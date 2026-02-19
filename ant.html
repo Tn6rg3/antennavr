@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Clean View</title>
+    <title>AR Ham Radio Planner - Reset Feature</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
         
@@ -40,7 +40,8 @@
         #btnGround { background: #2ed573; color: black; }
         #btnA { background: #ff4757; }
         #btnB { background: #1e90ff; }
-        #btnPhoto { background: #ffffff; color: black; font-size: 16px; flex: 0.5; }
+        #btnPhoto { background: #ffffff; color: black; font-size: 14px; }
+        #btnReset { background: #ff9f43; color: black; font-size: 14px; }
         
         #instruction { text-align: center; color: #fff; font-weight: bold; background: #e1b12c; padding: 6px; border-radius: 5px; width: 100%; box-sizing: border-box; font-size: 13px;}
         
@@ -109,7 +110,7 @@
                     Lunghezza (m): <input type="number" id="lwLen" value="20" step="1">
                 </div>
                 
-                <div id="warning">â ï¸ Antenna piÃ¹ lunga dello spazio!</div>
+                <div id="warning">⚠️ Antenna più lunga dello spazio!</div>
             </div>
         </div>
 
@@ -127,10 +128,10 @@
             </div>
 
             <div id="panel-edit-point" class="edit-panel" style="display: none;">
-                <div style="font-size: 12px; margin-bottom: 5px; color: #aaa;">ð TRASCINA IL DITO per micro-correzioni.</div>
+                <div style="font-size: 12px; margin-bottom: 5px; color: #aaa;">👆 TRASCINA IL DITO per micro-correzioni.</div>
                 <div class="edit-row">
-                    <button class="edit-btn" id="btnPFar">Lontano âï¸</button>
-                    <button class="edit-btn" id="btnPNear">Vicino âï¸</button>
+                    <button class="edit-btn" id="btnPFar">Lontano ↗️</button>
+                    <button class="edit-btn" id="btnPNear">Vicino ↙️</button>
                 </div>
             </div>
 
@@ -140,7 +141,11 @@
                 <button id="btnGround" class="main-btn">1. Terreno</button>
                 <button id="btnA" class="main-btn">2. Albero A</button>
                 <button id="btnB" class="main-btn">3. Albero B</button>
-                <button id="btnPhoto" class="main-btn">ð¸ Foto</button>
+            </div>
+            
+            <div class="btn-row">
+                <button id="btnReset" class="main-btn">🔄 Reset Totale</button>
+                <button id="btnPhoto" class="main-btn">📸 Fai Foto</button>
             </div>
         </div>
     </div>
@@ -254,16 +259,51 @@
             document.getElementById('antType').addEventListener('change', updateAntennaUI);
             document.querySelectorAll('#antennaPanel select, #antennaPanel input').forEach(el => el.addEventListener('input', drawAntenna));
 
+            // LOGICA PULSANTE FOTO
             document.getElementById('btnPhoto').addEventListener('click', () => {
-                document.querySelector('.bottom-controls').style.visibility = 'hidden';
+                // Nascondiamo ENTRAMBE le righe dei bottoni
+                document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'hidden');
                 document.getElementById('antennaPanel').style.visibility = 'hidden';
                 const toast = document.getElementById('photoOverlay');
                 toast.style.display = 'block';
                 setTimeout(() => {
                     toast.style.display = 'none';
-                    document.querySelector('.bottom-controls').style.visibility = 'visible';
+                    document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'visible');
                     if (point1.visible && point2.visible) document.getElementById('antennaPanel').style.visibility = 'visible';
                 }, 5000);
+            });
+
+            // LOGICA PULSANTE RESET
+            document.getElementById('btnReset').addEventListener('click', () => {
+                // 1. Nascondi gli oggetti base
+                point1.visible = false;
+                point2.visible = false;
+                groundGrid.visible = false;
+                lineAB.visible = false;
+
+                // 2. Distruggi tutti gli oggetti dinamici dalla memoria
+                antennaMeshes.forEach(m => scene.remove(m)); antennaMeshes = [];
+                markerMeshes.forEach(m => scene.remove(m)); markerMeshes = [];
+                textSprites.forEach(m => scene.remove(m)); textSprites = [];
+                clearTempMarkers();
+                if (laserMesh) { scene.remove(laserMesh); laserMesh = null; }
+
+                // 3. Resetta le variabili di stato
+                isGroundSet = false;
+                groundLevel = 0;
+                isShot1Done = false;
+
+                // 4. Resetta i testi a schermo
+                document.getElementById('hA').innerText = '--';
+                document.getElementById('hB').innerText = '--';
+                document.getElementById('distAB').innerText = '--';
+                
+                // 5. Nascondi il pannello dell'antenna
+                document.getElementById('antennaPanel').style.display = 'none';
+                document.getElementById('warning').style.display = 'none';
+
+                // 6. Ritorna al menu iniziale
+                setAction('MENU_GROUND');
             });
 
             const touchArea = document.getElementById('touchArea');
@@ -374,7 +414,6 @@
             line.computeLineDistances();
             scene.add(line); antennaMeshes.push(line);
 
-            // Mette il cartello a 1/3 dell'altezza da terra per non coprire l'antenna
             const labelY = groundLevel + (position.y - groundLevel) * 0.3;
             const sprite = makeTextSprite(labelText, `#${color.toString(16).padStart(6, '0')}`);
             sprite.position.set(position.x, labelY, position.z);
@@ -383,7 +422,7 @@
 
         function drawRopeLabel(pStart, pEnd) {
             const dist = pStart.distanceTo(pEnd);
-            if (dist < 0.1) return; // Non disegna se il tirante Ã¨ inesistente
+            if (dist < 0.1) return;
             const midPoint = new THREE.Vector3().copy(pStart).lerp(pEnd, 0.5);
             const sprite = makeTextSprite(`Corda: ${dist.toFixed(1)}m`, '#ffdd59', 'rgba(50, 50, 0, 0.8)');
             sprite.position.copy(midPoint);
@@ -477,7 +516,6 @@
             const totalDist = A.distanceTo(B);
             const dir = new THREE.Vector3().subVectors(B, A).normalize();
             
-            // Disegna sempre le drop line di A e B
             drawDropLine(A, 0xff4757, `Alb.A: ${(A.y - groundLevel).toFixed(1)}m`);
             drawDropLine(B, 0x1e90ff, `Alb.B: ${(B.y - groundLevel).toFixed(1)}m`);
 
@@ -499,16 +537,9 @@
                 
                 buildWire(p1, Center, copperColor); buildWire(Center, p2, copperColor);
                 
-                // PALLINO DI ALIMENTAZIONE AZZURRO (Centro Dipolo)
                 let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0x00ffff}));
                 balun.position.copy(Center); scene.add(balun); markerMeshes.push(balun);
                 
-                // Isolatori
-                let iso1 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                iso1.position.copy(p1); scene.add(iso1); markerMeshes.push(iso1);
-                let iso2 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                iso2.position.copy(p2); scene.add(iso2); markerMeshes.push(iso2);
-
                 drawDropLine(Center, 0x00ffff, `Feed: ${(Center.y - groundLevel).toFixed(1)}m`);
                 drawRopeLabel(A, p1); drawRopeLabel(p2, B);
 
@@ -526,16 +557,9 @@
                 
                 buildWire(pStartWire, pFeed, copperColor); buildWire(pFeed, pEndWire, copperColor);
                 
-                // PALLINO DI ALIMENTAZIONE VERDE (Trafo End-Fed)
                 let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0x2ed573}));
                 balun.position.copy(pFeed); scene.add(balun); markerMeshes.push(balun);
                 
-                // Isolatori
-                let iso1 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                iso1.position.copy(pStartWire); scene.add(iso1); markerMeshes.push(iso1);
-                let iso2 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                iso2.position.copy(pEndWire); scene.add(iso2); markerMeshes.push(iso2);
-
                 drawDropLine(pFeed, 0x2ed573, `Trafo: ${(pFeed.y - groundLevel).toFixed(1)}m`);
                 
                 if (document.getElementById('efStart').value === 'A') { drawRopeLabel(A, pStartWire); drawRopeLabel(pEndWire, B); }
@@ -550,13 +574,8 @@
                 
                 buildWire(startNode, pEndWire, copperColor);
                 
-                // PALLINO DI ALIMENTAZIONE GIALLO (Inizio Long Wire)
                 let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0xffdd59}));
                 balun.position.copy(startNode); scene.add(balun); markerMeshes.push(balun);
-                
-                // Isolatore finale
-                let isolator = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                isolator.position.copy(pEndWire); scene.add(isolator); markerMeshes.push(isolator);
                 
                 if (document.getElementById('lwStart').value === 'A') { drawRopeLabel(pEndWire, B); }
                 else { drawRopeLabel(pEndWire, A); }
