@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Reset Feature</title>
+    <title>AR Ham Radio Planner - 3-Point Triangulation</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
         
@@ -23,18 +23,15 @@
 
         #antennaPanel {
             background: rgba(20, 40, 60, 0.95); padding: 10px; border-radius: 8px; font-size: 14px;
-            width: 45%; pointer-events: auto; border: 2px solid #1e90ff; display: none;
+            width: 48%; pointer-events: auto; border: 2px solid #1e90ff; display: none;
         }
-        #antennaPanel select, #antennaPanel input { width: 100%; margin-top: 5px; margin-bottom: 10px; padding: 5px; background: #222; color: white; border: 1px solid #555; }
+        #antennaPanel select, #antennaPanel input { width: 100%; margin-top: 5px; margin-bottom: 10px; padding: 8px; background: #222; color: white; border: 1px solid #777; border-radius: 5px; font-size: 14px; box-sizing: border-box;}
         .ant-settings { display: none; }
         #warning { color: #ff4757; font-weight: bold; font-size: 12px; display: none; margin-top: 5px;}
 
         .bottom-controls { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; }
         .btn-row { display: flex; gap: 5px; pointer-events: auto; width: 100%; justify-content: center; }
-        .main-btn {
-            padding: 10px 5px; font-size: 13px; font-weight: bold; flex: 1; border-radius: 8px;
-            border: 2px solid transparent; cursor: pointer; color: white; opacity: 0.7; transition: 0.2s;
-        }
+        .main-btn { padding: 10px 5px; font-size: 13px; font-weight: bold; flex: 1; border-radius: 8px; border: 2px solid transparent; cursor: pointer; color: white; opacity: 0.7; transition: 0.2s; }
         .main-btn.active { opacity: 1; border-color: white; transform: scale(1.02); }
         
         #btnGround { background: #2ed573; color: black; }
@@ -54,7 +51,6 @@
         #phoneHeight { width: 60px; padding: 5px; font-size: 16px; text-align: center; font-weight: bold; border-radius: 4px; border: none;}
         
         #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
-        
         #photoOverlay { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(46, 213, 115, 0.9); color: black; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: bold; display: none; z-index: 200; box-shadow: 0 4px 6px rgba(0,0,0,0.5);}
     </style>
 </head>
@@ -62,7 +58,6 @@
 
     <div id="ui-container" style="display: none;">
         <div id="touchArea"></div>
-        
         <div id="top-bar">
             <div id="dataPanel">
                 <strong>QUOTE (dal suolo):</strong><br>
@@ -75,10 +70,10 @@
             <div id="antennaPanel">
                 <strong>Configura Antenna</strong>
                 <select id="antType">
-                    <option value="none">Solo Filo</option>
-                    <option value="dipole">Dipolo</option>
+                    <option value="dipole" selected>Dipolo</option>
                     <option value="endfed">End Fed</option>
                     <option value="longwire">Long Wire</option>
+                    <option value="none">Solo Filo</option>
                 </select>
 
                 <div id="setDipole" class="ant-settings">
@@ -95,35 +90,29 @@
                         <option value="2">2m (~1m filo)</option>
                     </select>
                 </div>
-
                 <div id="setEndFed" class="ant-settings">
-                    Start:<br>
-                    <select id="efStart"><option value="A">Punto A</option><option value="B">Punto B</option></select>
-                    Corda Tirante (m): <input type="number" id="efDist" value="1" step="0.5">
+                    Start:<br><select id="efStart"><option value="A">Punto A</option><option value="B">Punto B</option></select>
+                    Corda (m): <input type="number" id="efDist" value="1" step="0.5">
                     L1 (m): <input type="number" id="efL1" value="10" step="0.5">
                     L2 (m): <input type="number" id="efL2" value="2" step="0.5">
                 </div>
-
                 <div id="setLongWire" class="ant-settings">
-                    Start:<br>
-                    <select id="lwStart"><option value="A">Punto A</option><option value="B">Punto B</option></select>
+                    Start:<br><select id="lwStart"><option value="A">Punto A</option><option value="B">Punto B</option></select>
                     Lunghezza (m): <input type="number" id="lwLen" value="20" step="1">
                 </div>
-                
                 <div id="warning">⚠️ Antenna più lunga dello spazio!</div>
             </div>
         </div>
 
         <div class="bottom-controls">
-            
             <div id="panel-setup-ground" class="edit-panel" style="display: none;">
                 <div style="font-size: 13px; margin-bottom: 8px; color: #2ed573;">CALIBRAZIONE MATEMATICA</div>
                 <div class="height-input-container">
-                    Altezza cellulare: <input type="number" id="phoneHeight" value="1.40" step="0.05"> m
+                    H Telecamera: <input type="number" id="phoneHeight" value="1.40" step="0.05"> m
                 </div>
                 <div class="edit-row">
-                    <button class="edit-btn" id="btnSetByHeight" style="background:#2ed573; color:black;">Usa Altezza Cellulare</button>
-                    <button class="edit-btn" id="btnSetByTouch">Usa 3 Tocchi (Mirino)</button>
+                    <button class="edit-btn" id="btnSetByHeight" style="background:#2ed573; color:black;">Usa Altezza Lente</button>
+                    <button class="edit-btn" id="btnSetByTouch">Usa 3 Tocchi</button>
                 </div>
             </div>
 
@@ -142,7 +131,6 @@
                 <button id="btnA" class="main-btn">2. Albero A</button>
                 <button id="btnB" class="main-btn">3. Albero B</button>
             </div>
-            
             <div class="btn-row">
                 <button id="btnReset" class="main-btn">🔄 Reset Totale</button>
                 <button id="btnPhoto" class="main-btn">📸 Fai Foto</button>
@@ -169,24 +157,22 @@
         let hitTestSource = null, hitTestSourceRequested = false;
 
         let point1, point2, groundGrid, lineAB;
-        let antennaMeshes = []; 
-        let markerMeshes = []; 
-        let textSprites = []; 
-        let laserMesh = null;
+        let antennaMeshes = [], markerMeshes = [], textSprites = [];
         
-        let groundLevel = 0; 
-        let isGroundSet = false;
-        let groundCalibrationPoints = []; 
-        let tempGroundMarkers = [];
-        
+        let groundLevel = 0, isGroundSet = false, groundCalibrationPoints = [], tempGroundMarkers = [];
         let currentAction = 'NONE'; 
 
-        let shot1Pos = new THREE.Vector3();
-        let shot1Dir = new THREE.Vector3();
-        let isShot1Done = false;
+        // Nuove variabili per 3 tiri
+        let currentShots = [];
+        let activeLaserMeshes = [];
+        let tempCrosshair = null;
 
-        let lastTouchX = 0, lastTouchY = 0;
-        let isDragging = false, hasDragged = false; 
+        // Variabili Touch e Dragging
+        let lastTouchX = 0, lastTouchY = 0, isDragging = false, hasDragged = false; 
+
+        // Variabili patch anti-jitter
+        let targetReticlePosition = new THREE.Vector3();
+        let targetReticleQuaternion = new THREE.Quaternion();
 
         init();
         animate();
@@ -225,6 +211,20 @@
             reticle = new THREE.Mesh( new THREE.RingGeometry( 0.02, 0.04, 32 ).rotateX( - Math.PI / 2 ), new THREE.MeshBasicMaterial( { color: 0xffffff } ) );
             reticle.matrixAutoUpdate = true; reticle.visible = false; scene.add( reticle );
 
+            // Crea il MIRINO TEMPORANEO (Croce 3D di 20cm con punto centrale)
+            const crossGeo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-0.1, 0, 0), new THREE.Vector3(0.1, 0, 0),
+                new THREE.Vector3(0, -0.1, 0), new THREE.Vector3(0, 0.1, 0),
+                new THREE.Vector3(0, 0, -0.1), new THREE.Vector3(0, 0, 0.1)
+            ]);
+            const crossMat = new THREE.LineBasicMaterial({color: 0xffff00, linewidth: 2});
+            const crossLines = new THREE.LineSegments(crossGeo, crossMat);
+            const crossDot = new THREE.Mesh(new THREE.SphereGeometry(0.02), new THREE.MeshBasicMaterial({color: 0xffff00}));
+            tempCrosshair = new THREE.Group();
+            tempCrosshair.add(crossLines); tempCrosshair.add(crossDot);
+            tempCrosshair.visible = false;
+            scene.add(tempCrosshair);
+
             controller = renderer.xr.getController( 0 );
             controller.addEventListener( 'select', onSelect );
             scene.add( controller );
@@ -233,7 +233,7 @@
 
             renderer.xr.addEventListener('sessionstart', () => {
                 document.getElementById('ui-container').style.display = 'flex';
-                setAction('MENU_GROUND');
+                updateAntennaUI(); setAction('MENU_GROUND');
             });
 
             document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
@@ -241,7 +241,6 @@
             });
 
             document.getElementById('btnGround').addEventListener('click', () => setAction('MENU_GROUND'));
-            
             document.getElementById('btnSetByHeight').addEventListener('click', () => {
                 const height = parseFloat(document.getElementById('phoneHeight').value);
                 if(isNaN(height) || height <= 0) return;
@@ -250,18 +249,15 @@
                 groundGrid.visible = true; isGroundSet = true;
                 setAction('NONE'); updateCalculations();
             });
-
             document.getElementById('btnSetByTouch').addEventListener('click', () => setAction('PLACE_GROUND'));
-            document.getElementById('btnA').addEventListener('click', () => { isShot1Done = false; setAction('TRIANGULATE_A'); });
-            document.getElementById('btnB').addEventListener('click', () => { isShot1Done = false; setAction('TRIANGULATE_B'); });
+            document.getElementById('btnA').addEventListener('click', () => setAction('TRIANGULATE_A'));
+            document.getElementById('btnB').addEventListener('click', () => setAction('TRIANGULATE_B'));
             document.getElementById('btnPFar').addEventListener('click', () => adjustDepth(0.5));
             document.getElementById('btnPNear').addEventListener('click', () => adjustDepth(-0.5));
             document.getElementById('antType').addEventListener('change', updateAntennaUI);
-            document.querySelectorAll('#antennaPanel select, #antennaPanel input').forEach(el => el.addEventListener('input', drawAntenna));
+            document.querySelectorAll('#antennaPanel select, #antennaPanel input').forEach(el => { el.addEventListener('change', drawAntenna); el.addEventListener('input', drawAntenna); });
 
-            // LOGICA PULSANTE FOTO
             document.getElementById('btnPhoto').addEventListener('click', () => {
-                // Nascondiamo ENTRAMBE le righe dei bottoni
                 document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'hidden');
                 document.getElementById('antennaPanel').style.visibility = 'hidden';
                 const toast = document.getElementById('photoOverlay');
@@ -273,65 +269,38 @@
                 }, 5000);
             });
 
-            // LOGICA PULSANTE RESET
             document.getElementById('btnReset').addEventListener('click', () => {
-                // 1. Nascondi gli oggetti base
-                point1.visible = false;
-                point2.visible = false;
-                groundGrid.visible = false;
-                lineAB.visible = false;
-
-                // 2. Distruggi tutti gli oggetti dinamici dalla memoria
+                point1.visible = false; point2.visible = false; groundGrid.visible = false; lineAB.visible = false;
                 antennaMeshes.forEach(m => scene.remove(m)); antennaMeshes = [];
                 markerMeshes.forEach(m => scene.remove(m)); markerMeshes = [];
                 textSprites.forEach(m => scene.remove(m)); textSprites = [];
-                clearTempMarkers();
-                if (laserMesh) { scene.remove(laserMesh); laserMesh = null; }
-
-                // 3. Resetta le variabili di stato
-                isGroundSet = false;
-                groundLevel = 0;
-                isShot1Done = false;
-
-                // 4. Resetta i testi a schermo
-                document.getElementById('hA').innerText = '--';
-                document.getElementById('hB').innerText = '--';
-                document.getElementById('distAB').innerText = '--';
-                
-                // 5. Nascondi il pannello dell'antenna
-                document.getElementById('antennaPanel').style.display = 'none';
-                document.getElementById('warning').style.display = 'none';
-
-                // 6. Ritorna al menu iniziale
+                clearTempMarkers(); clearShots();
+                isGroundSet = false; groundLevel = 0;
+                document.getElementById('hA').innerText = '--'; document.getElementById('hB').innerText = '--'; document.getElementById('distAB').innerText = '--';
+                document.getElementById('antType').value = 'dipole'; updateAntennaUI();
+                document.getElementById('antennaPanel').style.display = 'none'; document.getElementById('warning').style.display = 'none';
                 setAction('MENU_GROUND');
             });
 
             const touchArea = document.getElementById('touchArea');
             touchArea.addEventListener('touchstart', (e) => {
                 if (e.touches.length === 1 && (currentAction === 'EDIT_A' || currentAction === 'EDIT_B')) {
-                    isDragging = true; hasDragged = false; 
-                    lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
+                    isDragging = true; hasDragged = false; lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
                 }
             });
-
             touchArea.addEventListener('touchmove', (e) => {
                 if (!isDragging) return;
                 hasDragged = true; 
                 if (e.touches.length === 1 && (currentAction === 'EDIT_A' || currentAction === 'EDIT_B')) {
                     let pt = currentAction === 'EDIT_A' ? point1 : point2;
                     if (!pt || !pt.visible) return;
-
                     let touchX = e.touches[0].clientX; let touchY = e.touches[0].clientY;
                     let deltaX = touchX - lastTouchX; let deltaY = touchY - lastTouchY;
-                    let dist = camera.position.distanceTo(pt.position);
-                    let sensitivity = 0.001 * dist; 
-
+                    let sensitivity = 0.001 * camera.position.distanceTo(pt.position); 
                     let camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
                     let camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-
                     pt.position.add(camRight.multiplyScalar(deltaX * sensitivity));
                     pt.position.add(camUp.multiplyScalar(-deltaY * sensitivity)); 
-
                     lastTouchX = touchX; lastTouchY = touchY;
                     updateCalculations();
                 }
@@ -339,18 +308,23 @@
             touchArea.addEventListener('touchend', () => { isDragging = false; });
         }
 
+        function clearShots() {
+            currentShots = [];
+            activeLaserMeshes.forEach(m => scene.remove(m)); activeLaserMeshes = [];
+            if(tempCrosshair) tempCrosshair.visible = false;
+        }
+
         function setAction(action) {
             currentAction = action;
             document.getElementById('panel-setup-ground').style.display = 'none';
             document.getElementById('panel-edit-point').style.display = 'none';
             document.querySelectorAll('.main-btn').forEach(b => b.classList.remove('active'));
+            clearShots();
 
             let inst = document.getElementById('instruction');
-            if (laserMesh) { scene.remove(laserMesh); laserMesh = null; }
 
             if (action === 'MENU_GROUND') {
-                document.getElementById('btnGround').classList.add('active');
-                document.getElementById('panel-setup-ground').style.display = 'block';
+                document.getElementById('btnGround').classList.add('active'); document.getElementById('panel-setup-ground').style.display = 'block';
                 inst.innerText = "Scegli come impostare la quota zero del suolo."; inst.style.background = "#2ed573";
             } else if (action === 'PLACE_GROUND') {
                 groundCalibrationPoints = []; clearTempMarkers();
@@ -359,7 +333,7 @@
             } else if (action === 'TRIANGULATE_A' || action === 'TRIANGULATE_B') {
                 const btn = action === 'TRIANGULATE_A' ? 'btnA' : 'btnB';
                 document.getElementById(btn).classList.add('active');
-                inst.innerText = "1. MIRA al ramo esatto e TOCCA."; inst.style.background = action === 'TRIANGULATE_A' ? "#ff4757" : "#1e90ff";
+                inst.innerText = "Tiro 1/3: MIRA al ramo esatto e TOCCA."; inst.style.background = action === 'TRIANGULATE_A' ? "#ff4757" : "#1e90ff";
             } else if (action === 'EDIT_A' || action === 'EDIT_B') {
                 const btn = action === 'EDIT_A' ? 'btnA' : 'btnB';
                 document.getElementById(btn).classList.add('active');
@@ -391,18 +365,10 @@
         }
 
         function makeTextSprite(message, textColor = '#ffffff', bgColor = 'rgba(0, 0, 0, 0.7)') {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512; canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.font = 'bold 42px sans-serif';
-            ctx.fillStyle = textColor;
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(message, 256, 64);
-            const texture = new THREE.CanvasTexture(canvas);
-            const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-            return new THREE.Sprite(spriteMat);
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 128; const ctx = canvas.getContext('2d');
+            ctx.fillStyle = bgColor; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = 'bold 42px sans-serif'; ctx.fillStyle = textColor; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(message, 256, 64);
+            const texture = new THREE.CanvasTexture(canvas); const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false }); return new THREE.Sprite(spriteMat);
         }
 
         function drawDropLine(position, color, labelText) {
@@ -410,23 +376,15 @@
             const groundPos = new THREE.Vector3(position.x, groundLevel, position.z);
             const geo = new THREE.BufferGeometry().setFromPoints([position, groundPos]);
             const mat = new THREE.LineDashedMaterial({ color: color, dashSize: 0.2, gapSize: 0.2 });
-            const line = new THREE.Line(geo, mat);
-            line.computeLineDistances();
-            scene.add(line); antennaMeshes.push(line);
-
+            const line = new THREE.Line(geo, mat); line.computeLineDistances(); scene.add(line); antennaMeshes.push(line);
             const labelY = groundLevel + (position.y - groundLevel) * 0.3;
-            const sprite = makeTextSprite(labelText, `#${color.toString(16).padStart(6, '0')}`);
-            sprite.position.set(position.x, labelY, position.z);
-            scene.add(sprite); textSprites.push(sprite);
+            const sprite = makeTextSprite(labelText, `#${color.toString(16).padStart(6, '0')}`); sprite.position.set(position.x, labelY, position.z); scene.add(sprite); textSprites.push(sprite);
         }
 
         function drawRopeLabel(pStart, pEnd) {
-            const dist = pStart.distanceTo(pEnd);
-            if (dist < 0.1) return;
+            const dist = pStart.distanceTo(pEnd); if (dist < 0.1) return;
             const midPoint = new THREE.Vector3().copy(pStart).lerp(pEnd, 0.5);
-            const sprite = makeTextSprite(`Corda: ${dist.toFixed(1)}m`, '#ffdd59', 'rgba(50, 50, 0, 0.8)');
-            sprite.position.copy(midPoint);
-            scene.add(sprite); textSprites.push(sprite);
+            const sprite = makeTextSprite(`Corda: ${dist.toFixed(1)}m`, '#ffdd59', 'rgba(50, 50, 0, 0.8)'); sprite.position.copy(midPoint); scene.add(sprite); textSprites.push(sprite);
         }
 
         function onSelect() {
@@ -445,20 +403,35 @@
             } else if (currentAction === 'TRIANGULATE_A' || currentAction === 'TRIANGULATE_B') {
                 const camPos = new THREE.Vector3(); camera.getWorldPosition(camPos);
                 const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
+                let color = currentAction === 'TRIANGULATE_A' ? 0xff4757 : 0x1e90ff;
 
-                if (!isShot1Done) {
-                    shot1Pos.copy(camPos); shot1Dir.copy(camDir); isShot1Done = true;
-                    let color = currentAction === 'TRIANGULATE_A' ? 0xff4757 : 0x1e90ff;
-                    laserMesh = createLaserRay(shot1Pos, shot1Dir, color);
-                    document.getElementById('instruction').innerText = "2. Spostati di lato, mira DI NUOVO al ramo e tocca.";
-                } else {
-                    const finalPoint = calculateTriangulation(shot1Pos, shot1Dir, camPos, camDir);
+                // Salva il tiro e disegna il raggio
+                currentShots.push({pos: camPos.clone(), dir: camDir.clone()});
+                activeLaserMeshes.push(createLaserRay(camPos, camDir, color));
+
+                if (currentShots.length === 1) {
+                    document.getElementById('instruction').innerText = "Tiro 2/3: Spostati e mira lo STESSO ramo.";
+                } 
+                else if (currentShots.length === 2) {
+                    // Calcola il primo incrocio tra tiro 1 e tiro 2 e piazza il mirino giallo
+                    let p12 = calculateTriangulation(currentShots[0].pos, currentShots[0].dir, currentShots[1].pos, currentShots[1].dir);
+                    tempCrosshair.position.copy(p12);
+                    tempCrosshair.visible = true;
+                    document.getElementById('instruction').innerText = "Tiro 3/3: Spostati. Fai incrociare l'ultimo raggio sul mirino giallo!";
+                } 
+                else if (currentShots.length === 3) {
+                    // Calcola i 3 incroci e fa la media perfetta
+                    let p12 = calculateTriangulation(currentShots[0].pos, currentShots[0].dir, currentShots[1].pos, currentShots[1].dir);
+                    let p23 = calculateTriangulation(currentShots[1].pos, currentShots[1].dir, currentShots[2].pos, currentShots[2].dir);
+                    let p13 = calculateTriangulation(currentShots[0].pos, currentShots[0].dir, currentShots[2].pos, currentShots[2].dir);
+                    
+                    let finalPoint = new THREE.Vector3().add(p12).add(p23).add(p13).divideScalar(3);
+
                     if (currentAction === 'TRIANGULATE_A') {
                         point1.position.copy(finalPoint); point1.visible = true; setAction('EDIT_A');
                     } else {
                         point2.position.copy(finalPoint); point2.visible = true; setAction('EDIT_B');
                     }
-                    if (laserMesh) { scene.remove(laserMesh); laserMesh = null; } 
                     updateCalculations();
                 }
             }
@@ -520,10 +493,7 @@
             drawDropLine(B, 0x1e90ff, `Alb.B: ${(B.y - groundLevel).toFixed(1)}m`);
 
             const type = document.getElementById('antType').value;
-            if (type === 'none') {
-                drawRopeLabel(A, B);
-                return;
-            }
+            if (type === 'none') { drawRopeLabel(A, B); return; }
 
             let wireLength = 0; const copperColor = 0xe67e22;
 
@@ -560,7 +530,7 @@
                 let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0x2ed573}));
                 balun.position.copy(pFeed); scene.add(balun); markerMeshes.push(balun);
                 
-                drawDropLine(pFeed, 0x2ed573, `Trafo: ${(pFeed.y - groundLevel).toFixed(1)}m`);
+                drawDropLine(pFeed, 0x2ed573, `Feed: ${(pFeed.y - groundLevel).toFixed(1)}m`);
                 
                 if (document.getElementById('efStart').value === 'A') { drawRopeLabel(A, pStartWire); drawRopeLabel(pEndWire, B); }
                 else { drawRopeLabel(B, pStartWire); drawRopeLabel(pEndWire, A); }
@@ -576,6 +546,8 @@
                 
                 let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0xffdd59}));
                 balun.position.copy(startNode); scene.add(balun); markerMeshes.push(balun);
+                
+                drawDropLine(startNode, 0xffdd59, `Feed: ${(startNode.y - groundLevel).toFixed(1)}m`);
                 
                 if (document.getElementById('lwStart').value === 'A') { drawRopeLabel(pEndWire, B); }
                 else { drawRopeLabel(pEndWire, A); }
@@ -595,6 +567,8 @@
                 if (point2.visible) point2.scale.setScalar(camera.position.distanceTo(point2.position) * apparentSizeFactor);
                 markerMeshes.forEach(marker => marker.scale.setScalar(camera.position.distanceTo(marker.position) * apparentSizeFactor));
                 
+                if (tempCrosshair && tempCrosshair.visible) tempCrosshair.scale.setScalar(camera.position.distanceTo(tempCrosshair.position) * apparentSizeFactor);
+
                 textSprites.forEach(sprite => {
                     const dist = camera.position.distanceTo(sprite.position);
                     sprite.scale.set(dist * 0.25, dist * 0.06, 1);
@@ -609,21 +583,24 @@
                 }
 
                 if (currentAction === 'PLACE_GROUND') {
-                    reticle.visible = false;
                     if ( hitTestSource ) {
                         const hitTestResults = frame.getHitTestResults( hitTestSource );
                         if ( hitTestResults.length ) {
                             const pose = hitTestResults[0].getPose( referenceSpace );
-                            reticle.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
-                            reticle.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
+                            targetReticlePosition.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                            targetReticleQuaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
+                            reticle.position.lerp(targetReticlePosition, 0.2);
+                            reticle.quaternion.slerp(targetReticleQuaternion, 0.2);
                             reticle.visible = true;
-                        }
+                        } else { reticle.visible = false; }
                     }
                 } else if (currentAction === 'TRIANGULATE_A' || currentAction === 'TRIANGULATE_B') {
                     const distance = 2; 
                     const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
-                    reticle.position.copy(camera.position).add(camDir.multiplyScalar(distance));
-                    reticle.quaternion.copy(camera.quaternion); 
+                    targetReticlePosition.copy(camera.position).add(camDir.multiplyScalar(distance));
+                    targetReticleQuaternion.copy(camera.quaternion); 
+                    reticle.position.lerp(targetReticlePosition, 0.3);
+                    reticle.quaternion.slerp(targetReticleQuaternion, 0.3);
                     reticle.visible = true; 
                 } else {
                     reticle.visible = false;
