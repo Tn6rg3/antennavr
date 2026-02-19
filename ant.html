@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Balun & Drop Lines</title>
+    <title>AR Ham Radio Planner - Photo Fix</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
         
@@ -54,8 +54,8 @@
         
         #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
         
-        /* Schermata Overlay per la foto */
-        #photoOverlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; font-size: 18px; text-align: center; font-weight: bold; display: none; z-index: 200; border: 2px solid #2ed573;}
+        /* Avviso Foto discreto in basso */
+        #photoOverlay { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(46, 213, 115, 0.9); color: black; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: bold; display: none; z-index: 200; box-shadow: 0 4px 6px rgba(0,0,0,0.5);}
     </style>
 </head>
 <body>
@@ -146,7 +146,7 @@
         </div>
     </div>
     
-    <div id="photoOverlay">Usa i tasti del telefono per lo screenshot!<br><span style="font-size:14px;font-weight:normal;">Interfaccia nascosta per 5 secondi...</span></div>
+    <div id="photoOverlay">Usa i tasti screenshot! (Torno tra 5s)</div>
 
     <script type="importmap">
         {
@@ -167,7 +167,7 @@
         let point1, point2, groundGrid, lineAB;
         let antennaMeshes = []; 
         let markerMeshes = []; 
-        let textSprites = []; // Array specifico per i cartelli di testo (cosÃ¬ li scaliamo diversamente)
+        let textSprites = []; 
         let laserMesh = null;
         
         let groundLevel = 0; 
@@ -248,26 +248,28 @@
             });
 
             document.getElementById('btnSetByTouch').addEventListener('click', () => setAction('PLACE_GROUND'));
-
             document.getElementById('btnA').addEventListener('click', () => { isShot1Done = false; setAction('TRIANGULATE_A'); });
             document.getElementById('btnB').addEventListener('click', () => { isShot1Done = false; setAction('TRIANGULATE_B'); });
-
             document.getElementById('btnPFar').addEventListener('click', () => adjustDepth(0.5));
             document.getElementById('btnPNear').addEventListener('click', () => adjustDepth(-0.5));
-
             document.getElementById('antType').addEventListener('change', updateAntennaUI);
             document.querySelectorAll('#antennaPanel select, #antennaPanel input').forEach(el => el.addEventListener('input', drawAntenna));
 
-            // Logica Screenshot (Nasconde l'UI temporaneamente)
+            // NUOVA LOGICA PULSANTE FOTO
             document.getElementById('btnPhoto').addEventListener('click', () => {
-                const ui = document.getElementById('ui-container');
-                const overlay = document.getElementById('photoOverlay');
-                ui.style.visibility = 'hidden';
-                overlay.style.display = 'block';
+                // Nascondiamo i bottoni e il pannello antenna usando 'visibility' cosÃ¬ il dataPanel non si sposta
+                document.querySelector('.bottom-controls').style.visibility = 'hidden';
+                document.getElementById('antennaPanel').style.visibility = 'hidden';
+                
+                const toast = document.getElementById('photoOverlay');
+                toast.style.display = 'block';
                 
                 setTimeout(() => {
-                    overlay.style.display = 'none';
-                    ui.style.visibility = 'visible';
+                    toast.style.display = 'none';
+                    document.querySelector('.bottom-controls').style.visibility = 'visible';
+                    if (point1.visible && point2.visible) {
+                        document.getElementById('antennaPanel').style.visibility = 'visible';
+                    }
                 }, 5000);
             });
 
@@ -288,7 +290,6 @@
 
                     let touchX = e.touches[0].clientX; let touchY = e.touches[0].clientY;
                     let deltaX = touchX - lastTouchX; let deltaY = touchY - lastTouchY;
-
                     let dist = camera.position.distanceTo(pt.position);
                     let sensitivity = 0.001 * dist; 
 
@@ -356,7 +357,6 @@
             const mesh = new THREE.Line(geo, mat); scene.add(mesh); return mesh;
         }
 
-        // Funzione per creare i cartelli di testo 3D
         function makeTextSprite(message) {
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 128;
@@ -369,26 +369,22 @@
             ctx.fillText(message, 128, 64);
             const texture = new THREE.CanvasTexture(canvas);
             const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-            const sprite = new THREE.Sprite(spriteMat);
-            return sprite;
+            return new THREE.Sprite(spriteMat);
         }
 
-        // Crea la linea tratteggiata verticale e il cartello
         function drawDropLine(position, color, labelText) {
             if (!isGroundSet) return;
             const groundPos = new THREE.Vector3(position.x, groundLevel, position.z);
             const geo = new THREE.BufferGeometry().setFromPoints([position, groundPos]);
             const mat = new THREE.LineDashedMaterial({ color: color, dashSize: 0.1, gapSize: 0.1 });
             const line = new THREE.Line(geo, mat);
-            line.computeLineDistances(); // Obbligatorio per le linee tratteggiate in Threejs
-            scene.add(line);
-            antennaMeshes.push(line);
+            line.computeLineDistances();
+            scene.add(line); antennaMeshes.push(line);
 
             const midY = (position.y + groundLevel) / 2;
             const sprite = makeTextSprite(labelText);
             sprite.position.set(position.x, midY, position.z);
-            scene.add(sprite);
-            textSprites.push(sprite);
+            scene.add(sprite); textSprites.push(sprite);
         }
 
         function onSelect() {
@@ -493,7 +489,6 @@
                 let balun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({color: 0x00ffff}));
                 balun.position.copy(Center); scene.add(balun); markerMeshes.push(balun);
                 
-                // Traccia la linea verticale con l'altezza
                 drawDropLine(Center, 0x00ffff, `Feed: ${(Center.y - groundLevel).toFixed(1)}m`);
 
             } else if (type === 'endfed') {
@@ -512,7 +507,6 @@
                 let balun = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), new THREE.MeshBasicMaterial({color: 0x00ffff}));
                 balun.position.copy(pFeed); scene.add(balun); markerMeshes.push(balun);
                 
-                // Traccia la linea verticale
                 drawDropLine(pFeed, 0x00ffff, `Feed: ${(pFeed.y - groundLevel).toFixed(1)}m`);
 
             } else if (type === 'longwire') {
@@ -543,7 +537,6 @@
                 if (point2.visible) point2.scale.setScalar(camera.position.distanceTo(point2.position) * apparentSizeFactor);
                 markerMeshes.forEach(marker => marker.scale.setScalar(camera.position.distanceTo(marker.position) * apparentSizeFactor));
                 
-                // I cartelli di testo hanno proporzioni 2:1 (rettangolari), per cui li scalo in modo specifico
                 textSprites.forEach(sprite => {
                     const dist = camera.position.distanceTo(sprite.position);
                     sprite.scale.set(dist * 0.15, dist * 0.075, 1);
