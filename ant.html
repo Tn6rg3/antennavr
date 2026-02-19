@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Photo Fix</title>
+    <title>AR Ham Radio Planner - Tiranti e Quote</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
         
@@ -54,7 +54,6 @@
         
         #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
         
-        /* Avviso Foto discreto in basso */
         #photoOverlay { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(46, 213, 115, 0.9); color: black; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: bold; display: none; z-index: 200; box-shadow: 0 4px 6px rgba(0,0,0,0.5);}
     </style>
 </head>
@@ -99,7 +98,7 @@
                 <div id="setEndFed" class="ant-settings">
                     Start:<br>
                     <select id="efStart"><option value="A">Punto A</option><option value="B">Punto B</option></select>
-                    Dist: <input type="number" id="efDist" value="1" step="0.5">
+                    Corda Tirante (m): <input type="number" id="efDist" value="1" step="0.5">
                     L1 (m): <input type="number" id="efL1" value="10" step="0.5">
                     L2 (m): <input type="number" id="efL2" value="2" step="0.5">
                 </div>
@@ -255,21 +254,15 @@
             document.getElementById('antType').addEventListener('change', updateAntennaUI);
             document.querySelectorAll('#antennaPanel select, #antennaPanel input').forEach(el => el.addEventListener('input', drawAntenna));
 
-            // NUOVA LOGICA PULSANTE FOTO
             document.getElementById('btnPhoto').addEventListener('click', () => {
-                // Nascondiamo i bottoni e il pannello antenna usando 'visibility' cosÃ¬ il dataPanel non si sposta
                 document.querySelector('.bottom-controls').style.visibility = 'hidden';
                 document.getElementById('antennaPanel').style.visibility = 'hidden';
-                
                 const toast = document.getElementById('photoOverlay');
                 toast.style.display = 'block';
-                
                 setTimeout(() => {
                     toast.style.display = 'none';
                     document.querySelector('.bottom-controls').style.visibility = 'visible';
-                    if (point1.visible && point2.visible) {
-                        document.getElementById('antennaPanel').style.visibility = 'visible';
-                    }
+                    if (point1.visible && point2.visible) document.getElementById('antennaPanel').style.visibility = 'visible';
                 }, 5000);
             });
 
@@ -287,18 +280,14 @@
                 if (e.touches.length === 1 && (currentAction === 'EDIT_A' || currentAction === 'EDIT_B')) {
                     let pt = currentAction === 'EDIT_A' ? point1 : point2;
                     if (!pt || !pt.visible) return;
-
                     let touchX = e.touches[0].clientX; let touchY = e.touches[0].clientY;
                     let deltaX = touchX - lastTouchX; let deltaY = touchY - lastTouchY;
                     let dist = camera.position.distanceTo(pt.position);
                     let sensitivity = 0.001 * dist; 
-
                     let camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
                     let camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-
                     pt.position.add(camRight.multiplyScalar(deltaX * sensitivity));
                     pt.position.add(camUp.multiplyScalar(-deltaY * sensitivity)); 
-
                     lastTouchX = touchX; lastTouchY = touchY;
                     updateCalculations();
                 }
@@ -357,16 +346,16 @@
             const mesh = new THREE.Line(geo, mat); scene.add(mesh); return mesh;
         }
 
-        function makeTextSprite(message) {
+        function makeTextSprite(message, textColor = '#ffffff', bgColor = 'rgba(0, 0, 0, 0.7)') {
             const canvas = document.createElement('canvas');
-            canvas.width = 256; canvas.height = 128;
+            canvas.width = 512; canvas.height = 128;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.font = 'bold 36px sans-serif';
-            ctx.fillStyle = '#ffdd59';
+            ctx.font = 'bold 42px sans-serif';
+            ctx.fillStyle = textColor;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(message, 128, 64);
+            ctx.fillText(message, 256, 64);
             const texture = new THREE.CanvasTexture(canvas);
             const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
             return new THREE.Sprite(spriteMat);
@@ -376,14 +365,25 @@
             if (!isGroundSet) return;
             const groundPos = new THREE.Vector3(position.x, groundLevel, position.z);
             const geo = new THREE.BufferGeometry().setFromPoints([position, groundPos]);
-            const mat = new THREE.LineDashedMaterial({ color: color, dashSize: 0.1, gapSize: 0.1 });
+            const mat = new THREE.LineDashedMaterial({ color: color, dashSize: 0.2, gapSize: 0.2 });
             const line = new THREE.Line(geo, mat);
             line.computeLineDistances();
             scene.add(line); antennaMeshes.push(line);
 
-            const midY = (position.y + groundLevel) / 2;
-            const sprite = makeTextSprite(labelText);
-            sprite.position.set(position.x, midY, position.z);
+            // Mette il cartello a 1/3 dell'altezza da terra per non coprire l'antenna
+            const labelY = groundLevel + (position.y - groundLevel) * 0.3;
+            const sprite = makeTextSprite(labelText, `#${color.toString(16).padStart(6, '0')}`);
+            sprite.position.set(position.x, labelY, position.z);
+            scene.add(sprite); textSprites.push(sprite);
+        }
+
+        // Aggiunge un cartello di distanza su un segmento (per i tiranti gialli)
+        function drawRopeLabel(pStart, pEnd) {
+            const dist = pStart.distanceTo(pEnd);
+            if (dist < 0.1) return; // Non disegna se il tirante Ã¨ inesistente
+            const midPoint = new THREE.Vector3().copy(pStart).lerp(pEnd, 0.5);
+            const sprite = makeTextSprite(`Corda: ${dist.toFixed(1)}m`, '#ffdd59', 'rgba(50, 50, 0, 0.8)');
+            sprite.position.copy(midPoint);
             scene.add(sprite); textSprites.push(sprite);
         }
 
@@ -469,12 +469,21 @@
             document.getElementById('warning').style.display = 'none';
 
             if (!point1.visible || !point2.visible) return;
-            const type = document.getElementById('antType').value;
-            if (type === 'none') return;
-
+            
             const A = point1.position; const B = point2.position;
             const totalDist = A.distanceTo(B);
             const dir = new THREE.Vector3().subVectors(B, A).normalize();
+            
+            // Disegna sempre le drop line di A e B
+            drawDropLine(A, 0xff4757, `Alb.A: ${(A.y - groundLevel).toFixed(1)}m`);
+            drawDropLine(B, 0x1e90ff, `Alb.B: ${(B.y - groundLevel).toFixed(1)}m`);
+
+            const type = document.getElementById('antType').value;
+            if (type === 'none') {
+                drawRopeLabel(A, B); // Tutta corda
+                return;
+            }
+
             let wireLength = 0; const copperColor = 0xe67e22;
 
             if (type === 'dipole') {
@@ -484,12 +493,24 @@
                 const Center = new THREE.Vector3().copy(A).lerp(B, 0.5);
                 const p1 = new THREE.Vector3().copy(Center).add(dir.clone().multiplyScalar(-armLen));
                 const p2 = new THREE.Vector3().copy(Center).add(dir.clone().multiplyScalar(armLen));
+                
                 buildWire(p1, Center, copperColor); buildWire(Center, p2, copperColor);
                 
-                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({color: 0x00ffff}));
+                // Balun Azzurro
+                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshBasicMaterial({color: 0x00ffff}));
                 balun.position.copy(Center); scene.add(balun); markerMeshes.push(balun);
                 
+                // Isolatori
+                let iso1 = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                iso1.position.copy(p1); scene.add(iso1); markerMeshes.push(iso1);
+                let iso2 = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                iso2.position.copy(p2); scene.add(iso2); markerMeshes.push(iso2);
+
                 drawDropLine(Center, 0x00ffff, `Feed: ${(Center.y - groundLevel).toFixed(1)}m`);
+                drawDropLine(p1, 0xffffff, `Isol: ${(p1.y - groundLevel).toFixed(1)}m`);
+                drawDropLine(p2, 0xffffff, `Isol: ${(p2.y - groundLevel).toFixed(1)}m`);
+                
+                drawRopeLabel(A, p1); drawRopeLabel(p2, B);
 
             } else if (type === 'endfed') {
                 const startNode = document.getElementById('efStart').value === 'A' ? A : B;
@@ -502,12 +523,25 @@
                 const pStartWire = new THREE.Vector3().copy(startNode).add(activeDir.clone().multiplyScalar(dist));
                 const pFeed = new THREE.Vector3().copy(pStartWire).add(activeDir.clone().multiplyScalar(L1));
                 const pEndWire = new THREE.Vector3().copy(pFeed).add(activeDir.clone().multiplyScalar(L2));
+                
                 buildWire(pStartWire, pFeed, copperColor); buildWire(pFeed, pEndWire, copperColor);
                 
-                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), new THREE.MeshBasicMaterial({color: 0x00ffff}));
+                // Trasformatore Verde
+                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({color: 0x2ed573}));
                 balun.position.copy(pFeed); scene.add(balun); markerMeshes.push(balun);
                 
-                drawDropLine(pFeed, 0x00ffff, `Feed: ${(pFeed.y - groundLevel).toFixed(1)}m`);
+                // Isolatori
+                let iso1 = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                iso1.position.copy(pStartWire); scene.add(iso1); markerMeshes.push(iso1);
+                let iso2 = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                iso2.position.copy(pEndWire); scene.add(iso2); markerMeshes.push(iso2);
+
+                drawDropLine(pFeed, 0x2ed573, `Trafo: ${(pFeed.y - groundLevel).toFixed(1)}m`);
+                drawDropLine(pStartWire, 0xffffff, `Isol: ${(pStartWire.y - groundLevel).toFixed(1)}m`);
+                drawDropLine(pEndWire, 0xffffff, `Isol: ${(pEndWire.y - groundLevel).toFixed(1)}m`);
+                
+                if (document.getElementById('efStart').value === 'A') { drawRopeLabel(A, pStartWire); drawRopeLabel(pEndWire, B); }
+                else { drawRopeLabel(B, pStartWire); drawRopeLabel(pEndWire, A); }
 
             } else if (type === 'longwire') {
                 const startNode = document.getElementById('lwStart').value === 'A' ? A : B;
@@ -515,12 +549,21 @@
                 const L = parseFloat(document.getElementById('lwLen').value);
                 if (L > totalDist) { document.getElementById('warning').style.display = 'block'; return; }
                 const pEndWire = new THREE.Vector3().copy(startNode).add(activeDir.clone().multiplyScalar(L));
+                
                 buildWire(startNode, pEndWire, copperColor);
                 
-                let isolator = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                isolator.position.copy(startNode); scene.add(isolator); markerMeshes.push(isolator);
+                // Unun Giallo all'ancoraggio
+                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({color: 0xffdd59}));
+                balun.position.copy(startNode); scene.add(balun); markerMeshes.push(balun);
                 
-                drawDropLine(startNode, 0xffffff, `Start: ${(startNode.y - groundLevel).toFixed(1)}m`);
+                // Isolatore finale
+                let isolator = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                isolator.position.copy(pEndWire); scene.add(isolator); markerMeshes.push(isolator);
+                
+                drawDropLine(pEndWire, 0xffffff, `Isol: ${(pEndWire.y - groundLevel).toFixed(1)}m`);
+                
+                if (document.getElementById('lwStart').value === 'A') { drawRopeLabel(pEndWire, B); }
+                else { drawRopeLabel(pEndWire, A); }
             }
         }
 
@@ -532,14 +575,14 @@
                 const referenceSpace = renderer.xr.getReferenceSpace();
                 const session = renderer.xr.getSession();
 
-                const apparentSizeFactor = 0.06; 
+                const apparentSizeFactor = 0.05; 
                 if (point1.visible) point1.scale.setScalar(camera.position.distanceTo(point1.position) * apparentSizeFactor);
                 if (point2.visible) point2.scale.setScalar(camera.position.distanceTo(point2.position) * apparentSizeFactor);
                 markerMeshes.forEach(marker => marker.scale.setScalar(camera.position.distanceTo(marker.position) * apparentSizeFactor));
                 
                 textSprites.forEach(sprite => {
                     const dist = camera.position.distanceTo(sprite.position);
-                    sprite.scale.set(dist * 0.15, dist * 0.075, 1);
+                    sprite.scale.set(dist * 0.25, dist * 0.06, 1);
                 });
 
                 if ( hitTestSourceRequested === false ) {
