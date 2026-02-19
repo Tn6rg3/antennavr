@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Tiranti e Quote</title>
+    <title>AR Ham Radio Planner - Clean View</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
         
@@ -280,14 +280,18 @@
                 if (e.touches.length === 1 && (currentAction === 'EDIT_A' || currentAction === 'EDIT_B')) {
                     let pt = currentAction === 'EDIT_A' ? point1 : point2;
                     if (!pt || !pt.visible) return;
+
                     let touchX = e.touches[0].clientX; let touchY = e.touches[0].clientY;
                     let deltaX = touchX - lastTouchX; let deltaY = touchY - lastTouchY;
                     let dist = camera.position.distanceTo(pt.position);
                     let sensitivity = 0.001 * dist; 
+
                     let camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
                     let camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+
                     pt.position.add(camRight.multiplyScalar(deltaX * sensitivity));
                     pt.position.add(camUp.multiplyScalar(-deltaY * sensitivity)); 
+
                     lastTouchX = touchX; lastTouchY = touchY;
                     updateCalculations();
                 }
@@ -377,7 +381,6 @@
             scene.add(sprite); textSprites.push(sprite);
         }
 
-        // Aggiunge un cartello di distanza su un segmento (per i tiranti gialli)
         function drawRopeLabel(pStart, pEnd) {
             const dist = pStart.distanceTo(pEnd);
             if (dist < 0.1) return; // Non disegna se il tirante Ã¨ inesistente
@@ -480,7 +483,7 @@
 
             const type = document.getElementById('antType').value;
             if (type === 'none') {
-                drawRopeLabel(A, B); // Tutta corda
+                drawRopeLabel(A, B);
                 return;
             }
 
@@ -496,20 +499,17 @@
                 
                 buildWire(p1, Center, copperColor); buildWire(Center, p2, copperColor);
                 
-                // Balun Azzurro
-                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshBasicMaterial({color: 0x00ffff}));
+                // PALLINO DI ALIMENTAZIONE AZZURRO (Centro Dipolo)
+                let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0x00ffff}));
                 balun.position.copy(Center); scene.add(balun); markerMeshes.push(balun);
                 
                 // Isolatori
-                let iso1 = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                let iso1 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
                 iso1.position.copy(p1); scene.add(iso1); markerMeshes.push(iso1);
-                let iso2 = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                let iso2 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
                 iso2.position.copy(p2); scene.add(iso2); markerMeshes.push(iso2);
 
                 drawDropLine(Center, 0x00ffff, `Feed: ${(Center.y - groundLevel).toFixed(1)}m`);
-                drawDropLine(p1, 0xffffff, `Isol: ${(p1.y - groundLevel).toFixed(1)}m`);
-                drawDropLine(p2, 0xffffff, `Isol: ${(p2.y - groundLevel).toFixed(1)}m`);
-                
                 drawRopeLabel(A, p1); drawRopeLabel(p2, B);
 
             } else if (type === 'endfed') {
@@ -526,19 +526,17 @@
                 
                 buildWire(pStartWire, pFeed, copperColor); buildWire(pFeed, pEndWire, copperColor);
                 
-                // Trasformatore Verde
-                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({color: 0x2ed573}));
+                // PALLINO DI ALIMENTAZIONE VERDE (Trafo End-Fed)
+                let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0x2ed573}));
                 balun.position.copy(pFeed); scene.add(balun); markerMeshes.push(balun);
                 
                 // Isolatori
-                let iso1 = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                let iso1 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
                 iso1.position.copy(pStartWire); scene.add(iso1); markerMeshes.push(iso1);
-                let iso2 = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                let iso2 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
                 iso2.position.copy(pEndWire); scene.add(iso2); markerMeshes.push(iso2);
 
                 drawDropLine(pFeed, 0x2ed573, `Trafo: ${(pFeed.y - groundLevel).toFixed(1)}m`);
-                drawDropLine(pStartWire, 0xffffff, `Isol: ${(pStartWire.y - groundLevel).toFixed(1)}m`);
-                drawDropLine(pEndWire, 0xffffff, `Isol: ${(pEndWire.y - groundLevel).toFixed(1)}m`);
                 
                 if (document.getElementById('efStart').value === 'A') { drawRopeLabel(A, pStartWire); drawRopeLabel(pEndWire, B); }
                 else { drawRopeLabel(B, pStartWire); drawRopeLabel(pEndWire, A); }
@@ -552,15 +550,13 @@
                 
                 buildWire(startNode, pEndWire, copperColor);
                 
-                // Unun Giallo all'ancoraggio
-                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({color: 0xffdd59}));
+                // PALLINO DI ALIMENTAZIONE GIALLO (Inizio Long Wire)
+                let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0xffdd59}));
                 balun.position.copy(startNode); scene.add(balun); markerMeshes.push(balun);
                 
                 // Isolatore finale
-                let isolator = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                let isolator = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
                 isolator.position.copy(pEndWire); scene.add(isolator); markerMeshes.push(isolator);
-                
-                drawDropLine(pEndWire, 0xffffff, `Isol: ${(pEndWire.y - groundLevel).toFixed(1)}m`);
                 
                 if (document.getElementById('lwStart').value === 'A') { drawRopeLabel(pEndWire, B); }
                 else { drawRopeLabel(pEndWire, A); }
