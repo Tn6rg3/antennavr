@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Ham Radio Planner - Balun & Drop Lines</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
+        
+        #ui-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: space-between;
+            z-index: 100; pointer-events: none; padding: 5px; box-sizing: border-box;
+        }
+
+        #top-bar { display: flex; justify-content: space-between; width: 100%; }
+
+        #dataPanel {
+            background: rgba(0, 0, 0, 0.85); padding: 10px; border-radius: 8px; font-size: 13px;
+            width: fit-content; max-width: 45%; pointer-events: auto; border-left: 3px solid #ffdd59;
+        }
+        .data-value { font-weight: bold; color: #ffdd59; font-size: 15px; }
+
+        #antennaPanel {
+            background: rgba(20, 40, 60, 0.95); padding: 10px; border-radius: 8px; font-size: 14px;
+            width: 45%; pointer-events: auto; border: 2px solid #1e90ff; display: none;
+        }
+        #antennaPanel select, #antennaPanel input { width: 100%; margin-top: 5px; margin-bottom: 10px; padding: 5px; background: #222; color: white; border: 1px solid #555; }
+        .ant-settings { display: none; }
+        #warning { color: #ff4757; font-weight: bold; font-size: 12px; display: none; margin-top: 5px;}
+
+        .bottom-controls { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; }
+        .btn-row { display: flex; gap: 5px; pointer-events: auto; width: 100%; justify-content: center; }
+        .main-btn {
+            padding: 10px 5px; font-size: 13px; font-weight: bold; flex: 1; border-radius: 8px;
+            border: 2px solid transparent; cursor: pointer; color: white; opacity: 0.7; transition: 0.2s;
+        }
+        .main-btn.active { opacity: 1; border-color: white; transform: scale(1.02); }
+        
+        #btnGround { background: #2ed573; color: black; }
+        #btnA { background: #ff4757; }
+        #btnB { background: #1e90ff; }
+        #btnPhoto { background: #ffffff; color: black; font-size: 16px; flex: 0.5; }
+        
+        #instruction { text-align: center; color: #fff; font-weight: bold; background: #e1b12c; padding: 6px; border-radius: 5px; width: 100%; box-sizing: border-box; font-size: 13px;}
+        
+        .edit-panel { background: rgba(30,30,30,0.95); padding: 8px; border-radius: 8px; width: 100%; pointer-events: auto; box-sizing: border-box; text-align: center;}
+        .edit-row { display: flex; justify-content: center; gap: 10px; margin-top: 5px; }
+        .edit-btn { padding: 10px 15px; font-size: 14px; background: #444; color: white; border: 1px solid #777; border-radius: 5px; font-weight: bold; cursor: pointer;}
+        .edit-btn:active { background: #888; }
+        
+        .height-input-container { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; }
+        #phoneHeight { width: 60px; padding: 5px; font-size: 16px; text-align: center; font-weight: bold; border-radius: 4px; border: none;}
+        
+        #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
+        
+        /* Schermata Overlay per la foto */
+        #photoOverlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; font-size: 18px; text-align: center; font-weight: bold; display: none; z-index: 200; border: 2px solid #2ed573;}
+    </style>
+</head>
+<body>
+
+    <div id="ui-container" style="display: none;">
+        <div id="touchArea"></div>
+        
+        <div id="top-bar">
+            <div id="dataPanel">
+                <strong>QUOTE (dal suolo):</strong><br>
+                A: <span id="hA" class="data-value">--</span>m<br>
+                B: <span id="hB" class="data-value">--</span>m<br>
+                <hr style="border-color:#555; margin: 5px 0;">
+                Distanza A-B:<br><span id="distAB" class="data-value" style="font-size: 18px;">--</span>m
+            </div>
+
+            <div id="antennaPanel">
+                <strong>Configura Antenna</strong>
+                <select id="antType">
+                    <option value="none">Solo Filo</option>
+                    <option value="dipole">Dipolo</option>
+                    <option value="endfed">End Fed</option>
+                    <option value="longwire">Long Wire</option>
+                </select>
+
+                <div id="setDipole" class="ant-settings">
+                    Banda:<br>
+                    <select id="dipoleBand">
+                        <option value="160">160m (~80m filo)</option>
+                        <option value="80">80m (~40m filo)</option>
+                        <option value="40">40m (~20m filo)</option>
+                        <option value="20">20m (~10m filo)</option>
+                        <option value="15">15m (~7m filo)</option>
+                        <option value="10">10m (~5m filo)</option>
+                        <option value="6">6m (~3m filo)</option>
+                        <option value="4">4m (~2m filo)</option>
+                        <option value="2">2m (~1m filo)</option>
+                    </select>
+                </div>
+
+                <div id="setEndFed" class="ant-settings">
+                    Start:<br>
+                    <select id="efStart"><option value="A">Punto A</option><option value="B">Punto B</option></select>
+                    Dist: <input type="number" id="efDist" value="1" step="0.5">
+                    L1 (m): <input type="number" id="efL1" value="10" step="0.5">
+                    L2 (m): <input type="number" id="efL2" value="2" step="0.5">
+                </div>
+
+                <div id="setLongWire" class="ant-settings">
+                    Start:<br>
+                    <select id="lwStart"><option value="A">Punto A</option><option value="B">Punto B</option></select>
+                    Lunghezza (m): <input type="number" id="lwLen" value="20" step="1">
+                </div>
+                
+                <div id="warning">â ï¸ Antenna piÃ¹ lunga dello spazio!</div>
+            </div>
+        </div>
+
+        <div class="bottom-controls">
+            
+            <div id="panel-setup-ground" class="edit-panel" style="display: none;">
+                <div style="font-size: 13px; margin-bottom: 8px; color: #2ed573;">CALIBRAZIONE MATEMATICA</div>
+                <div class="height-input-container">
+                    Altezza cellulare: <input type="number" id="phoneHeight" value="1.40" step="0.05"> m
+                </div>
+                <div class="edit-row">
+                    <button class="edit-btn" id="btnSetByHeight" style="background:#2ed573; color:black;">Usa Altezza Cellulare</button>
+                    <button class="edit-btn" id="btnSetByTouch">Usa 3 Tocchi (Mirino)</button>
+                </div>
+            </div>
+
+            <div id="panel-edit-point" class="edit-panel" style="display: none;">
+                <div style="font-size: 12px; margin-bottom: 5px; color: #aaa;">ð TRASCINA IL DITO per micro-correzioni.</div>
+                <div class="edit-row">
+                    <button class="edit-btn" id="btnPFar">Lontano âï¸</button>
+                    <button class="edit-btn" id="btnPNear">Vicino âï¸</button>
+                </div>
+            </div>
+
+            <div id="instruction">Inizializzazione...</div>
+
+            <div class="btn-row">
+                <button id="btnGround" class="main-btn">1. Terreno</button>
+                <button id="btnA" class="main-btn">2. Albero A</button>
+                <button id="btnB" class="main-btn">3. Albero B</button>
+                <button id="btnPhoto" class="main-btn">ð¸ Foto</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="photoOverlay">Usa i tasti del telefono per lo screenshot!<br><span style="font-size:14px;font-weight:normal;">Interfaccia nascosta per 5 secondi...</span></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+        let container, camera, scene, renderer, controller, reticle;
+        let hitTestSource = null, hitTestSourceRequested = false;
+
+        let point1, point2, groundGrid, lineAB;
+        let antennaMeshes = []; 
+        let markerMeshes = []; 
+        let textSprites = []; // Array specifico per i cartelli di testo (cosÃ¬ li scaliamo diversamente)
+        let laserMesh = null;
+        
+        let groundLevel = 0; 
+        let isGroundSet = false;
+        let groundCalibrationPoints = []; 
+        let tempGroundMarkers = [];
+        
+        let currentAction = 'NONE'; 
+
+        let shot1Pos = new THREE.Vector3();
+        let shot1Dir = new THREE.Vector3();
+        let isShot1Done = false;
+
+        let lastTouchX = 0, lastTouchY = 0;
+        let isDragging = false, hasDragged = false; 
+
+        init();
+        animate();
+
+        function init() {
+            container = document.createElement( 'div' );
+            document.body.appendChild( container );
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 200 );
+
+            const light = new THREE.HemisphereLight( 0xffffff, 0xbbbbff, 3 );
+            light.position.set( 0.5, 1, 0.25 ); scene.add( light );
+
+            renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
+            renderer.setPixelRatio( window.devicePixelRatio );
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            renderer.xr.enabled = true;
+            container.appendChild( renderer.domElement );
+
+            document.body.appendChild( ARButton.createButton( renderer, { 
+                requiredFeatures: [ 'hit-test', 'dom-overlay' ],
+                domOverlay: { root: document.getElementById('ui-container') }
+            } ) );
+
+            groundGrid = new THREE.GridHelper( 3, 30, 0x2ed573, 0x2ed573 );
+            groundGrid.material.opacity = 0.8; groundGrid.material.transparent = true; groundGrid.visible = false;
+            scene.add( groundGrid );
+
+            const pointGeo = new THREE.SphereGeometry( 0.05, 32, 32 );
+            point1 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0xff4757 } ) ); point1.visible = false; scene.add( point1 );
+            point2 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0x1e90ff } ) ); point2.visible = false; scene.add( point2 );
+
+            lineAB = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffdd59, linewidth: 1 }));
+            lineAB.visible = false; scene.add(lineAB);
+
+            reticle = new THREE.Mesh( new THREE.RingGeometry( 0.02, 0.04, 32 ).rotateX( - Math.PI / 2 ), new THREE.MeshBasicMaterial( { color: 0xffffff } ) );
+            reticle.matrixAutoUpdate = true; reticle.visible = false; scene.add( reticle );
+
+            controller = renderer.xr.getController( 0 );
+            controller.addEventListener( 'select', onSelect );
+            scene.add( controller );
+
+            window.addEventListener( 'resize', onWindowResize );
+
+            renderer.xr.addEventListener('sessionstart', () => {
+                document.getElementById('ui-container').style.display = 'flex';
+                setAction('MENU_GROUND');
+            });
+
+            document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
+                if (ev.target.id !== 'touchArea') ev.preventDefault();
+            });
+
+            document.getElementById('btnGround').addEventListener('click', () => setAction('MENU_GROUND'));
+            
+            document.getElementById('btnSetByHeight').addEventListener('click', () => {
+                const height = parseFloat(document.getElementById('phoneHeight').value);
+                if(isNaN(height) || height <= 0) return;
+                groundLevel = camera.position.y - height;
+                groundGrid.position.set(camera.position.x, groundLevel, camera.position.z);
+                groundGrid.visible = true; isGroundSet = true;
+                setAction('NONE'); updateCalculations();
+            });
+
+            document.getElementById('btnSetByTouch').addEventListener('click', () => setAction('PLACE_GROUND'));
+
+            document.getElementById('btnA').addEventListener('click', () => { isShot1Done = false; setAction('TRIANGULATE_A'); });
+            document.getElementById('btnB').addEventListener('click', () => { isShot1Done = false; setAction('TRIANGULATE_B'); });
+
+            document.getElementById('btnPFar').addEventListener('click', () => adjustDepth(0.5));
+            document.getElementById('btnPNear').addEventListener('click', () => adjustDepth(-0.5));
+
+            document.getElementById('antType').addEventListener('change', updateAntennaUI);
+            document.querySelectorAll('#antennaPanel select, #antennaPanel input').forEach(el => el.addEventListener('input', drawAntenna));
+
+            // Logica Screenshot (Nasconde l'UI temporaneamente)
+            document.getElementById('btnPhoto').addEventListener('click', () => {
+                const ui = document.getElementById('ui-container');
+                const overlay = document.getElementById('photoOverlay');
+                ui.style.visibility = 'hidden';
+                overlay.style.display = 'block';
+                
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                    ui.style.visibility = 'visible';
+                }, 5000);
+            });
+
+            const touchArea = document.getElementById('touchArea');
+            touchArea.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1 && (currentAction === 'EDIT_A' || currentAction === 'EDIT_B')) {
+                    isDragging = true; hasDragged = false; 
+                    lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
+                }
+            });
+
+            touchArea.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                hasDragged = true; 
+                if (e.touches.length === 1 && (currentAction === 'EDIT_A' || currentAction === 'EDIT_B')) {
+                    let pt = currentAction === 'EDIT_A' ? point1 : point2;
+                    if (!pt || !pt.visible) return;
+
+                    let touchX = e.touches[0].clientX; let touchY = e.touches[0].clientY;
+                    let deltaX = touchX - lastTouchX; let deltaY = touchY - lastTouchY;
+
+                    let dist = camera.position.distanceTo(pt.position);
+                    let sensitivity = 0.001 * dist; 
+
+                    let camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                    let camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+
+                    pt.position.add(camRight.multiplyScalar(deltaX * sensitivity));
+                    pt.position.add(camUp.multiplyScalar(-deltaY * sensitivity)); 
+
+                    lastTouchX = touchX; lastTouchY = touchY;
+                    updateCalculations();
+                }
+            });
+            touchArea.addEventListener('touchend', () => { isDragging = false; });
+        }
+
+        function setAction(action) {
+            currentAction = action;
+            document.getElementById('panel-setup-ground').style.display = 'none';
+            document.getElementById('panel-edit-point').style.display = 'none';
+            document.querySelectorAll('.main-btn').forEach(b => b.classList.remove('active'));
+
+            let inst = document.getElementById('instruction');
+            if (laserMesh) { scene.remove(laserMesh); laserMesh = null; }
+
+            if (action === 'MENU_GROUND') {
+                document.getElementById('btnGround').classList.add('active');
+                document.getElementById('panel-setup-ground').style.display = 'block';
+                inst.innerText = "Scegli come impostare la quota zero del suolo."; inst.style.background = "#2ed573";
+            } else if (action === 'PLACE_GROUND') {
+                groundCalibrationPoints = []; clearTempMarkers();
+                document.getElementById('btnGround').classList.add('active');
+                inst.innerText = "Tocca 3 punti a terra per calibrare lo Zero."; inst.style.background = "#2ed573";
+            } else if (action === 'TRIANGULATE_A' || action === 'TRIANGULATE_B') {
+                const btn = action === 'TRIANGULATE_A' ? 'btnA' : 'btnB';
+                document.getElementById(btn).classList.add('active');
+                inst.innerText = "1. MIRA al ramo esatto e TOCCA."; inst.style.background = action === 'TRIANGULATE_A' ? "#ff4757" : "#1e90ff";
+            } else if (action === 'EDIT_A' || action === 'EDIT_B') {
+                const btn = action === 'EDIT_A' ? 'btnA' : 'btnB';
+                document.getElementById(btn).classList.add('active');
+                document.getElementById('panel-edit-point').style.display = 'block';
+                inst.innerText = "Trascina il punto per correzioni fini."; inst.style.background = action === 'EDIT_A' ? "#ff4757" : "#1e90ff";
+            } else {
+                inst.innerText = "Antenna pronta. Usa il tasto Foto per salvare."; inst.style.background = "#555";
+            }
+        }
+
+        function calculateTriangulation(p1, d1, p2, d2) {
+            const w0 = new THREE.Vector3().subVectors(p1, p2);
+            const a = d1.dot(d1); const b = d1.dot(d2); const c = d2.dot(d2);
+            const d = d1.dot(w0); const e = d2.dot(w0);
+            const denom = a * c - b * b;
+            if (denom < 0.001) return new THREE.Vector3().copy(p1).add(d1.clone().multiplyScalar(15)); 
+            const s = (b * e - c * d) / denom;
+            const t = (a * e - b * d) / denom;
+            const pointOnRay1 = new THREE.Vector3().copy(p1).add(d1.clone().multiplyScalar(s));
+            const pointOnRay2 = new THREE.Vector3().copy(p2).add(d2.clone().multiplyScalar(t));
+            return new THREE.Vector3().addVectors(pointOnRay1, pointOnRay2).multiplyScalar(0.5);
+        }
+
+        function createLaserRay(origin, direction, color) {
+            const end = origin.clone().add(direction.clone().multiplyScalar(50));
+            const geo = new THREE.BufferGeometry().setFromPoints([origin, end]);
+            const mat = new THREE.LineBasicMaterial({ color: color, linewidth: 2, transparent: true, opacity: 0.5 });
+            const mesh = new THREE.Line(geo, mat); scene.add(mesh); return mesh;
+        }
+
+        // Funzione per creare i cartelli di testo 3D
+        function makeTextSprite(message) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = 'bold 36px sans-serif';
+            ctx.fillStyle = '#ffdd59';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(message, 128, 64);
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+            const sprite = new THREE.Sprite(spriteMat);
+            return sprite;
+        }
+
+        // Crea la linea tratteggiata verticale e il cartello
+        function drawDropLine(position, color, labelText) {
+            if (!isGroundSet) return;
+            const groundPos = new THREE.Vector3(position.x, groundLevel, position.z);
+            const geo = new THREE.BufferGeometry().setFromPoints([position, groundPos]);
+            const mat = new THREE.LineDashedMaterial({ color: color, dashSize: 0.1, gapSize: 0.1 });
+            const line = new THREE.Line(geo, mat);
+            line.computeLineDistances(); // Obbligatorio per le linee tratteggiate in Threejs
+            scene.add(line);
+            antennaMeshes.push(line);
+
+            const midY = (position.y + groundLevel) / 2;
+            const sprite = makeTextSprite(labelText);
+            sprite.position.set(position.x, midY, position.z);
+            scene.add(sprite);
+            textSprites.push(sprite);
+        }
+
+        function onSelect() {
+            if (hasDragged) { hasDragged = false; return; }
+
+            if (currentAction === 'PLACE_GROUND') {
+                if(!reticle.visible) return;
+                groundCalibrationPoints.push(reticle.position.y);
+                let marker = new THREE.Mesh( new THREE.SphereGeometry(0.02), new THREE.MeshBasicMaterial({color: 0xffff00}) );
+                marker.position.copy(reticle.position); scene.add(marker); tempGroundMarkers.push(marker);
+                if (groundCalibrationPoints.length === 3) {
+                    groundLevel = groundCalibrationPoints.reduce((a, b) => a + b, 0) / 3;
+                    groundGrid.position.set(reticle.position.x, groundLevel, reticle.position.z);
+                    groundGrid.visible = true; isGroundSet = true; clearTempMarkers(); setAction('NONE'); updateCalculations();
+                }
+            } else if (currentAction === 'TRIANGULATE_A' || currentAction === 'TRIANGULATE_B') {
+                const camPos = new THREE.Vector3(); camera.getWorldPosition(camPos);
+                const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
+
+                if (!isShot1Done) {
+                    shot1Pos.copy(camPos); shot1Dir.copy(camDir); isShot1Done = true;
+                    let color = currentAction === 'TRIANGULATE_A' ? 0xff4757 : 0x1e90ff;
+                    laserMesh = createLaserRay(shot1Pos, shot1Dir, color);
+                    document.getElementById('instruction').innerText = "2. Spostati di lato, mira DI NUOVO al ramo e tocca.";
+                } else {
+                    const finalPoint = calculateTriangulation(shot1Pos, shot1Dir, camPos, camDir);
+                    if (currentAction === 'TRIANGULATE_A') {
+                        point1.position.copy(finalPoint); point1.visible = true; setAction('EDIT_A');
+                    } else {
+                        point2.position.copy(finalPoint); point2.visible = true; setAction('EDIT_B');
+                    }
+                    if (laserMesh) { scene.remove(laserMesh); laserMesh = null; } 
+                    updateCalculations();
+                }
+            }
+        }
+
+        function clearTempMarkers() { tempGroundMarkers.forEach(m => scene.remove(m)); tempGroundMarkers = []; }
+
+        function adjustDepth(amount) {
+            let pt = currentAction === 'EDIT_A' ? point1 : (currentAction === 'EDIT_B' ? point2 : null);
+            if (!pt || !pt.visible) return;
+            const toPoint = new THREE.Vector3().subVectors(pt.position, camera.position);
+            toPoint.y = 0; toPoint.normalize();
+            pt.position.add(toPoint.clone().multiplyScalar(amount));
+            updateCalculations();
+        }
+
+        function updateCalculations() {
+            if (isGroundSet && point1.visible) document.getElementById('hA').innerText = (point1.position.y - groundLevel).toFixed(1);
+            if (isGroundSet && point2.visible) document.getElementById('hB').innerText = (point2.position.y - groundLevel).toFixed(1);
+            if (point1.visible && point2.visible) {
+                lineAB.geometry.setFromPoints([point1.position, point2.position]);
+                lineAB.visible = true;
+                document.getElementById('distAB').innerText = point1.position.distanceTo(point2.position).toFixed(1);
+                document.getElementById('antennaPanel').style.display = 'block';
+                drawAntenna();
+            }
+        }
+
+        function updateAntennaUI() {
+            const type = document.getElementById('antType').value;
+            document.querySelectorAll('.ant-settings').forEach(el => el.style.display = 'none');
+            if (type === 'dipole') document.getElementById('setDipole').style.display = 'block';
+            if (type === 'endfed') document.getElementById('setEndFed').style.display = 'block';
+            if (type === 'longwire') document.getElementById('setLongWire').style.display = 'block';
+            drawAntenna();
+        }
+
+        function buildWire(pStart, pEnd, color, thickness=0.015) {
+            const dist = pStart.distanceTo(pEnd);
+            const cylinder = new THREE.Mesh( new THREE.CylinderGeometry(thickness, thickness, dist, 8), new THREE.MeshBasicMaterial({color: color}) );
+            cylinder.position.copy(pStart).lerp(pEnd, 0.5);
+            cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3().subVectors(pEnd, pStart).normalize());
+            scene.add(cylinder); antennaMeshes.push(cylinder);
+        }
+
+        function drawAntenna() {
+            antennaMeshes.forEach(m => scene.remove(m)); antennaMeshes = [];
+            markerMeshes.forEach(m => scene.remove(m)); markerMeshes = [];
+            textSprites.forEach(m => scene.remove(m)); textSprites = [];
+            document.getElementById('warning').style.display = 'none';
+
+            if (!point1.visible || !point2.visible) return;
+            const type = document.getElementById('antType').value;
+            if (type === 'none') return;
+
+            const A = point1.position; const B = point2.position;
+            const totalDist = A.distanceTo(B);
+            const dir = new THREE.Vector3().subVectors(B, A).normalize();
+            let wireLength = 0; const copperColor = 0xe67e22;
+
+            if (type === 'dipole') {
+                const band = parseFloat(document.getElementById('dipoleBand').value);
+                wireLength = band / 2; const armLen = wireLength / 2;
+                if (wireLength > totalDist) { document.getElementById('warning').style.display = 'block'; return; }
+                const Center = new THREE.Vector3().copy(A).lerp(B, 0.5);
+                const p1 = new THREE.Vector3().copy(Center).add(dir.clone().multiplyScalar(-armLen));
+                const p2 = new THREE.Vector3().copy(Center).add(dir.clone().multiplyScalar(armLen));
+                buildWire(p1, Center, copperColor); buildWire(Center, p2, copperColor);
+                
+                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({color: 0x00ffff}));
+                balun.position.copy(Center); scene.add(balun); markerMeshes.push(balun);
+                
+                // Traccia la linea verticale con l'altezza
+                drawDropLine(Center, 0x00ffff, `Feed: ${(Center.y - groundLevel).toFixed(1)}m`);
+
+            } else if (type === 'endfed') {
+                const startNode = document.getElementById('efStart').value === 'A' ? A : B;
+                const activeDir = document.getElementById('efStart').value === 'A' ? dir.clone() : dir.clone().multiplyScalar(-1);
+                const dist = parseFloat(document.getElementById('efDist').value);
+                const L1 = parseFloat(document.getElementById('efL1').value);
+                const L2 = parseFloat(document.getElementById('efL2').value);
+                wireLength = dist + L1 + L2;
+                if (wireLength > totalDist) { document.getElementById('warning').style.display = 'block'; return; }
+                const pStartWire = new THREE.Vector3().copy(startNode).add(activeDir.clone().multiplyScalar(dist));
+                const pFeed = new THREE.Vector3().copy(pStartWire).add(activeDir.clone().multiplyScalar(L1));
+                const pEndWire = new THREE.Vector3().copy(pFeed).add(activeDir.clone().multiplyScalar(L2));
+                buildWire(pStartWire, pFeed, copperColor); buildWire(pFeed, pEndWire, copperColor);
+                
+                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), new THREE.MeshBasicMaterial({color: 0x00ffff}));
+                balun.position.copy(pFeed); scene.add(balun); markerMeshes.push(balun);
+                
+                // Traccia la linea verticale
+                drawDropLine(pFeed, 0x00ffff, `Feed: ${(pFeed.y - groundLevel).toFixed(1)}m`);
+
+            } else if (type === 'longwire') {
+                const startNode = document.getElementById('lwStart').value === 'A' ? A : B;
+                const activeDir = document.getElementById('lwStart').value === 'A' ? dir.clone() : dir.clone().multiplyScalar(-1);
+                const L = parseFloat(document.getElementById('lwLen').value);
+                if (L > totalDist) { document.getElementById('warning').style.display = 'block'; return; }
+                const pEndWire = new THREE.Vector3().copy(startNode).add(activeDir.clone().multiplyScalar(L));
+                buildWire(startNode, pEndWire, copperColor);
+                
+                let isolator = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                isolator.position.copy(startNode); scene.add(isolator); markerMeshes.push(isolator);
+                
+                drawDropLine(startNode, 0xffffff, `Start: ${(startNode.y - groundLevel).toFixed(1)}m`);
+            }
+        }
+
+        function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize( window.innerWidth, window.innerHeight ); }
+        function animate() { renderer.setAnimationLoop( render ); }
+
+        function render( timestamp, frame ) {
+            if ( frame ) {
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const session = renderer.xr.getSession();
+
+                const apparentSizeFactor = 0.06; 
+                if (point1.visible) point1.scale.setScalar(camera.position.distanceTo(point1.position) * apparentSizeFactor);
+                if (point2.visible) point2.scale.setScalar(camera.position.distanceTo(point2.position) * apparentSizeFactor);
+                markerMeshes.forEach(marker => marker.scale.setScalar(camera.position.distanceTo(marker.position) * apparentSizeFactor));
+                
+                // I cartelli di testo hanno proporzioni 2:1 (rettangolari), per cui li scalo in modo specifico
+                textSprites.forEach(sprite => {
+                    const dist = camera.position.distanceTo(sprite.position);
+                    sprite.scale.set(dist * 0.15, dist * 0.075, 1);
+                });
+
+                if ( hitTestSourceRequested === false ) {
+                    session.requestReferenceSpace( 'viewer' ).then( function ( referenceSpace ) {
+                        session.requestHitTestSource( { space: referenceSpace } ).then( function ( source ) { hitTestSource = source; } );
+                    } );
+                    session.addEventListener( 'end', function () { hitTestSourceRequested = false; hitTestSource = null; } );
+                    hitTestSourceRequested = true;
+                }
+
+                if (currentAction === 'PLACE_GROUND') {
+                    reticle.visible = false;
+                    if ( hitTestSource ) {
+                        const hitTestResults = frame.getHitTestResults( hitTestSource );
+                        if ( hitTestResults.length ) {
+                            const pose = hitTestResults[0].getPose( referenceSpace );
+                            reticle.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                            reticle.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
+                            reticle.visible = true;
+                        }
+                    }
+                } else if (currentAction === 'TRIANGULATE_A' || currentAction === 'TRIANGULATE_B') {
+                    const distance = 2; 
+                    const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
+                    reticle.position.copy(camera.position).add(camDir.multiplyScalar(distance));
+                    reticle.quaternion.copy(camera.quaternion); 
+                    reticle.visible = true; 
+                } else {
+                    reticle.visible = false;
+                }
+            }
+            renderer.render( scene, camera );
+        }
+    </script>
+</body>
+</html>
