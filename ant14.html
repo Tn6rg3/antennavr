@@ -58,7 +58,7 @@
 <body>
 
     <!-- Fotocamera -->
-    <video id="camera-bg" autoplay playsinline></video>
+    <video id="camera-bg" autoplay playsinline muted></video>
     
     <!-- Mirino -->
     <div id="crosshair"></div>
@@ -163,25 +163,29 @@
         // Avvio Fotocamera
         async function initCamera() {
             try {
+                // Tenta di usare la fotocamera posteriore principale
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" } 
+                    video: { facingMode: { ideal: "environment" } } 
                 });
                 video.srcObject = stream;
+                
+                // Forza l'avvio della riproduzione (necessario su alcuni dispositivi)
+                video.play().catch(e => console.error("Errore di riproduzione video:", e));
             } catch (err) {
-                alert("Errore fotocamera. Assicurati di aver dato i permessi e di usare HTTPS.");
+                alert("ERRORE FOTOCAMERA:\n" + err.name + " - " + err.message + "\n\n1. Controlla di aver dato i permessi al browser.\n2. Assicurati che l'URL inizi per 'https://'.");
             }
         }
 
         // Lettura Sensori (Giroscopio/Bussola)
         function handleOrientation(event) {
-            if (!event.beta || event.beta === null) return;
+            if (event.beta === null) return;
             hasSensors = true;
             document.getElementById('sensor-error').style.display = 'none';
 
-            // Beta: -180 a 180. Telefono verticale = 90.
+            // Beta: da -180 a 180. Telefono verticale = 90.
             // Calcoliamo l'angolo di inclinazione (Pitch). 
             // Positivo = Guardo in GIÙ. Negativo = Guardo in SU.
-            let degrees = event.beta - 90; 
+            let degrees = 90 - event.beta; 
             pitch = degrees * (Math.PI / 180);
 
             // Alpha: Bussola (Azimuth)
@@ -313,20 +317,36 @@
             }
         }
 
-        // Event Listeners
-        window.addEventListener('deviceorientationabsolute', handleOrientation);
-        // Fallback per dispositivi che non supportano 'absolute'
-        window.addEventListener('deviceorientation', (e) => { if(!hasSensors) handleOrientation(e); });
+        // RIMOZIONE DEI LISTENER GLOBALI
+        // I sensori verranno attivati al click del pulsante per rispettare le nuove policy di sicurezza dei browser
 
-        btnStart.addEventListener('click', () => {
+        btnStart.addEventListener('click', async () => {
             eyeHeight = parseFloat(document.getElementById('eyeHeight').value);
             if (isNaN(eyeHeight) || eyeHeight < 0.5) { alert("Inserisci un'altezza valida."); return; }
             
-            if (!hasSensors) {
-                document.getElementById('sensor-error').style.display = 'block';
-                return; // Impedisce l'avvio se i sensori sono disattivati
+            // 1. RICHIESTA AUTORIZZAZIONE SENSORI (Fondamentale per iOS e Chrome aggiornato)
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                    } else {
+                        alert("Permesso sensori negato. Ricarica la pagina e consenti l'accesso per continuare.");
+                        return;
+                    }
+                } catch (error) {
+                    console.error("Errore durante la richiesta dei sensori:", error);
+                }
+            } else {
+                // Per Android o browser che non richiedono il prompt esplicito
+                window.addEventListener('deviceorientationabsolute', handleOrientation);
+                window.addEventListener('deviceorientation', (e) => { if(!hasSensors) handleOrientation(e); });
             }
 
+            // Rimuoviamo l'avviso di errore visto che abbiamo appena inizializzato i sensori
+            document.getElementById('sensor-error').style.display = 'none';
+
+            // 2. AVVIO FOTOCAMERA E UI
             setupScreen.style.display = 'none';
             initCamera();
             
@@ -357,5 +377,8 @@
     </script>
 </body>
 </html>
+
+
+
 
 
