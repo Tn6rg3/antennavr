@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Base & Altitudine</title>
+    <title>AR Ham Radio Planner - Vertical Quotes & Balun Fix</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
         
@@ -323,17 +323,20 @@
                     if (!pt || !pt.visible) return;
 
                     let touchY = e.touches[0].clientY;
-                    let deltaY = lastTouchY - touchY; // delta positivo se muovo il dito in su
-                    let sensitivity = 0.01; // Velocità di movimento verticale
+                    let deltaY = lastTouchY - touchY; 
+                    
+                    let dist = camera.position.distanceTo(pt.position);
+                    let vFov = camera.fov * Math.PI / 180; 
+                    let visibleHeight = 2 * Math.tan(vFov / 2) * dist;
+                    let sensitivity = visibleHeight / window.innerHeight; 
 
                     pt.position.y += deltaY * sensitivity;
 
-                    // Opzionale: impedire che vada sotto terra
                     if (isGroundSet && pt.position.y < groundLevel) pt.position.y = groundLevel;
 
                     lastTouchY = touchY;
                     updateCalculations();
-                    drawAntenna(); // Forza il ridisegno della linea verticale
+                    drawAntenna(); 
                 }
             });
             touchArea.addEventListener('touchend', () => { isDragging = false; });
@@ -369,19 +372,35 @@
             }
         }
 
-        function makeTextSprite(message, textColor = '#ffffff', bgColor = 'rgba(0, 0, 0, 0.7)') {
+        // Funzione modificata per supportare il testo in verticale
+        function makeTextSprite(message, textColor = '#ffffff', bgColor = 'rgba(0, 0, 0, 0.7)', isVertical = false) {
             const canvas = document.createElement('canvas');
-            canvas.width = 512; canvas.height = 128;
+            if (isVertical) {
+                canvas.width = 128; canvas.height = 512;
+            } else {
+                canvas.width = 512; canvas.height = 128;
+            }
+            
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.font = 'bold 42px sans-serif';
             ctx.fillStyle = textColor;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(message, 256, 64);
+            
+            if (isVertical) {
+                ctx.translate(64, 256);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillText(message, 0, 0);
+            } else {
+                ctx.fillText(message, 256, 64);
+            }
+            
             const texture = new THREE.CanvasTexture(canvas);
             const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-            return new THREE.Sprite(spriteMat);
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.userData.isVertical = isVertical; // Salvo il flag per usarlo in render()
+            return sprite;
         }
 
         function drawDropLine(position, color, labelText) {
@@ -393,8 +412,10 @@
             line.computeLineDistances();
             scene.add(line); antennaMeshes.push(line);
 
-            const labelY = groundLevel + (position.y - groundLevel) * 0.3;
-            const sprite = makeTextSprite(labelText, `#${color.toString(16).padStart(6, '0')}`);
+            // Posizionato esattamente al 50% dell'altezza (prima era 0.3)
+            const labelY = groundLevel + (position.y - groundLevel) * 0.5;
+            // Richiede lo sprite verticale passando 'true'
+            const sprite = makeTextSprite(labelText, `#${color.toString(16).padStart(6, '0')}`, 'rgba(0,0,0,0.7)', true);
             sprite.position.set(position.x, labelY, position.z);
             scene.add(sprite); textSprites.push(sprite);
         }
@@ -403,7 +424,7 @@
             const dist = pStart.distanceTo(pEnd);
             if (dist < 0.1) return;
             const midPoint = new THREE.Vector3().copy(pStart).lerp(pEnd, 0.5);
-            const sprite = makeTextSprite(`Corda: ${dist.toFixed(1)}m`, '#ffdd59', 'rgba(50, 50, 0, 0.8)');
+            const sprite = makeTextSprite(`Corda: ${dist.toFixed(1)}m`, '#ffdd59', 'rgba(50, 50, 0, 0.8)', false);
             sprite.position.copy(midPoint);
             scene.add(sprite); textSprites.push(sprite);
         }
@@ -449,7 +470,6 @@
             let pt = currentAction === 'SET_HEIGHT_A' ? point1 : (currentAction === 'SET_HEIGHT_B' ? point2 : null);
             if (!pt || !pt.visible) return;
             
-            // Sposta la base lungo la linea visiva della camera, ma mantenendo l'altezza impostata
             const toPoint = new THREE.Vector3().subVectors(pt.position, camera.position);
             toPoint.y = 0; toPoint.normalize();
             pt.position.add(toPoint.clone().multiplyScalar(amount));
@@ -463,8 +483,6 @@
             if (isGroundSet && point2.visible) document.getElementById('hB').innerText = (point2.position.y - groundLevel).toFixed(1);
             
             if (point1.visible && point2.visible) {
-                lineAB.geometry.setFromPoints([point1.position, point2.position]);
-                lineAB.visible = true;
                 document.getElementById('distAB').innerText = point1.position.distanceTo(point2.position).toFixed(1);
                 document.getElementById('antennaPanel').style.display = 'block';
             }
@@ -493,21 +511,28 @@
             textSprites.forEach(m => disposeNode(m)); textSprites = [];
             document.getElementById('warning').style.display = 'none';
 
-            // Disegna sempre le guide verticali se i punti esistono (anche singolarmente durante l'editing)
             if (point1.visible) drawDropLine(point1.position, 0xff4757, `Alb.A: ${(point1.position.y - groundLevel).toFixed(1)}m`);
             if (point2.visible) drawDropLine(point2.position, 0x1e90ff, `Alb.B: ${(point2.position.y - groundLevel).toFixed(1)}m`);
 
-            // Esci se non ci sono entrambi i punti per l'antenna principale
-            if (!point1.visible || !point2.visible) return;
+            if (!point1.visible || !point2.visible) {
+                lineAB.visible = false;
+                return;
+            }
             
             const A = point1.position; const B = point2.position;
             const totalDist = A.distanceTo(B);
             const dir = new THREE.Vector3().subVectors(B, A).normalize();
 
             const type = document.getElementById('antType').value;
+            
+            // Gestione visibilità linea di base gialla
             if (type === 'none') {
+                lineAB.geometry.setFromPoints([A, B]);
+                lineAB.visible = true;
                 drawRopeLabel(A, B);
                 return;
+            } else {
+                lineAB.visible = false; // La nascondo per non coprire il rame e il balun
             }
 
             let wireLength = 0; const copperColor = 0xe67e22;
@@ -522,7 +547,8 @@
                 
                 buildWire(p1, Center, copperColor); buildWire(Center, p2, copperColor);
                 
-                let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0x00ffff}));
+                // Nodo Balun molto più evidente (Cubo/Scatola bianca per massimo contrasto)
+                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff}));
                 balun.position.copy(Center); scene.add(balun); markerMeshes.push(balun);
                 
                 drawDropLine(Center, 0x00ffff, `Feed: ${(Center.y - groundLevel).toFixed(1)}m`);
@@ -542,7 +568,7 @@
                 
                 buildWire(pStartWire, pFeed, copperColor); buildWire(pFeed, pEndWire, copperColor);
                 
-                let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0x2ed573}));
+                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff}));
                 balun.position.copy(pFeed); scene.add(balun); markerMeshes.push(balun);
                 
                 drawDropLine(pFeed, 0x2ed573, `Trafo: ${(pFeed.y - groundLevel).toFixed(1)}m`);
@@ -559,7 +585,7 @@
                 
                 buildWire(startNode, pEndWire, copperColor);
                 
-                let balun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), new THREE.MeshBasicMaterial({color: 0xffdd59}));
+                let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff}));
                 balun.position.copy(startNode); scene.add(balun); markerMeshes.push(balun);
                 
                 if (document.getElementById('lwStart').value === 'A') { drawRopeLabel(pEndWire, B); }
@@ -580,9 +606,14 @@
                 if (point2.visible) point2.scale.setScalar(camera.position.distanceTo(point2.position) * apparentSizeFactor);
                 markerMeshes.forEach(marker => marker.scale.setScalar(camera.position.distanceTo(marker.position) * apparentSizeFactor));
                 
+                // Gestione proporzioni per sprite verticali vs orizzontali
                 textSprites.forEach(sprite => {
                     const dist = camera.position.distanceTo(sprite.position);
-                    sprite.scale.set(dist * 0.25, dist * 0.06, 1);
+                    if (sprite.userData.isVertical) {
+                        sprite.scale.set(dist * 0.06, dist * 0.25, 1);
+                    } else {
+                        sprite.scale.set(dist * 0.25, dist * 0.06, 1);
+                    }
                 });
 
                 if ( hitTestSourceRequested === false ) {
@@ -593,7 +624,6 @@
                     hitTestSourceRequested = true;
                 }
 
-                // Usa l'hit test a terra per Terreno e per piazzare la Base di A e B
                 if (currentAction === 'PLACE_GROUND' || currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B') {
                     reticle.visible = false;
                     if ( hitTestSource ) {
