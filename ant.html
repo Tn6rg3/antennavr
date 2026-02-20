@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Precision Tool</title>
+    <title>AR Ham Radio - Touch Precision</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; color: white; touch-action: none; }
         #ui-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; z-index: 100; pointer-events: none; padding: 10px; box-sizing: border-box; }
@@ -12,61 +12,52 @@
         #dataPanel { background: rgba(0,0,0,0.85); padding: 10px; border-radius: 8px; font-size: 11px; border-left: 4px solid #ffdd59; flex-grow: 1; }
         .data-value { font-weight: bold; color: #ffdd59; font-size: 13px; }
         
-        #settingsPanel { background: rgba(20,20,20,0.9); padding: 10px; border-radius: 8px; pointer-events: auto; font-size: 10px; min-width: 120px; }
-        input, select { width: 100%; background: #333; color: white; border: 1px solid #555; padding: 3px; border-radius: 4px; margin-top: 2px; }
+        #settingsPanel { background: rgba(20,20,20,0.9); padding: 10px; border-radius: 8px; pointer-events: auto; font-size: 10px; min-width: 140px; }
+        input, select { width: 100%; background: #333; color: white; border: 1px solid #555; padding: 4px; border-radius: 4px; margin-top: 2px; }
 
         .bottom-controls { display: flex; flex-direction: column; gap: 8px; width: 100%; align-items: center; }
         #instruction { background: #ffdd59; color: #000; padding: 10px; border-radius: 8px; font-weight: bold; width: 100%; text-align: center; font-size: 13px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); pointer-events: none; }
         
         .btn-row { display: flex; gap: 5px; width: 100%; pointer-events: auto; }
-        .main-btn { flex: 1; padding: 12px 5px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; color: white; text-transform: uppercase; font-size: 10px; }
+        .main-btn { flex: 1; padding: 14px 5px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; color: white; text-transform: uppercase; font-size: 10px; }
         #btnGround { background: #2ed573; color: black; }
         #btnA { background: #ff4757; }
         #btnB { background: #1e90ff; }
         .active { outline: 3px solid white; box-shadow: 0 0 15px rgba(255,255,255,0.5); }
 
-        #edit-panel { display: none; background: rgba(0,0,0,0.9); padding: 10px; border-radius: 12px; width: 95%; pointer-events: auto; flex-direction: column; gap: 8px; border: 1px solid #555; }
-        .edit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
-        .move-btn { padding: 10px; background: #444; color: white; border: none; border-radius: 5px; font-size: 12px; font-weight: bold; }
+        #touch-shield { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 50; display: none; }
     </style>
 </head>
 <body>
 
     <div id="ui-container" style="display: none;">
-        <div id="top-bar">
+        <div id="touch-shield"></div> <div id="top-bar">
             <div id="dataPanel">
-                H-A: <span id="hA" class="data-value">--</span>m | H-B: <span id="hB" class="data-value">--</span>m | H-Ctr: <span id="hC" class="data-value">--</span>m<br>
-                Dist AB: <span id="distAB" class="data-value">--</span>m | ISO: <span id="isoA" class="data-value">--</span>m
+                H-A: <span id="hA" class="data-value">--</span>m | H-B: <span id="hB" class="data-value">--</span>m | Centro: <span id="hC" class="data-value">--</span>m<br>
+                Dist AB: <span id="distAB" class="data-value">--</span>m | Isolatori: <span id="isoA" class="data-value">--</span>m
             </div>
             <div id="settingsPanel">
-                Banda: 
+                Banda Dipolo: 
                 <select id="bandSelect">
-                    <option value="20.2">40m (20.2m)</option>
+                    <option value="78.0">160m (78.0m)</option>
+                    <option value="39.0">80m (39.0m)</option>
+                    <option value="28.5">60m (28.5m)</option>
+                    <option value="20.2" selected>40m (20.2m)</option>
+                    <option value="14.5">30m (14.5m)</option>
                     <option value="10.1">20m (10.1m)</option>
+                    <option value="8.5">17m (8.5m)</option>
+                    <option value="6.8">15m (6.8m)</option>
                     <option value="5.1">10m (5.1m)</option>
                     <option value="2.5">6m (2.5m)</option>
                     <option value="0.97">2m (0.97m)</option>
                 </select>
                 H Cell: <input type="number" id="inpHCell" value="1.50" step="0.01">
-                Grid: <input type="number" id="inpGrid" value="10" step="1">
+                Grid: <input type="number" id="inpGrid" value="20" step="5">
             </div>
         </div>
 
         <div class="bottom-controls">
-            <div id="edit-panel">
-                <div style="text-align:center; font-size:11px; color:#ffdd59; margin-bottom:5px;">CORREZIONE PUNTO SELEZIONATO</div>
-                <div class="edit-grid">
-                    <button class="move-btn" onclick="movePoint(0,0.02,0)">SU ↑</button>
-                    <button class="move-btn" onclick="movePoint(0,0,-0.02)">AVANTI</button>
-                    <button class="move-btn" onclick="movePoint(0,0,0.02)">DIETRO</button>
-                    <button class="move-btn" onclick="movePoint(0,-0.02,0)">GIÙ ↓</button>
-                    <button class="move-btn" onclick="movePoint(-0.02,0,0)">SX ←</button>
-                    <button class="move-btn" onclick="movePoint(0.02,0,0)">DX →</button>
-                </div>
-            </div>
-
-            <div id="instruction">Configura il terreno</div>
-            
+            <div id="instruction">Configura il terreno toccando lo schermo</div>
             <div class="btn-row">
                 <button id="btnGround" class="main-btn active">1. SUOLO</button>
                 <button id="btnA" class="main-btn">2. PUNTO A</button>
@@ -88,27 +79,20 @@
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
         let scene, camera, renderer, reticle, groundGrid, antennaWire;
-        let hitTestSource = null, hitTestSourceRequested = false;
         let pA, pB, selectedPoint = null;
-        let groundLevel = 0;
+        let groundLevel = 0, isShot1Done = false;
+        let shot1Pos = new THREE.Vector3(), shot1Dir = new THREE.Vector3();
         let currentAction = 'MENU_GROUND';
-        let shot1Pos = new THREE.Vector3(), shot1Dir = new THREE.Vector3(), isShot1Done = false;
-        let groundPoints = [];
 
-        window.movePoint = (x, y, z) => {
-            if (selectedPoint) {
-                selectedPoint.position.x += x;
-                selectedPoint.position.y += y;
-                selectedPoint.position.z += z;
-                updateCalculations();
-            }
-        };
+        // Variabili per il Drag
+        let isDragging = false;
+        let previousTouch = { x: 0, y: 0 };
 
         init();
 
         function init() {
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 100);
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 150);
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -120,31 +104,64 @@
                 domOverlay: { root: document.getElementById('ui-container') }
             }));
 
-            const pGeo = new THREE.SphereGeometry(1, 16, 16);
+            // Punti
+            const pGeo = new THREE.SphereGeometry(1, 24, 24);
             pA = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({color: 0xff4757}));
             pB = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({color: 0x1e90ff}));
             pA.visible = pB.visible = false;
             scene.add(pA, pB);
 
+            // Mirino
             reticle = new THREE.Group();
             reticle.add(new THREE.Mesh(new THREE.RingGeometry(0.04, 0.05, 32).rotateX(-Math.PI/2), new THREE.MeshBasicMaterial()));
             reticle.add(new THREE.Mesh(new THREE.CircleGeometry(0.005, 16).rotateX(-Math.PI/2), new THREE.MeshBasicMaterial()));
-            reticle.visible = false;
             scene.add(reticle);
 
-            // UI Events
+            // Eventi UI
             document.getElementById('btnGround').onclick = () => setAction('MENU_GROUND');
-            document.getElementById('btnA').onclick = () => setAction('TRI_A');
-            document.getElementById('btnB').onclick = () => setAction('TRI_B');
+            document.getElementById('btnA').onclick = () => { selectedPoint = pA; setAction('TRI_A'); };
+            document.getElementById('btnB').onclick = () => { selectedPoint = pB; setAction('TRI_B'); };
             document.getElementById('btnReset').onclick = () => location.reload();
             document.getElementById('btnPhoto').onclick = takePhoto;
-            
-            // Reattività input griglia
-            document.getElementById('inpGrid').addEventListener('change', updateGrid);
+            document.getElementById('inpGrid').onchange = updateGrid;
+            document.getElementById('bandSelect').onchange = updateCalculations;
+
+            // Logica Touch Drag
+            const shield = document.getElementById('touch-shield');
+            shield.addEventListener('touchstart', (e) => {
+                if(selectedPoint && selectedPoint.visible) {
+                    isDragging = true;
+                    previousTouch.x = e.touches[0].clientX;
+                    previousTouch.y = e.touches[0].clientY;
+                }
+            });
+
+            shield.addEventListener('touchmove', (e) => {
+                if(!isDragging || !selectedPoint) return;
+                
+                const touchX = e.touches[0].clientX;
+                const touchY = e.touches[0].clientY;
+                
+                const deltaX = (touchX - previousTouch.x) * 0.001;
+                const deltaY = (touchY - previousTouch.y) * 0.001;
+
+                // Muove il punto in base all'orientamento della camera (piano locale)
+                const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+                const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+                
+                selectedPoint.position.addScaledVector(right, deltaX * camera.position.distanceTo(selectedPoint.position));
+                selectedPoint.position.addScaledVector(up, -deltaY * camera.position.distanceTo(selectedPoint.position));
+                
+                previousTouch.x = touchX;
+                previousTouch.y = touchY;
+                updateCalculations();
+            });
+
+            shield.addEventListener('touchend', () => { isDragging = false; });
 
             renderer.xr.addEventListener('sessionstart', () => {
                 document.getElementById('ui-container').style.display = 'flex';
-                setAction('MENU_GROUND');
+                document.getElementById('touch-shield').style.display = 'block';
             });
 
             renderer.setAnimationLoop(render);
@@ -154,24 +171,24 @@
             currentAction = action;
             isShot1Done = false;
             document.querySelectorAll('.main-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('edit-panel').style.display = 'none';
+            const inst = document.getElementById('instruction');
 
             if(action === 'MENU_GROUND') {
                 document.getElementById('btnGround').classList.add('active');
-                document.getElementById('instruction').innerText = "Tocca lo schermo per calibrare il suolo (H-Cell)";
+                inst.innerText = "Tocca per fissare il suolo (H-Cell)";
             } else if(action === 'TRI_A') {
                 document.getElementById('btnA').classList.add('active');
-                document.getElementById('instruction').innerText = "MIRA PUNTO A: 1° Tocco sul ramo";
+                inst.innerText = "ALBERO A: 1° Tocco sul ramo";
             } else if(action === 'TRI_B') {
                 document.getElementById('btnB').classList.add('active');
-                document.getElementById('instruction').innerText = "MIRA PUNTO B: 1° Tocco sul ramo";
+                inst.innerText = "ALBERO B: 1° Tocco sul ramo";
             }
         }
 
         function updateGrid() {
             if(groundGrid) scene.remove(groundGrid);
-            const size = parseFloat(document.getElementById('inpGrid').value) || 10;
-            groundGrid = new THREE.GridHelper(size, 20, 0x2ed573, 0x444444);
+            const size = parseFloat(document.getElementById('inpGrid').value) || 20;
+            groundGrid = new THREE.GridHelper(size, size/2, 0x2ed573, 0x444444);
             groundGrid.position.y = groundLevel;
             scene.add(groundGrid);
         }
@@ -179,12 +196,14 @@
         function takePhoto() {
             renderer.render(scene, camera);
             const link = document.createElement('a');
-            link.download = 'antenna-ar.png';
+            link.download = 'dipole-plan.png';
             link.href = renderer.domElement.toDataURL("image/png");
             link.click();
         }
 
         renderer.xr.getController(0).addEventListener('select', () => {
+            if (isDragging) return; // Non scattare se stiamo trascinando
+
             if (currentAction === 'MENU_GROUND') {
                 groundLevel = camera.position.y - parseFloat(document.getElementById('inpHCell').value);
                 updateGrid();
@@ -197,9 +216,8 @@
                 if (!isShot1Done) {
                     shot1Pos.copy(cPos); shot1Dir.copy(cDir);
                     isShot1Done = true;
-                    document.getElementById('instruction').innerText = "SPOSTATI e tocca di nuovo lo stesso punto";
+                    document.getElementById('instruction').innerText = "SPOSTATI e tocca di nuovo il ramo";
                 } else {
-                    // Algoritmo triangolazione
                     const cross = new THREE.Vector3().crossVectors(shot1Dir, cDir);
                     const detL = new THREE.Vector3().subVectors(cPos, shot1Pos);
                     const s = new THREE.Vector3().crossVectors(detL, cDir).dot(cross) / cross.lengthSq();
@@ -209,8 +227,7 @@
                     if (currentAction === 'TRI_A') { pA.position.copy(res); pA.visible = true; selectedPoint = pA; }
                     else { pB.position.copy(res); pB.visible = true; selectedPoint = pB; }
                     
-                    document.getElementById('edit-panel').style.display = 'flex';
-                    document.getElementById('instruction').innerText = "Usa le frecce per la correzione fine";
+                    document.getElementById('instruction').innerText = "TRASCINA il punto per correggerlo";
                     isShot1Done = false;
                     updateCalculations();
                 }
@@ -230,23 +247,22 @@
 
             if(antennaWire) scene.remove(antennaWire);
             const geo = new THREE.BufferGeometry().setFromPoints([pA.position, pB.position]);
-            antennaWire = new THREE.Line(geo, new THREE.LineBasicMaterial({color: 0xffdd59, linewidth: 2}));
+            antennaWire = new THREE.Line(geo, new THREE.LineBasicMaterial({color: 0xffdd59}));
             scene.add(antennaWire);
         }
 
         function render(timestamp, frame) {
             if (frame) {
-                // Scaling dinamico punti
                 [pA, pB].forEach(p => {
                     if (p.visible) {
                         const d = camera.position.distanceTo(p.position);
-                        p.scale.setScalar(d * 0.015);
+                        p.scale.setScalar(d * 0.012); // Scala adattiva
                     }
                 });
 
                 if (currentAction.includes('TRI')) {
                     const dir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
-                    reticle.position.copy(camera.position).add(dir.multiplyScalar(2.5));
+                    reticle.position.copy(camera.position).add(dir.multiplyScalar(3));
                     reticle.quaternion.copy(camera.quaternion);
                     reticle.visible = true;
                 } else { reticle.visible = false; }
