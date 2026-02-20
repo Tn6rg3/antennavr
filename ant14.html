@@ -1,3 +1,6 @@
+
+
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -18,7 +21,7 @@
         #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #2ed573; }
         #crosshair::before { top: 19px; left: 0; width: 40px; height: 2px; }
         #crosshair::after { top: 0; left: 19px; width: 2px; height: 40px; }
-        #angle-display { position: absolute; top: 50%; left: 50%; transform: translate(30px, -10px); color: #2ed573; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 2px black; z-index: 5;}
+        #angle-display { position: absolute; top: 50%; left: 50%; transform: translate(30px, -10px); color: #fff; font-weight: bold; font-size: 16px; text-shadow: 1px 1px 3px black; z-index: 5;}
 
         /* Pannelli dati */
         #top-bar { display: flex; justify-content: space-between; width: 100%; pointer-events: auto; }
@@ -57,14 +60,14 @@
 </head>
 <body>
 
-    <!-- Fotocamera -->
+    <!-- Fotocamera (Aggiunto muted per autoplay garantito sui cellulari) -->
     <video id="camera-bg" autoplay playsinline muted></video>
     
     <!-- Mirino -->
     <div id="crosshair"></div>
     <div id="angle-display">0.0°</div>
 
-    <!-- UI -->
+    <!-- UI Principale -->
     <div id="ui-container">
         <div id="top-bar">
             <!-- Dati Rilevati -->
@@ -136,14 +139,7 @@
         let hasSensors = false;
 
         // Macchina a stati
-        const STATES = {
-            SETUP: 0,
-            AIM_BASE_A: 1,
-            AIM_BRANCH_A: 2,
-            AIM_BASE_B: 3,
-            AIM_BRANCH_B: 4,
-            DONE: 5
-        };
+        const STATES = { SETUP: 0, AIM_BASE_A: 1, AIM_BRANCH_A: 2, AIM_BASE_B: 3, AIM_BRANCH_B: 4, DONE: 5 };
         let currentState = STATES.SETUP;
 
         // Dati misurati
@@ -163,60 +159,55 @@
         // Avvio Fotocamera
         async function initCamera() {
             try {
-                // Tenta di usare la fotocamera posteriore principale
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: { ideal: "environment" } } 
                 });
                 video.srcObject = stream;
-                
-                // Forza l'avvio della riproduzione (necessario su alcuni dispositivi)
-                video.play().catch(e => console.error("Errore di riproduzione video:", e));
+                video.play().catch(e => console.error("Video non partito in automatico:", e));
             } catch (err) {
-                alert("ERRORE FOTOCAMERA:\n" + err.name + " - " + err.message + "\n\n1. Controlla di aver dato i permessi al browser.\n2. Assicurati che l'URL inizi per 'https://'.");
+                alert("ERRORE FOTOCAMERA:\n" + err.message + "\n\nAssicurati che il sito sia caricato in HTTPS e di aver concesso i permessi.");
             }
         }
 
-        // Lettura Sensori (Giroscopio/Bussola)
+        // Lettura Sensori Robusta (Ignora i segni +/- dei vari produttori di telefoni)
         function handleOrientation(event) {
             if (event.beta === null) return;
             hasSensors = true;
             document.getElementById('sensor-error').style.display = 'none';
 
-            // Beta: da -180 a 180. Telefono verticale = 90.
-            // Calcoliamo l'angolo di inclinazione (Pitch). 
-            // Positivo = Guardo in GIÙ. Negativo = Guardo in SU.
-            let degrees = 90 - event.beta; 
+            // Estraiamo l'inclinazione. Su quasi tutti i telefoni, verticale = 90.
+            let degrees = event.beta - 90; 
             pitch = degrees * (Math.PI / 180);
 
-            // Alpha: Bussola (Azimuth)
             let compass = event.alpha || 0;
             azimuth = compass * (Math.PI / 180);
 
-            // Aggiorna UI mirino
-            angleDisplay.innerText = degrees.toFixed(1) + "°";
-            if(degrees > 0) {
-                angleDisplay.style.color = "#ffdd59"; // Giallo (Giù)
+            // UI del mirino usa i valori assoluti
+            let displayDeg = Math.abs(degrees);
+            angleDisplay.innerText = displayDeg.toFixed(1) + "°";
+            
+            // Colora il mirino in modo estetico (non influisce sulla misurazione matematica)
+            if (displayDeg > 2) {
                 crosshair.style.setProperty('--c', '#ffdd59');
             } else {
-                angleDisplay.style.color = "#2ed573"; // Verde (Su)
+                crosshair.style.setProperty('--c', '#2ed573');
             }
         }
 
-        // Calcoli Trigonometrici
+        // Calcoli Trigonometrici Assoluti (Funzionano sempre, sia in positivo che in negativo)
         function calculateDistance(pitchAngle) {
-            // d = h / tan(angolo). Serve angolo positivo (guardare in giù)
-            if (pitchAngle < 0.02) return -1; // Troppo orizzontale o guarda in su
-            return eyeHeight / Math.tan(pitchAngle);
+            let absPitch = Math.abs(pitchAngle);
+            if (absPitch < 0.05) return -1; // Se il telefono è troppo dritto (angolo < 3 gradi)
+            return eyeHeight / Math.tan(absPitch);
         }
 
         function calculateHeight(distBase, pitchAngle) {
-            // H = h_occhi - (distanza * tan(angolo))
-            // Se guardo in su, l'angolo è negativo, quindi diventa una somma
-            return eyeHeight - (distBase * Math.tan(pitchAngle));
+            let absPitch = Math.abs(pitchAngle);
+            // Poiché puntiamo sempre in alto per il ramo, l'altezza è l'altezza degli occhi + il cateto calcolato
+            return eyeHeight + (distBase * Math.tan(absPitch));
         }
 
         function calculate3DCoordinates(distBase, azim) {
-            // Coordinate X e Z sul piano orizzontale
             return {
                 x: distBase * Math.sin(azim),
                 z: distBase * Math.cos(azim)
@@ -224,10 +215,9 @@
         }
 
         function calculateDistanceAB() {
-            // Teorema di Pitagora in 3D
             const dx = treeB.x - treeA.x;
             const dz = treeB.z - treeA.z;
-            const dy = treeB.height - treeA.height; // Differenza di quota tra i rami
+            const dy = treeB.height - treeA.height;
             return Math.sqrt(dx*dx + dy*dy + dz*dz);
         }
 
@@ -236,7 +226,7 @@
             switch(currentState) {
                 case STATES.AIM_BASE_A:
                     let d1 = calculateDistance(pitch);
-                    if (d1 < 0) { alert("Devi mirare in BASSO verso la radice dell'albero!"); return; }
+                    if (d1 < 0) { alert("Attenzione: inclina maggiormente il telefono verso il BASSO per puntare la radice."); return; }
                     treeA.distBase = d1;
                     
                     let coordsA = calculate3DCoordinates(d1, azimuth);
@@ -262,7 +252,7 @@
 
                 case STATES.AIM_BASE_B:
                     let d2 = calculateDistance(pitch);
-                    if (d2 < 0) { alert("Devi mirare in BASSO verso la radice!"); return; }
+                    if (d2 < 0) { alert("Attenzione: inclina maggiormente il telefono verso il BASSO per puntare la radice."); return; }
                     treeB.distBase = d2;
                     
                     let coordsB = calculate3DCoordinates(d2, azimuth);
@@ -303,7 +293,7 @@
             if (type === 'dipole') {
                 document.getElementById('setDipole').style.display = 'block';
                 const band = parseFloat(document.getElementById('dipoleBand').value);
-                requiredDist = band / 2; // Lunghezza totale dipolo
+                requiredDist = band / 2;
             } else if (type === 'endfed') {
                 document.getElementById('setEndFed').style.display = 'block';
                 const l1 = parseFloat(document.getElementById('efL1').value);
@@ -317,36 +307,28 @@
             }
         }
 
-        // RIMOZIONE DEI LISTENER GLOBALI
-        // I sensori verranno attivati al click del pulsante per rispettare le nuove policy di sicurezza dei browser
-
+        // Avvio Sicuro dei Sensori al Click (Richiesto per le nuove policy browser)
         btnStart.addEventListener('click', async () => {
             eyeHeight = parseFloat(document.getElementById('eyeHeight').value);
             if (isNaN(eyeHeight) || eyeHeight < 0.5) { alert("Inserisci un'altezza valida."); return; }
             
-            // 1. RICHIESTA AUTORIZZAZIONE SENSORI (Fondamentale per iOS e Chrome aggiornato)
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     const permission = await DeviceOrientationEvent.requestPermission();
                     if (permission === 'granted') {
                         window.addEventListener('deviceorientation', handleOrientation);
                     } else {
-                        alert("Permesso sensori negato. Ricarica la pagina e consenti l'accesso per continuare.");
-                        return;
+                        alert("Devi concedere i permessi per il giroscopio per misurare le altezze."); return;
                     }
                 } catch (error) {
-                    console.error("Errore durante la richiesta dei sensori:", error);
+                    console.error(error);
                 }
             } else {
-                // Per Android o browser che non richiedono il prompt esplicito
                 window.addEventListener('deviceorientationabsolute', handleOrientation);
                 window.addEventListener('deviceorientation', (e) => { if(!hasSensors) handleOrientation(e); });
             }
 
-            // Rimuoviamo l'avviso di errore visto che abbiamo appena inizializzato i sensori
             document.getElementById('sensor-error').style.display = 'none';
-
-            // 2. AVVIO FOTOCAMERA E UI
             setupScreen.style.display = 'none';
             initCamera();
             
