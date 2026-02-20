@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Reset Feature</title>
+    <title>AR Ham Radio Planner - Base & Altitudine</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
         
@@ -128,10 +128,10 @@
             </div>
 
             <div id="panel-edit-point" class="edit-panel" style="display: none;">
-                <div style="font-size: 12px; margin-bottom: 5px; color: #aaa;">👆 TRASCINA IL DITO per micro-correzioni.</div>
+                <div style="font-size: 12px; margin-bottom: 5px; color: #aaa;">👆 TRASCINA SU/GIÙ per alzare. Usa i tasti per muovere la base.</div>
                 <div class="edit-row">
-                    <button class="edit-btn" id="btnPFar">Lontano ↗️</button>
-                    <button class="edit-btn" id="btnPNear">Vicino ↙️</button>
+                    <button class="edit-btn" id="btnPFar">Base Lontana ↗️</button>
+                    <button class="edit-btn" id="btnPNear">Base Vicina ↙️</button>
                 </div>
             </div>
 
@@ -172,7 +172,6 @@
         let antennaMeshes = []; 
         let markerMeshes = []; 
         let textSprites = []; 
-        let laserMesh = null;
         
         let groundLevel = 0; 
         let isGroundSet = false;
@@ -181,14 +180,9 @@
         
         let currentAction = 'NONE'; 
 
-        let shot1Pos = new THREE.Vector3();
-        let shot1Dir = new THREE.Vector3();
-        let isShot1Done = false;
-
-        let lastTouchX = 0, lastTouchY = 0;
+        let lastTouchY = 0;
         let isDragging = false, hasDragged = false; 
 
-        // NUOVA FUNZIONE per prevenire i Memory Leak su smartphone
         function disposeNode(node) {
             if (!node) return;
             scene.remove(node);
@@ -266,18 +260,17 @@
                 groundLevel = camera.position.y - height;
                 groundGrid.position.set(camera.position.x, groundLevel, camera.position.z);
                 groundGrid.visible = true; isGroundSet = true;
-                setAction('NONE'); updateCalculations();
+                setAction('NONE'); updateCalculations(); drawAntenna();
             });
 
             document.getElementById('btnSetByTouch').addEventListener('click', () => setAction('PLACE_GROUND'));
-            document.getElementById('btnA').addEventListener('click', () => { isShot1Done = false; setAction('TRIANGULATE_A'); });
-            document.getElementById('btnB').addEventListener('click', () => { isShot1Done = false; setAction('TRIANGULATE_B'); });
+            document.getElementById('btnA').addEventListener('click', () => setAction('PLACE_BASE_A'));
+            document.getElementById('btnB').addEventListener('click', () => setAction('PLACE_BASE_B'));
             document.getElementById('btnPFar').addEventListener('click', () => adjustDepth(0.5));
             document.getElementById('btnPNear').addEventListener('click', () => adjustDepth(-0.5));
             document.getElementById('antType').addEventListener('change', updateAntennaUI);
             document.querySelectorAll('#antennaPanel select, #antennaPanel input').forEach(el => el.addEventListener('input', drawAntenna));
 
-            // LOGICA PULSANTE FOTO
             document.getElementById('btnPhoto').addEventListener('click', () => {
                 document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'hidden');
                 document.getElementById('antennaPanel').style.visibility = 'hidden';
@@ -290,23 +283,19 @@
                 }, 5000);
             });
 
-            // LOGICA PULSANTE RESET
             document.getElementById('btnReset').addEventListener('click', () => {
                 point1.visible = false;
                 point2.visible = false;
                 groundGrid.visible = false;
                 lineAB.visible = false;
 
-                // Corretto con disposeNode per evitare memory leak
                 antennaMeshes.forEach(m => disposeNode(m)); antennaMeshes = [];
                 markerMeshes.forEach(m => disposeNode(m)); markerMeshes = [];
                 textSprites.forEach(m => disposeNode(m)); textSprites = [];
                 clearTempMarkers();
-                if (laserMesh) { disposeNode(laserMesh); laserMesh = null; }
 
                 isGroundSet = false;
                 groundLevel = 0;
-                isShot1Done = false;
 
                 document.getElementById('hA').innerText = '--';
                 document.getElementById('hB').innerText = '--';
@@ -320,32 +309,31 @@
 
             const touchArea = document.getElementById('touchArea');
             touchArea.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1 && (currentAction === 'EDIT_A' || currentAction === 'EDIT_B')) {
+                if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B')) {
                     isDragging = true; hasDragged = false; 
-                    lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
+                    lastTouchY = e.touches[0].clientY;
                 }
             });
 
             touchArea.addEventListener('touchmove', (e) => {
                 if (!isDragging) return;
                 hasDragged = true; 
-                if (e.touches.length === 1 && (currentAction === 'EDIT_A' || currentAction === 'EDIT_B')) {
-                    let pt = currentAction === 'EDIT_A' ? point1 : point2;
+                if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B')) {
+                    let pt = currentAction === 'SET_HEIGHT_A' ? point1 : point2;
                     if (!pt || !pt.visible) return;
 
-                    let touchX = e.touches[0].clientX; let touchY = e.touches[0].clientY;
-                    let deltaX = touchX - lastTouchX; let deltaY = touchY - lastTouchY;
-                    let dist = camera.position.distanceTo(pt.position);
-                    let sensitivity = 0.001 * dist; 
+                    let touchY = e.touches[0].clientY;
+                    let deltaY = lastTouchY - touchY; // delta positivo se muovo il dito in su
+                    let sensitivity = 0.01; // Velocità di movimento verticale
 
-                    let camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-                    let camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+                    pt.position.y += deltaY * sensitivity;
 
-                    pt.position.add(camRight.multiplyScalar(deltaX * sensitivity));
-                    pt.position.add(camUp.multiplyScalar(-deltaY * sensitivity)); 
+                    // Opzionale: impedire che vada sotto terra
+                    if (isGroundSet && pt.position.y < groundLevel) pt.position.y = groundLevel;
 
-                    lastTouchX = touchX; lastTouchY = touchY;
+                    lastTouchY = touchY;
                     updateCalculations();
+                    drawAntenna(); // Forza il ridisegno della linea verticale
                 }
             });
             touchArea.addEventListener('touchend', () => { isDragging = false; });
@@ -358,7 +346,6 @@
             document.querySelectorAll('.main-btn').forEach(b => b.classList.remove('active'));
 
             let inst = document.getElementById('instruction');
-            if (laserMesh) { disposeNode(laserMesh); laserMesh = null; }
 
             if (action === 'MENU_GROUND') {
                 document.getElementById('btnGround').classList.add('active');
@@ -368,38 +355,18 @@
                 groundCalibrationPoints = []; clearTempMarkers();
                 document.getElementById('btnGround').classList.add('active');
                 inst.innerText = "Tocca 3 punti a terra per calibrare lo Zero."; inst.style.background = "#2ed573";
-            } else if (action === 'TRIANGULATE_A' || action === 'TRIANGULATE_B') {
-                const btn = action === 'TRIANGULATE_A' ? 'btnA' : 'btnB';
+            } else if (action === 'PLACE_BASE_A' || action === 'PLACE_BASE_B') {
+                const btn = action === 'PLACE_BASE_A' ? 'btnA' : 'btnB';
                 document.getElementById(btn).classList.add('active');
-                inst.innerText = "1. MIRA al ramo esatto e TOCCA."; inst.style.background = action === 'TRIANGULATE_A' ? "#ff4757" : "#1e90ff";
-            } else if (action === 'EDIT_A' || action === 'EDIT_B') {
-                const btn = action === 'EDIT_A' ? 'btnA' : 'btnB';
+                inst.innerText = "1. MIRA al terreno per posizionare la BASE e TOCCA."; inst.style.background = action === 'PLACE_BASE_A' ? "#ff4757" : "#1e90ff";
+            } else if (action === 'SET_HEIGHT_A' || action === 'SET_HEIGHT_B') {
+                const btn = action === 'SET_HEIGHT_A' ? 'btnA' : 'btnB';
                 document.getElementById(btn).classList.add('active');
                 document.getElementById('panel-edit-point').style.display = 'block';
-                inst.innerText = "Trascina il punto per correzioni fini."; inst.style.background = action === 'EDIT_A' ? "#ff4757" : "#1e90ff";
+                inst.innerText = "2. TRASCINA SU/GIÙ per alzare il punto sul palo."; inst.style.background = action === 'SET_HEIGHT_A' ? "#ff4757" : "#1e90ff";
             } else {
                 inst.innerText = "Antenna pronta. Usa il tasto Foto per salvare."; inst.style.background = "#555";
             }
-        }
-
-        function calculateTriangulation(p1, d1, p2, d2) {
-            const w0 = new THREE.Vector3().subVectors(p1, p2);
-            const a = d1.dot(d1); const b = d1.dot(d2); const c = d2.dot(d2);
-            const d = d1.dot(w0); const e = d2.dot(w0);
-            const denom = a * c - b * b;
-            if (denom < 0.001) return new THREE.Vector3().copy(p1).add(d1.clone().multiplyScalar(15)); 
-            const s = (b * e - c * d) / denom;
-            const t = (a * e - b * d) / denom;
-            const pointOnRay1 = new THREE.Vector3().copy(p1).add(d1.clone().multiplyScalar(s));
-            const pointOnRay2 = new THREE.Vector3().copy(p2).add(d2.clone().multiplyScalar(t));
-            return new THREE.Vector3().addVectors(pointOnRay1, pointOnRay2).multiplyScalar(0.5);
-        }
-
-        function createLaserRay(origin, direction, color) {
-            const end = origin.clone().add(direction.clone().multiplyScalar(50));
-            const geo = new THREE.BufferGeometry().setFromPoints([origin, end]);
-            const mat = new THREE.LineBasicMaterial({ color: color, linewidth: 2, transparent: true, opacity: 0.5 });
-            const mesh = new THREE.Line(geo, mat); scene.add(mesh); return mesh;
         }
 
         function makeTextSprite(message, textColor = '#ffffff', bgColor = 'rgba(0, 0, 0, 0.7)') {
@@ -452,26 +419,23 @@
                 if (groundCalibrationPoints.length === 3) {
                     groundLevel = groundCalibrationPoints.reduce((a, b) => a + b, 0) / 3;
                     groundGrid.position.set(reticle.position.x, groundLevel, reticle.position.z);
-                    groundGrid.visible = true; isGroundSet = true; clearTempMarkers(); setAction('NONE'); updateCalculations();
+                    groundGrid.visible = true; isGroundSet = true; clearTempMarkers(); setAction('NONE'); updateCalculations(); drawAntenna();
                 }
-            } else if (currentAction === 'TRIANGULATE_A' || currentAction === 'TRIANGULATE_B') {
-                const camPos = new THREE.Vector3(); camera.getWorldPosition(camPos);
-                const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
-
-                if (!isShot1Done) {
-                    shot1Pos.copy(camPos); shot1Dir.copy(camDir); isShot1Done = true;
-                    let color = currentAction === 'TRIANGULATE_A' ? 0xff4757 : 0x1e90ff;
-                    laserMesh = createLaserRay(shot1Pos, shot1Dir, color);
-                    document.getElementById('instruction').innerText = "2. Spostati di lato, mira DI NUOVO al ramo e tocca.";
-                } else {
-                    const finalPoint = calculateTriangulation(shot1Pos, shot1Dir, camPos, camDir);
-                    if (currentAction === 'TRIANGULATE_A') {
-                        point1.position.copy(finalPoint); point1.visible = true; setAction('EDIT_A');
-                    } else {
-                        point2.position.copy(finalPoint); point2.visible = true; setAction('EDIT_B');
-                    }
-                    if (laserMesh) { disposeNode(laserMesh); laserMesh = null; } 
+            } else if (currentAction === 'PLACE_BASE_A') {
+                if (reticle.visible) {
+                    point1.position.copy(reticle.position);
+                    point1.visible = true;
+                    setAction('SET_HEIGHT_A');
                     updateCalculations();
+                    drawAntenna(); 
+                }
+            } else if (currentAction === 'PLACE_BASE_B') {
+                if (reticle.visible) {
+                    point2.position.copy(reticle.position);
+                    point2.visible = true;
+                    setAction('SET_HEIGHT_B');
+                    updateCalculations();
+                    drawAntenna();
                 }
             }
         }
@@ -482,23 +446,27 @@
         }
 
         function adjustDepth(amount) {
-            let pt = currentAction === 'EDIT_A' ? point1 : (currentAction === 'EDIT_B' ? point2 : null);
+            let pt = currentAction === 'SET_HEIGHT_A' ? point1 : (currentAction === 'SET_HEIGHT_B' ? point2 : null);
             if (!pt || !pt.visible) return;
+            
+            // Sposta la base lungo la linea visiva della camera, ma mantenendo l'altezza impostata
             const toPoint = new THREE.Vector3().subVectors(pt.position, camera.position);
             toPoint.y = 0; toPoint.normalize();
             pt.position.add(toPoint.clone().multiplyScalar(amount));
+            
             updateCalculations();
+            drawAntenna();
         }
 
         function updateCalculations() {
             if (isGroundSet && point1.visible) document.getElementById('hA').innerText = (point1.position.y - groundLevel).toFixed(1);
             if (isGroundSet && point2.visible) document.getElementById('hB').innerText = (point2.position.y - groundLevel).toFixed(1);
+            
             if (point1.visible && point2.visible) {
                 lineAB.geometry.setFromPoints([point1.position, point2.position]);
                 lineAB.visible = true;
                 document.getElementById('distAB').innerText = point1.position.distanceTo(point2.position).toFixed(1);
                 document.getElementById('antennaPanel').style.display = 'block';
-                drawAntenna();
             }
         }
 
@@ -520,20 +488,21 @@
         }
 
         function drawAntenna() {
-            // Ottimizzato con disposeNode per Memory Leak
             antennaMeshes.forEach(m => disposeNode(m)); antennaMeshes = [];
             markerMeshes.forEach(m => disposeNode(m)); markerMeshes = [];
             textSprites.forEach(m => disposeNode(m)); textSprites = [];
             document.getElementById('warning').style.display = 'none';
 
+            // Disegna sempre le guide verticali se i punti esistono (anche singolarmente durante l'editing)
+            if (point1.visible) drawDropLine(point1.position, 0xff4757, `Alb.A: ${(point1.position.y - groundLevel).toFixed(1)}m`);
+            if (point2.visible) drawDropLine(point2.position, 0x1e90ff, `Alb.B: ${(point2.position.y - groundLevel).toFixed(1)}m`);
+
+            // Esci se non ci sono entrambi i punti per l'antenna principale
             if (!point1.visible || !point2.visible) return;
             
             const A = point1.position; const B = point2.position;
             const totalDist = A.distanceTo(B);
             const dir = new THREE.Vector3().subVectors(B, A).normalize();
-            
-            drawDropLine(A, 0xff4757, `Alb.A: ${(A.y - groundLevel).toFixed(1)}m`);
-            drawDropLine(B, 0x1e90ff, `Alb.B: ${(B.y - groundLevel).toFixed(1)}m`);
 
             const type = document.getElementById('antType').value;
             if (type === 'none') {
@@ -624,7 +593,8 @@
                     hitTestSourceRequested = true;
                 }
 
-                if (currentAction === 'PLACE_GROUND') {
+                // Usa l'hit test a terra per Terreno e per piazzare la Base di A e B
+                if (currentAction === 'PLACE_GROUND' || currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B') {
                     reticle.visible = false;
                     if ( hitTestSource ) {
                         const hitTestResults = frame.getHitTestResults( hitTestSource );
@@ -635,12 +605,6 @@
                             reticle.visible = true;
                         }
                     }
-                } else if (currentAction === 'TRIANGULATE_A' || currentAction === 'TRIANGULATE_B') {
-                    const distance = 2; 
-                    const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
-                    reticle.position.copy(camera.position).add(camDir.multiplyScalar(distance));
-                    reticle.quaternion.copy(camera.quaternion); 
-                    reticle.visible = true; 
                 } else {
                     reticle.visible = false;
                 }
