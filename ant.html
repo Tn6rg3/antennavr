@@ -155,8 +155,8 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
             }
         }
     </script>
@@ -187,6 +187,24 @@
 
         let lastTouchX = 0, lastTouchY = 0;
         let isDragging = false, hasDragged = false; 
+
+        // NUOVA FUNZIONE per prevenire i Memory Leak su smartphone
+        function disposeNode(node) {
+            if (!node) return;
+            scene.remove(node);
+            if (node.geometry) node.geometry.dispose();
+            if (node.material) {
+                if (Array.isArray(node.material)) {
+                    node.material.forEach(m => {
+                        if (m.map) m.map.dispose();
+                        m.dispose();
+                    });
+                } else {
+                    if (node.material.map) node.material.map.dispose();
+                    node.material.dispose();
+                }
+            }
+        }
 
         init();
         animate();
@@ -261,7 +279,6 @@
 
             // LOGICA PULSANTE FOTO
             document.getElementById('btnPhoto').addEventListener('click', () => {
-                // Nascondiamo ENTRAMBE le righe dei bottoni
                 document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'hidden');
                 document.getElementById('antennaPanel').style.visibility = 'hidden';
                 const toast = document.getElementById('photoOverlay');
@@ -275,34 +292,29 @@
 
             // LOGICA PULSANTE RESET
             document.getElementById('btnReset').addEventListener('click', () => {
-                // 1. Nascondi gli oggetti base
                 point1.visible = false;
                 point2.visible = false;
                 groundGrid.visible = false;
                 lineAB.visible = false;
 
-                // 2. Distruggi tutti gli oggetti dinamici dalla memoria
-                antennaMeshes.forEach(m => scene.remove(m)); antennaMeshes = [];
-                markerMeshes.forEach(m => scene.remove(m)); markerMeshes = [];
-                textSprites.forEach(m => scene.remove(m)); textSprites = [];
+                // Corretto con disposeNode per evitare memory leak
+                antennaMeshes.forEach(m => disposeNode(m)); antennaMeshes = [];
+                markerMeshes.forEach(m => disposeNode(m)); markerMeshes = [];
+                textSprites.forEach(m => disposeNode(m)); textSprites = [];
                 clearTempMarkers();
-                if (laserMesh) { scene.remove(laserMesh); laserMesh = null; }
+                if (laserMesh) { disposeNode(laserMesh); laserMesh = null; }
 
-                // 3. Resetta le variabili di stato
                 isGroundSet = false;
                 groundLevel = 0;
                 isShot1Done = false;
 
-                // 4. Resetta i testi a schermo
                 document.getElementById('hA').innerText = '--';
                 document.getElementById('hB').innerText = '--';
                 document.getElementById('distAB').innerText = '--';
                 
-                // 5. Nascondi il pannello dell'antenna
                 document.getElementById('antennaPanel').style.display = 'none';
                 document.getElementById('warning').style.display = 'none';
 
-                // 6. Ritorna al menu iniziale
                 setAction('MENU_GROUND');
             });
 
@@ -346,7 +358,7 @@
             document.querySelectorAll('.main-btn').forEach(b => b.classList.remove('active'));
 
             let inst = document.getElementById('instruction');
-            if (laserMesh) { scene.remove(laserMesh); laserMesh = null; }
+            if (laserMesh) { disposeNode(laserMesh); laserMesh = null; }
 
             if (action === 'MENU_GROUND') {
                 document.getElementById('btnGround').classList.add('active');
@@ -458,13 +470,16 @@
                     } else {
                         point2.position.copy(finalPoint); point2.visible = true; setAction('EDIT_B');
                     }
-                    if (laserMesh) { scene.remove(laserMesh); laserMesh = null; } 
+                    if (laserMesh) { disposeNode(laserMesh); laserMesh = null; } 
                     updateCalculations();
                 }
             }
         }
 
-        function clearTempMarkers() { tempGroundMarkers.forEach(m => scene.remove(m)); tempGroundMarkers = []; }
+        function clearTempMarkers() { 
+            tempGroundMarkers.forEach(m => disposeNode(m)); 
+            tempGroundMarkers = []; 
+        }
 
         function adjustDepth(amount) {
             let pt = currentAction === 'EDIT_A' ? point1 : (currentAction === 'EDIT_B' ? point2 : null);
@@ -505,9 +520,10 @@
         }
 
         function drawAntenna() {
-            antennaMeshes.forEach(m => scene.remove(m)); antennaMeshes = [];
-            markerMeshes.forEach(m => scene.remove(m)); markerMeshes = [];
-            textSprites.forEach(m => scene.remove(m)); textSprites = [];
+            // Ottimizzato con disposeNode per Memory Leak
+            antennaMeshes.forEach(m => disposeNode(m)); antennaMeshes = [];
+            markerMeshes.forEach(m => disposeNode(m)); markerMeshes = [];
+            textSprites.forEach(m => disposeNode(m)); textSprites = [];
             document.getElementById('warning').style.display = 'none';
 
             if (!point1.visible || !point2.visible) return;
