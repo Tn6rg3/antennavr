@@ -1,7 +1,7 @@
 const CACHE_NAME = 'ar-antenna-v2';
 const ASSETS_TO_CACHE = [
   './',
-  './index.html',
+  './ant.html',
   './manifest.json',
   // File esterni di Three.js salvati in cache
   'https://unpkg.com/three@0.160.0/build/three.module.js',
