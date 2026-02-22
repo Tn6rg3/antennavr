@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="it">
-<head>    
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Vertical Quotes</title>
+    <title>AR Ham Radio Planner - Vertical Quotes & Balun Fix</title>
+    
+    <!-- Meta tag per la PWA e collegamento al Manifest -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#2ed573">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
         
@@ -155,6 +158,7 @@
     
     <div id="photoOverlay">Usa i tasti screenshot! (Torno tra 5s)</div>
 
+    <!-- Mappa di importazione con link esterni per evitare di scaricare file locali in cartelle -->
     <script type="importmap">
         {
             "imports": {
@@ -375,7 +379,6 @@
             }
         }
 
-        // Funzione modificata per supportare il testo in verticale
         function makeTextSprite(message, textColor = '#ffffff', bgColor = 'rgba(0, 0, 0, 0.7)', isVertical = false) {
             const canvas = document.createElement('canvas');
             if (isVertical) {
@@ -402,7 +405,7 @@
             const texture = new THREE.CanvasTexture(canvas);
             const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
             const sprite = new THREE.Sprite(spriteMat);
-            sprite.userData.isVertical = isVertical; // Salvo il flag per usarlo in render()
+            sprite.userData.isVertical = isVertical; 
             return sprite;
         }
 
@@ -415,9 +418,7 @@
             line.computeLineDistances();
             scene.add(line); antennaMeshes.push(line);
 
-            // Posizionato esattamente al 50% dell'altezza (prima era 0.3)
             const labelY = groundLevel + (position.y - groundLevel) * 0.5;
-            // Richiede lo sprite verticale passando 'true'
             const sprite = makeTextSprite(labelText, `#${color.toString(16).padStart(6, '0')}`, 'rgba(0,0,0,0.7)', true);
             sprite.position.set(position.x, labelY, position.z);
             scene.add(sprite); textSprites.push(sprite);
@@ -528,14 +529,13 @@
 
             const type = document.getElementById('antType').value;
             
-            // Gestione visibilità linea di base gialla
             if (type === 'none') {
                 lineAB.geometry.setFromPoints([A, B]);
                 lineAB.visible = true;
                 drawRopeLabel(A, B);
                 return;
             } else {
-                lineAB.visible = false; // La nascondo per non coprire il rame e il balun
+                lineAB.visible = false;
             }
 
             let wireLength = 0; const copperColor = 0xe67e22;
@@ -550,7 +550,6 @@
                 
                 buildWire(p1, Center, copperColor); buildWire(Center, p2, copperColor);
                 
-                // Nodo Balun molto più evidente (Cubo/Scatola bianca per massimo contrasto)
                 let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff}));
                 balun.position.copy(Center); scene.add(balun); markerMeshes.push(balun);
                 
@@ -609,7 +608,6 @@
                 if (point2.visible) point2.scale.setScalar(camera.position.distanceTo(point2.position) * apparentSizeFactor);
                 markerMeshes.forEach(marker => marker.scale.setScalar(camera.position.distanceTo(marker.position) * apparentSizeFactor));
                 
-                // Gestione proporzioni per sprite verticali vs orizzontali
                 textSprites.forEach(sprite => {
                     const dist = camera.position.distanceTo(sprite.position);
                     if (sprite.userData.isVertical) {
@@ -645,31 +643,16 @@
             renderer.render( scene, camera );
         }
     </script>
-  
-</body>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
-
-    <script type="module">
-        import * as THREE from 'three';
-        import { ARButton } from 'three/addons/webxr/ARButton.js';
-        // ... (Qui va tutto il tuo codice Javascript originale) ...
-    </script>
-
+    
+    <!-- Avvio del Service Worker -->
     <script>
-        // Registrazione del Service Worker per l'offline
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('Offline pronto!'))
-                    .catch(err => console.log('Errore SW:', err));
+                    .then(reg => console.log('Offline Engine Pronto!'))
+                    .catch(err => console.log('Errore Service Worker:', err));
             });
         }
     </script>
+</body>
 </html>
