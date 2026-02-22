@@ -242,8 +242,14 @@
             renderer.xr.enabled = true;
             container.appendChild( renderer.domElement );
 
+            // MODIFICA CRUCIALE: Richiediamo esplicitamente l'API Depth a Chrome
             document.body.appendChild( ARButton.createButton( renderer, { 
                 requiredFeatures: [ 'hit-test', 'dom-overlay' ],
+                optionalFeatures: [ 'depth-sensing' ],
+                depthSensing: {
+                    usagePreference: [ 'cpu-optimized', 'gpu-optimized' ],
+                    dataFormatPreference: [ 'luminance-alpha', 'float32' ]
+                },
                 domOverlay: { root: document.getElementById('ui-container') }
             } ) );
 
@@ -676,4 +682,3 @@
         }
     </script>
 </body>
-</html>
