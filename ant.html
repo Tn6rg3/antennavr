@@ -69,19 +69,21 @@
         /* Tasto Settings */
         #btnSettings { position: absolute; top: 10px; right: 55px; background: rgba(0,0,0,0.7); border: 2px solid #1e90ff; color: #1e90ff; border-radius: 50%; width: 35px; height: 35px; font-weight: bold; font-size: 18px; cursor: pointer; z-index: 200; pointer-events: auto; display: flex; align-items: center; justify-content: center;}
 
-        .custom-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 400px; background: rgba(20, 30, 40, 0.98); padding: 20px; border: 2px solid #2ed573; border-radius: 10px; z-index: 300; pointer-events: auto; color: white; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8);}
-        .custom-modal h3 { margin-top: 0; color: #2ed573; }
-        .custom-modal p { font-size: 14px; line-height: 1.5; text-align: justify; margin-bottom: 20px; }
+        .custom-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px; background: rgba(20, 30, 40, 0.98); padding: 15px; border: 2px solid #2ed573; border-radius: 10px; z-index: 300; pointer-events: auto; color: white; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); max-height: 85vh; overflow-y: auto;}
+        .custom-modal h3 { margin-top: 0; color: #2ed573; font-size: 18px; }
+        .custom-modal p { font-size: 13px; line-height: 1.5; text-align: justify; margin-bottom: 20px; }
         
         #settingsModal { border-color: #1e90ff; }
-        #settingsModal h3 { color: #1e90ff; margin-bottom: 20px;}
-        .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 14px; text-align: left;}
+        #settingsModal h3 { color: #1e90ff; margin-bottom: 15px;}
+        .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 13px; text-align: left;}
         
-        /* Nuovi controlli + e - per evitare la tastiera e slider buggati in AR */
-        .stepper { display: flex; align-items: center; gap: 10px; }
-        .step-btn { background: #444; color: white; border: 1px solid #777; width: 35px; height: 35px; border-radius: 5px; font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        /* Controlli stepper e color */
+        .stepper { display: flex; align-items: center; gap: 5px; }
+        .step-btn { background: #444; color: white; border: 1px solid #777; width: 30px; height: 30px; border-radius: 5px; font-size: 18px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .step-btn:active { background: #1e90ff; color: white; border-color: white;}
-        .stepper span { width: 60px; text-align: center; font-weight: bold; font-size: 16px; color: #ffdd59;}
+        .stepper span { width: 50px; text-align: center; font-weight: bold; font-size: 14px; color: #ffdd59;}
+        
+        input[type="color"] { border: none; width: 40px; height: 30px; background: transparent; cursor: pointer; border-radius: 5px; padding: 0;}
 
         .modal-close-btn { padding: 10px 20px; background: #2ed573; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; margin-top: 10px;}
         #btnCloseSettings { background: #1e90ff; color: white; }
@@ -104,7 +106,7 @@
             <button id="btnCloseInfo" class="modal-close-btn">Ho capito</button>
         </div>
 
-        <!-- Pannello Settings Modal (Riprogettato senza Input) -->
+        <!-- Pannello Settings Modal (Riprogettato) -->
         <div id="settingsModal" class="custom-modal">
             <h3>Impostazioni Visive</h3>
             
@@ -116,6 +118,15 @@
                     <button id="btnGridPlus" class="step-btn">+</button>
                 </div>
             </div>
+
+            <div class="setting-row">
+                <label>Dim. Quadrati:</label>
+                <div class="stepper">
+                    <button id="btnSqMinus" class="step-btn">-</button>
+                    <span id="sqVal">0.5m</span>
+                    <button id="btnSqPlus" class="step-btn">+</button>
+                </div>
+            </div>
             
             <div class="setting-row">
                 <label>Grandezza Punti:</label>
@@ -124,6 +135,21 @@
                     <span id="ptVal">100%</span>
                     <button id="btnPtPlus" class="step-btn">+</button>
                 </div>
+            </div>
+
+            <hr style="border-color:#444; margin: 15px 0;">
+
+            <div class="setting-row">
+                <label>Colore Punto A:</label>
+                <input type="color" id="colorPickerA" value="#ff4757">
+            </div>
+            <div class="setting-row">
+                <label>Colore Punto B:</label>
+                <input type="color" id="colorPickerB" value="#1e90ff">
+            </div>
+            <div class="setting-row">
+                <label>Colore Punto C:</label>
+                <input type="color" id="colorPickerC" value="#f1c40f">
             </div>
             
             <button id="btnCloseSettings" class="modal-close-btn">Chiudi</button>
@@ -257,7 +283,13 @@
 
         // Nuove variabili per le impostazioni
         let globalGridSize = 50;
+        let globalGridSquareSize = 0.5; // Dimensione singoli quadrati
         let globalPointScale = 0.1; // Default equivale al 100%
+        
+        // Colori Iniziali Punti
+        let colorA = 0xff4757;
+        let colorB = 0x1e90ff;
+        let colorC = 0xf1c40f;
 
         function disposeNode(node) {
             if (!node) return;
@@ -304,16 +336,17 @@
                 domOverlay: { root: document.getElementById('ui-container') }
             } ) );
 
-            // Griglia Iniziale con quadrati fissi a 0.5m
-            groundGrid = new THREE.GridHelper( globalGridSize, Math.round(globalGridSize * 2), 0x2ed573, 0x2ed573 );
+            // Griglia Iniziale
+            let divisions = Math.max(1, Math.round(globalGridSize / globalGridSquareSize));
+            groundGrid = new THREE.GridHelper( globalGridSize, divisions, 0x2ed573, 0x2ed573 );
             groundGrid.material.opacity = 0.8; groundGrid.material.transparent = true; groundGrid.visible = false;
             scene.add( groundGrid );
 
-            // Creazione punti base
+            // Creazione punti base con colori personalizzabili
             const pointGeo = new THREE.SphereGeometry( 0.1, 32, 32 );
-            point1 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0xff4757 } ) ); point1.visible = false; scene.add( point1 );
-            point2 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0x1e90ff } ) ); point2.visible = false; scene.add( point2 );
-            point3 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0xf1c40f } ) ); point3.visible = false; scene.add( point3 );
+            point1 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: colorA } ) ); point1.visible = false; scene.add( point1 );
+            point2 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: colorB } ) ); point2.visible = false; scene.add( point2 );
+            point3 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: colorC } ) ); point3.visible = false; scene.add( point3 );
 
             lineAB = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffdd59, linewidth: 1, transparent: true, opacity: 0.5 }));
             lineAB.visible = false; scene.add(lineAB);
@@ -348,8 +381,11 @@
             // GESTIONE DINAMICA DELLE IMPOSTAZIONI TRAMITE PULSANTI (+ / -)
             function updateGridVisuals() {
                 document.getElementById('gridVal').innerText = globalGridSize + 'm';
+                document.getElementById('sqVal').innerText = globalGridSquareSize.toFixed(1) + 'm';
+                
                 scene.remove(groundGrid);
-                groundGrid = new THREE.GridHelper( globalGridSize, Math.round(globalGridSize * 2), 0x2ed573, 0x2ed573 );
+                let divs = Math.max(1, Math.round(globalGridSize / globalGridSquareSize));
+                groundGrid = new THREE.GridHelper( globalGridSize, divs, 0x2ed573, 0x2ed573 );
                 groundGrid.material.opacity = 0.8; 
                 groundGrid.material.transparent = true;
                 if (isGroundSet) {
@@ -361,13 +397,23 @@
                 scene.add( groundGrid );
             }
 
+            // Lato Griglia (Passi di 1m)
             document.getElementById('btnGridMinus').addEventListener('click', () => {
-                if (globalGridSize > 10) { globalGridSize -= 10; updateGridVisuals(); }
+                if (globalGridSize > 5) { globalGridSize -= 1; updateGridVisuals(); }
             });
             document.getElementById('btnGridPlus').addEventListener('click', () => {
-                if (globalGridSize < 150) { globalGridSize += 10; updateGridVisuals(); }
+                if (globalGridSize < 200) { globalGridSize += 1; updateGridVisuals(); }
             });
 
+            // Dimensione Quadrati (Passi di 0.1m)
+            document.getElementById('btnSqMinus').addEventListener('click', () => {
+                if (globalGridSquareSize > 0.2) { globalGridSquareSize -= 0.1; updateGridVisuals(); }
+            });
+            document.getElementById('btnSqPlus').addEventListener('click', () => {
+                if (globalGridSquareSize < 5.0) { globalGridSquareSize += 0.1; updateGridVisuals(); }
+            });
+
+            // Grandezza Punti
             document.getElementById('btnPtMinus').addEventListener('click', () => {
                 if (globalPointScale > 0.04) { 
                     globalPointScale -= 0.02; 
@@ -381,6 +427,23 @@
                 }
             });
             
+            // Colori Punti
+            document.getElementById('colorPickerA').addEventListener('input', (e) => {
+                colorA = parseInt(e.target.value.replace('#', '0x'));
+                point1.material.color.setHex(colorA);
+                drawAntenna();
+            });
+            document.getElementById('colorPickerB').addEventListener('input', (e) => {
+                colorB = parseInt(e.target.value.replace('#', '0x'));
+                point2.material.color.setHex(colorB);
+                drawAntenna();
+            });
+            document.getElementById('colorPickerC').addEventListener('input', (e) => {
+                colorC = parseInt(e.target.value.replace('#', '0x'));
+                point3.material.color.setHex(colorC);
+                drawAntenna();
+            });
+
             document.getElementById('btnSetByHeight').addEventListener('click', () => {
                 const height = parseFloat(document.getElementById('phoneHeight').value);
                 if(isNaN(height) || height <= 0) return;
@@ -557,7 +620,9 @@
             scene.add(line); antennaMeshes.push(line);
 
             const labelY = groundLevel + (position.y - groundLevel) * 0.5;
-            const sprite = makeTextSprite(labelText, `#${color.toString(16).padStart(6, '0')}`, 'rgba(0,0,0,0.7)', true);
+            // Usa la stringa hex corretta per il colore dello sprite
+            const hexColorStr = `#${color.toString(16).padStart(6, '0')}`;
+            const sprite = makeTextSprite(labelText, hexColorStr, 'rgba(0,0,0,0.7)', true);
             sprite.position.set(position.x, labelY, position.z);
             scene.add(sprite); textSprites.push(sprite);
         }
@@ -721,14 +786,16 @@
             textSprites.forEach(m => disposeNode(m)); textSprites = [];
             document.getElementById('warning').style.display = 'none';
 
+            // DISEGNA LE LINEE GUIDA SUBITO, indipendentemente dal collegamento dei fili
+            if (point1.visible) drawDropLine(point1.position, colorA, `Alb.A: ${(point1.position.y - groundLevel).toFixed(1)}m`);
+            if (point2.visible) drawDropLine(point2.position, colorB, `Alb.B: ${(point2.position.y - groundLevel).toFixed(1)}m`);
+            if (point3.visible) drawDropLine(point3.position, colorC, `Centro: ${(point3.position.y - groundLevel).toFixed(1)}m`);
+
+            // Se mancano A o B, ferma qui il disegno dei fili dell'antenna
             if (!point1.visible || !point2.visible) {
                 lineAB.visible = false;
                 return;
             }
-
-            if (point1.visible) drawDropLine(point1.position, 0xff4757, `Alb.A: ${(point1.position.y - groundLevel).toFixed(1)}m`);
-            if (point2.visible) drawDropLine(point2.position, 0x1e90ff, `Alb.B: ${(point2.position.y - groundLevel).toFixed(1)}m`);
-            if (point3.visible) drawDropLine(point3.position, 0xf1c40f, `Centro: ${(point3.position.y - groundLevel).toFixed(1)}m`);
 
             const A = point1.position; const B = point2.position;
             const C = point3.visible ? point3.position : null;
