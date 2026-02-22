@@ -753,6 +753,56 @@
             }
         }
 
+        // --- MOTORE DI DEFORMAZIONE DEL LOBO (Ray-Bending Simulation) ---
+        function applyEnvironmentalDeformation(mesh, baseGeometry, centerPoint, isOmni) {
+            // Applichiamo la trasformazione per operare sui vertici nello spazio del mondo reale
+            mesh.updateMatrixWorld(true);
+            baseGeometry.applyMatrix4(mesh.matrixWorld);
+            mesh.position.set(0,0,0);
+            mesh.quaternion.identity();
+            mesh.scale.set(1,1,1);
+            mesh.updateMatrix();
+
+            const positions = baseGeometry.attributes.position;
+            const v = new THREE.Vector3();
+            const treeRadius = 2.0; // Raggio di influenza degli alberi (ostacoli fisici)
+
+            for (let i = 0; i < positions.count; i++) {
+                v.fromBufferAttribute(positions, i);
+                
+                // 1. RIFLESSIONE SUL TERRENO: Il lobo non può andare sotto terra
+                if (v.y < groundLevel + 0.1) {
+                    let depth = (groundLevel + 0.1) - v.y;
+                    v.y = groundLevel + 0.1; // Appiattisce
+                    // Simula l'espansione dell'onda che rimbalza (allarga la base)
+                    v.x += (v.x - centerPoint.x) * 0.15 * depth;
+                    v.z += (v.z - centerPoint.z) * 0.15 * depth;
+                }
+
+                // 2. ASSORBIMENTO DA OSTACOLI (Alberi/Pali)
+                let distA = v.distanceTo(point1.position);
+                let distB = v.distanceTo(point2.position);
+                let distC = point3.visible ? v.distanceTo(point3.position) : 9999;
+
+                // Funzione per creare un'ammaccatura nel lobo vicino all'ostacolo
+                if (distA < treeRadius) {
+                    let squish = 1.0 - (distA / treeRadius);
+                    v.lerp(centerPoint, squish * 0.6); // Spinge il vertice indentro
+                }
+                if (distB < treeRadius) {
+                    let squish = 1.0 - (distB / treeRadius);
+                    v.lerp(centerPoint, squish * 0.6);
+                }
+                if (distC < treeRadius) {
+                    let squish = 1.0 - (distC / treeRadius);
+                    v.lerp(centerPoint, squish * 0.6);
+                }
+
+                positions.setXYZ(i, v.x, v.y, v.z);
+            }
+            baseGeometry.computeVertexNormals(); // Ricalcola i riflessi della luce
+        }
+
         function drawAntenna() {
             antennaMeshes.forEach(m => disposeNode(m)); antennaMeshes = [];
             markerMeshes.forEach(m => disposeNode(m)); markerMeshes = [];
@@ -860,20 +910,19 @@
                 }
             }
 
-            // --- DISEGNO DEL LOBO 3D TEORICO ---
+            // --- DISEGNO DEL LOBO 3D DEFORMATO DALL'AMBIENTE ---
             if (isLobeVisible && type !== 'none') {
-                // Calcola l'altezza media dell'antenna da terra
                 let feedHeight = (point1.position.y + point2.position.y) / 2; 
                 if (point3.visible) feedHeight = point3.position.y;
                 const heightCenter = feedHeight - groundLevel;
 
-                // Materiale "Energia" Rosso Traslucido
                 let lobeMaterial = new THREE.MeshPhongMaterial({ 
                     color: 0xff0055, 
                     transparent: true, 
                     opacity: 0.6, 
                     side: THREE.DoubleSide,
-                    blending: THREE.AdditiveBlending 
+                    blending: THREE.AdditiveBlending,
+                    wireframe: true // Usiamo il wireframe per far sembrare il diagramma uno strumento di scansione
                 });
 
                 if (type === 'dipole') {
@@ -881,46 +930,49 @@
                     const FeedNode = C ? C : new THREE.Vector3().copy(A).lerp(B, 0.5);
                     let wireDir = new THREE.Vector3().subVectors(B, A).normalize();
 
-                    // Logica NVIS vs DX: Se l'altezza è < 0.3 lambda, il lobo va verso l'alto
+                    let geo, mesh;
                     if (heightCenter < band * 0.3) {
-                        // EFFETTO NVIS (Bolla verso il cielo)
-                        let geo = new THREE.SphereGeometry(totalDist * 0.3, 32, 16);
-                        geo.scale(1, 0.6, 1); // Schiaccia come un uovo
-                        geo.translate(0, totalDist * 0.2, 0); // Sposta sopra il dipolo
-                        let mesh = new THREE.Mesh(geo, lobeMaterial);
+                        // EFFETTO NVIS + Deformazione
+                        geo = new THREE.SphereGeometry(totalDist * 0.35, 64, 32);
+                        geo.scale(1, 0.7, 1);
+                        geo.translate(0, totalDist * 0.2, 0);
+                        mesh = new THREE.Mesh(geo, lobeMaterial);
                         mesh.position.copy(FeedNode);
-                        scene.add(mesh);
-                        antennaMeshes.push(mesh);
                     } else {
-                        // EFFETTO DX (Toroide / Ciambella per dipolo alto)
-                        let geo = new THREE.TorusGeometry(totalDist * 0.25, totalDist * 0.1, 16, 32);
-                        let mesh = new THREE.Mesh(geo, lobeMaterial);
+                        // EFFETTO DX + Deformazione
+                        geo = new THREE.TorusGeometry(totalDist * 0.25, totalDist * 0.15, 32, 64);
+                        mesh = new THREE.Mesh(geo, lobeMaterial);
                         mesh.position.copy(FeedNode);
                         mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), wireDir);
-                        scene.add(mesh);
-                        antennaMeshes.push(mesh);
                     }
+                    
+                    // Applica il "Ray-Bending" basato sull'ambiente
+                    applyEnvironmentalDeformation(mesh, geo, FeedNode, true);
+                    scene.add(mesh);
+                    antennaMeshes.push(mesh);
+
                 } else if (type === 'endfed' || type === 'longwire') {
-                    // Lobi Direzionali lungo il filo
                     let isStartA = type === 'endfed' ? (document.getElementById('efStart').value === 'A') : (document.getElementById('lwStart').value === 'A');
                     let startPos = isStartA ? A : B;
                     let endPos = isStartA ? B : A;
                     let mainDir = new THREE.Vector3().subVectors(endPos, startPos).normalize();
+                    let feedNode = C ? C : startPos;
                     
-                    // Cono allungato per simulare la direzione di lancio
-                    let geo = new THREE.ConeGeometry(totalDist * 0.15, totalDist * 0.7, 32);
-                    geo.translate(0, totalDist * 0.35, 0); // Perno sulla base
+                    // Cono allungato
+                    let geo = new THREE.ConeGeometry(totalDist * 0.2, totalDist * 0.8, 64, 32);
+                    geo.translate(0, totalDist * 0.4, 0); 
                     
-                    let mesh1 = new THREE.Mesh(geo, lobeMaterial);
-                    mesh1.position.copy(C ? C : startPos);
+                    let mesh = new THREE.Mesh(geo, lobeMaterial);
+                    mesh.position.copy(feedNode);
                     
-                    // Inclinazione verso l'alto
                     let up = new THREE.Vector3(0,1,0);
-                    mesh1.quaternion.setFromUnitVectors(up, mainDir);
-                    mesh1.rotateOnAxis(new THREE.Vector3(1,0,0), -Math.PI / 6); // 30 gradi in su
+                    mesh.quaternion.setFromUnitVectors(up, mainDir);
+                    mesh.rotateOnAxis(new THREE.Vector3(1,0,0), -Math.PI / 6); 
                     
-                    scene.add(mesh1);
-                    antennaMeshes.push(mesh1);
+                    // Applica il "Ray-Bending" basato sull'ambiente
+                    applyEnvironmentalDeformation(mesh, geo, feedNode, false);
+                    scene.add(mesh);
+                    antennaMeshes.push(mesh);
                 }
             }
         }
