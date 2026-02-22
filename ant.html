@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Vertical Quotes & Balun Fix</title>
+    <title>AR Ham Radio Planner - Extended Range</title>
     
     <!-- Meta tag per la PWA e collegamento al Manifest -->
     <link rel="manifest" href="./manifest.json">
@@ -65,10 +65,22 @@
         #photoOverlay { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(46, 213, 115, 0.9); color: black; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: bold; display: none; z-index: 200; box-shadow: 0 4px 6px rgba(0,0,0,0.5);}
         
         #btnInfo { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); border: 2px solid #2ed573; color: #2ed573; border-radius: 50%; width: 35px; height: 35px; font-weight: bold; font-size: 18px; cursor: pointer; z-index: 200; pointer-events: auto; display: flex; align-items: center; justify-content: center;}
-        #infoModal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 400px; background: rgba(20, 30, 40, 0.98); padding: 20px; border: 2px solid #2ed573; border-radius: 10px; z-index: 300; pointer-events: auto; color: white; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8);}
-        #infoModal h3 { margin-top: 0; color: #2ed573; }
-        #infoModal p { font-size: 14px; line-height: 1.5; text-align: justify; margin-bottom: 20px; }
-        #btnCloseInfo { padding: 10px 20px; background: #2ed573; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; }
+        
+        /* Tasto Settings */
+        #btnSettings { position: absolute; top: 10px; right: 55px; background: rgba(0,0,0,0.7); border: 2px solid #1e90ff; color: #1e90ff; border-radius: 50%; width: 35px; height: 35px; font-weight: bold; font-size: 18px; cursor: pointer; z-index: 200; pointer-events: auto; display: flex; align-items: center; justify-content: center;}
+
+        .custom-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 400px; background: rgba(20, 30, 40, 0.98); padding: 20px; border: 2px solid #2ed573; border-radius: 10px; z-index: 300; pointer-events: auto; color: white; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8);}
+        .custom-modal h3 { margin-top: 0; color: #2ed573; }
+        .custom-modal p { font-size: 14px; line-height: 1.5; text-align: justify; margin-bottom: 20px; }
+        
+        #settingsModal { border-color: #1e90ff; }
+        #settingsModal h3 { color: #1e90ff; margin-bottom: 20px;}
+        .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 14px; text-align: left;}
+        .setting-row input[type="number"] { width: 60px; padding: 5px; border-radius: 4px; border: 1px solid #555; background: #222; color: white; text-align: center; font-weight:bold;}
+        .setting-row input[type="range"] { flex: 1; margin-left: 10px; }
+
+        .modal-close-btn { padding: 10px 20px; background: #2ed573; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; margin-top: 10px;}
+        #btnCloseSettings { background: #1e90ff; color: white; }
     </style>
 </head>
 <body>
@@ -76,15 +88,30 @@
     <div id="ui-container" style="display: none;">
         <div id="touchArea"></div>
         
-        <!-- Tasto Info -->
+        <!-- Tasti in alto a destra -->
         <button id="btnInfo">i</button>
+        <button id="btnSettings">⚙️</button>
 
         <!-- Pannello Info Modal -->
-        <div id="infoModal">
+        <div id="infoModal" class="custom-modal">
             <h3>Info Privacy & Offline</h3>
             <p>Questa app è progettata per i radioamatori: <strong>non raccoglie dati personali</strong> e salva i file essenziali sul tuo dispositivo per funzionare perfettamente al 100% in modalità offline, anche dove non c'è copertura di rete.</p>
             <p style="font-size: 13px; color: #ffdd59; margin-top: -10px;">⚠️ <strong>Requisiti:</strong> Per funzionare, richiede un browser compatibile con la Realtà Aumentata (WebXR), come <strong>Google Chrome</strong> (consigliato su Android) o browser abilitati su iOS.</p>
-            <button id="btnCloseInfo">Ho capito</button>
+            <button id="btnCloseInfo" class="modal-close-btn">Ho capito</button>
+        </div>
+
+        <!-- Pannello Settings Modal -->
+        <div id="settingsModal" class="custom-modal">
+            <h3>Impostazioni Visive</h3>
+            <div class="setting-row">
+                <label>Griglia (metri):</label>
+                <input type="number" id="gridSizeInput" value="50" min="5" max="200" step="5">
+            </div>
+            <div class="setting-row">
+                <label>Dimensione Punti:</label>
+                <input type="range" id="pointSizeInput" min="0.02" max="0.3" step="0.01" value="0.1">
+            </div>
+            <button id="btnCloseSettings" class="modal-close-btn">Chiudi e Applica</button>
         </div>
         
         <div id="top-bar">
@@ -95,7 +122,7 @@
                 C: <span id="hC" class="data-value" style="color:#f1c40f;">--</span>m<br>
                 <hr style="border-color:#555; margin: 5px 0;">
                 Spazio Totale:<br><span id="distAB" class="data-value" style="font-size: 18px;">--</span>m
-                <div id="distV_container" style="display:none; font-size:11px; margin-top:3px; color:#ccc;">
+                <div id="distV_container" style="display:none; font-size:11px; margin-top:3px; color:#ccc; word-wrap: break-word;">
                     A-C: <span id="distAC">--</span>m | C-B: <span id="distCB">--</span>m
                 </div>
             </div>
@@ -145,21 +172,22 @@
         <div class="bottom-controls">
             
             <div id="panel-setup-ground" class="edit-panel" style="display: none;">
-                <div style="font-size: 13px; margin-bottom: 8px; color: #2ed573;">CALIBRAZIONE MATEMATICA</div>
+                <div style="font-size: 13px; margin-bottom: 8px; color: #2ed573;">CALIBRAZIONE MATEMATICA (Supera Limiti AR)</div>
                 <div class="height-input-container">
                     Altezza cellulare: <input type="number" id="phoneHeight" value="1.40" step="0.05"> m
                 </div>
                 <div class="edit-row">
                     <button class="edit-btn" id="btnSetByHeight" style="background:#2ed573; color:black;">Usa Altezza Cellulare</button>
-                    <button class="edit-btn" id="btnSetByTouch">Usa 3 Tocchi (Mirino)</button>
+                    <button class="edit-btn" id="btnSetByTouch">Usa 3 Tocchi (Limita a 5m)</button>
                 </div>
             </div>
 
             <div id="panel-edit-point" class="edit-panel" style="display: none;">
-                <div style="font-size: 12px; margin-bottom: 5px; color: #aaa;">👆 TRASCINA SU/GIÙ per alzare. Usa i tasti per muovere la base.</div>
+                <div style="font-size: 12px; margin-bottom: 5px; color: #aaa;">👆 TRASCINA SU/GIÙ per alzare. Usa i tasti.</div>
                 <div class="edit-row">
-                    <button class="edit-btn" id="btnPFar">Base Lontana ↗️</button>
-                    <button class="edit-btn" id="btnPNear">Base Vicina ↙️</button>
+                    <button class="edit-btn" id="btnPFar">Lontana ↗️</button>
+                    <button class="edit-btn" id="btnPNear">Vicina ↙️</button>
+                    <button class="edit-btn" id="btnDoneEdit" style="background: #2ed573; color: black;">✔ OK</button>
                 </div>
             </div>
 
@@ -213,6 +241,10 @@
         let lastTouchY = 0;
         let isDragging = false, hasDragged = false; 
 
+        // Nuove variabili per le impostazioni
+        let globalGridSize = 50;
+        let globalPointScale = 0.1;
+
         function disposeNode(node) {
             if (!node) return;
             scene.remove(node);
@@ -248,7 +280,6 @@
             renderer.xr.enabled = true;
             container.appendChild( renderer.domElement );
 
-            // MODIFICA CRUCIALE: Richiediamo esplicitamente l'API Depth a Chrome
             document.body.appendChild( ARButton.createButton( renderer, { 
                 requiredFeatures: [ 'hit-test', 'dom-overlay' ],
                 optionalFeatures: [ 'depth-sensing' ],
@@ -259,11 +290,13 @@
                 domOverlay: { root: document.getElementById('ui-container') }
             } ) );
 
-            groundGrid = new THREE.GridHelper( 3, 30, 0x2ed573, 0x2ed573 );
+            // Griglia Iniziale
+            groundGrid = new THREE.GridHelper( globalGridSize, globalGridSize, 0x2ed573, 0x2ed573 );
             groundGrid.material.opacity = 0.8; groundGrid.material.transparent = true; groundGrid.visible = false;
             scene.add( groundGrid );
 
-            const pointGeo = new THREE.SphereGeometry( 0.05, 32, 32 );
+            // Creazione punti base
+            const pointGeo = new THREE.SphereGeometry( 0.1, 32, 32 );
             point1 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0xff4757 } ) ); point1.visible = false; scene.add( point1 );
             point2 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0x1e90ff } ) ); point2.visible = false; scene.add( point2 );
             point3 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0xf1c40f } ) ); point3.visible = false; scene.add( point3 );
@@ -271,7 +304,7 @@
             lineAB = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffdd59, linewidth: 1, transparent: true, opacity: 0.5 }));
             lineAB.visible = false; scene.add(lineAB);
 
-            reticle = new THREE.Mesh( new THREE.RingGeometry( 0.02, 0.04, 32 ).rotateX( - Math.PI / 2 ), new THREE.MeshBasicMaterial( { color: 0xffffff } ) );
+            reticle = new THREE.Mesh( new THREE.RingGeometry( 0.05, 0.08, 32 ).rotateX( - Math.PI / 2 ), new THREE.MeshBasicMaterial( { color: 0xffffff } ) );
             reticle.matrixAutoUpdate = true; reticle.visible = false; scene.add( reticle );
 
             controller = renderer.xr.getController( 0 );
@@ -291,9 +324,38 @@
 
             document.getElementById('btnGround').addEventListener('click', () => setAction('MENU_GROUND'));
             
-            // Gestione Tasto Info
+            // Gestione Tasto Info e Settings
             document.getElementById('btnInfo').addEventListener('click', () => { document.getElementById('infoModal').style.display = 'block'; });
             document.getElementById('btnCloseInfo').addEventListener('click', () => { document.getElementById('infoModal').style.display = 'none'; });
+            
+            document.getElementById('btnSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'block'; });
+            document.getElementById('btnCloseSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'none'; });
+
+            // Gestione Dinamica Dimensione Griglia
+            document.getElementById('gridSizeInput').addEventListener('change', (e) => {
+                let size = parseFloat(e.target.value);
+                if(isNaN(size) || size < 5) size = 5;
+                globalGridSize = size;
+                
+                // Ricrea la griglia con la nuova dimensione
+                scene.remove(groundGrid);
+                groundGrid = new THREE.GridHelper( globalGridSize, globalGridSize, 0x2ed573, 0x2ed573 );
+                groundGrid.material.opacity = 0.8; 
+                groundGrid.material.transparent = true;
+                
+                if (isGroundSet) {
+                    groundGrid.position.set(camera.position.x, groundLevel, camera.position.z);
+                    groundGrid.visible = true;
+                } else {
+                    groundGrid.visible = false;
+                }
+                scene.add( groundGrid );
+            });
+
+            // Gestione Dinamica Dimensione Punti
+            document.getElementById('pointSizeInput').addEventListener('input', (e) => {
+                globalPointScale = parseFloat(e.target.value);
+            });
             
             document.getElementById('btnSetByHeight').addEventListener('click', () => {
                 const height = parseFloat(document.getElementById('phoneHeight').value);
@@ -308,8 +370,12 @@
             document.getElementById('btnA').addEventListener('click', () => setAction('PLACE_BASE_A'));
             document.getElementById('btnB').addEventListener('click', () => setAction('PLACE_BASE_B'));
             document.getElementById('btnC').addEventListener('click', () => setAction('PLACE_BASE_C'));
+            
+            // Nuovi Event Listener
             document.getElementById('btnPFar').addEventListener('click', () => adjustDepth(0.5));
             document.getElementById('btnPNear').addEventListener('click', () => adjustDepth(-0.5));
+            document.getElementById('btnDoneEdit').addEventListener('click', () => setAction('NONE'));
+
             document.getElementById('antType').addEventListener('change', updateAntennaUI);
             document.querySelectorAll('#antennaPanel select, #antennaPanel input').forEach(el => el.addEventListener('input', drawAntenna));
 
@@ -415,7 +481,7 @@
                 inst.innerText = "2. TRASCINA SU/GIÙ per alzare il punto."; 
                 inst.style.background = action === 'SET_HEIGHT_A' ? "#ff4757" : (action === 'SET_HEIGHT_B' ? "#1e90ff" : "#f1c40f");
             } else {
-                inst.innerText = "Antenna pronta. Usa il tasto Foto per salvare."; inst.style.background = "#555";
+                inst.innerText = "Punti posizionati. Puoi personalizzare l'Antenna."; inst.style.background = "#555";
             }
         }
 
@@ -565,25 +631,28 @@
 
         function buildWire(pStart, pEnd, color, thickness=0.015) {
             const dist = pStart.distanceTo(pEnd);
+            if (dist < 0.01) return; 
+            
             const cylinder = new THREE.Mesh( new THREE.CylinderGeometry(thickness, thickness, dist, 8), new THREE.MeshBasicMaterial({color: color}) );
             cylinder.position.copy(pStart).lerp(pEnd, 0.5);
             cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3().subVectors(pEnd, pStart).normalize());
             scene.add(cylinder); antennaMeshes.push(cylinder);
         }
 
-        // --- NUOVI HELPER PER GESTIRE LA FORMA A "V" O I TRACCIATI PIEGATI ---
         function getPointAlongPath(distance, points) {
             let currentDist = 0;
             for (let i = 0; i < points.length - 1; i++) {
                 let segLen = points[i].distanceTo(points[i+1]);
-                if (currentDist + segLen >= distance) {
-                    let excess = distance - currentDist;
+                if (segLen < 0.001) continue; 
+                
+                if (currentDist + segLen >= distance - 0.001) {
+                    let excess = Math.max(0, distance - currentDist);
                     let dir = new THREE.Vector3().subVectors(points[i+1], points[i]).normalize();
                     return new THREE.Vector3().copy(points[i]).add(dir.multiplyScalar(excess));
                 }
                 currentDist += segLen;
             }
-            return points[points.length - 1]; // Ritorna l'ultimo punto se supera la lunghezza
+            return new THREE.Vector3().copy(points[points.length - 1]);
         }
 
         function buildWirePath(startDist, endDist, pathPoints, color) {
@@ -598,15 +667,14 @@
             let distToC = pathPoints[0].distanceTo(C);
 
             if (endDist <= distToC + 0.01) {
-                buildWire(pStart, pEnd, color); // Tutto sul primo segmento
+                buildWire(pStart, pEnd, color); 
             } else if (startDist >= distToC - 0.01) {
-                buildWire(pStart, pEnd, color); // Tutto sul secondo segmento
+                buildWire(pStart, pEnd, color); 
             } else {
-                buildWire(pStart, C, color); // Scavalca il punto C (piega)
+                buildWire(pStart, C, color); 
                 buildWire(C, pEnd, color);
             }
         }
-        // ---------------------------------------------------------------------
 
         function drawAntenna() {
             antennaMeshes.forEach(m => disposeNode(m)); antennaMeshes = [];
@@ -614,21 +682,31 @@
             textSprites.forEach(m => disposeNode(m)); textSprites = [];
             document.getElementById('warning').style.display = 'none';
 
-            if (point1.visible) drawDropLine(point1.position, 0xff4757, `Alb.A: ${(point1.position.y - groundLevel).toFixed(1)}m`);
-            if (point2.visible) drawDropLine(point2.position, 0x1e90ff, `Alb.B: ${(point2.position.y - groundLevel).toFixed(1)}m`);
-            if (point3.visible) drawDropLine(point3.position, 0xf1c40f, `Centro: ${(point3.position.y - groundLevel).toFixed(1)}m`);
-
             if (!point1.visible || !point2.visible) {
                 lineAB.visible = false;
                 return;
             }
-            
+
+            if (point1.visible) drawDropLine(point1.position, 0xff4757, `Alb.A: ${(point1.position.y - groundLevel).toFixed(1)}m`);
+            if (point2.visible) drawDropLine(point2.position, 0x1e90ff, `Alb.B: ${(point2.position.y - groundLevel).toFixed(1)}m`);
+            if (point3.visible) drawDropLine(point3.position, 0xf1c40f, `Centro: ${(point3.position.y - groundLevel).toFixed(1)}m`);
+
             const A = point1.position; const B = point2.position;
             const C = point3.visible ? point3.position : null;
             const pathBase = C ? [A, C, B] : [A, B];
             
+            let totalDist = C ? A.distanceTo(C) + C.distanceTo(B) : A.distanceTo(B);
+            
+            if (totalDist < 0.1) {
+                document.getElementById('warning').innerText = "⚠️ Punti troppo vicini tra loro!";
+                document.getElementById('warning').style.display = 'block'; 
+                return;
+            } else {
+                document.getElementById('warning').innerText = "⚠️ Antenna più lunga dello spazio!";
+            }
+
             lineAB.geometry.setFromPoints(pathBase);
-            lineAB.visible = true; // Mostriamo sempre la traccia di base (spazio disponibile)
+            lineAB.visible = true;
 
             const type = document.getElementById('antType').value;
             
@@ -637,7 +715,6 @@
                 return;
             }
 
-            let totalDist = C ? A.distanceTo(C) + C.distanceTo(B) : A.distanceTo(B);
             const copperColor = 0xe67e22;
 
             if (type === 'dipole') {
@@ -711,7 +788,8 @@
                 const referenceSpace = renderer.xr.getReferenceSpace();
                 const session = renderer.xr.getSession();
 
-                const apparentSizeFactor = 0.05; 
+                // Applicazione dinamica della dimensione dei punti in base allo slider
+                const apparentSizeFactor = globalPointScale; 
                 if (point1.visible) point1.scale.setScalar(camera.position.distanceTo(point1.position) * apparentSizeFactor);
                 if (point2.visible) point2.scale.setScalar(camera.position.distanceTo(point2.position) * apparentSizeFactor);
                 if (point3.visible) point3.scale.setScalar(camera.position.distanceTo(point3.position) * apparentSizeFactor);
@@ -734,8 +812,10 @@
                     hitTestSourceRequested = true;
                 }
 
+                let hitFound = false;
                 if (currentAction === 'PLACE_GROUND' || currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B' || currentAction === 'PLACE_BASE_C') {
-                    reticle.visible = false;
+                    
+                    // 1. Prova prima il classico sensore ARCore (per distanze ravvicinate)
                     if ( hitTestSource ) {
                         const hitTestResults = frame.getHitTestResults( hitTestSource );
                         if ( hitTestResults.length ) {
@@ -743,7 +823,33 @@
                             reticle.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
                             reticle.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
                             reticle.visible = true;
+                            hitFound = true;
                         }
+                    }
+
+                    // 2: IL TRUCCO MATEMATICO (Distanza Infinita)
+                    if (!hitFound && isGroundSet && currentAction !== 'PLACE_GROUND') {
+                        const cameraDirection = new THREE.Vector3();
+                        camera.getWorldDirection(cameraDirection);
+                        
+                        // Assicuriamoci che l'utente stia guardando un po' verso il basso, non in cielo
+                        if (cameraDirection.y < -0.01) { 
+                            // Calcola a che distanza il raggio visivo tocca il pavimento (groundLevel)
+                            const t = (groundLevel - camera.position.y) / cameraDirection.y;
+                            
+                            // Mettiamo un limite di sicurezza di 100 metri
+                            if (t > 0 && t < 100) { 
+                                const hitPoint = new THREE.Vector3().copy(camera.position).add(cameraDirection.multiplyScalar(t));
+                                reticle.position.copy(hitPoint);
+                                reticle.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2); // Sdraiato per terra
+                                reticle.visible = true;
+                                hitFound = true;
+                            }
+                        }
+                    }
+
+                    if (!hitFound) {
+                        reticle.visible = false;
                     }
                 } else {
                     reticle.visible = false;
