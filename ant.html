@@ -153,6 +153,9 @@
                 <input type="color" id="colorPickerC" value="#f1c40f">
             </div>
             
+            <hr style="border-color:#444; margin: 15px 0;">
+            <button id="btnForceUpdate" style="padding: 10px 20px; background: #ff9f43; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; margin-bottom: 10px;">🔄 Scarica Ultima Versione App</button>
+
             <button id="btnCloseSettings" class="modal-close-btn">Chiudi</button>
         </div>
         
@@ -385,6 +388,27 @@
             
             document.getElementById('btnSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'block'; });
             document.getElementById('btnCloseSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'none'; });
+
+            // SISTEMA DI AGGIORNAMENTO FORZATO APP
+            document.getElementById('btnForceUpdate').addEventListener('click', () => {
+                document.getElementById('btnForceUpdate').innerText = "Aggiornamento in corso...";
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                        for(let registration of registrations) {
+                            registration.unregister(); // Disinstalla il vecchio Service Worker
+                        }
+                        // Pulisce tutta la cache locale
+                        caches.keys().then((keyList) => {
+                            return Promise.all(keyList.map((key) => caches.delete(key)));
+                        }).then(() => {
+                            // Ricarica la pagina forzatamente ignorando la cache
+                            window.location.reload(true);
+                        });
+                    });
+                } else {
+                    window.location.reload(true);
+                }
+            });
 
             function updateGridVisuals() {
                 document.getElementById('gridVal').innerText = globalGridSize + 'm';
@@ -927,20 +951,23 @@
 
                 if (type === 'dipole') {
                     const band = parseFloat(document.getElementById('dipoleBand').value);
+                    const wireLength = band / 2; // NOVITA': Usiamo la VERA lunghezza del filo per dimensionare il lobo
+                    
                     const FeedNode = C ? C : new THREE.Vector3().copy(A).lerp(B, 0.5);
                     let wireDir = new THREE.Vector3().subVectors(B, A).normalize();
 
                     let geo, mesh;
                     if (heightCenter < band * 0.3) {
-                        // EFFETTO NVIS + Deformazione
-                        geo = new THREE.SphereGeometry(totalDist * 0.35, 64, 32);
+                        // EFFETTO NVIS (Bolla che copre tutto il filo)
+                        geo = new THREE.SphereGeometry(wireLength * 0.55, 64, 32);
                         geo.scale(1, 0.7, 1);
-                        geo.translate(0, totalDist * 0.2, 0);
+                        geo.translate(0, wireLength * 0.25, 0);
                         mesh = new THREE.Mesh(geo, lobeMaterial);
                         mesh.position.copy(FeedNode);
                     } else {
-                        // EFFETTO DX + Deformazione
-                        geo = new THREE.TorusGeometry(totalDist * 0.25, totalDist * 0.15, 32, 64);
+                        // EFFETTO DX (Toroide che abbraccia l'antenna da una punta all'altra)
+                        // Raggio principale = 30% lunghezza, Spessore ciambella = 25% lunghezza. Totale = 55% per coprire la punta.
+                        geo = new THREE.TorusGeometry(wireLength * 0.3, wireLength * 0.25, 32, 64);
                         mesh = new THREE.Mesh(geo, lobeMaterial);
                         mesh.position.copy(FeedNode);
                         mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), wireDir);
@@ -956,18 +983,35 @@
                     let startPos = isStartA ? A : B;
                     let endPos = isStartA ? B : A;
                     let mainDir = new THREE.Vector3().subVectors(endPos, startPos).normalize();
-                    let feedNode = C ? C : startPos;
+                    let feedNode = startPos;
                     
-                    // Cono allungato
-                    let geo = new THREE.ConeGeometry(totalDist * 0.2, totalDist * 0.8, 64, 32);
-                    geo.translate(0, totalDist * 0.4, 0); 
+                    let activeLength = 0; // Lunghezza della sola parte che irradia
+                    
+                    if (type === 'endfed') {
+                        let L1 = parseFloat(document.getElementById('efL1').value);
+                        let L2 = parseFloat(document.getElementById('efL2').value);
+                        activeLength = L1 + L2; // Il lobo è lungo quanto tutto il filo radiante
+                        
+                        let dist = parseFloat(document.getElementById('efDist').value);
+                        let path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]);
+                        // Il lobo parte dall'inizio effettivo del filo radiante (dopo il cordino)
+                        feedNode = getPointAlongPath(dist, path); 
+                    } else {
+                        activeLength = parseFloat(document.getElementById('lwLen').value);
+                        let path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]);
+                        feedNode = path[0];
+                    }
+                    
+                    // Cono allungato proporzionato alla VERA lunghezza del filo
+                    let geo = new THREE.ConeGeometry(activeLength * 0.25, activeLength, 64, 32);
+                    geo.translate(0, activeLength * 0.45, 0); 
                     
                     let mesh = new THREE.Mesh(geo, lobeMaterial);
                     mesh.position.copy(feedNode);
                     
                     let up = new THREE.Vector3(0,1,0);
                     mesh.quaternion.setFromUnitVectors(up, mainDir);
-                    mesh.rotateOnAxis(new THREE.Vector3(1,0,0), -Math.PI / 6); 
+                    mesh.rotateOnAxis(new THREE.Vector3(1,0,0), -Math.PI / 8); 
                     
                     // Applica il "Ray-Bending" basato sull'ambiente
                     applyEnvironmentalDeformation(mesh, geo, feedNode, false);
