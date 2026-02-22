@@ -894,19 +894,36 @@
                 const referenceSpace = renderer.xr.getReferenceSpace();
                 const session = renderer.xr.getSession();
 
-                // Applicazione dinamica della dimensione dei punti
-                const apparentSizeFactor = globalPointScale; 
-                if (point1.visible) point1.scale.setScalar(camera.position.distanceTo(point1.position) * apparentSizeFactor);
-                if (point2.visible) point2.scale.setScalar(camera.position.distanceTo(point2.position) * apparentSizeFactor);
-                if (point3.visible) point3.scale.setScalar(camera.position.distanceTo(point3.position) * apparentSizeFactor);
-                markerMeshes.forEach(marker => marker.scale.setScalar(camera.position.distanceTo(marker.position) * apparentSizeFactor));
+                // ---------------------------------------------------------------------
+                // NOVITÀ: FORMULA DI SCALING SMORZATA PER RISOLVERE L'EFFETTO SCHERMO INTERO
+                // ---------------------------------------------------------------------
+
+                // 1. Scala dei Punti (Sfere)
+                [point1, point2, point3].forEach(pt => {
+                    if (pt.visible) {
+                        const dist = camera.position.distanceTo(pt.position);
+                        // Dimensione base 50% + crescita progressiva morbida con la distanza
+                        const scaleFactor = globalPointScale * (0.5 + (dist * 0.05));
+                        pt.scale.setScalar(scaleFactor);
+                    }
+                });
+
+                // 2. Scala dei Marker (Balun, ecc)
+                markerMeshes.forEach(marker => {
+                    const dist = camera.position.distanceTo(marker.position);
+                    marker.scale.setScalar(0.5 + (dist * 0.05));
+                });
                 
+                // 3. Scala delle Etichette Testuali (Per non farle giganti da vicino)
                 textSprites.forEach(sprite => {
                     const dist = camera.position.distanceTo(sprite.position);
+                    // Dimensione smorzata: costante minima 0.4 + aumento lento
+                    const textScale = 0.4 + (dist * 0.05); 
+                    
                     if (sprite.userData.isVertical) {
-                        sprite.scale.set(dist * 0.06, dist * 0.25, 1);
+                        sprite.scale.set(textScale * 0.15, textScale * 0.6, 1);
                     } else {
-                        sprite.scale.set(dist * 0.25, dist * 0.06, 1);
+                        sprite.scale.set(textScale * 0.6, textScale * 0.15, 1);
                     }
                 });
 
