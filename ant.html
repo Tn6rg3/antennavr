@@ -46,6 +46,7 @@
         #btnGround { background: #2ed573; color: black; }
         #btnA { background: #ff4757; }
         #btnB { background: #1e90ff; }
+        #btnC { background: #f1c40f; color: black; }
         #btnPhoto { background: #ffffff; color: black; font-size: 14px; }
         #btnReset { background: #ff9f43; color: black; font-size: 14px; }
         
@@ -91,8 +92,12 @@
                 <strong>QUOTE (dal suolo):</strong><br>
                 A: <span id="hA" class="data-value">--</span>m<br>
                 B: <span id="hB" class="data-value">--</span>m<br>
+                C: <span id="hC" class="data-value" style="color:#f1c40f;">--</span>m<br>
                 <hr style="border-color:#555; margin: 5px 0;">
-                Distanza A-B:<br><span id="distAB" class="data-value" style="font-size: 18px;">--</span>m
+                Spazio Totale:<br><span id="distAB" class="data-value" style="font-size: 18px;">--</span>m
+                <div id="distV_container" style="display:none; font-size:11px; margin-top:3px; color:#ccc;">
+                    A-C: <span id="distAC">--</span>m | C-B: <span id="distCB">--</span>m
+                </div>
             </div>
 
             <div id="antennaPanel">
@@ -161,9 +166,10 @@
             <div id="instruction">Inizializzazione...</div>
 
             <div class="btn-row">
-                <button id="btnGround" class="main-btn">1. Terreno</button>
-                <button id="btnA" class="main-btn">2. Albero A</button>
-                <button id="btnB" class="main-btn">3. Albero B</button>
+                <button id="btnGround" class="main-btn">1. Zero</button>
+                <button id="btnA" class="main-btn">2. Alb.A</button>
+                <button id="btnB" class="main-btn">3. Alb.B</button>
+                <button id="btnC" class="main-btn">4. C (Opz)</button>
             </div>
             
             <div class="btn-row">
@@ -192,7 +198,7 @@
         let container, camera, scene, renderer, controller, reticle;
         let hitTestSource = null, hitTestSourceRequested = false;
 
-        let point1, point2, groundGrid, lineAB;
+        let point1, point2, point3, groundGrid, lineAB;
         let antennaMeshes = []; 
         let markerMeshes = []; 
         let textSprites = []; 
@@ -260,8 +266,9 @@
             const pointGeo = new THREE.SphereGeometry( 0.05, 32, 32 );
             point1 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0xff4757 } ) ); point1.visible = false; scene.add( point1 );
             point2 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0x1e90ff } ) ); point2.visible = false; scene.add( point2 );
+            point3 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: 0xf1c40f } ) ); point3.visible = false; scene.add( point3 );
 
-            lineAB = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffdd59, linewidth: 1 }));
+            lineAB = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffdd59, linewidth: 1, transparent: true, opacity: 0.5 }));
             lineAB.visible = false; scene.add(lineAB);
 
             reticle = new THREE.Mesh( new THREE.RingGeometry( 0.02, 0.04, 32 ).rotateX( - Math.PI / 2 ), new THREE.MeshBasicMaterial( { color: 0xffffff } ) );
@@ -300,6 +307,7 @@
             document.getElementById('btnSetByTouch').addEventListener('click', () => setAction('PLACE_GROUND'));
             document.getElementById('btnA').addEventListener('click', () => setAction('PLACE_BASE_A'));
             document.getElementById('btnB').addEventListener('click', () => setAction('PLACE_BASE_B'));
+            document.getElementById('btnC').addEventListener('click', () => setAction('PLACE_BASE_C'));
             document.getElementById('btnPFar').addEventListener('click', () => adjustDepth(0.5));
             document.getElementById('btnPNear').addEventListener('click', () => adjustDepth(-0.5));
             document.getElementById('antType').addEventListener('change', updateAntennaUI);
@@ -320,6 +328,7 @@
             document.getElementById('btnReset').addEventListener('click', () => {
                 point1.visible = false;
                 point2.visible = false;
+                point3.visible = false;
                 groundGrid.visible = false;
                 lineAB.visible = false;
 
@@ -333,7 +342,9 @@
 
                 document.getElementById('hA').innerText = '--';
                 document.getElementById('hB').innerText = '--';
+                document.getElementById('hC').innerText = '--';
                 document.getElementById('distAB').innerText = '--';
+                document.getElementById('distV_container').style.display = 'none';
                 
                 document.getElementById('antennaPanel').style.display = 'none';
                 document.getElementById('warning').style.display = 'none';
@@ -343,7 +354,7 @@
 
             const touchArea = document.getElementById('touchArea');
             touchArea.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B')) {
+                if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B' || currentAction === 'SET_HEIGHT_C')) {
                     isDragging = true; hasDragged = false; 
                     lastTouchY = e.touches[0].clientY;
                 }
@@ -352,8 +363,8 @@
             touchArea.addEventListener('touchmove', (e) => {
                 if (!isDragging) return;
                 hasDragged = true; 
-                if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B')) {
-                    let pt = currentAction === 'SET_HEIGHT_A' ? point1 : point2;
+                if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B' || currentAction === 'SET_HEIGHT_C')) {
+                    let pt = currentAction === 'SET_HEIGHT_A' ? point1 : (currentAction === 'SET_HEIGHT_B' ? point2 : point3);
                     if (!pt || !pt.visible) return;
 
                     let touchY = e.touches[0].clientY;
@@ -392,15 +403,17 @@
                 groundCalibrationPoints = []; clearTempMarkers();
                 document.getElementById('btnGround').classList.add('active');
                 inst.innerText = "Tocca 3 punti a terra per calibrare lo Zero."; inst.style.background = "#2ed573";
-            } else if (action === 'PLACE_BASE_A' || action === 'PLACE_BASE_B') {
-                const btn = action === 'PLACE_BASE_A' ? 'btnA' : 'btnB';
+            } else if (action === 'PLACE_BASE_A' || action === 'PLACE_BASE_B' || action === 'PLACE_BASE_C') {
+                const btn = action === 'PLACE_BASE_A' ? 'btnA' : (action === 'PLACE_BASE_B' ? 'btnB' : 'btnC');
                 document.getElementById(btn).classList.add('active');
-                inst.innerText = "1. MIRA al terreno per posizionare la BASE e TOCCA."; inst.style.background = action === 'PLACE_BASE_A' ? "#ff4757" : "#1e90ff";
-            } else if (action === 'SET_HEIGHT_A' || action === 'SET_HEIGHT_B') {
-                const btn = action === 'SET_HEIGHT_A' ? 'btnA' : 'btnB';
+                inst.innerText = action === 'PLACE_BASE_C' ? "MIRA al terreno per il CENTRO e TOCCA." : "MIRA al terreno per posizionare la BASE e TOCCA."; 
+                inst.style.background = action === 'PLACE_BASE_A' ? "#ff4757" : (action === 'PLACE_BASE_B' ? "#1e90ff" : "#f1c40f");
+            } else if (action === 'SET_HEIGHT_A' || action === 'SET_HEIGHT_B' || action === 'SET_HEIGHT_C') {
+                const btn = action === 'SET_HEIGHT_A' ? 'btnA' : (action === 'SET_HEIGHT_B' ? 'btnB' : 'btnC');
                 document.getElementById(btn).classList.add('active');
                 document.getElementById('panel-edit-point').style.display = 'block';
-                inst.innerText = "2. TRASCINA SU/GIÙ per alzare il punto sul palo."; inst.style.background = action === 'SET_HEIGHT_A' ? "#ff4757" : "#1e90ff";
+                inst.innerText = "2. TRASCINA SU/GIÙ per alzare il punto."; 
+                inst.style.background = action === 'SET_HEIGHT_A' ? "#ff4757" : (action === 'SET_HEIGHT_B' ? "#1e90ff" : "#f1c40f");
             } else {
                 inst.innerText = "Antenna pronta. Usa il tasto Foto per salvare."; inst.style.background = "#555";
             }
@@ -489,6 +502,14 @@
                     updateCalculations();
                     drawAntenna();
                 }
+            } else if (currentAction === 'PLACE_BASE_C') {
+                if (reticle.visible) {
+                    point3.position.copy(reticle.position);
+                    point3.visible = true;
+                    setAction('SET_HEIGHT_C');
+                    updateCalculations();
+                    drawAntenna();
+                }
             }
         }
 
@@ -498,7 +519,7 @@
         }
 
         function adjustDepth(amount) {
-            let pt = currentAction === 'SET_HEIGHT_A' ? point1 : (currentAction === 'SET_HEIGHT_B' ? point2 : null);
+            let pt = currentAction === 'SET_HEIGHT_A' ? point1 : (currentAction === 'SET_HEIGHT_B' ? point2 : (currentAction === 'SET_HEIGHT_C' ? point3 : null));
             if (!pt || !pt.visible) return;
             
             const toPoint = new THREE.Vector3().subVectors(pt.position, camera.position);
@@ -512,9 +533,23 @@
         function updateCalculations() {
             if (isGroundSet && point1.visible) document.getElementById('hA').innerText = (point1.position.y - groundLevel).toFixed(1);
             if (isGroundSet && point2.visible) document.getElementById('hB').innerText = (point2.position.y - groundLevel).toFixed(1);
+            if (isGroundSet && point3.visible) document.getElementById('hC').innerText = (point3.position.y - groundLevel).toFixed(1);
             
             if (point1.visible && point2.visible) {
-                document.getElementById('distAB').innerText = point1.position.distanceTo(point2.position).toFixed(1);
+                let distAB = point1.position.distanceTo(point2.position);
+                
+                if (point3.visible) {
+                    let distAC = point1.position.distanceTo(point3.position);
+                    let distCB = point3.position.distanceTo(point2.position);
+                    document.getElementById('distAB').innerText = (distAC + distCB).toFixed(1);
+                    document.getElementById('distV_container').style.display = 'block';
+                    document.getElementById('distAC').innerText = distAC.toFixed(1);
+                    document.getElementById('distCB').innerText = distCB.toFixed(1);
+                } else {
+                    document.getElementById('distAB').innerText = distAB.toFixed(1);
+                    document.getElementById('distV_container').style.display = 'none';
+                }
+                
                 document.getElementById('antennaPanel').style.display = 'block';
             }
         }
@@ -536,6 +571,43 @@
             scene.add(cylinder); antennaMeshes.push(cylinder);
         }
 
+        // --- NUOVI HELPER PER GESTIRE LA FORMA A "V" O I TRACCIATI PIEGATI ---
+        function getPointAlongPath(distance, points) {
+            let currentDist = 0;
+            for (let i = 0; i < points.length - 1; i++) {
+                let segLen = points[i].distanceTo(points[i+1]);
+                if (currentDist + segLen >= distance) {
+                    let excess = distance - currentDist;
+                    let dir = new THREE.Vector3().subVectors(points[i+1], points[i]).normalize();
+                    return new THREE.Vector3().copy(points[i]).add(dir.multiplyScalar(excess));
+                }
+                currentDist += segLen;
+            }
+            return points[points.length - 1]; // Ritorna l'ultimo punto se supera la lunghezza
+        }
+
+        function buildWirePath(startDist, endDist, pathPoints, color) {
+            let pStart = getPointAlongPath(startDist, pathPoints);
+            let pEnd = getPointAlongPath(endDist, pathPoints);
+
+            if (pathPoints.length === 2) {
+                buildWire(pStart, pEnd, color); return;
+            }
+
+            let C = pathPoints[1];
+            let distToC = pathPoints[0].distanceTo(C);
+
+            if (endDist <= distToC + 0.01) {
+                buildWire(pStart, pEnd, color); // Tutto sul primo segmento
+            } else if (startDist >= distToC - 0.01) {
+                buildWire(pStart, pEnd, color); // Tutto sul secondo segmento
+            } else {
+                buildWire(pStart, C, color); // Scavalca il punto C (piega)
+                buildWire(C, pEnd, color);
+            }
+        }
+        // ---------------------------------------------------------------------
+
         function drawAntenna() {
             antennaMeshes.forEach(m => disposeNode(m)); antennaMeshes = [];
             markerMeshes.forEach(m => disposeNode(m)); markerMeshes = [];
@@ -544,6 +616,7 @@
 
             if (point1.visible) drawDropLine(point1.position, 0xff4757, `Alb.A: ${(point1.position.y - groundLevel).toFixed(1)}m`);
             if (point2.visible) drawDropLine(point2.position, 0x1e90ff, `Alb.B: ${(point2.position.y - groundLevel).toFixed(1)}m`);
+            if (point3.visible) drawDropLine(point3.position, 0xf1c40f, `Centro: ${(point3.position.y - groundLevel).toFixed(1)}m`);
 
             if (!point1.visible || !point2.visible) {
                 lineAB.visible = false;
@@ -551,74 +624,82 @@
             }
             
             const A = point1.position; const B = point2.position;
-            const totalDist = A.distanceTo(B);
-            const dir = new THREE.Vector3().subVectors(B, A).normalize();
+            const C = point3.visible ? point3.position : null;
+            const pathBase = C ? [A, C, B] : [A, B];
+            
+            lineAB.geometry.setFromPoints(pathBase);
+            lineAB.visible = true; // Mostriamo sempre la traccia di base (spazio disponibile)
 
             const type = document.getElementById('antType').value;
             
             if (type === 'none') {
-                lineAB.geometry.setFromPoints([A, B]);
-                lineAB.visible = true;
-                drawRopeLabel(A, B);
+                if (C) { drawRopeLabel(A, C); drawRopeLabel(C, B); } else { drawRopeLabel(A, B); }
                 return;
-            } else {
-                lineAB.visible = false;
             }
 
-            let wireLength = 0; const copperColor = 0xe67e22;
+            let totalDist = C ? A.distanceTo(C) + C.distanceTo(B) : A.distanceTo(B);
+            const copperColor = 0xe67e22;
 
             if (type === 'dipole') {
                 const band = parseFloat(document.getElementById('dipoleBand').value);
-                wireLength = band / 2; const armLen = wireLength / 2;
-                if (wireLength > totalDist) { document.getElementById('warning').style.display = 'block'; return; }
-                const Center = new THREE.Vector3().copy(A).lerp(B, 0.5);
-                const p1 = new THREE.Vector3().copy(Center).add(dir.clone().multiplyScalar(-armLen));
-                const p2 = new THREE.Vector3().copy(Center).add(dir.clone().multiplyScalar(armLen));
+                let wireLength = band / 2; const armLen = wireLength / 2;
                 
-                buildWire(p1, Center, copperColor); buildWire(Center, p2, copperColor);
+                const FeedNode = C ? C : new THREE.Vector3().copy(A).lerp(B, 0.5);
+                const path1 = [FeedNode, A];
+                const path2 = [FeedNode, B];
+                
+                if (armLen > FeedNode.distanceTo(A) || armLen > FeedNode.distanceTo(B)) { 
+                    document.getElementById('warning').style.display = 'block'; return; 
+                }
+                
+                buildWirePath(0, armLen, path1, copperColor);
+                buildWirePath(0, armLen, path2, copperColor);
                 
                 let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                balun.position.copy(Center); scene.add(balun); markerMeshes.push(balun);
+                balun.position.copy(FeedNode); scene.add(balun); markerMeshes.push(balun);
                 
-                drawDropLine(Center, 0x00ffff, `Feed: ${(Center.y - groundLevel).toFixed(1)}m`);
-                drawRopeLabel(A, p1); drawRopeLabel(p2, B);
+                if (!C) drawDropLine(FeedNode, 0x00ffff, `Feed: ${(FeedNode.y - groundLevel).toFixed(1)}m`);
+                
+                drawRopeLabel(getPointAlongPath(armLen, path1), A); 
+                drawRopeLabel(getPointAlongPath(armLen, path2), B);
 
             } else if (type === 'endfed') {
-                const startNode = document.getElementById('efStart').value === 'A' ? A : B;
-                const activeDir = document.getElementById('efStart').value === 'A' ? dir.clone() : dir.clone().multiplyScalar(-1);
+                const isStartA = document.getElementById('efStart').value === 'A';
+                const path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]);
+                
                 const dist = parseFloat(document.getElementById('efDist').value);
                 const L1 = parseFloat(document.getElementById('efL1').value);
                 const L2 = parseFloat(document.getElementById('efL2').value);
-                wireLength = dist + L1 + L2;
+                let wireLength = dist + L1 + L2;
+                
                 if (wireLength > totalDist) { document.getElementById('warning').style.display = 'block'; return; }
-                const pStartWire = new THREE.Vector3().copy(startNode).add(activeDir.clone().multiplyScalar(dist));
-                const pFeed = new THREE.Vector3().copy(pStartWire).add(activeDir.clone().multiplyScalar(L1));
-                const pEndWire = new THREE.Vector3().copy(pFeed).add(activeDir.clone().multiplyScalar(L2));
                 
-                buildWire(pStartWire, pFeed, copperColor); buildWire(pFeed, pEndWire, copperColor);
+                const feedDist = dist + L1;
+                buildWirePath(dist, feedDist, path, copperColor);
+                buildWirePath(feedDist, wireLength, path, copperColor);
                 
+                let balunPos = getPointAlongPath(feedDist, path);
                 let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                balun.position.copy(pFeed); scene.add(balun); markerMeshes.push(balun);
+                balun.position.copy(balunPos); scene.add(balun); markerMeshes.push(balun);
                 
-                drawDropLine(pFeed, 0x2ed573, `Trafo: ${(pFeed.y - groundLevel).toFixed(1)}m`);
+                drawDropLine(balunPos, 0x2ed573, `Trafo: ${(balunPos.y - groundLevel).toFixed(1)}m`);
                 
-                if (document.getElementById('efStart').value === 'A') { drawRopeLabel(A, pStartWire); drawRopeLabel(pEndWire, B); }
-                else { drawRopeLabel(B, pStartWire); drawRopeLabel(pEndWire, A); }
+                drawRopeLabel(path[0], getPointAlongPath(dist, path));
+                drawRopeLabel(getPointAlongPath(wireLength, path), path[path.length - 1]);
 
             } else if (type === 'longwire') {
-                const startNode = document.getElementById('lwStart').value === 'A' ? A : B;
-                const activeDir = document.getElementById('lwStart').value === 'A' ? dir.clone() : dir.clone().multiplyScalar(-1);
+                const isStartA = document.getElementById('lwStart').value === 'A';
+                const path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]);
                 const L = parseFloat(document.getElementById('lwLen').value);
-                if (L > totalDist) { document.getElementById('warning').style.display = 'block'; return; }
-                const pEndWire = new THREE.Vector3().copy(startNode).add(activeDir.clone().multiplyScalar(L));
                 
-                buildWire(startNode, pEndWire, copperColor);
+                if (L > totalDist) { document.getElementById('warning').style.display = 'block'; return; }
+                
+                buildWirePath(0, L, path, copperColor);
                 
                 let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                balun.position.copy(startNode); scene.add(balun); markerMeshes.push(balun);
+                balun.position.copy(path[0]); scene.add(balun); markerMeshes.push(balun);
                 
-                if (document.getElementById('lwStart').value === 'A') { drawRopeLabel(pEndWire, B); }
-                else { drawRopeLabel(pEndWire, A); }
+                drawRopeLabel(getPointAlongPath(L, path), path[path.length - 1]);
             }
         }
 
@@ -633,6 +714,7 @@
                 const apparentSizeFactor = 0.05; 
                 if (point1.visible) point1.scale.setScalar(camera.position.distanceTo(point1.position) * apparentSizeFactor);
                 if (point2.visible) point2.scale.setScalar(camera.position.distanceTo(point2.position) * apparentSizeFactor);
+                if (point3.visible) point3.scale.setScalar(camera.position.distanceTo(point3.position) * apparentSizeFactor);
                 markerMeshes.forEach(marker => marker.scale.setScalar(camera.position.distanceTo(marker.position) * apparentSizeFactor));
                 
                 textSprites.forEach(sprite => {
@@ -652,7 +734,7 @@
                     hitTestSourceRequested = true;
                 }
 
-                if (currentAction === 'PLACE_GROUND' || currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B') {
+                if (currentAction === 'PLACE_GROUND' || currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B' || currentAction === 'PLACE_BASE_C') {
                     reticle.visible = false;
                     if ( hitTestSource ) {
                         const hitTestResults = frame.getHitTestResults( hitTestSource );
@@ -682,3 +764,4 @@
         }
     </script>
 </body>
+</html>
