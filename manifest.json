@@ -2,7 +2,7 @@
   "name": "AR Ham Radio Planner",
   "short_name": "AR Antenna",
   "description": "Pianificatore AR per antenne radioamatoriali",
-  "start_url": "./index.html",
+  "start_url": "./ant.html",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#2ed573",
