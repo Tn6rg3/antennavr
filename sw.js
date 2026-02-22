@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ar-antenna-v3';
+const CACHE_NAME = 'ar-antenna-v4';
 const ASSETS_TO_CACHE = [
   './',
   './ant.html',
