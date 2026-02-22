@@ -645,14 +645,31 @@
             renderer.render( scene, camera );
         }
     </script>
-    <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('Service Worker Registrato'))
-        .catch(err => console.log('Errore SW:', err));
-    });
-  }
-</script>
+  
 </body>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
+        // ... (Qui va tutto il tuo codice Javascript originale) ...
+    </script>
+
+    <script>
+        // Registrazione del Service Worker per l'offline
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Offline pronto!'))
+                    .catch(err => console.log('Errore SW:', err));
+            });
+        }
+    </script>
 </html>
