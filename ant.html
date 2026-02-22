@@ -76,8 +76,12 @@
         #settingsModal { border-color: #1e90ff; }
         #settingsModal h3 { color: #1e90ff; margin-bottom: 20px;}
         .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 14px; text-align: left;}
-        .setting-row input[type="number"] { width: 60px; padding: 5px; border-radius: 4px; border: 1px solid #555; background: #222; color: white; text-align: center; font-weight:bold;}
-        .setting-row input[type="range"] { flex: 1; margin-left: 10px; }
+        
+        /* Nuovi controlli + e - per evitare la tastiera e slider buggati in AR */
+        .stepper { display: flex; align-items: center; gap: 10px; }
+        .step-btn { background: #444; color: white; border: 1px solid #777; width: 35px; height: 35px; border-radius: 5px; font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .step-btn:active { background: #1e90ff; color: white; border-color: white;}
+        .stepper span { width: 60px; text-align: center; font-weight: bold; font-size: 16px; color: #ffdd59;}
 
         .modal-close-btn { padding: 10px 20px; background: #2ed573; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; margin-top: 10px;}
         #btnCloseSettings { background: #1e90ff; color: white; }
@@ -100,18 +104,29 @@
             <button id="btnCloseInfo" class="modal-close-btn">Ho capito</button>
         </div>
 
-        <!-- Pannello Settings Modal -->
+        <!-- Pannello Settings Modal (Riprogettato senza Input) -->
         <div id="settingsModal" class="custom-modal">
             <h3>Impostazioni Visive</h3>
+            
             <div class="setting-row">
-                <label>Griglia (metri):</label>
-                <input type="number" id="gridSizeInput" value="50" min="5" max="200" step="5">
+                <label>Lato Griglia:</label>
+                <div class="stepper">
+                    <button id="btnGridMinus" class="step-btn">-</button>
+                    <span id="gridVal">50m</span>
+                    <button id="btnGridPlus" class="step-btn">+</button>
+                </div>
             </div>
+            
             <div class="setting-row">
-                <label>Dimensione Punti:</label>
-                <input type="range" id="pointSizeInput" min="0.02" max="0.3" step="0.01" value="0.1">
+                <label>Grandezza Punti:</label>
+                <div class="stepper">
+                    <button id="btnPtMinus" class="step-btn">-</button>
+                    <span id="ptVal">100%</span>
+                    <button id="btnPtPlus" class="step-btn">+</button>
+                </div>
             </div>
-            <button id="btnCloseSettings" class="modal-close-btn">Chiudi e Applica</button>
+            
+            <button id="btnCloseSettings" class="modal-close-btn">Chiudi</button>
         </div>
         
         <div id="top-bar">
@@ -183,10 +198,9 @@
             </div>
 
             <div id="panel-edit-point" class="edit-panel" style="display: none;">
-                <div style="font-size: 12px; margin-bottom: 5px; color: #aaa;">👆 TRASCINA SU/GIÙ per alzare. Usa i tasti.</div>
+                <div style="font-size: 12px; margin-bottom: 5px; color: #aaa;">👆 TRASCINA SU/GIÙ per alzare.</div>
                 <div class="edit-row">
-                    <button class="edit-btn" id="btnPFar">Lontana ↗️</button>
-                    <button class="edit-btn" id="btnPNear">Vicina ↙️</button>
+                    <button class="edit-btn" id="btnMoveBase">Sposta Base 🎯</button>
                     <button class="edit-btn" id="btnDoneEdit" style="background: #2ed573; color: black;">✔ OK</button>
                 </div>
             </div>
@@ -243,7 +257,7 @@
 
         // Nuove variabili per le impostazioni
         let globalGridSize = 50;
-        let globalPointScale = 0.1;
+        let globalPointScale = 0.1; // Default equivale al 100%
 
         function disposeNode(node) {
             if (!node) return;
@@ -290,8 +304,8 @@
                 domOverlay: { root: document.getElementById('ui-container') }
             } ) );
 
-            // Griglia Iniziale
-            groundGrid = new THREE.GridHelper( globalGridSize, globalGridSize, 0x2ed573, 0x2ed573 );
+            // Griglia Iniziale con quadrati fissi a 0.5m
+            groundGrid = new THREE.GridHelper( globalGridSize, Math.round(globalGridSize * 2), 0x2ed573, 0x2ed573 );
             groundGrid.material.opacity = 0.8; groundGrid.material.transparent = true; groundGrid.visible = false;
             scene.add( groundGrid );
 
@@ -331,18 +345,13 @@
             document.getElementById('btnSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'block'; });
             document.getElementById('btnCloseSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'none'; });
 
-            // Gestione Dinamica Dimensione Griglia
-            document.getElementById('gridSizeInput').addEventListener('change', (e) => {
-                let size = parseFloat(e.target.value);
-                if(isNaN(size) || size < 5) size = 5;
-                globalGridSize = size;
-                
-                // Ricrea la griglia con la nuova dimensione
+            // GESTIONE DINAMICA DELLE IMPOSTAZIONI TRAMITE PULSANTI (+ / -)
+            function updateGridVisuals() {
+                document.getElementById('gridVal').innerText = globalGridSize + 'm';
                 scene.remove(groundGrid);
-                groundGrid = new THREE.GridHelper( globalGridSize, globalGridSize, 0x2ed573, 0x2ed573 );
+                groundGrid = new THREE.GridHelper( globalGridSize, Math.round(globalGridSize * 2), 0x2ed573, 0x2ed573 );
                 groundGrid.material.opacity = 0.8; 
                 groundGrid.material.transparent = true;
-                
                 if (isGroundSet) {
                     groundGrid.position.set(camera.position.x, groundLevel, camera.position.z);
                     groundGrid.visible = true;
@@ -350,11 +359,26 @@
                     groundGrid.visible = false;
                 }
                 scene.add( groundGrid );
+            }
+
+            document.getElementById('btnGridMinus').addEventListener('click', () => {
+                if (globalGridSize > 10) { globalGridSize -= 10; updateGridVisuals(); }
+            });
+            document.getElementById('btnGridPlus').addEventListener('click', () => {
+                if (globalGridSize < 150) { globalGridSize += 10; updateGridVisuals(); }
             });
 
-            // Gestione Dinamica Dimensione Punti
-            document.getElementById('pointSizeInput').addEventListener('input', (e) => {
-                globalPointScale = parseFloat(e.target.value);
+            document.getElementById('btnPtMinus').addEventListener('click', () => {
+                if (globalPointScale > 0.04) { 
+                    globalPointScale -= 0.02; 
+                    document.getElementById('ptVal').innerText = Math.round(globalPointScale * 1000) + '%'; 
+                }
+            });
+            document.getElementById('btnPtPlus').addEventListener('click', () => {
+                if (globalPointScale < 0.3) { 
+                    globalPointScale += 0.02; 
+                    document.getElementById('ptVal').innerText = Math.round(globalPointScale * 1000) + '%'; 
+                }
             });
             
             document.getElementById('btnSetByHeight').addEventListener('click', () => {
@@ -371,9 +395,12 @@
             document.getElementById('btnB').addEventListener('click', () => setAction('PLACE_BASE_B'));
             document.getElementById('btnC').addEventListener('click', () => setAction('PLACE_BASE_C'));
             
-            // Nuovi Event Listener
-            document.getElementById('btnPFar').addEventListener('click', () => adjustDepth(0.5));
-            document.getElementById('btnPNear').addEventListener('click', () => adjustDepth(-0.5));
+            // Nuovi Event Listener per Spostare la Base dinamicamente
+            document.getElementById('btnMoveBase').addEventListener('click', () => {
+                if (currentAction === 'SET_HEIGHT_A') setAction('MOVE_BASE_A');
+                else if (currentAction === 'SET_HEIGHT_B') setAction('MOVE_BASE_B');
+                else if (currentAction === 'SET_HEIGHT_C') setAction('MOVE_BASE_C');
+            });
             document.getElementById('btnDoneEdit').addEventListener('click', () => setAction('NONE'));
 
             document.getElementById('antType').addEventListener('change', updateAntennaUI);
@@ -480,6 +507,11 @@
                 document.getElementById('panel-edit-point').style.display = 'block';
                 inst.innerText = "2. TRASCINA SU/GIÙ per alzare il punto."; 
                 inst.style.background = action === 'SET_HEIGHT_A' ? "#ff4757" : (action === 'SET_HEIGHT_B' ? "#1e90ff" : "#f1c40f");
+            } else if (action === 'MOVE_BASE_A' || action === 'MOVE_BASE_B' || action === 'MOVE_BASE_C') {
+                const btn = action === 'MOVE_BASE_A' ? 'btnA' : (action === 'MOVE_BASE_B' ? 'btnB' : 'btnC');
+                document.getElementById(btn).classList.add('active');
+                inst.innerText = "MIRA al terreno per spostare la base e TOCCA per confermare."; 
+                inst.style.background = action === 'MOVE_BASE_A' ? "#ff4757" : (action === 'MOVE_BASE_B' ? "#1e90ff" : "#f1c40f");
             } else {
                 inst.innerText = "Punti posizionati. Puoi personalizzare l'Antenna."; inst.style.background = "#555";
             }
@@ -552,30 +584,37 @@
                     groundGrid.position.set(reticle.position.x, groundLevel, reticle.position.z);
                     groundGrid.visible = true; isGroundSet = true; clearTempMarkers(); setAction('NONE'); updateCalculations(); drawAntenna();
                 }
-            } else if (currentAction === 'PLACE_BASE_A') {
+            } else if (currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B' || currentAction === 'PLACE_BASE_C') {
                 if (reticle.visible) {
-                    point1.position.copy(reticle.position);
-                    point1.visible = true;
-                    setAction('SET_HEIGHT_A');
+                    // Auto-Imposta la Quota Zero se l'utente non l'ha fatto prima
+                    if (!isGroundSet) {
+                        groundLevel = reticle.position.y;
+                        groundGrid.position.set(camera.position.x, groundLevel, camera.position.z);
+                        groundGrid.visible = true; isGroundSet = true;
+                    }
+
+                    if (currentAction === 'PLACE_BASE_A') {
+                        point1.position.copy(reticle.position);
+                        point1.visible = true;
+                        setAction('SET_HEIGHT_A');
+                    } else if (currentAction === 'PLACE_BASE_B') {
+                        point2.position.copy(reticle.position);
+                        point2.visible = true;
+                        setAction('SET_HEIGHT_B');
+                    } else if (currentAction === 'PLACE_BASE_C') {
+                        point3.position.copy(reticle.position);
+                        point3.visible = true;
+                        setAction('SET_HEIGHT_C');
+                    }
                     updateCalculations();
                     drawAntenna(); 
                 }
-            } else if (currentAction === 'PLACE_BASE_B') {
-                if (reticle.visible) {
-                    point2.position.copy(reticle.position);
-                    point2.visible = true;
-                    setAction('SET_HEIGHT_B');
-                    updateCalculations();
-                    drawAntenna();
-                }
-            } else if (currentAction === 'PLACE_BASE_C') {
-                if (reticle.visible) {
-                    point3.position.copy(reticle.position);
-                    point3.visible = true;
-                    setAction('SET_HEIGHT_C');
-                    updateCalculations();
-                    drawAntenna();
-                }
+            } else if (currentAction === 'MOVE_BASE_A') {
+                setAction('SET_HEIGHT_A'); // Conferma lo spostamento
+            } else if (currentAction === 'MOVE_BASE_B') {
+                setAction('SET_HEIGHT_B');
+            } else if (currentAction === 'MOVE_BASE_C') {
+                setAction('SET_HEIGHT_C');
             }
         }
 
@@ -788,7 +827,7 @@
                 const referenceSpace = renderer.xr.getReferenceSpace();
                 const session = renderer.xr.getSession();
 
-                // Applicazione dinamica della dimensione dei punti in base allo slider
+                // Applicazione dinamica della dimensione dei punti
                 const apparentSizeFactor = globalPointScale; 
                 if (point1.visible) point1.scale.setScalar(camera.position.distanceTo(point1.position) * apparentSizeFactor);
                 if (point2.visible) point2.scale.setScalar(camera.position.distanceTo(point2.position) * apparentSizeFactor);
@@ -813,7 +852,7 @@
                 }
 
                 let hitFound = false;
-                if (currentAction === 'PLACE_GROUND' || currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B' || currentAction === 'PLACE_BASE_C') {
+                if (currentAction === 'PLACE_GROUND' || currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B' || currentAction === 'PLACE_BASE_C' || currentAction === 'MOVE_BASE_A' || currentAction === 'MOVE_BASE_B' || currentAction === 'MOVE_BASE_C') {
                     
                     // 1. Prova prima il classico sensore ARCore (per distanze ravvicinate)
                     if ( hitTestSource ) {
@@ -848,7 +887,22 @@
                         }
                     }
 
-                    if (!hitFound) {
+                    if (hitFound) {
+                        // Se siamo in modalità spostamento base, aggiorna solo X e Z (non Y)
+                        if (currentAction === 'MOVE_BASE_A') {
+                            point1.position.x = reticle.position.x;
+                            point1.position.z = reticle.position.z;
+                            drawAntenna(); updateCalculations();
+                        } else if (currentAction === 'MOVE_BASE_B') {
+                            point2.position.x = reticle.position.x;
+                            point2.position.z = reticle.position.z;
+                            drawAntenna(); updateCalculations();
+                        } else if (currentAction === 'MOVE_BASE_C') {
+                            point3.position.x = reticle.position.x;
+                            point3.position.z = reticle.position.z;
+                            drawAntenna(); updateCalculations();
+                        }
+                    } else {
                         reticle.visible = false;
                     }
                 } else {
