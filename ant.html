@@ -377,6 +377,12 @@
             renderer.xr.addEventListener('sessionstart', () => {
                 document.getElementById('ui-container').style.display = 'flex';
                 setAction('MENU_GROUND');
+                
+                // Sblocca il limite visivo nativo dell'ARCore (che spesso taglia la grafica a 50-100m)
+                const session = renderer.xr.getSession();
+                if (session) {
+                    try { session.updateRenderState({ depthNear: 0.1, depthFar: 2500 }); } catch (e) {}
+                }
             });
 
             document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
@@ -1082,28 +1088,33 @@
                         }
                     }
 
-                    // AGGIORNAMENTO 2: Limite del raggio matematico portato da 100m a 1000m
-                    // MIGLIORAMENTO: Angolo di mira abbassato da -0.01 a -0.001 per permettere di mirare lontano (quasi orizzontale)
+                    // FALLBACK MATEMATICO POTENZIATO
                     if (!hitFound && isGroundSet && currentAction !== 'PLACE_GROUND') {
                         const cameraDirection = new THREE.Vector3();
                         camera.getWorldDirection(cameraDirection);
                         
-                        if (cameraDirection.y < -0.001) { 
-                            const t = (groundLevel - camera.position.y) / cameraDirection.y;
-                            if (t > 0 && t < 1000) { 
-                                const hitPoint = new THREE.Vector3().copy(camera.position).add(cameraDirection.multiplyScalar(t));
-                                reticle.position.copy(hitPoint);
-                                reticle.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
-                                reticle.visible = true;
-                                hitFound = true;
-                            }
+                        let dirY = cameraDirection.y;
+                        // TRUCCO CRUCIALE: Se guardi dritto o in alto, forza il raggio leggermente in basso
+                        // per incrociare il terreno lontanissimo (evita che il raggio sparisca nel cielo)
+                        if (dirY > -0.01) {
+                            dirY = -0.01;
+                        }
+                        
+                        const t = (groundLevel - camera.position.y) / dirY;
+                        if (t > 0 && t < 2500) { 
+                            const hitPoint = new THREE.Vector3().copy(camera.position).add(cameraDirection.multiplyScalar(t));
+                            hitPoint.y = groundLevel; // Assicura che sia perfettamente spiaccicato a terra
+                            reticle.position.copy(hitPoint);
+                            reticle.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
+                            reticle.visible = true;
+                            hitFound = true;
                         }
                     }
 
                     if (hitFound) {
-                        // NUOVO: Ingrandisce il mirino bianco proporzionalmente alla distanza così non scompare!
+                        // SCALATURA COSTANTE: Mantiene il mirino sempre grande e visibile sullo schermo
                         const reticleDist = camera.position.distanceTo(reticle.position);
-                        reticle.scale.setScalar(1 + (reticleDist * 0.1));
+                        reticle.scale.setScalar(Math.max(1, reticleDist * 0.5));
 
                         if (currentAction === 'MOVE_BASE_A') {
                             point1.position.x = reticle.position.x;
