@@ -498,7 +498,8 @@
                 date: safeGetVal('date'), freq: safeGetVal('freq'), timeOn: safeGetVal('timeOn'), timeOff: tf,
                 call: safeGetVal('call').toUpperCase().trim(), name: safeGetVal('name'), qth: safeGetVal('qth'),
                 band: safeGetVal('band'), mode: safeGetVal('mode'), rstS: safeGetVal('rstS'), rstR: safeGetVal('rstR'),
-                gridsquare: safeGetVal('gridsquare').toUpperCase(), note: safeGetVal('note'), myRef: safeGetVal('myRef').toUpperCase(), theirRef: safeGetVal('theirRef').toUpperCase()
+                gridsquare: safeGetVal('gridsquare').toUpperCase(), note: safeGetVal('note'), myRef: safeGetVal('myRef').toUpperCase(), theirRef: safeGetVal('theirRef').toUpperCase(),
+                qslMeta: getQslState() // SALVA L'ESATTO STATO DEI TESTI DELLA QSL NEL QSO
             };
 
             if(!q.call) return msg("MANCA CALL!");
@@ -768,7 +769,11 @@
         document.getElementById('dupeAlert').innerText = ''; document.getElementById('qrbCalc').innerText = '';
         tempOriginalBlob = null; loadedOriginalBlob = null; syncRST(); qsoStarted=false; initDate(); 
         const c = document.getElementById('call'); if(c) c.focus(); 
-        loadDefaultTemplateBg(); syncLiveQsoData(); 
+        
+        clearQSLEditorCanvas();
+        let raw = localStorage.getItem(QSL_TEMPLATE_META);
+        if (raw) { loadQslTemplate(); } else { syncGlobalToQsl(); }
+        syncLiveQsoData(); 
     }
 
     function loadEdit(i) { 
@@ -778,6 +783,15 @@
         document.getElementById('saveBtn').innerText = "MODIFICA QSO E QSL"; document.getElementById('saveBtn').className = "btn-orange"; document.getElementById('cancelBtn').style.display = 'block'; 
 
         tempOriginalBlob = null; loadedOriginalBlob = null;
+        
+        // RIPRISTINA L'ESATTA CONFIGURAZIONE DEI TESTI QSL DI QUESTO QSO (Se esiste)
+        if (q.qslMeta) {
+            applyQslState(q.qslMeta);
+        } else {
+            let raw = localStorage.getItem(QSL_TEMPLATE_META);
+            if(raw) { let t = JSON.parse(raw); applyQslState(t); }
+        }
+
         if(q.hasPhoto && q.photoId) {
             getOriginalPhotoFromDBPromise(q.photoId).then(blob => {
                 if(blob) { loadedOriginalBlob = blob; loadBlobToQSLEditor(URL.createObjectURL(blob)); } 
@@ -1189,7 +1203,7 @@
 
     function qslMouseUp() { cropAction = null; draggingElement = null; if(qslCanvas && !cropMode) qslCanvas.style.cursor = 'default'; }
     
-    // NUOVA FUNZIONE RITAGLIO ANTI-CRASH
+    // FIX Ritaglio asincrono corretto
     function applyCrop() { 
         try {
             if (!cropBox) {
@@ -1274,8 +1288,9 @@
 
     function getBase64Image(img) { const c = document.createElement("canvas"); c.width = img.width; c.height = img.height; c.getContext("2d").drawImage(img, 0, 0); return c.toDataURL("image/jpeg", 0.85); }
 
-    function saveQslTemplate() {
-        let t = { settings: {}, fields: {}, bg: null, logo: null, logoObj: logoObj };
+    // ESTRAE LO STATO ATTUALE DEI TESTI E DEI COLORI DALL'EDITOR
+    function getQslState() {
+        let t = { settings: {}, fields: {}, logoObj: logoObj };
         t.settings = {
             fBright: document.getElementById('fBright').value, fContrast: document.getElementById('fContrast').value, fEdgeBlur: document.getElementById('fEdgeBlur').value,
             c_topBar: document.getElementById('c_topBar').checked, col_topBar: document.getElementById('col_topBar').value, h_topBar: document.getElementById('h_topBar').value, op_topBar: document.getElementById('op_topBar').value,
@@ -1289,6 +1304,35 @@
                 x: dragObjects[el.id].x, y: dragObjects[el.id].y
             };
         });
+        return t;
+    }
+
+    // APPLICA UNO STATO SALVATO (O TEMPLATE) ALL'EDITOR
+    function applyQslState(t) {
+        if (!t) return;
+        if(t.settings) {
+            document.getElementById('fBright').value = t.settings.fBright || 100; document.getElementById('fContrast').value = t.settings.fContrast || 100; document.getElementById('fEdgeBlur').value = t.settings.fEdgeBlur || 0;
+            document.getElementById('c_topBar').checked = t.settings.c_topBar; document.getElementById('col_topBar').value = t.settings.col_topBar; document.getElementById('h_topBar').value = t.settings.h_topBar; document.getElementById('op_topBar').value = t.settings.op_topBar;
+            document.getElementById('c_bottomBar').checked = t.settings.c_bottomBar; document.getElementById('col_bottomBar').value = t.settings.col_bottomBar; document.getElementById('h_bottomBar').value = t.settings.h_bottomBar; document.getElementById('op_bottomBar').value = t.settings.op_bottomBar;
+            document.getElementById('c_logo').checked = t.settings.c_logo;
+        }
+        if(t.fields) {
+            qslElementsDef.forEach(el => {
+                let f = t.fields[el.id];
+                if(f) {
+                    document.getElementById(`chk_qsl_${el.id}`).checked = f.active; document.getElementById(`col_qsl_${el.id}`).value = f.col;
+                    document.getElementById(`fnt_qsl_${el.id}`).value = f.fnt; document.getElementById(`sz_qsl_${el.id}`).value = f.sz; document.getElementById(`b_qsl_${el.id}`).checked = f.b; document.getElementById(`i_qsl_${el.id}`).checked = f.i;
+                    if(el.id !== 'toCall' && el.id !== 'qsoData') document.getElementById(`txt_qsl_${el.id}`).value = f.text;
+                    dragObjects[el.id].x = f.x; dragObjects[el.id].y = f.y;
+                }
+            });
+        }
+        if(t.logoObj) logoObj = t.logoObj;
+        renderQSL();
+    }
+
+    function saveQslTemplate() {
+        let t = getQslState();
         if (currentCroppedImg) t.bg = getBase64Image(currentCroppedImg);
         if (logoImg) t.logo = getBase64Image(logoImg);
         try { 
@@ -1303,24 +1347,7 @@
         let raw = localStorage.getItem(QSL_TEMPLATE_META); if(!raw) return;
         try {
             let t = JSON.parse(raw);
-            if(t.settings) {
-                document.getElementById('fBright').value = t.settings.fBright || 100; document.getElementById('fContrast').value = t.settings.fContrast || 100; document.getElementById('fEdgeBlur').value = t.settings.fEdgeBlur || 0;
-                document.getElementById('c_topBar').checked = t.settings.c_topBar; document.getElementById('col_topBar').value = t.settings.col_topBar; document.getElementById('h_topBar').value = t.settings.h_topBar; document.getElementById('op_topBar').value = t.settings.op_topBar;
-                document.getElementById('c_bottomBar').checked = t.settings.c_bottomBar; document.getElementById('col_bottomBar').value = t.settings.col_bottomBar; document.getElementById('h_bottomBar').value = t.settings.h_bottomBar; document.getElementById('op_bottomBar').value = t.settings.op_bottomBar;
-                document.getElementById('c_logo').checked = t.settings.c_logo;
-            }
-            if(t.fields) {
-                qslElementsDef.forEach(el => {
-                    let f = t.fields[el.id];
-                    if(f) {
-                        document.getElementById(`chk_qsl_${el.id}`).checked = f.active; document.getElementById(`col_qsl_${el.id}`).value = f.col;
-                        document.getElementById(`fnt_qsl_${el.id}`).value = f.fnt; document.getElementById(`sz_qsl_${el.id}`).value = f.sz; document.getElementById(`b_qsl_${el.id}`).checked = f.b; document.getElementById(`i_qsl_${el.id}`).checked = f.i;
-                        if(el.id !== 'toCall' && el.id !== 'qsoData') document.getElementById(`txt_qsl_${el.id}`).value = f.text;
-                        dragObjects[el.id].x = f.x; dragObjects[el.id].y = f.y;
-                    }
-                });
-            }
-            if(t.logoObj) logoObj = t.logoObj;
+            applyQslState(t);
             let promises = [];
             if(t.bg && !originalImg) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { currentCroppedImg = img; originalImg = img; res(); }; img.src = t.bg; })); }
             if(t.logo) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { logoImg = img; res(); }; img.src = t.logo; })); }
@@ -1328,17 +1355,6 @@
         } catch(e) { console.error("Errore caricamento template", e); }
     }
 
-</script>
-
-<!-- REGISTRAZIONE SERVICE WORKER (MOTORE OFFLINE) -->
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw2.js')
-        .then(reg => console.log('App pronta per l\'uso offline!'))
-        .catch(err => console.error('Errore Service Worker:', err));
-    });
-  }
 </script>
 </body>
 </html>
