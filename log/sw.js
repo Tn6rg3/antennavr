@@ -1,4 +1,4 @@
-const CACHE_NAME = 'logradio-v2';
+const CACHE_NAME = 'logradio-v3';
 const FILES_TO_CACHE = [
   './',
   './log.html',
