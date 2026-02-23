@@ -138,7 +138,6 @@
                 </div>
             </div>
 
-            <!-- NUOVO COMANDO: GRANDEZZA TESTO -->
             <div class="setting-row">
                 <label>Grandezza Testo:</label>
                 <div class="stepper">
@@ -254,7 +253,6 @@
                 <button id="btnC" class="main-btn">4. C (Opz)</button>
             </div>
             
-            <!-- Aggiunto bottone Lobo 3D -->
             <div class="btn-row">
                 <button id="btnReset" class="main-btn">🔄 Reset</button>
                 <button id="btnToggleLobe" class="main-btn">🌐 Lobo 3D</button>
@@ -265,7 +263,6 @@
     
     <div id="photoOverlay">Usa i tasti screenshot! (Torno tra 5s)</div>
 
-    <!-- Mappa di importazione con link esterni per evitare di scaricare file locali in cartelle -->
     <script type="importmap">
         {
             "imports": {
@@ -301,7 +298,7 @@
         let globalGridSize = 50;
         let globalGridSquareSize = 0.5;
         let globalPointScale = 0.1;
-        let globalTextScale = 1.2; // NUOVA VARIABILE: Scala globale del testo (default 120%)
+        let globalTextScale = 1.2; 
         let isLobeVisible = false; 
         
         let colorA = 0xff4757;
@@ -332,7 +329,9 @@
             container = document.createElement( 'div' );
             document.body.appendChild( container );
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 200 );
+            
+            // AGGIORNAMENTO 1: Aumentato il limite visivo (far plane) da 200m a 2000m
+            camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 2000 );
 
             const light = new THREE.HemisphereLight( 0xffffff, 0xbbbbff, 3 );
             light.position.set( 0.5, 1, 0.25 ); scene.add( light );
@@ -436,7 +435,8 @@
             }
 
             document.getElementById('btnGridMinus').addEventListener('click', () => { if (globalGridSize > 5) { globalGridSize -= 1; updateGridVisuals(); } });
-            document.getElementById('btnGridPlus').addEventListener('click', () => { if (globalGridSize < 200) { globalGridSize += 1; updateGridVisuals(); } });
+            // Aggiornamento per assecondare la nuova distanza
+            document.getElementById('btnGridPlus').addEventListener('click', () => { if (globalGridSize < 500) { globalGridSize += 10; updateGridVisuals(); } });
             document.getElementById('btnSqMinus').addEventListener('click', () => { if (globalGridSquareSize > 0.2) { globalGridSquareSize -= 0.1; updateGridVisuals(); } });
             document.getElementById('btnSqPlus').addEventListener('click', () => { if (globalGridSquareSize < 5.0) { globalGridSquareSize += 0.1; updateGridVisuals(); } });
             
@@ -447,7 +447,6 @@
                 if (globalPointScale < 0.3) { globalPointScale += 0.02; document.getElementById('ptVal').innerText = Math.round(globalPointScale * 1000) + '%'; }
             });
 
-            // GESTIONE EVENTI PER IL NUOVO COMANDO TESTO
             document.getElementById('btnTextMinus').addEventListener('click', () => {
                 if (globalTextScale > 0.5) { 
                     globalTextScale -= 0.1; 
@@ -611,7 +610,6 @@
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            // Font ingrandito di base per maggiore nitidezza
             ctx.font = 'bold 46px sans-serif';
             ctx.fillStyle = textColor;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -799,7 +797,6 @@
             }
         }
 
-        // --- MOTORE DI DEFORMAZIONE DEL LOBO (Ray-Bending Simulation) ---
         function applyEnvironmentalDeformation(mesh, baseGeometry, centerPoint, isOmni) {
             mesh.updateMatrixWorld(true);
             baseGeometry.applyMatrix4(mesh.matrixWorld);
@@ -1052,7 +1049,6 @@
                 });
                 
                 // --- AGGIORNAMENTO SCALATURA TESTO ---
-                // Il testo ora usa la variabile globale impostabile dall'utente
                 textSprites.forEach(sprite => {
                     const dist = camera.position.distanceTo(sprite.position);
                     const textScale = (0.4 + (dist * 0.05)) * globalTextScale; 
@@ -1086,13 +1082,14 @@
                         }
                     }
 
+                    // AGGIORNAMENTO 2: Limite del raggio matematico portato da 100m a 1000m
                     if (!hitFound && isGroundSet && currentAction !== 'PLACE_GROUND') {
                         const cameraDirection = new THREE.Vector3();
                         camera.getWorldDirection(cameraDirection);
                         
                         if (cameraDirection.y < -0.01) { 
                             const t = (groundLevel - camera.position.y) / cameraDirection.y;
-                            if (t > 0 && t < 100) { 
+                            if (t > 0 && t < 1000) { 
                                 const hitPoint = new THREE.Vector3().copy(camera.position).add(cameraDirection.multiplyScalar(t));
                                 reticle.position.copy(hitPoint);
                                 reticle.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
