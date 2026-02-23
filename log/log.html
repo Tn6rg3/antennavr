@@ -42,7 +42,7 @@
         button:hover { filter: brightness(1.1); }
         .btn-green { background: #27ae60; color: white; } .btn-blue { background: #3498db; color: white; width: 100%; font-size: 16px; padding: 12px; } .btn-red { background: #c0392b; color: white; } .btn-grey { background: #7f8c8d; color: white; } .btn-orange { background: #e67e22; color: white; } .btn-purple { background: #8e44ad; color: white; } .btn-dark { background: #2c3e50; color: white; } .btn-cyan { background: #17a2b8; color: white; } 
         
-        .header-tools { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .header-tools { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 5px;}
         .theme-switch { cursor: pointer; background: none; border: 1px solid var(--text-color); color: var(--text-color); padding: 5px 10px; border-radius: 15px; font-size: 0.8em; font-weight: bold;}
         
         .config-header { background: #34495e; color: white; padding: 10px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin-bottom: 5px; }
@@ -134,7 +134,8 @@
 
     <div class="header-tools">
         <div id="statusMsg" class="status-bar" style="flex:1; margin:0 10px 0 0;">Log Radio QSL</div>
-        <button class="theme-switch" onclick="toggleTheme()">🌗 Dark/Light</button>
+        <button class="theme-switch" onclick="document.getElementById('privacyModal').style.display='flex'">🛡️ Privacy</button>
+        <button class="theme-switch" onclick="toggleTheme()">🌗 Tema</button>
     </div>
 
     <div id="solarHeader" onclick="toggleSolar()">☀️ DATI PROPAGAZIONE SOLARE (Clicca)</div>
@@ -347,6 +348,20 @@
         <div class="table-wrapper"><table id="dataTable"><thead><tr><th style="width:80px;">Act</th><th onclick="sortBy('date')">Data</th><th onclick="sortBy('freq')">Freq</th><th onclick="sortBy('call')">Call</th><th>Banda</th><th>Modo</th><th>RST</th><th>Exch</th><th>Foto</th></tr></thead><tbody id="tableBody"></tbody></table></div>
     </div>
 
+    <!-- MODAL PRIVACY -->
+    <div id="privacyModal" class="modal-overlay" onclick="this.style.display='none'">
+        <div class="stats-content" style="max-width: 500px;" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0; color:#2980b9; border-bottom: 2px solid #2980b9; padding-bottom: 5px;">🛡️ Informativa sulla Privacy</h3>
+            <p style="font-size:0.95em; line-height:1.6; color:var(--text-color);">
+                <strong>I tuoi dati sono al sicuro e restano tuoi.</strong><br><br>
+                Questa applicazione è progettata per funzionare interamente "lato client" (sul tuo browser). Salva i dati dei tuoi QSO, le impostazioni personali e le foto per le QSL <strong>esclusivamente all'interno della memoria locale del tuo dispositivo</strong> (utilizzando le tecnologie standard <i>localStorage</i> e <i>IndexedDB</i>). Questo permette all'app di funzionare anche offline.<br><br>
+                <strong>Nessun dato</strong> viene mai trasmesso a server esterni, tracciato a fini pubblicitari, profilato o condiviso con terze parti.<br><br>
+                <em style="color:#c0392b; font-weight:bold;">⚠️ Attenzione:</em> poiché i dati risiedono solo sul tuo telefono/PC, se decidi di cancellare la cronologia, i cookie o i "dati dei siti" dal browser, perderai tutto il tuo Log. Ricordati di utilizzare spesso la funzione di <strong>"🔄 BACKUP TOT"</strong> (nella Configurazione) per salvare un file di sicurezza sul tuo dispositivo!
+            </p>
+            <button class="btn-green" style="width:100%; margin-top:15px; padding: 12px; font-size: 1.1em;" onclick="document.getElementById('privacyModal').style.display='none'">✅ HO CAPITO</button>
+        </div>
+    </div>
+
     <div id="statsModal" class="modal-overlay" onclick="this.style.display='none'">
         <div class="stats-content" onclick="event.stopPropagation()">
             <h3 style="margin-top:0;">📊 Statistiche</h3>
@@ -499,7 +514,7 @@
                 call: safeGetVal('call').toUpperCase().trim(), name: safeGetVal('name'), qth: safeGetVal('qth'),
                 band: safeGetVal('band'), mode: safeGetVal('mode'), rstS: safeGetVal('rstS'), rstR: safeGetVal('rstR'),
                 gridsquare: safeGetVal('gridsquare').toUpperCase(), note: safeGetVal('note'), myRef: safeGetVal('myRef').toUpperCase(), theirRef: safeGetVal('theirRef').toUpperCase(),
-                qslMeta: getQslState() // SALVA L'ESATTO STATO DEI TESTI DELLA QSL NEL QSO
+                qslMeta: getQslState()
             };
 
             if(!q.call) return msg("MANCA CALL!");
@@ -784,7 +799,6 @@
 
         tempOriginalBlob = null; loadedOriginalBlob = null;
         
-        // RIPRISTINA L'ESATTA CONFIGURAZIONE DEI TESTI QSL DI QUESTO QSO (Se esiste)
         if (q.qslMeta) {
             applyQslState(q.qslMeta);
         } else {
@@ -1030,7 +1044,6 @@
 
                 qslCtx.strokeStyle = "#e74c3c"; qslCtx.lineWidth = 4; qslCtx.strokeRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
                 qslCtx.fillStyle = "#3498db"; 
-                // Grandezza quadratini dinamica e robusta
                 let drawHs = Math.max(20, w * 0.02); 
                 qslCtx.fillRect(cropBox.x - drawHs/2, cropBox.y - drawHs/2, drawHs, drawHs); 
                 qslCtx.fillRect(cropBox.x + cropBox.w - drawHs/2, cropBox.y - drawHs/2, drawHs, drawHs); 
@@ -1203,92 +1216,36 @@
 
     function qslMouseUp() { cropAction = null; draggingElement = null; if(qslCanvas && !cropMode) qslCanvas.style.cursor = 'default'; }
     
-    // FIX Ritaglio asincrono corretto
     function applyCrop() { 
         try {
-            if (!cropBox) {
-                alert("Seleziona prima l'area da ritagliare trascinando i quadratini blu.");
-                return;
-            }
-            if (cropBox.w < 50 || cropBox.h < 50) {
-                alert("L'area di ritaglio selezionata è troppo piccola!");
-                return;
-            }
-            
-            document.getElementById('btnConfirmCrop').innerText = "⏳ ELABORAZIONE IN CORSO...";
-            document.getElementById('btnConfirmCrop').disabled = true;
-            
-            // Timeout brevissimo per permettere al browser di aggiornare la UI col testo "ELABORAZIONE"
-            setTimeout(() => {
-                generateQSLCrop(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
-            }, 50);
-        } catch(e) {
-            alert("Errore nel comando di ritaglio: " + e.message);
-            document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA";
-            document.getElementById('btnConfirmCrop').disabled = false;
-        }
+            if (!cropBox) { alert("Seleziona prima l'area da ritagliare trascinando i quadratini blu."); return; }
+            if (cropBox.w < 50 || cropBox.h < 50) { alert("L'area di ritaglio selezionata è troppo piccola!"); return; }
+            document.getElementById('btnConfirmCrop').innerText = "⏳ ELABORAZIONE IN CORSO..."; document.getElementById('btnConfirmCrop').disabled = true;
+            setTimeout(() => { generateQSLCrop(cropBox.x, cropBox.y, cropBox.w, cropBox.h); }, 50);
+        } catch(e) { alert("Errore nel comando di ritaglio: " + e.message); document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA"; document.getElementById('btnConfirmCrop').disabled = false; }
     }
     
     function generateQSLCrop(sx, sy, sw, sh) {
         try {
-            const tempCanvas = document.createElement('canvas'); 
-            tempCanvas.width = QSL_WIDTH; 
-            tempCanvas.height = QSL_HEIGHT;
-            
-            // Matematica difensiva: impedisce al ritaglio di andare fuori dai bordi dell'immagine originale!
-            sx = Math.max(0, sx);
-            sy = Math.max(0, sy);
-            sw = Math.min(originalImg.width - sx, sw);
-            sh = Math.min(originalImg.height - sy, sh);
-            
-            // Disegna il pezzo di immagine nel nuovo canvas virtuale
+            const tempCanvas = document.createElement('canvas'); tempCanvas.width = QSL_WIDTH; tempCanvas.height = QSL_HEIGHT;
+            sx = Math.max(0, sx); sy = Math.max(0, sy); sw = Math.min(originalImg.width - sx, sw); sh = Math.min(originalImg.height - sy, sh);
             tempCanvas.getContext('2d').drawImage(originalImg, sx, sy, sw, sh, 0, 0, QSL_WIDTH, QSL_HEIGHT);
-            
-            // Converte il canvas in un'immagine Jpeg
             let dataUrl = tempCanvas.toDataURL('image/jpeg', 0.95);
             let newImg = new Image();
-            
             newImg.onload = () => {
-                currentCroppedImg = newImg; 
-                qslCanvas.width = QSL_WIDTH; 
-                qslCanvas.height = QSL_HEIGHT;
-                
-                // Disattiva la modalità ritaglio
-                cropMode = false; 
-                cropBox = null; 
-                
-                // Aggiorna pulsanti interfaccia
-                const btnMode = document.getElementById('btnCropMode');
-                btnMode.style.display = "block"; 
-                btnMode.style.background = "#e67e22"; 
-                btnMode.textContent = "✂️ RI-TAGLIA FOTO"; 
-                
-                const btnConfirm = document.getElementById('btnConfirmCrop');
-                btnConfirm.style.display = "none";
-                btnConfirm.innerText = "✅ CONFERMA INQUADRATURA";
-                btnConfirm.disabled = false;
-                
-                qslCanvas.style.cursor = "default"; 
-                renderQSL();
+                currentCroppedImg = newImg; qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT;
+                cropMode = false; cropBox = null; 
+                const btnMode = document.getElementById('btnCropMode'); btnMode.style.display = "block"; btnMode.style.background = "#e67e22"; btnMode.textContent = "✂️ RI-TAGLIA FOTO"; 
+                const btnConfirm = document.getElementById('btnConfirmCrop'); btnConfirm.style.display = "none"; btnConfirm.innerText = "✅ CONFERMA INQUADRATURA"; btnConfirm.disabled = false;
+                qslCanvas.style.cursor = "default"; renderQSL();
             };
-            
-            newImg.onerror = () => {
-                alert("Si è verificato un errore generando il file ritagliato.");
-                document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA";
-                document.getElementById('btnConfirmCrop').disabled = false;
-            };
-            
+            newImg.onerror = () => { alert("Errore file ritagliato."); document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA"; document.getElementById('btnConfirmCrop').disabled = false; };
             newImg.src = dataUrl;
-        } catch(e) {
-            alert("Errore interno durante il ritaglio: " + e.message);
-            document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA";
-            document.getElementById('btnConfirmCrop').disabled = false;
-        }
+        } catch(e) { alert("Errore interno durante il ritaglio: " + e.message); document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA"; document.getElementById('btnConfirmCrop').disabled = false; }
     }
 
     function getBase64Image(img) { const c = document.createElement("canvas"); c.width = img.width; c.height = img.height; c.getContext("2d").drawImage(img, 0, 0); return c.toDataURL("image/jpeg", 0.85); }
 
-    // ESTRAE LO STATO ATTUALE DEI TESTI E DEI COLORI DALL'EDITOR
     function getQslState() {
         let t = { settings: {}, fields: {}, logoObj: logoObj };
         t.settings = {
@@ -1307,7 +1264,6 @@
         return t;
     }
 
-    // APPLICA UNO STATO SALVATO (O TEMPLATE) ALL'EDITOR
     function applyQslState(t) {
         if (!t) return;
         if(t.settings) {
@@ -1338,16 +1294,13 @@
         try { 
             localStorage.setItem(QSL_TEMPLATE_META, JSON.stringify(t)); 
             alert("✅ TEMPLATE SALVATO CON SUCCESSO!\n\nI colori, i font, le posizioni dei testi e l'immagine di sfondo (se presente) verranno caricati automaticamente come 'Sfondo Base' per ogni nuovo QSO."); 
-        } catch(e) { 
-            alert("Errore Salvataggio: L'immagine caricata come sfondo è troppo pesante. Riduci la risoluzione della foto prima di salvarla come Template."); 
-        }
+        } catch(e) { alert("Errore Salvataggio: L'immagine caricata come sfondo è troppo pesante. Riduci la risoluzione della foto prima di salvarla come Template."); }
     }
 
     function loadQslTemplate() {
         let raw = localStorage.getItem(QSL_TEMPLATE_META); if(!raw) return;
         try {
-            let t = JSON.parse(raw);
-            applyQslState(t);
+            let t = JSON.parse(raw); applyQslState(t);
             let promises = [];
             if(t.bg && !originalImg) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { currentCroppedImg = img; originalImg = img; res(); }; img.src = t.bg; })); }
             if(t.logo) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { logoImg = img; res(); }; img.src = t.logo; })); }
@@ -1355,6 +1308,17 @@
         } catch(e) { console.error("Errore caricamento template", e); }
     }
 
+</script>
+
+<!-- REGISTRAZIONE SERVICE WORKER (MOTORE OFFLINE) -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('App pronta per l\'uso offline!'))
+        .catch(err => console.error('Errore Service Worker:', err));
+    });
+  }
 </script>
 </body>
 </html>
