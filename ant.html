@@ -1083,11 +1083,12 @@
                     }
 
                     // AGGIORNAMENTO 2: Limite del raggio matematico portato da 100m a 1000m
+                    // MIGLIORAMENTO: Angolo di mira abbassato da -0.01 a -0.001 per permettere di mirare lontano (quasi orizzontale)
                     if (!hitFound && isGroundSet && currentAction !== 'PLACE_GROUND') {
                         const cameraDirection = new THREE.Vector3();
                         camera.getWorldDirection(cameraDirection);
                         
-                        if (cameraDirection.y < -0.01) { 
+                        if (cameraDirection.y < -0.001) { 
                             const t = (groundLevel - camera.position.y) / cameraDirection.y;
                             if (t > 0 && t < 1000) { 
                                 const hitPoint = new THREE.Vector3().copy(camera.position).add(cameraDirection.multiplyScalar(t));
@@ -1100,6 +1101,10 @@
                     }
 
                     if (hitFound) {
+                        // NUOVO: Ingrandisce il mirino bianco proporzionalmente alla distanza così non scompare!
+                        const reticleDist = camera.position.distanceTo(reticle.position);
+                        reticle.scale.setScalar(1 + (reticleDist * 0.1));
+
                         if (currentAction === 'MOVE_BASE_A') {
                             point1.position.x = reticle.position.x;
                             point1.position.z = reticle.position.z;
