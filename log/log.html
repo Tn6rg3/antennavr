@@ -1,1 +1,1344 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Radio + QSL Live Editor Pro</title>
+    
+    <!-- TAG PER WEB APP (PWA) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2c3e50">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Dancing+Script:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* RESET BASE */
+        * { box-sizing: border-box; }
 
+        /* COLORI & TEMA */
+        :root { 
+            --bg-color: #eaeff2; --text-color: #000000; --box-bg: #ffffff; 
+            --input-bg: #ffffff; --input-text: #000000; --input-border: #999; 
+            --th-bg: #e0e0e0; --highlight: #fff3cd; 
+            --dupe-new: #27ae60; --dupe-old: #c0392b; 
+            --bar-color: #0056b3; --bar-track: #ccc;
+            --modal-bg: #ffffff; --modal-text: #000000;
+        }
+        [data-theme="dark"] { 
+            --bg-color: #121212; --text-color: #ffffff; --box-bg: #1e1e1e; 
+            --input-bg: #333333; --input-text: #ffffff; --input-border: #666; 
+            --th-bg: #2c2c2c; --highlight: #4a4008; --dupe-new: #2ecc71; --dupe-old: #e74c3c;
+            --bar-color: #3498db; --bar-track: #444;
+            --modal-bg: #222222; --modal-text: #ffffff;
+        }
+
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg-color); color: var(--text-color); padding: 5px; max-width: 99%; margin: auto; transition: background 0.3s; }
+        .status-bar { background: #27ae60; color: white; padding: 5px; text-align: center; font-weight: bold; font-size: 0.9em; margin-bottom: 10px; border-radius: 4px; }
+        .box { background: var(--box-bg); padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin-bottom: 10px; transition: all 0.3s ease; }
+        
+        button { padding: 8px 12px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; font-size: 13px; margin: 2px; transition: filter 0.2s; }
+        button:hover { filter: brightness(1.1); }
+        .btn-green { background: #27ae60; color: white; } .btn-blue { background: #3498db; color: white; width: 100%; font-size: 16px; padding: 12px; } .btn-red { background: #c0392b; color: white; } .btn-grey { background: #7f8c8d; color: white; } .btn-orange { background: #e67e22; color: white; } .btn-purple { background: #8e44ad; color: white; } .btn-dark { background: #2c3e50; color: white; } .btn-cyan { background: #17a2b8; color: white; } 
+        
+        .header-tools { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .theme-switch { cursor: pointer; background: none; border: 1px solid var(--text-color); color: var(--text-color); padding: 5px 10px; border-radius: 15px; font-size: 0.8em; font-weight: bold;}
+        
+        .config-header { background: #34495e; color: white; padding: 10px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin-bottom: 5px; }
+        #configPanel { display: none; background: var(--box-bg); border: 1px solid #777; border-radius: 0 0 8px 8px; padding: 15px; margin-bottom: 15px; }
+        
+        #contestSettingsPanel { display: none; background: rgba(230, 126, 34, 0.1); border: 2px solid #e67e22; padding: 10px; border-radius: 8px; margin-bottom: 15px; margin-top: 15px;}
+        .contest-label { color: #e67e22 !important; font-weight: bold; font-size: 0.8em; text-transform: uppercase; }
+        .hide-in-contest { display: block; } 
+
+        #solarHeader { background: #e67e22; color: white; padding: 8px; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: center; margin-bottom: 15px; font-size: 0.9em; }
+        #solarContent { display: none; text-align: center; margin-bottom: 15px; }
+        #solarContent img { max-width: 100%; height: auto; border-radius: 4px; border: 2px solid #555; }
+        
+        #createLogArea { display: none; background: #ecf0f1; padding: 10px; margin-top: 10px; border-radius: 5px; color: #333; }
+        
+        input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]), select { width: 100%; padding: 10px; margin-bottom: 5px; border: 1px solid var(--input-border); background-color: var(--input-bg) !important; color: var(--input-text) !important; border-radius: 4px; box-sizing: border-box; font-size: 16px; font-weight: bold; }
+        .row { display: flex; gap: 5px; } .col { flex: 1; }
+        label { font-size: 0.75em; font-weight: bold; color: var(--text-color); opacity: 0.8; display:block; margin-bottom:2px; text-transform: uppercase;}
+        .call-row { display: flex; gap: 5px; align-items: flex-end; } .call-input-wrapper { flex: 1; }
+        .btn-qrz { padding: 9px 15px; background: #2980b9; color: white; margin-bottom: 5px; height: 42px; display: flex; align-items: center; }
+        
+        .snapshot-list { list-style: none; padding: 0; margin: 10px 0; max-height: 200px; overflow-y: auto; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 4px; }
+        .snapshot-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #555; font-size: 0.9em; color: var(--text-color); }
+        
+        #dupeAlert { font-size: 0.9em; font-weight: bold; min-height: 18px; margin-bottom: 5px; }
+        .qrb-info { font-size: 0.8em; color: #17a2b8; font-weight: bold; margin-top: -3px; display: block; }
+        .advanced-toggle { text-align: center; font-size: 0.8em; color: #3498db; cursor: pointer; margin: 5px 0; text-decoration: underline; }
+        #advancedFields { display: none; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 4px; margin-bottom: 10px; border: 1px dashed #aaa; }
+        
+        .camera-btn { background: #e74c3c; color: white; width: 100%; padding: 12px; font-size: 1.1em; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .camera-btn.blue { background: #3498db; }
+        
+        .table-wrapper { overflow-x: auto; border: 1px solid #777; border-radius: 4px; width: 100%; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; color: var(--text-color); }
+        th { background: var(--th-bg); padding: 10px; text-align: left; border-bottom: 2px solid #777; color: var(--text-color); cursor: pointer; white-space: nowrap; font-weight: bold;}
+        td { border-bottom: 1px solid #555; padding: 8px 10px; white-space: nowrap; }
+        .edit-row { background: var(--highlight) !important; color: var(--text-color); }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; }
+        .stats-content { background-color: var(--modal-bg) !important; color: var(--modal-text) !important; padding: 15px; border-radius: 8px; width: 98vw !important; max-width: 100% !important; height: auto; max-height: 98vh; overflow-y: auto; display: flex; flex-direction: column; box-shadow: 0 5px 20px rgba(0,0,0,0.7); border: 1px solid #666; }
+        
+        #mapContainer { height: 75vh !important; width: 100% !important; border-radius: 4px; border: 2px solid #333; margin-bottom: 10px; }
+        #mediaContentContainer { text-align: center; background: #000; padding: 5px; border-radius: 4px; min-height: 200px; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+        #mediaContentContainer img { max-width: 100%; max-height: 70vh; margin-bottom: 10px; }
+        
+        .bar-container { margin-bottom: 12px; }
+        .bar-label { font-size: 1.1em; font-weight: bold; display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--modal-text); }
+        .bar-bg { background: var(--bar-track); height: 25px; border-radius: 4px; overflow: hidden; width:100%; border: 1px solid #777; }
+        .bar-fill { height: 100%; background: var(--bar-color); min-width: 5px; transition: width 0.3s ease; }
+
+        .pagination-bar { display: flex; justify-content: space-between; align-items: center; background: var(--th-bg); padding: 8px; border-bottom: 1px solid #777; border-radius: 4px 4px 0 0; }
+        #toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed; z-index: 200; left: 50%; bottom: 30px; transform: translateX(-50%); }
+        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        
+        .btn-xmas-upload { background: #b03a2e; color: white; width: 100%; font-size: 1.1em; padding: 12px; border: 2px solid #f1c40f; margin-top: 10px; font-weight: bold; text-transform: uppercase; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        .btn-xmas-upload:hover { background: #922b21; }
+        #xmasPanel { display: none; margin-bottom: 15px; border-radius: 8px; overflow: hidden; border: 2px solid #c0392b; }
+        .xmas-header { background: linear-gradient(135deg, #c0392b, #8e44ad); color: white; padding: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        .xmas-content { display: none; padding: 15px; background: #fff0f0; border-top: 1px solid #c0392b; }
+        .radio-group { display: flex; gap: 20px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 4px; margin-bottom: 10px; border: 1px solid #e6b0aa; }
+        .radio-item { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+        /* --- STILI ISOLATI QSL EDITOR LIVE --- */
+        .qsl-editor-btn { display: flex; justify-content: space-between; align-items: center; background: #2980b9; color: white; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); transition: background 0.3s; }
+        .qsl-editor-btn:hover { background: #1c5980; }
+        .qsl-live-box { border: 2px solid #2980b9; padding: 10px; border-radius: 0 0 8px 8px; margin-top: -10px; margin-bottom: 10px; background: rgba(41, 128, 185, 0.05); }
+        
+        .qsl-field-row { display: grid; grid-template-columns: 20px 1fr 25px 110px 45px 25px 25px; gap: 5px; align-items: center; margin-bottom: 8px; background: rgba(0,0,0,0.05); padding: 5px; border-radius: 4px; border: 1px solid var(--input-border); }
+        .qsl-field-row input[type="text"], .qsl-field-row select, .qsl-field-row input[type="number"] { width: 100% !important; padding: 4px !important; margin: 0 !important; border: 1px solid #ccc !important; border-radius: 3px !important; box-sizing: border-box !important; font-size: 0.85em !important; height: 28px !important; font-weight: normal !important; background: var(--input-bg) !important; color: var(--input-text) !important; }
+        .qsl-field-row input[type="color"] { width: 100% !important; height: 28px !important; padding: 0 !important; margin: 0 !important; border: none !important; cursor: pointer !important; }
+        .qsl-field-row .style-chk { display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold; background: rgba(0,0,0,0.1); border-radius: 3px; cursor: pointer; user-select: none; height: 28px; }
+        .qsl-field-row .style-chk input { margin: 0 2px 0 0 !important; width: auto !important; height: auto !important;}
+
+        #qslCanvasContainer { position: relative; width: 100%; max-height: 400px; background: #222; overflow: hidden; touch-action: none; border: 2px solid #555; border-radius: 4px; display: flex; justify-content: center; user-select: none; -webkit-user-select: none; }
+        #qslCanvas { max-width: 100%; height: auto; object-fit: contain; display: block; margin: 0 auto; cursor: crosshair; user-select: none; -webkit-user-select: none; }
+
+        .btn-crop { background: #e67e22; color: white; width: 100%; padding: 10px; margin-bottom: 5px; font-weight: bold;}
+        .btn-success-crop { background: #27ae60; color: white; width: 100%; padding: 10px; display: none; font-weight: bold;}
+        .qsl-flex-row { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
+        
+        .qsl-details-panel { background: var(--box-bg); padding: 10px; border-radius: 4px; margin-top: 10px; border: 1px solid var(--input-border); color: var(--text-color); }
+        .qsl-details-panel label { margin-bottom: 2px !important; display: block; font-size: 0.8em; font-weight: bold; color: var(--text-color); }
+        .qsl-details-panel input[type="range"] { width: 100% !important; margin-bottom: 8px !important; }
+    </style>
+</head>
+<body>
+
+    <div class="header-tools">
+        <div id="statusMsg" class="status-bar" style="flex:1; margin:0 10px 0 0;">Log Radio QSL</div>
+        <button class="theme-switch" onclick="toggleTheme()">🌗 Dark/Light</button>
+    </div>
+
+    <div id="solarHeader" onclick="toggleSolar()">☀️ DATI PROPAGAZIONE SOLARE (Clicca)</div>
+    <div id="solarContent">
+        <a href="http://www.hamqsl.com/solar.html" target="_blank"><img src="http://www.hamqsl.com/solar101vhf.php" alt="Solar Data by N0NBH"></a>
+    </div>
+
+    <div class="box" style="background: #2c3e50; color: white;">
+        <label style="color:white;">LOG ATTIVO:</label>
+        <div style="display:flex; gap:5px;">
+            <select id="logSelector" onchange="changeLog(this.value)" style="flex:1; font-weight:bold; color:black;"></select>
+            <button class="btn-green" onclick="toggleCreate()" title="Crea nuovo log">+</button>
+        </div>
+        <div id="createLogArea" style="display:none;">
+            <label style="color:#333;">Nome Nuovo Log:</label>
+            <input type="text" id="newLogName" placeholder="Nome log..." style="color:black; background:white; border:1px solid #ccc;">
+            <div class="checkbox-container" style="background:#fff; padding:5px; border-radius:4px; margin-bottom:5px; border:1px solid #ccc;">
+                <input type="checkbox" id="isContestCheck" style="width:auto; margin-right:5px;">
+                <label for="isContestCheck" style="display:inline; color:#c0392b; font-weight:bold;">🏆 MODALITÀ CONTEST</label>
+            </div>
+            <button class="btn-green" onclick="doCreateLog()">CONFERMA</button>
+            <button class="btn-grey" onclick="toggleCreate()">ANNULLA</button>
+        </div>
+        <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+            <small>QSO Totali: <span id="qsoCount">0</span></small>
+            <button class="btn-red" onclick="deleteLog()" style="padding:5px 10px; font-size:11px;">ELIMINA / SVUOTA LOG</button>
+        </div>
+    </div>
+
+    <div class="config-header" onclick="toggleConfigPanel()"><span>⚙️ CONFIGURAZIONE DI BASE</span><span id="configArrow">▼</span></div>
+    <div id="configPanel">
+        <h4 style="margin-top:0; color:#2980b9; border-bottom:1px solid #2980b9; padding-bottom:5px;">👤 I Tuoi Dati (Sulla QSL)</h4>
+        <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:120px;"><label>TUO NOMINATIVO</label><input type="text" id="myCall" placeholder="Il tuo Call" onchange="saveUserData(); syncGlobalToQsl()"></div>
+            <div style="flex:1; min-width:120px;"><label>TUO LOCATOR</label><input type="text" id="myLocator" placeholder="JN..." style="text-transform:uppercase;" onchange="saveUserData(); syncGlobalToQsl()"></div>
+            <div style="flex:1; min-width:120px;"><label>LOCATION (CABRILLO)</label><input type="text" id="myLocation" placeholder="DX, ITA..." style="text-transform:uppercase;" onchange="saveUserData()"></div>
+        </div>
+        <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:120px;"><label>NOME E COGNOME</label><input type="text" id="qslName" placeholder="Es. Mario Rossi" onchange="saveUserData(); syncGlobalToQsl()"></div>
+            <div style="flex:1; min-width:120px;"><label>INDIRIZZO</label><input type="text" id="qslAddr" placeholder="Via Roma 10" onchange="saveUserData(); syncGlobalToQsl()"></div>
+            <div style="flex:1; min-width:120px;"><label>CITTÀ/CAP</label><input type="text" id="qslCity" placeholder="00100 Roma" onchange="saveUserData(); syncGlobalToQsl()"></div>
+            <div style="flex:1; min-width:120px;"><label>NAZIONE</label><input type="text" id="qslCountry" placeholder="ITALY" onchange="saveUserData(); syncGlobalToQsl()"></div>
+        </div>
+
+        <div id="contestSettingsPanel">
+            <h4 style="margin-top:0; color:#e67e22; border-bottom:1px solid #e67e22;">🏆 IMPOSTAZIONI CONTEST (Cabrillo)</h4>
+            <div class="row">
+                <div class="col"><label class="contest-label">NOME CONTEST</label><input type="text" id="c_name" value="CQ-WW-DX" placeholder="Es. CQ-WW-DX"></div>
+                <div class="col"><label class="contest-label">OPERATORE</label><select id="c_op"><option>SINGLE-OP</option><option>MULTI-OP</option><option>CHECKLOG</option></select></div>
+            </div>
+            <div class="row" style="border-top:1px dashed #e67e22; padding-top:5px; margin-top:5px;">
+                <div class="col">
+                    <label class="contest-label">COSA INVII? (Scambio)</label>
+                    <select id="c_exchType" onchange="toggleExchInput()">
+                        <option value="SERIAL">PROGRESSIVO (001, 002...)</option>
+                        <option value="FIXED">DATO FISSO (Zona, Prov...)</option>
+                    </select>
+                </div>
+                <div class="col" id="fixedValBox" style="display:none;">
+                    <label class="contest-label">VALORE FISSO (Es. 15, TV)</label>
+                    <input type="text" id="c_fixedVal" placeholder="Dato fisso..." style="border: 2px solid #e67e22;">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col"><label class="contest-label">BANDA</label><select id="c_band"><option>ALL</option><option>160M</option><option>80M</option><option>40M</option><option>20M</option><option>15M</option><option>10M</option></select></div>
+                <div class="col"><label class="contest-label">MODO</label><select id="c_mode"><option>MIXED</option><option>CW</option><option>SSB</option><option>RTTY</option></select></div>
+            </div>
+            <div class="row">
+                <div class="col"><label class="contest-label">POTENZA</label><select id="c_power"><option>HIGH</option><option>LOW</option><option>QRP</option></select></div>
+                <div class="col"><label class="contest-label">ASSISTITO</label><select id="c_assisted"><option>NON-ASSISTED</option><option>ASSISTED</option></select></div>
+            </div>
+            <button class="btn-orange" onclick="saveContestMeta()" style="width:100%; margin-top:5px;">💾 SALVA IMPOSTAZIONI CONTEST</button>
+        </div>
+
+        <div class="checkbox-container" style="border:1px solid #3498db; padding:10px; border-radius:4px; margin-bottom:10px;">
+            <input type="checkbox" id="autoSnapshotCheck" checked onchange="saveConfigState()">
+            <label for="autoSnapshotCheck" style="display:inline;">Backup auto ad ogni QSO</label>
+        </div>
+        <ul id="snapshotList" class="snapshot-list"></ul>
+        <button class="btn-red" style="width:100%; font-size:11px; margin-bottom:15px;" onclick="clearAllSnapshots()">ELIMINA CRONOLOGIA BACKUP</button>
+        
+        <hr style="border:0; border-top:1px solid #777;">
+        
+        <div style="display:flex; justify-content:center; flex-wrap:wrap; gap:5px; align-items:center; margin-top:10px;">
+            <button class="btn-grey" onclick="document.getElementById('fileInput').click()">📂 IMPORTA ADIF</button>
+            <input type="file" id="fileInput" accept=".adi,.adif" style="display:none;">
+
+            <div style="display:flex; align-items:center; background:#7f8c8d; border-radius:4px; padding:0 1px; margin:2px; flex:1; min-width: 250px; justify-content: space-between;">
+                <select id="exportFormat" style="height:36px; border:none; margin:0; width:100%; font-size:13px; font-weight:bold; cursor:pointer;">
+                    <option value="" disabled selected>SCEGLI FORMATO...</option>
+                    <option value="ADIF">ADIF (Standard)</option>
+                    <option value="CABRILLO">CABRILLO (Contest)</option>
+                </select>
+                <button class="btn-grey" onclick="exportLogChoice()" style="margin:0; height:36px; border-radius:0 4px 4px 0; border-left:1px solid #555; white-space:nowrap;">💾 SALVA</button>
+            </div>
+
+            <button class="btn-purple" onclick="downloadFullBackup()">🔄 BACKUP TOT</button>
+            <button class="btn-purple" onclick="document.getElementById('backupInput').click()">📂 RIPRISTINA</button>
+            <input type="file" id="backupInput" accept=".json" style="display:none;" onchange="restoreFullBackup()">
+        </div>
+    </div>
+    
+    <div id="xmasPanel">
+        <div class="xmas-header" onclick="toggleXmasSettings()"><span>🎅 XMAS ACTIVITY</span><span id="xmasArrow">▼</span></div>
+        <div id="xmasContent" class="xmas-content">
+            <div class="row"><div class="col"><label>IL TUO NOMINATIVO</label><input type="text" id="xmasCall" style="border: 2px solid #e6b0aa;"></div><div class="col"><label>LA TUA EMAIL</label><input type="email" id="xmasEmail" placeholder="tua@email.com" style="border: 2px solid #e6b0aa;"></div></div>
+            <label>CATEGORIA</label><div class="radio-group"><label class="radio-item"><input type="radio" name="xmasCategory" value="1" checked> <span>ROOKIE</span></label><label class="radio-item"><input type="radio" name="xmasCategory" value="2"> <span>SENIOR</span></label></div>
+            <label>SERVER URL</label><input type="text" id="xmasUrl" value="https://cwqrs.pythonanywhere.com/xmas_2025/upload_log_json" style="color:#555;">
+            <button class="btn-xmas-upload" onclick="uploadXmasLog()">📤 INVIA LOG ORA</button>
+        </div>
+    </div>
+
+    <div class="box" id="formBox">
+        <h4 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:5px;">Inserimento QSO</h4>
+        <div class="row"><div class="col"><label>DATA</label><input type="date" id="date" oninput="syncLiveQsoData()"></div><div class="col"><label>FREQ</label><input type="number" id="freq" step="0.0001" oninput="syncLiveQsoData()"></div></div>
+        <div class="row"><div class="col"><label>INIZIO (UTC)</label><input type="time" id="timeOn" oninput="syncLiveQsoData()"></div><div class="col"><label>FINE (UTC)</label><input type="time" id="timeOff" oninput="syncLiveQsoData()"></div></div>
+        <div class="row"><div class="col"><label>CALLSIGN</label><div class="call-row"><div class="call-input-wrapper"><input type="text" id="call" placeholder="CALL..." style="text-transform:uppercase; font-weight:bold; font-size:1.4em; border:2px solid #3498db; margin:0; height:42px;" oninput="syncLiveQsoData()"></div><button class="btn-qrz" onclick="openQRZ()">🔍 QRZ</button></div><div id="dupeAlert"></div></div></div>
+        
+        <div class="hide-in-contest">
+            <div class="row"><div class="col"><label>NOME</label><input type="text" id="name"></div><div class="col"><label>QTH</label><input type="text" id="qth"></div></div>
+        </div>
+
+        <div class="row"><div class="col"><label>BANDA</label><select id="band" oninput="syncLiveQsoData()"><option>160m</option><option>80m</option><option>60m</option><option selected>40m</option><option>30m</option><option>20m</option><option>17m</option><option>15m</option><option>12m</option><option>10m</option><option>6m</option><option>2m</option><option>70cm</option></select></div><div class="col"><label>MODO</label><select id="mode" onchange="syncRST(); syncLiveQsoData()"><option selected>CW</option><option>SSB</option><option>FT8</option><option>FM</option><option>RTTY</option><option>AM</option></select></div></div>
+        <div class="row"><div class="col"><label>RST TX</label><input type="text" id="rstS" value="599" oninput="syncLiveQsoData()"></div><div class="col"><label>RST RX</label><input type="text" id="rstR" value="599"></div></div>
+        
+        <div class="hide-in-contest">
+            <div class="qsl-editor-btn" onclick="toggleQSLEditor()">
+                <span>🎨 APRI EDITOR QSL (Foto e Testi)</span>
+                <span id="qslToggleArrow">▼</span>
+            </div>
+
+            <div id="qslLiveBox" class="qsl-live-box" style="display:none;">
+                <div style="display:flex; gap:5px; margin-bottom:5px;">
+                    <button type="button" class="camera-btn blue" onclick="document.getElementById('qslImageInput').click()">📂 CARICA FOTO</button>
+                    <button type="button" class="camera-btn" onclick="document.getElementById('qslSnapInput').click()">📷 SCATTA FOTO</button>
+                </div>
+                <input type="file" id="qslImageInput" accept="image/*" style="display:none;" onchange="handleQSLImageInput(this)">
+                <input type="file" id="qslSnapInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQSLImageInput(this)">
+
+                <div id="qslCanvasContainer" style="margin-top:5px;">
+                    <canvas id="qslCanvas"></canvas>
+                </div>
+                <p style="font-size:0.8em; color:#555; text-align:center; margin:3px 0;">(Trascina i testi sull'immagine per posizionarli. Usa i bordi blu per il ritaglio se attivo)</p>
+                
+                <button type="button" class="btn-crop" id="btnCropMode" style="display:none;">✂️ RI-TAGLIA FOTO</button>
+                <button type="button" class="btn-success-crop" id="btnConfirmCrop" onclick="applyCrop()" style="display:none;">✅ CONFERMA INQUADRATURA</button>
+
+                <details class="qsl-details-panel">
+                    <summary style="cursor:pointer; font-weight:bold; color:#2980b9;">⚙️ Personalizza Grafica e Testi QSL</summary>
+                    <div style="margin-top:10px;">
+                        <label>Luminosità</label><input type="range" id="fBright" min="50" max="150" value="100">
+                        <label>Contrasto</label><input type="range" id="fContrast" min="50" max="150" value="100">
+                        <label>Sfocatura Bordi (Vignette)</label><input type="range" id="fEdgeBlur" min="0" max="30" value="0">
+                        
+                        <div style="background:rgba(41, 128, 185, 0.1); padding:10px; border-radius:4px; border:1px solid #2980b9; margin-top:10px; margin-bottom:10px;">
+                            <label style="color:#2980b9; text-transform:uppercase; border-bottom:1px solid rgba(41,128,185,0.5); padding-bottom:3px; margin-bottom:8px; display:block;">Barre in Sovraimpressione</label>
+                            <div class="qsl-flex-row" style="margin-bottom:8px;">
+                                <input type="checkbox" id="c_topBar" class="bar-ctrl"> <b style="font-size:0.8em;">TOP</b>
+                                <input type="color" id="col_topBar" value="#000000" class="bar-ctrl" style="width:30px; height:25px; padding:0; border:none; cursor:pointer;" title="Colore">
+                                <input type="range" id="h_topBar" min="1" max="50" value="10" class="bar-ctrl" title="Altezza %" style="flex:1;">
+                                <input type="range" id="op_topBar" min="0" max="100" value="65" class="bar-ctrl" title="Opacità %" style="flex:1;">
+                            </div>
+                            <div class="qsl-flex-row">
+                                <input type="checkbox" id="c_bottomBar" class="bar-ctrl" checked> <b style="font-size:0.8em;">BOT</b>
+                                <input type="color" id="col_bottomBar" value="#000000" class="bar-ctrl" style="width:30px; height:25px; padding:0; border:none; cursor:pointer;" title="Colore">
+                                <input type="range" id="h_bottomBar" min="1" max="50" value="25" class="bar-ctrl" title="Altezza %" style="flex:1;">
+                                <input type="range" id="op_bottomBar" min="0" max="100" value="65" class="bar-ctrl" title="Opacità %" style="flex:1;">
+                            </div>
+                        </div>
+
+                        <div id="qslFieldsContainer"></div>
+                        
+                        <div style="margin-top:10px; border-top:1px dashed #ccc; padding-top:10px;">
+                            <label><input type="checkbox" id="c_logo" checked> Mostra Logo (Seleziona per attivare)</label>
+                            <input type="file" id="qslLocalLogoInput" accept="image/*" style="width:100%; margin-top:5px;">
+                        </div>
+
+                        <button type="button" class="btn-green" style="width:100%; padding:10px; margin-top:10px;" onclick="saveQslTemplate()">💾 SALVA COME TEMPLATE PREDEFINITO</button>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <div class="advanced-toggle" onclick="toggleAdvanced()">⬇️ Scambi & Note</div>
+        <div id="advancedFields" style="display:none;"> 
+            <div class="hide-in-contest">
+                <div class="row"><div class="col"><label>GRID LOCATOR</label><input type="text" id="gridsquare" onchange="calcQRB()" style="text-transform:uppercase;"><span id="qrbCalc" class="qrb-info"></span></div><div class="col"><label>NOTE</label><input type="text" id="note"></div></div>
+            </div>
+            <div class="row" style="margin-top:5px;">
+                <div class="col"><label id="lblMyRef" style="color:var(--text-color);">TUO REF (SCAMBIO)</label><input type="text" id="myRef" onchange="saveUserData()" style="border: 2px solid #e67e22;"></div>
+                <div class="col"><label id="lblTheirRef" style="color:var(--text-color);">SUO REF (RICEVUTO)</label><input type="text" id="theirRef" style="border: 2px solid #e67e22;"></div>
+            </div>
+        </div>
+        <button type="button" id="saveBtn" class="btn-blue" onclick="saveQSO()">SALVA QSO E GENERA QSL</button>
+        <button type="button" id="cancelBtn" class="btn-grey" style="width:100%; display:none; margin-top:5px;" onclick="cancelEdit()">ANNULLA MODIFICA</button>
+    </div>
+
+    <div class="box">
+        <div class="search-bar" style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;">
+            <span style="font-size:1.2em;">🔍</span>
+            <input type="text" id="searchInput" placeholder="Cerca..." style="text-transform:uppercase; flex:1; min-width:100px;">
+            <button class="btn-dark" onclick="doSearch()">CERCA</button>
+            <button class="btn-grey" onclick="resetSearch()">RESET</button>
+            <span style="border-left:1px solid #999; height:20px; margin:0 2px;"></span>
+            <button class="btn-cyan" onclick="showStats()">📊 STATS</button>
+            <button class="btn-blue" onclick="showMap()">🌍 MAPPA</button>
+        </div>
+
+        <div class="pagination-bar" style="margin-top:10px;"><div style="display:flex; align-items:center; gap:5px;"><span style="font-size:0.8em; font-weight:bold;">MOSTRA:</span><select id="rowsPerPage" onchange="changeRows(this.value)" style="width:auto; padding:4px;"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></div><div class="page-controls"><button id="btnPrev" onclick="changePage(-1)">◀</button><span id="pageInfo" class="page-info">Pag 1/1</span><button id="btnNext" onclick="changePage(1)">▶</button></div></div>
+        <div class="table-wrapper"><table id="dataTable"><thead><tr><th style="width:80px;">Act</th><th onclick="sortBy('date')">Data</th><th onclick="sortBy('freq')">Freq</th><th onclick="sortBy('call')">Call</th><th>Banda</th><th>Modo</th><th>RST</th><th>Exch</th><th>Foto</th></tr></thead><tbody id="tableBody"></tbody></table></div>
+    </div>
+
+    <div id="statsModal" class="modal-overlay" onclick="this.style.display='none'">
+        <div class="stats-content" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0;">📊 Statistiche</h3>
+            <div id="statsBody"></div>
+            <button class="btn-grey" style="width:100%; margin-top:15px;" onclick="document.getElementById('statsModal').style.display='none'">CHIUDI</button>
+        </div>
+    </div>
+    
+    <div id="mapModal" class="modal-overlay" onclick="document.getElementById('mapModal').style.display='none'">
+        <div class="stats-content" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0;">🌍 Mappa QSO</h3>
+            <div id="mapContainer"></div>
+            <button class="btn-grey" style="width:100%;" onclick="document.getElementById('mapModal').style.display='none'">CHIUDI MAPPA</button>
+        </div>
+    </div>
+    
+    <div id="mediaModal" class="modal-overlay" onclick="closeMedia()">
+        <div class="stats-content" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0; color:var(--primary);">📷 QSL Salvata</h3>
+            <div id="mediaContentContainer"></div>
+            <div class="row" style="margin-top:10px;">
+                <div class="col"><button class="btn-green" style="width:100%;" onclick="shareCurrentImage()">📤 CONDIVIDI</button></div>
+                <div class="col"><button class="btn-blue" style="width:100%;" onclick="downloadCurrentImage()">💾 SCARICA QSL</button></div>
+            </div>
+            <div class="row" style="margin-top:5px;">
+                <div class="col"><button class="btn-purple" style="width:100%;" onclick="printQSLImage()">🖨️ STAMPA QSL (15x10.5)</button></div>
+            </div>
+            <button class="btn-grey" style="width:100%; margin-top:10px;" onclick="closeMedia()">CHIUDI</button>
+        </div>
+    </div>
+
+    <div id="toast">Notifica</div>
+
+<script>
+    const DB_KEY="HamLog_FINAL_PRO_V6", DRAFT_KEY="HamLog_Draft_V6", USER_DATA_KEY="HamLog_UserData_V7", CONFIG_KEY="HamLog_Config_V6", SNAPSHOT_KEY="HamLog_Snap_V6";
+    const META_KEY="HamLog_Meta_V1"; 
+    const IMAGE_DB_NAME="HamLog_ImagesDB", IMAGE_STORE_NAME="photos";
+    const QSL_TEMPLATE_META = "HamLog_QSL_Template_Meta_V3";
+    
+    let db={}; let snapshots=[]; let logMeta={}; 
+    let currentLog="GENERALE"; let editIdx=-1; let qsoStarted=false; 
+    let currentPage=1; let rowsPerPage=10; let currentSort={col:null,asc:true}; let activeSearch=null; 
+    let liveCallFilter=""; let map=null; let imageDB=null; 
+    let currentViewBlob = null;
+
+    // --- VARIABILI QSL EDITOR LIVE ---
+    let qslCanvas, qslCtx;
+    const QSL_WIDTH = 1500; const QSL_HEIGHT = 1000;
+    let originalImg = null; let croppedImg = null; let currentCroppedImg = null; let logoImg = null;
+    let cropMode = false; let cropBox = null; let cropAction = null; let cropStartPos = null;
+    let offset = { x: 0, y: 0 };
+    let dragObjects = {}; let logoObj = { x: 1250, y: 50, w: 150, h: 150 }; let draggingElement = null;
+    
+    let tempOriginalBlob = null;
+    let loadedOriginalBlob = null;
+
+    function safeGetVal(id) { const el = document.getElementById(id); return el ? el.value : ""; }
+    function safeGetCheck(id) { const el = document.getElementById(id); return el ? el.checked : false; }
+
+    window.onload = function() {
+        const freqEl = document.getElementById('freq');
+        if(freqEl) freqEl.addEventListener('input', autoBand);
+        const callEl = document.getElementById('call');
+        if(callEl) { callEl.addEventListener('input', (e)=>{ autoStartTime(); checkDupe(); liveCallFilter=e.target.value.trim().toUpperCase(); currentPage=1; renderUI(); }); }
+
+        document.getElementById('fileInput').addEventListener('change', handleImport);
+        document.getElementById('formBox').addEventListener('keypress', (e)=>{if(e.key==='Enter'&&e.target.id!=='note'){e.preventDefault();saveQSO();}});
+        document.getElementById('searchInput').addEventListener('keypress', (e)=>{if(e.key==='Enter')doSearch();});
+        document.getElementById('formBox').addEventListener('input', saveDraft);
+
+        initTheme(); initDate(); loadDB(); loadMeta(); loadSnapshots();
+        
+        loadUserData(); 
+        initQSLEditorUI();
+        syncGlobalToQsl(); 
+        loadQslTemplate(); 
+        syncLiveQsoData(); 
+        
+        loadConfigState(); renderUI(); loadDraft(); renderSnapshots();
+        try { initImageDB(); } catch(e) { console.error("ImageDB:", e); }
+    };
+
+    function msg(t){document.getElementById('statusMsg').innerText=t;setTimeout(()=>document.getElementById('statusMsg').innerText="Log Radio QSL",3000);}
+    function showToast(t){const el=document.getElementById('toast');el.innerText=t;el.className="show";setTimeout(()=>el.className="",3000);}
+
+    function getUTCTime() { const n = new Date(); return String(n.getUTCHours()).padStart(2, '0') + ":" + String(n.getUTCMinutes()).padStart(2, '0'); }
+    function initDate() {
+        const n = new Date(); const y = n.getUTCFullYear(); const m = String(n.getUTCMonth() + 1).padStart(2, '0'); const d = String(n.getUTCDate()).padStart(2, '0');
+        const dateEl = document.getElementById('date'); if (dateEl) dateEl.value = `${y}-${m}-${d}`;
+    }
+
+    function loadMeta() { try { logMeta = JSON.parse(localStorage.getItem(META_KEY)) || {}; } catch(e){ logMeta={}; } }
+    function saveMeta() { localStorage.setItem(META_KEY, JSON.stringify(logMeta)); }
+    function isContestMode() { return logMeta[currentLog] && logMeta[currentLog].isContest; }
+
+    function updateFormVisibility() {
+        const isC = isContestMode();
+        document.querySelectorAll('.hide-in-contest').forEach(el => el.style.display = isC ? 'none' : 'block');
+        document.getElementById('contestSettingsPanel').style.display = isC ? 'block' : 'none';
+        document.getElementById('lblMyRef').innerText = isC ? "SCAMBIO INVIATO (MY)" : "TUO REF";
+        document.getElementById('lblMyRef').style.color = isC ? "#e67e22" : "var(--text-color)";
+        document.getElementById('lblTheirRef').innerText = isC ? "SCAMBIO RICEVUTO (DX)" : "SUO REF";
+        document.getElementById('lblTheirRef').style.color = isC ? "#e67e22" : "var(--text-color)";
+    }
+
+    function toggleExchInput() { const t = safeGetVal('c_exchType'); const box = document.getElementById('fixedValBox'); if(box) box.style.display = (t === "FIXED") ? "block" : "none"; }
+
+    function autoStartTime() {
+        const c = safeGetVal('call'); const tOn = document.getElementById('timeOn');
+        if(c.length===0) { qsoStarted=false; return; }
+        if(editIdx===-1 && (!qsoStarted || (tOn && tOn.value===""))) { if(tOn) tOn.value=getUTCTime(); qsoStarted=true; syncLiveQsoData(); }
+        if(editIdx===-1 && isContestMode()) {
+            const m = logMeta[currentLog]; const myRef = document.getElementById('myRef');
+            if(myRef && myRef.value === "") { if (m.exchType === "FIXED") myRef.value = m.fixedVal || ""; else myRef.value = String((db[currentLog]||[]).length + 1).padStart(3, '0'); }
+        }
+    }
+
+    function autoBand() {
+        let v=parseFloat(safeGetVal('freq')); if(!v)return; if(v>100)v=v/1000; let b=""; 
+        if(v>=1.8&&v<=2.0)b="160m"; else if(v>=3.5&&v<=3.8)b="80m"; else if(v>=5.3&&v<=5.4)b="60m"; else if(v>=7.0&&v<=7.2)b="40m"; else if(v>=10.1&&v<=10.15)b="30m";
+        else if(v>=14.0&&v<=14.35)b="20m"; else if(v>=18.068&&v<=18.168)b="17m"; else if(v>=21.0&&v<=21.45)b="15m"; else if(v>=24.89&&v<=24.99)b="12m";
+        else if(v>=28.0&&v<=29.7)b="10m"; else if(v>=50.0&&v<=52.0)b="6m"; else if(v>=144.0&&v<=146.0)b="2m"; else if(v>=430)b="70cm";
+        const bandEl = document.getElementById('band'); if(b && bandEl) bandEl.value=b;
+        syncLiveQsoData();
+    }
+
+    function safeAddToLog(targetLogName, qsoData) {
+        if (!db[targetLogName]) db[targetLogName] = [];
+        if (!qsoData.id) qsoData.id = Date.now() + Math.random();
+        const exists = db[targetLogName].some(existing => {
+             if (existing.id && qsoData.id && existing.id === qsoData.id) return true;
+             return existing.call === qsoData.call && existing.date === qsoData.date && existing.timeOn === qsoData.timeOn && existing.band === qsoData.band
+        });
+        if (!exists) { db[targetLogName].push(JSON.parse(JSON.stringify(qsoData))); return true; }
+        return false;
+    }
+
+    async function saveQSO() {
+        const saveBtn = document.getElementById('saveBtn');
+        if (cropMode) return alert("Devi CONFERMARE il ritaglio (tasto verde con la spunta) prima di salvare il QSO!");
+        
+        try {
+            const timeOffEl = document.getElementById('timeOff'); const timeOnEl = document.getElementById('timeOn');
+            if(editIdx === -1 && timeOffEl) timeOffEl.value = getUTCTime();
+            let tf = (timeOffEl ? timeOffEl.value : "") || (timeOnEl ? timeOnEl.value : "");
+            if(!db[currentLog]) db[currentLog] = []; 
+            
+            const q = {
+                date: safeGetVal('date'), freq: safeGetVal('freq'), timeOn: safeGetVal('timeOn'), timeOff: tf,
+                call: safeGetVal('call').toUpperCase().trim(), name: safeGetVal('name'), qth: safeGetVal('qth'),
+                band: safeGetVal('band'), mode: safeGetVal('mode'), rstS: safeGetVal('rstS'), rstR: safeGetVal('rstR'),
+                gridsquare: safeGetVal('gridsquare').toUpperCase(), note: safeGetVal('note'), myRef: safeGetVal('myRef').toUpperCase(), theirRef: safeGetVal('theirRef').toUpperCase()
+            };
+
+            if(!q.call) return msg("MANCA CALL!");
+            saveBtn.innerText = "Salvataggio in corso..."; saveBtn.disabled = true;
+
+            let oldRecord = null;
+            if (editIdx !== -1) { oldRecord = db[currentLog][editIdx]; q.id = oldRecord.id || oldRecord.photoId || Date.now(); q.photoId = q.id; } 
+            else { q.id = Date.now(); q.photoId = q.id; }
+
+            q.hasPhoto = false;
+            let finalBlob = await new Promise(r => qslCanvas.toBlob(r, 'image/jpeg', 0.90));
+            let origBlob = tempOriginalBlob || loadedOriginalBlob;
+            if (!origBlob && currentCroppedImg) { origBlob = await fetch(currentCroppedImg.src).then(res => res.blob()); }
+            
+            q.hasPhoto = true; 
+            await savePhotoToDBPromise(q.photoId, finalBlob, origBlob);
+
+            if(editIdx === -1) { db[currentLog].push(q); if (currentLog !== "GENERALE") safeAddToLog("GENERALE", q); } 
+            else {
+                db[currentLog][editIdx] = q;
+                if (currentLog !== "GENERALE") {
+                    const genIdx = db["GENERALE"].findIndex(g => {
+                        if (q.id && g.id === q.id) return true; if (q.photoId && g.photoId === q.photoId) return true;
+                        if (oldRecord) return g.call === oldRecord.call && g.date === oldRecord.date && g.timeOn === oldRecord.timeOn; return false;
+                    });
+                    if (genIdx !== -1) db["GENERALE"][genIdx] = q; else safeAddToLog("GENERALE", q);
+                }
+            }
+
+            localStorage.setItem(DB_KEY, JSON.stringify(db));
+
+            if(editIdx === -1) { msg("QSO E QSL SALVATI!"); clearDraft(); resetForm(); try { createSnapshot("Add: "+q.call); } catch(e){} } 
+            else { msg("QSO E QSL AGGIORNATI!"); cancelEdit(); try { createSnapshot("Edit: "+q.call); } catch(e){} }
+            
+            liveCallFilter = ""; activeSearch = null; const searchEl = document.getElementById('searchInput'); if(searchEl) searchEl.value = '';
+            renderUI();
+        } catch(e) { alert("Errore Salvataggio: " + e.message); } 
+        finally { if(saveBtn) { saveBtn.innerText = (editIdx === -1) ? "SALVA QSO E GENERA QSL" : "MODIFICA QSO"; saveBtn.disabled = false; } }
+    }
+
+    function handleQSLImageInput(input) {
+        if(!input.files || !input.files[0]) return;
+        const file = input.files[0];
+        tempOriginalBlob = new Blob([file], {type: file.type});
+        
+        const p = document.getElementById('qslLiveBox');
+        if (p.style.display === "none") {
+            p.style.display = "block";
+            document.getElementById('qslToggleArrow').innerText = "▲";
+        }
+        
+        loadBlobToQSLEditor(URL.createObjectURL(tempOriginalBlob));
+        showToast("Immagine caricata nell'editor!");
+    }
+
+    function delQSO(i) {
+        if(!confirm("Eliminare QSO e relativa QSL?")) return;
+        try {
+            if(db[currentLog][i].hasPhoto) deletePhotoFromDB(db[currentLog][i].photoId);
+            if(editIdx===i) cancelEdit();
+            db[currentLog].splice(i,1); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderUI();
+            try { createSnapshot("Del QSO"); } catch(e){}
+        } catch(e) { alert("Err Delete"); }
+    }
+
+    function changeLog(val) { if(editIdx !== -1) cancelEdit(); currentLog = val; currentPage = 1; activeSearch = null; document.getElementById('searchInput').value = ''; document.getElementById('xmasPanel').style.display = (currentLog === "logXmasActivity") ? "block" : "none"; renderUI(); }
+    function deleteLog() { const isSystemLog = (currentLog === "GENERALE" || currentLog === "logXmasActivity"); const message = isSystemLog ? "SVUOTARE il log "+currentLog+"?" : "Eliminare definitivamente "+currentLog+"?"; if (confirm(message)) { if (isSystemLog) { db[currentLog] = []; } else { delete db[currentLog]; if(logMeta[currentLog]) { delete logMeta[currentLog]; saveMeta(); } currentLog = "GENERALE"; } saveDB(); renderUI(); } }
+    function doCreateLog() { const n=safeGetVal('newLogName').trim(); const isCBox = document.getElementById('isContestCheck'); const isC = isCBox ? isCBox.checked : false; if(n && !db[n]) { db[n]=[]; if(isC) { logMeta[n] = { isContest: true, name: "CQ-TEST", op: "SINGLE-OP", band: "ALL", mode: "MIXED", power: "LOW", exchType: "SERIAL", fixedVal: "" }; saveMeta(); } currentLog=n; saveDB(); renderUI(); document.getElementById('createLogArea').style.display='none'; document.getElementById('newLogName').value = ""; if(isCBox) isCBox.checked = false; } }
+
+    function saveContestMeta() {
+        try {
+            if(!logMeta[currentLog]) logMeta[currentLog] = { isContest: true }; const m = logMeta[currentLog];
+            m.name = safeGetVal('c_name'); m.op = safeGetVal('c_op'); m.band = safeGetVal('c_band'); m.mode = safeGetVal('c_mode'); m.power = safeGetVal('c_power'); m.assisted = safeGetVal('c_assisted'); m.exchType = safeGetVal('c_exchType'); m.fixedVal = safeGetVal('c_fixedVal').toUpperCase();
+            if(m.exchType === "FIXED" && m.fixedVal.trim() === "") { alert("ATTENZIONE: Hai scelto 'Dato Fisso' ma non hai inserito nessun valore!"); return; }
+            saveMeta(); showToast("Impostazioni Salvate!");
+            if(editIdx === -1) { const myRefField = document.getElementById('myRef'); if (myRefField) { if (m.exchType === "FIXED") myRefField.value = m.fixedVal; else myRefField.value = String((db[currentLog]||[]).length + 1).padStart(3, '0'); } }
+            renderUI();
+        } catch(e) { alert("Errore: " + e.message); }
+    }
+
+    function renderUI() {
+        const s = document.getElementById('logSelector'); s.innerHTML=''; const opt = (k,l) => { const o=document.createElement('option'); o.value=k; o.innerText=l; if(k===currentLog)o.selected=true; s.appendChild(o); };
+        if(!db[currentLog]) db[currentLog] = []; const allKeys = Object.keys(db);
+        if(!allKeys.includes("GENERALE")) db["GENERALE"] = []; if(!allKeys.includes("logXmasActivity")) db["logXmasActivity"] = [];
+        opt("GENERALE", `⭐ GENERALE (${(db.GENERALE||[]).length})`); opt("logXmasActivity", `🎄 logXmasActivity (${(db.logXmasActivity||[]).length})`);
+        Object.keys(db).forEach(k=>{ if(k!=="GENERALE" && k!=="logXmasActivity") { const prefix = (logMeta[k] && logMeta[k].isContest) ? "🏆 " : ""; opt(k, `${prefix}${k} (${db[k].length})`); } });
+        document.getElementById('xmasPanel').style.display = (currentLog === "logXmasActivity") ? "block" : "none"; document.getElementById('qsoCount').innerText = (db[currentLog]||[]).length;
+        updateFormVisibility();
+        if(isContestMode() && logMeta[currentLog]) { const m = logMeta[currentLog]; const cName = document.getElementById('c_name'); if(cName) cName.value = m.name || "CQ-TEST"; const cExch = document.getElementById('c_exchType'); if(cExch) cExch.value = m.exchType || "SERIAL"; const cFix = document.getElementById('c_fixedVal'); if(cFix) cFix.value = m.fixedVal || ""; toggleExchInput(); }
+        
+        let list = (db[currentLog]||[]).map((x,i)=>({...x,_i:i}));
+        if(activeSearch) list = list.filter(q => q.call && q.call.includes(activeSearch)); else if(liveCallFilter.length > 1) list = list.filter(q => q.call && q.call.includes(liveCallFilter));
+        if(currentSort.col) { list.sort((a,b) => { let v1=a[currentSort.col], v2=b[currentSort.col]; if(currentSort.col==='freq') { v1=parseFloat(v1)||0; v2=parseFloat(v2)||0; } else { v1=(v1||'').toString(); v2=(v2||'').toString(); } return (v1<v2?-1:1)*(currentSort.asc?1:-1); }); } else list.reverse();
+        const tot = Math.ceil(list.length/rowsPerPage)||1; if(currentPage>tot) currentPage=tot; if(currentPage<1) currentPage=1; document.getElementById('pageInfo').innerText = `Pag ${currentPage}/${tot}`;
+        const tb = document.getElementById('tableBody'); tb.innerHTML = '';
+        if(list.length === 0) { tb.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:15px;">Nessun QSO.</td></tr>'; } 
+        else {
+            list.slice((currentPage-1)*rowsPerPage, currentPage*rowsPerPage).forEach(q => {
+                const isEd = (q._i===editIdx); const mediaBtn = q.hasPhoto ? `<button onclick="loadPhotoFromDB(${q.photoId})" style="padding:2px 6px;" title="Vedi QSL">📸</button>` : ''; const exch = (q.myRef || "") + " -> " + (q.theirRef || "");
+                tb.innerHTML += `<tr class="${isEd?'edit-row':''}">
+                    <td style="white-space:nowrap;">
+                        <button onclick="loadEdit(${q._i})" style="padding:4px 6px;" title="Modifica">✏️</button>
+                        <button class="btn-red" style="padding:4px 6px;" onclick="delQSO(${q._i})" title="Elimina">x</button>
+                    </td>
+                    <td>${q.date}</td> <td>${q.freq||''}</td> <td style="font-weight:bold">${q.call}</td> <td>${q.band}</td> <td>${q.mode}</td> <td>${q.rstS}/${q.rstR}</td> <td style="font-size:0.9em;">${exch}</td><td style="text-align:center;">${mediaBtn}</td></tr>`;
+            });
+        }
+    }
+
+    function toggleConfigPanel() { const p=document.getElementById('configPanel'); const s=(p.style.display==="block"); p.style.display=s?"none":"block"; document.getElementById('configArrow').innerText=s?"▼":"▲"; }
+    function toggleAdvanced() { const p=document.getElementById('advancedFields'); p.style.display=(p.style.display==="block")?"none":"block"; }
+    function toggleXmasSettings() { const c=document.getElementById('xmasContent'); const v=(c.style.display==="block"); c.style.display=v?"none":"block"; document.getElementById('xmasArrow').innerText=v?"▼":"▲"; }
+    
+    function toggleQSLEditor() {
+        const p = document.getElementById('qslLiveBox');
+        const s = (p.style.display === "block");
+        p.style.display = s ? "none" : "block";
+        document.getElementById('qslToggleArrow').innerText = s ? "▼" : "▲";
+        if(!s) renderQSL();
+    }
+
+    function loadDB() { try { const raw = localStorage.getItem(DB_KEY); db = raw ? JSON.parse(raw) : {"GENERALE":[]}; } catch(e){ db = {"GENERALE":[]}; } if(!db["GENERALE"]) db["GENERALE"] = []; if(!db["logXmasActivity"]) db["logXmasActivity"] = []; if(!db[currentLog]) currentLog = "GENERALE"; saveDB(); }
+    
+    function exportLogChoice() { const fmt = document.getElementById('exportFormat').value; if (!fmt) { alert("Seleziona formato!"); return; } if (fmt === "ADIF") exportADIF(); else if (fmt === "CABRILLO") exportCabrillo(); }
+
+    function exportADIF() {
+        const list = db[currentLog]; if (!list || list.length === 0) { alert("Nessun QSO."); return; }
+        let adif = "ADIF Export Log Radio V9.4\n<PROGRAMID:8>LogRadio\n<ADIF_VER:5>3.1.4\n<EOH>\n";
+        list.forEach(q => {
+            let row = ""; const add = (tag, val) => { if(val) { val = String(val).trim(); if(val.length > 0) row += `<${tag}:${val.length}>${val}`; } };
+            let d = (q.date || "").trim().replace(/-/g, ""); let tOn = (q.timeOn || "").trim().replace(/:/g, ""); let tOff = (q.timeOff || tOn).trim().replace(/:/g, "");
+            add("CALL", q.call); add("QSO_DATE", d); add("TIME_ON", tOn); add("TIME_OFF", tOff); add("BAND", q.band); add("MODE", q.mode); add("FREQ", q.freq); add("RST_SENT", q.rstS); add("RST_RCVD", q.rstR); add("MY_SIG_INFO", q.myRef); add("SIG_INFO", q.theirRef); 
+            if(isContestMode()) { add("STX", q.myRef); add("SRX", q.theirRef); add("CONTEST_ID", (logMeta[currentLog]||{}).name); } else { add("NAME", q.name); add("QTH", q.qth); add("GRIDSQUARE", q.gridsquare); add("COMMENT", q.note); }
+            adif += row + "<EOR>\n";
+        });
+        const blob = new Blob([adif], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentLog}_${new Date().toISOString().split('T')[0]}.adi`; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast("Export ADIF OK!");
+    }
+
+    function exportCabrillo() {
+        try {
+            const list = db[currentLog]; if (!list || list.length === 0) { alert("Nessun QSO."); return; }
+            let myCall = safeGetVal('myCall').toUpperCase().trim() || "MYCALL"; let locInput = document.getElementById('myLocation'); let myLocation = (locInput && locInput.value.trim() !== "") ? locInput.value.toUpperCase().trim() : "DX";
+            let meta = logMeta[currentLog] || { name: "GENERAL-LOG", op: "SINGLE-OP", band: "ALL", mode: "MIXED", power: "LOW", assisted: "NON-ASSISTED" };
+            let cab = `START-OF-LOG: 3.0\nCALLSIGN: ${myCall}\nLOCATION: ${myLocation}\nCONTEST: ${meta.name.toUpperCase()}\nCATEGORY-OPERATOR: ${meta.op}\nCATEGORY-ASSISTED: ${meta.assisted || "NON-ASSISTED"}\nCATEGORY-BAND: ${meta.band}\nCATEGORY-MODE: ${meta.mode}\nCATEGORY-POWER: ${meta.power || "LOW"}\nCATEGORY-STATION: FIXED\nCREATED-BY: Log Radio V9.4\nNAME: ${myCall}\n`;
+            list.forEach(q => {
+                let freqKHz = "14000"; if (q.freq) { let f = parseFloat(q.freq); if (!isNaN(f)) { if (f < 200) f = f * 1000; freqKHz = Math.floor(f).toString(); } }
+                let modeRaw = (q.mode || "SSB").trim().toUpperCase(); let mode = "PH"; if (modeRaw === "CW") mode = "CW"; else if (["RTTY", "FT8", "FT4"].includes(modeRaw)) mode = "DG";
+                let d = (q.date || "1900-01-01").trim().replace(/-/g, "-"); let t = (q.timeOn || "00:00").trim().replace(/:/g, "");
+                let rstS = (q.rstS || "59").toString().trim(); let rstR = (q.rstR || "59").toString().trim(); let exchS = (q.myRef || "001").toString().trim(); let exchR = (q.theirRef || "001").toString().trim(); let dxCall = (q.call || "").toString().toUpperCase().trim();
+                cab += `QSO: ${freqKHz.padEnd(6)} ${mode.padEnd(3)} ${d} ${t} ${myCall.padEnd(10)} ${rstS.padEnd(3)} ${exchS.padEnd(6)} ${dxCall.padEnd(10)} ${rstR.padEnd(3)} ${exchR}\n`;
+            });
+            cab += "END-OF-LOG:\n"; const blob = new Blob([cab], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentLog}_${new Date().toISOString().split('T')[0]}.cbr`; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast("Export Cabrillo OK!");
+        } catch (err) { alert("Errore Export: " + err.message); }
+    }
+
+    function handleImport(e) { 
+        const f = e.target.files[0]; if(!f) return; const r = new FileReader(); 
+        r.onload = function(ev) { 
+            const p = ev.target.result.split(/<eor>/i); let c=0; 
+            const g = (r, t) => { const m = r.match(new RegExp(`<${t}(?:[:]\\d+)?>([^<]*)`,'i')); return m ? m[1].trim() : ''; }; 
+            p.forEach(x => { 
+                if(x.length < 5) return; 
+                const cl = g(x, 'CALL'); 
+                if(cl) { 
+                    let d = g(x, 'QSO_DATE'); if(d.length === 8) d = d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8); 
+                    let to = g(x, 'TIME_ON'); if(to.length >= 4) to = to.slice(0,2)+':'+to.slice(2,4); 
+                    const q = { call: cl, date: d, timeOn: to, timeOff: to, freq: g(x, 'FREQ'), band: g(x, 'BAND'), mode: g(x, 'MODE'), rstS: g(x, 'RST_SENT')||'599', rstR: g(x, 'RST_RCVD')||'599', gridsquare: g(x, 'GRIDSQUARE'), note: g(x, 'COMMENT'), myRef: g(x, 'MY_SIG_INFO'), theirRef: g(x, 'SIG_INFO'), hasPhoto: false, id: Date.now() + Math.random(), photoId: Date.now() + Math.random() }; 
+                    if (safeAddToLog(currentLog, q)) c++; if (currentLog !== "GENERALE") safeAddToLog("GENERALE", q); 
+                } 
+            }); 
+            saveDB(); renderUI(); createSnapshot("Import ADIF"); alert(`Import: ${c}`); 
+        }; 
+        r.readAsText(f); e.target.value = ''; 
+    }
+
+    function showStats() { 
+        try { 
+            const list = db[currentLog]||[]; if(!list || list.length===0) { alert("Log vuoto!"); return; } 
+            let bands = {}, modes = {}; list.forEach(q => { if(q.band) bands[q.band] = (bands[q.band]||0)+1; if(q.mode) modes[q.mode] = (modes[q.mode]||0)+1; }); 
+            const draw = (o, t) => { let h = `<h4 style="margin-bottom:10px;">${t}</h4>`; const max = Math.max(...Object.values(o), 1); Object.keys(o).sort().forEach(k => { const p = (o[k]/max)*100; h += `<div class="bar-container"><div class="bar-label"><span>${k}</span><span>${o[k]}</span></div><div class="bar-bg"><div class="bar-fill" style="width:${p}%"></div></div></div>`; }); return h; }; 
+            document.getElementById('statsBody').innerHTML = draw(bands, "Bande") + "<br>" + draw(modes, "Modi"); document.getElementById('statsModal').style.display = 'flex'; 
+        } catch(e) { alert("Err Stats"); } 
+    }
+
+    function initImageDB() { if(!window.indexedDB) return; const req = indexedDB.open(IMAGE_DB_NAME, 1); req.onupgradeneeded = function(e) { if(!e.target.result.objectStoreNames.contains(IMAGE_STORE_NAME)) e.target.result.createObjectStore(IMAGE_STORE_NAME, { keyPath: "id" }); }; req.onsuccess = function(e) { imageDB = e.target.result; }; }
+    
+    function savePhotoToDBPromise(id, finalBlob, originalBlob = null) {
+        return new Promise((resolve, reject) => {
+            if(!imageDB) { reject("Database Immagini non pronto"); return; }
+            const tx = imageDB.transaction([IMAGE_STORE_NAME], "readwrite");
+            const store = tx.objectStore(IMAGE_STORE_NAME);
+            const req = store.put({ id: id, image: finalBlob, original: originalBlob });
+            req.onsuccess = () => resolve(); req.onerror = (e) => reject("Errore DB: " + e.target.error);
+        });
+    }
+
+    function getPhotoFromDBPromise(id) {
+        return new Promise((resolve) => {
+            if (!imageDB) return resolve(null);
+            const tx = imageDB.transaction([IMAGE_STORE_NAME], "readonly");
+            const req = tx.objectStore(IMAGE_STORE_NAME).get(id);
+            req.onsuccess = () => resolve(req.result ? req.result.image : null);
+            req.onerror = () => resolve(null);
+        });
+    }
+
+    function getOriginalPhotoFromDBPromise(id) {
+        return new Promise((resolve) => {
+            if (!imageDB) return resolve(null);
+            const tx = imageDB.transaction([IMAGE_STORE_NAME], "readonly");
+            const req = tx.objectStore(IMAGE_STORE_NAME).get(id);
+            req.onsuccess = () => { if(req.result) resolve(req.result.original || req.result.image); else resolve(null); }
+            req.onerror = () => resolve(null);
+        });
+    }
+
+    function deletePhotoFromDB(id) { if(imageDB){ const tx=imageDB.transaction([IMAGE_STORE_NAME],"readwrite"); tx.objectStore(IMAGE_STORE_NAME).delete(id); } }
+    function blobToBase64(blob) { return new Promise((resolve) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); }); }
+    function base64ToBlob(base64) { const arr = base64.split(','), mime = arr[0].match(/:(.*?);/)[1]; const bstr = atob(arr[1]); let n = bstr.length; const u8arr = new Uint8Array(n); while(n--){ u8arr[n] = bstr.charCodeAt(n); } return new Blob([u8arr], {type:mime}); }
+    
+    async function downloadFullBackup() { showToast("Backup..."); const exDB = JSON.parse(JSON.stringify(db)); let tp = 0; for (let l in exDB) { for (let q of exDB[l]) { if (q.hasPhoto && q.photoId) { let b = await getPhotoFromDBPromise(q.photoId); if (b) { q.photoData = await blobToBase64(b); tp++; } } } } const fb = { db: exDB, meta: logMeta }; const b = new Blob([JSON.stringify(fb)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `FullBackup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast("Backup OK: "+tp+" foto"); }
+    async function restoreFullBackup() { const f = document.getElementById('backupInput').files[0]; if(!f) return; if(!confirm("Sovrascrivere tutto?")) return; const r = new FileReader(); r.onload = async function(e) { try { const d = JSON.parse(e.target.result); let iDB = d.db || d; logMeta = d.meta || {}; db = {}; let pc = 0; for (let l in iDB) { if(!db[l]) db[l] = []; for (let q of iDB[l]) { if (q.photoData) { savePhotoToDBPromise(q.photoId, base64ToBlob(q.photoData)); delete q.photoData; pc++; } db[l].push(q); } } if(!db["GENERALE"]) db["GENERALE"] = []; saveDB(); saveMeta(); renderUI(); alert("Ripristino OK. Foto: "+pc); } catch(err) { alert("Err File"); } }; r.readAsText(f); }
+    
+    function loadPhotoFromDB(id) { 
+        if(!imageDB) { alert("Database immagini non pronto o errore caricamento."); return; }
+        const tx=imageDB.transaction([IMAGE_STORE_NAME],"readonly"); 
+        const req=tx.objectStore(IMAGE_STORE_NAME).get(id); 
+        req.onsuccess=function(){ 
+            if(req.result){ 
+                currentViewBlob = req.result.image;
+                const url=URL.createObjectURL(req.result.image); 
+                document.getElementById('mediaContentContainer').innerHTML=`<img src="${url}">`; 
+                document.getElementById('mediaModal').style.display='flex'; 
+            } else alert("Immagine non trovata nel database."); 
+        }; 
+        req.onerror = function(e) { alert("Errore lettura DB Immagini: " + e.target.error); };
+    }
+    
+    function closeMedia() { document.getElementById('mediaModal').style.display = 'none'; currentViewBlob = null; }
+    
+    function shareCurrentImage() {
+        if(!currentViewBlob) return;
+        const file = new File([currentViewBlob], "qsl_card.jpg", { type: "image/jpeg" });
+        if (navigator.share) { navigator.share({ title: 'La mia QSL', text: 'Ecco la QSL del nostro collegamento!', files: [file] }).catch(console.error); } 
+        else { alert("Condivisione non supportata. Usa 'Scarica QSL'."); }
+    }
+
+    function downloadCurrentImage() {
+        if(!currentViewBlob) return;
+        const url = URL.createObjectURL(currentViewBlob);
+        const a = document.createElement('a'); a.href = url; a.download = "qsl_card_" + Date.now() + ".jpg";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+
+    function showMap() { document.getElementById('mapModal').style.display = 'flex'; if(!map) { map = L.map('mapContainer').setView([20, 0], 2); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map); } else { setTimeout(function(){ map.invalidateSize(); }, 200); } map.eachLayer((layer) => { if(layer instanceof L.Marker) map.removeLayer(layer); }); const list = db[currentLog] || []; let count = 0; list.forEach(q => { if(q.gridsquare && q.gridsquare.length >= 4) { try { const c = loc2latlon(q.gridsquare); L.marker([c.lat, c.lon]).addTo(map).bindPopup(`<b>${q.call}</b><br>${q.band} ${q.mode}<br>${q.date}`); count++; } catch(e) {} } }); if(count===0) alert("Nessun Locator."); }
+    function loc2latlon(loc) { loc = loc.toUpperCase(); let lon = (loc.charCodeAt(0)-65)*20 + (loc.charCodeAt(2)-48)*2; let lat = (loc.charCodeAt(1)-65)*10 + (loc.charCodeAt(3)-48); if(loc.length >= 6) { lon += (loc.charCodeAt(4)-65)/12 + 1/24; lat += (loc.charCodeAt(5)-65)/24 + 1/48; } else { lon+=1; lat+=0.5; } return {lat: lat-90, lon: lon-180}; }
+    function openQRZ() { const c=document.getElementById('call').value.trim(); if(c) window.open('https://www.qrz.com/db/'+c,'_blank'); else alert("Manca Call!"); }
+    function toggleSolar() { const p=document.getElementById('solarContent'); p.style.display=(p.style.display==='block')?'none':'block'; }
+    function initTheme() { const theme=localStorage.getItem('theme')||'light'; document.documentElement.setAttribute('data-theme', theme); }
+    function toggleTheme() { const curr=document.documentElement.getAttribute('data-theme'); const next=(curr==='dark')?'light':'dark'; document.documentElement.setAttribute('data-theme',next); localStorage.setItem('theme',next); }
+    function syncRST() { const m=document.getElementById('mode').value; const v=(m==="CW"||m==="RTTY")?"599":"59"; document.getElementById('rstS').value=v; document.getElementById('rstR').value=v; }
+    function checkDupe() { const c = document.getElementById('call').value.trim().toUpperCase(); const alert = document.getElementById('dupeAlert'); if(c.length < 3) { alert.innerText=""; return; } const matches = (db[currentLog]||[]).filter(q => q.call === c); if(matches.length > 0) { alert.innerText=`⚠️ GIÀ COLLEGATO`; alert.style.color="var(--dupe-old)"; } else { alert.innerText="✨ NEW ONE"; alert.style.color="var(--dupe-new)"; } }
+    function calcQRB() { const my = document.getElementById('myLocator').value.toUpperCase(); const dx = document.getElementById('gridsquare').value.toUpperCase(); const out = document.getElementById('qrbCalc'); if(my.length < 4 || dx.length < 4) { out.innerText=""; return; } try { const p1=loc2latlon(my), p2=loc2latlon(dx); const R=6371; const dLat=(p2.lat-p1.lat)*Math.PI/180; const dLon=(p2.lon-p1.lon)*Math.PI/180; const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(p1.lat*Math.PI/180)*Math.cos(p2.lat*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); const dist=Math.round(R*c); const y=Math.sin(dLon)*Math.cos(p2.lat*Math.PI/180); const x=Math.cos(p1.lat*Math.PI/180)*Math.sin(p2.lat*Math.PI/180)-Math.sin(p1.lat*Math.PI/180)*Math.cos(p2.lat*Math.PI/180)*Math.cos(dLon); const brg=Math.round((Math.atan2(y,x)*180/Math.PI+360)%360); out.innerText = `📡 QRB: ${dist} km | AZ: ${brg}°`; } catch(e) { out.innerText = "Err Loc"; } }
+    
+    function resetForm() { 
+        ['freq','call','name','qth','gridsquare','note','theirRef','timeOn','timeOff'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+        document.getElementById('dupeAlert').innerText = ''; document.getElementById('qrbCalc').innerText = '';
+        tempOriginalBlob = null; loadedOriginalBlob = null; syncRST(); qsoStarted=false; initDate(); 
+        const c = document.getElementById('call'); if(c) c.focus(); 
+        loadDefaultTemplateBg(); syncLiveQsoData(); 
+    }
+
+    function loadEdit(i) { 
+        editIdx = i; const q = db[currentLog][i]; 
+        document.getElementById('date').value = q.date; document.getElementById('freq').value = q.freq||''; document.getElementById('timeOn').value = q.timeOn||q.time; document.getElementById('timeOff').value = q.timeOff||q.timeOn; document.getElementById('call').value = q.call; document.getElementById('name').value = q.name||""; document.getElementById('qth').value = q.qth||""; document.getElementById('band').value = q.band; document.getElementById('mode').value = q.mode; document.getElementById('rstS').value = q.rstS; document.getElementById('rstR').value = q.rstR; document.getElementById('gridsquare').value = q.gridsquare||""; document.getElementById('note').value = q.note||""; document.getElementById('myRef').value = q.myRef||""; document.getElementById('theirRef').value = q.theirRef||""; calcQRB(); 
+        
+        document.getElementById('saveBtn').innerText = "MODIFICA QSO E QSL"; document.getElementById('saveBtn').className = "btn-orange"; document.getElementById('cancelBtn').style.display = 'block'; 
+
+        tempOriginalBlob = null; loadedOriginalBlob = null;
+        if(q.hasPhoto && q.photoId) {
+            getOriginalPhotoFromDBPromise(q.photoId).then(blob => {
+                if(blob) { loadedOriginalBlob = blob; loadBlobToQSLEditor(URL.createObjectURL(blob)); } 
+                else { loadDefaultTemplateBg(); }
+            });
+        } else { loadDefaultTemplateBg(); }
+        syncLiveQsoData();
+    }
+    
+    function cancelEdit() { editIdx = -1; document.getElementById('saveBtn').innerText = "SALVA QSO E GENERA QSL"; document.getElementById('saveBtn').className = "btn-blue"; document.getElementById('cancelBtn').style.display = 'none'; resetForm(); clearDraft(); }
+    
+    function loadSnapshots() { snapshots = JSON.parse(localStorage.getItem(SNAPSHOT_KEY)) || []; }
+    function createSnapshot(reason) { if(!document.getElementById('autoSnapshotCheck').checked) return; const snap={id:Date.now(), time:new Date().toLocaleTimeString(), desc:reason, count:(db[currentLog]||[]).length, data:JSON.parse(JSON.stringify(db))}; snapshots.unshift(snap); if(snapshots.length>5) snapshots.pop(); localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(snapshots)); renderSnapshots(); }
+    function renderSnapshots() { const ul=document.getElementById('snapshotList'); ul.innerHTML=''; if(snapshots.length===0)ul.innerHTML='<li style="padding:5px;">Nessun backup.</li>'; snapshots.forEach(s => { ul.innerHTML += `<li class="snapshot-item"><span><b>${s.time}</b> ${s.desc} (${s.count})</span><div><button class="btn-cyan" style="padding:2px 6px;" onclick="restoreSnapshot(${s.id})">R</button><button class="btn-red" style="padding:2px 6px;" onclick="deleteSnapshot(${s.id})">X</button></div></li>`; }); }
+    function restoreSnapshot(id) { const s=snapshots.find(x=>x.id===id); if(s&&confirm(`Ripristinare backup delle ${s.time}?`)){db=JSON.parse(JSON.stringify(s.data));saveDB();renderUI();alert("Ripristinato!");}}
+    function deleteSnapshot(id) { snapshots=snapshots.filter(x=>x.id!==id); localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(snapshots)); renderSnapshots(); }
+    function clearAllSnapshots() { if(confirm("Cancellare tutto?")){snapshots=[];localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(snapshots));renderSnapshots();}}
+    function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+
+    function saveUserData() { 
+        const data = {
+            call:safeGetVal('myCall'), loc:safeGetVal('myLocator'), location:safeGetVal('myLocation'), xmasCall:safeGetVal('xmasCall'), xmasEmail:safeGetVal('xmasEmail'), persRef: safeGetVal('myRef'),
+            qslName: safeGetVal('qslName'), qslAddr: safeGetVal('qslAddr'), qslCity: safeGetVal('qslCity'), qslCountry: safeGetVal('qslCountry')
+        };
+        localStorage.setItem(USER_DATA_KEY, JSON.stringify(data)); 
+    }
+
+    function loadUserData() { 
+        const d=JSON.parse(localStorage.getItem(USER_DATA_KEY)); 
+        if(d){ 
+            const s=id=>document.getElementById(id);
+            if(s('myCall')) s('myCall').value=d.call||""; if(s('myLocator')) s('myLocator').value=d.loc||""; if(s('myLocation')) s('myLocation').value=d.location||""; if(s('xmasCall')) s('xmasCall').value=d.xmasCall||""; if(s('xmasEmail')) s('xmasEmail').value=d.xmasEmail||""; if(s('myRef')) s('myRef').value=d.persRef||""; 
+            if(s('qslName')) s('qslName').value=d.qslName||""; if(s('qslAddr')) s('qslAddr').value=d.qslAddr||""; if(s('qslCity')) s('qslCity').value=d.qslCity||""; if(s('qslCountry')) s('qslCountry').value=d.qslCountry||"";
+        } 
+    }
+
+    function saveConfigState() { localStorage.setItem(CONFIG_KEY, JSON.stringify({snap:document.getElementById('autoSnapshotCheck').checked})); }
+    function loadConfigState() { const d=JSON.parse(localStorage.getItem(CONFIG_KEY)); if(d) document.getElementById('autoSnapshotCheck').checked=d.snap; }
+    function saveDraft() { if(editIdx===-1) localStorage.setItem(DRAFT_KEY, JSON.stringify({call:document.getElementById('call').value, freq:document.getElementById('freq').value, band:document.getElementById('band').value, mode:document.getElementById('mode').value})); }
+    function loadDraft() { const d=JSON.parse(localStorage.getItem(DRAFT_KEY)); if(d && editIdx===-1) { document.getElementById('call').value=d.call||""; document.getElementById('freq').value=d.freq||""; } }
+    function clearDraft() { localStorage.removeItem(DRAFT_KEY); }
+    function toggleCreate() { const a=document.getElementById('createLogArea'); a.style.display=(a.style.display==='block')?'none':'block'; }
+    function doSearch() { const v=document.getElementById('searchInput').value.trim().toUpperCase(); if(v) { activeSearch=v; currentPage=1; renderUI(); showToast("Filtro: "+v); } }
+    function resetSearch() { activeSearch=null; document.getElementById('searchInput').value=''; renderUI(); showToast("Filtro Reset"); }
+    function changeRows(v) { rowsPerPage=parseInt(v); currentPage=1; renderUI(); }
+    function changePage(d) { currentPage+=d; renderUI(); }
+    function sortBy(c) { if(currentSort.col===c) currentSort.asc=!currentSort.asc; else { currentSort.col=c; currentSort.asc=true; } renderUI(); }
+    function uploadXmasLog() { alert("Funzione di upload natalizia (placeholder) invocata."); }
+
+    function printQSLImage() {
+        if (!currentViewBlob) return alert("Nessuna immagine!");
+        const url = URL.createObjectURL(currentViewBlob);
+        const win = window.open('', '_blank');
+        win.document.write(`<html><head><title>Stampa QSL</title><style>body { margin:0; display:flex; justify-content:center; align-items:center; height:100vh; } img { width: 15cm; height: 10.5cm; object-fit: contain; } @media print { @page { size: 150mm 105mm; margin: 0; } body { margin: 0; } img { width: 150mm; height: 105mm; } }</style></head><body><img src="${url}" onload="window.print(); window.close();"></body></html>`);
+        win.document.close();
+    }
+
+    // =========================================================
+    // --- FUNZIONI QSL TEMPLATE BUILDER LIVE
+    // =========================================================
+    
+    const qslElementsDef = [
+        { id: 'myCall', lbl: 'Tuo Call', defTxt: 'MY CALL', size: 80, x: 50, y: 100, b: true, i: false, col: '#ffffff', fnt: 'Arial Black' },
+        { id: 'myLoc', lbl: 'Tuo Locator', defTxt: 'GRID: JN00AA', size: 35, x: 50, y: 150, b: true, i: false, col: '#ffffff', fnt: 'Arial' },
+        { id: 'myName', lbl: 'Nome', defTxt: 'Mario Rossi', size: 35, x: 50, y: 200, b: true, i: false, col: '#ffffff', fnt: 'Arial' },
+        { id: 'myAddr', lbl: 'Indirizzo', defTxt: 'Via Roma 10', size: 35, x: 50, y: 250, b: true, i: false, col: '#ffffff', fnt: 'Arial' },
+        { id: 'myCity', lbl: 'Città/CAP', defTxt: '00100 Roma', size: 35, x: 50, y: 300, b: true, i: false, col: '#ffffff', fnt: 'Arial' },
+        { id: 'myCountry', lbl: 'Nazione', defTxt: 'ITALY', size: 35, x: 50, y: 350, b: true, i: false, col: '#ffffff', fnt: 'Arial' },
+        { id: 'confirm', lbl: 'Dicitura Conf.', defTxt: 'CONFIRMING QSO WITH:', size: 35, x: 50, y: 780, b: true, i: false, col: '#f1c40f', fnt: 'Arial' },
+        { id: 'toCall', lbl: 'Call DX (Auto)', defTxt: 'CALL DX', size: 70, x: 50, y: 860, b: true, i: false, col: '#ffffff', fnt: 'Arial Black' },
+        { id: 'qsoData', lbl: 'Dati (Auto)', defTxt: '21/02/2026 | 10:00 UTC | 20M | SSB | RST 599', size: 40, x: 50, y: 930, b: true, i: false, col: '#ffffff', fnt: '"Courier New", monospace' },
+        { id: 'note', lbl: 'Nota', defTxt: 'Tnx for QSO!', size: 70, x: 50, y: 650, b: false, i: false, col: '#ffffff', fnt: '"Dancing Script", cursive' }
+    ];
+
+    const fonts = ['Arial', '"Arial Black", sans-serif', 'Verdana', '"Courier New", monospace', '"Dancing Script", cursive', '"Caveat", cursive', '"Times New Roman", serif'];
+
+    function syncGlobalToQsl() {
+        const setVal = (qslId, val, prefix="") => {
+            const el = document.getElementById(qslId);
+            if(el && val) el.value = prefix + val;
+        };
+        setVal('txt_qsl_myCall', safeGetVal('myCall'));
+        setVal('txt_qsl_myLoc', safeGetVal('myLocator'), "GRID: ");
+        setVal('txt_qsl_myName', safeGetVal('qslName'));
+        setVal('txt_qsl_myAddr', safeGetVal('qslAddr'));
+        setVal('txt_qsl_myCity', safeGetVal('qslCity'));
+        setVal('txt_qsl_myCountry', safeGetVal('qslCountry'));
+        renderQSL();
+    }
+
+    function initQSLEditorUI() {
+        qslCanvas = document.getElementById('qslCanvas'); qslCtx = qslCanvas.getContext('2d');
+        qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT;
+        const container = document.getElementById('qslFieldsContainer');
+
+        qslElementsDef.forEach(el => {
+            dragObjects[el.id] = { x: el.x, y: el.y, w: 0, h: el.size, size: el.size };
+            let fontOptions = fonts.map(f => {
+                let cleanName = f.split(',')[0].replace(/"/g,'');
+                if (f.includes('Dancing')) cleanName = 'Dancing Script (Mano)'; if (f.includes('Caveat')) cleanName = 'Caveat (Mano)';
+                return `<option value='${f}' ${f === el.fnt || f.includes(el.fnt) ? 'selected' : ''}>${cleanName}</option>`;
+            }).join('');
+            
+            let html = `<div class="qsl-field-row">
+                <input type="checkbox" id="chk_qsl_${el.id}" checked>
+                <input type="text" id="txt_qsl_${el.id}" placeholder="${el.lbl}" value="${el.defTxt}" ${el.id==='toCall'||el.id==='qsoData'?'title="Testo auto-generato dal QSO"':''}>
+                <input type="color" id="col_qsl_${el.id}" value="${el.col}" title="Colore">
+                <select id="fnt_qsl_${el.id}" title="Font">${fontOptions}</select>
+                <input type="number" id="sz_qsl_${el.id}" value="${el.size}" min="10" max="300" title="Dimensione">
+                <label class="style-chk" title="Grassetto"><input type="checkbox" id="b_qsl_${el.id}" ${el.b?'checked':''}>B</label>
+                <label class="style-chk" title="Corsivo"><input type="checkbox" id="i_qsl_${el.id}" ${el.i?'checked':''}>I</label>
+            </div>`;
+            container.insertAdjacentHTML('beforeend', html);
+        });
+
+        document.getElementById('qslFieldsContainer').addEventListener('input', renderQSL);
+        document.getElementById('fBright').addEventListener('input', renderQSL);
+        document.getElementById('fContrast').addEventListener('input', renderQSL);
+        document.getElementById('fEdgeBlur').addEventListener('input', renderQSL);
+        document.querySelectorAll('.bar-ctrl').forEach(ctrl => ctrl.addEventListener('input', renderQSL));
+        document.getElementById('c_logo').addEventListener('change', renderQSL);
+
+        document.getElementById('qslLocalLogoInput').onchange = function(e) {
+            const reader = new FileReader(); reader.onload = (f) => { logoImg = new Image(); logoImg.onload = renderQSL; logoImg.src = f.target.result; document.getElementById('c_logo').checked = true; };
+            if(e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+        };
+
+        qslCanvas.addEventListener('mousedown', qslMouseDown); window.addEventListener('mousemove', qslMouseMove); window.addEventListener('mouseup', qslMouseUp);
+        qslCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); qslCanvas.dispatchEvent(new MouseEvent('mousedown', {clientX: e.touches[0].clientX, clientY: e.touches[0].clientY})); }, {passive: false});
+        qslCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); window.dispatchEvent(new MouseEvent('mousemove', {clientX: e.touches[0].clientX, clientY: e.touches[0].clientY})); }, {passive: false});
+        qslCanvas.addEventListener('touchend', (e) => { e.preventDefault(); window.dispatchEvent(new MouseEvent('mouseup')); }, {passive: false});
+    }
+
+    function syncLiveQsoData() {
+        const call = safeGetVal('call').toUpperCase() || "CALL DX";
+        const date = safeGetVal('date') || "DATA";
+        const time = safeGetVal('timeOn') || "ORA";
+        const toff = safeGetVal('timeOff');
+        const band = safeGetVal('band') || "BANDA";
+        const mode = safeGetVal('mode') || "MODO";
+        const rst = safeGetVal('rstS') || "599";
+        const freq = safeGetVal('freq');
+
+        let tf = (toff && toff !== time) ? `-${toff}` : "";
+        let fr = freq ? ` (${freq})` : "";
+        let qsoDataStr = `${date} | ${time}${tf} UTC | ${band}${fr} | ${mode} | RST: ${rst}`;
+
+        const toCallEl = document.getElementById('txt_qsl_toCall');
+        if(toCallEl) toCallEl.value = call;
+        const qsoDataEl = document.getElementById('txt_qsl_qsoData');
+        if(qsoDataEl) qsoDataEl.value = qsoDataStr;
+
+        renderQSL();
+    }
+
+    function loadDefaultTemplateBg() {
+        let raw = localStorage.getItem(QSL_TEMPLATE_META);
+        if(raw) {
+            let t = JSON.parse(raw);
+            if(t.bg) {
+                let img = new Image();
+                img.onload = () => { currentCroppedImg = img; originalImg = img; renderQSL(); };
+                img.src = t.bg;
+                return;
+            }
+        }
+        clearQSLEditorCanvas();
+    }
+
+    function loadBlobToQSLEditor(dataUrl) {
+        originalImg = new Image();
+        originalImg.onload = () => {
+            let tr = QSL_WIDTH / QSL_HEIGHT; let sr = originalImg.width / originalImg.height;
+            let sx = 0, sy = 0, sw = originalImg.width, sh = originalImg.height;
+            if (sr > tr) { sw = originalImg.height * tr; sx = (originalImg.width - sw) / 2; } 
+            else { sh = originalImg.width / tr; sy = (originalImg.height - sh) / 2; }
+            const tempC = document.createElement('canvas'); tempC.width = QSL_WIDTH; tempC.height = QSL_HEIGHT;
+            tempC.getContext('2d').drawImage(originalImg, sx, sy, sw, sh, 0, 0, QSL_WIDTH, QSL_HEIGHT);
+            croppedImg = new Image();
+            croppedImg.onload = () => {
+                currentCroppedImg = croppedImg; qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT;
+                cropMode = false; cropBox = null; document.getElementById('btnCropMode').style.display = "block"; document.getElementById('btnCropMode').style.background = "#e67e22"; document.getElementById('btnCropMode').textContent = "✂️ RI-TAGLIA FOTO"; document.getElementById('btnConfirmCrop').style.display = "none";
+                qslCanvas.style.cursor = "move"; renderQSL();
+            };
+            croppedImg.src = tempC.toDataURL('image/jpeg', 0.95);
+        };
+        originalImg.src = dataUrl;
+    }
+
+    function clearQSLEditorCanvas() {
+        originalImg = null; croppedImg = null; currentCroppedImg = null;
+        qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT;
+        document.getElementById('btnCropMode').style.display = "none";
+        renderQSL();
+    }
+
+    function hexToRgba(hex, opacity) { let r = parseInt(hex.substring(1, 3), 16), g = parseInt(hex.substring(3, 5), 16), b = parseInt(hex.substring(5, 7), 16); return `rgba(${r}, ${g}, ${b}, ${opacity / 100})`; }
+
+    function renderQSL() {
+        if (!qslCtx) return;
+        const w = qslCanvas.width; const h = qslCanvas.height; const isCropped = (w === QSL_WIDTH);
+        qslCtx.clearRect(0, 0, w, h);
+        
+        if (currentCroppedImg && isCropped) {
+            qslCtx.filter = `brightness(${document.getElementById('fBright').value}%) contrast(${document.getElementById('fContrast').value}%)`;
+            qslCtx.drawImage(currentCroppedImg, 0, 0, w, h); qslCtx.filter = "none";
+            let blur = document.getElementById('fEdgeBlur').value;
+            if (blur > 0) {
+                const offCanvas = document.createElement('canvas'); offCanvas.width = w; offCanvas.height = h; const oCtx = offCanvas.getContext('2d');
+                oCtx.filter = `blur(${blur}px) brightness(${document.getElementById('fBright').value}%) contrast(${document.getElementById('fContrast').value}%)`;
+                oCtx.drawImage(currentCroppedImg, 0, 0, w, h); oCtx.filter = 'none'; oCtx.globalCompositeOperation = 'destination-in';
+                const cx = w / 2, cy = h / 2, r = Math.max(cx, cy) * 1.2; const grad = oCtx.createRadialGradient(cx, cy, r * 0.3, cx, cy, r);
+                grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,1)');
+                oCtx.fillStyle = grad; oCtx.fillRect(0, 0, w, h); qslCtx.drawImage(offCanvas, 0, 0);
+            }
+        } else if (originalImg && cropMode) {
+            qslCtx.drawImage(originalImg, 0, 0, w, h);
+        } else {
+            qslCtx.fillStyle = "#34495e"; qslCtx.fillRect(0,0,w,h);
+        }
+
+        if (!isCropped) {
+            if (cropMode && cropBox) {
+                qslCtx.fillStyle = "rgba(0,0,0,0.6)";
+                qslCtx.fillRect(0, 0, w, cropBox.y); qslCtx.fillRect(0, cropBox.y + cropBox.h, w, h - (cropBox.y + cropBox.h));
+                qslCtx.fillRect(0, cropBox.y, cropBox.x, cropBox.h); qslCtx.fillRect(cropBox.x + cropBox.w, cropBox.y, w - (cropBox.x + cropBox.w), cropBox.h);
+                
+                if (document.getElementById('c_topBar').checked) {
+                    let colorHex = document.getElementById('col_topBar').value; let opacity = document.getElementById('op_topBar').value; let percent = document.getElementById('h_topBar').value / 100;
+                    qslCtx.fillStyle = hexToRgba(colorHex, opacity); qslCtx.fillRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h * percent);
+                }
+                if (document.getElementById('c_bottomBar').checked) {
+                    let colorHex = document.getElementById('col_bottomBar').value; let opacity = document.getElementById('op_bottomBar').value; let percent = document.getElementById('h_bottomBar').value / 100;
+                    qslCtx.fillStyle = hexToRgba(colorHex, opacity); qslCtx.fillRect(cropBox.x, cropBox.y + cropBox.h - (cropBox.h * percent), cropBox.w, cropBox.h * percent);
+                }
+
+                qslCtx.strokeStyle = "#e74c3c"; qslCtx.lineWidth = 4; qslCtx.strokeRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
+                qslCtx.fillStyle = "#3498db"; 
+                // Grandezza quadratini dinamica e robusta
+                let drawHs = Math.max(20, w * 0.02); 
+                qslCtx.fillRect(cropBox.x - drawHs/2, cropBox.y - drawHs/2, drawHs, drawHs); 
+                qslCtx.fillRect(cropBox.x + cropBox.w - drawHs/2, cropBox.y - drawHs/2, drawHs, drawHs); 
+                qslCtx.fillRect(cropBox.x - drawHs/2, cropBox.y + cropBox.h - drawHs/2, drawHs, drawHs); 
+                qslCtx.fillRect(cropBox.x + cropBox.w - drawHs/2, cropBox.y + cropBox.h - drawHs/2, drawHs, drawHs); 
+            }
+            return; 
+        }
+
+        if (document.getElementById('c_topBar').checked) { qslCtx.fillStyle = hexToRgba(document.getElementById('col_topBar').value, document.getElementById('op_topBar').value); qslCtx.fillRect(0, 0, w, h * (document.getElementById('h_topBar').value / 100)); }
+        if (document.getElementById('c_bottomBar').checked) { let pct = document.getElementById('h_bottomBar').value / 100; qslCtx.fillStyle = hexToRgba(document.getElementById('col_bottomBar').value, document.getElementById('op_bottomBar').value); qslCtx.fillRect(0, h - (h * pct), w, h * pct); }
+
+        qslElementsDef.forEach(el => {
+            if (!document.getElementById(`chk_qsl_${el.id}`).checked) return;
+            let text = document.getElementById(`txt_qsl_${el.id}`).value; if (!text) return;
+            let obj = dragObjects[el.id]; let size = parseInt(document.getElementById(`sz_qsl_${el.id}`).value) || 30; obj.size = size; obj.h = size;
+            let isItalic = document.getElementById(`i_qsl_${el.id}`).checked; let isBold = document.getElementById(`b_qsl_${el.id}`).checked;
+            qslCtx.font = `${isItalic ? 'italic ' : ''}${isBold ? 'bold ' : ''}${size}px ${document.getElementById(`fnt_qsl_${el.id}`).value}`;
+            qslCtx.textAlign = "left"; qslCtx.fillStyle = document.getElementById(`col_qsl_${el.id}`).value;
+            qslCtx.strokeStyle = "rgba(0,0,0,0.8)"; qslCtx.lineWidth = size * 0.12; qslCtx.lineJoin = "round";
+            qslCtx.strokeText(text, obj.x, obj.y); qslCtx.fillText(text, obj.x, obj.y);
+            obj.w = qslCtx.measureText(text).width;
+        });
+
+        if (logoImg && document.getElementById('c_logo').checked) { qslCtx.shadowColor = "black"; qslCtx.shadowBlur = 10; qslCtx.drawImage(logoImg, logoObj.x, logoObj.y, logoObj.w, logoObj.h); qslCtx.shadowBlur = 0; }
+    }
+
+    function getQslPos(e) { 
+        const rect = qslCanvas.getBoundingClientRect(); 
+        const canvasAspect = qslCanvas.width / qslCanvas.height;
+        const rectAspect = rect.width / rect.height;
+        
+        let renderWidth = rect.width;
+        let renderHeight = rect.height;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (canvasAspect > rectAspect) {
+            renderHeight = rect.width / canvasAspect;
+            offsetY = (rect.height - renderHeight) / 2;
+        } else {
+            renderWidth = rect.height * canvasAspect;
+            offsetX = (rect.width - renderWidth) / 2;
+        }
+
+        const scaleX = qslCanvas.width / renderWidth;
+        const scaleY = qslCanvas.height / renderHeight;
+        
+        const cx = e.touches ? e.touches[0].clientX : e.clientX; 
+        const cy = e.touches ? e.touches[0].clientY : e.clientY; 
+        
+        return { 
+            x: (cx - rect.left - offsetX) * scaleX, 
+            y: (cy - rect.top - offsetY) * scaleY 
+        }; 
+    }
+    
+    function isQslHit(pos, tx, ty) { 
+        let hs = Math.max(40, qslCanvas.width * 0.04); 
+        return Math.abs(pos.x - tx) < hs && Math.abs(pos.y - ty) < hs; 
+    }
+
+    document.getElementById('btnCropMode').onclick = () => {
+        if (!originalImg) return alert("Carica prima una foto!"); cropMode = !cropMode;
+        if (cropMode) {
+            qslCanvas.width = originalImg.width; qslCanvas.height = originalImg.height; 
+            let tw = qslCanvas.width * 0.8; let th = tw / 1.5; if (th > qslCanvas.height * 0.8) { th = qslCanvas.height * 0.8; tw = th * 1.5; }
+            cropBox = { x: (qslCanvas.width - tw)/2, y: (qslCanvas.height - th)/2, w: tw, h: th };
+            document.getElementById('btnConfirmCrop').style.display = "block"; document.getElementById('btnCropMode').style.background = "red";
+            document.getElementById('btnCropMode').textContent = "❌ ANNULLA RITAGLIO";
+            qslCanvas.style.cursor = "crosshair";
+        } else {
+            qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT;
+            document.getElementById('btnCropMode').style.background = "#e67e22"; document.getElementById('btnCropMode').textContent = "✂️ RI-TAGLIA FOTO";
+            document.getElementById('btnConfirmCrop').style.display = "none";
+            qslCanvas.style.cursor = "move";
+        }
+        renderQSL();
+    };
+
+    function qslMouseDown(e) {
+        if(e.target === qslCanvas) e.preventDefault(); 
+        
+        if (document.getElementById('qslLiveBox').style.display === 'none') return;
+        const pos = getQslPos(e);
+        
+        if (cropMode && cropBox) {
+            if (isQslHit(pos, cropBox.x, cropBox.y)) cropAction = 'nw'; 
+            else if (isQslHit(pos, cropBox.x + cropBox.w, cropBox.y)) cropAction = 'ne'; 
+            else if (isQslHit(pos, cropBox.x, cropBox.y + cropBox.h)) cropAction = 'sw'; 
+            else if (isQslHit(pos, cropBox.x + cropBox.w, cropBox.y + cropBox.h)) cropAction = 'se';
+            else if (pos.x > cropBox.x && pos.x < cropBox.x + cropBox.w && pos.y > cropBox.y && pos.y < cropBox.y + cropBox.h) { 
+                cropAction = 'move'; offset = { x: pos.x - cropBox.x, y: pos.y - cropBox.y }; 
+            } else { cropAction = 'new'; cropStartPos = pos; }
+        } else if (!cropMode && qslCanvas.width === QSL_WIDTH) {
+            
+            let p = 0; 
+            
+            if (document.getElementById('c_logo').checked && logoImg) {
+                if (pos.x >= logoObj.x - p && pos.x <= logoObj.x + logoObj.w + p && pos.y >= logoObj.y - p && pos.y <= logoObj.y + logoObj.h + p) { 
+                    draggingElement = logoObj; offset = { x: pos.x - logoObj.x, y: pos.y - logoObj.y }; 
+                    qslCanvas.style.cursor = 'grabbing'; return; 
+                }
+            }
+            
+            for (let i = qslElementsDef.length - 1; i >= 0; i--) {
+                let id = qslElementsDef[i].id; 
+                if (!document.getElementById(`chk_qsl_${id}`).checked) continue; 
+                let obj = dragObjects[id];
+                if (obj.w === 0) continue;
+
+                let top = obj.y - obj.h; let bottom = obj.y + (obj.h * 0.3); let left = obj.x; let right = obj.x + obj.w;
+                if (pos.x >= left - p && pos.x <= right + p && pos.y >= top - p && pos.y <= bottom + p) { 
+                    draggingElement = obj; offset = { x: pos.x - obj.x, y: pos.y - obj.y }; 
+                    qslCanvas.style.cursor = 'grabbing'; return; 
+                }
+            }
+        }
+    }
+
+    function qslMouseMove(e) {
+        if (document.getElementById('qslLiveBox').style.display === 'none') return;
+        const pos = getQslPos(e);
+        
+        if (cropMode && cropAction) {
+            if (cropAction === 'new') { let w = pos.x - cropStartPos.x, h = w / 1.5; cropBox = { x: w > 0 ? cropStartPos.x : pos.x, y: h > 0 ? cropStartPos.y : cropStartPos.y + h, w: Math.abs(w), h: Math.abs(h) }; } 
+            else if (cropAction === 'move') { cropBox.x = pos.x - offset.x; cropBox.y = pos.y - offset.y; } 
+            else {
+                if (cropAction === 'se') { cropBox.w = pos.x - cropBox.x; cropBox.h = cropBox.w / 1.5; } 
+                else if (cropAction === 'ne') { cropBox.w = pos.x - cropBox.x; let oY = cropBox.y + cropBox.h; cropBox.h = cropBox.w / 1.5; cropBox.y = oY - cropBox.h; } 
+                else if (cropAction === 'sw') { cropBox.w = cropBox.x + cropBox.w - pos.x; cropBox.x = pos.x; cropBox.h = cropBox.w / 1.5; } 
+                else if (cropAction === 'nw') { let mW = cropBox.x + cropBox.w, mB = cropBox.y + cropBox.h; cropBox.w = mW - pos.x; cropBox.x = pos.x; cropBox.h = cropBox.w / 1.5; cropBox.y = mB - cropBox.h; }
+                if(cropBox.w < 50) { cropBox.w = 50; cropBox.h = 50/1.5; }
+            }
+            renderQSL(); return;
+        } else if (draggingElement) { 
+            draggingElement.x = pos.x - offset.x; draggingElement.y = pos.y - offset.y; 
+            renderQSL(); return; 
+        }
+
+        if (e.target === qslCanvas) {
+            if (cropMode && cropBox) {
+                if (isQslHit(pos, cropBox.x, cropBox.y) || isQslHit(pos, cropBox.x + cropBox.w, cropBox.y + cropBox.h)) qslCanvas.style.cursor = 'nwse-resize';
+                else if (isQslHit(pos, cropBox.x + cropBox.w, cropBox.y) || isQslHit(pos, cropBox.x, cropBox.y + cropBox.h)) qslCanvas.style.cursor = 'nesw-resize';
+                else if (pos.x > cropBox.x && pos.x < cropBox.x + cropBox.w && pos.y > cropBox.y && pos.y < cropBox.y + cropBox.h) qslCanvas.style.cursor = 'move';
+                else qslCanvas.style.cursor = 'crosshair';
+            } else if (!cropMode && qslCanvas.width === QSL_WIDTH) {
+                let isHovering = false;
+                let p = 0; 
+                
+                if (document.getElementById('c_logo').checked && logoImg) {
+                    if (pos.x >= logoObj.x - p && pos.x <= logoObj.x + logoObj.w + p && pos.y >= logoObj.y - p && pos.y <= logoObj.y + logoObj.h + p) { isHovering = true; }
+                }
+                
+                if (!isHovering) {
+                    for (let i = qslElementsDef.length - 1; i >= 0; i--) {
+                        let id = qslElementsDef[i].id; 
+                        if (!document.getElementById(`chk_qsl_${id}`).checked) continue; 
+                        let obj = dragObjects[id];
+                        if (obj.w === 0) continue;
+                        
+                        let top = obj.y - obj.h; let bottom = obj.y + (obj.h * 0.3); let left = obj.x; let right = obj.x + obj.w;
+                        if (pos.x >= left - p && pos.x <= right + p && pos.y >= top - p && pos.y <= bottom + p) { isHovering = true; break; }
+                    }
+                }
+                qslCanvas.style.cursor = isHovering ? 'pointer' : 'default';
+            }
+        }
+    }
+
+    function qslMouseUp() { cropAction = null; draggingElement = null; if(qslCanvas && !cropMode) qslCanvas.style.cursor = 'default'; }
+    
+    // NUOVA FUNZIONE RITAGLIO ANTI-CRASH
+    function applyCrop() { 
+        try {
+            if (!cropBox) {
+                alert("Seleziona prima l'area da ritagliare trascinando i quadratini blu.");
+                return;
+            }
+            if (cropBox.w < 50 || cropBox.h < 50) {
+                alert("L'area di ritaglio selezionata è troppo piccola!");
+                return;
+            }
+            
+            document.getElementById('btnConfirmCrop').innerText = "⏳ ELABORAZIONE IN CORSO...";
+            document.getElementById('btnConfirmCrop').disabled = true;
+            
+            // Timeout brevissimo per permettere al browser di aggiornare la UI col testo "ELABORAZIONE"
+            setTimeout(() => {
+                generateQSLCrop(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
+            }, 50);
+        } catch(e) {
+            alert("Errore nel comando di ritaglio: " + e.message);
+            document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA";
+            document.getElementById('btnConfirmCrop').disabled = false;
+        }
+    }
+    
+    function generateQSLCrop(sx, sy, sw, sh) {
+        try {
+            const tempCanvas = document.createElement('canvas'); 
+            tempCanvas.width = QSL_WIDTH; 
+            tempCanvas.height = QSL_HEIGHT;
+            
+            // Matematica difensiva: impedisce al ritaglio di andare fuori dai bordi dell'immagine originale!
+            sx = Math.max(0, sx);
+            sy = Math.max(0, sy);
+            sw = Math.min(originalImg.width - sx, sw);
+            sh = Math.min(originalImg.height - sy, sh);
+            
+            // Disegna il pezzo di immagine nel nuovo canvas virtuale
+            tempCanvas.getContext('2d').drawImage(originalImg, sx, sy, sw, sh, 0, 0, QSL_WIDTH, QSL_HEIGHT);
+            
+            // Converte il canvas in un'immagine Jpeg
+            let dataUrl = tempCanvas.toDataURL('image/jpeg', 0.95);
+            let newImg = new Image();
+            
+            newImg.onload = () => {
+                currentCroppedImg = newImg; 
+                qslCanvas.width = QSL_WIDTH; 
+                qslCanvas.height = QSL_HEIGHT;
+                
+                // Disattiva la modalità ritaglio
+                cropMode = false; 
+                cropBox = null; 
+                
+                // Aggiorna pulsanti interfaccia
+                const btnMode = document.getElementById('btnCropMode');
+                btnMode.style.display = "block"; 
+                btnMode.style.background = "#e67e22"; 
+                btnMode.textContent = "✂️ RI-TAGLIA FOTO"; 
+                
+                const btnConfirm = document.getElementById('btnConfirmCrop');
+                btnConfirm.style.display = "none";
+                btnConfirm.innerText = "✅ CONFERMA INQUADRATURA";
+                btnConfirm.disabled = false;
+                
+                qslCanvas.style.cursor = "default"; 
+                renderQSL();
+            };
+            
+            newImg.onerror = () => {
+                alert("Si è verificato un errore generando il file ritagliato.");
+                document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA";
+                document.getElementById('btnConfirmCrop').disabled = false;
+            };
+            
+            newImg.src = dataUrl;
+        } catch(e) {
+            alert("Errore interno durante il ritaglio: " + e.message);
+            document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA";
+            document.getElementById('btnConfirmCrop').disabled = false;
+        }
+    }
+
+    function getBase64Image(img) { const c = document.createElement("canvas"); c.width = img.width; c.height = img.height; c.getContext("2d").drawImage(img, 0, 0); return c.toDataURL("image/jpeg", 0.85); }
+
+    function saveQslTemplate() {
+        let t = { settings: {}, fields: {}, bg: null, logo: null, logoObj: logoObj };
+        t.settings = {
+            fBright: document.getElementById('fBright').value, fContrast: document.getElementById('fContrast').value, fEdgeBlur: document.getElementById('fEdgeBlur').value,
+            c_topBar: document.getElementById('c_topBar').checked, col_topBar: document.getElementById('col_topBar').value, h_topBar: document.getElementById('h_topBar').value, op_topBar: document.getElementById('op_topBar').value,
+            c_bottomBar: document.getElementById('c_bottomBar').checked, col_bottomBar: document.getElementById('col_bottomBar').value, h_bottomBar: document.getElementById('h_bottomBar').value, op_bottomBar: document.getElementById('op_bottomBar').value,
+            c_logo: document.getElementById('c_logo').checked
+        };
+        qslElementsDef.forEach(el => {
+            t.fields[el.id] = {
+                active: document.getElementById(`chk_qsl_${el.id}`).checked, text: document.getElementById(`txt_qsl_${el.id}`).value, col: document.getElementById(`col_qsl_${el.id}`).value,
+                fnt: document.getElementById(`fnt_qsl_${el.id}`).value, sz: document.getElementById(`sz_qsl_${el.id}`).value, b: document.getElementById(`b_qsl_${el.id}`).checked, i: document.getElementById(`i_qsl_${el.id}`).checked,
+                x: dragObjects[el.id].x, y: dragObjects[el.id].y
+            };
+        });
+        if (currentCroppedImg) t.bg = getBase64Image(currentCroppedImg);
+        if (logoImg) t.logo = getBase64Image(logoImg);
+        try { 
+            localStorage.setItem(QSL_TEMPLATE_META, JSON.stringify(t)); 
+            alert("✅ TEMPLATE SALVATO CON SUCCESSO!\n\nI colori, i font, le posizioni dei testi e l'immagine di sfondo (se presente) verranno caricati automaticamente come 'Sfondo Base' per ogni nuovo QSO."); 
+        } catch(e) { 
+            alert("Errore Salvataggio: L'immagine caricata come sfondo è troppo pesante. Riduci la risoluzione della foto prima di salvarla come Template."); 
+        }
+    }
+
+    function loadQslTemplate() {
+        let raw = localStorage.getItem(QSL_TEMPLATE_META); if(!raw) return;
+        try {
+            let t = JSON.parse(raw);
+            if(t.settings) {
+                document.getElementById('fBright').value = t.settings.fBright || 100; document.getElementById('fContrast').value = t.settings.fContrast || 100; document.getElementById('fEdgeBlur').value = t.settings.fEdgeBlur || 0;
+                document.getElementById('c_topBar').checked = t.settings.c_topBar; document.getElementById('col_topBar').value = t.settings.col_topBar; document.getElementById('h_topBar').value = t.settings.h_topBar; document.getElementById('op_topBar').value = t.settings.op_topBar;
+                document.getElementById('c_bottomBar').checked = t.settings.c_bottomBar; document.getElementById('col_bottomBar').value = t.settings.col_bottomBar; document.getElementById('h_bottomBar').value = t.settings.h_bottomBar; document.getElementById('op_bottomBar').value = t.settings.op_bottomBar;
+                document.getElementById('c_logo').checked = t.settings.c_logo;
+            }
+            if(t.fields) {
+                qslElementsDef.forEach(el => {
+                    let f = t.fields[el.id];
+                    if(f) {
+                        document.getElementById(`chk_qsl_${el.id}`).checked = f.active; document.getElementById(`col_qsl_${el.id}`).value = f.col;
+                        document.getElementById(`fnt_qsl_${el.id}`).value = f.fnt; document.getElementById(`sz_qsl_${el.id}`).value = f.sz; document.getElementById(`b_qsl_${el.id}`).checked = f.b; document.getElementById(`i_qsl_${el.id}`).checked = f.i;
+                        if(el.id !== 'toCall' && el.id !== 'qsoData') document.getElementById(`txt_qsl_${el.id}`).value = f.text;
+                        dragObjects[el.id].x = f.x; dragObjects[el.id].y = f.y;
+                    }
+                });
+            }
+            if(t.logoObj) logoObj = t.logoObj;
+            let promises = [];
+            if(t.bg && !originalImg) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { currentCroppedImg = img; originalImg = img; res(); }; img.src = t.bg; })); }
+            if(t.logo) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { logoImg = img; res(); }; img.src = t.logo; })); }
+            Promise.all(promises).then(() => renderQSL());
+        } catch(e) { console.error("Errore caricamento template", e); }
+    }
+
+</script>
+
+<!-- REGISTRAZIONE SERVICE WORKER (MOTORE OFFLINE) -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('App pronta per l\'uso offline!'))
+        .catch(err => console.error('Errore Service Worker:', err));
+    });
+  }
+</script>
+</body>
+</html>
