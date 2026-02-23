@@ -138,6 +138,16 @@
                 </div>
             </div>
 
+            <!-- NUOVO COMANDO: GRANDEZZA TESTO -->
+            <div class="setting-row">
+                <label>Grandezza Testo:</label>
+                <div class="stepper">
+                    <button id="btnTextMinus" class="step-btn">-</button>
+                    <span id="textVal">120%</span>
+                    <button id="btnTextPlus" class="step-btn">+</button>
+                </div>
+            </div>
+
             <hr style="border-color:#444; margin: 15px 0;">
 
             <div class="setting-row">
@@ -287,11 +297,12 @@
         let lastTouchY = 0;
         let isDragging = false, hasDragged = false; 
 
-        // Nuove variabili per le impostazioni e Lobo
+        // Variabili per le impostazioni
         let globalGridSize = 50;
         let globalGridSquareSize = 0.5;
         let globalPointScale = 0.1;
-        let isLobeVisible = false; // Stato visibilità Lobo 3D
+        let globalTextScale = 1.2; // NUOVA VARIABILE: Scala globale del testo (default 120%)
+        let isLobeVisible = false; 
         
         let colorA = 0xff4757;
         let colorB = 0x1e90ff;
@@ -375,7 +386,6 @@
 
             document.getElementById('btnGround').addEventListener('click', () => setAction('MENU_GROUND'));
             
-            // Toggle Lobo 3D
             document.getElementById('btnToggleLobe').addEventListener('click', () => {
                 isLobeVisible = !isLobeVisible;
                 document.getElementById('btnToggleLobe').style.opacity = isLobeVisible ? '1' : '0.7';
@@ -389,19 +399,16 @@
             document.getElementById('btnSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'block'; });
             document.getElementById('btnCloseSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'none'; });
 
-            // SISTEMA DI AGGIORNAMENTO FORZATO APP
             document.getElementById('btnForceUpdate').addEventListener('click', () => {
                 document.getElementById('btnForceUpdate').innerText = "Aggiornamento in corso...";
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.getRegistrations().then(function(registrations) {
                         for(let registration of registrations) {
-                            registration.unregister(); // Disinstalla il vecchio Service Worker
+                            registration.unregister();
                         }
-                        // Pulisce tutta la cache locale
                         caches.keys().then((keyList) => {
                             return Promise.all(keyList.map((key) => caches.delete(key)));
                         }).then(() => {
-                            // Ricarica la pagina forzatamente ignorando la cache
                             window.location.reload(true);
                         });
                     });
@@ -438,6 +445,20 @@
             });
             document.getElementById('btnPtPlus').addEventListener('click', () => {
                 if (globalPointScale < 0.3) { globalPointScale += 0.02; document.getElementById('ptVal').innerText = Math.round(globalPointScale * 1000) + '%'; }
+            });
+
+            // GESTIONE EVENTI PER IL NUOVO COMANDO TESTO
+            document.getElementById('btnTextMinus').addEventListener('click', () => {
+                if (globalTextScale > 0.5) { 
+                    globalTextScale -= 0.1; 
+                    document.getElementById('textVal').innerText = Math.round(globalTextScale * 100) + '%'; 
+                }
+            });
+            document.getElementById('btnTextPlus').addEventListener('click', () => {
+                if (globalTextScale < 3.0) { 
+                    globalTextScale += 0.1; 
+                    document.getElementById('textVal').innerText = Math.round(globalTextScale * 100) + '%'; 
+                }
             });
             
             document.getElementById('colorPickerA').addEventListener('input', (e) => { colorA = parseInt(e.target.value.replace('#', '0x')); point1.material.color.setHex(colorA); drawAntenna(); });
@@ -590,7 +611,8 @@
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.font = 'bold 42px sans-serif';
+            // Font ingrandito di base per maggiore nitidezza
+            ctx.font = 'bold 46px sans-serif';
             ctx.fillStyle = textColor;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             
@@ -779,7 +801,6 @@
 
         // --- MOTORE DI DEFORMAZIONE DEL LOBO (Ray-Bending Simulation) ---
         function applyEnvironmentalDeformation(mesh, baseGeometry, centerPoint, isOmni) {
-            // Applichiamo la trasformazione per operare sui vertici nello spazio del mondo reale
             mesh.updateMatrixWorld(true);
             baseGeometry.applyMatrix4(mesh.matrixWorld);
             mesh.position.set(0,0,0);
@@ -789,29 +810,25 @@
 
             const positions = baseGeometry.attributes.position;
             const v = new THREE.Vector3();
-            const treeRadius = 2.0; // Raggio di influenza degli alberi (ostacoli fisici)
+            const treeRadius = 2.0;
 
             for (let i = 0; i < positions.count; i++) {
                 v.fromBufferAttribute(positions, i);
                 
-                // 1. RIFLESSIONE SUL TERRENO: Il lobo non può andare sotto terra
                 if (v.y < groundLevel + 0.1) {
                     let depth = (groundLevel + 0.1) - v.y;
-                    v.y = groundLevel + 0.1; // Appiattisce
-                    // Simula l'espansione dell'onda che rimbalza (allarga la base)
+                    v.y = groundLevel + 0.1; 
                     v.x += (v.x - centerPoint.x) * 0.15 * depth;
                     v.z += (v.z - centerPoint.z) * 0.15 * depth;
                 }
 
-                // 2. ASSORBIMENTO DA OSTACOLI (Alberi/Pali)
                 let distA = v.distanceTo(point1.position);
                 let distB = v.distanceTo(point2.position);
                 let distC = point3.visible ? v.distanceTo(point3.position) : 9999;
 
-                // Funzione per creare un'ammaccatura nel lobo vicino all'ostacolo
                 if (distA < treeRadius) {
                     let squish = 1.0 - (distA / treeRadius);
-                    v.lerp(centerPoint, squish * 0.6); // Spinge il vertice indentro
+                    v.lerp(centerPoint, squish * 0.6); 
                 }
                 if (distB < treeRadius) {
                     let squish = 1.0 - (distB / treeRadius);
@@ -824,7 +841,7 @@
 
                 positions.setXYZ(i, v.x, v.y, v.z);
             }
-            baseGeometry.computeVertexNormals(); // Ricalcola i riflessi della luce
+            baseGeometry.computeVertexNormals(); 
         }
 
         function drawAntenna() {
@@ -934,7 +951,6 @@
                 }
             }
 
-            // --- DISEGNO DEL LOBO 3D DEFORMATO DALL'AMBIENTE ---
             if (isLobeVisible && type !== 'none') {
                 let feedHeight = (point1.position.y + point2.position.y) / 2; 
                 if (point3.visible) feedHeight = point3.position.y;
@@ -946,34 +962,30 @@
                     opacity: 0.6, 
                     side: THREE.DoubleSide,
                     blending: THREE.AdditiveBlending,
-                    wireframe: true // Usiamo il wireframe per far sembrare il diagramma uno strumento di scansione
+                    wireframe: true 
                 });
 
                 if (type === 'dipole') {
                     const band = parseFloat(document.getElementById('dipoleBand').value);
-                    const wireLength = band / 2; // NOVITA': Usiamo la VERA lunghezza del filo per dimensionare il lobo
+                    const wireLength = band / 2; 
                     
                     const FeedNode = C ? C : new THREE.Vector3().copy(A).lerp(B, 0.5);
                     let wireDir = new THREE.Vector3().subVectors(B, A).normalize();
 
                     let geo, mesh;
                     if (heightCenter < band * 0.3) {
-                        // EFFETTO NVIS (Bolla che copre tutto il filo)
                         geo = new THREE.SphereGeometry(wireLength * 0.55, 64, 32);
                         geo.scale(1, 0.7, 1);
                         geo.translate(0, wireLength * 0.25, 0);
                         mesh = new THREE.Mesh(geo, lobeMaterial);
                         mesh.position.copy(FeedNode);
                     } else {
-                        // EFFETTO DX (Toroide che abbraccia l'antenna da una punta all'altra)
-                        // Raggio principale = 30% lunghezza, Spessore ciambella = 25% lunghezza. Totale = 55% per coprire la punta.
                         geo = new THREE.TorusGeometry(wireLength * 0.3, wireLength * 0.25, 32, 64);
                         mesh = new THREE.Mesh(geo, lobeMaterial);
                         mesh.position.copy(FeedNode);
                         mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), wireDir);
                     }
                     
-                    // Applica il "Ray-Bending" basato sull'ambiente
                     applyEnvironmentalDeformation(mesh, geo, FeedNode, true);
                     scene.add(mesh);
                     antennaMeshes.push(mesh);
@@ -985,16 +997,15 @@
                     let mainDir = new THREE.Vector3().subVectors(endPos, startPos).normalize();
                     let feedNode = startPos;
                     
-                    let activeLength = 0; // Lunghezza della sola parte che irradia
+                    let activeLength = 0; 
                     
                     if (type === 'endfed') {
                         let L1 = parseFloat(document.getElementById('efL1').value);
                         let L2 = parseFloat(document.getElementById('efL2').value);
-                        activeLength = L1 + L2; // Il lobo è lungo quanto tutto il filo radiante
+                        activeLength = L1 + L2; 
                         
                         let dist = parseFloat(document.getElementById('efDist').value);
                         let path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]);
-                        // Il lobo parte dall'inizio effettivo del filo radiante (dopo il cordino)
                         feedNode = getPointAlongPath(dist, path); 
                     } else {
                         activeLength = parseFloat(document.getElementById('lwLen').value);
@@ -1002,7 +1013,6 @@
                         feedNode = path[0];
                     }
                     
-                    // Cono allungato proporzionato alla VERA lunghezza del filo
                     let geo = new THREE.ConeGeometry(activeLength * 0.25, activeLength, 64, 32);
                     geo.translate(0, activeLength * 0.45, 0); 
                     
@@ -1013,7 +1023,6 @@
                     mesh.quaternion.setFromUnitVectors(up, mainDir);
                     mesh.rotateOnAxis(new THREE.Vector3(1,0,0), -Math.PI / 8); 
                     
-                    // Applica il "Ray-Bending" basato sull'ambiente
                     applyEnvironmentalDeformation(mesh, geo, feedNode, false);
                     scene.add(mesh);
                     antennaMeshes.push(mesh);
@@ -1042,9 +1051,11 @@
                     marker.scale.setScalar(0.5 + (dist * 0.05));
                 });
                 
+                // --- AGGIORNAMENTO SCALATURA TESTO ---
+                // Il testo ora usa la variabile globale impostabile dall'utente
                 textSprites.forEach(sprite => {
                     const dist = camera.position.distanceTo(sprite.position);
-                    const textScale = 0.4 + (dist * 0.05); 
+                    const textScale = (0.4 + (dist * 0.05)) * globalTextScale; 
                     
                     if (sprite.userData.isVertical) {
                         sprite.scale.set(textScale * 0.15, textScale * 0.6, 1);
