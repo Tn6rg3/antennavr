@@ -1,10 +1,9 @@
-const CACHE_NAME = 'logradio-v3';
+const CACHE_NAME = 'logradio-v4';
 const FILES_TO_CACHE = [
   './',
   './log.html',
   './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './icon-192.png'
 ];
 
 // Installa il service worker e salva i file in cache
