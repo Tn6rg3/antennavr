@@ -3,7 +3,7 @@
   "name": "Log Radio Pro",
   "short_name": "LogPro",
   "description": "Log di stazione con generazione QSL in tempo reale",
-  "start_url": "./log.html?app=pro",
+  "start_url": "./log.html",
   "display": "standalone",
   "background_color": "#eaeff2",
   "theme_color": "#2c3e50",
@@ -11,12 +11,6 @@
     {
       "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
