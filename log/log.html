@@ -10,7 +10,6 @@
     <meta name="theme-color" content="#2c3e50">
     <link rel="apple-touch-icon" href="icon-192.png">
     
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Dancing+Script:wght@400;700&display=swap" rel="stylesheet">
     
     <style>
@@ -343,7 +342,7 @@
             <button class="btn-grey" onclick="resetSearch()">RESET</button>
             <span style="border-left:1px solid #999; height:20px; margin:0 2px;"></span>
             <button class="btn-cyan" onclick="showStats()">📊 STATS</button>
-            <button class="btn-blue" onclick="showMap()">🌍 MAPPA</button>
+        
         </div>
 
         <div class="pagination-bar" style="margin-top:10px;"><div style="display:flex; align-items:center; gap:5px;"><span style="font-size:0.8em; font-weight:bold;">MOSTRA:</span><select id="rowsPerPage" onchange="changeRows(this.value)" style="width:auto; padding:4px;"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></div><div class="page-controls"><button id="btnPrev" onclick="changePage(-1)">◀</button><span id="pageInfo" class="page-info">Pag 1/1</span><button id="btnNext" onclick="changePage(1)">▶</button></div></div>
@@ -372,13 +371,7 @@
         </div>
     </div>
     
-    <div id="mapModal" class="modal-overlay" onclick="document.getElementById('mapModal').style.display='none'">
-        <div class="stats-content" onclick="event.stopPropagation()">
-            <h3 style="margin-top:0;">🌍 Mappa QSO</h3>
-            <div id="mapContainer"></div>
-            <button class="btn-grey" style="width:100%;" onclick="document.getElementById('mapModal').style.display='none'">CHIUDI MAPPA</button>
-        </div>
-    </div>
+
     
     <div id="mediaModal" class="modal-overlay" onclick="closeMedia()">
         <div class="stats-content" onclick="event.stopPropagation()">
@@ -787,7 +780,6 @@
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
     }
 
-    function showMap() { document.getElementById('mapModal').style.display = 'flex'; if(!map) { map = L.map('mapContainer').setView([20, 0], 2); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map); } else { setTimeout(function(){ map.invalidateSize(); }, 200); } map.eachLayer((layer) => { if(layer instanceof L.Marker) map.removeLayer(layer); }); const list = db[currentLog] || []; let count = 0; list.forEach(q => { if(q.gridsquare && q.gridsquare.length >= 4) { try { const c = loc2latlon(q.gridsquare); L.marker([c.lat, c.lon]).addTo(map).bindPopup(`<b>${q.call}</b><br>${q.band} ${q.mode}<br>${q.date}`); count++; } catch(e) {} } }); if(count===0) alert("Nessun Locator."); }
     function loc2latlon(loc) { loc = loc.toUpperCase(); let lon = (loc.charCodeAt(0)-65)*20 + (loc.charCodeAt(2)-48)*2; let lat = (loc.charCodeAt(1)-65)*10 + (loc.charCodeAt(3)-48); if(loc.length >= 6) { lon += (loc.charCodeAt(4)-65)/12 + 1/24; lat += (loc.charCodeAt(5)-65)/24 + 1/48; } else { lon+=1; lat+=0.5; } return {lat: lat-90, lon: lon-180}; }
     function openQRZ() { const c=document.getElementById('call').value.trim(); if(c) window.open('https://www.qrz.com/db/'+c,'_blank'); else alert("Manca Call!"); }
     function toggleSolar() { const p=document.getElementById('solarContent'); p.style.display=(p.style.display==='block')?'none':'block'; }
