@@ -4,7 +4,6 @@
   "short_name": "LogPro",
   "description": "Log di stazione con generazione QSL in tempo reale",
   "start_url": "./log.html?app=pro",
-    "scope": "/Tn6rg3/antennavr/log/",
   "display": "standalone",
   "background_color": "#eaeff2",
   "theme_color": "#2c3e50",
