@@ -647,7 +647,7 @@
 
     function changeLog(val) { if(editIdx !== -1) cancelEdit(); currentLog = val; currentPage = 1; activeSearch = null; document.getElementById('searchInput').value = ''; renderUI(); }
     
-    function deleteLog() { const isSystemLog = (currentLog === "GENERALE" || currentLog === "logXmasActivity"); const message = isSystemLog ? "SVUOTARE il log "+currentLog+"?" : "Eliminare definitivamente "+currentLog+"?"; if (confirm(message)) { if (isSystemLog) { db[currentLog] = []; } else { delete db[currentLog]; if(logMeta[currentLog]) { delete logMeta[currentLog]; saveMeta(); } currentLog = "GENERALE"; } saveDB(); renderUI(); } }
+    function deleteLog() { const isSystemLog = (currentLog === "GENERALE"); const message = isSystemLog ? "SVUOTARE il log "+currentLog+"?" : "Eliminare definitivamente "+currentLog+"?"; if (confirm(message)) { if (isSystemLog) { db[currentLog] = []; } else { delete db[currentLog]; if(logMeta[currentLog]) { delete logMeta[currentLog]; saveMeta(); } currentLog = "GENERALE"; } saveDB(); renderUI(); } }
     
     function doCreateLog() { const n=safeGetVal('newLogName').trim(); const template = safeGetVal('newLogTemplate'); const isCBox = document.getElementById('isContestCheck'); const isC = isCBox ? isCBox.checked : false; if(n && !db[n]) { db[n]=[]; logMeta[n] = { type: template }; if(isC) { logMeta[n].isContest = true; logMeta[n].name = "CQ-TEST"; logMeta[n].op = "SINGLE-OP"; logMeta[n].band = "ALL"; logMeta[n].mode = "MIXED"; logMeta[n].power = "LOW"; logMeta[n].exchType = "SERIAL"; logMeta[n].fixedVal = ""; } saveMeta(); currentLog=n; saveDB(); renderUI(); document.getElementById('createLogArea').style.display='none'; document.getElementById('newLogName').value = ""; if(isCBox) isCBox.checked = false; document.getElementById('newLogTemplate').value = "STD"; } else if(db[n]) alert("Log già esistente!"); }
 
@@ -665,11 +665,11 @@
     function renderUI() {
         const s = document.getElementById('logSelector'); s.innerHTML=''; const opt = (k,l) => { const o=document.createElement('option'); o.value=k; o.innerText=l; if(k===currentLog)o.selected=true; s.appendChild(o); };
         if(!db[currentLog]) db[currentLog] = []; const allKeys = Object.keys(db);
-        if(!allKeys.includes("GENERALE")) db["GENERALE"] = []; if(!allKeys.includes("logXmasActivity")) db["logXmasActivity"] = [];
-        opt("GENERALE", `⭐ GENERALE (${(db.GENERALE||[]).length})`); opt("logXmasActivity", `🎄 logXmasActivity (${(db.logXmasActivity||[]).length})`);
+        if(!allKeys.includes("GENERALE")) db["GENERALE"] = [];
+        opt("GENERALE", `⭐ GENERALE (${(db.GENERALE||[]).length})`);
         
         Object.keys(db).forEach(k=>{ 
-            if(k!=="GENERALE" && k!=="logXmasActivity") { 
+            if(k!=="GENERALE") { 
                 let prefix = ""; 
                 if(logMeta[k]) { 
                     if(logMeta[k].type === "XMAS") prefix += "🎄 "; 
@@ -735,7 +735,7 @@
         if(!s) renderQSL();
     }
 
-    function loadDB() { try { const raw = localStorage.getItem(DB_KEY); db = raw ? JSON.parse(raw) : {"GENERALE":[]}; } catch(e){ db = {"GENERALE":[]}; } if(!db["GENERALE"]) db["GENERALE"] = []; if(!db["logXmasActivity"]) db["logXmasActivity"] = []; if(!db["Xmas Activity Modello"]) db["Xmas Activity Modello"] = []; if(!db["Key Night Modello"]) db["Key Night Modello"] = []; if(!logMeta["Xmas Activity Modello"]) logMeta["Xmas Activity Modello"] = { type: "XMAS" }; if(!logMeta["Key Night Modello"]) logMeta["Key Night Modello"] = { type: "KEYNIGHT" }; if(!db[currentLog]) currentLog = "GENERALE"; saveDB(); }
+    function loadDB() { try { const raw = localStorage.getItem(DB_KEY); db = raw ? JSON.parse(raw) : {"GENERALE":[]}; } catch(e){ db = {"GENERALE":[]}; } if(!db["GENERALE"]) db["GENERALE"] = []; if(!db[currentLog]) currentLog = "GENERALE"; saveDB(); }
     
     function exportLogChoice() { const fmt = document.getElementById('exportFormat').value; if (!fmt) { alert("Seleziona formato!"); return; } if (fmt === "ADIF") exportADIF(); else if (fmt === "CABRILLO") exportCabrillo(); }
 
