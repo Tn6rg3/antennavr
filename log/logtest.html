@@ -239,8 +239,11 @@
                 <button class="btn-grey" onclick="exportLogChoice()" style="margin:0; height:36px; border-radius:0 4px 4px 0; border-left:1px solid #555; white-space:nowrap;">💾 SALVA</button>
             </div>
 
-            <button class="btn-purple" onclick="downloadFullBackup()">🔄 BACKUP TOT</button>
-            <button class="btn-purple" onclick="document.getElementById('backupInput').click()">📂 RIPRISTINA</button>
+            <!-- NUOVI BOTTONI BACKUP CON CONDIVISIONE DRIVE/CLOUD -->
+            <button class="btn-purple" style="flex:1;" onclick="downloadFullBackup()">⬇️ SCARICA BACKUP</button>
+            <button class="btn-cyan" style="flex:1;" onclick="shareFullBackup()">📤 CONDIVIDI (Drive/Cloud)</button>
+            <button class="btn-purple" style="flex:1;" onclick="document.getElementById('backupInput').click()">📂 RIPRISTINA</button>
+            
             <input type="file" id="backupInput" accept=".json" style="display:none;" onchange="restoreFullBackup()">
         </div>
     </div>
@@ -872,7 +875,59 @@
     function blobToBase64(blob) { return new Promise((resolve) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); }); }
     function base64ToBlob(base64) { const arr = base64.split(','), mime = arr[0].match(/:(.*?);/)[1]; const bstr = atob(arr[1]); let n = bstr.length; const u8arr = new Uint8Array(n); while(n--){ u8arr[n] = bstr.charCodeAt(n); } return new Blob([u8arr], {type:mime}); }
     
-    async function downloadFullBackup() { showToast("Backup..."); const exDB = JSON.parse(JSON.stringify(db)); let tp = 0; for (let l in exDB) { for (let q of exDB[l]) { if (q.hasPhoto && q.photoId) { let b = await getPhotoFromDBPromise(q.photoId); if (b) { q.photoData = await blobToBase64(b); tp++; } } } } const fb = { db: exDB, meta: logMeta }; const b = new Blob([JSON.stringify(fb)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `FullBackup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast("Backup OK: "+tp+" foto"); }
+    // --- FUNZIONI DI BACKUP / CONDIVISIONE ---
+    async function generateBackupBlob() {
+        showToast("Generazione file in corso..."); 
+        const exDB = JSON.parse(JSON.stringify(db)); 
+        let tp = 0; 
+        for (let l in exDB) { 
+            for (let q of exDB[l]) { 
+                if (q.hasPhoto && q.photoId) { 
+                    let b = await getPhotoFromDBPromise(q.photoId); 
+                    if (b) { q.photoData = await blobToBase64(b); tp++; } 
+                } 
+            } 
+        } 
+        const fb = { db: exDB, meta: logMeta }; 
+        return { 
+            blob: new Blob([JSON.stringify(fb)], {type:'application/json'}), 
+            photosCount: tp 
+        };
+    }
+
+    async function downloadFullBackup() { 
+        try {
+            const { blob, photosCount } = await generateBackupBlob();
+            const a = document.createElement('a'); 
+            a.href = URL.createObjectURL(blob); 
+            a.download = `FullBackup_${new Date().toISOString().split('T')[0]}.json`; 
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); 
+            showToast("Backup OK: " + photosCount + " foto"); 
+        } catch (e) { alert("Errore durante il backup: " + e.message); }
+    }
+
+    async function shareFullBackup() {
+        try {
+            const { blob, photosCount } = await generateBackupBlob();
+            const fileName = `FullBackup_${new Date().toISOString().split('T')[0]}.json`;
+            const file = new File([blob], fileName, { type: "application/json" });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    title: 'Backup Log Radio',
+                    text: 'Ecco il file JSON di backup completo del Log Radio.',
+                    files: [file]
+                });
+                showToast("Condivisione riuscita!");
+            } else {
+                alert("⚠️ Il tuo browser o dispositivo non supporta la condivisione diretta dei file verso Drive/Email.\nUsa il tasto 'SCARICA BACKUP' classico.");
+            }
+        } catch (e) { 
+            console.error(e);
+            // L'utente potrebbe aver semplicemente annullato la condivisione
+        }
+    }
+
     async function restoreFullBackup() { const f = document.getElementById('backupInput').files[0]; if(!f) return; if(!confirm("Sovrascrivere tutto?")) return; const r = new FileReader(); r.onload = async function(e) { try { const d = JSON.parse(e.target.result); let iDB = d.db || d; logMeta = d.meta || {}; db = {}; let pc = 0; for (let l in iDB) { if(!db[l]) db[l] = []; for (let q of iDB[l]) { if (q.photoData) { savePhotoToDBPromise(q.photoId, base64ToBlob(q.photoData)); delete q.photoData; pc++; } db[l].push(q); } } if(!db["GENERALE"]) db["GENERALE"] = []; saveDB(); saveMeta(); renderUI(); alert("Ripristino OK. Foto: "+pc); } catch(err) { alert("Err File"); } }; r.readAsText(f); }
     
     function loadPhotoFromDB(id) { 
