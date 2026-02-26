@@ -239,7 +239,7 @@
                 <button class="btn-grey" onclick="exportLogChoice()" style="margin:0; height:36px; border-radius:0 4px 4px 0; border-left:1px solid #555; white-space:nowrap;">💾 SALVA</button>
             </div>
 
-            <!-- NUOVI BOTTONI BACKUP CON CONDIVISIONE DRIVE/CLOUD -->
+            <!-- BOTTONI BACKUP CON CONDIVISIONE DRIVE/CLOUD -->
             <button class="btn-purple" style="flex:1;" onclick="downloadFullBackup()">⬇️ SCARICA BACKUP</button>
             <button class="btn-cyan" style="flex:1;" onclick="shareFullBackup()">📤 CONDIVIDI (Drive/Cloud)</button>
             <button class="btn-purple" style="flex:1;" onclick="document.getElementById('backupInput').click()">📂 RIPRISTINA</button>
@@ -908,23 +908,41 @@
 
     async function shareFullBackup() {
         try {
+            showToast("Preparo il file... attendi.");
             const { blob, photosCount } = await generateBackupBlob();
-            const fileName = `FullBackup_${new Date().toISOString().split('T')[0]}.json`;
-            const file = new File([blob], fileName, { type: "application/json" });
+            
+            // TRUCCO PER ANDROID: Dichiariamo il JSON come se fosse un file di testo semplice (text/plain).
+            // Molti telefoni Android bloccano "application/json" nella tendina di condivisione nativa.
+            const fileName = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}.json`;
+            const file = new File([blob], fileName, { type: "text/plain" });
 
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    title: 'Backup Log Radio',
-                    text: 'Ecco il file JSON di backup completo del Log Radio.',
-                    files: [file]
-                });
-                showToast("Condivisione riuscita!");
-            } else {
-                alert("⚠️ Il tuo browser o dispositivo non supporta la condivisione diretta dei file verso Drive/Email.\nUsa il tasto 'SCARICA BACKUP' classico.");
+            if (!navigator.canShare) {
+                alert("⚠️ Il tuo browser non supporta la condivisione nativa da questo tasto.\nUsa il tasto 'SCARICA BACKUP' classico.");
+                return;
             }
+            
+            if (!navigator.canShare({ files: [file] })) {
+                alert("⚠️ Il tuo telefono non permette di condividere direttamente questo tipo di file.\nUsa il tasto 'SCARICA BACKUP' classico e poi condividilo a mano dalla cartella Download.");
+                return;
+            }
+
+            await navigator.share({
+                title: 'Backup Log Radio',
+                text: `Ecco il file di backup completo del Log Radio (${photosCount} foto incluse).`,
+                files: [file]
+            });
+            showToast("Condivisione avviata!");
+            
         } catch (e) { 
-            console.error(e);
-            // L'utente potrebbe aver semplicemente annullato la condivisione
+            console.error("Errore di condivisione:", e);
+            
+            // Gestione dell'errore di TIMEOUT (NotAllowedError) dovuto alla sicurezza del browser
+            if (e.name === "NotAllowedError" || (e.message && e.message.includes("activation"))) {
+                alert("⏳ LA TENDINA DI CONDIVISIONE È STATA BLOCCATA.\n\nMotivo: Creare il file di backup ha richiesto troppi secondi e il telefono ha annullato la condivisione automatica per sicurezza.\n\n👉 SOLUZIONE: Usa il tasto viola '⬇️ SCARICA BACKUP'. Lo troverai nella tua cartella Download, e da lì potrai caricarlo sul Drive.");
+            } else if (e.name !== "AbortError") {
+                // Se l'errore non è "AbortError" (cioè l'utente che ha chiuso la tendina senza scegliere) lo mostriamo
+                alert("Si è verificato un errore durante la condivisione: " + e.message);
+            }
         }
     }
 
