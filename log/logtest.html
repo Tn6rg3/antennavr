@@ -241,7 +241,7 @@
 
             <!-- BOTTONI BACKUP CON CONDIVISIONE DRIVE/CLOUD -->
             <button class="btn-purple" style="flex:1;" onclick="downloadFullBackup()">⬇️ SCARICA BACKUP</button>
-            <button class="btn-cyan" style="flex:1;" onclick="shareFullBackup()">📤 CONDIVIDI (Drive/Cloud)</button>
+            <button class="btn-cyan" style="flex:1;" onclick="startShareProcess()">📤 CONDIVIDI (Drive/Cloud)</button>
             <button class="btn-purple" style="flex:1;" onclick="document.getElementById('backupInput').click()">📂 RIPRISTINA</button>
             
             <input type="file" id="backupInput" accept=".json" style="display:none;" onchange="restoreFullBackup()">
@@ -430,8 +430,21 @@
             <button class="btn-grey" style="width:100%; margin-top:15px;" onclick="document.getElementById('statsModal').style.display='none'">CHIUDI</button>
         </div>
     </div>
-    
 
+    <!-- MODAL CONDIVISIONE DRIVE/CLOUD A DUE STEP -->
+    <div id="shareModal" class="modal-overlay" onclick="this.style.display='none'">
+        <div class="stats-content" style="max-width: 400px; text-align: center;" onclick="event.stopPropagation()">
+            <h3 id="shareModalTitle" style="margin-top:0; color:#2980b9;">⏳ Preparazione Backup...</h3>
+            <p id="shareModalText" style="font-size:1.1em; color:var(--text-color);">
+                Attendi la creazione del file. Sto impacchettando le foto e i log...
+            </p>
+            <div id="shareSpinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            
+            <button id="btnRealShare" class="btn-green" style="display:none; width:100%; font-size: 1.2em; padding: 15px; margin-top:10px;" onclick="executeRealShare()">📤 APRI MENU CONDIVISIONE</button>
+            <button class="btn-grey" style="width:100%; margin-top:15px;" onclick="document.getElementById('shareModal').style.display='none'">ANNULLA</button>
+        </div>
+    </div>
+    <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
     
     <div id="mediaModal" class="modal-overlay" onclick="closeMedia()">
         <div class="stats-content" onclick="event.stopPropagation()">
@@ -461,6 +474,7 @@
     let currentPage=1; let rowsPerPage=10; let currentSort={col:null,asc:true}; let activeSearch=null; 
     let liveCallFilter=""; let map=null; let imageDB=null; 
     let currentViewBlob = null;
+    let preparedShareFile = null; // Variabile globale per il file generato
 
     // --- VARIABILI QSL EDITOR LIVE ---
     let qslCanvas, qslCtx;
@@ -877,7 +891,6 @@
     
     // --- FUNZIONI DI BACKUP / CONDIVISIONE ---
     async function generateBackupBlob() {
-        showToast("Generazione file in corso..."); 
         const exDB = JSON.parse(JSON.stringify(db)); 
         let tp = 0; 
         for (let l in exDB) { 
@@ -896,52 +909,80 @@
     }
 
     async function downloadFullBackup() { 
+        showToast("Generazione file in corso...");
         try {
             const { blob, photosCount } = await generateBackupBlob();
             const a = document.createElement('a'); 
             a.href = URL.createObjectURL(blob); 
-            a.download = `FullBackup_${new Date().toISOString().split('T')[0]}.json`; 
+            a.download = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}.json`; 
             document.body.appendChild(a); a.click(); document.body.removeChild(a); 
             showToast("Backup OK: " + photosCount + " foto"); 
         } catch (e) { alert("Errore durante il backup: " + e.message); }
     }
 
-    async function shareFullBackup() {
+    // SISTEMA DI CONDIVISIONE A DUE STEP (Evita il blocco di sicurezza del browser)
+    async function startShareProcess() {
+        if (!navigator.canShare) {
+            alert("⚠️ Il tuo browser o telefono non supportano la condivisione nativa da questo tasto.\n\nUsa il tasto viola '⬇️ SCARICA BACKUP'.");
+            return;
+        }
+
+        // 1. Mostra la modale di attesa
+        const modal = document.getElementById('shareModal');
+        const title = document.getElementById('shareModalTitle');
+        const text = document.getElementById('shareModalText');
+        const spinner = document.getElementById('shareSpinner');
+        const btn = document.getElementById('btnRealShare');
+
+        modal.style.display = 'flex';
+        title.style.color = "#2980b9";
+        title.innerText = "⏳ Preparazione Backup...";
+        text.innerText = "Sto impacchettando foto e dati...\nL'operazione può richiedere qualche secondo.";
+        spinner.style.display = "block";
+        btn.style.display = "none";
+
+        // 2. Genera il file in background
         try {
-            showToast("Preparo il file... attendi.");
             const { blob, photosCount } = await generateBackupBlob();
+            const fileName = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}.txt`; // Usa txt per ingannare Android/iOS e forzare il permesso
             
-            // TRUCCO PER ANDROID: Dichiariamo il JSON come se fosse un file di testo semplice (text/plain).
-            // Molti telefoni Android bloccano "application/json" nella tendina di condivisione nativa.
-            const fileName = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}.json`;
-            const file = new File([blob], fileName, { type: "text/plain" });
+            preparedShareFile = new File([blob], fileName, { type: "text/plain" });
 
-            if (!navigator.canShare) {
-                alert("⚠️ Il tuo browser non supporta la condivisione nativa da questo tasto.\nUsa il tasto 'SCARICA BACKUP' classico.");
-                return;
-            }
-            
-            if (!navigator.canShare({ files: [file] })) {
-                alert("⚠️ Il tuo telefono non permette di condividere direttamente questo tipo di file.\nUsa il tasto 'SCARICA BACKUP' classico e poi condividilo a mano dalla cartella Download.");
+            if (!navigator.canShare({ files: [preparedShareFile] })) {
+                modal.style.display = 'none';
+                alert("⚠️ Il tuo telefono blocca la condivisione di questo file.\n\nUsa il tasto viola '⬇️ SCARICA BACKUP'.");
                 return;
             }
 
+            // 3. File pronto, aggiorna l'UI per chiedere il tocco finale
+            title.style.color = "#27ae60";
+            title.innerText = "✅ Backup Pronto!";
+            text.innerHTML = `File creato con successo (${photosCount} foto).<br><br><b>Tocca il tasto verde qui sotto</b> per inviare il file direttamente al tuo Google Drive, Email o WhatsApp!`;
+            spinner.style.display = "none";
+            btn.style.display = "block";
+
+        } catch (e) {
+            modal.style.display = 'none';
+            alert("Errore durante la preparazione: " + e.message);
+        }
+    }
+
+    // Viene eseguita istantaneamente al tocco del pulsante grande verde
+    async function executeRealShare() {
+        if (!preparedShareFile) return;
+        try {
             await navigator.share({
-                title: 'Backup Log Radio',
-                text: `Ecco il file di backup completo del Log Radio (${photosCount} foto incluse).`,
-                files: [file]
+                title: 'Backup Log Radio Pro',
+                text: 'Ecco il file completo di backup (Log e Foto).',
+                files: [preparedShareFile]
             });
-            showToast("Condivisione avviata!");
-            
-        } catch (e) { 
-            console.error("Errore di condivisione:", e);
-            
-            // Gestione dell'errore di TIMEOUT (NotAllowedError) dovuto alla sicurezza del browser
-            if (e.name === "NotAllowedError" || (e.message && e.message.includes("activation"))) {
-                alert("⏳ LA TENDINA DI CONDIVISIONE È STATA BLOCCATA.\n\nMotivo: Creare il file di backup ha richiesto troppi secondi e il telefono ha annullato la condivisione automatica per sicurezza.\n\n👉 SOLUZIONE: Usa il tasto viola '⬇️ SCARICA BACKUP'. Lo troverai nella tua cartella Download, e da lì potrai caricarlo sul Drive.");
-            } else if (e.name !== "AbortError") {
-                // Se l'errore non è "AbortError" (cioè l'utente che ha chiuso la tendina senza scegliere) lo mostriamo
-                alert("Si è verificato un errore durante la condivisione: " + e.message);
+            document.getElementById('shareModal').style.display = 'none';
+            showToast("Condivisione riuscita!");
+        } catch (e) {
+            // Se l'utente preme "indietro" nel menu di condivisione o annulla
+            console.error(e);
+            if (e.name !== "AbortError") {
+                alert("Condivisione non completata o bloccata dal sistema.");
             }
         }
     }
