@@ -133,7 +133,6 @@
 
     <div class="header-tools">
         <div id="statusMsg" class="status-bar" style="flex:1; margin:0 10px 0 0;">Log Radio QSL</div>
-        <!-- NUOVO TASTO AGGIORNA APP -->
         <button class="theme-switch" onclick="forceAppUpdate()" style="background-color:rgba(52, 152, 219, 0.2); border-color:#3498db;">🔄 Aggiorna App</button>
         <button class="theme-switch" onclick="document.getElementById('privacyModal').style.display='flex'">🛡️ Privacy</button>
         <button class="theme-switch" onclick="toggleTheme()">🌗 Tema</button>
@@ -244,7 +243,8 @@
             <button class="btn-cyan" style="flex:1;" onclick="startShareProcess()">📤 CONDIVIDI (Drive/Cloud)</button>
             <button class="btn-purple" style="flex:1;" onclick="document.getElementById('backupInput').click()">📂 RIPRISTINA</button>
             
-            <input type="file" id="backupInput" accept=".json" style="display:none;" onchange="restoreFullBackup()">
+            <!-- ACCETTA SIA JSON CHE TXT! -->
+            <input type="file" id="backupInput" accept=".json, .txt, text/plain, application/json" style="display:none;" onchange="restoreFullBackup()">
         </div>
     </div>
     
@@ -258,7 +258,7 @@
         </div>
     </div>
 
-    <!-- PANNELLO TOP PER KEY NIGHT (Simile a Xmas) -->
+    <!-- PANNELLO TOP PER KEY NIGHT -->
     <div id="keyNightTopPanel" style="display:none; margin-bottom: 15px; border-radius: 8px; overflow: hidden; border: 2px solid #1abc9c;">
         <div class="kn-header" onclick="toggleKeyNightSettings()" style="background: linear-gradient(135deg, #1abc9c, #16a085); color: white; padding: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold;">
             <span>🗝️ KEY NIGHT ACTIVITY / SETTINGS</span><span id="knArrow">▼</span>
@@ -474,7 +474,7 @@
     let currentPage=1; let rowsPerPage=10; let currentSort={col:null,asc:true}; let activeSearch=null; 
     let liveCallFilter=""; let map=null; let imageDB=null; 
     let currentViewBlob = null;
-    let preparedShareFile = null; // Variabile globale per il file generato
+    let preparedShareFile = null;
 
     // --- VARIABILI QSL EDITOR LIVE ---
     let qslCanvas, qslCtx;
@@ -516,7 +516,6 @@
     function msg(t){document.getElementById('statusMsg').innerText=t;setTimeout(()=>document.getElementById('statusMsg').innerText="Log Radio QSL",3000);}
     function showToast(t){const el=document.getElementById('toast');el.innerText=t;el.className="show";setTimeout(()=>el.className="",3000);}
 
-    // FUNZIONE AGGIORNAMENTO APP (BYPASS CACHE)
     function forceAppUpdate() {
         if(confirm("Vuoi cercare su GitHub e forzare l'aggiornamento dell'applicazione all'ultima versione disponibile?")) {
             if ('serviceWorker' in navigator) {
@@ -631,22 +630,13 @@
                 db[currentLog].push(q); 
                 if (currentLog !== "GENERALE") safeAddToLog("GENERALE", q); 
             } else {
-                // LOGICA DI SPOSTAMENTO (MOVE) O AGGIORNAMENTO LOG CORRENTE
                 if (targetLog !== currentLog) {
-                    // Rimuovi dal log precedente solo se non è il log GENERALE maestro
-                    if (currentLog !== "GENERALE") {
-                        db[currentLog].splice(editIdx, 1);
-                    }
-                    // Aggiungi al nuovo log scelto
+                    if (currentLog !== "GENERALE") { db[currentLog].splice(editIdx, 1); }
                     if(!db[targetLog]) db[targetLog] = [];
                     const trgIdx = db[targetLog].findIndex(g => g.id === q.id || (oldRecord && g.call === oldRecord.call && g.date === oldRecord.date && g.timeOn === oldRecord.timeOn));
                     if(trgIdx !== -1) db[targetLog][trgIdx] = q; else db[targetLog].push(q);
-                } else {
-                    // Semplice aggiornamento sul log attuale
-                    db[currentLog][editIdx] = q;
-                }
+                } else { db[currentLog][editIdx] = q; }
                 
-                // Aggiorna costantemente anche la copia nel log GENERALE (Master Log)
                 const genIdx = db["GENERALE"].findIndex(g => {
                     if (q.id && g.id === q.id) return true; 
                     if (q.photoId && g.photoId === q.photoId) return true;
@@ -920,14 +910,13 @@
         } catch (e) { alert("Errore durante il backup: " + e.message); }
     }
 
-    // SISTEMA DI CONDIVISIONE A DUE STEP (Evita il blocco di sicurezza del browser)
+    // SISTEMA DI CONDIVISIONE A DUE STEP
     async function startShareProcess() {
         if (!navigator.canShare) {
             alert("⚠️ Il tuo browser o telefono non supportano la condivisione nativa da questo tasto.\n\nUsa il tasto viola '⬇️ SCARICA BACKUP'.");
             return;
         }
 
-        // 1. Mostra la modale di attesa
         const modal = document.getElementById('shareModal');
         const title = document.getElementById('shareModalTitle');
         const text = document.getElementById('shareModalText');
@@ -941,10 +930,10 @@
         spinner.style.display = "block";
         btn.style.display = "none";
 
-        // 2. Genera il file in background
         try {
             const { blob, photosCount } = await generateBackupBlob();
-            const fileName = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}.txt`; // Usa txt per ingannare Android/iOS e forzare il permesso
+            // Aggiungiamo _JSON al nome del file così è chiaro cosa c'è dentro anche se ha estensione .txt
+            const fileName = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}_JSON.txt`; 
             
             preparedShareFile = new File([blob], fileName, { type: "text/plain" });
 
@@ -954,7 +943,6 @@
                 return;
             }
 
-            // 3. File pronto, aggiorna l'UI per chiedere il tocco finale
             title.style.color = "#27ae60";
             title.innerText = "✅ Backup Pronto!";
             text.innerHTML = `File creato con successo (${photosCount} foto).<br><br><b>Tocca il tasto verde qui sotto</b> per inviare il file direttamente al tuo Google Drive, Email o WhatsApp!`;
@@ -967,7 +955,6 @@
         }
     }
 
-    // Viene eseguita istantaneamente al tocco del pulsante grande verde
     async function executeRealShare() {
         if (!preparedShareFile) return;
         try {
@@ -979,7 +966,6 @@
             document.getElementById('shareModal').style.display = 'none';
             showToast("Condivisione riuscita!");
         } catch (e) {
-            // Se l'utente preme "indietro" nel menu di condivisione o annulla
             console.error(e);
             if (e.name !== "AbortError") {
                 alert("Condivisione non completata o bloccata dal sistema.");
@@ -987,7 +973,41 @@
         }
     }
 
-    async function restoreFullBackup() { const f = document.getElementById('backupInput').files[0]; if(!f) return; if(!confirm("Sovrascrivere tutto?")) return; const r = new FileReader(); r.onload = async function(e) { try { const d = JSON.parse(e.target.result); let iDB = d.db || d; logMeta = d.meta || {}; db = {}; let pc = 0; for (let l in iDB) { if(!db[l]) db[l] = []; for (let q of iDB[l]) { if (q.photoData) { savePhotoToDBPromise(q.photoId, base64ToBlob(q.photoData)); delete q.photoData; pc++; } db[l].push(q); } } if(!db["GENERALE"]) db["GENERALE"] = []; saveDB(); saveMeta(); renderUI(); alert("Ripristino OK. Foto: "+pc); } catch(err) { alert("Err File"); } }; r.readAsText(f); }
+    async function restoreFullBackup() { 
+        const f = document.getElementById('backupInput').files[0]; 
+        if(!f) return; 
+        if(!confirm("Sovrascrivere tutto?")) return; 
+        const r = new FileReader(); 
+        r.onload = async function(e) { 
+            try { 
+                const d = JSON.parse(e.target.result); 
+                let iDB = d.db || d; 
+                logMeta = d.meta || {}; 
+                db = {}; 
+                let pc = 0; 
+                for (let l in iDB) { 
+                    if(!db[l]) db[l] = []; 
+                    for (let q of iDB[l]) { 
+                        if (q.photoData) { 
+                            savePhotoToDBPromise(q.photoId, base64ToBlob(q.photoData)); 
+                            delete q.photoData; 
+                            pc++; 
+                        } 
+                        db[l].push(q); 
+                    } 
+                } 
+                if(!db["GENERALE"]) db["GENERALE"] = []; 
+                saveDB(); 
+                saveMeta(); 
+                renderUI(); 
+                alert("Ripristino OK. Foto: "+pc); 
+            } catch(err) { 
+                alert("Errore di lettura del File Backup. Verifica che sia un file LogRadio valido."); 
+            } 
+        }; 
+        r.readAsText(f); 
+        document.getElementById('backupInput').value = ''; // Resetta l'input file per futuri ripristini
+    }
     
     function loadPhotoFromDB(id) { 
         if(!imageDB) { alert("Database immagini non pronto o errore caricamento."); return; }
