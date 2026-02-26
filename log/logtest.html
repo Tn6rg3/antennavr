@@ -370,6 +370,13 @@
             </div>
         </div>
 
+        <!-- PANNELLO SPOSTA LOG -->
+        <div id="moveLogPanel" style="display:none; background:rgba(155, 89, 182, 0.1); border:2px solid #9b59b6; padding:10px; border-radius:8px; margin-bottom:10px; margin-top:10px;">
+            <label style="color:#8e44ad; font-weight:bold; font-size:1em;">📦 SPOSTA QSO IN UN ALTRO LOG</label>
+            <select id="moveLogSelect" style="border:1px solid #9b59b6; margin-bottom:0; font-weight:bold; color:black; background:white;"></select>
+            <small style="color:#555; display:block; margin-top:4px;">Il QSO rimarrà sempre visibile anche nel log principale GENERALE.</small>
+        </div>
+
         <div class="advanced-toggle" onclick="toggleAdvanced()">⬇️ Scambi & Note</div>
         <div id="advancedFields" style="display:none;"> 
             <div class="hide-in-contest">
@@ -597,22 +604,46 @@
             q.hasPhoto = true; 
             await savePhotoToDBPromise(q.photoId, finalBlob, origBlob);
 
-            if(editIdx === -1) { db[currentLog].push(q); if (currentLog !== "GENERALE") safeAddToLog("GENERALE", q); } 
-            else {
-                db[currentLog][editIdx] = q;
-                if (currentLog !== "GENERALE") {
-                    const genIdx = db["GENERALE"].findIndex(g => {
-                        if (q.id && g.id === q.id) return true; if (q.photoId && g.photoId === q.photoId) return true;
-                        if (oldRecord) return g.call === oldRecord.call && g.date === oldRecord.date && g.timeOn === oldRecord.timeOn; return false;
-                    });
-                    if (genIdx !== -1) db["GENERALE"][genIdx] = q; else safeAddToLog("GENERALE", q);
+            let targetLog = currentLog;
+            if (editIdx !== -1) {
+                const moveSelect = document.getElementById('moveLogSelect');
+                if (moveSelect && moveSelect.value) targetLog = moveSelect.value;
+            }
+
+            if(editIdx === -1) { 
+                db[currentLog].push(q); 
+                if (currentLog !== "GENERALE") safeAddToLog("GENERALE", q); 
+            } else {
+                // LOGICA DI SPOSTAMENTO (MOVE) O AGGIORNAMENTO LOG CORRENTE
+                if (targetLog !== currentLog) {
+                    // Rimuovi dal log precedente solo se non è il log GENERALE maestro
+                    if (currentLog !== "GENERALE") {
+                        db[currentLog].splice(editIdx, 1);
+                    }
+                    // Aggiungi al nuovo log scelto
+                    if(!db[targetLog]) db[targetLog] = [];
+                    const trgIdx = db[targetLog].findIndex(g => g.id === q.id || (oldRecord && g.call === oldRecord.call && g.date === oldRecord.date && g.timeOn === oldRecord.timeOn));
+                    if(trgIdx !== -1) db[targetLog][trgIdx] = q; else db[targetLog].push(q);
+                } else {
+                    // Semplice aggiornamento sul log attuale
+                    db[currentLog][editIdx] = q;
                 }
+                
+                // Aggiorna costantemente anche la copia nel log GENERALE (Master Log)
+                const genIdx = db["GENERALE"].findIndex(g => {
+                    if (q.id && g.id === q.id) return true; 
+                    if (q.photoId && g.photoId === q.photoId) return true;
+                    if (oldRecord) return g.call === oldRecord.call && g.date === oldRecord.date && g.timeOn === oldRecord.timeOn; 
+                    return false;
+                });
+                if (genIdx !== -1) db["GENERALE"][genIdx] = q; 
+                else safeAddToLog("GENERALE", q);
             }
 
             localStorage.setItem(DB_KEY, JSON.stringify(db));
 
             if(editIdx === -1) { msg("QSO E QSL SALVATI!"); clearDraft(); resetForm(); try { createSnapshot("Add: "+q.call); } catch(e){} } 
-            else { msg("QSO E QSL AGGIORNATI!"); cancelEdit(); try { createSnapshot("Edit: "+q.call); } catch(e){} }
+            else { msg("QSO E QSL AGGIORNATI!"); cancelEdit(); try { createSnapshot("Edit/Move: "+q.call); } catch(e){} }
             
             liveCallFilter = ""; activeSearch = null; const searchEl = document.getElementById('searchInput'); if(searchEl) searchEl.value = '';
             renderUI();
@@ -891,6 +922,9 @@
         tempOriginalBlob = null; loadedOriginalBlob = null; syncRST(); qsoStarted=false; initDate(); 
         const c = document.getElementById('call'); if(c) c.focus(); 
         
+        const moveLogPanel = document.getElementById('moveLogPanel');
+        if (moveLogPanel) moveLogPanel.style.display = 'none';
+
         clearQSLEditorCanvas();
         let raw = localStorage.getItem(QSL_TEMPLATE_META);
         if (raw) { loadQslTemplate(); } else { syncGlobalToQsl(); }
@@ -902,6 +936,20 @@
         document.getElementById('date').value = q.date; document.getElementById('freq').value = q.freq||''; document.getElementById('timeOn').value = q.timeOn||q.time; document.getElementById('timeOff').value = q.timeOff||q.timeOn; document.getElementById('call').value = q.call; document.getElementById('name').value = q.name||""; document.getElementById('qth').value = q.qth||""; document.getElementById('band').value = q.band; document.getElementById('mode').value = q.mode; document.getElementById('rstS').value = q.rstS; document.getElementById('rstR').value = q.rstR; document.getElementById('gridsquare').value = q.gridsquare||""; document.getElementById('note').value = q.note||""; document.getElementById('myRef').value = q.myRef||""; document.getElementById('theirRef').value = q.theirRef||""; const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = q.keyType||"Verticale"; calcQRB(); 
         
         document.getElementById('saveBtn').innerText = "MODIFICA QSO E QSL"; document.getElementById('saveBtn').className = "btn-orange"; document.getElementById('cancelBtn').style.display = 'block'; 
+
+        const moveLogPanel = document.getElementById('moveLogPanel');
+        if (moveLogPanel) {
+            moveLogPanel.style.display = 'block';
+            const moveSelect = document.getElementById('moveLogSelect');
+            moveSelect.innerHTML = '';
+            Object.keys(db).forEach(k => {
+                const opt = document.createElement('option');
+                opt.value = k;
+                opt.innerText = (k === "GENERALE") ? "⭐ GENERALE" : k;
+                if(k === currentLog) opt.selected = true;
+                moveSelect.appendChild(opt);
+            });
+        }
 
         tempOriginalBlob = null; loadedOriginalBlob = null;
         
