@@ -493,8 +493,13 @@
     window.onload = function() {
         const freqEl = document.getElementById('freq');
         if(freqEl) freqEl.addEventListener('input', autoBand);
+        
         const callEl = document.getElementById('call');
-        if(callEl) { callEl.addEventListener('input', (e)=>{ autoStartTime(); checkDupe(); liveCallFilter=e.target.value.trim().toUpperCase(); currentPage=1; renderUI(); }); }
+        if(callEl) { 
+            callEl.addEventListener('input', (e)=>{ autoStartTime(); checkDupe(); liveCallFilter=e.target.value.trim().toUpperCase(); currentPage=1; renderUI(); }); 
+            // Aggiunto listener per l'autocompilazione
+            callEl.addEventListener('change', autoFillQSO);
+        }
 
         document.getElementById('fileInput').addEventListener('change', handleImport);
         document.getElementById('formBox').addEventListener('keypress', (e)=>{if(e.key==='Enter'&&e.target.id!=='note'){e.preventDefault();saveQSO();}});
@@ -574,6 +579,64 @@
         const bandEl = document.getElementById('band'); if(b && bandEl) bandEl.value=b;
         syncLiveQsoData();
     }
+
+    // =========================================================================
+    // NUOVA FUNZIONE: AUTOCOMPILAZIONE DATI DA PRECEDENTI QSO
+    // =========================================================================
+    function autoFillQSO() {
+        // Se stiamo modificando un QSO esistente, non facciamo l'autocompilazione per non cancellare modifiche in corso
+        if (editIdx !== -1) return;
+
+        const searchCall = safeGetVal('call').trim().toUpperCase();
+        if (!searchCall) return;
+
+        let matchFound = false;
+        let lastQso = null;
+
+        // Cerca nell'array dei QSO (usiamo il registro GENERALE perché contiene tutti i QSO fatti)
+        if (db["GENERALE"]) {
+            // Cicliamo all'indietro per trovare il PIÙ RECENTE
+            for (let i = db["GENERALE"].length - 1; i >= 0; i--) {
+                if (db["GENERALE"][i].call === searchCall) {
+                    lastQso = db["GENERALE"][i];
+                    matchFound = true;
+                    break;
+                }
+            }
+        }
+
+        const nameInput = document.getElementById('name');
+        const qthInput = document.getElementById('qth');
+        const locInput = document.getElementById('gridsquare');
+        const refInput = document.getElementById('theirRef');
+
+        if (matchFound && lastQso) {
+            // Compila con i dati del vecchio QSO
+            if (nameInput) nameInput.value = lastQso.name || "";
+            if (qthInput) qthInput.value = lastQso.qth || "";
+            if (locInput) locInput.value = lastQso.gridsquare || "";
+            if (refInput) refInput.value = lastQso.theirRef || "";
+            
+            // Effetto visivo: evidenzia brevemente di giallo i campi autocompilati
+            let fields = [nameInput, qthInput, locInput, refInput];
+            fields.forEach(f => {
+                if(f && f.value) {
+                    f.style.transition = 'background-color 0.3s';
+                    f.style.backgroundColor = 'var(--highlight)';
+                    setTimeout(() => f.style.backgroundColor = '', 800);
+                }
+            });
+            calcQRB(); // Aggiorna eventuale calcolo distanza
+        } else {
+            // Nessun precedente trovato: Svuota i campi (lasciali vuoti)
+            if (nameInput) nameInput.value = "";
+            if (qthInput) qthInput.value = "";
+            if (locInput) locInput.value = "";
+            if (refInput) refInput.value = "";
+            calcQRB();
+        }
+    }
+    // =========================================================================
 
     function safeAddToLog(targetLogName, qsoData) {
         if (!db[targetLogName]) db[targetLogName] = [];
@@ -1721,5 +1784,6 @@
     });
   }
 </script>
+
 </body>
 </html>
