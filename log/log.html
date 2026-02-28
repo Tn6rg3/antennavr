@@ -496,9 +496,17 @@
         
         const callEl = document.getElementById('call');
         if(callEl) { 
-            callEl.addEventListener('input', (e)=>{ autoStartTime(); checkDupe(); liveCallFilter=e.target.value.trim().toUpperCase(); currentPage=1; renderUI(); }); 
-            // Aggiunto listener per l'autocompilazione
-            callEl.addEventListener('change', autoFillQSO);
+            // MODIFICATO QUI: Agganciata la funzione autoFillQSO all'evento "input" in modo che 
+            // funzioni in tempo reale mentre scrivi.
+            callEl.addEventListener('input', (e)=>{ 
+                autoStartTime(); 
+                checkDupe(); 
+                liveCallFilter=e.target.value.trim().toUpperCase(); 
+                currentPage=1; 
+                renderUI(); 
+                autoFillQSO(); // Esegue l'autocompilazione ad ogni singola lettera
+            }); 
+            // Rimosso il listener 'change' che attivava l'autocompilazione solo uscendo dal campo
         }
 
         document.getElementById('fileInput').addEventListener('change', handleImport);
@@ -581,21 +589,34 @@
     }
 
     // =========================================================================
-    // NUOVA FUNZIONE: AUTOCOMPILAZIONE DATI DA PRECEDENTI QSO
+    // NUOVA FUNZIONE: AUTOCOMPILAZIONE IN TEMPO REALE E SVUOTAMENTO
     // =========================================================================
     function autoFillQSO() {
-        // Se stiamo modificando un QSO esistente, non facciamo l'autocompilazione per non cancellare modifiche in corso
+        // Se stiamo modificando un QSO esistente, non facciamo l'autocompilazione
         if (editIdx !== -1) return;
 
         const searchCall = safeGetVal('call').trim().toUpperCase();
-        if (!searchCall) return;
+        
+        const nameInput = document.getElementById('name');
+        const qthInput = document.getElementById('qth');
+        const locInput = document.getElementById('gridsquare');
+        const refInput = document.getElementById('theirRef');
+
+        // Se il campo callsign è vuoto (o se l'utente ha cancellato tutto), svuota esplicitamente i campi e fermati
+        if (!searchCall) {
+            if (nameInput) nameInput.value = "";
+            if (qthInput) qthInput.value = "";
+            if (locInput) locInput.value = "";
+            if (refInput) refInput.value = "";
+            calcQRB();
+            return;
+        }
 
         let matchFound = false;
         let lastQso = null;
 
-        // Cerca nell'array dei QSO (usiamo il registro GENERALE perché contiene tutti i QSO fatti)
+        // Cerca la corrispondenza esatta nel log GENERALE
         if (db["GENERALE"]) {
-            // Cicliamo all'indietro per trovare il PIÙ RECENTE
             for (let i = db["GENERALE"].length - 1; i >= 0; i--) {
                 if (db["GENERALE"][i].call === searchCall) {
                     lastQso = db["GENERALE"][i];
@@ -605,30 +626,40 @@
             }
         }
 
-        const nameInput = document.getElementById('name');
-        const qthInput = document.getElementById('qth');
-        const locInput = document.getElementById('gridsquare');
-        const refInput = document.getElementById('theirRef');
-
         if (matchFound && lastQso) {
-            // Compila con i dati del vecchio QSO
-            if (nameInput) nameInput.value = lastQso.name || "";
-            if (qthInput) qthInput.value = lastQso.qth || "";
-            if (locInput) locInput.value = lastQso.gridsquare || "";
-            if (refInput) refInput.value = lastQso.theirRef || "";
-            
-            // Effetto visivo: evidenzia brevemente di giallo i campi autocompilati
-            let fields = [nameInput, qthInput, locInput, refInput];
-            fields.forEach(f => {
-                if(f && f.value) {
-                    f.style.transition = 'background-color 0.3s';
-                    f.style.backgroundColor = 'var(--highlight)';
-                    setTimeout(() => f.style.backgroundColor = '', 800);
-                }
-            });
-            calcQRB(); // Aggiorna eventuale calcolo distanza
+            // Controlla se i dati sono diversi per evitare continui "flash" visivi
+            let isDifferent = (nameInput && nameInput.value !== (lastQso.name || "")) || 
+                              (qthInput && qthInput.value !== (lastQso.qth || "")) || 
+                              (locInput && locInput.value !== (lastQso.gridsquare || "")) || 
+                              (refInput && refInput.value !== (lastQso.theirRef || ""));
+
+            if (isDifferent) {
+                // Compila con i dati del vecchio QSO
+                if (nameInput) nameInput.value = lastQso.name || "";
+                if (qthInput) qthInput.value = lastQso.qth || "";
+                if (locInput) locInput.value = lastQso.gridsquare || "";
+                if (refInput) refInput.value = lastQso.theirRef || "";
+                
+                // Effetto visivo di lampeggio giallo per segnalare l'autocompilazione
+                let fields = [nameInput, qthInput, locInput, refInput];
+                fields.forEach(f => {
+                    if(f && f.value) {
+                        f.style.transition = 'none';
+                        f.style.backgroundColor = 'var(--highlight)';
+                        
+                        // Piccolo timeout per forzare l'animazione di ritorno al colore normale
+                        setTimeout(() => {
+                            f.style.transition = 'background-color 0.6s ease';
+                            f.style.backgroundColor = 'var(--input-bg)';
+                        }, 50);
+                    }
+                });
+                calcQRB(); 
+            }
         } else {
-            // Nessun precedente trovato: Svuota i campi (lasciali vuoti)
+            // Nessun precedente trovato (nessun match perfetto). 
+            // In questo caso azzeriamo i campi per evitare che l'utente veda i vecchi dati 
+            // di una corrispondenza errata.
             if (nameInput) nameInput.value = "";
             if (qthInput) qthInput.value = "";
             if (locInput) locInput.value = "";
