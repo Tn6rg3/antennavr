@@ -394,7 +394,11 @@
         <button type="button" id="cancelBtn" class="btn-grey" style="width:100%; display:none; margin-top:5px;" onclick="cancelEdit()">ANNULLA MODIFICA</button>
     </div>
 
-    <div class="box">
+   <div class="config-header" onclick="toggleQsoTable()" style="margin-top: 15px;">
+        <span>📻 TABELLA QSO REGISTRATI</span><span id="qsoArrow">▼</span>
+    </div>
+    
+    <div class="box" id="qsoTableContainer" style="display: none; border-top-left-radius: 0; border-top-right-radius: 0; margin-top: -5px;">
         <div class="search-bar" style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;">
             <span style="font-size:1.2em;">🔍</span>
             <input type="text" id="searchInput" placeholder="Cerca..." style="text-transform:uppercase; flex:1; min-width:100px;">
@@ -402,7 +406,6 @@
             <button class="btn-grey" onclick="resetSearch()">RESET</button>
             <span style="border-left:1px solid #999; height:20px; margin:0 2px;"></span>
             <button class="btn-cyan" onclick="showStats()">📊 STATS</button>
-        
         </div>
 
         <div class="pagination-bar" style="margin-top:10px;"><div style="display:flex; align-items:center; gap:5px;"><span style="font-size:0.8em; font-weight:bold;">MOSTRA:</span><select id="rowsPerPage" onchange="changeRows(this.value)" style="width:auto; padding:4px;"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></div><div class="page-controls"><button id="btnPrev" onclick="changePage(-1)">◀</button><span id="pageInfo" class="page-info">Pag 1/1</span><button id="btnNext" onclick="changePage(1)">▶</button></div></div>
@@ -579,6 +582,16 @@
         }
     }
 
+    function toggleQsoTable() { 
+        const p = document.getElementById('qsoTableContainer'); 
+        const s = (p.style.display === "block"); 
+        p.style.display = s ? "none" : "block"; 
+        document.getElementById('qsoArrow').innerText = s ? "▼" : "▲"; 
+    }
+
+
+
+    
     function autoBand() {
         let v=parseFloat(safeGetVal('freq')); if(!v)return; if(v>100)v=v/1000; let b=""; 
         if(v>=1.8&&v<=2.0)b="160m"; else if(v>=3.5&&v<=3.8)b="80m"; else if(v>=5.3&&v<=5.4)b="60m"; else if(v>=7.0&&v<=7.2)b="40m"; else if(v>=10.1&&v<=10.15)b="30m";
