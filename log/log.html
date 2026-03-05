@@ -582,12 +582,7 @@
         }
     }
 
-    function toggleQsoTable() { 
-        const p = document.getElementById('qsoTableContainer'); 
-        const s = (p.style.display === "block"); 
-        p.style.display = s ? "none" : "block"; 
-        document.getElementById('qsoArrow').innerText = s ? "▼" : "▲"; 
-    }
+    
 
 
 
@@ -871,7 +866,13 @@
     function toggleAdvanced() { const p=document.getElementById('advancedFields'); p.style.display=(p.style.display==="block")?"none":"block";saveConfigState(); }
     function toggleXmasSettings() { const c=document.getElementById('xmasContent'); const v=(c.style.display==="block"); c.style.display=v?"none":"block"; document.getElementById('xmasArrow').innerText=v?"▼":"▲";saveConfigState(); }
     function toggleKeyNightSettings() { const c=document.getElementById('knContent'); const v=(c.style.display==="block"); c.style.display=v?"none":"block"; document.getElementById('knArrow').innerText=v?"▼":"▲";saveConfigState(); }
-    
+    function toggleQsoTable() { 
+        const p = document.getElementById('qsoTableContainer'); 
+        const s = (p.style.display === "block"); 
+        p.style.display = s ? "none" : "block"; 
+        document.getElementById('qsoArrow').innerText = s ? "▼" : "▲"; 
+        saveConfigState();
+    }
     function toggleQSLEditor() {
         const p = document.getElementById('qslLiveBox');
         const s = (p.style.display === "block");
