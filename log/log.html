@@ -867,10 +867,10 @@
         }
     }
 
-    function toggleConfigPanel() { const p=document.getElementById('configPanel'); const s=(p.style.display==="block"); p.style.display=s?"none":"block"; document.getElementById('configArrow').innerText=s?"▼":"▲"; }
-    function toggleAdvanced() { const p=document.getElementById('advancedFields'); p.style.display=(p.style.display==="block")?"none":"block"; }
-    function toggleXmasSettings() { const c=document.getElementById('xmasContent'); const v=(c.style.display==="block"); c.style.display=v?"none":"block"; document.getElementById('xmasArrow').innerText=v?"▼":"▲"; }
-    function toggleKeyNightSettings() { const c=document.getElementById('knContent'); const v=(c.style.display==="block"); c.style.display=v?"none":"block"; document.getElementById('knArrow').innerText=v?"▼":"▲"; }
+    function toggleConfigPanel() { const p=document.getElementById('configPanel'); const s=(p.style.display==="block"); p.style.display=s?"none":"block"; document.getElementById('configArrow').innerText=s?"▼":"▲";saveConfigState(); }
+    function toggleAdvanced() { const p=document.getElementById('advancedFields'); p.style.display=(p.style.display==="block")?"none":"block";saveConfigState(); }
+    function toggleXmasSettings() { const c=document.getElementById('xmasContent'); const v=(c.style.display==="block"); c.style.display=v?"none":"block"; document.getElementById('xmasArrow').innerText=v?"▼":"▲";saveConfigState(); }
+    function toggleKeyNightSettings() { const c=document.getElementById('knContent'); const v=(c.style.display==="block"); c.style.display=v?"none":"block"; document.getElementById('knArrow').innerText=v?"▼":"▲";saveConfigState(); }
     
     function toggleQSLEditor() {
         const p = document.getElementById('qslLiveBox');
@@ -878,6 +878,7 @@
         p.style.display = s ? "none" : "block";
         document.getElementById('qslToggleArrow').innerText = s ? "▼" : "▲";
         if(!s) renderQSL();
+        saveConfigState();
     }
 
     function loadDB() { try { const raw = localStorage.getItem(DB_KEY); db = raw ? JSON.parse(raw) : {"GENERALE":[]}; } catch(e){ db = {"GENERALE":[]}; } if(!db["GENERALE"]) db["GENERALE"] = []; if(!db[currentLog]) currentLog = "GENERALE"; saveDB(); }
@@ -1250,8 +1251,46 @@
         } 
     }
 
-    function saveConfigState() { localStorage.setItem(CONFIG_KEY, JSON.stringify({snap:document.getElementById('autoSnapshotCheck').checked})); }
-    function loadConfigState() { const d=JSON.parse(localStorage.getItem(CONFIG_KEY)); if(d) document.getElementById('autoSnapshotCheck').checked=d.snap; }
+function saveConfigState() { 
+        const state = {
+            snap: document.getElementById('autoSnapshotCheck') ? document.getElementById('autoSnapshotCheck').checked : true,
+            panels: {
+                config: document.getElementById('configPanel') && document.getElementById('configPanel').style.display === "block",
+                advanced: document.getElementById('advancedFields') && document.getElementById('advancedFields').style.display === "block",
+                xmas: document.getElementById('xmasContent') && document.getElementById('xmasContent').style.display === "block",
+                kn: document.getElementById('knContent') && document.getElementById('knContent').style.display === "block",
+                qsl: document.getElementById('qslLiveBox') && document.getElementById('qslLiveBox').style.display === "block",
+                qso: document.getElementById('qsoTableContainer') && document.getElementById('qsoTableContainer').style.display === "block"
+            }
+        };
+        localStorage.setItem(CONFIG_KEY, JSON.stringify(state)); 
+    }
+
+    function loadConfigState() { 
+        const d = JSON.parse(localStorage.getItem(CONFIG_KEY)); 
+        if(d) {
+            if(d.snap !== undefined && document.getElementById('autoSnapshotCheck')) {
+                document.getElementById('autoSnapshotCheck').checked = d.snap;
+            }
+            if(d.panels) {
+                const applyState = (panelId, arrowId, isOpen) => {
+                    const p = document.getElementById(panelId);
+                    const a = document.getElementById(arrowId);
+                    if(p) p.style.display = isOpen ? "block" : "none";
+                    if(a) a.innerText = isOpen ? "▲" : "▼";
+                };
+                applyState('configPanel', 'configArrow', d.panels.config);
+                applyState('xmasContent', 'xmasArrow', d.panels.xmas);
+                applyState('knContent', 'knArrow', d.panels.kn);
+                applyState('qslLiveBox', 'qslToggleArrow', d.panels.qsl);
+                applyState('qsoTableContainer', 'qsoArrow', d.panels.qso);
+                
+                const adv = document.getElementById('advancedFields');
+                if(adv) adv.style.display = d.panels.advanced ? "block" : "none";
+            }
+        } 
+    }
+    
     function saveDraft() { if(editIdx===-1) localStorage.setItem(DRAFT_KEY, JSON.stringify({call:document.getElementById('call').value, freq:document.getElementById('freq').value, band:document.getElementById('band').value, mode:document.getElementById('mode').value})); }
     function loadDraft() { const d=JSON.parse(localStorage.getItem(DRAFT_KEY)); if(d && editIdx===-1) { document.getElementById('call').value=d.call||""; document.getElementById('freq').value=d.freq||""; } }
     function clearDraft() { localStorage.removeItem(DRAFT_KEY); }
