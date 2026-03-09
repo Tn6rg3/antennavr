@@ -132,7 +132,7 @@
 <body>
 
     <div class="header-tools">
-        <div id="statusMsg" class="status-bar" style="flex:1; margin:0 10px 0 0;">Log Radio QSL</div>
+        <div id="statusMsg" class="status-bar" style="flex:1; margin:0 10px 0 0;">Log Radio</div>
         <button class="theme-switch" onclick="forceAppUpdate()" style="background-color:rgba(52, 152, 219, 0.2); border-color:#3498db;">🔄 Aggiorna App</button>
         <button class="theme-switch" onclick="document.getElementById('privacyModal').style.display='flex'">🛡️ Privacy</button>
         <button class="theme-switch" onclick="toggleTheme()">🌗 Tema</button>
@@ -528,20 +528,38 @@
         try { initImageDB(); } catch(e) { console.error("ImageDB:", e); }
     };
 
-    function msg(t){document.getElementById('statusMsg').innerText=t;setTimeout(()=>document.getElementById('statusMsg').innerText="Log Radio QSL",3000);}
+    function msg(t){document.getElementById('statusMsg').innerText=t;setTimeout(()=>document.getElementById('statusMsg').innerText="Log Radio",3000);}
     function showToast(t){const el=document.getElementById('toast');el.innerText=t;el.className="show";setTimeout(()=>el.className="",3000);}
 
-    function forceAppUpdate() {
-        if(confirm("Vuoi cercare su GitHub e forzare l'aggiornamento dell'applicazione all'ultima versione disponibile?")) {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                    for(let registration of registrations) {
-                        registration.unregister();
+    // FUNZIONE AGGIORNATA PER FORZARE REALMENTE L'AGGIORNAMENTO
+    async function forceAppUpdate() {
+        if(confirm("Vuoi forzare l'aggiornamento dell'applicazione all'ultima versione disponibile?\n\n(Questo cancellerà le vecchie cache di sistema, NON perderai i tuoi QSO)")) {
+            try {
+                // 1. Unregister Service Workers
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (let registration of registrations) {
+                        await registration.unregister();
                     }
-                    window.location.reload(true);
-                });
-            } else {
-                window.location.reload(true);
+                }
+                
+                // 2. Svuota tutte le Cache di sistema della PWA
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    for (let cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                    }
+                }
+                
+                // 3. Ricarica la pagina forzando l'aggiramento della cache HTTP (aggiungendo timestamp)
+                const url = new URL(window.location.href);
+                url.searchParams.set('upd', Date.now());
+                window.location.href = url.href;
+                
+            } catch (err) {
+                console.error("Errore durante l'aggiornamento: ", err);
+                // Fallback nel caso in cui qualcosa fallisca
+                window.location.reload();
             }
         }
     }
