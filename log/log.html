@@ -367,7 +367,7 @@
                             <input type="file" id="qslLocalLogoInput" accept="image/*" style="width:100%; margin-top:5px;">
                         </div>
 
-                        <button type="button" class="btn-green" style="width:100%; padding:10px; margin-top:10px;" onclick="saveQslTemplate()">💾 SALVA COME TEMPLATE PREDEFINITO</button>
+                        <button type="button" class="btn-green" style="width:100%; padding:10px; margin-top:10px; text-transform: uppercase;" onclick="saveQslTemplate()">💾 SALVA TEMPLATE PER IL LOG CORRENTE</button>
                     </div>
                 </details>
             </div>
@@ -470,9 +470,11 @@
     const DB_KEY="HamLog_FINAL_PRO_V6", DRAFT_KEY="HamLog_Draft_V6", USER_DATA_KEY="HamLog_UserData_V7", CONFIG_KEY="HamLog_Config_V6", SNAPSHOT_KEY="HamLog_Snap_V6";
     const META_KEY="HamLog_Meta_V1"; 
     const IMAGE_DB_NAME="HamLog_ImagesDB", IMAGE_STORE_NAME="photos";
-    const QSL_TEMPLATE_META = "HamLog_QSL_Template_Meta_V3";
+    const QSL_TEMPLATE_META = "HamLog_QSL_Template_Meta_V3"; // Vecchio storage globale per retrocompatibilità
+    const QSL_TEMPLATES_KEY = "HamLog_QSL_Templates_V1"; // NUOVO storage per-log
     
     let db={}; let snapshots=[]; let logMeta={}; 
+    let qslTemplates = {}; // Database dei template per ogni logbook
     let currentLog="GENERALE"; let editIdx=-1; let qsoStarted=false; 
     let currentPage=1; let rowsPerPage=10; let currentSort={col:null,asc:true}; let activeSearch=null; 
     let liveCallFilter=""; let map=null; let imageDB=null; 
@@ -499,17 +501,14 @@
         
         const callEl = document.getElementById('call');
         if(callEl) { 
-            // MODIFICATO QUI: Agganciata la funzione autoFillQSO all'evento "input" in modo che 
-            // funzioni in tempo reale mentre scrivi.
             callEl.addEventListener('input', (e)=>{ 
                 autoStartTime(); 
                 checkDupe(); 
                 liveCallFilter=e.target.value.trim().toUpperCase(); 
                 currentPage=1; 
                 renderUI(); 
-                autoFillQSO(); // Esegue l'autocompilazione ad ogni singola lettera
+                autoFillQSO(); 
             }); 
-            // Rimosso il listener 'change' che attivava l'autocompilazione solo uscendo dal campo
         }
 
         document.getElementById('fileInput').addEventListener('change', handleImport);
@@ -517,7 +516,7 @@
         document.getElementById('searchInput').addEventListener('keypress', (e)=>{if(e.key==='Enter')doSearch();});
         document.getElementById('formBox').addEventListener('input', saveDraft);
 
-        initTheme(); initDate(); loadDB(); loadMeta(); loadSnapshots();
+        initTheme(); initDate(); loadDB(); loadMeta(); loadSnapshots(); loadQslTemplatesDB();
         
         loadUserData(); 
         initQSLEditorUI();
@@ -560,6 +559,24 @@
     function saveMeta() { localStorage.setItem(META_KEY, JSON.stringify(logMeta)); }
     function isContestMode() { return logMeta[currentLog] && logMeta[currentLog].isContest; }
 
+    function loadQslTemplatesDB() {
+        try { 
+            qslTemplates = JSON.parse(localStorage.getItem(QSL_TEMPLATES_KEY)) || {}; 
+            // Migrazione per retrocompatibilità (se esiste un template globale ma il nuovo DB è vuoto, assegnalo a GENERALE)
+            if (Object.keys(qslTemplates).length === 0) {
+                let oldGlobal = localStorage.getItem(QSL_TEMPLATE_META);
+                if (oldGlobal) {
+                    qslTemplates["GENERALE"] = JSON.parse(oldGlobal);
+                    saveQslTemplatesDB();
+                }
+            }
+        } catch(e) { qslTemplates = {}; }
+    }
+    function saveQslTemplatesDB() {
+        try { localStorage.setItem(QSL_TEMPLATES_KEY, JSON.stringify(qslTemplates)); } 
+        catch(e) { alert("Errore Salvataggio Template: " + e.message + "\n\nForse hai caricato immagini di sfondo troppo pesanti nei vari log."); }
+    }
+
     function updateFormVisibility() {
         const isC = isContestMode();
         document.querySelectorAll('.hide-in-contest').forEach(el => el.style.display = isC ? 'none' : 'block');
@@ -582,11 +599,6 @@
         }
     }
 
-    
-
-
-
-    
     function autoBand() {
         let v=parseFloat(safeGetVal('freq')); if(!v)return; if(v>100)v=v/1000; let b=""; 
         if(v>=1.8&&v<=2.0)b="160m"; else if(v>=3.5&&v<=3.8)b="80m"; else if(v>=5.3&&v<=5.4)b="60m"; else if(v>=7.0&&v<=7.2)b="40m"; else if(v>=10.1&&v<=10.15)b="30m";
@@ -596,11 +608,7 @@
         syncLiveQsoData();
     }
 
-    // =========================================================================
-    // NUOVA FUNZIONE: AUTOCOMPILAZIONE IN TEMPO REALE E SVUOTAMENTO
-    // =========================================================================
     function autoFillQSO() {
-        // Se stiamo modificando un QSO esistente, non facciamo l'autocompilazione
         if (editIdx !== -1) return;
 
         const searchCall = safeGetVal('call').trim().toUpperCase();
@@ -610,7 +618,6 @@
         const locInput = document.getElementById('gridsquare');
         const refInput = document.getElementById('theirRef');
 
-        // Se il campo callsign è vuoto (o se l'utente ha cancellato tutto), svuota esplicitamente i campi e fermati
         if (!searchCall) {
             if (nameInput) nameInput.value = "";
             if (qthInput) qthInput.value = "";
@@ -623,7 +630,6 @@
         let matchFound = false;
         let lastQso = null;
 
-        // Cerca la corrispondenza esatta nel log GENERALE
         if (db["GENERALE"]) {
             for (let i = db["GENERALE"].length - 1; i >= 0; i--) {
                 if (db["GENERALE"][i].call === searchCall) {
@@ -635,27 +641,22 @@
         }
 
         if (matchFound && lastQso) {
-            // Controlla se i dati sono diversi per evitare continui "flash" visivi
             let isDifferent = (nameInput && nameInput.value !== (lastQso.name || "")) || 
                               (qthInput && qthInput.value !== (lastQso.qth || "")) || 
                               (locInput && locInput.value !== (lastQso.gridsquare || "")) || 
                               (refInput && refInput.value !== (lastQso.theirRef || ""));
 
             if (isDifferent) {
-                // Compila con i dati del vecchio QSO
                 if (nameInput) nameInput.value = lastQso.name || "";
                 if (qthInput) qthInput.value = lastQso.qth || "";
                 if (locInput) locInput.value = lastQso.gridsquare || "";
                 if (refInput) refInput.value = lastQso.theirRef || "";
                 
-                // Effetto visivo di lampeggio giallo per segnalare l'autocompilazione
                 let fields = [nameInput, qthInput, locInput, refInput];
                 fields.forEach(f => {
                     if(f && f.value) {
                         f.style.transition = 'none';
                         f.style.backgroundColor = 'var(--highlight)';
-                        
-                        // Piccolo timeout per forzare l'animazione di ritorno al colore normale
                         setTimeout(() => {
                             f.style.transition = 'background-color 0.6s ease';
                             f.style.backgroundColor = 'var(--input-bg)';
@@ -665,9 +666,6 @@
                 calcQRB(); 
             }
         } else {
-            // Nessun precedente trovato (nessun match perfetto). 
-            // In questo caso azzeriamo i campi per evitare che l'utente veda i vecchi dati 
-            // di una corrispondenza errata.
             if (nameInput) nameInput.value = "";
             if (qthInput) qthInput.value = "";
             if (locInput) locInput.value = "";
@@ -675,7 +673,6 @@
             calcQRB();
         }
     }
-    // =========================================================================
 
     function safeAddToLog(targetLogName, qsoData) {
         if (!db[targetLogName]) db[targetLogName] = [];
@@ -785,11 +782,62 @@
         } catch(e) { alert("Err Delete"); }
     }
 
-    function changeLog(val) { if(editIdx !== -1) cancelEdit(); currentLog = val; currentPage = 1; activeSearch = null; document.getElementById('searchInput').value = ''; renderUI(); }
+    function changeLog(val) { 
+        if(editIdx !== -1) cancelEdit(); 
+        currentLog = val; 
+        currentPage = 1; activeSearch = null; document.getElementById('searchInput').value = ''; 
+        
+        // Carica il template associato a questo log specifico
+        clearQSLEditorCanvas();
+        let t = qslTemplates[currentLog];
+        if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
+        
+        renderUI(); 
+    }
     
-    function deleteLog() { const isSystemLog = (currentLog === "GENERALE"); const message = isSystemLog ? "SVUOTARE il log "+currentLog+"?" : "Eliminare definitivamente "+currentLog+"?"; if (confirm(message)) { if (isSystemLog) { db[currentLog] = []; } else { delete db[currentLog]; if(logMeta[currentLog]) { delete logMeta[currentLog]; saveMeta(); } currentLog = "GENERALE"; } saveDB(); renderUI(); } }
+    function deleteLog() { 
+        const isSystemLog = (currentLog === "GENERALE"); 
+        const message = isSystemLog ? "SVUOTARE il log "+currentLog+"?" : "Eliminare definitivamente "+currentLog+"?"; 
+        if (confirm(message)) { 
+            if (isSystemLog) { 
+                db[currentLog] = []; 
+            } else { 
+                delete db[currentLog]; 
+                if(logMeta[currentLog]) { delete logMeta[currentLog]; saveMeta(); } 
+                if(qslTemplates[currentLog]) { delete qslTemplates[currentLog]; saveQslTemplatesDB(); }
+                currentLog = "GENERALE"; 
+            } 
+            saveDB(); renderUI(); 
+            // Aggiorna template vista
+            clearQSLEditorCanvas();
+            let t = qslTemplates[currentLog];
+            if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
+        } 
+    }
     
-    function doCreateLog() { const n=safeGetVal('newLogName').trim(); const template = safeGetVal('newLogTemplate'); const isCBox = document.getElementById('isContestCheck'); const isC = isCBox ? isCBox.checked : false; if(n && !db[n]) { db[n]=[]; logMeta[n] = { type: template }; if(isC) { logMeta[n].isContest = true; logMeta[n].name = "CQ-TEST"; logMeta[n].op = "SINGLE-OP"; logMeta[n].band = "ALL"; logMeta[n].mode = "MIXED"; logMeta[n].power = "LOW"; logMeta[n].exchType = "SERIAL"; logMeta[n].fixedVal = ""; } saveMeta(); currentLog=n; saveDB(); renderUI(); document.getElementById('createLogArea').style.display='none'; document.getElementById('newLogName').value = ""; if(isCBox) isCBox.checked = false; document.getElementById('newLogTemplate').value = "STD"; } else if(db[n]) alert("Log già esistente!"); }
+    function doCreateLog() { 
+        const n=safeGetVal('newLogName').trim(); 
+        const template = safeGetVal('newLogTemplate'); 
+        const isCBox = document.getElementById('isContestCheck'); 
+        const isC = isCBox ? isCBox.checked : false; 
+        if(n && !db[n]) { 
+            db[n]=[]; 
+            logMeta[n] = { type: template }; 
+            if(isC) { logMeta[n].isContest = true; logMeta[n].name = "CQ-TEST"; logMeta[n].op = "SINGLE-OP"; logMeta[n].band = "ALL"; logMeta[n].mode = "MIXED"; logMeta[n].power = "LOW"; logMeta[n].exchType = "SERIAL"; logMeta[n].fixedVal = ""; } 
+            saveMeta(); 
+            currentLog=n; 
+            saveDB(); 
+            renderUI(); 
+            document.getElementById('createLogArea').style.display='none'; 
+            document.getElementById('newLogName').value = ""; 
+            if(isCBox) isCBox.checked = false; 
+            document.getElementById('newLogTemplate').value = "STD"; 
+            
+            // Imposta canvas vuoto per il nuovo log
+            clearQSLEditorCanvas();
+            syncGlobalToQsl();
+        } else if(db[n]) alert("Log già esistente!"); 
+    }
 
     function saveContestMeta() {
         try {
@@ -1000,7 +1048,7 @@
                 } 
             } 
         } 
-        const fb = { db: exDB, meta: logMeta }; 
+        const fb = { db: exDB, meta: logMeta, templates: qslTemplates }; 
         return { 
             blob: new Blob([JSON.stringify(fb)], {type:'application/json'}), 
             photosCount: tp 
@@ -1041,7 +1089,6 @@
 
         try {
             const { blob, photosCount } = await generateBackupBlob();
-            // Aggiungiamo _JSON al nome del file così è chiaro cosa c'è dentro anche se ha estensione .txt
             const fileName = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}_JSON.txt`; 
             
             preparedShareFile = new File([blob], fileName, { type: "text/plain" });
@@ -1092,6 +1139,7 @@
                 const d = JSON.parse(e.target.result); 
                 let iDB = d.db || d; 
                 logMeta = d.meta || {}; 
+                if (d.templates) { qslTemplates = d.templates; saveQslTemplatesDB(); }
                 db = {}; 
                 let pc = 0; 
                 for (let l in iDB) { 
@@ -1109,13 +1157,19 @@
                 saveDB(); 
                 saveMeta(); 
                 renderUI(); 
+                
+                // Ricarica template
+                clearQSLEditorCanvas();
+                let t = qslTemplates[currentLog];
+                if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
+                
                 alert("Ripristino OK. Foto: "+pc); 
             } catch(err) { 
                 alert("Errore di lettura del File Backup. Verifica che sia un file LogRadio valido."); 
             } 
         }; 
         r.readAsText(f); 
-        document.getElementById('backupInput').value = ''; // Resetta l'input file per futuri ripristini
+        document.getElementById('backupInput').value = ''; 
     }
     
     function loadPhotoFromDB(id) { 
@@ -1169,8 +1223,8 @@
         if (moveLogPanel) moveLogPanel.style.display = 'none';
 
         clearQSLEditorCanvas();
-        let raw = localStorage.getItem(QSL_TEMPLATE_META);
-        if (raw) { loadQslTemplate(); } else { syncGlobalToQsl(); }
+        let t = qslTemplates[currentLog];
+        if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
         syncLiveQsoData(); 
     }
 
@@ -1199,8 +1253,8 @@
         if (q.qslMeta) {
             applyQslState(q.qslMeta);
         } else {
-            let raw = localStorage.getItem(QSL_TEMPLATE_META);
-            if(raw) { let t = JSON.parse(raw); applyQslState(t); }
+            let t = qslTemplates[currentLog];
+            if(t) { applyQslState(t); }
         }
 
         if(q.hasPhoto && q.photoId) {
@@ -1510,15 +1564,12 @@ function saveConfigState() {
     }
 
     function loadDefaultTemplateBg() {
-        let raw = localStorage.getItem(QSL_TEMPLATE_META);
-        if(raw) {
-            let t = JSON.parse(raw);
-            if(t.bg) {
-                let img = new Image();
-                img.onload = () => { currentCroppedImg = img; originalImg = img; renderQSL(); };
-                img.src = t.bg;
-                return;
-            }
+        let t = qslTemplates[currentLog] || (localStorage.getItem(QSL_TEMPLATE_META) ? JSON.parse(localStorage.getItem(QSL_TEMPLATE_META)) : null);
+        if(t && t.bg) {
+            let img = new Image();
+            img.onload = () => { currentCroppedImg = img; originalImg = img; renderQSL(); };
+            img.src = t.bg;
+            return;
         }
         clearQSLEditorCanvas();
     }
@@ -1840,15 +1891,25 @@ function saveConfigState() {
         if (currentCroppedImg) t.bg = getBase64Image(currentCroppedImg);
         if (logoImg) t.logo = getBase64Image(logoImg);
         try { 
-            localStorage.setItem(QSL_TEMPLATE_META, JSON.stringify(t)); 
-            alert("✅ TEMPLATE SALVATO CON SUCCESSO!\n\nI colori, i font, le posizioni dei testi e l'immagine di sfondo (se presente) verranno caricati automaticamente come 'Sfondo Base' per ogni nuovo QSO."); 
+            // NUOVO: Salva il template nel database dei template sotto il nome del log corrente
+            qslTemplates[currentLog] = t;
+            saveQslTemplatesDB();
+            alert(`✅ TEMPLATE SALVATO CON SUCCESSO PER IL LOG: ${currentLog}!\n\nOgni nuovo QSO aggiunto a questo log avrà questo sfondo, posizioni e font.`); 
         } catch(e) { alert("Errore Salvataggio: L'immagine caricata come sfondo è troppo pesante. Riduci la risoluzione della foto prima di salvarla come Template."); }
     }
 
     function loadQslTemplate() {
-        let raw = localStorage.getItem(QSL_TEMPLATE_META); if(!raw) return;
+        // NUOVO: Cerca il template specifico per questo log
+        let t = qslTemplates[currentLog];
+        if (!t) {
+            // Se non c'è, controlliamo se esiste un vecchio template globale per retrocompatibilità
+            let raw = localStorage.getItem(QSL_TEMPLATE_META); 
+            if (raw) t = JSON.parse(raw);
+            else return; // Nessun template esistente
+        }
+
         try {
-            let t = JSON.parse(raw); applyQslState(t);
+            applyQslState(t);
             let promises = [];
             if(t.bg && !originalImg) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { currentCroppedImg = img; originalImg = img; res(); }; img.src = t.bg; })); }
             if(t.logo) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { logoImg = img; res(); }; img.src = t.logo; })); }
