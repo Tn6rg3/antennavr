@@ -528,7 +528,7 @@
         try { initImageDB(); } catch(e) { console.error("ImageDB:", e); }
     };
 
-    function msg(t){document.getElementById('statusMsg').innerText=t;setTimeout(()=>document.getElementById('statusMsg').innerText="Log Radio QSL",3000);}
+    function msg(t){document.getElementById('statusMsg').innerText=t;setTimeout(()=>document.getElementById('statusMsg').innerText="Log Radio",3000);}
     function showToast(t){const el=document.getElementById('toast');el.innerText=t;el.className="show";setTimeout(()=>el.className="",3000);}
 
     // FUNZIONE AGGIORNATA PER FORZARE REALMENTE L'AGGIORNAMENTO
