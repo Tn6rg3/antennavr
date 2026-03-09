@@ -133,7 +133,6 @@
 
     <div class="header-tools">
         <div id="statusMsg" class="status-bar" style="flex:1; margin:0 10px 0 0;">Log Radio QSL</div>
-        <!-- NUOVO TASTO AGGIORNA APP -->
         <button class="theme-switch" onclick="forceAppUpdate()" style="background-color:rgba(52, 152, 219, 0.2); border-color:#3498db;">🔄 Aggiorna App</button>
         <button class="theme-switch" onclick="document.getElementById('privacyModal').style.display='flex'">🛡️ Privacy</button>
         <button class="theme-switch" onclick="toggleTheme()">🌗 Tema</button>
@@ -150,10 +149,16 @@
             <select id="logSelector" onchange="changeLog(this.value)" style="flex:1; font-weight:bold; color:black;"></select>
             <button class="btn-green" onclick="toggleCreate()" title="Crea nuovo log">+</button>
         </div>
-        <div id="createLogArea" style="display:none;">
+        <div id="createLogArea" style="display:none; background:#ecf0f1; padding:10px; margin-top:10px; border-radius:5px; color:#333;">
             <label style="color:#333;">Nome Nuovo Log:</label>
             <input type="text" id="newLogName" placeholder="Nome log..." style="color:black; background:white; border:1px solid #ccc;">
-            <div class="checkbox-container" style="background:#fff; padding:5px; border-radius:4px; margin-bottom:5px; border:1px solid #ccc;">
+            <label style="color:#333; margin-top:5px;">Modello (Template):</label>
+            <select id="newLogTemplate" style="color:black; background:white; border:1px solid #ccc; font-weight:normal;">
+                <option value="STD">Standard (Nessuno)</option>
+                <option value="XMAS">🎄 Xmas Activity</option>
+                <option value="KEYNIGHT">🗝️ Key Night</option>
+            </select>
+            <div class="checkbox-container" style="background:#fff; padding:5px; border-radius:4px; margin-bottom:5px; margin-top:5px; border:1px solid #ccc;">
                 <input type="checkbox" id="isContestCheck" style="width:auto; margin-right:5px;">
                 <label for="isContestCheck" style="display:inline; color:#c0392b; font-weight:bold;">🏆 MODALITÀ CONTEST</label>
             </div>
@@ -233,19 +238,55 @@
                 <button class="btn-grey" onclick="exportLogChoice()" style="margin:0; height:36px; border-radius:0 4px 4px 0; border-left:1px solid #555; white-space:nowrap;">💾 SALVA</button>
             </div>
 
-            <button class="btn-purple" onclick="downloadFullBackup()">🔄 BACKUP TOT</button>
-            <button class="btn-purple" onclick="document.getElementById('backupInput').click()">📂 RIPRISTINA</button>
-            <input type="file" id="backupInput" accept=".json" style="display:none;" onchange="restoreFullBackup()">
+            <!-- BOTTONI BACKUP CON CONDIVISIONE DRIVE/CLOUD -->
+            <button class="btn-purple" style="flex:1;" onclick="downloadFullBackup()">⬇️ SCARICA BACKUP</button>
+            <button class="btn-cyan" style="flex:1;" onclick="startShareProcess()">📤 CONDIVIDI (Drive/Cloud)</button>
+            <button class="btn-purple" style="flex:1;" onclick="document.getElementById('backupInput').click()">📂 RIPRISTINA</button>
+            
+            <!-- ACCETTA SIA JSON CHE TXT! -->
+            <input type="file" id="backupInput" accept=".json, .txt, text/plain, application/json" style="display:none;" onchange="restoreFullBackup()">
         </div>
     </div>
     
     <div id="xmasPanel">
-        <div class="xmas-header" onclick="toggleXmasSettings()"><span>🎅 XMAS ACTIVITY</span><span id="xmasArrow">▼</span></div>
+        <div class="xmas-header" onclick="toggleXmasSettings()"><span>🎅 XMAS ACTIVITY / SETTINGS</span><span id="xmasArrow">▼</span></div>
         <div id="xmasContent" class="xmas-content">
-            <div class="row"><div class="col"><label>IL TUO NOMINATIVO</label><input type="text" id="xmasCall" style="border: 2px solid #e6b0aa;"></div><div class="col"><label>LA TUA EMAIL</label><input type="email" id="xmasEmail" placeholder="tua@email.com" style="border: 2px solid #e6b0aa;"></div></div>
+            <div class="row"><div class="col"><label>IL TUO NOMINATIVO</label><input type="text" id="xmasCall" onchange="saveUserData()" style="border: 2px solid #e6b0aa;"></div><div class="col"><label>LA TUA EMAIL</label><input type="email" id="xmasEmail" onchange="saveUserData()" placeholder="tua@email.com" style="border: 2px solid #e6b0aa;"></div></div>
             <label>CATEGORIA</label><div class="radio-group"><label class="radio-item"><input type="radio" name="xmasCategory" value="1" checked> <span>ROOKIE</span></label><label class="radio-item"><input type="radio" name="xmasCategory" value="2"> <span>SENIOR</span></label></div>
             <label>SERVER URL</label><input type="text" id="xmasUrl" value="https://cwqrs.pythonanywhere.com/xmas_2025/upload_log_json" style="color:#555;">
             <button class="btn-xmas-upload" onclick="uploadXmasLog()">📤 INVIA LOG ORA</button>
+        </div>
+    </div>
+
+    <!-- PANNELLO TOP PER KEY NIGHT -->
+    <div id="keyNightTopPanel" style="display:none; margin-bottom: 15px; border-radius: 8px; overflow: hidden; border: 2px solid #1abc9c;">
+        <div class="kn-header" onclick="toggleKeyNightSettings()" style="background: linear-gradient(135deg, #1abc9c, #16a085); color: white; padding: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold;">
+            <span>🗝️ KEY NIGHT ACTIVITY / SETTINGS</span><span id="knArrow">▼</span>
+        </div>
+        <div id="knContent" class="kn-content" style="display: none; padding: 15px; background: #e8f6f3; border-top: 1px solid #1abc9c;">
+            <div class="row">
+                <div class="col"><label>IL TUO NOMINATIVO</label><input type="text" id="knCall" onchange="saveUserData()" style="border: 2px solid #1abc9c;"></div>
+                <div class="col"><label>LA TUA EMAIL</label><input type="email" id="knEmail" onchange="saveUserData()" placeholder="tua@email.com" style="border: 2px solid #1abc9c;"></div>
+            </div>
+            <label>CATEGORIA</label>
+            <div class="radio-group" style="border: 1px solid #a3e4d7; margin-bottom: 10px;">
+                <label class="radio-item"><input type="radio" name="knCategory" value="1" checked> <span>ROOKIE</span></label>
+                <label class="radio-item"><input type="radio" name="knCategory" value="2"> <span>SENIOR</span></label>
+            </div>
+            <div class="row">
+                <div class="col"><label>DATA EVENTO</label><input type="date" id="knDateFilter" style="border: 2px solid #1abc9c;"></div>
+                <div class="col"><label>TASTO DA INVIARE</label>
+                    <select id="knKeyFilter" style="border: 2px solid #1abc9c;">
+                        <option value="Verticale">Verticale</option>
+                        <option value="Sideswiper">Sideswiper</option>
+                        <option value="Bug">Bug</option>
+                        <option value="Paddle">Paddle</option>
+                        <option value="Monopala">Monopala</option>
+                    </select>
+                </div>
+            </div>
+            <label>SERVER URL</label><input type="text" id="knUrl" value="https://cwqrs.pythonanywhere.com/keynight/upload_log_json" style="color:#555;">
+            <button class="btn-green" style="width: 100%; font-size: 1.1em; padding: 12px; margin-top: 10px; font-weight: bold; text-transform: uppercase;" onclick="uploadKeyNightLog()">📤 CERCA E INVIA LOG KEY NIGHT</button>
         </div>
     </div>
 
@@ -262,6 +303,18 @@
         <div class="row"><div class="col"><label>BANDA</label><select id="band" oninput="syncLiveQsoData()"><option>160m</option><option>80m</option><option>60m</option><option selected>40m</option><option>30m</option><option>20m</option><option>17m</option><option>15m</option><option>12m</option><option>10m</option><option>6m</option><option>2m</option><option>70cm</option></select></div><div class="col"><label>MODO</label><select id="mode" onchange="syncRST(); syncLiveQsoData()"><option selected>CW</option><option>SSB</option><option>FT8</option><option>FM</option><option>RTTY</option><option>AM</option></select></div></div>
         <div class="row"><div class="col"><label>RST TX</label><input type="text" id="rstS" value="599" oninput="syncLiveQsoData()"></div><div class="col"><label>RST RX</label><input type="text" id="rstR" value="599"></div></div>
         
+        <!-- PANNELLO SELEZIONE TASTO (Visibile solo se modello = KEYNIGHT) -->
+        <div id="keyNightPanel" style="display:none; background:rgba(26, 188, 156, 0.1); border:2px solid #1abc9c; padding:10px; border-radius:8px; margin-bottom:10px; margin-top:10px;">
+            <label style="color:#16a085; font-weight:bold; font-size:1em;">🗝️ MODELLO TASTO UTILIZZATO</label>
+            <select id="keyType" style="border:1px solid #1abc9c; margin-bottom:0;">
+                <option value="Verticale">Verticale</option>
+                <option value="Sideswiper">Sideswiper</option>
+                <option value="Bug">Bug</option>
+                <option value="Paddle">Paddle</option>
+                <option value="Monopala">Monopala</option>
+            </select>
+        </div>
+
         <div class="hide-in-contest">
             <div class="qsl-editor-btn" onclick="toggleQSLEditor()">
                 <span>🎨 APRI EDITOR QSL (Foto e Testi)</span>
@@ -314,10 +367,17 @@
                             <input type="file" id="qslLocalLogoInput" accept="image/*" style="width:100%; margin-top:5px;">
                         </div>
 
-                        <button type="button" class="btn-green" style="width:100%; padding:10px; margin-top:10px;" onclick="saveQslTemplate()">💾 SALVA COME TEMPLATE PREDEFINITO</button>
+                        <button type="button" class="btn-green" style="width:100%; padding:10px; margin-top:10px; text-transform: uppercase;" onclick="saveQslTemplate()">💾 SALVA TEMPLATE PER IL LOG CORRENTE</button>
                     </div>
                 </details>
             </div>
+        </div>
+
+        <!-- PANNELLO SPOSTA LOG -->
+        <div id="moveLogPanel" style="display:none; background:rgba(155, 89, 182, 0.1); border:2px solid #9b59b6; padding:10px; border-radius:8px; margin-bottom:10px; margin-top:10px;">
+            <label style="color:#8e44ad; font-weight:bold; font-size:1em;">📦 SPOSTA QSO IN UN ALTRO LOG</label>
+            <select id="moveLogSelect" style="border:1px solid #9b59b6; margin-bottom:0; font-weight:bold; color:black; background:white;"></select>
+            <small style="color:#555; display:block; margin-top:4px;">Il QSO rimarrà sempre visibile anche nel log principale GENERALE.</small>
         </div>
 
         <div class="advanced-toggle" onclick="toggleAdvanced()">⬇️ Scambi & Note</div>
@@ -334,7 +394,11 @@
         <button type="button" id="cancelBtn" class="btn-grey" style="width:100%; display:none; margin-top:5px;" onclick="cancelEdit()">ANNULLA MODIFICA</button>
     </div>
 
-    <div class="box">
+   <div class="config-header" onclick="toggleQsoTable()" style="margin-top: 15px;">
+        <span>📻 TABELLA QSO REGISTRATI</span><span id="qsoArrow">▼</span>
+    </div>
+    
+    <div class="box" id="qsoTableContainer" style="display: none; border-top-left-radius: 0; border-top-right-radius: 0; margin-top: -5px;">
         <div class="search-bar" style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;">
             <span style="font-size:1.2em;">🔍</span>
             <input type="text" id="searchInput" placeholder="Cerca..." style="text-transform:uppercase; flex:1; min-width:100px;">
@@ -342,11 +406,10 @@
             <button class="btn-grey" onclick="resetSearch()">RESET</button>
             <span style="border-left:1px solid #999; height:20px; margin:0 2px;"></span>
             <button class="btn-cyan" onclick="showStats()">📊 STATS</button>
-        
         </div>
 
         <div class="pagination-bar" style="margin-top:10px;"><div style="display:flex; align-items:center; gap:5px;"><span style="font-size:0.8em; font-weight:bold;">MOSTRA:</span><select id="rowsPerPage" onchange="changeRows(this.value)" style="width:auto; padding:4px;"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></div><div class="page-controls"><button id="btnPrev" onclick="changePage(-1)">◀</button><span id="pageInfo" class="page-info">Pag 1/1</span><button id="btnNext" onclick="changePage(1)">▶</button></div></div>
-        <div class="table-wrapper"><table id="dataTable"><thead><tr><th style="width:80px;">Act</th><th onclick="sortBy('date')">Data</th><th onclick="sortBy('freq')">Freq</th><th onclick="sortBy('call')">Call</th><th>Banda</th><th>Modo</th><th>RST</th><th>Exch</th><th>Foto</th></tr></thead><tbody id="tableBody"></tbody></table></div>
+        <div class="table-wrapper"><table id="dataTable"><thead><tr id="tableHeadRow"><th style="width:80px;">Act</th><th onclick="sortBy('date')">Data</th><th onclick="sortBy('freq')">Freq</th><th onclick="sortBy('call')">Call</th><th>Banda</th><th>Modo</th><th>RST</th><th>Exch</th><th>Foto</th></tr></thead><tbody id="tableBody"></tbody></table></div>
     </div>
 
     <!-- MODAL PRIVACY -->
@@ -370,8 +433,21 @@
             <button class="btn-grey" style="width:100%; margin-top:15px;" onclick="document.getElementById('statsModal').style.display='none'">CHIUDI</button>
         </div>
     </div>
-    
 
+    <!-- MODAL CONDIVISIONE DRIVE/CLOUD A DUE STEP -->
+    <div id="shareModal" class="modal-overlay" onclick="this.style.display='none'">
+        <div class="stats-content" style="max-width: 400px; text-align: center;" onclick="event.stopPropagation()">
+            <h3 id="shareModalTitle" style="margin-top:0; color:#2980b9;">⏳ Preparazione Backup...</h3>
+            <p id="shareModalText" style="font-size:1.1em; color:var(--text-color);">
+                Attendi la creazione del file. Sto impacchettando le foto e i log...
+            </p>
+            <div id="shareSpinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            
+            <button id="btnRealShare" class="btn-green" style="display:none; width:100%; font-size: 1.2em; padding: 15px; margin-top:10px;" onclick="executeRealShare()">📤 APRI MENU CONDIVISIONE</button>
+            <button class="btn-grey" style="width:100%; margin-top:15px;" onclick="document.getElementById('shareModal').style.display='none'">ANNULLA</button>
+        </div>
+    </div>
+    <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
     
     <div id="mediaModal" class="modal-overlay" onclick="closeMedia()">
         <div class="stats-content" onclick="event.stopPropagation()">
@@ -394,13 +470,16 @@
     const DB_KEY="HamLog_FINAL_PRO_V6", DRAFT_KEY="HamLog_Draft_V6", USER_DATA_KEY="HamLog_UserData_V7", CONFIG_KEY="HamLog_Config_V6", SNAPSHOT_KEY="HamLog_Snap_V6";
     const META_KEY="HamLog_Meta_V1"; 
     const IMAGE_DB_NAME="HamLog_ImagesDB", IMAGE_STORE_NAME="photos";
-    const QSL_TEMPLATE_META = "HamLog_QSL_Template_Meta_V3";
+    const QSL_TEMPLATE_META = "HamLog_QSL_Template_Meta_V3"; // Vecchio storage globale per retrocompatibilità
+    const QSL_TEMPLATES_KEY = "HamLog_QSL_Templates_V1"; // NUOVO storage per-log
     
     let db={}; let snapshots=[]; let logMeta={}; 
+    let qslTemplates = {}; // Database dei template per ogni logbook
     let currentLog="GENERALE"; let editIdx=-1; let qsoStarted=false; 
     let currentPage=1; let rowsPerPage=10; let currentSort={col:null,asc:true}; let activeSearch=null; 
     let liveCallFilter=""; let map=null; let imageDB=null; 
     let currentViewBlob = null;
+    let preparedShareFile = null;
 
     // --- VARIABILI QSL EDITOR LIVE ---
     let qslCanvas, qslCtx;
@@ -419,15 +498,25 @@
     window.onload = function() {
         const freqEl = document.getElementById('freq');
         if(freqEl) freqEl.addEventListener('input', autoBand);
+        
         const callEl = document.getElementById('call');
-        if(callEl) { callEl.addEventListener('input', (e)=>{ autoStartTime(); checkDupe(); liveCallFilter=e.target.value.trim().toUpperCase(); currentPage=1; renderUI(); }); }
+        if(callEl) { 
+            callEl.addEventListener('input', (e)=>{ 
+                autoStartTime(); 
+                checkDupe(); 
+                liveCallFilter=e.target.value.trim().toUpperCase(); 
+                currentPage=1; 
+                renderUI(); 
+                autoFillQSO(); 
+            }); 
+        }
 
         document.getElementById('fileInput').addEventListener('change', handleImport);
         document.getElementById('formBox').addEventListener('keypress', (e)=>{if(e.key==='Enter'&&e.target.id!=='note'){e.preventDefault();saveQSO();}});
         document.getElementById('searchInput').addEventListener('keypress', (e)=>{if(e.key==='Enter')doSearch();});
         document.getElementById('formBox').addEventListener('input', saveDraft);
 
-        initTheme(); initDate(); loadDB(); loadMeta(); loadSnapshots();
+        initTheme(); initDate(); loadDB(); loadMeta(); loadSnapshots(); loadQslTemplatesDB();
         
         loadUserData(); 
         initQSLEditorUI();
@@ -442,31 +531,69 @@
     function msg(t){document.getElementById('statusMsg').innerText=t;setTimeout(()=>document.getElementById('statusMsg').innerText="Log Radio QSL",3000);}
     function showToast(t){const el=document.getElementById('toast');el.innerText=t;el.className="show";setTimeout(()=>el.className="",3000);}
 
-    // FUNZIONE AGGIORNAMENTO APP (BYPASS CACHE)
-    function forceAppUpdate() {
-        if(confirm("Vuoi cercare su GitHub e forzare l'aggiornamento dell'applicazione all'ultima versione disponibile?")) {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                    for(let registration of registrations) {
-                        registration.unregister();
+    // FUNZIONE AGGIORNATA PER FORZARE REALMENTE L'AGGIORNAMENTO
+    async function forceAppUpdate() {
+        if(confirm("Vuoi forzare l'aggiornamento dell'applicazione all'ultima versione disponibile?\n\n(Questo cancellerà le vecchie cache di sistema, NON perderai i tuoi QSO)")) {
+            try {
+                // 1. Unregister Service Workers
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (let registration of registrations) {
+                        await registration.unregister();
                     }
-                    window.location.reload(true);
-                });
-            } else {
-                window.location.reload(true);
+                }
+                
+                // 2. Svuota tutte le Cache di sistema della PWA
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    for (let cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                    }
+                }
+                
+                // 3. Ricarica la pagina forzando l'aggiramento della cache HTTP (aggiungendo timestamp)
+                const url = new URL(window.location.href);
+                url.searchParams.set('upd', Date.now());
+                window.location.href = url.href;
+                
+            } catch (err) {
+                console.error("Errore durante l'aggiornamento: ", err);
+                // Fallback nel caso in cui qualcosa fallisca
+                window.location.reload();
             }
         }
     }
 
     function getUTCTime() { const n = new Date(); return String(n.getUTCHours()).padStart(2, '0') + ":" + String(n.getUTCMinutes()).padStart(2, '0'); }
+    
     function initDate() {
         const n = new Date(); const y = n.getUTCFullYear(); const m = String(n.getUTCMonth() + 1).padStart(2, '0'); const d = String(n.getUTCDate()).padStart(2, '0');
-        const dateEl = document.getElementById('date'); if (dateEl) dateEl.value = `${y}-${m}-${d}`;
+        const dateStr = `${y}-${m}-${d}`;
+        const dateEl = document.getElementById('date'); if (dateEl) dateEl.value = dateStr;
+        const knDateEl = document.getElementById('knDateFilter'); if (knDateEl) knDateEl.value = dateStr;
     }
 
     function loadMeta() { try { logMeta = JSON.parse(localStorage.getItem(META_KEY)) || {}; } catch(e){ logMeta={}; } }
     function saveMeta() { localStorage.setItem(META_KEY, JSON.stringify(logMeta)); }
     function isContestMode() { return logMeta[currentLog] && logMeta[currentLog].isContest; }
+
+    function loadQslTemplatesDB() {
+        try { 
+            qslTemplates = JSON.parse(localStorage.getItem(QSL_TEMPLATES_KEY)) || {}; 
+            // Migrazione per retrocompatibilità (se esiste un template globale ma il nuovo DB è vuoto, assegnalo a GENERALE)
+            if (Object.keys(qslTemplates).length === 0) {
+                let oldGlobal = localStorage.getItem(QSL_TEMPLATE_META);
+                if (oldGlobal) {
+                    qslTemplates["GENERALE"] = JSON.parse(oldGlobal);
+                    saveQslTemplatesDB();
+                }
+            }
+        } catch(e) { qslTemplates = {}; }
+    }
+    function saveQslTemplatesDB() {
+        try { localStorage.setItem(QSL_TEMPLATES_KEY, JSON.stringify(qslTemplates)); } 
+        catch(e) { alert("Errore Salvataggio Template: " + e.message + "\n\nForse hai caricato immagini di sfondo troppo pesanti nei vari log."); }
+    }
 
     function updateFormVisibility() {
         const isC = isContestMode();
@@ -499,6 +626,72 @@
         syncLiveQsoData();
     }
 
+    function autoFillQSO() {
+        if (editIdx !== -1) return;
+
+        const searchCall = safeGetVal('call').trim().toUpperCase();
+        
+        const nameInput = document.getElementById('name');
+        const qthInput = document.getElementById('qth');
+        const locInput = document.getElementById('gridsquare');
+        const refInput = document.getElementById('theirRef');
+
+        if (!searchCall) {
+            if (nameInput) nameInput.value = "";
+            if (qthInput) qthInput.value = "";
+            if (locInput) locInput.value = "";
+            if (refInput) refInput.value = "";
+            calcQRB();
+            return;
+        }
+
+        let matchFound = false;
+        let lastQso = null;
+
+        if (db["GENERALE"]) {
+            for (let i = db["GENERALE"].length - 1; i >= 0; i--) {
+                if (db["GENERALE"][i].call === searchCall) {
+                    lastQso = db["GENERALE"][i];
+                    matchFound = true;
+                    break;
+                }
+            }
+        }
+
+        if (matchFound && lastQso) {
+            let isDifferent = (nameInput && nameInput.value !== (lastQso.name || "")) || 
+                              (qthInput && qthInput.value !== (lastQso.qth || "")) || 
+                              (locInput && locInput.value !== (lastQso.gridsquare || "")) || 
+                              (refInput && refInput.value !== (lastQso.theirRef || ""));
+
+            if (isDifferent) {
+                if (nameInput) nameInput.value = lastQso.name || "";
+                if (qthInput) qthInput.value = lastQso.qth || "";
+                if (locInput) locInput.value = lastQso.gridsquare || "";
+                if (refInput) refInput.value = lastQso.theirRef || "";
+                
+                let fields = [nameInput, qthInput, locInput, refInput];
+                fields.forEach(f => {
+                    if(f && f.value) {
+                        f.style.transition = 'none';
+                        f.style.backgroundColor = 'var(--highlight)';
+                        setTimeout(() => {
+                            f.style.transition = 'background-color 0.6s ease';
+                            f.style.backgroundColor = 'var(--input-bg)';
+                        }, 50);
+                    }
+                });
+                calcQRB(); 
+            }
+        } else {
+            if (nameInput) nameInput.value = "";
+            if (qthInput) qthInput.value = "";
+            if (locInput) locInput.value = "";
+            if (refInput) refInput.value = "";
+            calcQRB();
+        }
+    }
+
     function safeAddToLog(targetLogName, qsoData) {
         if (!db[targetLogName]) db[targetLogName] = [];
         if (!qsoData.id) qsoData.id = Date.now() + Math.random();
@@ -525,6 +718,7 @@
                 call: safeGetVal('call').toUpperCase().trim(), name: safeGetVal('name'), qth: safeGetVal('qth'),
                 band: safeGetVal('band'), mode: safeGetVal('mode'), rstS: safeGetVal('rstS'), rstR: safeGetVal('rstR'),
                 gridsquare: safeGetVal('gridsquare').toUpperCase(), note: safeGetVal('note'), myRef: safeGetVal('myRef').toUpperCase(), theirRef: safeGetVal('theirRef').toUpperCase(),
+                keyType: safeGetVal('keyType'),
                 qslMeta: getQslState()
             };
 
@@ -543,22 +737,37 @@
             q.hasPhoto = true; 
             await savePhotoToDBPromise(q.photoId, finalBlob, origBlob);
 
-            if(editIdx === -1) { db[currentLog].push(q); if (currentLog !== "GENERALE") safeAddToLog("GENERALE", q); } 
-            else {
-                db[currentLog][editIdx] = q;
-                if (currentLog !== "GENERALE") {
-                    const genIdx = db["GENERALE"].findIndex(g => {
-                        if (q.id && g.id === q.id) return true; if (q.photoId && g.photoId === q.photoId) return true;
-                        if (oldRecord) return g.call === oldRecord.call && g.date === oldRecord.date && g.timeOn === oldRecord.timeOn; return false;
-                    });
-                    if (genIdx !== -1) db["GENERALE"][genIdx] = q; else safeAddToLog("GENERALE", q);
-                }
+            let targetLog = currentLog;
+            if (editIdx !== -1) {
+                const moveSelect = document.getElementById('moveLogSelect');
+                if (moveSelect && moveSelect.value) targetLog = moveSelect.value;
+            }
+
+            if(editIdx === -1) { 
+                db[currentLog].push(q); 
+                if (currentLog !== "GENERALE") safeAddToLog("GENERALE", q); 
+            } else {
+                if (targetLog !== currentLog) {
+                    if (currentLog !== "GENERALE") { db[currentLog].splice(editIdx, 1); }
+                    if(!db[targetLog]) db[targetLog] = [];
+                    const trgIdx = db[targetLog].findIndex(g => g.id === q.id || (oldRecord && g.call === oldRecord.call && g.date === oldRecord.date && g.timeOn === oldRecord.timeOn));
+                    if(trgIdx !== -1) db[targetLog][trgIdx] = q; else db[targetLog].push(q);
+                } else { db[currentLog][editIdx] = q; }
+                
+                const genIdx = db["GENERALE"].findIndex(g => {
+                    if (q.id && g.id === q.id) return true; 
+                    if (q.photoId && g.photoId === q.photoId) return true;
+                    if (oldRecord) return g.call === oldRecord.call && g.date === oldRecord.date && g.timeOn === oldRecord.timeOn; 
+                    return false;
+                });
+                if (genIdx !== -1) db["GENERALE"][genIdx] = q; 
+                else safeAddToLog("GENERALE", q);
             }
 
             localStorage.setItem(DB_KEY, JSON.stringify(db));
 
             if(editIdx === -1) { msg("QSO E QSL SALVATI!"); clearDraft(); resetForm(); try { createSnapshot("Add: "+q.call); } catch(e){} } 
-            else { msg("QSO E QSL AGGIORNATI!"); cancelEdit(); try { createSnapshot("Edit: "+q.call); } catch(e){} }
+            else { msg("QSO E QSL AGGIORNATI!"); cancelEdit(); try { createSnapshot("Edit/Move: "+q.call); } catch(e){} }
             
             liveCallFilter = ""; activeSearch = null; const searchEl = document.getElementById('searchInput'); if(searchEl) searchEl.value = '';
             renderUI();
@@ -591,9 +800,62 @@
         } catch(e) { alert("Err Delete"); }
     }
 
-    function changeLog(val) { if(editIdx !== -1) cancelEdit(); currentLog = val; currentPage = 1; activeSearch = null; document.getElementById('searchInput').value = ''; document.getElementById('xmasPanel').style.display = (currentLog === "logXmasActivity") ? "block" : "none"; renderUI(); }
-    function deleteLog() { const isSystemLog = (currentLog === "GENERALE" || currentLog === "logXmasActivity"); const message = isSystemLog ? "SVUOTARE il log "+currentLog+"?" : "Eliminare definitivamente "+currentLog+"?"; if (confirm(message)) { if (isSystemLog) { db[currentLog] = []; } else { delete db[currentLog]; if(logMeta[currentLog]) { delete logMeta[currentLog]; saveMeta(); } currentLog = "GENERALE"; } saveDB(); renderUI(); } }
-    function doCreateLog() { const n=safeGetVal('newLogName').trim(); const isCBox = document.getElementById('isContestCheck'); const isC = isCBox ? isCBox.checked : false; if(n && !db[n]) { db[n]=[]; if(isC) { logMeta[n] = { isContest: true, name: "CQ-TEST", op: "SINGLE-OP", band: "ALL", mode: "MIXED", power: "LOW", exchType: "SERIAL", fixedVal: "" }; saveMeta(); } currentLog=n; saveDB(); renderUI(); document.getElementById('createLogArea').style.display='none'; document.getElementById('newLogName').value = ""; if(isCBox) isCBox.checked = false; } }
+    function changeLog(val) { 
+        if(editIdx !== -1) cancelEdit(); 
+        currentLog = val; 
+        currentPage = 1; activeSearch = null; document.getElementById('searchInput').value = ''; 
+        
+        // Carica il template associato a questo log specifico
+        clearQSLEditorCanvas();
+        let t = qslTemplates[currentLog];
+        if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
+        
+        renderUI(); 
+    }
+    
+    function deleteLog() { 
+        const isSystemLog = (currentLog === "GENERALE"); 
+        const message = isSystemLog ? "SVUOTARE il log "+currentLog+"?" : "Eliminare definitivamente "+currentLog+"?"; 
+        if (confirm(message)) { 
+            if (isSystemLog) { 
+                db[currentLog] = []; 
+            } else { 
+                delete db[currentLog]; 
+                if(logMeta[currentLog]) { delete logMeta[currentLog]; saveMeta(); } 
+                if(qslTemplates[currentLog]) { delete qslTemplates[currentLog]; saveQslTemplatesDB(); }
+                currentLog = "GENERALE"; 
+            } 
+            saveDB(); renderUI(); 
+            // Aggiorna template vista
+            clearQSLEditorCanvas();
+            let t = qslTemplates[currentLog];
+            if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
+        } 
+    }
+    
+    function doCreateLog() { 
+        const n=safeGetVal('newLogName').trim(); 
+        const template = safeGetVal('newLogTemplate'); 
+        const isCBox = document.getElementById('isContestCheck'); 
+        const isC = isCBox ? isCBox.checked : false; 
+        if(n && !db[n]) { 
+            db[n]=[]; 
+            logMeta[n] = { type: template }; 
+            if(isC) { logMeta[n].isContest = true; logMeta[n].name = "CQ-TEST"; logMeta[n].op = "SINGLE-OP"; logMeta[n].band = "ALL"; logMeta[n].mode = "MIXED"; logMeta[n].power = "LOW"; logMeta[n].exchType = "SERIAL"; logMeta[n].fixedVal = ""; } 
+            saveMeta(); 
+            currentLog=n; 
+            saveDB(); 
+            renderUI(); 
+            document.getElementById('createLogArea').style.display='none'; 
+            document.getElementById('newLogName').value = ""; 
+            if(isCBox) isCBox.checked = false; 
+            document.getElementById('newLogTemplate').value = "STD"; 
+            
+            // Imposta canvas vuoto per il nuovo log
+            clearQSLEditorCanvas();
+            syncGlobalToQsl();
+        } else if(db[n]) alert("Log già esistente!"); 
+    }
 
     function saveContestMeta() {
         try {
@@ -609,10 +871,32 @@
     function renderUI() {
         const s = document.getElementById('logSelector'); s.innerHTML=''; const opt = (k,l) => { const o=document.createElement('option'); o.value=k; o.innerText=l; if(k===currentLog)o.selected=true; s.appendChild(o); };
         if(!db[currentLog]) db[currentLog] = []; const allKeys = Object.keys(db);
-        if(!allKeys.includes("GENERALE")) db["GENERALE"] = []; if(!allKeys.includes("logXmasActivity")) db["logXmasActivity"] = [];
-        opt("GENERALE", `⭐ GENERALE (${(db.GENERALE||[]).length})`); opt("logXmasActivity", `🎄 logXmasActivity (${(db.logXmasActivity||[]).length})`);
-        Object.keys(db).forEach(k=>{ if(k!=="GENERALE" && k!=="logXmasActivity") { const prefix = (logMeta[k] && logMeta[k].isContest) ? "🏆 " : ""; opt(k, `${prefix}${k} (${db[k].length})`); } });
-        document.getElementById('xmasPanel').style.display = (currentLog === "logXmasActivity") ? "block" : "none"; document.getElementById('qsoCount').innerText = (db[currentLog]||[]).length;
+        if(!allKeys.includes("GENERALE")) db["GENERALE"] = [];
+        opt("GENERALE", `⭐ GENERALE (${(db.GENERALE||[]).length})`);
+        
+        Object.keys(db).forEach(k=>{ 
+            if(k!=="GENERALE") { 
+                let prefix = ""; 
+                if(logMeta[k]) { 
+                    if(logMeta[k].type === "XMAS") prefix += "🎄 "; 
+                    else if(logMeta[k].type === "KEYNIGHT") prefix += "🗝️ "; 
+                    if(logMeta[k].isContest) prefix += "🏆 "; 
+                } 
+                opt(k, `${prefix}${k} (${db[k].length})`); 
+            } 
+        });
+        
+        const type = logMeta[currentLog]?.type || "STD";
+        document.getElementById('xmasPanel').style.display = (currentLog === "logXmasActivity" || type === "XMAS") ? "block" : "none";
+        
+        const knTopPanel = document.getElementById('keyNightTopPanel');
+        if(knTopPanel) knTopPanel.style.display = (type === "KEYNIGHT") ? "block" : "none";
+        
+        const keyPanel = document.getElementById('keyNightPanel'); 
+        if(keyPanel) keyPanel.style.display = (type === "KEYNIGHT") ? "block" : "none";
+        
+        document.getElementById('qsoCount').innerText = (db[currentLog]||[]).length;
+        
         updateFormVisibility();
         if(isContestMode() && logMeta[currentLog]) { const m = logMeta[currentLog]; const cName = document.getElementById('c_name'); if(cName) cName.value = m.name || "CQ-TEST"; const cExch = document.getElementById('c_exchType'); if(cExch) cExch.value = m.exchType || "SERIAL"; const cFix = document.getElementById('c_fixedVal'); if(cFix) cFix.value = m.fixedVal || ""; toggleExchInput(); }
         
@@ -620,34 +904,51 @@
         if(activeSearch) list = list.filter(q => q.call && q.call.includes(activeSearch)); else if(liveCallFilter.length > 1) list = list.filter(q => q.call && q.call.includes(liveCallFilter));
         if(currentSort.col) { list.sort((a,b) => { let v1=a[currentSort.col], v2=b[currentSort.col]; if(currentSort.col==='freq') { v1=parseFloat(v1)||0; v2=parseFloat(v2)||0; } else { v1=(v1||'').toString(); v2=(v2||'').toString(); } return (v1<v2?-1:1)*(currentSort.asc?1:-1); }); } else list.reverse();
         const tot = Math.ceil(list.length/rowsPerPage)||1; if(currentPage>tot) currentPage=tot; if(currentPage<1) currentPage=1; document.getElementById('pageInfo').innerText = `Pag ${currentPage}/${tot}`;
+        
+        let thHTML = `<th style="width:80px;">Act</th><th onclick="sortBy('date')">Data</th><th onclick="sortBy('freq')">Freq</th><th onclick="sortBy('call')">Call</th><th>Banda</th><th>Modo</th><th>RST</th>`;
+        if (type === "KEYNIGHT") thHTML += `<th>Tasto</th>`;
+        thHTML += `<th>Exch</th><th>Foto</th>`;
+        const headRow = document.getElementById('tableHeadRow'); if(headRow) headRow.innerHTML = thHTML;
+        
         const tb = document.getElementById('tableBody'); tb.innerHTML = '';
-        if(list.length === 0) { tb.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:15px;">Nessun QSO.</td></tr>'; } 
+        if(list.length === 0) { tb.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:15px;">Nessun QSO.</td></tr>'; } 
         else {
             list.slice((currentPage-1)*rowsPerPage, currentPage*rowsPerPage).forEach(q => {
                 const isEd = (q._i===editIdx); const mediaBtn = q.hasPhoto ? `<button onclick="loadPhotoFromDB(${q.photoId})" style="padding:2px 6px;" title="Vedi QSL">📸</button>` : ''; const exch = (q.myRef || "") + " -> " + (q.theirRef || "");
-                tb.innerHTML += `<tr class="${isEd?'edit-row':''}">
+                let rowHTML = `<tr class="${isEd?'edit-row':''}">
                     <td style="white-space:nowrap;">
                         <button onclick="loadEdit(${q._i})" style="padding:4px 6px;" title="Modifica">✏️</button>
                         <button class="btn-red" style="padding:4px 6px;" onclick="delQSO(${q._i})" title="Elimina">x</button>
                     </td>
-                    <td>${q.date}</td> <td>${q.freq||''}</td> <td style="font-weight:bold">${q.call}</td> <td>${q.band}</td> <td>${q.mode}</td> <td>${q.rstS}/${q.rstR}</td> <td style="font-size:0.9em;">${exch}</td><td style="text-align:center;">${mediaBtn}</td></tr>`;
+                    <td>${q.date}</td> <td>${q.freq||''}</td> <td style="font-weight:bold">${q.call}</td> <td>${q.band}</td> <td>${q.mode}</td> <td>${q.rstS}/${q.rstR}</td>`;
+                if(type === "KEYNIGHT") rowHTML += `<td><strong style="color:#16a085;">${q.keyType||'-'}</strong></td>`;
+                rowHTML += `<td style="font-size:0.9em;">${exch}</td><td style="text-align:center;">${mediaBtn}</td></tr>`;
+                tb.innerHTML += rowHTML;
             });
         }
     }
 
-    function toggleConfigPanel() { const p=document.getElementById('configPanel'); const s=(p.style.display==="block"); p.style.display=s?"none":"block"; document.getElementById('configArrow').innerText=s?"▼":"▲"; }
-    function toggleAdvanced() { const p=document.getElementById('advancedFields'); p.style.display=(p.style.display==="block")?"none":"block"; }
-    function toggleXmasSettings() { const c=document.getElementById('xmasContent'); const v=(c.style.display==="block"); c.style.display=v?"none":"block"; document.getElementById('xmasArrow').innerText=v?"▼":"▲"; }
-    
+    function toggleConfigPanel() { const p=document.getElementById('configPanel'); const s=(p.style.display==="block"); p.style.display=s?"none":"block"; document.getElementById('configArrow').innerText=s?"▼":"▲";saveConfigState(); }
+    function toggleAdvanced() { const p=document.getElementById('advancedFields'); p.style.display=(p.style.display==="block")?"none":"block";saveConfigState(); }
+    function toggleXmasSettings() { const c=document.getElementById('xmasContent'); const v=(c.style.display==="block"); c.style.display=v?"none":"block"; document.getElementById('xmasArrow').innerText=v?"▼":"▲";saveConfigState(); }
+    function toggleKeyNightSettings() { const c=document.getElementById('knContent'); const v=(c.style.display==="block"); c.style.display=v?"none":"block"; document.getElementById('knArrow').innerText=v?"▼":"▲";saveConfigState(); }
+    function toggleQsoTable() { 
+        const p = document.getElementById('qsoTableContainer'); 
+        const s = (p.style.display === "block"); 
+        p.style.display = s ? "none" : "block"; 
+        document.getElementById('qsoArrow').innerText = s ? "▼" : "▲"; 
+        saveConfigState();
+    }
     function toggleQSLEditor() {
         const p = document.getElementById('qslLiveBox');
         const s = (p.style.display === "block");
         p.style.display = s ? "none" : "block";
         document.getElementById('qslToggleArrow').innerText = s ? "▼" : "▲";
         if(!s) renderQSL();
+        saveConfigState();
     }
 
-    function loadDB() { try { const raw = localStorage.getItem(DB_KEY); db = raw ? JSON.parse(raw) : {"GENERALE":[]}; } catch(e){ db = {"GENERALE":[]}; } if(!db["GENERALE"]) db["GENERALE"] = []; if(!db["logXmasActivity"]) db["logXmasActivity"] = []; if(!db[currentLog]) currentLog = "GENERALE"; saveDB(); }
+    function loadDB() { try { const raw = localStorage.getItem(DB_KEY); db = raw ? JSON.parse(raw) : {"GENERALE":[]}; } catch(e){ db = {"GENERALE":[]}; } if(!db["GENERALE"]) db["GENERALE"] = []; if(!db[currentLog]) currentLog = "GENERALE"; saveDB(); }
     
     function exportLogChoice() { const fmt = document.getElementById('exportFormat').value; if (!fmt) { alert("Seleziona formato!"); return; } if (fmt === "ADIF") exportADIF(); else if (fmt === "CABRILLO") exportCabrillo(); }
 
@@ -658,7 +959,14 @@
             let row = ""; const add = (tag, val) => { if(val) { val = String(val).trim(); if(val.length > 0) row += `<${tag}:${val.length}>${val}`; } };
             let d = (q.date || "").trim().replace(/-/g, ""); let tOn = (q.timeOn || "").trim().replace(/:/g, ""); let tOff = (q.timeOff || tOn).trim().replace(/:/g, "");
             add("CALL", q.call); add("QSO_DATE", d); add("TIME_ON", tOn); add("TIME_OFF", tOff); add("BAND", q.band); add("MODE", q.mode); add("FREQ", q.freq); add("RST_SENT", q.rstS); add("RST_RCVD", q.rstR); add("MY_SIG_INFO", q.myRef); add("SIG_INFO", q.theirRef); 
-            if(isContestMode()) { add("STX", q.myRef); add("SRX", q.theirRef); add("CONTEST_ID", (logMeta[currentLog]||{}).name); } else { add("NAME", q.name); add("QTH", q.qth); add("GRIDSQUARE", q.gridsquare); add("COMMENT", q.note); }
+            
+            let noteStr = q.note || "";
+            if (q.keyType && (logMeta[currentLog] && logMeta[currentLog].type === 'KEYNIGHT')) {
+                add("APP_KEYNIGHT_TYPE", q.keyType);
+                noteStr = `[Key: ${q.keyType}] ${noteStr}`.trim();
+            }
+
+            if(isContestMode()) { add("STX", q.myRef); add("SRX", q.theirRef); add("CONTEST_ID", (logMeta[currentLog]||{}).name); if(noteStr) add("COMMENT", noteStr); } else { add("NAME", q.name); add("QTH", q.qth); add("GRIDSQUARE", q.gridsquare); if(noteStr) add("COMMENT", noteStr); }
             adif += row + "<EOR>\n";
         });
         const blob = new Blob([adif], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentLog}_${new Date().toISOString().split('T')[0]}.adi`; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast("Export ADIF OK!");
@@ -746,8 +1054,141 @@
     function blobToBase64(blob) { return new Promise((resolve) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); }); }
     function base64ToBlob(base64) { const arr = base64.split(','), mime = arr[0].match(/:(.*?);/)[1]; const bstr = atob(arr[1]); let n = bstr.length; const u8arr = new Uint8Array(n); while(n--){ u8arr[n] = bstr.charCodeAt(n); } return new Blob([u8arr], {type:mime}); }
     
-    async function downloadFullBackup() { showToast("Backup..."); const exDB = JSON.parse(JSON.stringify(db)); let tp = 0; for (let l in exDB) { for (let q of exDB[l]) { if (q.hasPhoto && q.photoId) { let b = await getPhotoFromDBPromise(q.photoId); if (b) { q.photoData = await blobToBase64(b); tp++; } } } } const fb = { db: exDB, meta: logMeta }; const b = new Blob([JSON.stringify(fb)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `FullBackup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast("Backup OK: "+tp+" foto"); }
-    async function restoreFullBackup() { const f = document.getElementById('backupInput').files[0]; if(!f) return; if(!confirm("Sovrascrivere tutto?")) return; const r = new FileReader(); r.onload = async function(e) { try { const d = JSON.parse(e.target.result); let iDB = d.db || d; logMeta = d.meta || {}; db = {}; let pc = 0; for (let l in iDB) { if(!db[l]) db[l] = []; for (let q of iDB[l]) { if (q.photoData) { savePhotoToDBPromise(q.photoId, base64ToBlob(q.photoData)); delete q.photoData; pc++; } db[l].push(q); } } if(!db["GENERALE"]) db["GENERALE"] = []; saveDB(); saveMeta(); renderUI(); alert("Ripristino OK. Foto: "+pc); } catch(err) { alert("Err File"); } }; r.readAsText(f); }
+    // --- FUNZIONI DI BACKUP / CONDIVISIONE ---
+    async function generateBackupBlob() {
+        const exDB = JSON.parse(JSON.stringify(db)); 
+        let tp = 0; 
+        for (let l in exDB) { 
+            for (let q of exDB[l]) { 
+                if (q.hasPhoto && q.photoId) { 
+                    let b = await getPhotoFromDBPromise(q.photoId); 
+                    if (b) { q.photoData = await blobToBase64(b); tp++; } 
+                } 
+            } 
+        } 
+        const fb = { db: exDB, meta: logMeta, templates: qslTemplates }; 
+        return { 
+            blob: new Blob([JSON.stringify(fb)], {type:'application/json'}), 
+            photosCount: tp 
+        };
+    }
+
+    async function downloadFullBackup() { 
+        showToast("Generazione file in corso...");
+        try {
+            const { blob, photosCount } = await generateBackupBlob();
+            const a = document.createElement('a'); 
+            a.href = URL.createObjectURL(blob); 
+            a.download = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}.json`; 
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); 
+            showToast("Backup OK: " + photosCount + " foto"); 
+        } catch (e) { alert("Errore durante il backup: " + e.message); }
+    }
+
+    // SISTEMA DI CONDIVISIONE A DUE STEP
+    async function startShareProcess() {
+        if (!navigator.canShare) {
+            alert("⚠️ Il tuo browser o telefono non supportano la condivisione nativa da questo tasto.\n\nUsa il tasto viola '⬇️ SCARICA BACKUP'.");
+            return;
+        }
+
+        const modal = document.getElementById('shareModal');
+        const title = document.getElementById('shareModalTitle');
+        const text = document.getElementById('shareModalText');
+        const spinner = document.getElementById('shareSpinner');
+        const btn = document.getElementById('btnRealShare');
+
+        modal.style.display = 'flex';
+        title.style.color = "#2980b9";
+        title.innerText = "⏳ Preparazione Backup...";
+        text.innerText = "Sto impacchettando foto e dati...\nL'operazione può richiedere qualche secondo.";
+        spinner.style.display = "block";
+        btn.style.display = "none";
+
+        try {
+            const { blob, photosCount } = await generateBackupBlob();
+            const fileName = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}_JSON.txt`; 
+            
+            preparedShareFile = new File([blob], fileName, { type: "text/plain" });
+
+            if (!navigator.canShare({ files: [preparedShareFile] })) {
+                modal.style.display = 'none';
+                alert("⚠️ Il tuo telefono blocca la condivisione di questo file.\n\nUsa il tasto viola '⬇️ SCARICA BACKUP'.");
+                return;
+            }
+
+            title.style.color = "#27ae60";
+            title.innerText = "✅ Backup Pronto!";
+            text.innerHTML = `File creato con successo (${photosCount} foto).<br><br><b>Tocca il tasto verde qui sotto</b> per inviare il file direttamente al tuo Google Drive, Email o WhatsApp!`;
+            spinner.style.display = "none";
+            btn.style.display = "block";
+
+        } catch (e) {
+            modal.style.display = 'none';
+            alert("Errore durante la preparazione: " + e.message);
+        }
+    }
+
+    async function executeRealShare() {
+        if (!preparedShareFile) return;
+        try {
+            await navigator.share({
+                title: 'Backup Log Radio Pro',
+                text: 'Ecco il file completo di backup (Log e Foto).',
+                files: [preparedShareFile]
+            });
+            document.getElementById('shareModal').style.display = 'none';
+            showToast("Condivisione riuscita!");
+        } catch (e) {
+            console.error(e);
+            if (e.name !== "AbortError") {
+                alert("Condivisione non completata o bloccata dal sistema.");
+            }
+        }
+    }
+
+    async function restoreFullBackup() { 
+        const f = document.getElementById('backupInput').files[0]; 
+        if(!f) return; 
+        if(!confirm("Sovrascrivere tutto?")) return; 
+        const r = new FileReader(); 
+        r.onload = async function(e) { 
+            try { 
+                const d = JSON.parse(e.target.result); 
+                let iDB = d.db || d; 
+                logMeta = d.meta || {}; 
+                if (d.templates) { qslTemplates = d.templates; saveQslTemplatesDB(); }
+                db = {}; 
+                let pc = 0; 
+                for (let l in iDB) { 
+                    if(!db[l]) db[l] = []; 
+                    for (let q of iDB[l]) { 
+                        if (q.photoData) { 
+                            savePhotoToDBPromise(q.photoId, base64ToBlob(q.photoData)); 
+                            delete q.photoData; 
+                            pc++; 
+                        } 
+                        db[l].push(q); 
+                    } 
+                } 
+                if(!db["GENERALE"]) db["GENERALE"] = []; 
+                saveDB(); 
+                saveMeta(); 
+                renderUI(); 
+                
+                // Ricarica template
+                clearQSLEditorCanvas();
+                let t = qslTemplates[currentLog];
+                if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
+                
+                alert("Ripristino OK. Foto: "+pc); 
+            } catch(err) { 
+                alert("Errore di lettura del File Backup. Verifica che sia un file LogRadio valido."); 
+            } 
+        }; 
+        r.readAsText(f); 
+        document.getElementById('backupInput').value = ''; 
+    }
     
     function loadPhotoFromDB(id) { 
         if(!imageDB) { alert("Database immagini non pronto o errore caricamento."); return; }
@@ -791,29 +1232,47 @@
     
     function resetForm() { 
         ['freq','call','name','qth','gridsquare','note','theirRef','timeOn','timeOff'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+        const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = 'Verticale';
         document.getElementById('dupeAlert').innerText = ''; document.getElementById('qrbCalc').innerText = '';
         tempOriginalBlob = null; loadedOriginalBlob = null; syncRST(); qsoStarted=false; initDate(); 
         const c = document.getElementById('call'); if(c) c.focus(); 
         
+        const moveLogPanel = document.getElementById('moveLogPanel');
+        if (moveLogPanel) moveLogPanel.style.display = 'none';
+
         clearQSLEditorCanvas();
-        let raw = localStorage.getItem(QSL_TEMPLATE_META);
-        if (raw) { loadQslTemplate(); } else { syncGlobalToQsl(); }
+        let t = qslTemplates[currentLog];
+        if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
         syncLiveQsoData(); 
     }
 
     function loadEdit(i) { 
         editIdx = i; const q = db[currentLog][i]; 
-        document.getElementById('date').value = q.date; document.getElementById('freq').value = q.freq||''; document.getElementById('timeOn').value = q.timeOn||q.time; document.getElementById('timeOff').value = q.timeOff||q.timeOn; document.getElementById('call').value = q.call; document.getElementById('name').value = q.name||""; document.getElementById('qth').value = q.qth||""; document.getElementById('band').value = q.band; document.getElementById('mode').value = q.mode; document.getElementById('rstS').value = q.rstS; document.getElementById('rstR').value = q.rstR; document.getElementById('gridsquare').value = q.gridsquare||""; document.getElementById('note').value = q.note||""; document.getElementById('myRef').value = q.myRef||""; document.getElementById('theirRef').value = q.theirRef||""; calcQRB(); 
+        document.getElementById('date').value = q.date; document.getElementById('freq').value = q.freq||''; document.getElementById('timeOn').value = q.timeOn||q.time; document.getElementById('timeOff').value = q.timeOff||q.timeOn; document.getElementById('call').value = q.call; document.getElementById('name').value = q.name||""; document.getElementById('qth').value = q.qth||""; document.getElementById('band').value = q.band; document.getElementById('mode').value = q.mode; document.getElementById('rstS').value = q.rstS; document.getElementById('rstR').value = q.rstR; document.getElementById('gridsquare').value = q.gridsquare||""; document.getElementById('note').value = q.note||""; document.getElementById('myRef').value = q.myRef||""; document.getElementById('theirRef').value = q.theirRef||""; const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = q.keyType||"Verticale"; calcQRB(); 
         
         document.getElementById('saveBtn').innerText = "MODIFICA QSO E QSL"; document.getElementById('saveBtn').className = "btn-orange"; document.getElementById('cancelBtn').style.display = 'block'; 
+
+        const moveLogPanel = document.getElementById('moveLogPanel');
+        if (moveLogPanel) {
+            moveLogPanel.style.display = 'block';
+            const moveSelect = document.getElementById('moveLogSelect');
+            moveSelect.innerHTML = '';
+            Object.keys(db).forEach(k => {
+                const opt = document.createElement('option');
+                opt.value = k;
+                opt.innerText = (k === "GENERALE") ? "⭐ GENERALE" : k;
+                if(k === currentLog) opt.selected = true;
+                moveSelect.appendChild(opt);
+            });
+        }
 
         tempOriginalBlob = null; loadedOriginalBlob = null;
         
         if (q.qslMeta) {
             applyQslState(q.qslMeta);
         } else {
-            let raw = localStorage.getItem(QSL_TEMPLATE_META);
-            if(raw) { let t = JSON.parse(raw); applyQslState(t); }
+            let t = qslTemplates[currentLog];
+            if(t) { applyQslState(t); }
         }
 
         if(q.hasPhoto && q.photoId) {
@@ -837,7 +1296,10 @@
 
     function saveUserData() { 
         const data = {
-            call:safeGetVal('myCall'), loc:safeGetVal('myLocator'), location:safeGetVal('myLocation'), xmasCall:safeGetVal('xmasCall'), xmasEmail:safeGetVal('xmasEmail'), persRef: safeGetVal('myRef'),
+            call:safeGetVal('myCall'), loc:safeGetVal('myLocator'), location:safeGetVal('myLocation'), 
+            xmasCall:safeGetVal('xmasCall'), xmasEmail:safeGetVal('xmasEmail'), 
+            knCall:safeGetVal('knCall'), knEmail:safeGetVal('knEmail'),
+            persRef: safeGetVal('myRef'),
             qslName: safeGetVal('qslName'), qslAddr: safeGetVal('qslAddr'), qslCity: safeGetVal('qslCity'), qslCountry: safeGetVal('qslCountry')
         };
         localStorage.setItem(USER_DATA_KEY, JSON.stringify(data)); 
@@ -847,13 +1309,61 @@
         const d=JSON.parse(localStorage.getItem(USER_DATA_KEY)); 
         if(d){ 
             const s=id=>document.getElementById(id);
-            if(s('myCall')) s('myCall').value=d.call||""; if(s('myLocator')) s('myLocator').value=d.loc||""; if(s('myLocation')) s('myLocation').value=d.location||""; if(s('xmasCall')) s('xmasCall').value=d.xmasCall||""; if(s('xmasEmail')) s('xmasEmail').value=d.xmasEmail||""; if(s('myRef')) s('myRef').value=d.persRef||""; 
-            if(s('qslName')) s('qslName').value=d.qslName||""; if(s('qslAddr')) s('qslAddr').value=d.qslAddr||""; if(s('qslCity')) s('qslCity').value=d.qslCity||""; if(s('qslCountry')) s('qslCountry').value=d.qslCountry||"";
+            if(s('myCall')) s('myCall').value=d.call||""; 
+            if(s('myLocator')) s('myLocator').value=d.loc||""; 
+            if(s('myLocation')) s('myLocation').value=d.location||""; 
+            if(s('xmasCall')) s('xmasCall').value=d.xmasCall||""; 
+            if(s('xmasEmail')) s('xmasEmail').value=d.xmasEmail||""; 
+            if(s('knCall')) s('knCall').value=d.knCall||""; 
+            if(s('knEmail')) s('knEmail').value=d.knEmail||""; 
+            if(s('myRef')) s('myRef').value=d.persRef||""; 
+            if(s('qslName')) s('qslName').value=d.qslName||""; 
+            if(s('qslAddr')) s('qslAddr').value=d.qslAddr||""; 
+            if(s('qslCity')) s('qslCity').value=d.qslCity||""; 
+            if(s('qslCountry')) s('qslCountry').value=d.qslCountry||"";
         } 
     }
 
-    function saveConfigState() { localStorage.setItem(CONFIG_KEY, JSON.stringify({snap:document.getElementById('autoSnapshotCheck').checked})); }
-    function loadConfigState() { const d=JSON.parse(localStorage.getItem(CONFIG_KEY)); if(d) document.getElementById('autoSnapshotCheck').checked=d.snap; }
+function saveConfigState() { 
+        const state = {
+            snap: document.getElementById('autoSnapshotCheck') ? document.getElementById('autoSnapshotCheck').checked : true,
+            panels: {
+                config: document.getElementById('configPanel') && document.getElementById('configPanel').style.display === "block",
+                advanced: document.getElementById('advancedFields') && document.getElementById('advancedFields').style.display === "block",
+                xmas: document.getElementById('xmasContent') && document.getElementById('xmasContent').style.display === "block",
+                kn: document.getElementById('knContent') && document.getElementById('knContent').style.display === "block",
+                qsl: document.getElementById('qslLiveBox') && document.getElementById('qslLiveBox').style.display === "block",
+                qso: document.getElementById('qsoTableContainer') && document.getElementById('qsoTableContainer').style.display === "block"
+            }
+        };
+        localStorage.setItem(CONFIG_KEY, JSON.stringify(state)); 
+    }
+
+    function loadConfigState() { 
+        const d = JSON.parse(localStorage.getItem(CONFIG_KEY)); 
+        if(d) {
+            if(d.snap !== undefined && document.getElementById('autoSnapshotCheck')) {
+                document.getElementById('autoSnapshotCheck').checked = d.snap;
+            }
+            if(d.panels) {
+                const applyState = (panelId, arrowId, isOpen) => {
+                    const p = document.getElementById(panelId);
+                    const a = document.getElementById(arrowId);
+                    if(p) p.style.display = isOpen ? "block" : "none";
+                    if(a) a.innerText = isOpen ? "▲" : "▼";
+                };
+                applyState('configPanel', 'configArrow', d.panels.config);
+                applyState('xmasContent', 'xmasArrow', d.panels.xmas);
+                applyState('knContent', 'knArrow', d.panels.kn);
+                applyState('qslLiveBox', 'qslToggleArrow', d.panels.qsl);
+                applyState('qsoTableContainer', 'qsoArrow', d.panels.qso);
+                
+                const adv = document.getElementById('advancedFields');
+                if(adv) adv.style.display = d.panels.advanced ? "block" : "none";
+            }
+        } 
+    }
+    
     function saveDraft() { if(editIdx===-1) localStorage.setItem(DRAFT_KEY, JSON.stringify({call:document.getElementById('call').value, freq:document.getElementById('freq').value, band:document.getElementById('band').value, mode:document.getElementById('mode').value})); }
     function loadDraft() { const d=JSON.parse(localStorage.getItem(DRAFT_KEY)); if(d && editIdx===-1) { document.getElementById('call').value=d.call||""; document.getElementById('freq').value=d.freq||""; } }
     function clearDraft() { localStorage.removeItem(DRAFT_KEY); }
@@ -863,7 +1373,98 @@
     function changeRows(v) { rowsPerPage=parseInt(v); currentPage=1; renderUI(); }
     function changePage(d) { currentPage+=d; renderUI(); }
     function sortBy(c) { if(currentSort.col===c) currentSort.asc=!currentSort.asc; else { currentSort.col=c; currentSort.asc=true; } renderUI(); }
-    function uploadXmasLog() { alert("Funzione di upload natalizia (placeholder) invocata."); }
+    
+    // INVIO REALE XMAS ACTIVITY
+    async function uploadXmasLog() { 
+        const call = document.getElementById('xmasCall').value.trim().toUpperCase();
+        const email = document.getElementById('xmasEmail').value.trim();
+        const cat = document.querySelector('input[name="xmasCategory"]:checked').value;
+        const catName = cat === "1" ? "Rookie" : "Senior";
+        const url = document.getElementById('xmasUrl').value.trim();
+
+        if(!call || !email) return alert("Compila Nominativo ed Email!");
+        const logs = db[currentLog] || [];
+        if(logs.length === 0) return alert("Il log è vuoto, niente da inviare.");
+
+        let adif = "Generato da Log Radio Pro Live Editor\n<PROGRAMID:13>LogRadioPro\n<EOH>\n\n";
+        logs.forEach(q => {
+            let qsoDate = (q.date||"").replace(/-/g, "");
+            let qsoTime = (q.timeOn||"").replace(/:/g, "");
+            let row = `<QSO_DATE:${qsoDate.length}>${qsoDate} <TIME_ON:${qsoTime.length}>${qsoTime} <CALL:${(q.call||"").length}>${q.call} <BAND:${(q.band||"").length}>${q.band} <MODE:${(q.mode||"").length}>${q.mode} <RST_SENT:${(q.rstS||"").length}>${q.rstS} <RST_RCVD:${(q.rstR||"").length}>${q.rstR} `;
+            let note = (q.note || "").trim();
+            if (note) row += `<COMMENT:${note.length}>${note} `;
+            adif += row + "<EOR>\n";
+        });
+
+        if(!confirm(`Trovati ${logs.length} QSO.\nVuoi inviarli al server Xmas?`)) return;
+        try {
+            const formData = new FormData();
+            formData.append("callsign", call);
+            formData.append("email", email);
+            formData.append("category", catName);
+            const blob = new Blob([adif], { type: 'text/plain' });
+            formData.append("adif_file", blob, `${call}_Xmas.adi`);
+
+            const response = await fetch(url, { method: 'POST', body: formData });
+            if (response.ok) alert("✅ Log Xmas inviato con successo al server!");
+            else alert("❌ Errore durante l'invio. Codice: " + response.status);
+        } catch(e) {
+            alert("❌ Errore di connessione al server: " + e.message + "\n\n(Possibile blocco CORS o server offline)");
+        }
+    }
+
+    // INVIO REALE KEY NIGHT
+    async function uploadKeyNightLog() {
+        const call = document.getElementById('knCall').value.trim().toUpperCase();
+        const email = document.getElementById('knEmail').value.trim();
+        const cat = document.querySelector('input[name="knCategory"]:checked').value;
+        const catName = cat === "1" ? "Rookie" : "Senior";
+        const dateFilter = document.getElementById('knDateFilter').value;
+        const keyFilter = document.getElementById('knKeyFilter').value;
+        const url = document.getElementById('knUrl').value.trim();
+
+        if(!call || !email || !dateFilter) return alert("Compila Nominativo, Email e Data Evento!");
+
+        const logs = db[currentLog] || [];
+        const filteredLogs = logs.filter(q => q.date === dateFilter && q.keyType === keyFilter);
+
+        if(filteredLogs.length === 0) {
+            return alert(`Nessun QSO trovato in data ${dateFilter} con il tasto "${keyFilter}".`);
+        }
+
+        let adif = "Generato da Log Radio Pro Live Editor\n<PROGRAMID:13>LogRadioPro\n<EOH>\n\n";
+        filteredLogs.forEach(q => {
+            let qsoDate = (q.date||"").replace(/-/g, "");
+            let qsoTime = (q.timeOn||"").replace(/:/g, "");
+            let row = `<QSO_DATE:${qsoDate.length}>${qsoDate} <TIME_ON:${qsoTime.length}>${qsoTime} <CALL:${(q.call||"").length}>${q.call} <BAND:${(q.band||"").length}>${q.band} <MODE:${(q.mode||"").length}>${q.mode} <RST_SENT:${(q.rstS||"").length}>${q.rstS} <RST_RCVD:${(q.rstR||"").length}>${q.rstR} <APP_KEYNIGHT_TYPE:${(q.keyType||"").length}>${q.keyType} `;
+            let note = (q.note || "").trim();
+            if (note) row += `<COMMENT:${note.length}>${note} `;
+            adif += row + "<EOR>\n";
+        });
+
+        if(!confirm(`Trovati ${filteredLogs.length} QSO per il ${dateFilter} con ${keyFilter}.\nVuoi inviarli al server?`)) return;
+
+        try {
+            const formData = new FormData();
+            formData.append("callsign", call);
+            formData.append("email", email);
+            formData.append("category", catName);
+            formData.append("key_type", keyFilter);
+            formData.append("qso_date", dateFilter);
+            
+            const blob = new Blob([adif], { type: 'text/plain' });
+            formData.append("adif_file", blob, `${call}_${dateFilter}_${keyFilter}.adi`);
+
+            const response = await fetch(url, { method: 'POST', body: formData });
+            if (response.ok) {
+                alert("✅ Log Key Night inviato con successo al server!");
+            } else {
+                alert("❌ Errore durante l'invio del log. Codice HTTP: " + response.status);
+            }
+        } catch(e) {
+            alert("❌ Errore di connessione al server: " + e.message + "\n\n(Possibile blocco CORS o server offline)");
+        }
+    }
 
     function printQSLImage() {
         if (!currentViewBlob) return alert("Nessuna immagine!");
@@ -981,15 +1582,12 @@
     }
 
     function loadDefaultTemplateBg() {
-        let raw = localStorage.getItem(QSL_TEMPLATE_META);
-        if(raw) {
-            let t = JSON.parse(raw);
-            if(t.bg) {
-                let img = new Image();
-                img.onload = () => { currentCroppedImg = img; originalImg = img; renderQSL(); };
-                img.src = t.bg;
-                return;
-            }
+        let t = qslTemplates[currentLog] || (localStorage.getItem(QSL_TEMPLATE_META) ? JSON.parse(localStorage.getItem(QSL_TEMPLATE_META)) : null);
+        if(t && t.bg) {
+            let img = new Image();
+            img.onload = () => { currentCroppedImg = img; originalImg = img; renderQSL(); };
+            img.src = t.bg;
+            return;
         }
         clearQSLEditorCanvas();
     }
@@ -1311,15 +1909,25 @@
         if (currentCroppedImg) t.bg = getBase64Image(currentCroppedImg);
         if (logoImg) t.logo = getBase64Image(logoImg);
         try { 
-            localStorage.setItem(QSL_TEMPLATE_META, JSON.stringify(t)); 
-            alert("✅ TEMPLATE SALVATO CON SUCCESSO!\n\nI colori, i font, le posizioni dei testi e l'immagine di sfondo (se presente) verranno caricati automaticamente come 'Sfondo Base' per ogni nuovo QSO."); 
+            // NUOVO: Salva il template nel database dei template sotto il nome del log corrente
+            qslTemplates[currentLog] = t;
+            saveQslTemplatesDB();
+            alert(`✅ TEMPLATE SALVATO CON SUCCESSO PER IL LOG: ${currentLog}!\n\nOgni nuovo QSO aggiunto a questo log avrà questo sfondo, posizioni e font.`); 
         } catch(e) { alert("Errore Salvataggio: L'immagine caricata come sfondo è troppo pesante. Riduci la risoluzione della foto prima di salvarla come Template."); }
     }
 
     function loadQslTemplate() {
-        let raw = localStorage.getItem(QSL_TEMPLATE_META); if(!raw) return;
+        // NUOVO: Cerca il template specifico per questo log
+        let t = qslTemplates[currentLog];
+        if (!t) {
+            // Se non c'è, controlliamo se esiste un vecchio template globale per retrocompatibilità
+            let raw = localStorage.getItem(QSL_TEMPLATE_META); 
+            if (raw) t = JSON.parse(raw);
+            else return; // Nessun template esistente
+        }
+
         try {
-            let t = JSON.parse(raw); applyQslState(t);
+            applyQslState(t);
             let promises = [];
             if(t.bg && !originalImg) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { currentCroppedImg = img; originalImg = img; res(); }; img.src = t.bg; })); }
             if(t.logo) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { logoImg = img; res(); }; img.src = t.logo; })); }
@@ -1339,5 +1947,6 @@
     });
   }
 </script>
+
 </body>
 </html>
