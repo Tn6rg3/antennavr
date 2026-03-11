@@ -1797,7 +1797,27 @@ function saveConfigState() {
             }
             renderQSL(); return;
         } else if (draggingElement) { 
-            draggingElement.x = pos.x - offset.x; draggingElement.y = pos.y - offset.y; 
+            let newX = pos.x - offset.x;
+            let newY = pos.y - offset.y;
+            
+            // Impostazione dei limiti del canvas
+            let minX = 0, maxX = QSL_WIDTH - draggingElement.w;
+            let minY = 0, maxY = QSL_HEIGHT - draggingElement.h;
+            
+            // Per il testo l'ancora Y è diversa (è la baseline)
+            if (draggingElement !== logoObj) {
+                minY = draggingElement.h;
+                maxY = QSL_HEIGHT - (draggingElement.h * 0.3);
+            }
+            
+            // Protezione nel caso il testo fosse più largo dello schermo
+            if (maxX < minX) maxX = minX;
+            if (maxY < minY) maxY = minY;
+            
+            // Applicazione dei limiti calcolati
+            draggingElement.x = Math.max(minX, Math.min(newX, maxX));
+            draggingElement.y = Math.max(minY, Math.min(newY, maxY));
+            
             renderQSL(); return; 
         }
 
