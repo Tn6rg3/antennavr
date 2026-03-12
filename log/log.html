@@ -277,11 +277,11 @@
                 <div class="col"><label>DATA EVENTO</label><input type="date" id="knDateFilter" style="border: 2px solid #1abc9c;"></div>
                 <div class="col"><label>TASTO DA INVIARE</label>
                     <select id="knKeyFilter" style="border: 2px solid #1abc9c;">
-                        <option value="Verticale">Verticale</option>
-                        <option value="Sideswiper">Sideswiper</option>
                         <option value="Bug">Bug</option>
-                        <option value="Paddle">Paddle</option>
-                        <option value="Monopala">Monopala</option>
+                        <option value="Dual Paddle">Dual Paddle</option>
+                        <option value="Mono paddle">Mono paddle</option>
+                        <option value="Side-sweeper">Side-sweeper</option>
+                        <option value="Straight Key">Straight Key</option>
                     </select>
                 </div>
             </div>
@@ -307,11 +307,11 @@
         <div id="keyNightPanel" style="display:none; background:rgba(26, 188, 156, 0.1); border:2px solid #1abc9c; padding:10px; border-radius:8px; margin-bottom:10px; margin-top:10px;">
             <label style="color:#16a085; font-weight:bold; font-size:1em;">🗝️ MODELLO TASTO UTILIZZATO</label>
             <select id="keyType" style="border:1px solid #1abc9c; margin-bottom:0;">
-                <option value="Verticale">Verticale</option>
-                <option value="Sideswiper">Sideswiper</option>
                 <option value="Bug">Bug</option>
-                <option value="Paddle">Paddle</option>
-                <option value="Monopala">Monopala</option>
+                <option value="Dual Paddle">Dual Paddle</option>
+                <option value="Mono paddle">Mono paddle</option>
+                <option value="Side-sweeper">Side-sweeper</option>
+                <option value="Straight Key">Straight Key</option>
             </select>
         </div>
 
@@ -1232,7 +1232,7 @@
     
     function resetForm() { 
         ['freq','call','name','qth','gridsquare','note','theirRef','timeOn','timeOff'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-        const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = 'Verticale';
+        const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = 'Straight Key';
         document.getElementById('dupeAlert').innerText = ''; document.getElementById('qrbCalc').innerText = '';
         tempOriginalBlob = null; loadedOriginalBlob = null; syncRST(); qsoStarted=false; initDate(); 
         const c = document.getElementById('call'); if(c) c.focus(); 
@@ -1248,7 +1248,7 @@
 
     function loadEdit(i) { 
         editIdx = i; const q = db[currentLog][i]; 
-        document.getElementById('date').value = q.date; document.getElementById('freq').value = q.freq||''; document.getElementById('timeOn').value = q.timeOn||q.time; document.getElementById('timeOff').value = q.timeOff||q.timeOn; document.getElementById('call').value = q.call; document.getElementById('name').value = q.name||""; document.getElementById('qth').value = q.qth||""; document.getElementById('band').value = q.band; document.getElementById('mode').value = q.mode; document.getElementById('rstS').value = q.rstS; document.getElementById('rstR').value = q.rstR; document.getElementById('gridsquare').value = q.gridsquare||""; document.getElementById('note').value = q.note||""; document.getElementById('myRef').value = q.myRef||""; document.getElementById('theirRef').value = q.theirRef||""; const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = q.keyType||"Verticale"; calcQRB(); 
+        document.getElementById('date').value = q.date; document.getElementById('freq').value = q.freq||''; document.getElementById('timeOn').value = q.timeOn||q.time; document.getElementById('timeOff').value = q.timeOff||q.timeOn; document.getElementById('call').value = q.call; document.getElementById('name').value = q.name||""; document.getElementById('qth').value = q.qth||""; document.getElementById('band').value = q.band; document.getElementById('mode').value = q.mode; document.getElementById('rstS').value = q.rstS; document.getElementById('rstR').value = q.rstR; document.getElementById('gridsquare').value = q.gridsquare||""; document.getElementById('note').value = q.note||""; document.getElementById('myRef').value = q.myRef||""; document.getElementById('theirRef').value = q.theirRef||""; const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = q.keyType||"Straight Key"; calcQRB(); 
         
         document.getElementById('saveBtn').innerText = "MODIFICA QSO E QSL"; document.getElementById('saveBtn').className = "btn-orange"; document.getElementById('cancelBtn').style.display = 'block'; 
 
