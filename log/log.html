@@ -285,7 +285,7 @@
                     </select>
                 </div>
             </div>
-            <label>SERVER URL</label><input type="text" id="knUrl" value="https://cwqrs.pythonanywhere.com/a1kn_2026/upload_log_json" style="color:#555;">
+            <label>SERVER URL</label><input type="text" id="knUrl" value="https://cwqrs.pythonanywhere.com/keynight/upload_log_json" style="color:#555;">
             <button class="btn-green" style="width: 100%; font-size: 1.1em; padding: 12px; margin-top: 10px; font-weight: bold; text-transform: uppercase;" onclick="uploadKeyNightLog()">📤 CERCA E INVIA LOG KEY NIGHT</button>
         </div>
     </div>
@@ -969,7 +969,7 @@
             if(isContestMode()) { add("STX", q.myRef); add("SRX", q.theirRef); add("CONTEST_ID", (logMeta[currentLog]||{}).name); if(noteStr) add("COMMENT", noteStr); } else { add("NAME", q.name); add("QTH", q.qth); add("GRIDSQUARE", q.gridsquare); if(noteStr) add("COMMENT", noteStr); }
             adif += row + "<EOR>\n";
         });
-        const blob = new Blob([adif], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentLog}_${new Date().toISOString().split('T')[0]}.adi`; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast("Export ADIF OK!");
+        const blob = new Blob([adif], { type: 'application/octet-stream' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentLog}_${new Date().toISOString().split('T')[0]}.adi`; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast("Export ADIF OK!");
     }
 
     function exportCabrillo() {
@@ -985,7 +985,7 @@
                 let rstS = (q.rstS || "59").toString().trim(); let rstR = (q.rstR || "59").toString().trim(); let exchS = (q.myRef || "001").toString().trim(); let exchR = (q.theirRef || "001").toString().trim(); let dxCall = (q.call || "").toString().toUpperCase().trim();
                 cab += `QSO: ${freqKHz.padEnd(6)} ${mode.padEnd(3)} ${d} ${t} ${myCall.padEnd(10)} ${rstS.padEnd(3)} ${exchS.padEnd(6)} ${dxCall.padEnd(10)} ${rstR.padEnd(3)} ${exchR}\n`;
             });
-            cab += "END-OF-LOG:\n"; const blob = new Blob([cab], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentLog}_${new Date().toISOString().split('T')[0]}.cbr`; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast("Export Cabrillo OK!");
+            cab += "END-OF-LOG:\n"; const blob = new Blob([cab], { type: 'application/octet-stream' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentLog}_${new Date().toISOString().split('T')[0]}.cbr`; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast("Export Cabrillo OK!");
         } catch (err) { alert("Errore Export: " + err.message); }
     }
 
