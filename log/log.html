@@ -157,6 +157,7 @@
                 <option value="STD">Standard (Nessuno)</option>
                 <option value="XMAS">🎄 Xmas Activity</option>
                 <option value="KEYNIGHT">🗝️ Key Night</option>
+                <option value="MUMBLE">🗣️ Mumble CW</option>
             </select>
             <div class="checkbox-container" style="background:#fff; padding:5px; border-radius:4px; margin-bottom:5px; margin-top:5px; border:1px solid #ccc;">
                 <input type="checkbox" id="isContestCheck" style="width:auto; margin-right:5px;">
@@ -292,9 +293,12 @@
 
     <div class="box" id="formBox">
         <h4 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:5px;">Inserimento QSO</h4>
-        <div class="row"><div class="col"><label>DATA</label><input type="date" id="date" oninput="syncLiveQsoData()"></div><div class="col"><label>FREQ</label><input type="number" id="freq" step="0.0001" oninput="syncLiveQsoData()"></div></div>
+        <div class="row">
+            <div class="col"><label>DATA</label><input type="date" id="date" oninput="syncLiveQsoData()"></div>
+            <div id="freqCol" class="col"><label>FREQ</label><input type="number" id="freq" step="0.0001" oninput="syncLiveQsoData()"></div>
+        </div>
         <div class="row"><div class="col"><label>INIZIO (UTC)</label><input type="time" id="timeOn" oninput="syncLiveQsoData()"></div><div class="col"><label>FINE (UTC)</label><input type="time" id="timeOff" oninput="syncLiveQsoData()"></div></div>
-        <div class="row"><div class="col"><label>CALLSIGN</label><div class="call-row"><div class="call-input-wrapper"><input type="text" id="call" placeholder="CALL..." style="text-transform:uppercase; font-weight:bold; font-size:1.4em; border:2px solid #3498db; margin:0; height:42px;" oninput="syncLiveQsoData()"></div><button class="btn-qrz" onclick="openQRZ()">🔍 QRZ</button></div><div id="dupeAlert"></div></div></div>
+        <div class="row"><div class="col"><label>CALLSIGN</label><div class="call-row"><div class="call-input-wrapper"><input type="text" id="call" placeholder="CALL..." style="text-transform:uppercase; font-weight:bold; font-size:1.4em; border:2px solid #3498db; margin:0; height:42px;" oninput="syncLiveQsoData()"></div><button id="btnQRZ" class="btn-qrz" onclick="openQRZ()">🔍 QRZ</button></div><div id="dupeAlert"></div></div></div>
         
         <div class="hide-in-contest">
             <div class="row"><div class="col"><label>NOME</label><input type="text" id="name"></div><div class="col"><label>QTH</label><input type="text" id="qth"></div></div>
@@ -313,6 +317,26 @@
                 <option value="Side-sweeper">Side-sweeper</option>
                 <option value="Straight Key">Straight Key</option>
             </select>
+        </div>
+
+        <!-- PANNELLO SELEZIONE SISTEMA (Visibile solo se modello = MUMBLE) -->
+        <div id="mumblePanel" style="display:none; background:rgba(52, 152, 219, 0.1); border:2px solid #3498db; padding:10px; border-radius:8px; margin-bottom:10px; margin-top:10px;">
+            <label style="color:#2980b9; font-weight:bold; font-size:1em;">📱 SISTEMA UTILIZZATO (MUMBLE)</label>
+            <select id="mumbleSystem" style="border:1px solid #3498db; margin-bottom:0;">
+                <option value="PC">PC</option>
+                <option value="Smartphone">Smartphone</option>
+            </select>
+        </div>
+
+        <div class="advanced-toggle" onclick="toggleAdvanced()">⬇️ Scambi & Note</div>
+        <div id="advancedFields" style="display:none;"> 
+            <div class="hide-in-contest">
+                <div class="row"><div class="col"><label>GRID LOCATOR</label><input type="text" id="gridsquare" onchange="calcQRB()" style="text-transform:uppercase;"><span id="qrbCalc" class="qrb-info"></span></div><div class="col"><label>NOTE</label><input type="text" id="note"></div></div>
+            </div>
+            <div class="row" style="margin-top:5px;">
+                <div class="col"><label id="lblMyRef" style="color:var(--text-color);">TUO REF (SCAMBIO)</label><input type="text" id="myRef" onchange="saveUserData()" style="border: 2px solid #e67e22;"></div>
+                <div class="col"><label id="lblTheirRef" style="color:var(--text-color);">SUO REF (RICEVUTO)</label><input type="text" id="theirRef" style="border: 2px solid #e67e22;"></div>
+            </div>
         </div>
 
         <div class="hide-in-contest">
@@ -380,16 +404,6 @@
             <small style="color:#555; display:block; margin-top:4px;">Il QSO rimarrà sempre visibile anche nel log principale GENERALE.</small>
         </div>
 
-        <div class="advanced-toggle" onclick="toggleAdvanced()">⬇️ Scambi & Note</div>
-        <div id="advancedFields" style="display:none;"> 
-            <div class="hide-in-contest">
-                <div class="row"><div class="col"><label>GRID LOCATOR</label><input type="text" id="gridsquare" onchange="calcQRB()" style="text-transform:uppercase;"><span id="qrbCalc" class="qrb-info"></span></div><div class="col"><label>NOTE</label><input type="text" id="note"></div></div>
-            </div>
-            <div class="row" style="margin-top:5px;">
-                <div class="col"><label id="lblMyRef" style="color:var(--text-color);">TUO REF (SCAMBIO)</label><input type="text" id="myRef" onchange="saveUserData()" style="border: 2px solid #e67e22;"></div>
-                <div class="col"><label id="lblTheirRef" style="color:var(--text-color);">SUO REF (RICEVUTO)</label><input type="text" id="theirRef" style="border: 2px solid #e67e22;"></div>
-            </div>
-        </div>
         <button type="button" id="saveBtn" class="btn-blue" onclick="saveQSO()">SALVA QSO E GENERA QSL</button>
         <button type="button" id="cancelBtn" class="btn-grey" style="width:100%; display:none; margin-top:5px;" onclick="cancelEdit()">ANNULLA MODIFICA</button>
     </div>
@@ -718,7 +732,7 @@
                 call: safeGetVal('call').toUpperCase().trim(), name: safeGetVal('name'), qth: safeGetVal('qth'),
                 band: safeGetVal('band'), mode: safeGetVal('mode'), rstS: safeGetVal('rstS'), rstR: safeGetVal('rstR'),
                 gridsquare: safeGetVal('gridsquare').toUpperCase(), note: safeGetVal('note'), myRef: safeGetVal('myRef').toUpperCase(), theirRef: safeGetVal('theirRef').toUpperCase(),
-                keyType: safeGetVal('keyType'),
+                keyType: safeGetVal('keyType'), mumbleSystem: safeGetVal('mumbleSystem'),
                 qslMeta: getQslState()
             };
 
@@ -880,6 +894,7 @@
                 if(logMeta[k]) { 
                     if(logMeta[k].type === "XMAS") prefix += "🎄 "; 
                     else if(logMeta[k].type === "KEYNIGHT") prefix += "🗝️ "; 
+                    else if(logMeta[k].type === "MUMBLE") prefix += "🗣️ "; 
                     if(logMeta[k].isContest) prefix += "🏆 "; 
                 } 
                 opt(k, `${prefix}${k} (${db[k].length})`); 
@@ -895,6 +910,15 @@
         const keyPanel = document.getElementById('keyNightPanel'); 
         if(keyPanel) keyPanel.style.display = (type === "KEYNIGHT") ? "block" : "none";
         
+        const mumblePanel = document.getElementById('mumblePanel');
+        if(mumblePanel) mumblePanel.style.display = (type === "MUMBLE") ? "block" : "none";
+
+        const freqCol = document.getElementById('freqCol');
+        if(freqCol) freqCol.style.display = (type === "MUMBLE") ? "none" : "block";
+
+        const btnQRZ = document.getElementById('btnQRZ');
+        if(btnQRZ) btnQRZ.style.display = (type === "MUMBLE") ? "none" : "flex";
+        
         document.getElementById('qsoCount').innerText = (db[currentLog]||[]).length;
         
         updateFormVisibility();
@@ -905,7 +929,7 @@
         if(currentSort.col) { list.sort((a,b) => { let v1=a[currentSort.col], v2=b[currentSort.col]; if(currentSort.col==='freq') { v1=parseFloat(v1)||0; v2=parseFloat(v2)||0; } else { v1=(v1||'').toString(); v2=(v2||'').toString(); } return (v1<v2?-1:1)*(currentSort.asc?1:-1); }); } else list.reverse();
         const tot = Math.ceil(list.length/rowsPerPage)||1; if(currentPage>tot) currentPage=tot; if(currentPage<1) currentPage=1; document.getElementById('pageInfo').innerText = `Pag ${currentPage}/${tot}`;
         
-        let thHTML = `<th style="width:80px;">Act</th><th onclick="sortBy('date')">Data</th><th onclick="sortBy('freq')">Freq</th><th onclick="sortBy('call')">Call</th><th>Banda</th><th>Modo</th><th>RST</th>`;
+        let thHTML = `<th style="width:80px;">Act</th><th onclick="sortBy('date')">Data</th><th onclick="sortBy('freq')">${type === 'MUMBLE' ? 'Sistema' : 'Freq'}</th><th onclick="sortBy('call')">Call</th><th>Banda</th><th>Modo</th><th>RST</th>`;
         if (type === "KEYNIGHT") thHTML += `<th>Tasto</th>`;
         thHTML += `<th>Exch</th><th>Foto</th>`;
         const headRow = document.getElementById('tableHeadRow'); if(headRow) headRow.innerHTML = thHTML;
@@ -915,12 +939,15 @@
         else {
             list.slice((currentPage-1)*rowsPerPage, currentPage*rowsPerPage).forEach(q => {
                 const isEd = (q._i===editIdx); const mediaBtn = q.hasPhoto ? `<button onclick="loadPhotoFromDB(${q.photoId})" style="padding:2px 6px;" title="Vedi QSL">📸</button>` : ''; const exch = (q.myRef || "") + " -> " + (q.theirRef || "");
+                let freqOrSys = q.freq || '';
+                if (type === 'MUMBLE') freqOrSys = `<strong style="color:#2980b9;">${q.mumbleSystem || '-'}</strong>`;
+                
                 let rowHTML = `<tr class="${isEd?'edit-row':''}">
                     <td style="white-space:nowrap;">
                         <button onclick="loadEdit(${q._i})" style="padding:4px 6px;" title="Modifica">✏️</button>
                         <button class="btn-red" style="padding:4px 6px;" onclick="delQSO(${q._i})" title="Elimina">x</button>
                     </td>
-                    <td>${q.date}</td> <td>${q.freq||''}</td> <td style="font-weight:bold">${q.call}</td> <td>${q.band}</td> <td>${q.mode}</td> <td>${q.rstS}/${q.rstR}</td>`;
+                    <td>${q.date}</td> <td>${freqOrSys}</td> <td style="font-weight:bold">${q.call}</td> <td>${q.band}</td> <td>${q.mode}</td> <td>${q.rstS}/${q.rstR}</td>`;
                 if(type === "KEYNIGHT") rowHTML += `<td><strong style="color:#16a085;">${q.keyType||'-'}</strong></td>`;
                 rowHTML += `<td style="font-size:0.9em;">${exch}</td><td style="text-align:center;">${mediaBtn}</td></tr>`;
                 tb.innerHTML += rowHTML;
@@ -964,6 +991,10 @@
             if (q.keyType && (logMeta[currentLog] && logMeta[currentLog].type === 'KEYNIGHT')) {
                 add("APP_KEYNIGHT_TYPE", q.keyType);
                 noteStr = `[Key: ${q.keyType}] ${noteStr}`.trim();
+            }
+            if (q.mumbleSystem && (logMeta[currentLog] && logMeta[currentLog].type === 'MUMBLE')) {
+                add("APP_MUMBLE_SYSTEM", q.mumbleSystem);
+                noteStr = `[Sys: ${q.mumbleSystem}] ${noteStr}`.trim();
             }
 
             if(isContestMode()) { add("STX", q.myRef); add("SRX", q.theirRef); add("CONTEST_ID", (logMeta[currentLog]||{}).name); if(noteStr) add("COMMENT", noteStr); } else { add("NAME", q.name); add("QTH", q.qth); add("GRIDSQUARE", q.gridsquare); if(noteStr) add("COMMENT", noteStr); }
@@ -1233,6 +1264,7 @@
     function resetForm() { 
         ['freq','call','name','qth','gridsquare','note','theirRef','timeOn','timeOff'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
         const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = 'Straight Key';
+        const mumbleEl = document.getElementById('mumbleSystem'); if(mumbleEl) mumbleEl.value = 'PC';
         document.getElementById('dupeAlert').innerText = ''; document.getElementById('qrbCalc').innerText = '';
         tempOriginalBlob = null; loadedOriginalBlob = null; syncRST(); qsoStarted=false; initDate(); 
         const c = document.getElementById('call'); if(c) c.focus(); 
@@ -1248,7 +1280,10 @@
 
     function loadEdit(i) { 
         editIdx = i; const q = db[currentLog][i]; 
-        document.getElementById('date').value = q.date; document.getElementById('freq').value = q.freq||''; document.getElementById('timeOn').value = q.timeOn||q.time; document.getElementById('timeOff').value = q.timeOff||q.timeOn; document.getElementById('call').value = q.call; document.getElementById('name').value = q.name||""; document.getElementById('qth').value = q.qth||""; document.getElementById('band').value = q.band; document.getElementById('mode').value = q.mode; document.getElementById('rstS').value = q.rstS; document.getElementById('rstR').value = q.rstR; document.getElementById('gridsquare').value = q.gridsquare||""; document.getElementById('note').value = q.note||""; document.getElementById('myRef').value = q.myRef||""; document.getElementById('theirRef').value = q.theirRef||""; const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = q.keyType||"Straight Key"; calcQRB(); 
+        document.getElementById('date').value = q.date; document.getElementById('freq').value = q.freq||''; document.getElementById('timeOn').value = q.timeOn||q.time; document.getElementById('timeOff').value = q.timeOff||q.timeOn; document.getElementById('call').value = q.call; document.getElementById('name').value = q.name||""; document.getElementById('qth').value = q.qth||""; document.getElementById('band').value = q.band; document.getElementById('mode').value = q.mode; document.getElementById('rstS').value = q.rstS; document.getElementById('rstR').value = q.rstR; document.getElementById('gridsquare').value = q.gridsquare||""; document.getElementById('note').value = q.note||""; document.getElementById('myRef').value = q.myRef||""; document.getElementById('theirRef').value = q.theirRef||""; 
+        const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = q.keyType||"Straight Key"; 
+        const mumbleEl = document.getElementById('mumbleSystem'); if(mumbleEl) mumbleEl.value = q.mumbleSystem||"PC";
+        calcQRB(); 
         
         document.getElementById('saveBtn').innerText = "MODIFICA QSO E QSL"; document.getElementById('saveBtn').className = "btn-orange"; document.getElementById('cancelBtn').style.display = 'block'; 
 
