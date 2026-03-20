@@ -828,6 +828,7 @@
         if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
         
         renderUI(); 
+        syncLiveQsoData();
     }
     
     function deleteLog() { 
@@ -847,6 +848,7 @@
             clearQSLEditorCanvas();
             let t = qslTemplates[currentLog];
             if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
+            syncLiveQsoData();
         } 
     }
     
@@ -871,6 +873,7 @@
             // Imposta canvas vuoto per il nuovo log
             clearQSLEditorCanvas();
             syncGlobalToQsl();
+            syncLiveQsoData();
         } else if(db[n]) alert("Log già esistente!"); 
     }
 
