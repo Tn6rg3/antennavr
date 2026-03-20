@@ -265,14 +265,9 @@
             <span>🗝️ KEY NIGHT ACTIVITY / SETTINGS</span><span id="knArrow">▼</span>
         </div>
         <div id="knContent" class="kn-content" style="display: none; padding: 15px; background: #e8f6f3; border-top: 1px solid #1abc9c;">
-            <div class="row">
+            <div class="row" style="margin-bottom: 10px;">
                 <div class="col"><label>IL TUO NOMINATIVO</label><input type="text" id="knCall" onchange="saveUserData()" style="border: 2px solid #1abc9c;"></div>
                 <div class="col"><label>LA TUA EMAIL</label><input type="email" id="knEmail" onchange="saveUserData()" placeholder="tua@email.com" style="border: 2px solid #1abc9c;"></div>
-            </div>
-            <label>CATEGORIA</label>
-            <div class="radio-group" style="border: 1px solid #a3e4d7; margin-bottom: 10px;">
-                <label class="radio-item"><input type="radio" name="knCategory" value="1" checked> <span>ROOKIE</span></label>
-                <label class="radio-item"><input type="radio" name="knCategory" value="2"> <span>SENIOR</span></label>
             </div>
             <div class="row">
                 <div class="col"><label>DATA EVENTO</label><input type="date" id="knDateFilter" style="border: 2px solid #1abc9c;"></div>
@@ -530,7 +525,6 @@
 
         document.getElementById('fileInput').addEventListener('change', handleImport);
         document.getElementById('formBox').addEventListener('keypress', (e)=>{if(e.key==='Enter'&&e.target.id!=='note'){e.preventDefault();saveQSO();}});
-        document.getElementById('searchInput').addEventListener('keypress', (e)=>{if(e.key==='Enter')doSearch();});
         document.getElementById('formBox').addEventListener('input', saveDraft);
 
         initTheme(); initDate(); loadDB(); loadMeta(); loadSnapshots(); loadQslTemplatesDB();
@@ -817,20 +811,17 @@
         } catch(e) { alert("Err Delete"); }
     }
 
+    // GESTIONE DEL CAMBIO LOG TOTALMENTE RIVISTA: Azzera i campi spuri e forza il ricalcolo 
     function changeLog(val) { 
         if(editIdx !== -1) cancelEdit(); 
         currentLog = val; 
         currentPage = 1; activeSearch = null; document.getElementById('searchInput').value = ''; 
         
-        // Carica il template associato a questo log specifico
-        clearQSLEditorCanvas();
-        let t = qslTemplates[currentLog];
-        if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
-        
+        resetForm(); // Questa funzione resetterà la form, rimuovendo la vecchia Banda in memoria e forzando syncLiveQsoData()
         renderUI(); 
-        syncLiveQsoData();
     }
     
+    // RIVISTA ANCHE LA CANCELLAZIONE
     function deleteLog() { 
         const isSystemLog = (currentLog === "GENERALE"); 
         const message = isSystemLog ? "SVUOTARE il log "+currentLog+"?" : "Eliminare definitivamente "+currentLog+"?"; 
@@ -843,15 +834,13 @@
                 if(qslTemplates[currentLog]) { delete qslTemplates[currentLog]; saveQslTemplatesDB(); }
                 currentLog = "GENERALE"; 
             } 
-            saveDB(); renderUI(); 
-            // Aggiorna template vista
-            clearQSLEditorCanvas();
-            let t = qslTemplates[currentLog];
-            if (t) { loadQslTemplate(); } else { syncGlobalToQsl(); }
-            syncLiveQsoData();
+            saveDB(); 
+            resetForm();
+            renderUI(); 
         } 
     }
     
+    // RIVISTA ANCHE LA CREAZIONE
     function doCreateLog() { 
         const n=safeGetVal('newLogName').trim(); 
         const template = safeGetVal('newLogTemplate'); 
@@ -864,16 +853,14 @@
             saveMeta(); 
             currentLog=n; 
             saveDB(); 
+            
+            resetForm(); // Svuota la cache visiva della form e sincronizza le scritte correttamente!
             renderUI(); 
+            
             document.getElementById('createLogArea').style.display='none'; 
             document.getElementById('newLogName').value = ""; 
             if(isCBox) isCBox.checked = false; 
             document.getElementById('newLogTemplate').value = "STD"; 
-            
-            // Imposta canvas vuoto per il nuovo log
-            clearQSLEditorCanvas();
-            syncGlobalToQsl();
-            syncLiveQsoData();
         } else if(db[n]) alert("Log già esistente!"); 
     }
 
@@ -1435,8 +1422,8 @@ function saveConfigState() {
     function changePage(d) { currentPage+=d; renderUI(); }
     function sortBy(c) { if(currentSort.col===c) currentSort.asc=!currentSort.asc; else { currentSort.col=c; currentSort.asc=true; } renderUI(); }
     
-    // INVIO REALE XMAS ACTIVITY
-    async function uploadXmasLog() { 
+    // INVIO REALE XMAS ACTIVITY (Tramite AJAX Fetch standard)
+    async function uploadXmasLog() {
         const call = document.getElementById('xmasCall').value.trim().toUpperCase();
         const email = document.getElementById('xmasEmail').value.trim();
         const cat = document.querySelector('input[name="xmasCategory"]:checked').value;
@@ -1458,28 +1445,31 @@ function saveConfigState() {
         });
 
         if(!confirm(`Trovati ${logs.length} QSO.\nVuoi inviarli al server Xmas?`)) return;
+
         try {
             const formData = new FormData();
             formData.append("callsign", call);
             formData.append("email", email);
             formData.append("category", catName);
-            const blob = new Blob([adif], { type: 'text/plain' });
-            formData.append("adif_file", blob, `${call}_Xmas.adi`);
+
+            const file = new File([adif], `${call}_Xmas.adi`, { type: 'text/plain' });
+            formData.append("adif_file", file);
 
             const response = await fetch(url, { method: 'POST', body: formData });
-            if (response.ok) alert("✅ Log Xmas inviato con successo al server!");
-            else alert("❌ Errore durante l'invio. Codice: " + response.status);
+            if(response.ok) {
+                alert("✅ Log inviato con successo al server Xmas!");
+            } else {
+                alert("❌ Errore dal server. Controlla che il CORS o il CSRF siano configurati correttamente.");
+            }
         } catch(e) {
-            alert("❌ Errore di connessione al server: " + e.message + "\n\n(Possibile blocco CORS o server offline)");
+            alert("❌ Errore di connessione o CORS: " + e.message);
         }
     }
 
-    // INVIO REALE KEY NIGHT
+    // INVIO REALE KEY NIGHT (Tramite AJAX Fetch standard)
     async function uploadKeyNightLog() {
         const call = document.getElementById('knCall').value.trim().toUpperCase();
         const email = document.getElementById('knEmail').value.trim();
-        const cat = document.querySelector('input[name="knCategory"]:checked').value;
-        const catName = cat === "1" ? "Rookie" : "Senior";
         const dateFilter = document.getElementById('knDateFilter').value;
         const keyFilter = document.getElementById('knKeyFilter').value;
         const url = document.getElementById('knUrl').value.trim();
@@ -1509,21 +1499,19 @@ function saveConfigState() {
             const formData = new FormData();
             formData.append("callsign", call);
             formData.append("email", email);
-            formData.append("category", catName);
             formData.append("key_type", keyFilter);
-            formData.append("qso_date", dateFilter);
             
-            const blob = new Blob([adif], { type: 'text/plain' });
-            formData.append("adif_file", blob, `${call}_${dateFilter}_${keyFilter}.adi`);
+            const file = new File([adif], `${call}_${dateFilter}_${keyFilter}.adi`, { type: 'text/plain' });
+            formData.append("adif_file", file);
 
             const response = await fetch(url, { method: 'POST', body: formData });
-            if (response.ok) {
-                alert("✅ Log Key Night inviato con successo al server!");
+            if(response.ok) {
+                alert("✅ Log inviato con successo al server Key Night!");
             } else {
-                alert("❌ Errore durante l'invio del log. Codice HTTP: " + response.status);
+                alert("❌ Errore dal server. Controlla che il CORS o il CSRF siano configurati correttamente.");
             }
         } catch(e) {
-            alert("❌ Errore di connessione al server: " + e.message + "\n\n(Possibile blocco CORS o server offline)");
+            alert("❌ Errore di connessione o CORS: " + e.message);
         }
     }
 
