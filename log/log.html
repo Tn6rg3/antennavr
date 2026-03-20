@@ -304,7 +304,10 @@
             <div class="row"><div class="col"><label>NOME</label><input type="text" id="name"></div><div class="col"><label>QTH</label><input type="text" id="qth"></div></div>
         </div>
 
-        <div class="row"><div class="col"><label>BANDA</label><select id="band" oninput="syncLiveQsoData()"><option>160m</option><option>80m</option><option>60m</option><option selected>40m</option><option>30m</option><option>20m</option><option>17m</option><option>15m</option><option>12m</option><option>10m</option><option>6m</option><option>2m</option><option>70cm</option></select></div><div class="col"><label>MODO</label><select id="mode" onchange="syncRST(); syncLiveQsoData()"><option selected>CW</option><option>SSB</option><option>FT8</option><option>FM</option><option>RTTY</option><option>AM</option></select></div></div>
+        <div class="row">
+            <div class="col" id="bandCol"><label>BANDA</label><select id="band" oninput="syncLiveQsoData()"><option>160m</option><option>80m</option><option>60m</option><option selected>40m</option><option>30m</option><option>20m</option><option>17m</option><option>15m</option><option>12m</option><option>10m</option><option>6m</option><option>2m</option><option>70cm</option></select></div>
+            <div class="col"><label>MODO</label><select id="mode" onchange="syncRST(); syncLiveQsoData()"><option selected>CW</option><option>SSB</option><option>FT8</option><option>FM</option><option>RTTY</option><option>AM</option></select></div>
+        </div>
         <div class="row"><div class="col"><label>RST TX</label><input type="text" id="rstS" value="599" oninput="syncLiveQsoData()"></div><div class="col"><label>RST RX</label><input type="text" id="rstR" value="599"></div></div>
         
         <!-- PANNELLO SELEZIONE TASTO (Visibile solo se modello = KEYNIGHT) -->
@@ -322,7 +325,7 @@
         <!-- PANNELLO SELEZIONE SISTEMA (Visibile solo se modello = MUMBLE) -->
         <div id="mumblePanel" style="display:none; background:rgba(52, 152, 219, 0.1); border:2px solid #3498db; padding:10px; border-radius:8px; margin-bottom:10px; margin-top:10px;">
             <label style="color:#2980b9; font-weight:bold; font-size:1em;">📱 SISTEMA UTILIZZATO (MUMBLE)</label>
-            <select id="mumbleSystem" style="border:1px solid #3498db; margin-bottom:0;">
+            <select id="mumbleSystem" style="border:1px solid #3498db; margin-bottom:0;" onchange="syncLiveQsoData()">
                 <option value="PC">PC</option>
                 <option value="Smartphone">Smartphone</option>
             </select>
@@ -423,7 +426,7 @@
         </div>
 
         <div class="pagination-bar" style="margin-top:10px;"><div style="display:flex; align-items:center; gap:5px;"><span style="font-size:0.8em; font-weight:bold;">MOSTRA:</span><select id="rowsPerPage" onchange="changeRows(this.value)" style="width:auto; padding:4px;"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></div><div class="page-controls"><button id="btnPrev" onclick="changePage(-1)">◀</button><span id="pageInfo" class="page-info">Pag 1/1</span><button id="btnNext" onclick="changePage(1)">▶</button></div></div>
-        <div class="table-wrapper"><table id="dataTable"><thead><tr id="tableHeadRow"><th style="width:80px;">Act</th><th onclick="sortBy('date')">Data</th><th onclick="sortBy('freq')">Freq</th><th onclick="sortBy('call')">Call</th><th>Banda</th><th>Modo</th><th>RST</th><th>Exch</th><th>Foto</th></tr></thead><tbody id="tableBody"></tbody></table></div>
+        <div class="table-wrapper"><table id="dataTable"><thead><tr id="tableHeadRow"></tr></thead><tbody id="tableBody"></tbody></table></div>
     </div>
 
     <!-- MODAL PRIVACY -->
@@ -916,6 +919,9 @@
         const freqCol = document.getElementById('freqCol');
         if(freqCol) freqCol.style.display = (type === "MUMBLE") ? "none" : "block";
 
+        const bandCol = document.getElementById('bandCol');
+        if(bandCol) bandCol.style.display = (type === "MUMBLE") ? "none" : "block";
+
         const btnQRZ = document.getElementById('btnQRZ');
         if(btnQRZ) btnQRZ.style.display = (type === "MUMBLE") ? "none" : "flex";
         
@@ -929,9 +935,15 @@
         if(currentSort.col) { list.sort((a,b) => { let v1=a[currentSort.col], v2=b[currentSort.col]; if(currentSort.col==='freq') { v1=parseFloat(v1)||0; v2=parseFloat(v2)||0; } else { v1=(v1||'').toString(); v2=(v2||'').toString(); } return (v1<v2?-1:1)*(currentSort.asc?1:-1); }); } else list.reverse();
         const tot = Math.ceil(list.length/rowsPerPage)||1; if(currentPage>tot) currentPage=tot; if(currentPage<1) currentPage=1; document.getElementById('pageInfo').innerText = `Pag ${currentPage}/${tot}`;
         
-        let thHTML = `<th style="width:80px;">Act</th><th onclick="sortBy('date')">Data</th><th onclick="sortBy('freq')">${type === 'MUMBLE' ? 'Sistema' : 'Freq'}</th><th onclick="sortBy('call')">Call</th><th>Banda</th><th>Modo</th><th>RST</th>`;
+        // Logica dinamica intestazione tabella
+        let thHTML = `<th style="width:80px;">Act</th><th onclick="sortBy('date')">Data</th>`;
+        if (type !== 'MUMBLE') thHTML += `<th onclick="sortBy('freq')">Freq</th>`;
+        thHTML += `<th onclick="sortBy('call')">Call</th>`;
+        thHTML += `<th>${type === 'MUMBLE' ? 'Sistema' : 'Banda'}</th>`;
+        thHTML += `<th>Modo</th><th>RST</th>`;
         if (type === "KEYNIGHT") thHTML += `<th>Tasto</th>`;
         thHTML += `<th>Exch</th><th>Foto</th>`;
+        
         const headRow = document.getElementById('tableHeadRow'); if(headRow) headRow.innerHTML = thHTML;
         
         const tb = document.getElementById('tableBody'); tb.innerHTML = '';
@@ -939,17 +951,28 @@
         else {
             list.slice((currentPage-1)*rowsPerPage, currentPage*rowsPerPage).forEach(q => {
                 const isEd = (q._i===editIdx); const mediaBtn = q.hasPhoto ? `<button onclick="loadPhotoFromDB(${q.photoId})" style="padding:2px 6px;" title="Vedi QSL">📸</button>` : ''; const exch = (q.myRef || "") + " -> " + (q.theirRef || "");
-                let freqOrSys = q.freq || '';
-                if (type === 'MUMBLE') freqOrSys = `<strong style="color:#2980b9;">${q.mumbleSystem || '-'}</strong>`;
                 
                 let rowHTML = `<tr class="${isEd?'edit-row':''}">
                     <td style="white-space:nowrap;">
                         <button onclick="loadEdit(${q._i})" style="padding:4px 6px;" title="Modifica">✏️</button>
                         <button class="btn-red" style="padding:4px 6px;" onclick="delQSO(${q._i})" title="Elimina">x</button>
                     </td>
-                    <td>${q.date}</td> <td>${freqOrSys}</td> <td style="font-weight:bold">${q.call}</td> <td>${q.band}</td> <td>${q.mode}</td> <td>${q.rstS}/${q.rstR}</td>`;
+                    <td>${q.date}</td>`;
+                
+                if (type !== 'MUMBLE') rowHTML += `<td>${q.freq||''}</td>`;
+                rowHTML += `<td style="font-weight:bold">${q.call}</td>`;
+                
+                if (type === 'MUMBLE') {
+                    rowHTML += `<td><strong style="color:#2980b9;">${q.mumbleSystem || '-'}</strong></td>`;
+                } else {
+                    rowHTML += `<td>${q.band}</td>`;
+                }
+
+                rowHTML += `<td>${q.mode}</td> <td>${q.rstS}/${q.rstR}</td>`;
+                
                 if(type === "KEYNIGHT") rowHTML += `<td><strong style="color:#16a085;">${q.keyType||'-'}</strong></td>`;
                 rowHTML += `<td style="font-size:0.9em;">${exch}</td><td style="text-align:center;">${mediaBtn}</td></tr>`;
+                
                 tb.innerHTML += rowHTML;
             });
         }
@@ -1586,6 +1609,7 @@ function saveConfigState() {
     }
 
     function syncLiveQsoData() {
+        const type = logMeta[currentLog]?.type || "STD";
         const call = safeGetVal('call').toUpperCase();
         const date = safeGetVal('date');
         const time = safeGetVal('timeOn');
@@ -1594,15 +1618,23 @@ function saveConfigState() {
         const mode = safeGetVal('mode');
         const rst = safeGetVal('rstS');
         const freq = safeGetVal('freq');
+        const mumbleSys = safeGetVal('mumbleSystem');
 
         let tf = (toff && toff !== time) ? `-${toff}` : "";
         let fr = freq ? ` (${freq})` : "";
         
         let qsoDataStr = "";
-        if (date || time || band || mode) {
+        if (date || time || band || mode || mumbleSys) {
             let p_date = date || "";
             let p_time = time ? `${time}${tf} UTC` : "";
-            let p_band = band ? `${band}${fr}` : "";
+            
+            let p_band = "";
+            if (type === "MUMBLE") {
+                p_band = mumbleSys ? `Sys: ${mumbleSys}` : "";
+            } else {
+                p_band = band ? `${band}${fr}` : "";
+            }
+
             let p_mode = mode || "";
             let p_rst = rst ? `RST: ${rst}` : "";
             qsoDataStr = [p_date, p_time, p_band, p_mode, p_rst].filter(Boolean).join(' | ');
