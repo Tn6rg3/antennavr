@@ -407,7 +407,7 @@
     </div>
 
    <div class="config-header" onclick="toggleQsoTable()" style="margin-top: 15px;">
-        <span>📻 TABELLA QSO REGISTRATI</span><span id="qsoArrow">▼</span>
+       <span>📻 TABELLA QSO REGISTRATI</span><span id="qsoArrow">▼</span>
     </div>
     
     <div class="box" id="qsoTableContainer" style="display: none; border-top-left-radius: 0; border-top-right-radius: 0; margin-top: -5px;">
@@ -1939,7 +1939,25 @@ function saveConfigState() {
         } catch(e) { alert("Errore interno durante il ritaglio: " + e.message); document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA"; document.getElementById('btnConfirmCrop').disabled = false; }
     }
 
-    function getBase64Image(img) { const c = document.createElement("canvas"); c.width = img.width; c.height = img.height; c.getContext("2d").drawImage(img, 0, 0); return c.toDataURL("image/jpeg", 0.85); }
+    // NUOVA FUNZIONE: Comprime le immagini prima di salvarle come template per evitare il blocco del LocalStorage
+    function getBase64Image(img) { 
+        const c = document.createElement("canvas"); 
+        const MAX_WIDTH = 1000;
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+        }
+        
+        c.width = width; 
+        c.height = height; 
+        c.getContext("2d").drawImage(img, 0, 0, width, height); 
+        
+        // Comprime l'immagine (0.7 = 70% di qualità, più che sufficiente per un template)
+        return c.toDataURL("image/jpeg", 0.7); 
+    }
 
     function getQslState() {
         let t = { settings: {}, fields: {}, logoObj: logoObj };
