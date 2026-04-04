@@ -1453,20 +1453,28 @@
         .then(reg => {
           console.log('App pronta per l\'uso offline!');
 
-          // Ascolta se viene trovato un nuovo service worker
+          function showUpdateBanner() {
+            document.getElementById('updateBanner').style.display = 'block';
+          }
+
+          // 1. Controlla se c'è GIÀ un aggiornamento in attesa (scaricato magari in una sessione precedente)
+          if (reg.waiting) {
+            showUpdateBanner();
+          }
+
+          // 2. Ascolta se viene trovato un nuovo service worker MENTRE l'utente usa l'app
           reg.addEventListener('updatefound', () => {
             const newWorker = reg.installing;
             
-            // Quando il nuovo service worker cambia stato
             newWorker.addEventListener('statechange', () => {
-              // Se l'installazione è completata ed esiste già un controller attivo
-              // significa che questo NON è il primo caricamento dell'app, ma un update!
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // Mostra il banner all'utente!
-                document.getElementById('updateBanner').style.display = 'block';
+                showUpdateBanner();
               }
             });
           });
+          
+          // 3. FORZA il browser a controllare sul server se sw2.js è cambiato ogni volta che si apre l'app
+          reg.update();
 
         })
         .catch(err => console.error('Errore SW:', err));
