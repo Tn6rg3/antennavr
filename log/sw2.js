@@ -1,4 +1,4 @@
-const CACHE_NAME = 'logradio-v7'; // Incrementiamo la versione
+const CACHE_NAME = 'logradio-v8'; // Incrementiamo la versione
 const FILES_TO_CACHE = [
   'log.html',
   'manifest.json',
