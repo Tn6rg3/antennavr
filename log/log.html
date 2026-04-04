@@ -476,6 +476,14 @@
         </div>
     </div>
 
+    <!-- BANNER PER AGGIORNAMENTO AUTOMATICO -->
+    <div id="updateBanner" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#e74c3c; color:white; padding:15px; border-radius:8px; z-index:9999; box-shadow:0 4px 15px rgba(0,0,0,0.6); text-align:center; width: 90%; max-width: 400px;">
+        <h3 style="margin: 0 0 10px 0; font-size: 1.2em;">🚀 Nuovo Aggiornamento Disponibile!</h3>
+        <p style="margin: 0 0 15px 0; font-size: 0.9em;">È stata rilasciata una nuova versione di Log Radio Pro. Aggiorna per avere le ultime funzionalità e correzioni.</p>
+        <button onclick="document.getElementById('updateBanner').style.display='none'; forceAppUpdate();" style="background:white; color:#e74c3c; width:100%; padding:12px; border-radius:4px; font-weight:bold; border:none; font-size: 1.1em; cursor: pointer;">AGGIORNA ORA</button>
+        <button onclick="document.getElementById('updateBanner').style.display='none';" style="background:transparent; color:white; width:100%; padding:8px; border:none; font-size: 0.8em; margin-top: 5px; cursor: pointer; text-decoration: underline;">Ignora per ora</button>
+    </div>
+
     <div id="toast">Notifica</div>
 
 <script>
@@ -918,16 +926,9 @@
         try {
             localStorage.setItem(DB_KEY, JSON.stringify(db)); 
         } catch(e) {
-            // Se la memoria è piena, sacrifica la cronologia degli snapshot automatici per salvare il vero QSO!
-            localStorage.removeItem(SNAPSHOT_KEY);
-            snapshots = [];
-            renderSnapshots();
-            try {
-                localStorage.setItem(DB_KEY, JSON.stringify(db));
-                alert("⚠️ Memoria Quasi Piena: L'app ha svuotato la cronologia dei backup automatici per poter salvare correttamente il tuo QSO.\n\nTi consiglio di cancellare i log molto vecchi o di ridimensionare le foto dei Template.");
-            } catch(e2) {
-                alert("❌ ERRORE CRITICO: La memoria del browser è completamente esaurita. Il salvataggio del QSO è fallito.\n\nDevi svuotare qualche log o esportarli e poi cancellarli.");
-            }
+            localStorage.removeItem(SNAPSHOT_KEY); snapshots = []; renderSnapshots();
+            try { localStorage.setItem(DB_KEY, JSON.stringify(db)); alert("⚠️ Memoria Quasi Piena: L'app ha svuotato la cronologia dei backup automatici per poter salvare correttamente il tuo QSO."); } 
+            catch(e2) { alert("❌ ERRORE CRITICO: La memoria del browser è completamente esaurita. Il salvataggio del QSO è fallito.\n\nDevi svuotare qualche log o esportarli e poi cancellarli."); }
         }
     }
 
@@ -1165,24 +1166,13 @@
     
     function loadSnapshots() { snapshots = JSON.parse(localStorage.getItem(SNAPSHOT_KEY)) || []; }
     
-    // ==========================================
-    // FUNZIONE SNAPSHOT LIMITATA E PROTETTA
-    // ==========================================
     function createSnapshot(reason) { 
         if(!document.getElementById('autoSnapshotCheck').checked) return; 
         const snap={id:Date.now(), time:new Date().toLocaleTimeString(), desc:reason, count:(db[currentLog]||[]).length, data:JSON.parse(JSON.stringify(db))}; 
         snapshots.unshift(snap); 
-        // LIMITATO DA 5 A 2 (Risparmio drastico di memoria!)
         if(snapshots.length>2) snapshots.pop(); 
-        
-        try {
-            localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(snapshots)); 
-            renderSnapshots(); 
-        } catch(e) {
-            // Se fallisce qui, tienine solo UNO in memoria
-            snapshots = [snap];
-            try { localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(snapshots)); renderSnapshots(); } catch(err) { /* Nulla da fare, memoria totalmente piena */ }
-        }
+        try { localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(snapshots)); renderSnapshots(); } 
+        catch(e) { snapshots = [snap]; try { localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(snapshots)); renderSnapshots(); } catch(err) { } }
     }
     
     function renderSnapshots() { const ul=document.getElementById('snapshotList'); ul.innerHTML=''; if(snapshots.length===0)ul.innerHTML='<li style="padding:5px;">Nessun backup.</li>'; snapshots.forEach(s => { ul.innerHTML += `<li class="snapshot-item"><span><b>${s.time}</b> ${s.desc} (${s.count})</span><div><button class="btn-cyan" style="padding:2px 6px;" onclick="restoreSnapshot(${s.id})">R</button><button class="btn-red" style="padding:2px 6px;" onclick="deleteSnapshot(${s.id})">X</button></div></li>`; }); }
@@ -1216,9 +1206,7 @@
     function saveConfigState() { 
         const state = {
             snap: document.getElementById('autoSnapshotCheck') ? document.getElementById('autoSnapshotCheck').checked : true,
-            panels: {
-                config: document.getElementById('configPanel') && document.getElementById('configPanel').style.display === "block", advanced: document.getElementById('advancedFields') && document.getElementById('advancedFields').style.display === "block", xmas: document.getElementById('xmasContent') && document.getElementById('xmasContent').style.display === "block", kn: document.getElementById('knContent') && document.getElementById('knContent').style.display === "block", qsl: document.getElementById('qslLiveBox') && document.getElementById('qslLiveBox').style.display === "block", qso: document.getElementById('qsoTableContainer') && document.getElementById('qsoTableContainer').style.display === "block"
-            }
+            panels: { config: document.getElementById('configPanel') && document.getElementById('configPanel').style.display === "block", advanced: document.getElementById('advancedFields') && document.getElementById('advancedFields').style.display === "block", xmas: document.getElementById('xmasContent') && document.getElementById('xmasContent').style.display === "block", kn: document.getElementById('knContent') && document.getElementById('knContent').style.display === "block", qsl: document.getElementById('qslLiveBox') && document.getElementById('qslLiveBox').style.display === "block", qso: document.getElementById('qsoTableContainer') && document.getElementById('qsoTableContainer').style.display === "block" }
         }; localStorage.setItem(CONFIG_KEY, JSON.stringify(state)); 
     }
 
@@ -1270,10 +1258,6 @@
         win.document.close();
     }
 
-    // =========================================================
-    // --- FUNZIONI QSL TEMPLATE BUILDER LIVE
-    // =========================================================
-    
     const qslElementsDef = [
         { id: 'myCall', lbl: 'Tuo Call', defTxt: '', size: 80, x: 50, y: 100, b: true, i: false, col: '#ffffff', fnt: 'Arial Black' },
         { id: 'myLoc', lbl: 'Tuo Locator', defTxt: '', size: 35, x: 50, y: 150, b: true, i: false, col: '#ffffff', fnt: 'Arial' },
@@ -1296,17 +1280,12 @@
     }
 
     function initQSLEditorUI() {
-        qslCanvas = document.getElementById('qslCanvas'); qslCtx = qslCanvas.getContext('2d');
-        qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT;
+        qslCanvas = document.getElementById('qslCanvas'); qslCtx = qslCanvas.getContext('2d'); qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT;
         const container = document.getElementById('qslFieldsContainer');
 
         qslElementsDef.forEach(el => {
             dragObjects[el.id] = { x: el.x, y: el.y, w: 0, h: el.size, size: el.size };
-            let fontOptions = fonts.map(f => {
-                let cleanName = f.split(',')[0].replace(/"/g,''); if (f.includes('Dancing')) cleanName = 'Dancing Script (Mano)'; if (f.includes('Caveat')) cleanName = 'Caveat (Mano)';
-                return `<option value='${f}' ${f === el.fnt || f.includes(el.fnt) ? 'selected' : ''}>${cleanName}</option>`;
-            }).join('');
-            
+            let fontOptions = fonts.map(f => { let cleanName = f.split(',')[0].replace(/"/g,''); if (f.includes('Dancing')) cleanName = 'Dancing Script (Mano)'; if (f.includes('Caveat')) cleanName = 'Caveat (Mano)'; return `<option value='${f}' ${f === el.fnt || f.includes(el.fnt) ? 'selected' : ''}>${cleanName}</option>`; }).join('');
             let html = `<div class="qsl-field-row"><input type="checkbox" id="chk_qsl_${el.id}" checked><input type="text" id="txt_qsl_${el.id}" placeholder="${el.lbl}" value="${el.defTxt}" ${el.id==='toCall'||el.id==='qsoData'?'title="Testo auto-generato dal QSO"':''}><input type="color" id="col_qsl_${el.id}" value="${el.col}" title="Colore"><select id="fnt_qsl_${el.id}" title="Font">${fontOptions}</select><input type="number" id="sz_qsl_${el.id}" value="${el.size}" min="10" max="300" title="Dimensione"><label class="style-chk" title="Grassetto"><input type="checkbox" id="b_qsl_${el.id}" ${el.b?'checked':''}>B</label><label class="style-chk" title="Corsivo"><input type="checkbox" id="i_qsl_${el.id}" ${el.i?'checked':''}>I</label></div>`;
             container.insertAdjacentHTML('beforeend', html);
         });
@@ -1321,8 +1300,7 @@
 
     function syncLiveQsoData() {
         const type = logMeta[currentLog]?.type || "STD"; const call = safeGetVal('call').toUpperCase(); const date = safeGetVal('date'); const time = safeGetVal('timeOn'); const toff = safeGetVal('timeOff'); const band = safeGetVal('band'); const mode = safeGetVal('mode'); const rst = safeGetVal('rstS'); const freq = safeGetVal('freq'); const mumbleSys = safeGetVal('mumbleSystem');
-        let tf = (toff && toff !== time) ? `-${toff}` : ""; let fr = freq ? ` (${freq})` : "";
-        let qsoDataStr = "";
+        let tf = (toff && toff !== time) ? `-${toff}` : ""; let fr = freq ? ` (${freq})` : ""; let qsoDataStr = "";
         if (date || time || band || mode || mumbleSys) {
             let p_date = date || ""; let p_time = time ? `${time}${tf} UTC` : "";
             let p_band = (type === "MUMBLE") ? (mumbleSys ? `Sys: ${mumbleSys}` : "") : (band ? `${band}${fr}` : "");
@@ -1349,8 +1327,7 @@
             croppedImg = new Image();
             croppedImg.onload = () => { currentCroppedImg = croppedImg; qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT; cropMode = false; cropBox = null; document.getElementById('btnCropMode').style.display = "block"; document.getElementById('btnCropMode').style.background = "#e67e22"; document.getElementById('btnCropMode').textContent = "✂️ RI-TAGLIA FOTO"; document.getElementById('btnConfirmCrop').style.display = "none"; qslCanvas.style.cursor = "move"; renderQSL(); };
             croppedImg.src = tempC.toDataURL('image/jpeg', 0.95);
-        };
-        originalImg.src = dataUrl;
+        }; originalImg.src = dataUrl;
     }
 
     function clearQSLEditorCanvas() { originalImg = null; croppedImg = null; currentCroppedImg = null; qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT; document.getElementById('btnCropMode').style.display = "none"; renderQSL(); }
@@ -1359,7 +1336,6 @@
 
     function renderQSL() {
         if (!qslCtx) return; const w = qslCanvas.width; const h = qslCanvas.height; const isCropped = (w === QSL_WIDTH); qslCtx.clearRect(0, 0, w, h);
-        
         if (currentCroppedImg && isCropped) {
             qslCtx.filter = `brightness(${document.getElementById('fBright').value}%) contrast(${document.getElementById('fContrast').value}%)`; qslCtx.drawImage(currentCroppedImg, 0, 0, w, h); qslCtx.filter = "none";
             let blur = document.getElementById('fEdgeBlur').value;
@@ -1381,8 +1357,7 @@
         qslElementsDef.forEach(el => {
             if (!document.getElementById(`chk_qsl_${el.id}`).checked) return;
             let text = document.getElementById(`txt_qsl_${el.id}`).value; if (!text) return;
-            let obj = dragObjects[el.id]; let size = parseInt(document.getElementById(`sz_qsl_${el.id}`).value) || 30; obj.size = size; obj.h = size;
-            let isItalic = document.getElementById(`i_qsl_${el.id}`).checked; let isBold = document.getElementById(`b_qsl_${el.id}`).checked;
+            let obj = dragObjects[el.id]; let size = parseInt(document.getElementById(`sz_qsl_${el.id}`).value) || 30; obj.size = size; obj.h = size; let isItalic = document.getElementById(`i_qsl_${el.id}`).checked; let isBold = document.getElementById(`b_qsl_${el.id}`).checked;
             qslCtx.font = `${isItalic ? 'italic ' : ''}${isBold ? 'bold ' : ''}${size}px ${document.getElementById(`fnt_qsl_${el.id}`).value}`; qslCtx.textAlign = "left"; qslCtx.fillStyle = document.getElementById(`col_qsl_${el.id}`).value; qslCtx.strokeStyle = "rgba(0,0,0,0.8)"; qslCtx.lineWidth = size * 0.12; qslCtx.lineJoin = "round"; qslCtx.strokeText(text, obj.x, obj.y); qslCtx.fillText(text, obj.x, obj.y); obj.w = qslCtx.measureText(text).width;
         });
         if (logoImg && document.getElementById('c_logo').checked) { qslCtx.shadowColor = "black"; qslCtx.shadowBlur = 10; qslCtx.drawImage(logoImg, logoObj.x, logoObj.y, logoObj.w, logoObj.h); qslCtx.shadowBlur = 0; }
@@ -1403,9 +1378,7 @@
             qslCanvas.width = originalImg.width; qslCanvas.height = originalImg.height; let tw = qslCanvas.width * 0.8; let th = tw / 1.5; if (th > qslCanvas.height * 0.8) { th = qslCanvas.height * 0.8; tw = th * 1.5; }
             cropBox = { x: (qslCanvas.width - tw)/2, y: (qslCanvas.height - th)/2, w: tw, h: th };
             document.getElementById('btnConfirmCrop').style.display = "block"; document.getElementById('btnCropMode').style.background = "red"; document.getElementById('btnCropMode').textContent = "❌ ANNULLA RITAGLIO"; qslCanvas.style.cursor = "crosshair";
-        } else {
-            qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT; document.getElementById('btnCropMode').style.background = "#e67e22"; document.getElementById('btnCropMode').textContent = "✂️ RI-TAGLIA FOTO"; document.getElementById('btnConfirmCrop').style.display = "none"; qslCanvas.style.cursor = "move";
-        }
+        } else { qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT; document.getElementById('btnCropMode').style.background = "#e67e22"; document.getElementById('btnCropMode').textContent = "✂️ RI-TAGLIA FOTO"; document.getElementById('btnConfirmCrop').style.display = "none"; qslCanvas.style.cursor = "move"; }
         renderQSL();
     };
 
@@ -1432,8 +1405,7 @@
             let newX = pos.x - offset.x; let newY = pos.y - offset.y; let minX = 0, maxX = QSL_WIDTH - draggingElement.w; let minY = 0, maxY = QSL_HEIGHT - draggingElement.h;
             if (draggingElement !== logoObj) { minY = draggingElement.h; maxY = QSL_HEIGHT - (draggingElement.h * 0.3); }
             if (maxX < minX) maxX = minX; if (maxY < minY) maxY = minY;
-            draggingElement.x = Math.max(minX, Math.min(newX, maxX)); draggingElement.y = Math.max(minY, Math.min(newY, maxY));
-            renderQSL(); return; 
+            draggingElement.x = Math.max(minX, Math.min(newX, maxX)); draggingElement.y = Math.max(minY, Math.min(newY, maxY)); renderQSL(); return; 
         }
         if (e.target === qslCanvas) {
             if (cropMode && cropBox) { if (isQslHit(pos, cropBox.x, cropBox.y) || isQslHit(pos, cropBox.x + cropBox.w, cropBox.y + cropBox.h)) qslCanvas.style.cursor = 'nwse-resize'; else if (isQslHit(pos, cropBox.x + cropBox.w, cropBox.y) || isQslHit(pos, cropBox.x, cropBox.y + cropBox.h)) qslCanvas.style.cursor = 'nesw-resize'; else if (pos.x > cropBox.x && pos.x < cropBox.x + cropBox.w && pos.y > cropBox.y && pos.y < cropBox.y + cropBox.h) qslCanvas.style.cursor = 'move'; else qslCanvas.style.cursor = 'crosshair'; } 
@@ -1451,86 +1423,53 @@
         try { const tempCanvas = document.createElement('canvas'); tempCanvas.width = QSL_WIDTH; tempCanvas.height = QSL_HEIGHT; sx = Math.max(0, sx); sy = Math.max(0, sy); sw = Math.min(originalImg.width - sx, sw); sh = Math.min(originalImg.height - sy, sh); tempCanvas.getContext('2d').drawImage(originalImg, sx, sy, sw, sh, 0, 0, QSL_WIDTH, QSL_HEIGHT); let dataUrl = tempCanvas.toDataURL('image/jpeg', 0.95); let newImg = new Image(); newImg.onload = () => { currentCroppedImg = newImg; qslCanvas.width = QSL_WIDTH; qslCanvas.height = QSL_HEIGHT; cropMode = false; cropBox = null; const btnMode = document.getElementById('btnCropMode'); btnMode.style.display = "block"; btnMode.style.background = "#e67e22"; btnMode.textContent = "✂️ RI-TAGLIA FOTO"; const btnConfirm = document.getElementById('btnConfirmCrop'); btnConfirm.style.display = "none"; btnConfirm.innerText = "✅ CONFERMA INQUADRATURA"; btnConfirm.disabled = false; qslCanvas.style.cursor = "default"; renderQSL(); }; newImg.onerror = () => { alert("Errore file ritagliato."); document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA"; document.getElementById('btnConfirmCrop').disabled = false; }; newImg.src = dataUrl; } catch(e) { alert("Errore interno"); document.getElementById('btnConfirmCrop').innerText = "✅ CONFERMA INQUADRATURA"; document.getElementById('btnConfirmCrop').disabled = false; }
     }
 
-    // ==========================================================
-    // COMPRESSIONE SUPER-AGGRESSIVA (Evita il blocco della memoria)
-    // ==========================================================
-    function getBase64Image(img) { 
-        const c = document.createElement("canvas"); 
-        const MAX_WIDTH = 800; // Ridotto appositamente per i template (è solo uno sfondo)
-        let width = img.width;
-        let height = img.height;
-        
-        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-        c.width = width; c.height = height; c.getContext("2d").drawImage(img, 0, 0, width, height); 
-        
-        // Qualità ridotta al 50%. Invisibile a occhio su uno smartphone, ma pesa niente!
-        return c.toDataURL("image/jpeg", 0.5); 
-    }
+    function getBase64Image(img) { const c = document.createElement("canvas"); const MAX_WIDTH = 800; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } c.width = width; c.height = height; c.getContext("2d").drawImage(img, 0, 0, width, height); return c.toDataURL("image/jpeg", 0.5); }
 
     function getQslState() {
         let t = { settings: {}, fields: {}, logoObj: logoObj };
-        t.settings = {
-            fBright: document.getElementById('fBright').value, fContrast: document.getElementById('fContrast').value, fEdgeBlur: document.getElementById('fEdgeBlur').value,
-            c_topBar: document.getElementById('c_topBar').checked, col_topBar: document.getElementById('col_topBar').value, h_topBar: document.getElementById('h_topBar').value, op_topBar: document.getElementById('op_topBar').value,
-            c_bottomBar: document.getElementById('c_bottomBar').checked, col_bottomBar: document.getElementById('col_bottomBar').value, h_bottomBar: document.getElementById('h_bottomBar').value, op_bottomBar: document.getElementById('op_bottomBar').value,
-            c_logo: document.getElementById('c_logo').checked
-        };
-        qslElementsDef.forEach(el => {
-            t.fields[el.id] = {
-                active: document.getElementById(`chk_qsl_${el.id}`).checked, text: document.getElementById(`txt_qsl_${el.id}`).value, col: document.getElementById(`col_qsl_${el.id}`).value,
-                fnt: document.getElementById(`fnt_qsl_${el.id}`).value, sz: document.getElementById(`sz_qsl_${el.id}`).value, b: document.getElementById(`b_qsl_${el.id}`).checked, i: document.getElementById(`i_qsl_${el.id}`).checked,
-                x: dragObjects[el.id].x, y: dragObjects[el.id].y
-            };
-        });
+        t.settings = { fBright: document.getElementById('fBright').value, fContrast: document.getElementById('fContrast').value, fEdgeBlur: document.getElementById('fEdgeBlur').value, c_topBar: document.getElementById('c_topBar').checked, col_topBar: document.getElementById('col_topBar').value, h_topBar: document.getElementById('h_topBar').value, op_topBar: document.getElementById('op_topBar').value, c_bottomBar: document.getElementById('c_bottomBar').checked, col_bottomBar: document.getElementById('col_bottomBar').value, h_bottomBar: document.getElementById('h_bottomBar').value, op_bottomBar: document.getElementById('op_bottomBar').value, c_logo: document.getElementById('c_logo').checked };
+        qslElementsDef.forEach(el => { t.fields[el.id] = { active: document.getElementById(`chk_qsl_${el.id}`).checked, text: document.getElementById(`txt_qsl_${el.id}`).value, col: document.getElementById(`col_qsl_${el.id}`).value, fnt: document.getElementById(`fnt_qsl_${el.id}`).value, sz: document.getElementById(`sz_qsl_${el.id}`).value, b: document.getElementById(`b_qsl_${el.id}`).checked, i: document.getElementById(`i_qsl_${el.id}`).checked, x: dragObjects[el.id].x, y: dragObjects[el.id].y }; });
         return t;
     }
 
     function applyQslState(t) {
         if (!t) return;
-        if(t.settings) {
-            document.getElementById('fBright').value = t.settings.fBright || 100; document.getElementById('fContrast').value = t.settings.fContrast || 100; document.getElementById('fEdgeBlur').value = t.settings.fEdgeBlur || 0;
-            document.getElementById('c_topBar').checked = t.settings.c_topBar; document.getElementById('col_topBar').value = t.settings.col_topBar; document.getElementById('h_topBar').value = t.settings.h_topBar; document.getElementById('op_topBar').value = t.settings.op_topBar;
-            document.getElementById('c_bottomBar').checked = t.settings.c_bottomBar; document.getElementById('col_bottomBar').value = t.settings.col_bottomBar; document.getElementById('h_bottomBar').value = t.settings.h_bottomBar; document.getElementById('op_bottomBar').value = t.settings.op_bottomBar;
-            document.getElementById('c_logo').checked = t.settings.c_logo;
-        }
-        if(t.fields) {
-            qslElementsDef.forEach(el => { let f = t.fields[el.id]; if(f) { document.getElementById(`chk_qsl_${el.id}`).checked = f.active; document.getElementById(`col_qsl_${el.id}`).value = f.col; document.getElementById(`fnt_qsl_${el.id}`).value = f.fnt; document.getElementById(`sz_qsl_${el.id}`).value = f.sz; document.getElementById(`b_qsl_${el.id}`).checked = f.b; document.getElementById(`i_qsl_${el.id}`).checked = f.i; if(el.id !== 'toCall' && el.id !== 'qsoData') document.getElementById(`txt_qsl_${el.id}`).value = f.text; dragObjects[el.id].x = f.x; dragObjects[el.id].y = f.y; } });
-        }
-        if(t.logoObj) logoObj = t.logoObj;
-        renderQSL();
+        if(t.settings) { document.getElementById('fBright').value = t.settings.fBright || 100; document.getElementById('fContrast').value = t.settings.fContrast || 100; document.getElementById('fEdgeBlur').value = t.settings.fEdgeBlur || 0; document.getElementById('c_topBar').checked = t.settings.c_topBar; document.getElementById('col_topBar').value = t.settings.col_topBar; document.getElementById('h_topBar').value = t.settings.h_topBar; document.getElementById('op_topBar').value = t.settings.op_topBar; document.getElementById('c_bottomBar').checked = t.settings.c_bottomBar; document.getElementById('col_bottomBar').value = t.settings.col_bottomBar; document.getElementById('h_bottomBar').value = t.settings.h_bottomBar; document.getElementById('op_bottomBar').value = t.settings.op_bottomBar; document.getElementById('c_logo').checked = t.settings.c_logo; }
+        if(t.fields) { qslElementsDef.forEach(el => { let f = t.fields[el.id]; if(f) { document.getElementById(`chk_qsl_${el.id}`).checked = f.active; document.getElementById(`col_qsl_${el.id}`).value = f.col; document.getElementById(`fnt_qsl_${el.id}`).value = f.fnt; document.getElementById(`sz_qsl_${el.id}`).value = f.sz; document.getElementById(`b_qsl_${el.id}`).checked = f.b; document.getElementById(`i_qsl_${el.id}`).checked = f.i; if(el.id !== 'toCall' && el.id !== 'qsoData') document.getElementById(`txt_qsl_${el.id}`).value = f.text; dragObjects[el.id].x = f.x; dragObjects[el.id].y = f.y; } }); }
+        if(t.logoObj) logoObj = t.logoObj; renderQSL();
     }
 
-    function saveQslTemplate() {
-        let t = getQslState();
-        if (currentCroppedImg) t.bg = getBase64Image(currentCroppedImg);
-        if (logoImg) t.logo = getBase64Image(logoImg);
-        
-        try { 
-            qslTemplates[currentLog] = t;
-            saveQslTemplatesDB();
-            alert(`✅ TEMPLATE SALVATO CON SUCCESSO PER IL LOG: ${currentLog}!`); 
-        } catch(e) { 
-            alert("❌ MEMORIA PIENA! Non sono riuscito a salvare il template.\n\nIl browser ha esaurito lo spazio. Elimina vecchi Log inutili oppure cancella la Cronologia Backup."); 
-        }
-    }
+    function saveQslTemplate() { let t = getQslState(); if (currentCroppedImg) t.bg = getBase64Image(currentCroppedImg); if (logoImg) t.logo = getBase64Image(logoImg); try { qslTemplates[currentLog] = t; saveQslTemplatesDB(); alert(`✅ TEMPLATE SALVATO CON SUCCESSO PER IL LOG: ${currentLog}!`); } catch(e) { alert("❌ MEMORIA PIENA! Non sono riuscito a salvare il template."); } }
 
-    function loadQslTemplate() {
-        let t = qslTemplates[currentLog];
-        if (!t) { let raw = localStorage.getItem(QSL_TEMPLATE_META); if (raw) t = JSON.parse(raw); else return; }
-        try {
-            applyQslState(t); let promises = [];
-            if(t.bg && !originalImg) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { currentCroppedImg = img; originalImg = img; res(); }; img.src = t.bg; })); }
-            if(t.logo) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { logoImg = img; res(); }; img.src = t.logo; })); }
-            Promise.all(promises).then(() => renderQSL());
-        } catch(e) { console.error("Errore caricamento template", e); }
-    }
+    function loadQslTemplate() { let t = qslTemplates[currentLog]; if (!t) { let raw = localStorage.getItem(QSL_TEMPLATE_META); if (raw) t = JSON.parse(raw); else return; } try { applyQslState(t); let promises = []; if(t.bg && !originalImg) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { currentCroppedImg = img; originalImg = img; res(); }; img.src = t.bg; })); } if(t.logo) { promises.push(new Promise(res => { let img = new Image(); img.onload = () => { logoImg = img; res(); }; img.src = t.logo; })); } Promise.all(promises).then(() => renderQSL()); } catch(e) { console.error("Errore template", e); } }
 
 </script>
 
+<!-- REGISTRAZIONE SERVICE WORKER (MOTORE OFFLINE) CON RILEVATORE DI AGGIORNAMENTI -->
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw2.js').then(reg => console.log('App pronta!')).catch(err => console.error('Errore SW:', err));
+      navigator.serviceWorker.register('sw2.js')
+        .then(reg => {
+          console.log('App pronta per l\'uso offline!');
+
+          // Ascolta se viene trovato un nuovo service worker
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            
+            // Quando il nuovo service worker cambia stato
+            newWorker.addEventListener('statechange', () => {
+              // Se l'installazione è completata ed esiste già un controller attivo
+              // significa che questo NON è il primo caricamento dell'app, ma un update!
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // Mostra il banner all'utente!
+                document.getElementById('updateBanner').style.display = 'block';
+              }
+            });
+          });
+
+        })
+        .catch(err => console.error('Errore SW:', err));
     });
   }
 </script>
