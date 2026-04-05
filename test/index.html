@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gara Virtuale 10km</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #121212; color: white; padding: 20px; text-align: center; overflow-x: hidden; }
+        .hidden { display: none; }
+        button { background: #00ff88; color: black; border: none; padding: 15px 30px; font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 10px; width: 100%; max-width: 300px;}
+        input { padding: 15px; font-size: 16px; border-radius: 5px; border: none; width: 80%; max-width: 270px; margin-bottom: 10px; text-align: center;}
+        .corsia { background: #333; height: 50px; margin: 15px 0; border-radius: 25px; position: relative; overflow: hidden; border: 1px solid #555;}
+        .runner { background: #00ff88; height: 100%; width: 50px; border-radius: 50%; position: absolute; left: 0; transition: left 1s linear; display: flex; align-items: center; justify-content: center; color: black; font-weight: bold; font-size: 18px;}
+        .runner-name { position: absolute; left: 15px; top: 15px; z-index: 10; text-shadow: 1px 1px 3px black; font-weight: bold; letter-spacing: 1px;}
+    </style>
+</head>
+<body>
+
+    <div id="lobby">
+        <h1>Gara 10KM 🏃‍♂️</h1>
+        <p style="color:#aaa; font-size:14px;">Attiva il GPS e tieni lo schermo acceso</p>
+        <input type="text" id="nomeUtente" placeholder="Il tuo nome">
+        <button id="btnEntra">Entra in Gara</button>
+        <div id="listaLobby" style="margin-top: 30px; text-align: left; max-width: 300px; margin-left: auto; margin-right: auto;"></div>
+        <button id="btnStart" class="hidden" style="background: red; color: white; margin-top: 40px;">DAI IL VIA A TUTTI!</button>
+    </div>
+
+    <div id="gara" class="hidden">
+        <h2 style="margin-bottom: 5px;">Gara in corso</h2>
+        <h1 id="miaDistanza" style="color: #00ff88; margin-top: 0;">0 m</h1>
+        <div id="pista" style="margin-top: 30px;"></div>
+        <button id="btnSimula" style="background: #444; color: white; font-size: 12px; padding: 10px; margin-top:40px;">[TEST] Simula +100m</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+        // =========================================================================
+        // ⚠️ INCOLLA QUI IL TUO FIREBASE CONFIG (Quello del Passo 1, Punto 9)
+        // =========================================================================
+        const firebaseConfig = {
+            apiKey: "INSERISCI_API_KEY",
+            authDomain: "INSERISCI_AUTH_DOMAIN",
+            databaseURL: "INSERISCI_DATABASE_URL",
+            projectId: "INSERISCI_PROJECT_ID",
+            storageBucket: "INSERISCI_STORAGE_BUCKET",
+            messagingSenderId: "INSERISCI_MESSAGING_SENDER_ID",
+            appId: "INSERISCI_APP_ID"
+        };
+        // =========================================================================
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // VARIABILI
+        const DISTANZA_TOTALE = 10000;
+        let mioId = "user_" + Math.random().toString(36).substr(2, 9);
+        let mioNome = "";
+        let miaDistanza = 0;
+        let lastLat = null;
+        let lastLon = null;
+        let watchId = null;
+        let ultimaPosizione = 0;
+        let ultimoKmAnnunciato = 0;
+
+        const dbStatoGara = ref(db, 'gara/attiva');
+        const dbPartecipanti = ref(db, 'gara/partecipanti');
+
+        function avvisoVocale(testo) {
+            if ('speechSynthesis' in window) {
+                const msg = new SpeechSynthesisUtterance(testo);
+                msg.lang = 'it-IT';
+                msg.rate = 1.1;
+                window.speechSynthesis.speak(msg);
+            }
+        }
+
+        // ENTRA IN LOBBY
+        document.getElementById('btnEntra').addEventListener('click', () => {
+            mioNome = document.getElementById('nomeUtente').value;
+            if (!mioNome) return alert("Inserisci un nome!");
+
+            set(ref(db, 'gara/partecipanti/' + mioId), { nome: mioNome, distanza: 0 });
+
+            document.getElementById('nomeUtente').style.display = 'none';
+            document.getElementById('btnEntra').style.display = 'none';
+            document.getElementById('btnStart').classList.remove('hidden');
+            
+            avvisoVocale("Connesso. In attesa del via.");
+        });
+
+        // ASCOLTA DATABASE E AGGIORNA GRAFICA E VOCE
+        onValue(dbPartecipanti, (snapshot) => {
+            const dati = snapshot.val();
+            if (!dati) return;
+
+            let classifica = Object.keys(dati).map(key => ({ id: key, ...dati[key] })).sort((a, b) => b.distanza - a.distanza);
+
+            document.getElementById('listaLobby').innerHTML = classifica.map(u => `<h3 style="margin:5px 0;">✅ ${u.nome}</h3>`).join('');
+
+            const pista = document.getElementById('pista');
+            pista.innerHTML = '';
+            let distanzaPrimo = classifica[0].distanza;
+
+            classifica.forEach((utente, index) => {
+                const posizione = index + 1;
+                const percentuale = Math.min((utente.distanza / DISTANZA_TOTALE) * 100, 100);
+                
+                pista.innerHTML += `
+                    <div class="corsia">
+                        <span class="runner-name">${posizione}° | ${utente.nome} (${Math.floor(utente.distanza)}m)</span>
+                        <div class="runner" style="left: calc(${percentuale}% - 50px);">🏃</div>
+                    </div>
+                `;
+
+                if (utente.id === mioId) {
+                    if (ultimaPosizione !== 0 && posizione < ultimaPosizione) { avvisoVocale(`Sorpasso! Sei in ${posizione} posizione.`); } 
+                    else if (ultimaPosizione !== 0 && posizione > ultimaPosizione) { avvisoVocale(`Attenzione. Sei sceso in ${posizione} posizione.`); }
+                    ultimaPosizione = posizione;
+
+                    let kmAttuale = Math.floor(utente.distanza / 1000);
+                    if (kmAttuale > ultimoKmAnnunciato && kmAttuale > 0) {
+                        ultimoKmAnnunciato = kmAttuale;
+                        let testoKm = `Chilometro ${kmAttuale}. Sei ${posizione}°. `;
+                        if (posizione > 1) testoKm += `Il leader è a ${Math.floor(distanzaPrimo - utente.distanza)} metri.`;
+                        avvisoVocale(testoKm);
+                    }
+                }
+            });
+        });
+
+        // START
+        document.getElementById('btnStart').addEventListener('click', () => { set(dbStatoGara, true); });
+
+        onValue(dbStatoGara, (snapshot) => {
+            if (snapshot.val() === true) {
+                document.getElementById('lobby').classList.add('hidden');
+                document.getElementById('gara').classList.remove('hidden');
+                avvisoVocale("Tre, due, uno, via!");
+                avviaGPS();
+            }
+        });
+
+        // GPS LOGIC
+        function avviaGPS() {
+            if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(aggiornaPosizione, (err) => console.log(err), {
+                    enableHighAccuracy: true, maximumAge: 0, timeout: 5000
+                });
+            }
+        }
+
+        function calcolaDistanza(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; const rad = Math.PI / 180;
+            const a = Math.sin((lat2 - lat1)*rad/2) ** 2 + Math.cos(lat1*rad) * Math.cos(lat2*rad) * Math.sin((lon2 - lon1)*rad/2) ** 2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function aggiornaPosizione(pos) {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            const precisione = pos.coords.accuracy;
+
+            if (precisione > 15) return; // Filtro GPS sporco
+
+            if (lastLat !== null && lastLon !== null) {
+                const metriPercorsi = calcolaDistanza(lastLat, lastLon, lat, lon);
+                if (metriPercorsi > 0 && metriPercorsi < 12) {  // Filtro Anti-Teletrasporto
+                    miaDistanza += metriPercorsi;
+                    document.getElementById('miaDistanza').innerText = `${Math.floor(miaDistanza)} m`;
+                    update(ref(db, 'gara/partecipanti/' + mioId), { distanza: miaDistanza });
+                }
+            }
+            lastLat = lat; lastLon = lon;
+        }
+
+        // TASTO TEST
+        document.getElementById('btnSimula').addEventListener('click', () => {
+            miaDistanza += 100;
+            document.getElementById('miaDistanza').innerText = `${Math.floor(miaDistanza)} m`;
+            update(ref(db, 'gara/partecipanti/' + mioId), { distanza: miaDistanza });
+        });
+
+        // RESET DATABASE AL CARICAMENTO (per test)
+        set(dbStatoGara, false); 
+        remove(dbPartecipanti);
+    </script>
+</body>
+</html>
