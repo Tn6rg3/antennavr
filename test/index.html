@@ -143,9 +143,17 @@
             set(dbStatoGara, true);
         });
 
+        // --- TASTO INTERROMPI E PULISCI ---
         document.getElementById('btnInterrompi').addEventListener('click', () => {
-            if(confirm("Vuoi davvero interrompere la gara per tutti?")) {
+            if(confirm("Vuoi davvero interrompere la gara e CANCELLARE tutti i partecipanti?")) {
+                // 1. Ferma la gara per tutti
                 set(dbStatoGara, false);
+                
+                // 2. Svuota la lista dei partecipanti sul database di Google
+                remove(dbPartecipanti); 
+                
+                // Nota: Non serve ricaricare manualmente, l'evento onValue(dbStatoGara) 
+                // lo farà in automatico per noi grazie al codice precedente.
             }
         });
 
@@ -215,6 +223,13 @@
             const a = Math.sin((lat2-lat1)*r/2)**2 + Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin((lon2-lon1)*r/2)**2;
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
+
+        // Opzionale: pulisce tutto se apri la pagina e la gara non è attiva
+        onValue(dbStatoGara, (snapshot) => {
+            if (snapshot.val() === false) {
+                remove(dbPartecipanti);
+            }
+        }, { onlyOnce: true }); // Lo fa solo una volta all'avvio
     </script>
 </body>
 </html>
