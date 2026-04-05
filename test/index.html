@@ -3,24 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gara Virtuale Dinamica</title>
+    <title>Gara Virtuale PRO</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #121212; color: white; padding: 20px; text-align: center; margin: 0; }
+        body { font-family: Arial, sans-serif; background: #121212; color: white; padding: 20px; text-align: center; margin: 0; overflow-x: hidden; }
         .hidden { display: none !important; }
+        
+        /* Bottoni */
         button { background: #00ff88; color: black; border: none; padding: 15px; font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 10px; width: 100%; max-width: 300px;}
         .btn-red { background: #ff4444; color: white; }
         .btn-orange { background: #ffaa00; color: black; }
-        input { padding: 15px; font-size: 16px; border-radius: 5px; border: none; width: 80%; max-width: 270px; margin-bottom: 10px; text-align: center; background: #222; color: white; border: 1px solid #444; }
+        
+        /* Input */
+        input { padding: 15px; font-size: 16px; border-radius: 5px; border: 1px solid #444; width: 80%; max-width: 270px; margin-bottom: 10px; text-align: center; background: #222; color: white; }
         label { display: block; margin-top: 10px; color: #aaa; font-size: 14px; }
         
-        .corsia { background: #333; height: 50px; margin: 15px 0; border-radius: 25px; position: relative; overflow: hidden; border: 1px solid #444; }
+        /* Pista e Runner */
+        .corsia { background: #333; height: 50px; margin: 15px 0; border-radius: 25px; position: relative; overflow: hidden; border: 1px solid #555; }
         .runner { background: #00ff88; height: 100%; width: 50px; border-radius: 50%; position: absolute; left: 0; transition: left 1s linear; display: flex; align-items: center; justify-content: center; color: black; font-weight: bold; }
-        .runner-name { position: absolute; left: 15px; top: 15px; z-index: 10; text-shadow: 1px 1px 3px black; font-size: 11px; }
+        .runner-name { position: absolute; left: 15px; top: 15px; z-index: 10; text-shadow: 1px 1px 3px black; font-size: 12px; }
 
-        #schermataBlocco { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        #btnSblocca { background: #1a1a1a; border: 2px solid #333; color: #444; width: 200px; height: 200px; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; }
-        
-        .lobby-item { padding: 10px; margin: 5px 0; border-radius: 5px; font-weight: bold; }
+        /* Schermata Blocco Nera */
+        #schermataBlocco {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: black; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        #btnSblocca {
+            background: #1a1a1a; border: 2px solid #333; color: #555;
+            width: 200px; height: 200px; border-radius: 50%;
+            font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center;
+            text-align: center; user-select: none; -webkit-user-select: none;
+        }
+
+        /* Lista Lobby */
+        .lobby-item { padding: 10px; margin: 5px 0; border-radius: 5px; font-weight: bold; font-size: 14px;}
         .pronto { background: rgba(0, 255, 136, 0.2); color: #00ff88; }
         .attesa { background: rgba(255, 170, 0, 0.2); color: #ffaa00; }
     </style>
@@ -29,6 +44,7 @@
 
     <div id="schermataBlocco" class="hidden">
         <div id="btnSblocca">TIENI PREMUTO 2s<br>PER SBLOCCARE</div>
+        <p style="color: #333; margin-top: 20px;">GPS ATTIVO - SCHERMO PROTETTO</p>
     </div>
 
     <div id="lobby">
@@ -45,23 +61,32 @@
         <button id="btnEntra">Entra in Gara</button>
         
         <div id="infoGaraLobby" style="margin-top:20px; color:#00ff88; font-weight:bold;"></div>
-        <div id="listaLobby" style="margin-top: 10px;"></div>
+        <div id="listaLobby" style="margin-top: 15px;"></div>
         
-        <button id="btnStart" class="btn-red hidden">DAI IL VIA ALLA GARA!</button>
+        <button id="btnStart" class="btn-red hidden" style="margin-top: 20px;">TUTTI PRONTI: VIA!</button>
+
+        <button id="btnResettaTutto" style="background: transparent; color: #666; font-size: 12px; text-decoration: underline; margin-top: 40px; width: auto; padding: 5px;">
+            Pulisci database (se vedi nomi bloccati)
+        </button>
     </div>
 
     <div id="gara" class="hidden">
-        <h2 style="margin:0; color:#aaa;">Traguardo: <span id="distanzaTraguardo">--</span>m</h2>
-        <h1 id="miaDistanza" style="font-size: 50px; color: #00ff88; margin: 10px 0;">0 m</h1>
+        <h3 style="margin:0; color:#aaa; font-weight: normal;">Traguardo: <span id="distanzaTraguardo">--</span>m</h3>
+        <h1 id="miaDistanza" style="font-size: 50px; color: #00ff88; margin: 5px 0;">0 m</h1>
+        
         <div id="pista"></div>
-        <button id="btnBloccaSchermo" class="btn-orange">🔒 METTI IN TASCA</button>
-        <button id="btnInterrompi" class="btn-red" style="margin-top: 40px;">INTERROMPI PER TUTTI</button>
+        
+        <button id="btnBloccaSchermo" class="btn-orange" style="margin-top: 30px;">🔒 METTI IN TASCA</button>
+        <button id="btnInterrompi" class="btn-red" style="margin-top: 30px;">INTERROMPI E RESETTA</button>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getDatabase, ref, set, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
+        // ==========================================
+        // ⚠️ INCOLLA QUI I TUOI DATI FIREBASE ⚠️
+        // ==========================================
         // CONFIGURAZIONE FIREBASE (METTI I TUOI DATI QUI)
          const firebaseConfig = {
           apiKey: "AIzaSyAAFDKc1n-WnibH-62jLAqU_qbqrRoYMt0",
@@ -72,16 +97,10 @@
           messagingSenderId: "55405184801",
           appId: "1:55405184801:web:0f03f06467a5c1691ea060"
         };
-
-
-
-
-
-        
-
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
+        // Variabili globali
         let mioId = "user_" + Math.random().toString(36).substr(2, 9);
         let miaDistanza = 0;
         let lastLat = null, lastLon = null;
@@ -89,11 +108,13 @@
         let garaInCorso = false;
         let distanzaObiettivoMetri = 10000; 
 
+        // Riferimenti DB
         const dbGara = ref(db, 'gara');
         const dbStatoGara = ref(db, 'gara/attiva');
         const dbDistanzaGara = ref(db, 'gara/distanzaObiettivo');
         const dbPartecipanti = ref(db, 'gara/partecipanti');
 
+        // Voce
         function avvisoVocale(testo) {
             if ('speechSynthesis' in window) {
                 const msg = new SpeechSynthesisUtterance(testo);
@@ -102,16 +123,12 @@
             }
         }
 
-        // --- 1. SINCRONIZZAZIONE DISTANZA NELLA LOBBY ---
-        // Se io cambio i KM nell'input, lo dico a Firebase così tutti lo vedono
+        // 1. IMPOSTAZIONI DISTANZA
         document.getElementById('inputKm').addEventListener('input', (e) => {
             const km = parseFloat(e.target.value);
-            if (km > 0) {
-                set(dbDistanzaGara, km * 1000);
-            }
+            if (km > 0) set(dbDistanzaGara, km * 1000);
         });
 
-        // Tutti leggono la distanza impostata dall'organizzatore
         onValue(dbDistanzaGara, (snapshot) => {
             const d = snapshot.val();
             if (d) {
@@ -122,46 +139,72 @@
             }
         });
 
-        // --- 2. ENTRA NELLA LOBBY ---
+        // 2. TASTI DI RESET / PULIZIA DATABASE
+        document.getElementById('btnResettaTutto').addEventListener('click', () => {
+            if(confirm("Vuoi svuotare il database da tutti i vecchi corridori?")) {
+                remove(dbGara).then(() => location.reload());
+            }
+        });
+
+        document.getElementById('btnInterrompi').addEventListener('click', () => {
+            if(confirm("Vuoi fermare la gara per tutti e CANCELLARE i dati?")) {
+                remove(dbGara).then(() => location.reload());
+            }
+        });
+
+        // 3. ENTRATA NELLA LOBBY E RICERCA GPS
         document.getElementById('btnEntra').addEventListener('click', () => {
             const nome = document.getElementById('nomeUtente').value;
             if (!nome) return alert("Inserisci il nome!");
             
+            // Entro come NON pronto
             set(ref(db, 'gara/partecipanti/' + mioId), { nome: nome, distanza: 0, pronto: false });
             
             document.getElementById('btnEntra').classList.add('hidden');
             document.getElementById('nomeUtente').classList.add('hidden');
-            document.getElementById('setupGara').classList.add('hidden'); // Nascondi input km una volta entrati
+            document.getElementById('setupGara').classList.add('hidden');
+            document.getElementById('btnResettaTutto').classList.add('hidden');
+            avvisoVocale("Ricerca segnale GPS.");
 
+            // Cerco il GPS
             if (navigator.geolocation) {
-                navigator.geolocation.watchPosition((pos) => {
+                const gpsLobbyId = navigator.geolocation.watchPosition((pos) => {
                     if (pos.coords.accuracy <= 25) {
                         update(ref(db, 'gara/partecipanti/' + mioId), { pronto: true });
+                        navigator.geolocation.clearWatch(gpsLobbyId);
+                        avvisoVocale("GPS Trovato. Sei pronto.");
                     }
                 }, null, { enableHighAccuracy: true });
             }
         });
 
-        // --- 3. GESTIONE CLASSIFICA E LOBBY ---
+        // 4. AGGIORNAMENTO LISTE E PISTA
         onValue(dbPartecipanti, (snapshot) => {
             const dati = snapshot.val();
-            if (!dati) { document.getElementById('listaLobby').innerHTML = ''; return; }
+            
+            // Se il DB è vuoto, pulisco lo schermo
+            if (!dati) { 
+                document.getElementById('listaLobby').innerHTML = ''; 
+                document.getElementById('btnStart').classList.add('hidden');
+                if(garaInCorso) document.getElementById('pista').innerHTML = '';
+                return; 
+            }
 
             let partecipanti = Object.keys(dati).map(k => ({id:k, ...dati[k]}));
             
-            // UI Lobby
+            // Aggiorno la Lobby
             document.getElementById('listaLobby').innerHTML = partecipanti.map(u => 
                 `<div class="lobby-item ${u.pronto ? 'pronto' : 'attesa'}">${u.pronto ? '✅' : '⏳'} ${u.nome}</div>`
             ).join('');
 
-            // Mostra tasto START solo se tutti i presenti sono pronti
+            // Controllo se tutti sono pronti
             if (partecipanti.length > 0 && partecipanti.every(u => u.pronto) && !garaInCorso) {
                 document.getElementById('btnStart').classList.remove('hidden');
             } else {
                 document.getElementById('btnStart').classList.add('hidden');
             }
 
-            // UI Gara
+            // Aggiorno la Pista (se in gara)
             if (garaInCorso) {
                 partecipanti.sort((a,b) => b.distanza - a.distanza);
                 const pista = document.getElementById('pista');
@@ -177,44 +220,46 @@
             }
         });
 
-        // --- 4. START E STOP ---
+        // 5. START GARA
         document.getElementById('btnStart').addEventListener('click', () => { set(dbStatoGara, true); });
 
-        document.getElementById('btnInterrompi').addEventListener('click', () => {
-            if(confirm("Interrompere e cancellare tutto?")) {
-                remove(dbGara); // Cancella tutto il nodo gara (stato, distanza e partecipanti)
-                location.reload();
-            }
-        });
-
         onValue(dbStatoGara, (snapshot) => {
-            if (snapshot.val() === true) {
+            const attiva = snapshot.val();
+            
+            if (attiva === true && !garaInCorso) {
                 garaInCorso = true;
                 document.getElementById('lobby').classList.add('hidden');
                 document.getElementById('gara').classList.remove('hidden');
-                avvisoVocale(`Gara di ${distanzaObiettivoMetri} metri. Partenza!`);
+                avvisoVocale(`Gara di ${distanzaObiettivoMetri} metri. Tre, due, uno, via!`);
                 avviaGPS();
-                if ('wakeLock' in navigator) navigator.wakeLock.request('screen');
-            } else if (snapshot.val() === false && garaInCorso) {
+                if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
+            } 
+            else if (attiva === null && garaInCorso) {
+                // Se il nodo attiva diventa null significa che qualcuno ha resettato il DB
                 location.reload();
             }
         });
 
-        // --- 5. GPS ---
+        // 6. LOGICA GPS DURANTE LA GARA
         function avviaGPS() {
             watchId = navigator.geolocation.watchPosition((pos) => {
-                if (pos.coords.accuracy > 25) return;
-                const lat = pos.coords.latitude, lon = pos.coords.longitude;
+                if (pos.coords.accuracy > 25) return; // Ignora se impreciso
+
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+
                 if (lastLat !== null) {
                     const d = calcolaDistanza(lastLat, lastLon, lat, lon);
+                    
+                    // Aggiunge distanza solo se ci siamo mossi tra i 2 e i 15 metri (anti-rimbalzo)
                     if (d > 2 && d < 15) { 
                         miaDistanza += d;
                         document.getElementById('miaDistanza').innerText = Math.floor(miaDistanza) + " m";
                         update(ref(db, 'gara/partecipanti/' + mioId), { distanza: miaDistanza });
                         
                         if (miaDistanza >= distanzaObiettivoMetri) {
-                            avvisoVocale("Hai concluso la gara! Grande prestazione.");
-                            navigator.geolocation.clearWatch(watchId);
+                            avvisoVocale("Traguardo raggiunto! Ottimo lavoro.");
+                            navigator.geolocation.clearWatch(watchId); // Ferma il GPS
                         }
                     }
                 }
@@ -228,22 +273,29 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        // --- 6. BLOCCO TASCA ---
+        // 7. BLOCCO SCHERMO IN TASCA
         const schermataBlocco = document.getElementById('schermataBlocco');
         const btnSblocca = document.getElementById('btnSblocca');
         let timerSblocco;
 
         document.getElementById('btnBloccaSchermo').addEventListener('click', () => {
             schermataBlocco.classList.remove('hidden');
+            avvisoVocale("Schermo bloccato.");
         });
 
         btnSblocca.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            btnSblocca.style.borderColor = "#00ff88"; btnSblocca.style.color = "#00ff88";
             timerSblocco = setTimeout(() => {
                 schermataBlocco.classList.add('hidden');
+                avvisoVocale("Schermo sbloccato.");
             }, 2000);
         });
-        btnSblocca.addEventListener('touchend', () => clearTimeout(timerSblocco));
+
+        btnSblocca.addEventListener('touchend', () => {
+            clearTimeout(timerSblocco);
+            btnSblocca.style.borderColor = "#333"; btnSblocca.style.color = "#555";
+        });
 
     </script>
 </body>
