@@ -149,17 +149,23 @@
             }
         });
 
+        let garaInCorso = false; // Variabile per ricordare se stavamo correndo
+
         onValue(dbStatoGara, (snapshot) => {
             const attiva = snapshot.val();
+            
             if (attiva === true) {
+                garaInCorso = true; // Segniamo che siamo in corsa!
                 document.getElementById('lobby').classList.add('hidden');
                 document.getElementById('gara').classList.remove('hidden');
                 avvisoVocale("Tre. Due. Uno. Via!");
                 avviaGPS();
                 attivaWakeLock();
             } else if (attiva === false) {
-                // Se la gara viene interrotta, resettiamo tutto e torniamo in lobby
-                location.reload(); 
+                // Ricarichiamo la pagina SOLO se la gara è stata interrotta a metà
+                if (garaInCorso === true) {
+                    location.reload(); 
+                }
             }
         });
 
