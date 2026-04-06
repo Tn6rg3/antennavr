@@ -72,7 +72,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        // ⚠️ Nota: ho aggiunto 'get' qui sotto per poter leggere la password!
         import { getDatabase, ref, set, onValue, update, remove, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 
@@ -113,6 +112,9 @@
             }
         }
 
+        // ==========================================
+        // CONFIGURAZIONE LOBBY E RESET
+        // ==========================================
         document.getElementById('inputKm').addEventListener('input', (e) => {
             const km = parseFloat(e.target.value);
             if (km > 0) set(dbDistanzaGara, km * 1000);
@@ -141,7 +143,7 @@
         });
 
         // ==========================================
-        // LOGICA DI ACCESSO CON PASSWORD
+        // LOGICA DI ACCESSO CON PASSWORD MIGLIORATA
         // ==========================================
         document.getElementById('btnEntra').addEventListener('click', async () => {
             const nome = document.getElementById('nomeUtente').value;
@@ -151,12 +153,16 @@
             if (!codiceInserito) return alert("Inserisci la parola d'ordine!");
             
             try {
-                // Va a leggere la password da Firebase
+                // Legge la password da Firebase
                 const snapshot = await get(ref(db, 'gara/passwordGara'));
                 const passwordUfficiale = snapshot.val();
 
-                if (codiceInserito === passwordUfficiale) {
-                    // Password corretta!
+                // Pulisce spazi vuoti e trasforma in testo puro per evitare errori
+                const passDigitata = String(codiceInserito).trim();
+                const passServer = String(passwordUfficiale).trim();
+
+                if (passDigitata === passServer) {
+                    // Password corretta
                     set(ref(db, 'gara/partecipanti/' + mioId), { nome: nome, distanza: 0, pronto: false });
                     
                     document.getElementById('btnEntra').classList.add('hidden');
@@ -176,14 +182,18 @@
                         }, null, { enableHighAccuracy: true });
                     }
                 } else {
-                    alert("Parola d'ordine errata! Riprova.");
+                    // Avviso investigativo per capire l'errore
+                    alert(`ERRORE DI BATTITURA!\nHai digitato: [${passDigitata}]\nIl Server si aspetta: [${passServer}]\n\nControlla maiuscole, minuscole o se ci sono errori su Firebase.`);
                 }
             } catch (error) {
                 console.error("Errore di connessione a Firebase:", error);
-                alert("Si è verificato un errore di connessione.");
+                alert("Si è verificato un errore di connessione col database.");
             }
         });
 
+        // ==========================================
+        // AGGIORNAMENTO LISTE E GARA
+        // ==========================================
         onValue(dbPartecipanti, (snapshot) => {
             const dati = snapshot.val();
             
@@ -221,6 +231,9 @@
             }
         });
 
+        // ==========================================
+        // AVVIO GARA E GPS
+        // ==========================================
         document.getElementById('btnStart').addEventListener('click', () => { set(dbStatoGara, true); });
 
         onValue(dbStatoGara, (snapshot) => {
@@ -270,6 +283,9 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
+        // ==========================================
+        // BLOCCO SCHERMO
+        // ==========================================
         const schermataBlocco = document.getElementById('schermataBlocco');
         const btnSblocca = document.getElementById('btnSblocca');
         let timerSblocco;
