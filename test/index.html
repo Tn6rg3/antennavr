@@ -154,7 +154,8 @@
             
             try {
                 // Legge la password da Firebase
-                const snapshot = await get(ref(db, 'corsa/passwordCorsa'));
+            
+                const snapshot = await get(ref(db, 'passwordCorsa'));
                 const passwordUfficiale = snapshot.val();
 
                 // Pulisce spazi vuoti e trasforma in testo puro per evitare errori
