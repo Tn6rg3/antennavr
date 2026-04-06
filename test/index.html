@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gara Virtuale PRO</title>
+    <title>Gara TEST 123 🏃‍♂️</title>
     <style>
         body { font-family: Arial, sans-serif; background: #121212; color: white; padding: 20px; text-align: center; margin: 0; overflow-x: hidden; }
         .hidden { display: none !important; }
@@ -26,7 +26,6 @@
         .pronto { background: rgba(0, 255, 136, 0.2); color: #00ff88; }
         .attesa { background: rgba(255, 170, 0, 0.2); color: #ffaa00; }
 
-        /* Stile Classifica Finale */
         #classificaFinale { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; z-index: 10001; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow-y: auto; padding: 20px; box-sizing: border-box; }
         .riga-podio { background: #222; padding: 15px; margin: 8px; border-radius: 10px; width: 90%; max-width: 400px; border-left: 5px solid #00ff88; text-align: left; }
         .oro { border-left-color: gold; background: #332b00; transform: scale(1.05); }
@@ -42,11 +41,11 @@
 <div id="classificaFinale" class="hidden">
     <h1 style="color: gold;">🏆 CLASSIFICA FINALE</h1>
     <div id="contenutoPodio"></div>
-    <button onclick="location.reload()" style="margin-top: 20px;">Nuova Gara</button>
+    <div id="areaAzioniClassifica"></div>
 </div>
 
 <div id="lobby">
-    <h1>Gara Virtuale 🏃‍♂️</h1>
+    <h1 id="titoloApp">Gara Virtuale 🏃‍♂️</h1>
 
     <label>Il tuo nome:</label>
     <input type="text" id="nomeUtente" placeholder="Esempio: Marco">
@@ -111,30 +110,29 @@
     const dbDistanzaGara = ref(db, 'gara/distanzaObiettivo');
     const dbPartecipanti = ref(db, 'gara/partecipanti');
 
+    // SINTESI VOCALE OTTIMIZZATA PER ANDROID
     function avvisoVocale(testo) {
-            if ('speechSynthesis' in window) {
-                // 1. Fermiamo tutto quello che sta dicendo prima
-                window.speechSynthesis.cancel();
-
-                const msg = new SpeechSynthesisUtterance(testo);
-                msg.lang = 'it-IT';
-                msg.volume = 1.0;
-                msg.rate = 1.0;
-                msg.pitch = 1.0;
-
-                // 2. Recuperiamo le voci disponibili (trucco per svegliare la WebView)
-                const voices = window.speechSynthesis.getVoices();
-                if (voices.length > 0) {
-                    msg.voice = voices.find(v => v.lang.includes('it')) || voices[0];
-                }
-
-                // 3. Lanciamo il parlato
-                window.speechSynthesis.speak(msg);
-
-                // Debug per vedere se il comando parte (lo vedrai nei log se collegato al PC)
-                console.log("Audio richiesto: " + testo);
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const msg = new SpeechSynthesisUtterance(testo);
+            msg.lang = 'it-IT';
+            msg.volume = 1.0;
+            msg.rate = 1.0;
+            
+            // Forza caricamento voci
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                msg.voice = voices.find(v => v.lang.includes('it')) || voices[0];
             }
+            window.speechSynthesis.speak(msg);
         }
+    }
+
+    // SBLOCCO AUDIO AL PRIMO TOCCO
+    document.body.addEventListener('click', () => {
+        const sblocco = new SpeechSynthesisUtterance(" ");
+        window.speechSynthesis.speak(sblocco);
+    }, { once: true });
 
     // --- GESTIONE LOBBY ---
     document.getElementById('inputKm').addEventListener('input', (e) => {
@@ -177,11 +175,7 @@
             alert("Password errata!");
         }
     });
-// TRUCCO: Al primo tocco sblocchiamo il motore vocale
-    document.body.addEventListener('click', () => {
-        const sblocco = new SpeechSynthesisUtterance("");
-        window.speechSynthesis.speak(sblocco);
-    }, { once: true });
+
     // --- AVVIO GARA ---
     document.getElementById('btnStart').addEventListener('click', () => {
         set(dbStatoGara, Date.now());
@@ -216,7 +210,7 @@
                             tempo: tempoFinale,
                             distanza: distanzaObiettivoMetri
                         });
-                        avvisoVocale("Traguardo! Sei arrivato.");
+                        avvisoVocale("Traguardo raggiunto!");
                         if (window.Capacitor) window.Capacitor.Plugins.BackgroundGeolocation.removeWatcher({ id: watchId });
                     }
                 }
@@ -228,7 +222,6 @@
             const bgGeo = window.Capacitor.Plugins.BackgroundGeolocation;
             watchId = await bgGeo.addWatcher({
                 backgroundMessage: "Gara in corso...",
-                backgroundTitle: "Tracciamento GPS",
                 requestPermissions: true,
                 distanceFilter: 3
             }, (pos, err) => {
@@ -242,11 +235,14 @@
     // --- AGGIORNAMENTO PISTA E CLASSIFICA ---
     onValue(dbPartecipanti, (snapshot) => {
         const dati = snapshot.val();
-        if (!dati) return;
+        if (!dati) {
+            // Se il database è vuoto, assicurati che la classifica sia nascosta
+            document.getElementById('classificaFinale').classList.add('hidden');
+            return;
+        }
 
         const partecipanti = Object.keys(dati).map(k => ({id:k, ...dati[k]}));
 
-        // Aggiorna lista lobby
         document.getElementById('listaLobby').innerHTML = partecipanti.map(u =>
             `<div class="lobby-item ${u.pronto ? 'pronto' : 'attesa'}">${u.pronto ? '✅' : '⏳'} ${u.nome}</div>`
         ).join('');
@@ -256,7 +252,6 @@
         }
 
         if (garaInCorso) {
-            // Ordina per distanza per la pista
             partecipanti.sort((a,b) => b.distanza - a.distanza);
             const pista = document.getElementById('pista');
             pista.innerHTML = '';
@@ -269,7 +264,6 @@
                     </div>`;
             });
 
-            // CONTROLLO FINE GARA: Se tutti sono arrivati, mostra podio
             const arrivati = partecipanti.filter(u => u.arrivato).sort((a,b) => a.tempo - b.tempo);
             if (arrivati.length > 0 && arrivati.length === partecipanti.length) {
                 mostraPodio(arrivati);
@@ -277,11 +271,13 @@
         }
     });
 
+    // FUNZIONE PODIO CON RESET DATABASE
     function mostraPodio(classifica) {
         const podio = document.getElementById('classificaFinale');
         const contenuto = document.getElementById('contenutoPodio');
+        const areaAzioni = document.getElementById('areaAzioniClassifica');
+        
         podio.classList.remove('hidden');
-
         contenuto.innerHTML = classifica.map((u, i) => {
             const min = Math.floor(u.tempo / 60);
             const sec = Math.floor(u.tempo % 60);
@@ -291,6 +287,17 @@
                     Tempo: ${min}m ${sec}s
                 </div>`;
         }).join('');
+
+        // Creiamo il bottone Reset per la Nuova Gara
+        areaAzioni.innerHTML = `<button id="btnResetGara" style="margin-top:20px; background:white; color:black;">NUOVA GARA (Pulisci Tutto)</button>`;
+        
+        document.getElementById('btnResetGara').onclick = () => {
+            if(confirm("Vuoi cancellare i risultati attuali e iniziare una nuova gara?")) {
+                remove(dbGara).then(() => {
+                    location.reload();
+                });
+            }
+        };
     }
 
     function calcolaDistanza(lat1, lon1, lat2, lon2) {
