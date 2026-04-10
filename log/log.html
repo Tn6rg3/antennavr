@@ -239,12 +239,10 @@
                 <button class="btn-grey" onclick="exportLogChoice()" style="margin:0; height:36px; border-radius:0 4px 4px 0; border-left:1px solid #555; white-space:nowrap;">💾 SALVA</button>
             </div>
 
-            <!-- BOTTONI BACKUP CON CONDIVISIONE DRIVE/CLOUD -->
+            <!-- TASTI BACKUP -->
             <button class="btn-purple" style="flex:1;" onclick="downloadFullBackup()">⬇️ SCARICA BACKUP</button>
-            <button class="btn-cyan" style="flex:1;" onclick="startShareProcess()">📤 CONDIVIDI (Drive/Cloud)</button>
             <button class="btn-purple" style="flex:1;" onclick="document.getElementById('backupInput').click()">📂 RIPRISTINA</button>
             
-            <!-- ACCETTA SIA JSON CHE TXT! -->
             <input type="file" id="backupInput" accept=".json, .txt, text/plain, application/json" style="display:none;" onchange="restoreFullBackup()">
         </div>
     </div>
@@ -270,9 +268,9 @@
                 <div class="col"><label>LA TUA EMAIL</label><input type="email" id="knEmail" onchange="saveUserData()" placeholder="tua@email.com" style="border: 2px solid #1abc9c;"></div>
             </div>
             <div class="row">
-                <div class="col"><label>DATA EVENTO</label><input type="date" id="knDateFilter" style="border: 2px solid #1abc9c;"></div>
+                <div class="col"><label>DATA EVENTO</label><input type="date" id="knDateFilter" onchange="saveLogSpecificSettings()" style="border: 2px solid #1abc9c;"></div>
                 <div class="col"><label>TASTO DA INVIARE</label>
-                    <select id="knKeyFilter" style="border: 2px solid #1abc9c;">
+                    <select id="knKeyFilter" onchange="saveLogSpecificSettings()" style="border: 2px solid #1abc9c;">
                         <option value="Bug">Bug</option>
                         <option value="Dual Paddle">Dual Paddle</option>
                         <option value="Mono paddle">Mono paddle</option>
@@ -305,7 +303,7 @@
         </div>
         <div class="row"><div class="col"><label>RST TX</label><input type="text" id="rstS" value="599" oninput="syncLiveQsoData()"></div><div class="col"><label>RST RX</label><input type="text" id="rstR" value="599"></div></div>
         
-        <!-- PANNELLO SELEZIONE TASTO (Visibile solo se modello = KEYNIGHT) -->
+        <!-- PANNELLO SELEZIONE TASTO -->
         <div id="keyNightPanel" style="display:none; background:rgba(26, 188, 156, 0.1); border:2px solid #1abc9c; padding:10px; border-radius:8px; margin-bottom:10px; margin-top:10px;">
             <label style="color:#16a085; font-weight:bold; font-size:1em;">🗝️ MODELLO TASTO UTILIZZATO</label>
             <select id="keyType" style="border:1px solid #1abc9c; margin-bottom:0;">
@@ -317,7 +315,7 @@
             </select>
         </div>
 
-        <!-- PANNELLO SELEZIONE SISTEMA (Visibile solo se modello = MUMBLE) -->
+        <!-- PANNELLO SELEZIONE SISTEMA -->
         <div id="mumblePanel" style="display:none; background:rgba(52, 152, 219, 0.1); border:2px solid #3498db; padding:10px; border-radius:8px; margin-bottom:10px; margin-top:10px;">
             <label style="color:#2980b9; font-weight:bold; font-size:1em;">📱 SISTEMA UTILIZZATO (MUMBLE)</label>
             <select id="mumbleSystem" style="border:1px solid #3498db; margin-bottom:0;" onchange="syncLiveQsoData()">
@@ -445,28 +443,6 @@
             <button class="btn-grey" style="width:100%; margin-top:15px;" onclick="document.getElementById('statsModal').style.display='none'">CHIUDI</button>
         </div>
     </div>
-
-    <!-- MODAL CONDIVISIONE DRIVE/CLOUD MULTI-OPZIONE -->
-    <div id="shareModal" class="modal-overlay" onclick="this.style.display='none'">
-        <div class="stats-content" style="max-width: 400px; text-align: center;" onclick="event.stopPropagation()">
-            <h3 id="shareModalTitle" style="margin-top:0; color:#2980b9;">⏳ Preparazione Backup...</h3>
-            <p id="shareModalText" style="font-size:1.1em; color:var(--text-color);">
-                Attendi la creazione del file. Sto impacchettando le foto e i log...
-            </p>
-            <div id="shareSpinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            
-            <div id="shareButtonsArea" style="display:none; flex-direction:column; gap:10px; margin-top:15px;">
-                <button class="btn-green" style="width:100%; font-size: 1.1em; padding: 12px;" onclick="executeRealShare()">📤 INVIA COME FILE (Drive/WA/TG)</button>
-                <button class="btn-cyan" style="width:100%; font-size: 1.1em; padding: 12px;" onclick="shareTextOnly()">💬 INVIA COME TESTO (WA/Telegram)</button>
-                <button class="btn-orange" style="width:100%; font-size: 1.1em; padding: 12px;" onclick="shareViaEmail()">📧 INVIA VIA EMAIL (Testo)</button>
-                <hr style="border: 0; border-top: 1px dashed #ccc; width: 100%; margin: 5px 0;">
-                <button class="btn-purple" style="width:100%; font-size: 1.1em; padding: 12px;" onclick="copyBackupToClipboard()">📋 COPIA TESTO NEGLI APPUNTI</button>
-            </div>
-            
-            <button class="btn-grey" style="width:100%; margin-top:15px;" onclick="document.getElementById('shareModal').style.display='none'">ANNULLA</button>
-        </div>
-    </div>
-    <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
     
     <div id="mediaModal" class="modal-overlay" onclick="closeMedia()">
         <div class="stats-content" onclick="event.stopPropagation()">
@@ -506,8 +482,6 @@
     let currentPage=1; let rowsPerPage=10; let currentSort={col:null,asc:true}; let activeSearch=null; 
     let liveCallFilter=""; let map=null; let imageDB=null; 
     let currentViewBlob = null;
-    let preparedShareFile = null;
-    let preparedBackupText = "";
 
     // --- VARIABILI QSL EDITOR LIVE ---
     let qslCanvas, qslCtx;
@@ -588,6 +562,25 @@
     function loadMeta() { try { logMeta = JSON.parse(localStorage.getItem(META_KEY)) || {}; } catch(e){ logMeta={}; } }
     function saveMeta() { localStorage.setItem(META_KEY, JSON.stringify(logMeta)); }
     function isContestMode() { return logMeta[currentLog] && logMeta[currentLog].isContest; }
+
+    function saveLogSpecificSettings() {
+        if(!logMeta[currentLog]) logMeta[currentLog] = {};
+        const type = logMeta[currentLog].type;
+        if (type === "KEYNIGHT") {
+            logMeta[currentLog].knDate = safeGetVal('knDateFilter');
+            logMeta[currentLog].knKey = safeGetVal('knKeyFilter');
+        }
+        saveMeta();
+        
+        // Se l'utente sta inserendo un nuovo QSO, aggiorno subito i campi sottostanti
+        if (editIdx === -1) {
+            if(type === "KEYNIGHT") {
+                const d = document.getElementById('date'); if(d && logMeta[currentLog].knDate) d.value = logMeta[currentLog].knDate;
+                const k = document.getElementById('keyType'); if(k && logMeta[currentLog].knKey) k.value = logMeta[currentLog].knKey;
+            }
+            syncLiveQsoData();
+        }
+    }
 
     function loadQslTemplatesDB() {
         try { 
@@ -815,6 +808,14 @@
         const n=safeGetVal('newLogName').trim(); const template = safeGetVal('newLogTemplate'); const isCBox = document.getElementById('isContestCheck'); const isC = isCBox ? isCBox.checked : false; 
         if(n && !db[n]) { 
             db[n]=[]; logMeta[n] = { type: template }; 
+            
+            // Inizializza impostazioni predefinite se è Key Night
+            if(template === "KEYNIGHT") {
+                const nDate = new Date(); const y = nDate.getUTCFullYear(); const mo = String(nDate.getUTCMonth() + 1).padStart(2, '0'); const d = String(nDate.getUTCDate()).padStart(2, '0');
+                logMeta[n].knDate = `${y}-${mo}-${d}`;
+                logMeta[n].knKey = "Straight Key";
+            }
+
             if(isC) { logMeta[n].isContest = true; logMeta[n].name = "CQ-TEST"; logMeta[n].op = "SINGLE-OP"; logMeta[n].band = "ALL"; logMeta[n].mode = "MIXED"; logMeta[n].power = "LOW"; logMeta[n].exchType = "SERIAL"; logMeta[n].fixedVal = ""; } 
             saveMeta(); currentLog=n; saveDB(); resetForm(); renderUI(); 
             document.getElementById('createLogArea').style.display='none'; document.getElementById('newLogName').value = ""; if(isCBox) isCBox.checked = false; document.getElementById('newLogTemplate').value = "STD"; 
@@ -850,11 +851,18 @@
         });
         
         const type = logMeta[currentLog]?.type || "STD";
+        const m = logMeta[currentLog] || {};
+
         document.getElementById('xmasPanel').style.display = (currentLog === "logXmasActivity" || type === "XMAS") ? "block" : "none";
         
         const knTopPanel = document.getElementById('keyNightTopPanel');
         if(knTopPanel) knTopPanel.style.display = (type === "KEYNIGHT") ? "block" : "none";
         
+        if (type === "KEYNIGHT") {
+            const dEl = document.getElementById('knDateFilter'); if(dEl && m.knDate) dEl.value = m.knDate;
+            const kEl = document.getElementById('knKeyFilter'); if(kEl && m.knKey) kEl.value = m.knKey;
+        }
+
         const keyPanel = document.getElementById('keyNightPanel'); 
         if(keyPanel) keyPanel.style.display = (type === "KEYNIGHT") ? "block" : "none";
         
@@ -873,7 +881,7 @@
         document.getElementById('qsoCount').innerText = (db[currentLog]||[]).length;
         
         updateFormVisibility();
-        if(isContestMode() && logMeta[currentLog]) { const m = logMeta[currentLog]; const cName = document.getElementById('c_name'); if(cName) cName.value = m.name || "CQ-TEST"; const cExch = document.getElementById('c_exchType'); if(cExch) cExch.value = m.exchType || "SERIAL"; const cFix = document.getElementById('c_fixedVal'); if(cFix) cFix.value = m.fixedVal || ""; toggleExchInput(); }
+        if(isContestMode() && logMeta[currentLog]) { const mc = logMeta[currentLog]; const cName = document.getElementById('c_name'); if(cName) cName.value = mc.name || "CQ-TEST"; const cExch = document.getElementById('c_exchType'); if(cExch) cExch.value = mc.exchType || "SERIAL"; const cFix = document.getElementById('c_fixedVal'); if(cFix) cFix.value = mc.fixedVal || ""; toggleExchInput(); }
         
         let list = (db[currentLog]||[]).map((x,i)=>({...x,_i:i}));
         if(activeSearch) list = list.filter(q => q.call && q.call.includes(activeSearch)); else if(liveCallFilter.length > 1) list = list.filter(q => q.call && q.call.includes(liveCallFilter));
@@ -1042,110 +1050,16 @@
         const exDB = JSON.parse(JSON.stringify(db)); let tp = 0; 
         for (let l in exDB) { for (let q of exDB[l]) { if (q.hasPhoto && q.photoId) { let b = await getPhotoFromDBPromise(q.photoId); if (b) { q.photoData = await blobToBase64(b); tp++; } } } } 
         const fb = { db: exDB, meta: logMeta, templates: qslTemplates }; 
-        return { blob: new Blob([JSON.stringify(fb)], {type:'application/json'}), photosCount: tp };
+        return { blob: new Blob([JSON.stringify(fb)], {type:'text/plain'}), photosCount: tp };
     }
 
     async function downloadFullBackup() { 
         showToast("Generazione file in corso...");
         try {
             const { blob, photosCount } = await generateBackupBlob();
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); 
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); 
             showToast("Backup OK: " + photosCount + " foto"); 
         } catch (e) { alert("Errore durante il backup: " + e.message); }
-    }
-
-    async function startShareProcess() {
-        const modal = document.getElementById('shareModal'); 
-        const title = document.getElementById('shareModalTitle'); 
-        const text = document.getElementById('shareModalText'); 
-        const spinner = document.getElementById('shareSpinner'); 
-        const btns = document.getElementById('shareButtonsArea');
-        
-        modal.style.display = 'flex'; 
-        title.style.color = "#2980b9"; title.innerText = "⏳ Preparazione Backup..."; 
-        text.innerText = "Sto impacchettando foto e dati...\nL'operazione può richiedere qualche secondo."; 
-        spinner.style.display = "block"; 
-        if(btns) btns.style.display = "none";
-
-        try {
-            const { blob, photosCount } = await generateBackupBlob();
-            preparedBackupText = await blob.text();
-            const fileName = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}_JSON.txt`; 
-            preparedShareFile = new File([blob], fileName, { type: "text/plain" });
-            
-            title.style.color = "#27ae60"; 
-            title.innerText = "✅ Backup Pronto!"; 
-            text.innerHTML = `File creato con successo (${photosCount} foto).<br><br>Scegli un metodo di invio:`; 
-            spinner.style.display = "none"; 
-            if(btns) btns.style.display = "flex";
-        } catch (e) { 
-            modal.style.display = 'none'; 
-            alert("Errore durante la preparazione: " + e.message); 
-        }
-    }
-
-    async function executeRealShare() {
-        if (!preparedShareFile) return;
-        if (!navigator.share) {
-            alert("Il tuo browser non supporta la condivisione nativa. Usa il tasto Copia Testo o Email.");
-            return;
-        }
-        try { 
-            await navigator.share({ title: 'Backup Log Radio Pro', text: 'Ecco il file completo di backup.', files: [preparedShareFile] }); 
-            document.getElementById('shareModal').style.display = 'none'; 
-            showToast("Condivisione file riuscita!");
-        } catch (e) { 
-            if (e.name !== "AbortError") alert("Invio File bloccato dal sistema. Prova 'Invia come Testo', 'Invia via Email' o 'Copia Testo'."); 
-        }
-    }
-
-    async function shareTextOnly() {
-        if (!preparedBackupText) return;
-        if (!navigator.share) {
-            alert("Il tuo browser non supporta la condivisione nativa. Usa il tasto Copia Testo o Email.");
-            return;
-        }
-        try {
-            await navigator.share({ title: 'Backup Log Radio Pro', text: preparedBackupText });
-            document.getElementById('shareModal').style.display = 'none';
-            showToast("Condivisione testo riuscita!");
-        } catch (e) {
-            if (e.name !== "AbortError") alert("Invio Testo bloccato dal sistema. Usa 'Copia Testo negli appunti'.");
-        }
-    }
-
-    function shareViaEmail() {
-        if (!preparedBackupText) return;
-        const subject = encodeURIComponent('Backup Log Radio Pro');
-        let bodyText = preparedBackupText;
-        if (bodyText.length > 2000) {
-            bodyText = bodyText.substring(0, 2000) + "\n\n...[TESTO TRONCATO PER LIMITI EMAIL. USA 'INVIA COME FILE' O 'COPIA TESTO' PER AVERE IL BACKUP COMPLETO]";
-        }
-        window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
-    }
-
-    async function copyBackupToClipboard() {
-        if (!preparedBackupText) return;
-        try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(preparedBackupText);
-                showToast("Testo copiato negli appunti!");
-            } else {
-                throw new Error("Clipboard API non disponibile");
-            }
-        } catch (err) {
-            const textArea = document.createElement("textarea");
-            textArea.value = preparedBackupText;
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                showToast("Testo copiato negli appunti!");
-            } catch(e) {
-                alert("Errore nella copia del testo.");
-            }
-            document.body.removeChild(textArea);
-        }
     }
 
     async function restoreFullBackup() { 
@@ -1200,10 +1114,26 @@
     
     function resetForm() { 
         ['freq','call','name','qth','gridsquare','note','theirRef','timeOn','timeOff'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-        const keyEl = document.getElementById('keyType'); if(keyEl) keyEl.value = 'Straight Key';
-        const mumbleEl = document.getElementById('mumbleSystem'); if(mumbleEl) mumbleEl.value = 'PC';
+        
+        const type = logMeta[currentLog]?.type || "STD";
+        const m = logMeta[currentLog] || {};
+
+        const keyEl = document.getElementById('keyType'); 
+        if(keyEl) keyEl.value = (type === "KEYNIGHT" && m.knKey) ? m.knKey : 'Straight Key';
+        
+        const mumbleEl = document.getElementById('mumbleSystem'); 
+        if(mumbleEl) mumbleEl.value = 'PC';
+        
         document.getElementById('dupeAlert').innerText = ''; document.getElementById('qrbCalc').innerText = '';
-        tempOriginalBlob = null; loadedOriginalBlob = null; syncRST(); qsoStarted=false; initDate(); 
+        tempOriginalBlob = null; loadedOriginalBlob = null; syncRST(); qsoStarted=false; 
+        
+        // Imposta la data prendendola dalla configurazione del modello (se esiste) o usa quella odierna
+        if (type === "KEYNIGHT" && m.knDate) {
+            const dateEl = document.getElementById('date'); if(dateEl) dateEl.value = m.knDate;
+        } else {
+            initDate();
+        }
+
         const c = document.getElementById('call'); if(c) c.focus(); 
         
         const moveLogPanel = document.getElementById('moveLogPanel');
