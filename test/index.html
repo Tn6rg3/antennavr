@@ -217,7 +217,20 @@
                 <option value="maranza">Maranza (Fra, Bro)</option>
                 <option value="rambo">RAMBO (Brutale Militare)</option>
             </select>
-            <button id="btnTestVoce" class="btn-dark" style="padding: 10px; margin-top: 10px; width: 100%; font-size: 14px;">🔊 Prova Voce Coach</button>
+            
+            <div class="opz-row" style="margin-top: 15px;">
+                <label style="font-size: 14px;">Velocità Voce:</label>
+                <select id="optVoiceSpeed" style="width: 60%; margin: 0; padding: 8px; font-size: 14px;">
+                    <option value="0.5">Lenta (0.5x)</option>
+                    <option value="0.75">Medio-Lenta (0.75x)</option>
+                    <option value="1.0" selected>Normale (1x)</option>
+                    <option value="1.25">Veloce (1.25x)</option>
+                    <option value="1.5">Molto Veloce (1.5x)</option>
+                    <option value="2.0">Super (2x)</option>
+                </select>
+            </div>
+
+            <button id="btnTestVoce" class="btn-dark" style="padding: 10px; margin-top: 15px; width: 100%; font-size: 14px;">🔊 Prova Voce Coach</button>
         </div>
 
         <div class="opz-card">
@@ -420,6 +433,9 @@
             const optElem = document.getElementById('optCoach');
             const coach = optElem ? optElem.value : "standard";
             
+            const speedMultElem = document.getElementById('optVoiceSpeed');
+            const speedMultiplier = speedMultElem ? parseFloat(speedMultElem.value) : 1.0;
+            
             let fraseFinale = testoBase ? String(testoBase) : "";
 
             if (tipo === "incitamento") {
@@ -456,22 +472,22 @@
                 if(itVoice) msg.voice = itVoice;
                 else msg.lang = 'it-IT'; 
                 
-                // TUNING VOCE
+                // TUNING VOCE CON MOLTIPLICATORE
                 if (coach === "rambo") { 
                     msg.pitch = 0.3; // Voce profonda e arrabbiata
-                    msg.rate = 0.85; // Leggermente più lenta per scandire
+                    msg.rate = 0.85 * speedMultiplier; // Leggermente più lenta per scandire
                 } 
                 else if (coach === "scherzoso") { 
                     msg.pitch = 1.6; // Vocina stridula
-                    msg.rate = 1.1; 
+                    msg.rate = 1.1 * speedMultiplier; 
                 }
                 else if (coach === "maranza") { 
                     msg.pitch = 1.2; 
-                    msg.rate = 1.2; // Veloce
+                    msg.rate = 1.2 * speedMultiplier; // Veloce
                 }
                 else { 
                     msg.pitch = 1.0; 
-                    msg.rate = 1.0; 
+                    msg.rate = 1.0 * speedMultiplier; 
                 }
 
                 window.speechUtterances.push(msg);
