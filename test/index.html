@@ -31,7 +31,7 @@
         .marker-start { background-color: #00ff88; color: black; font-weight: bold; border-radius: 50%; border: 2px solid #121212; text-align: center; line-height: 24px; font-size: 14px; box-shadow: 0 0 8px rgba(0,255,136,0.6); }
         .marker-dot { background-color: #ffaa00; border-radius: 50%; border: 2px solid #121212; box-shadow: 0 0 5px black; }
 
-        #pannelloOpzioni, #areaProfilo, #areaClassifica, #areaAdmin, #areaSetup, #gara, #classificaFinale { 
+        #pannelloOpzioni, #areaProfilo, #areaClassifica, #areaAdmin, #areaSetup, #gara, #classificaFinale, #areaPrivacy { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; z-index: 10000; padding: 20px; box-sizing: border-box; overflow-y: auto; display: flex; flex-direction: column; align-items: center; 
         }
         
@@ -70,7 +70,6 @@
         .leaflet-routing-container { display: none !important; }
         hr { border: 0; border-top: 1px solid #444; margin: 15px 0; }
         
-        /* Stili per pannello bot */
         .bot-row { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; background: #222; padding: 8px; border-radius: 8px; }
         .bot-row input[type="text"] { width: 45%; margin: 0; padding: 8px; font-size: 13px; }
         .bot-row input[type="number"] { width: 20%; margin: 0; padding: 8px; font-size: 13px; }
@@ -90,11 +89,26 @@
         <button id="btnEsciPodio" style="margin-top: 30px;" class="btn-dark">Esci dalla Stanza</button>
     </div>
 
+    <!-- AREA LOGIN CON PULSANTE PRIVACY -->
     <div id="areaLogin">
         <h1 style="margin-bottom: 5px;">Gara Virtuale 🏃‍♂️</h1>
         <input type="text" id="nomeUtente" placeholder="Tuo Nome (Es. Marco)">
         <input type="password" id="codiceSegreto" placeholder="Password (o Admin)">
         <button id="btnVerificaPass">Entra</button>
+        <button id="btnPrivacy" style="background:transparent; color:#888; text-decoration:underline; font-size:12px; margin-top:30px; width:auto; padding:5px;">Info sulla Privacy e Dati</button>
+    </div>
+
+    <!-- INFORMATIVA PRIVACY -->
+    <div id="areaPrivacy" class="hidden">
+        <h1 style="color: #0088ff;">🔒 Privacy & Dati</h1>
+        <div class="opz-card" style="font-size:14px; line-height:1.6; color:#ddd;">
+            <p style="margin-top:0;"><b>1. Posizione e GPS:</b> I tuoi dati GPS vengono elaborati <u>esclusivamente in locale</u>. L'app comunica al server di gara solo i "metri percorsi". <b>Nessuna coordinata GPS esatta viene mai inviata o salvata sui server.</b></p>
+            <p><b>2. Mappe Esterne (OSM/OSRM):</b> Per visualizzare le strade, l'app usa OpenStreetMap. Il caricamento delle mappe e il tracciamento dei percorsi pre-gara avvengono tramite chiamate anonime e pubbliche. Le mappe non "sanno" chi sei né memorizzano i tuoi tracciati storici.</p>
+            <p><b>3. Chiusura App e Riconnessione:</b> Se chiudi l'app, l'accesso al GPS locale viene <b>interrotto istantaneamente</b> per risparmiare batteria. Se stavi gareggiando, puoi riaprire l'app e riprendere da dove eri rimasto. Se abbandoni definitivamente, allo scadere del "tempo limite" della gara sarai considerato "Ritirato" e la stanza pulita.</p>
+            <p><b>4. Cookie e Memoria Locale:</b> L'app <u>non usa cookie di tracciamento o marketing</u>. Utilizza solo la memoria locale tecnica (Local Storage) del tuo dispositivo per ricordare il tuo Nome, la Password di accesso e un ID anonimo necessario per non farti perdere i progressi in caso di riavvio.</p>
+            <p style="margin-bottom:0;"><b>5. Cancellazione:</b> Puoi eliminare definitivamente il tuo profilo (Username, Vittorie, Km Totali) e svuotare i dati salvati in qualsiasi momento dal menu "Profilo".</p>
+        </div>
+        <button id="btnChiudiPrivacy" class="btn-blue" style="margin-top: 20px;">Ho Capito, torna al Login</button>
     </div>
 
     <div id="areaAdmin" class="hidden">
@@ -184,7 +198,6 @@
         <button id="btnStart" class="btn-red hidden" style="width:100%;">START ALLA GARA!</button>
     </div>
 
-    <!-- PANNELLO OPZIONI AGGIORNATO -->
     <div id="pannelloOpzioni" class="hidden">
         <h2>⚙️ Impostazioni</h2>
 
@@ -272,13 +285,13 @@
         import { getDatabase, ref, set, onValue, update, remove, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
         const firebaseConfig = {
-          apiKey: "AIzaSyAAFDKc1n-WnibH-62jLAqU_qbqrRoYMt0",
-          authDomain: "corsa-1ad99.firebaseapp.com",
-          databaseURL: "https://corsa-1ad99-default-rtdb.europe-west1.firebasedatabase.app",
-          projectId: "corsa-1ad99",
-          storageBucket: "corsa-1ad99.firebasestorage.app",
-          messagingSenderId: "55405184801",
-          appId: "1:55405184801:web:0f03f06467a5c1691ea060"
+            apiKey: "AIzaSyAAFDKc1n-WnibH-62jLAqU_qbqrRoYMt0",
+            authDomain: "corsa-1ad99.firebaseapp.com",
+            databaseURL: "https://corsa-1ad99-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "corsa-1ad99",
+            storageBucket: "corsa-1ad99.firebasestorage.app",
+            messagingSenderId: "55405184801",
+            appId: "1:55405184801:web:0f03f06467a5c1691ea060"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -308,62 +321,82 @@
         window.speechUtterances = [];
         window.botInterval = null;
 
+        // PULIZIA FORZATA RISORSE ALLA CHIUSURA (Privacy e Batteria)
+        // Non forziamo il "ritiro" qui per permettere il rientro (auto-rejoin) se chiuso per sbaglio
+        window.addEventListener('beforeunload', () => {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+            if (wakeLock !== null) {
+                wakeLock.release().catch(() => {});
+            }
+        });
+
+        // Gestione Menu Privacy
+        document.getElementById('btnPrivacy').addEventListener('click', () => {
+            document.getElementById('areaLogin').classList.add('hidden');
+            document.getElementById('areaPrivacy').classList.remove('hidden');
+        });
+
+        document.getElementById('btnChiudiPrivacy').addEventListener('click', () => {
+            document.getElementById('areaPrivacy').classList.add('hidden');
+            document.getElementById('areaLogin').classList.remove('hidden');
+        });
+
         if ('speechSynthesis' in window) {
             window.speechSynthesis.getVoices();
-            // Trigger load
             setTimeout(() => window.speechSynthesis.getVoices(), 1000);
         }
 
-        // --- VOCABOLARIO ESTESO ---
         const coachPhrases = {
             standard: {
-                start: "Tre. Due. Uno. Via! Buona gara.",
+                start: "Tre. Due. Uno. Via! Buona gara.", 
                 win: "Traguardo raggiunto! Ottima prestazione e gestione del ritmo.",
-                incitamenti: [
+                incitamenti: [ 
                     "Continua così, ottimo ritmo.", "Non mollare, mantieni l'andatura.", 
-                    "Stai andando bene, ricordati di respirare.", "Concentrati sull'obiettivo, manca poco.",
-                    "Passo costante. Stai facendo un ottimo lavoro.", "Sciogli le spalle, rilassa le braccia.",
-                    "Siamo a buon punto, tieni duro."
+                    "Stai andando bene, ricordati di respirare.", "Concentrati sull'obiettivo, manca poco.", 
+                    "Passo costante. Stai facendo un ottimo lavoro.", "Sciogli le spalle, rilassa le braccia.", 
+                    "Siamo a buon punto, tieni duro." 
                 ]
             },
             scherzoso: {
-                start: "Tre. Due. Uno. Sciogliete i cani! Daje!",
+                start: "Tre. Due. Uno. Sciogliete i cani! Daje!", 
                 win: "Incredibile! Ce l'hai fatta nonostante i tortellini di ieri!",
-                incitamenti: [
+                incitamenti: [ 
                     "Uè testina, sembri mia nonna col girello!", "Prrrrrrr! Pernacchia per te! Spingi!", 
-                    "Ma che hai fatto? Ti sei fermato a guardare i cantieri?", "Daje che se vai più piano torni indietro!",
-                    "Ho visto bradipi con più sprint, muoviti!", "Stai strisciando! Alzati e corri!",
-                    "Sei così lento che i moscerini ti tamponano da dietro!"
+                    "Ma che hai fatto? Ti sei fermato a guardare i cantieri?", "Daje che se vai più piano torni indietro!", 
+                    "Ho visto bradipi con più sprint, muoviti!", "Stai strisciando! Alzati e corri!", 
+                    "Sei così lento che i moscerini ti tamponano da dietro!" 
                 ]
             },
             maranza: {
-                start: "Tre. Due. Uno. Sposta quel ferro! Andiamo fra!",
+                start: "Tre. Due. Uno. Sposta quel ferro! Andiamo fra!", 
                 win: "Troppo figo fra! Li hai umiliati tutti, sei un fottuto king!",
-                incitamenti: [
+                incitamenti: [ 
                     "Oh fra, stai a dormì in piedi?", "Amo, troppo cringino sto ritmo, spingi dai!", 
-                    "Guarda che questo ti mangia, sposta tutto!", "Figo sto passo, spacca tutto zí!",
-                    "Ma sei un npc? Metti il turbo bro!", "Drip check fallito se non acceleri fratello!",
-                    "Stai andando a due all'ora, troppo boomer sto passo."
+                    "Guarda che questo ti mangia, sposta tutto!", "Figo sto passo, spacca tutto zí!", 
+                    "Ma sei un npc? Metti il turbo bro!", "Drip check fallito se non acceleri fratello!", 
+                    "Stai andando a due all'ora, troppo boomer sto passo." 
                 ]
             },
             rambo: {
-                start: "Muovi quel culo flaccido soldato! Voglio vederti sputare sangue! Via! Via! Via!",
+                start: "Muovi quel culo flaccido soldato! Voglio vederti sputare sangue! Via! Via! Via!", 
                 win: "Hai superato la fottuta linea. Non sei più un verme, almeno per oggi.",
-                incitamenti: [
+                incitamenti: [ 
                     "Sei più lento di mia nonna morta! Spingi soldato!", 
                     "Che cos'è questo passo? Un fottuto valzer? Corri miserabile!", 
                     "Non sei stanco, sei solo debole! Alza quelle fottute ginocchia!", 
-                    "Voglio vedere il sudore! Muovi quel lardo!",
-                    "Sei una palla di lardo senza speranza! Dimostrami che mi sbaglio!",
-                    "Il dolore è debolezza che abbandona il corpo! Piantala di frignare e corri!",
-                    "Mia nipote zoppa corre più veloce di te! Vergogna!"
+                    "Voglio vedere il sudore! Muovi quel lardo!", 
+                    "Sei una palla di lardo senza speranza! Dimostrami che mi sbaglio!", 
+                    "Il dolore è debolezza che abbandona il corpo! Piantala di frignare e corri!", 
+                    "Mia nipote zoppa corre più veloce di te! Vergogna!" 
                 ]
             }
         };
 
-        function getPosWord(n) {
-            const words = ["prima", "seconda", "terza", "quarta", "quinta", "sesta", "settima", "ottava", "nona", "decima"];
-            return words[n-1] || (n + "esima");
+        function getPosWord(n) { 
+            const words = ["prima", "seconda", "terza", "quarta", "quinta", "sesta", "settima", "ottava", "nona", "decima"]; 
+            return words[n-1] || (n + "esima"); 
         }
 
         document.addEventListener("DOMContentLoaded", () => {
@@ -375,19 +408,22 @@
 
         async function attivaWakeLock() {
             if ('wakeLock' in navigator) {
-                try { wakeLock = await navigator.wakeLock.request('screen'); } 
-                catch (err) { console.error('Wake Lock errore:', err); }
+                try { 
+                    wakeLock = await navigator.wakeLock.request('screen'); 
+                } catch (err) { 
+                    console.error('Wake Lock errore:', err); 
+                }
             }
         }
+
         document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible' && garaAttiva) await attivaWakeLock();
+            if (wakeLock !== null && document.visibilityState === 'visible' && garaAttiva) {
+                await attivaWakeLock();
+            }
         });
 
-        // --- MOTORE BOT PERSONALIZZABILE ---
         function avviaMotoreBot() {
             if(window.botInterval) clearInterval(window.botInterval);
-            
-            // Leggo i valori impostati dall'utente nei campi input
             const bots = [
                 { id: 'bot_0', n: document.getElementById('b1Nome').value || "Bot 1", m: parseInt(document.getElementById('b1Min').value)||5, s: parseInt(document.getElementById('b1Sec').value)||0 },
                 { id: 'bot_1', n: document.getElementById('b2Nome').value || "Bot 2", m: parseInt(document.getElementById('b2Min').value)||5, s: parseInt(document.getElementById('b2Sec').value)||0 },
@@ -396,122 +432,131 @@
 
             window.botInterval = setInterval(async () => {
                 if(!garaAttiva) return;
-                
                 const snap = await get(ref(db, `stanze/${idStanzaCorrente}/partecipanti`));
                 if(!snap.exists()) return;
-                const parts = snap.val();
+                
+                const parts = snap.val(); 
                 let updates = {};
 
                 for(let b of bots) {
                     if(parts[b.id] && parts[b.id].isBot && !parts[b.id].arrivato) {
                         let currentDist = parts[b.id].percorsa || 0;
-                        
-                        // Calcola velocità base in m/s specifica per QUESTO bot
                         let baseSpeed = 1000 / ((b.m * 60) + b.s); 
-                        
-                        // Genera fluttuazione casuale del +/- 10% per simulare la corsa umana
                         let randomFluctuation = 0.90 + (Math.random() * 0.20); 
-                        
-                        // Distanza percorsa in 3 secondi (tick dell'interval)
                         let newDist = currentDist + (baseSpeed * 3 * randomFluctuation); 
-
-                        if(newDist >= distanzaGara) {
-                            updates[`${b.id}/percorsa`] = distanzaGara;
-                            updates[`${b.id}/arrivato`] = true;
-                            updates[`${b.id}/tempo`] = ((Date.now() - startTime) / 1000).toFixed(2);
-                        } else {
-                            updates[`${b.id}/percorsa`] = newDist;
+                        
+                        if(newDist >= distanzaGara) { 
+                            updates[`${b.id}/percorsa`] = distanzaGara; 
+                            updates[`${b.id}/arrivato`] = true; 
+                            updates[`${b.id}/tempo`] = ((Date.now() - startTime) / 1000).toFixed(2); 
+                        } else { 
+                            updates[`${b.id}/percorsa`] = newDist; 
                         }
                     }
                 }
-                if(Object.keys(updates).length > 0) update(ref(db, `stanze/${idStanzaCorrente}/partecipanti`), updates);
+                if(Object.keys(updates).length > 0) {
+                    update(ref(db, `stanze/${idStanzaCorrente}/partecipanti`), updates);
+                }
             }, 3000); 
         }
 
-        // --- SISTEMA VOCALE CON FIX PITCH PER ANDROID ---
         function parla(testoBase, tipo = "dinamico") {
-            const optElem = document.getElementById('optCoach');
+            const optElem = document.getElementById('optCoach'); 
             const coach = optElem ? optElem.value : "standard";
             
-            const speedMultElem = document.getElementById('optVoiceSpeed');
+            const speedMultElem = document.getElementById('optVoiceSpeed'); 
             const speedMultiplier = speedMultElem ? parseFloat(speedMultElem.value) : 1.0;
             
             let fraseFinale = testoBase ? String(testoBase) : "";
 
-            if (tipo === "incitamento") {
-                const elenco = coachPhrases[coach].incitamenti;
-                fraseFinale = elenco[Math.floor(Math.random() * elenco.length)];
-            } else if (tipo === "start") {
-                fraseFinale = coachPhrases[coach].start;
-            } else if (tipo === "win") {
-                fraseFinale = coachPhrases[coach].win;
-            } else if (tipo === "dinamico" && coach === "maranza") {
-                fraseFinale = fraseFinale.replace("posizione.", "posizione bro.");
-            } else if (tipo === "dinamico" && coach === "scherzoso") {
-                fraseFinale = fraseFinale.replace("posizione.", "posizione, mica male.");
-            } else if (tipo === "dinamico" && coach === "rambo") {
-                fraseFinale = fraseFinale.replace("posizione.", "posizione soldato!");
+            if (tipo === "incitamento") { 
+                const elenco = coachPhrases[coach].incitamenti; 
+                fraseFinale = elenco[Math.floor(Math.random() * elenco.length)]; 
+            } 
+            else if (tipo === "start") { 
+                fraseFinale = coachPhrases[coach].start; 
+            } 
+            else if (tipo === "win") { 
+                fraseFinale = coachPhrases[coach].win; 
+            } 
+            else if (tipo === "dinamico" && coach === "maranza") { 
+                fraseFinale = fraseFinale.replace("posizione.", "posizione bro."); 
+            } 
+            else if (tipo === "dinamico" && coach === "scherzoso") { 
+                fraseFinale = fraseFinale.replace("posizione.", "posizione, mica male."); 
+            } 
+            else if (tipo === "dinamico" && coach === "rambo") { 
+                fraseFinale = fraseFinale.replace("posizione.", "posizione soldato!"); 
             }
 
-            if (window.Android && typeof window.Android.speak === "function") {
-                window.Android.speak(fraseFinale);
-                return;
+            if (window.Android && typeof window.Android.speak === "function") { 
+                window.Android.speak(fraseFinale); 
+                return; 
             }
 
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel(); 
                 const msg = new SpeechSynthesisUtterance(fraseFinale);
-                
                 let voices = window.speechSynthesis.getVoices();
-                
-                // TRUCCO PER ANDROID: Le voci di rete (Cloud) ignorano il pitch. 
-                // Cerchiamo forzatamente una voce LOCALE italiana.
                 let itVoice = voices.find(v => (v.lang === 'it-IT' || v.lang === 'it_IT') && v.localService);
-                if (!itVoice) itVoice = voices.find(v => v.lang === 'it-IT' || v.lang === 'it_IT'); 
                 
-                if(itVoice) msg.voice = itVoice;
-                else msg.lang = 'it-IT'; 
+                if (!itVoice) {
+                    itVoice = voices.find(v => v.lang === 'it-IT' || v.lang === 'it_IT'); 
+                }
+
+                if(itVoice) {
+                    msg.voice = itVoice; 
+                } else {
+                    msg.lang = 'it-IT'; 
+                }
                 
-                // TUNING VOCE CON MOLTIPLICATORE
                 if (coach === "rambo") { 
-                    msg.pitch = 0.3; // Voce profonda e arrabbiata
-                    msg.rate = 0.85 * speedMultiplier; // Leggermente più lenta per scandire
+                    msg.pitch = 0.3; 
+                    msg.rate = 0.85 * speedMultiplier; 
                 } 
                 else if (coach === "scherzoso") { 
-                    msg.pitch = 1.6; // Vocina stridula
+                    msg.pitch = 1.6; 
                     msg.rate = 1.1 * speedMultiplier; 
                 }
                 else if (coach === "maranza") { 
                     msg.pitch = 1.2; 
-                    msg.rate = 1.2 * speedMultiplier; // Veloce
+                    msg.rate = 1.2 * speedMultiplier; 
                 }
                 else { 
                     msg.pitch = 1.0; 
                     msg.rate = 1.0 * speedMultiplier; 
                 }
 
-                window.speechUtterances.push(msg);
-                msg.onend = function() { window.speechUtterances.shift(); };
+                window.speechUtterances.push(msg); 
+                msg.onend = function() { 
+                    window.speechUtterances.shift(); 
+                };
                 window.speechSynthesis.speak(msg);
             }
         }
 
         document.getElementById('btnTestVoce').addEventListener('click', () => {
             const coach = document.getElementById('optCoach').value;
-            if (coach === "rambo") parla("Sono il Sergente Hartman, il tuo istruttore anziano! E ho detto che l'audio funziona!", "dinamico");
-            else parla("Daje, la voce funziona perfettamente!", "dinamico");
+            if (coach === "rambo") {
+                parla("Sono il Sergente Hartman, il tuo istruttore anziano! E ho detto che l'audio funziona!", "dinamico"); 
+            } else {
+                parla("Daje, la voce funziona perfettamente!", "dinamico");
+            }
         });
 
         document.getElementById('btnVerificaPass').addEventListener('click', async () => {
             mioNome = document.getElementById('nomeUtente').value;
             const pass = document.getElementById('codiceSegreto').value;
-            if (!mioNome || !pass) return alert("Nome e Password richiesti!");
+            
+            if (!mioNome || !pass) {
+                return alert("Nome e Password richiesti!");
+            }
 
             if ('speechSynthesis' in window) {
-                let w = new SpeechSynthesisUtterance('');
+                let w = new SpeechSynthesisUtterance(''); 
                 w.volume = 0; 
                 window.speechUtterances.push(w);
-                w.onend = function() { window.speechUtterances.shift(); };
+                w.onend = function() { window.speechUtterances.shift(); }; 
                 window.speechSynthesis.speak(w);
             }
 
@@ -523,86 +568,136 @@
                 const dbAdmin = snapAdmin.exists() ? String(snapAdmin.val()).trim() : "NESSUNA_PASSWORD_ADMIN_IMPOSTATA";
 
                 if (String(pass).trim() === dbAdmin) {
-                    document.getElementById('areaLogin').classList.add('hidden');
-                    document.getElementById('areaAdmin').classList.remove('hidden');
+                    document.getElementById('areaLogin').classList.add('hidden'); 
+                    document.getElementById('areaAdmin').classList.remove('hidden'); 
                     caricaGareAdmin();
-                } else if (String(pass).trim() === dbPass) {
-                    localStorage.setItem("corsa_nome", mioNome);
+                } 
+                else if (String(pass).trim() === dbPass) {
+                    localStorage.setItem("corsa_nome", mioNome); 
                     localStorage.setItem("corsa_pass", pass); 
+                    
                     const userRef = ref(db, `utenti/${mioId}`);
-                    get(userRef).then((snap) => {
-                        if(!snap.exists()) set(userRef, { nome: mioNome, vittorie: 0, gareFatte: 0, kmPercorsi: 0 });
-                        else update(userRef, { nome: mioNome }); 
+                    get(userRef).then((snap) => { 
+                        if(!snap.exists()) {
+                            set(userRef, { nome: mioNome, vittorie: 0, gareFatte: 0, kmPercorsi: 0 }); 
+                        } else {
+                            update(userRef, { nome: mioNome }); 
+                        }
                     });
-                    document.getElementById('areaLogin').classList.add('hidden');
-                    document.getElementById('areaStanze').classList.remove('hidden');
+                    
+                    document.getElementById('areaLogin').classList.add('hidden'); 
+                    document.getElementById('areaStanze').classList.remove('hidden'); 
                     ascoltaStanze(); 
-                } else { alert("❌ Password errata!"); }
-            } catch (error) { alert("🔴 Errore Server: " + error.message); }
+                } 
+                else { 
+                    alert("❌ Password errata!"); 
+                }
+            } catch (error) { 
+                alert("🔴 Errore Server: " + error.message); 
+            }
         });
 
         function caricaGareAdmin() {
             onValue(ref(db, 'stanze'), snap => {
-                const gare = snap.val(); let h = "";
-                if (gare) {
-                    Object.entries(gare).forEach(([id, d]) => {
-                        h += `<div class="admin-item">
+                const gare = snap.val(); 
+                let h = "";
+                if (gare) { 
+                    Object.entries(gare).forEach(([id, d]) => { 
+                        h += `
+                        <div class="admin-item">
                             <span style="color:white; font-weight:bold;">${d.info.nomeHost}</span>
                             <span style="color:#aaa;">${d.info.distanza}m - ${d.info.stato}</span>
                             <button class="btn-red" onclick="window.eliminaGaraAdmin('${id}')" style="width:auto; padding:5px 15px; margin:0;">CANC</button>
-                        </div>`;
-                    });
+                        </div>`; 
+                    }); 
                 }
                 document.getElementById('listaGareAdmin').innerHTML = h || "<p style='color:#666;'>Nessuna gara attiva.</p>";
             });
         }
-        window.eliminaGaraAdmin = (id) => { if(confirm("Sicuro di eliminare questa singola gara?")) remove(ref(db, `stanze/${id}`)); };
-        document.getElementById('btnAdminSvuotaStanze').addEventListener('click', async () => {
-            if(confirm("ATTENZIONE: Questo cancellerà TUTTE le stanze dal server. Vuoi procedere?")) { await remove(ref(db, 'stanze')); }
+
+        window.eliminaGaraAdmin = (id) => { 
+            if(confirm("Sicuro di eliminare questa singola gara?")) {
+                remove(ref(db, `stanze/${id}`)); 
+            }
+        };
+
+        document.getElementById('btnAdminSvuotaStanze').addEventListener('click', async () => { 
+            if(confirm("ATTENZIONE: Questo cancellerà TUTTE le stanze dal server. Vuoi procedere?")) { 
+                await remove(ref(db, 'stanze')); 
+            } 
         });
+
         document.getElementById('btnAdminEsci').addEventListener('click', () => location.reload());
 
         document.getElementById('btnApriProfilo').addEventListener('click', async () => {
-            document.getElementById('areaStanze').classList.add('hidden');
+            document.getElementById('areaStanze').classList.add('hidden'); 
             document.getElementById('areaProfilo').classList.remove('hidden');
             document.getElementById('profiloNomeUtente').innerText = mioNome;
+            
             const snap = await get(ref(db, `utenti/${mioId}`));
             if(snap.exists()) {
                 const dati = snap.val();
-                document.getElementById('profiloVittorie').innerText = dati.vittorie || 0;
-                document.getElementById('profiloGare').innerText = dati.gareFatte || 0;
+                document.getElementById('profiloVittorie').innerText = dati.vittorie || 0; 
+                document.getElementById('profiloGare').innerText = dati.gareFatte || 0; 
                 document.getElementById('profiloKm').innerText = (dati.kmPercorsi || 0).toFixed(1);
             }
         });
 
         document.getElementById('btnApriClassificaGlobale').addEventListener('click', async () => {
-            document.getElementById('areaStanze').classList.add('hidden');
+            document.getElementById('areaStanze').classList.add('hidden'); 
             document.getElementById('areaClassificaGlobale').classList.remove('hidden');
-            const listDiv = document.getElementById('listaClassificaGlobale');
+            
+            const listDiv = document.getElementById('listaClassificaGlobale'); 
             listDiv.innerHTML = "<p>Caricamento in corso...</p>";
+            
             const snap = await get(ref(db, 'utenti'));
             if(snap.exists()) {
                 const utentiArr = Object.values(snap.val());
                 utentiArr.sort((a, b) => {
-                    let vitA = a.vittorie || 0; let vitB = b.vittorie || 0;
+                    let vitA = a.vittorie || 0; 
+                    let vitB = b.vittorie || 0;
                     if (vitB !== vitA) return vitB - vitA;
-                    let kmA = a.kmPercorsi || 0; let kmB = b.kmPercorsi || 0;
+                    
+                    let kmA = a.kmPercorsi || 0; 
+                    let kmB = b.kmPercorsi || 0;
                     return kmB - kmA;
                 });
+
                 listDiv.innerHTML = utentiArr.map((u, i) => {
                     let med = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `<span style="color:#888; font-size:12px;">${i+1}°</span>`;
-                    return `<div class="riga-globale"><div style="font-size: 18px; width:30px;">${med}</div>
+                    return `
+                    <div class="riga-globale">
+                        <div style="font-size: 18px; width:30px;">${med}</div>
                         <div style="flex-grow: 1; text-align: left; padding-left: 10px;">
-                        <div style="color: white; font-weight: bold;">${u.nome}</div><div style="color: #aaa; font-size: 12px;">${(u.kmPercorsi || 0).toFixed(1)} km</div></div>
-                        <div style="color: gold; font-size: 20px; font-weight: bold;">${u.vittorie || 0} <span style="font-size:10px;">V</span></div></div>`;
+                            <div style="color: white; font-weight: bold;">${u.nome}</div>
+                            <div style="color: #aaa; font-size: 12px;">${(u.kmPercorsi || 0).toFixed(1)} km</div>
+                        </div>
+                        <div style="color: gold; font-size: 20px; font-weight: bold;">${u.vittorie || 0} <span style="font-size:10px;">V</span></div>
+                    </div>`;
                 }).join('');
-            } else { listDiv.innerHTML = "<p>Nessun dato disponibile.</p>"; }
+            } else { 
+                listDiv.innerHTML = "<p>Nessun dato disponibile.</p>"; 
+            }
         });
 
-        document.getElementById('btnChiudiProfilo').addEventListener('click', () => { document.getElementById('areaProfilo').classList.add('hidden'); document.getElementById('areaStanze').classList.remove('hidden'); });
-        document.getElementById('btnChiudiClassificaGlobale').addEventListener('click', () => { document.getElementById('areaClassificaGlobale').classList.add('hidden'); document.getElementById('areaStanze').classList.remove('hidden'); });
+        document.getElementById('btnChiudiProfilo').addEventListener('click', () => { 
+            document.getElementById('areaProfilo').classList.add('hidden'); 
+            document.getElementById('areaStanze').classList.remove('hidden'); 
+        });
+
+        document.getElementById('btnChiudiClassificaGlobale').addEventListener('click', () => { 
+            document.getElementById('areaClassificaGlobale').classList.add('hidden'); 
+            document.getElementById('areaStanze').classList.remove('hidden'); 
+        });
+
         document.getElementById('btnEliminaProfilo').addEventListener('click', async () => {
-            if(confirm("Eliminare il profilo? Operazione irreversibile.")) { await remove(ref(db, `utenti/${mioId}`)); localStorage.removeItem("corsa_id"); localStorage.removeItem("corsa_nome"); localStorage.removeItem("corsa_pass"); location.reload(); }
+            if(confirm("Eliminare il profilo? Operazione irreversibile.")) { 
+                await remove(ref(db, `utenti/${mioId}`)); 
+                localStorage.removeItem("corsa_id"); 
+                localStorage.removeItem("corsa_nome"); 
+                localStorage.removeItem("corsa_pass"); 
+                location.reload(); 
+            }
         });
 
         function ascoltaStanze() {
@@ -615,26 +710,31 @@
                         if (st.partecipanti && st.partecipanti[mioId]) {
                             let me = st.partecipanti[mioId];
                             if (!me.arrivato && !me.ritirato && st.info.stato === 'in_corso') {
-                                autoRejoined = true;
+                                autoRejoined = true; 
                                 isReconnecting = true; 
-                                idStanzaCorrente = id;
+                                idStanzaCorrente = id; 
                                 isHost = (st.info.creatoreId === mioId);
-                                distanzaGara = st.info.distanza;
-                                startTime = st.info.startTime;
+                                distanzaGara = st.info.distanza; 
+                                startTime = st.info.startTime; 
                                 distanzaFatta = me.percorsa || 0;
                                 
                                 ultimoAvvisoPosDist = Math.floor(distanzaFatta / (parseInt(document.getElementById('optPosInt').value) || 10));
                                 ultimoAvvisoMotivDist = Math.floor(distanzaFatta / (parseInt(document.getElementById('optMotivInt').value) || 20));
                                 
-                                isCorsaLibera = me.corsaLibera || false;
+                                isCorsaLibera = me.corsaLibera || false; 
                                 document.getElementById('chkCorsaLibera').checked = isCorsaLibera;
-                                if(!isCorsaLibera && me.waypoints) percorsoCoordinate = me.waypoints;
                                 
-                                utenteConfermato = true;
+                                if(!isCorsaLibera && me.waypoints) {
+                                    percorsoCoordinate = me.waypoints;
+                                }
+                                
+                                utenteConfermato = true; 
                                 document.getElementById('areaStanze').classList.add('hidden');
                                 
-                                if (isHost && Object.keys(st.partecipanti).some(k => st.partecipanti[k].isBot)) avviaMotoreBot();
-
+                                if (isHost && Object.keys(st.partecipanti).some(k => st.partecipanti[k].isBot)) {
+                                    avviaMotoreBot();
+                                }
+                                
                                 ascoltaLobby(); 
                                 return; 
                             }
@@ -647,18 +747,25 @@
                     if (stanze) {
                         Object.entries(stanze).forEach(([id, data]) => {
                             if (!data.info) return;
+                            
                             let maxTimeMs = (data.info.distanza / 1000) * 8 * 60 * 1000;
                             let isScaduta = data.info.stato === 'in_corso' && (Date.now() - data.info.startTime) > maxTimeMs;
                             const isMyRoom = (data.info.creatoreId === mioId); 
                             
                             if (data.info.stato === 'attesa') {
                                 let btnHtml = `<button class="btnJoinRoom btn-blue" data-id="${id}" data-dist="${data.info.distanza}" data-host="${data.info.nomeHost}" data-creator="${data.info.creatoreId}" style="width: ${isMyRoom ? '48%' : '100%'}">${isMyRoom ? 'Entra/Gestisci' : 'Partecipa'}</button>`;
-                                if (isMyRoom) btnHtml += `<button class="btnDeleteMyRoom btn-red" data-id="${id}" style="width: 48%; margin-left: 4%;">Elimina</button>`;
-                                html += `<div class="stanza-card"><strong>${data.info.nomeHost}</strong> (${data.info.distanza}m)<div style="display: flex; margin-top:10px;">${btnHtml}</div></div>`;
-                            } else if (isScaduta || data.info.stato === 'terminata') {
                                 if (isMyRoom) {
-                                    html += `<div class="stanza-card" style="border-left-color: #ff4444; opacity: 0.7;"><div style="color: #aaa;">La tua Gara è Terminata</div>`;
-                                    html += `<button class="btnDeleteRoom btn-red" data-id="${id}" style="padding: 10px; font-size: 12px; margin-top: 10px; width:100%;">🗑️ Rimuovi Stanza</button></div>`;
+                                    btnHtml += `<button class="btnDeleteMyRoom btn-red" data-id="${id}" style="width: 48%; margin-left: 4%;">Elimina</button>`;
+                                }
+                                html += `<div class="stanza-card"><strong>${data.info.nomeHost}</strong> (${data.info.distanza}m)<div style="display: flex; margin-top:10px;">${btnHtml}</div></div>`;
+                            } 
+                            else if (isScaduta || data.info.stato === 'terminata') {
+                                if (isMyRoom) {
+                                    html += `
+                                    <div class="stanza-card" style="border-left-color: #ff4444; opacity: 0.7;">
+                                        <div style="color: #aaa;">La tua Gara è Terminata</div>
+                                        <button class="btnDeleteRoom btn-red" data-id="${id}" style="padding: 10px; font-size: 12px; margin-top: 10px; width:100%;">🗑️ Rimuovi Stanza</button>
+                                    </div>`;
                                 }
                             }
                         });
@@ -669,41 +776,70 @@
         }
 
         document.getElementById('listaStanze').addEventListener('click', async (e) => {
-            if (e.target.classList.contains('btnJoinRoom')) window.unisciti(e.target.dataset.id, parseInt(e.target.dataset.dist), e.target.dataset.host, e.target.dataset.creator);
-            if (e.target.classList.contains('btnDeleteMyRoom') || e.target.classList.contains('btnDeleteRoom')) {
-                if(confirm("Eliminare definitivamente la stanza?")) await remove(ref(db, `stanze/${e.target.dataset.id}`));
+            if (e.target.classList.contains('btnJoinRoom')) {
+                window.unisciti(e.target.dataset.id, parseInt(e.target.dataset.dist), e.target.dataset.host, e.target.dataset.creator);
+            }
+            if (e.target.classList.contains('btnDeleteMyRoom') || e.target.classList.contains('btnDeleteRoom')) { 
+                if(confirm("Eliminare definitivamente la stanza?")) {
+                    await remove(ref(db, `stanze/${e.target.dataset.id}`)); 
+                }
             }
         });
 
         document.getElementById('btnCreaStanza').addEventListener('click', async () => {
             idStanzaCorrente = "room_" + Math.random().toString(36).substr(2, 8);
-            isHost = true; distanzaGara = 5000;
-            await set(ref(db, `stanze/${idStanzaCorrente}/info`), { creatoreId: mioId, nomeHost: mioNome, distanza: distanzaGara, stato: 'attesa', timestamp: Date.now() });
+            isHost = true; 
+            distanzaGara = 5000;
+            await set(ref(db, `stanze/${idStanzaCorrente}/info`), { 
+                creatoreId: mioId, 
+                nomeHost: mioNome, 
+                distanza: distanzaGara, 
+                stato: 'attesa', 
+                timestamp: Date.now() 
+            });
             window.unisciti(idStanzaCorrente, 5000, mioNome, mioId);
         });
 
         window.unisciti = (roomId, distanza, hostName, creatorId) => {
-            idStanzaCorrente = roomId; isHost = (creatorId === mioId); distanzaGara = distanza;
-            document.getElementById('areaStanze').classList.add('hidden');
+            idStanzaCorrente = roomId; 
+            isHost = (creatorId === mioId); 
+            distanzaGara = distanza;
+            
+            document.getElementById('areaStanze').classList.add('hidden'); 
             document.getElementById('areaSetup').classList.remove('hidden');
             document.getElementById('titoloRuolo').innerText = isHost ? "👑 Gestisci la tua Gara" : `Gara di ${hostName}`;
             
             if (isHost) {
-                document.getElementById('divInputDistanza').classList.remove('hidden'); document.getElementById('divDistanzaFissa').classList.add('hidden');
-                document.getElementById('btnEliminaGara').classList.remove('hidden'); document.getElementById('btnConfermaGara').innerText = "✅ Conferma Setup";
+                document.getElementById('divInputDistanza').classList.remove('hidden'); 
+                document.getElementById('divDistanzaFissa').classList.add('hidden');
+                document.getElementById('btnEliminaGara').classList.remove('hidden'); 
+                document.getElementById('btnConfermaGara').innerText = "✅ Conferma Setup";
             } else {
-                document.getElementById('divInputDistanza').classList.add('hidden'); document.getElementById('divDistanzaFissa').classList.remove('hidden');
+                document.getElementById('divInputDistanza').classList.add('hidden'); 
+                document.getElementById('divDistanzaFissa').classList.remove('hidden');
                 document.getElementById('divDistanzaFissa').innerText = distanzaGara + " m";
-                document.getElementById('btnEliminaGara').classList.add('hidden'); document.getElementById('btnConfermaGara').innerText = "🙋‍♂️ Pronto per la Gara";
+                document.getElementById('btnEliminaGara').classList.add('hidden'); 
+                document.getElementById('btnConfermaGara').innerText = "🙋‍♂️ Pronto per la Gara";
             }
-            initMappa(); ascoltaLobby();
+            initMappa(); 
+            ascoltaLobby();
         }
 
-        document.getElementById('btnEliminaGara').addEventListener('click', async () => {
-            if(confirm("Chiudere la stanza? Tutti i giocatori verranno espulsi.")) { await remove(ref(db, `stanze/${idStanzaCorrente}`)); location.reload(); }
+        document.getElementById('btnEliminaGara').addEventListener('click', async () => { 
+            if(confirm("Chiudere la stanza? Tutti i giocatori verranno espulsi.")) { 
+                await remove(ref(db, `stanze/${idStanzaCorrente}`)); 
+                location.reload(); 
+            } 
         });
+
         document.getElementById('btnAbbandonaStanza').addEventListener('click', async () => {
-            if(idStanzaCorrente) { if (isHost && !garaAttiva) await remove(ref(db, `stanze/${idStanzaCorrente}`)); else await remove(ref(db, `stanze/${idStanzaCorrente}/partecipanti/${mioId}`)); }
+            if(idStanzaCorrente) { 
+                if (isHost && !garaAttiva) {
+                    await remove(ref(db, `stanze/${idStanzaCorrente}`)); 
+                } else {
+                    await remove(ref(db, `stanze/${idStanzaCorrente}/partecipanti/${mioId}`)); 
+                }
+            }
             location.reload(); 
         });
 
@@ -712,59 +848,76 @@
             document.getElementById('mapWrapper').style.opacity = isCorsaLibera ? "0.2" : "1";
             document.getElementById('mapWrapper').style.pointerEvents = isCorsaLibera ? "none" : "auto";
         });
+
         document.getElementById('inputDistanzaGara').addEventListener('input', (e) => {
             let val = parseInt(e.target.value);
-            if (!isNaN(val) && val > 0) { distanzaGara = val; if (isHost && idStanzaCorrente) update(ref(db, `stanze/${idStanzaCorrente}/info`), { distanza: distanzaGara }); }
+            if (!isNaN(val) && val > 0) { 
+                distanzaGara = val; 
+                if (isHost && idStanzaCorrente) {
+                    update(ref(db, `stanze/${idStanzaCorrente}/info`), { distanza: distanzaGara }); 
+                }
+            }
         });
 
         function initMappa() {
             if(mappa) return;
+            
             mappa = L.map('map').setView([45.0, 9.0], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mappa);
             mappa.locate({setView: true, maxZoom: 16});
-            mappa.on('locationfound', e => markerLobby = L.circleMarker(e.latlng, {radius: 8, color: 'white', fillColor: '#0088ff', fillOpacity: 1}).addTo(mappa));
+            
+            mappa.on('locationfound', e => {
+                markerLobby = L.circleMarker(e.latlng, {radius: 8, color: 'white', fillColor: '#0088ff', fillOpacity: 1}).addTo(mappa);
+            });
 
             routingControl = L.Routing.control({
-                waypoints: [],
-                router: L.Routing.osrmv1({ 
-                    profile: 'foot',
-                    useHints: false,
-                    serviceUrl: 'https://routing.openstreetmap.de/routed-foot/route/v1' 
-                }), 
+                waypoints: [], 
+                router: L.Routing.osrmv1({ profile: 'foot', useHints: false, serviceUrl: 'https://routing.openstreetmap.de/routed-foot/route/v1' }), 
                 lineOptions: { styles: [{ color: '#00ff88', weight: 6, opacity: 0.8 }] },
                 createMarker: function(i, wp) { 
-                    let cName = i === 0 ? 'marker-start' : 'marker-dot';
-                    let size = i === 0 ? [24,24] : [12,12];
+                    let cName = i === 0 ? 'marker-start' : 'marker-dot'; 
+                    let size = i === 0 ? [24,24] : [12,12]; 
                     return L.marker(wp.latLng, { draggable: true, icon: L.divIcon({className: cName, html: i===0?'A':'', iconSize: size}) }); 
                 },
                 routeWhileDragging: true
             }).addTo(mappa);
 
             routingControl.on('routesfound', e => {
-                if(layerGPX) return;
-                const r = e.routes[0];
+                if(layerGPX) return; 
+                const r = e.routes[0]; 
                 document.getElementById('kmDisegnati').innerText = Math.floor(r.summary.totalDistance);
-                percorsoCoordinate = r.coordinates;
+                percorsoCoordinate = r.coordinates; 
+                
                 let cumulo = 0;
-                istruzioniNav = r.instructions.map(istr => { cumulo += istr.distance; return { text: istr.text, targetDist: cumulo, detto: false }; });
+                istruzioniNav = r.instructions.map(istr => { 
+                    cumulo += istr.distance; 
+                    return { text: istr.text, targetDist: cumulo, detto: false }; 
+                });
             });
 
             mappa.on('click', e => { 
                 if(!isCorsaLibera && !layerGPX) { 
                     if(isLoopManuale && puntiDisegnati.length >= 5) return;
+                    
                     puntiDisegnati.push(e.latlng); 
-                    if(isLoopManuale && puntiDisegnati.length === 5) {
-                        const chiusura = [...puntiDisegnati, puntiDisegnati[0]];
-                        routingControl.setWaypoints(chiusura);
-                    } else { routingControl.setWaypoints(puntiDisegnati); }
+                    
+                    if(isLoopManuale && puntiDisegnati.length === 5) { 
+                        routingControl.setWaypoints([...puntiDisegnati, puntiDisegnati[0]]); 
+                    } else { 
+                        routingControl.setWaypoints(puntiDisegnati); 
+                    }
                 } 
             });
         }
 
         document.getElementById('btnUsaMioGPS').addEventListener('click', () => {
             if(layerGPX) return alert("Pulisci la mappa prima.");
-            if (markerLobby) { puntiDisegnati = [markerLobby.getLatLng(), ...puntiDisegnati]; routingControl.setWaypoints(puntiDisegnati); } 
-            else alert("GPS non ancora agganciato.");
+            if (markerLobby) { 
+                puntiDisegnati = [markerLobby.getLatLng(), ...puntiDisegnati]; 
+                routingControl.setWaypoints(puntiDisegnati); 
+            } else {
+                alert("GPS non ancora agganciato.");
+            }
         });
 
         document.getElementById('btnAnnullaPunto').addEventListener('click', () => {
@@ -772,89 +925,152 @@
             if (puntiDisegnati.length > 0) { 
                 puntiDisegnati.pop(); 
                 routingControl.setWaypoints(puntiDisegnati); 
-                if (puntiDisegnati.length === 0) {
+                
+                if (puntiDisegnati.length === 0) { 
                     document.getElementById('kmDisegnati').innerText = "0"; 
-                    percorsoCoordinate = []; istruzioniNav = [];
+                    percorsoCoordinate = []; 
+                    istruzioniNav = []; 
                 }
             }
         });
 
         document.getElementById('btnCancellaMappa').addEventListener('click', () => {
-            puntiDisegnati = []; percorsoCoordinate = []; istruzioniNav = []; routingControl.setWaypoints([]);
-            if(layerGPX) { mappa.removeLayer(layerGPX); layerGPX = null; }
-            document.getElementById('kmDisegnati').innerText = "0";
-            isLoopManuale = false; document.getElementById('infoManualLoop').classList.add('hidden');
+            puntiDisegnati = []; 
+            percorsoCoordinate = []; 
+            istruzioniNav = []; 
+            routingControl.setWaypoints([]);
+            
+            if(layerGPX) { 
+                mappa.removeLayer(layerGPX); 
+                layerGPX = null; 
+            }
+            
+            document.getElementById('kmDisegnati').innerText = "0"; 
+            isLoopManuale = false; 
+            document.getElementById('infoManualLoop').classList.add('hidden');
         });
 
         document.getElementById('btnAttivaLoopManuale').addEventListener('click', () => {
-            isLoopManuale = true;
-            puntiDisegnati = []; routingControl.setWaypoints([]);
-            if(layerGPX) { mappa.removeLayer(layerGPX); layerGPX = null; }
+            isLoopManuale = true; 
+            puntiDisegnati = []; 
+            routingControl.setWaypoints([]);
+            
+            if(layerGPX) { 
+                mappa.removeLayer(layerGPX); 
+                layerGPX = null; 
+            }
+            
             document.getElementById('kmDisegnati').innerText = "0";
-            document.getElementById('infoManualLoop').classList.remove('hidden');
+            document.getElementById('infoManualLoop').classList.remove('hidden'); 
             document.getElementById('pannelloOpzioni').classList.add('hidden');
         });
 
-        document.getElementById('btnCaricaGPX').addEventListener('click', () => document.getElementById('fileGPX').click());
+        document.getElementById('btnCaricaGPX').addEventListener('click', () => {
+            document.getElementById('fileGPX').click();
+        });
+
         document.getElementById('fileGPX').addEventListener('change', e => {
-            const file = e.target.files[0]; if (!file) return;
+            const file = e.target.files[0]; 
+            if (!file) return; 
+            
             const reader = new FileReader();
             reader.onload = evt => {
                 const xml = new DOMParser().parseFromString(evt.target.result, "text/xml");
                 const trkpts = Array.from(xml.getElementsByTagName('trkpt'));
+                
                 if(trkpts.length === 0) return alert("GPX non valido.");
                 
-                routingControl.setWaypoints([]);
+                routingControl.setWaypoints([]); 
                 if(layerGPX) mappa.removeLayer(layerGPX);
                 
-                percorsoCoordinate = []; let dAcc = 0;
+                percorsoCoordinate = []; 
+                let dAcc = 0;
+                
                 for(let i=0; i<trkpts.length; i++) {
-                    let lat = parseFloat(trkpts[i].getAttribute('lat')), lng = parseFloat(trkpts[i].getAttribute('lon'));
-                    percorsoCoordinate.push({lat: lat, lng: lng});
-                    if(i>0) dAcc += calcolaD(percorsoCoordinate[i-1].lat, percorsoCoordinate[i-1].lng, lat, lng);
+                    let lat = parseFloat(trkpts[i].getAttribute('lat'));
+                    let lng = parseFloat(trkpts[i].getAttribute('lon'));
+                    
+                    percorsoCoordinate.push({lat: lat, lng: lng}); 
+                    
+                    if(i>0) {
+                        dAcc += calcolaD(percorsoCoordinate[i-1].lat, percorsoCoordinate[i-1].lng, lat, lng);
+                    }
                 }
-                layerGPX = L.polyline(percorsoCoordinate, {color: '#0088ff', weight: 5}).addTo(mappa);
+                
+                layerGPX = L.polyline(percorsoCoordinate, {color: '#0088ff', weight: 5}).addTo(mappa); 
                 mappa.fitBounds(layerGPX.getBounds());
-                document.getElementById('kmDisegnati').innerText = Math.floor(dAcc);
+                document.getElementById('kmDisegnati').innerText = Math.floor(dAcc); 
                 istruzioniNav = [];
-            };
+            }; 
             reader.readAsText(file);
         });
 
-        document.getElementById('btnApriOpzioni').onclick = () => document.getElementById('pannelloOpzioni').classList.remove('hidden');
-        document.getElementById('btnChiudiOpzioni').onclick = () => document.getElementById('pannelloOpzioni').classList.add('hidden');
+        document.getElementById('btnApriOpzioni').onclick = () => {
+            document.getElementById('pannelloOpzioni').classList.remove('hidden');
+        };
+
+        document.getElementById('btnChiudiOpzioni').onclick = () => {
+            document.getElementById('pannelloOpzioni').classList.add('hidden');
+        };
 
         document.getElementById('btnConfermaGara').addEventListener('click', async () => {
             let isPuro = false, dGpx = 0;
+            
             if (!isCorsaLibera) {
                 const km = parseFloat(document.getElementById('kmDisegnati').innerText);
+                
                 if(percorsoCoordinate.length < 2) return alert("Disegna il percorso o seleziona Corsa Libera!");
                 if(km < distanzaGara) return alert(`Percorso troppo corto di ${Math.floor(distanzaGara - km)} metri.`);
                 
-                let nuovaLinea = [percorsoCoordinate[0]], lenTot = 0;
+                let nuovaLinea = [percorsoCoordinate[0]];
+                let lenTot = 0;
+                
                 for(let i=0; i<percorsoCoordinate.length-1; i++) {
                     let d = calcolaD(percorsoCoordinate[i].lat, percorsoCoordinate[i].lng, percorsoCoordinate[i+1].lat, percorsoCoordinate[i+1].lng);
-                    if (lenTot + d >= distanzaGara) {
-                        let f = (distanzaGara - lenTot) / d;
-                        nuovaLinea.push({lat: percorsoCoordinate[i].lat + (percorsoCoordinate[i+1].lat - percorsoCoordinate[i].lat)*f, lng: percorsoCoordinate[i].lng + (percorsoCoordinate[i+1].lng - percorsoCoordinate[i].lng)*f});
-                        break;
-                    } else { nuovaLinea.push(percorsoCoordinate[i+1]); lenTot += d; }
+                    
+                    if (lenTot + d >= distanzaGara) { 
+                        let f = (distanzaGara - lenTot) / d; 
+                        nuovaLinea.push({
+                            lat: percorsoCoordinate[i].lat + (percorsoCoordinate[i+1].lat - percorsoCoordinate[i].lat)*f, 
+                            lng: percorsoCoordinate[i].lng + (percorsoCoordinate[i+1].lng - percorsoCoordinate[i].lng)*f
+                        }); 
+                        break; 
+                    } else { 
+                        nuovaLinea.push(percorsoCoordinate[i+1]); 
+                        lenTot += d; 
+                    }
                 }
                 percorsoCoordinate = nuovaLinea; 
-                if (layerGPX) { isPuro = true; dGpx = km; }
-            } else { percorsoCoordinate = []; }
+                
+                if (layerGPX) { 
+                    isPuro = true; 
+                    dGpx = km; 
+                }
+            } else { 
+                percorsoCoordinate = []; 
+            }
 
             const wpsToSave = isCorsaLibera ? [] : (layerGPX ? percorsoCoordinate : puntiDisegnati.map(p => ({lat: p.lat, lng: p.lng})));
-
-            await set(ref(db, `stanze/${idStanzaCorrente}/partecipanti/${mioId}`), {
-                nome: mioNome, obiettivo: distanzaGara, percorsa: 0, pronto: true, arrivato: false, ritirato: false,
-                corsaLibera: isCorsaLibera, waypoints: wpsToSave, gpxPuro: isPuro, gpxDist: dGpx
+            const refPartecipante = ref(db, `stanze/${idStanzaCorrente}/partecipanti/${mioId}`);
+            
+            await set(refPartecipante, {
+                nome: mioNome, 
+                obiettivo: distanzaGara, 
+                percorsa: 0, 
+                pronto: true, 
+                arrivato: false, 
+                ritirato: false,
+                corsaLibera: isCorsaLibera, 
+                waypoints: wpsToSave, 
+                gpxPuro: isPuro, 
+                gpxDist: dGpx
             });
-            utenteConfermato = true; document.getElementById('btnConfermaGara').disabled = true;
+            
+            utenteConfermato = true; 
+            document.getElementById('btnConfermaGara').disabled = true;
             parla(isHost ? "Pronto. Avvia la gara." : "Pronto. Attendi il via.", "dinamico");
         });
 
-        // --- AVVIO GARA E CREAZIONE BOT ---
         document.getElementById('btnStart').addEventListener('click', async () => {
             if(isHost && idStanzaCorrente) {
                 const snap = await get(ref(db, `stanze/${idStanzaCorrente}/partecipanti`));
@@ -863,16 +1079,10 @@
                 if (partsCount < 2) {
                     if(confirm("Sei solo in pista! Vuoi far scendere in campo i 3 Bot (Personalizzati nelle impostazioni)?")) {
                         let botUpdates = {};
-                        
-                        let b1N = document.getElementById('b1Nome').value || "Bot 1";
-                        let b2N = document.getElementById('b2Nome').value || "Bot 2";
-                        let b3N = document.getElementById('b3Nome').value || "Bot 3";
-
-                        botUpdates[`bot_0`] = { nome: `🤖 ${b1N}`, obiettivo: distanzaGara, percorsa: 0, pronto: true, arrivato: false, ritirato: false, isBot: true };
-                        botUpdates[`bot_1`] = { nome: `🤖 ${b2N}`, obiettivo: distanzaGara, percorsa: 0, pronto: true, arrivato: false, ritirato: false, isBot: true };
-                        botUpdates[`bot_2`] = { nome: `🤖 ${b3N}`, obiettivo: distanzaGara, percorsa: 0, pronto: true, arrivato: false, ritirato: false, isBot: true };
-                        
-                        await update(ref(db, `stanze/${idStanzaCorrente}/partecipanti`), botUpdates);
+                        botUpdates[`bot_0`] = { nome: `🤖 ${document.getElementById('b1Nome').value || "Bot 1"}`, obiettivo: distanzaGara, percorsa: 0, pronto: true, arrivato: false, ritirato: false, isBot: true };
+                        botUpdates[`bot_1`] = { nome: `🤖 ${document.getElementById('b2Nome').value || "Bot 2"}`, obiettivo: distanzaGara, percorsa: 0, pronto: true, arrivato: false, ritirato: false, isBot: true };
+                        botUpdates[`bot_2`] = { nome: `🤖 ${document.getElementById('b3Nome').value || "Bot 3"}`, obiettivo: distanzaGara, percorsa: 0, pronto: true, arrivato: false, ritirato: false, isBot: true };
+                        await update(ref(db, `stanze/${idStanzaCorrente}/partecipanti`), botUpdates); 
                         avviaMotoreBot();
                     }
                 }
@@ -883,19 +1093,38 @@
         function ascoltaLobby() {
             onValue(ref(db, `stanze/${idStanzaCorrente}/info`), (snap) => {
                 const info = snap.val();
-                if (!info) { if(!garaAttiva && !isHost && !isReconnecting) { alert("L'Host ha annullato la gara."); location.reload(); } return; }
-                if (!isHost && !garaAttiva) {
-                    distanzaGara = info.distanza; document.getElementById('divDistanzaFissa').innerText = distanzaGara + " m";
+                if (!info) { 
+                    if(!garaAttiva && !isHost && !isReconnecting) { 
+                        alert("L'Host ha annullato la gara."); 
+                        location.reload(); 
+                    } 
+                    return; 
                 }
-                if (info.stato === 'in_corso' && !garaAttiva && utenteConfermato) { startTime = info.startTime; garaAttiva = true; avviaSchermataGara(); }
+                
+                if (!isHost && !garaAttiva) { 
+                    distanzaGara = info.distanza; 
+                    document.getElementById('divDistanzaFissa').innerText = distanzaGara + " m"; 
+                }
+                
+                if (info.stato === 'in_corso' && !garaAttiva && utenteConfermato) { 
+                    startTime = info.startTime; 
+                    garaAttiva = true; 
+                    avviaSchermataGara(); 
+                }
             });
 
             onValue(ref(db, `stanze/${idStanzaCorrente}/partecipanti`), (snap) => {
                 const dati = snap.val(); 
-                if(!dati) { document.getElementById('listaPartecipantiLobby').innerHTML = ""; document.getElementById('btnStart').classList.add('hidden'); return; }
+                
+                if(!dati) { 
+                    document.getElementById('listaPartecipantiLobby').innerHTML = ""; 
+                    document.getElementById('btnStart').classList.add('hidden'); 
+                    return; 
+                }
                 
                 classificaAttiva = Object.entries(dati).map(([k, v]) => ({ id: k, ...v })).sort((a,b) => {
-                    if (a.ritirato && !b.ritirato) return 1; if (!a.ritirato && b.ritirato) return -1;
+                    if (a.ritirato && !b.ritirato) return 1; 
+                    if (!a.ritirato && b.ritirato) return -1;
                     if (a.arrivato && b.arrivato) return parseFloat(a.tempo) - parseFloat(b.tempo); 
                     return b.percorsa - a.percorsa;
                 });
@@ -904,47 +1133,59 @@
 
                 if(!garaAttiva) {
                     if (mioUtente && mioUtente.pronto && !utenteConfermato) {
-                        utenteConfermato = true; document.getElementById('btnConfermaGara').disabled = true;
-                        isCorsaLibera = mioUtente.corsaLibera || false;
+                        utenteConfermato = true; 
+                        document.getElementById('btnConfermaGara').disabled = true;
+                        
+                        isCorsaLibera = mioUtente.corsaLibera || false; 
                         document.getElementById('chkCorsaLibera').checked = isCorsaLibera;
+                        
                         if (!isCorsaLibera && mioUtente.waypoints && mioUtente.waypoints.length > 0) {
-                            if(mioUtente.gpxPuro) {
-                                percorsoCoordinate = mioUtente.waypoints;
-                                layerGPX = L.polyline(percorsoCoordinate, {color: '#0088ff'}).addTo(mappa);
-                                mappa.fitBounds(layerGPX.getBounds());
-                            } else {
-                                puntiDisegnati = mioUtente.waypoints.map(p => L.latLng(p.lat, p.lng));
-                                routingControl.setWaypoints(puntiDisegnati);
+                            if(mioUtente.gpxPuro) { 
+                                percorsoCoordinate = mioUtente.waypoints; 
+                                layerGPX = L.polyline(percorsoCoordinate, {color: '#0088ff'}).addTo(mappa); 
+                                mappa.fitBounds(layerGPX.getBounds()); 
+                            } else { 
+                                puntiDisegnati = mioUtente.waypoints.map(p => L.latLng(p.lat, p.lng)); 
+                                routingControl.setWaypoints(puntiDisegnati); 
                             }
                         }
                     }
-                    document.getElementById('listaPartecipantiLobby').innerHTML = classificaAttiva.map(u => `<div>● <span style="color:${u.ritirato?'#888':'#00ff88'}">${u.nome}</span> ${u.ritirato ? '(Ritirato)' : 'pronto'}</div>`).join('');
-                    if(isHost && classificaAttiva.length >= 1) document.getElementById('btnStart').classList.remove('hidden');
+                    
+                    document.getElementById('listaPartecipantiLobby').innerHTML = classificaAttiva.map(u => 
+                        `<div>● <span style="color:${u.ritirato?'#888':'#00ff88'}">${u.nome}</span> ${u.ritirato ? '(Ritirato)' : 'pronto'}</div>`
+                    ).join('');
+                    
+                    if(isHost && classificaAttiva.length >= 1) {
+                        document.getElementById('btnStart').classList.remove('hidden');
+                    }
                 } else {
                     const attivi = classificaAttiva.filter(u => !u.ritirato);
                     
                     if (mioUtente && !mioUtente.arrivato && !mioUtente.ritirato) {
                         let miaNuovaPos = attivi.findIndex(u => u.id === mioId) + 1;
                         if (miaPosizioneCorrente > 0 && miaPosizioneCorrente !== miaNuovaPos) {
-                            let now = Date.now();
+                            let now = Date.now(); 
                             const optPosAttivo = document.getElementById('optPosAttivo').checked;
-                            if (optPosAttivo && (now - ultimoTempoSorpasso > 15000)) {
-                                parla(miaNuovaPos < miaPosizioneCorrente ? `Ottimo sorpasso! Sei salito in ${getPosWord(miaNuovaPos)} posizione.` : `Attenzione, superato. Sceso in ${getPosWord(miaNuovaPos)} posizione.`, "dinamico");
-                                ultimoTempoSorpasso = now;
+                            
+                            if (optPosAttivo && (now - ultimoTempoSorpasso > 15000)) { 
+                                parla(miaNuovaPos < miaPosizioneCorrente ? `Ottimo sorpasso! Sei salito in ${getPosWord(miaNuovaPos)} posizione.` : `Attenzione, superato. Sceso in ${getPosWord(miaNuovaPos)} posizione.`, "dinamico"); 
+                                ultimoTempoSorpasso = now; 
                             }
                         }
-                        miaPosizioneCorrente = miaNuovaPos; document.getElementById('statPos').innerText = miaNuovaPos + "°";
+                        miaPosizioneCorrente = miaNuovaPos; 
+                        document.getElementById('statPos').innerText = miaNuovaPos + "°";
                     }
 
-                    if (mioUtente && (mioUtente.arrivato || mioUtente.ritirato)) {
-                        aggiornaClassificaLive(classificaAttiva);
+                    if (mioUtente && (mioUtente.arrivato || mioUtente.ritirato)) { 
+                        aggiornaClassificaLive(classificaAttiva); 
                     }
 
                     if (isCorsaLibera && !document.getElementById('gara').classList.contains('hidden')) {
                         let pistaHtml = "";
                         attivi.forEach((u) => {
-                            let perc = Math.min((u.percorsa / u.obiettivo) * 100, 100);
+                            let perc = Math.min((u.percorsa / u.obiettivo) * 100, 100); 
                             let color = (u.id === mioId) ? '#00ff88' : generaColore(u.id);
+                            
                             pistaHtml += `
                             <div style="text-align: left; font-size: 13px; color: ${color}; font-weight: bold; margin-bottom: 2px;">
                                 ${u.nome} <span style="color:#aaa; font-size:11px; font-weight:normal;">- ${Math.floor(u.percorsa)}m</span>
@@ -959,17 +1200,20 @@
                         attivi.forEach((u) => {
                             if(u.id !== mioId) {
                                 const posAvv = trovaPuntoSuLinea(Math.min(u.percorsa / u.obiettivo, 1));
-                                if(posAvv) {
-                                    if(!markersAvversari[u.id]) { markersAvversari[u.id] = L.circleMarker(posAvv, { radius: 7, color: 'white', fillColor: generaColore(u.id), fillOpacity: 1 }).addTo(mappaGara).bindTooltip(u.nome, {permanent: true, direction: 'top'}); } 
-                                    else { markersAvversari[u.id].setLatLng(posAvv); }
+                                if(posAvv) { 
+                                    if(!markersAvversari[u.id]) { 
+                                        markersAvversari[u.id] = L.circleMarker(posAvv, { radius: 7, color: 'white', fillColor: generaColore(u.id), fillOpacity: 1 }).addTo(mappaGara).bindTooltip(u.nome, {permanent: true, direction: 'top'}); 
+                                    } else { 
+                                        markersAvversari[u.id].setLatLng(posAvv); 
+                                    } 
                                 }
                             }
                         });
                     }
 
                     const completati = classificaAttiva.filter(u => u.arrivato || u.ritirato);
-                    if(isHost && completati.length === classificaAttiva.length && classificaAttiva.length > 0) {
-                        update(ref(db, `stanze/${idStanzaCorrente}/info`), { stato: 'terminata' });
+                    if(isHost && completati.length === classificaAttiva.length && classificaAttiva.length > 0) { 
+                        update(ref(db, `stanze/${idStanzaCorrente}/info`), { stato: 'terminata' }); 
                     }
                 }
             });
@@ -980,8 +1224,8 @@
             document.getElementById('gara').classList.remove('hidden');
             await attivaWakeLock();
 
-            if (isCorsaLibera) {
-                document.getElementById('trackLineareContainer').classList.remove('hidden');
+            if (isCorsaLibera) { 
+                document.getElementById('trackLineareContainer').classList.remove('hidden'); 
                 document.getElementById('mapGara').style.height = "150px"; 
             }
 
@@ -989,7 +1233,7 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mappaGara);
             
             if (isCorsaLibera) {
-                breadcrumbTrail = L.polyline([], {color: '#00ff88', weight: 6}).addTo(mappaGara);
+                breadcrumbTrail = L.polyline([], {color: '#00ff88', weight: 6}).addTo(mappaGara); 
                 markerMioGara = L.circleMarker([0,0], {radius: 9, color: 'white', fillColor: '#00ff88', fillOpacity: 1}).addTo(mappaGara);
             } else {
                 L.polyline(percorsoCoordinate, {color: '#333', weight: 8, opacity: 0.5}).addTo(mappaGara); 
@@ -997,11 +1241,11 @@
                 markerMioGara = L.circleMarker(percorsoCoordinate[0], {radius: 9, color: 'white', fillColor: '#00ff88', fillOpacity: 1}).addTo(mappaGara);
             }
             
-            if (isReconnecting) {
-                parla("Riconnessione completata. Riprendiamo da " + Math.floor(distanzaFatta) + " metri.", "dinamico");
+            if (isReconnecting) { 
+                parla("Riconnessione completata. Riprendiamo da " + Math.floor(distanzaFatta) + " metri.", "dinamico"); 
                 isReconnecting = false; 
-            } else {
-                parla("", "start");
+            } else { 
+                parla("", "start"); 
             }
             
             avviaGPS();
@@ -1015,27 +1259,31 @@
                 
                 if (p.coords.accuracy > 40) return; 
 
-                gpsBuffer.push({lat: lat, lon: lon});
+                gpsBuffer.push({lat: lat, lon: lon}); 
                 if (gpsBuffer.length > 3) gpsBuffer.shift(); 
                 
-                if (isCorsaLibera && gpsBuffer.length === 3) {
-                    lat = (gpsBuffer[0].lat + gpsBuffer[1].lat + gpsBuffer[2].lat) / 3;
-                    lon = (gpsBuffer[0].lon + gpsBuffer[1].lon + gpsBuffer[2].lon) / 3;
+                if (isCorsaLibera && gpsBuffer.length === 3) { 
+                    lat = (gpsBuffer[0].lat + gpsBuffer[1].lat + gpsBuffer[2].lat) / 3; 
+                    lon = (gpsBuffer[0].lon + gpsBuffer[1].lon + gpsBuffer[2].lon) / 3; 
                 }
-
-                if (!mappaCentrata) { mappaGara.setView([lat, lon], 18); mappaCentrata = true; }
+                
+                if (!mappaCentrata) { 
+                    mappaGara.setView([lat, lon], 18); 
+                    mappaCentrata = true; 
+                }
 
                 if (lastLat !== null) {
                     const d = calcolaD(lastLat, lastLon, lat, lon);
                     
                     if (d > 0.5 && d < 20) { 
                         distanzaFatta += d;
-                        document.getElementById('statFatti').innerText = Math.floor(distanzaFatta) + "m";
+                        document.getElementById('statFatti').innerText = Math.floor(distanzaFatta) + "m"; 
                         document.getElementById('statMancano').innerText = Math.max(0, Math.floor(distanzaGara - distanzaFatta)) + "m";
                         update(ref(db, `stanze/${idStanzaCorrente}/partecipanti/${mioId}`), { percorsa: distanzaFatta });
 
                         let maxTimeMs = (distanzaGara / 1000) * 8 * 60 * 1000;
                         let elapsedMs = Date.now() - startTime;
+                        
                         if (elapsedMs > maxTimeMs) {
                             if(watchId) navigator.geolocation.clearWatch(watchId);
                             parla("Tempo massimo scaduto. Gara terminata.", "dinamico");
@@ -1043,20 +1291,26 @@
                             return; 
                         }
 
-                        if (isCorsaLibera) {
-                            breadcrumbTrail.addLatLng([lat, lon]);
-                            markerMioGara.setLatLng([lat, lon]);
+                        if (isCorsaLibera) { 
+                            breadcrumbTrail.addLatLng([lat, lon]); 
+                            markerMioGara.setLatLng([lat, lon]); 
                             mappaGara.setView([lat, lon], 18, { animate: true }); 
-                        } else {
+                        } 
+                        else {
                             const miaPos = trovaPuntoSuLinea(Math.min(distanzaFatta / distanzaGara, 1));
-                            if(miaPos) { markerMioGara.setLatLng(miaPos); mappaGara.setView(miaPos, 18, { animate: true }); }
                             
-                            if(document.getElementById('optNavAttivo').checked && !layerGPX) {
-                                istruzioniNav.forEach(istr => {
-                                    if(!istr.detto && (istr.targetDist - distanzaFatta) <= parseInt(document.getElementById('optPre').value) && (istr.targetDist - distanzaFatta) > 0) {
-                                        parla(istr.text, "dinamico"); istr.detto = true;
-                                    }
-                                });
+                            if(miaPos) { 
+                                markerMioGara.setLatLng(miaPos); 
+                                mappaGara.setView(miaPos, 18, { animate: true }); 
+                            }
+                            
+                            if(document.getElementById('optNavAttivo').checked && !layerGPX) { 
+                                istruzioniNav.forEach(istr => { 
+                                    if(!istr.detto && (istr.targetDist - distanzaFatta) <= parseInt(document.getElementById('optPre').value) && (istr.targetDist - distanzaFatta) > 0) { 
+                                        parla(istr.text, "dinamico"); 
+                                        istr.detto = true; 
+                                    } 
+                                }); 
                             }
                         }
 
@@ -1070,76 +1324,109 @@
                             const att = classificaAttiva.filter(u => !u.ritirato);
                             const myI = att.findIndex(u => u.id === mioId);
                             
-                            if (myI >= 0) {
-                                msg += `Sei in ${getPosWord(myI + 1)} posizione. `;
-                                if (myI > 0) { msg += `A ${Math.floor(att[myI-1].percorsa - distanzaFatta)} metri da chi ti precede. `; }
-                                if (myI < att.length - 1) { msg += `Hai ${Math.floor(distanzaFatta - att[myI+1].percorsa)} metri di vantaggio su chi ti segue. `; }
+                            if (myI >= 0) { 
+                                msg += `Sei in ${getPosWord(myI + 1)} posizione. `; 
+                                if (myI > 0) { 
+                                    msg += `A ${Math.floor(att[myI-1].percorsa - distanzaFatta)} metri da chi ti precede. `; 
+                                } 
+                                if (myI < att.length - 1) { 
+                                    msg += `Hai ${Math.floor(distanzaFatta - att[myI+1].percorsa)} metri di vantaggio su chi ti segue. `; 
+                                } 
                             }
                             parla(msg, "dinamico"); 
                             ultimoAvvisoPosDist = Math.floor(distanzaFatta / intPos);
                         }
 
-                        if(optMotivAttivo && Math.floor(distanzaFatta / intMotiv) > ultimoAvvisoMotivDist && distanzaFatta > 5) {
-                            parla("", "incitamento");
-                            ultimoAvvisoMotivDist = Math.floor(distanzaFatta / intMotiv);
+                        if(optMotivAttivo && Math.floor(distanzaFatta / intMotiv) > ultimoAvvisoMotivDist && distanzaFatta > 5) { 
+                            parla("", "incitamento"); 
+                            ultimoAvvisoMotivDist = Math.floor(distanzaFatta / intMotiv); 
                         }
 
                         if (distanzaFatta >= distanzaGara) {
                             if(watchId) navigator.geolocation.clearWatch(watchId);
                             await update(ref(db, `stanze/${idStanzaCorrente}/partecipanti/${mioId}`), { arrivato: true, tempo: ((Date.now() - startTime)/1000).toFixed(2), percorsa: distanzaGara });
+                            const uRef = ref(db, `utenti/${mioId}`);
+                            const s = await get(uRef);
                             
-                            const uRef = ref(db, `utenti/${mioId}`), s = await get(uRef);
-                            if(s.exists()) update(uRef, { gareFatte: (s.val().gareFatte || 0) + 1, kmPercorsi: (s.val().kmPercorsi || 0) + (distanzaGara / 1000) });
+                            if(s.exists()) {
+                                update(uRef, { gareFatte: (s.val().gareFatte || 0) + 1, kmPercorsi: (s.val().kmPercorsi || 0) + (distanzaGara / 1000) });
+                            }
                             parla("", "win"); 
                         }
                     }
                 }
-                lastLat = lat; lastLon = lon;
+                lastLat = lat; 
+                lastLon = lon;
             }, null, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
         }
 
         function trovaPuntoSuLinea(perc) {
-            if (percorsoCoordinate.length < 2) return null;
+            if (percorsoCoordinate.length < 2) return null; 
+            
             let lenTot = 0, seg = [];
-            for (let i=0; i<percorsoCoordinate.length-1; i++) {
-                const d = calcolaD(percorsoCoordinate[i].lat, percorsoCoordinate[i].lng, percorsoCoordinate[i+1].lat, percorsoCoordinate[i+1].lng);
-                lenTot += d; seg.push(d);
+            for (let i=0; i<percorsoCoordinate.length-1; i++) { 
+                const d = calcolaD(percorsoCoordinate[i].lat, percorsoCoordinate[i].lng, percorsoCoordinate[i+1].lat, percorsoCoordinate[i+1].lng); 
+                lenTot += d; 
+                seg.push(d); 
             }
-            const target = lenTot * perc; let acc = 0;
-            for (let i=0; i<percorsoCoordinate.length-1; i++) {
-                if (acc + seg[i] >= target) {
-                    const f = (target - acc) / seg[i];
-                    return [percorsoCoordinate[i].lat + (percorsoCoordinate[i+1].lat - percorsoCoordinate[i].lat)*f, percorsoCoordinate[i].lng + (percorsoCoordinate[i+1].lng - percorsoCoordinate[i].lng)*f];
-                }
-                acc += seg[i];
+            
+            const target = lenTot * perc; 
+            let acc = 0;
+            
+            for (let i=0; i<percorsoCoordinate.length-1; i++) { 
+                if (acc + seg[i] >= target) { 
+                    const f = (target - acc) / seg[i]; 
+                    return [
+                        percorsoCoordinate[i].lat + (percorsoCoordinate[i+1].lat - percorsoCoordinate[i].lat)*f, 
+                        percorsoCoordinate[i].lng + (percorsoCoordinate[i+1].lng - percorsoCoordinate[i].lng)*f
+                    ]; 
+                } 
+                acc += seg[i]; 
             }
             return percorsoCoordinate[percorsoCoordinate.length - 1];
         }
-        function calcolaD(lat1, lon1, lat2, lon2) {
-            const R=6371e3, r=Math.PI/180;
-            const a = Math.sin((lat2-lat1)*r/2)**2 + Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin((lon2-lon1)*r/2)**2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        function calcolaD(lat1, lon1, lat2, lon2) { 
+            const R = 6371e3;
+            const r = Math.PI/180; 
+            const a = Math.sin((lat2-lat1)*r/2)**2 + Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin((lon2-lon1)*r/2)**2; 
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
         }
-        function generaColore(s) { let h=0; for(let i=0;i<s.length;i++)h=s.charCodeAt(i)+((h<<5)-h); return `hsl(${Math.abs(h)%360}, 70%, 50%)`; }
+
+        function generaColore(s) { 
+            let h=0; 
+            for(let i=0; i<s.length; i++) {
+                h = s.charCodeAt(i) + ((h<<5)-h);
+            } 
+            return `hsl(${Math.abs(h)%360}, 70%, 50%)`; 
+        }
 
         function aggiornaClassificaLive(arr) {
-            document.getElementById('gara').classList.add('hidden');
-            document.getElementById('schermataBlocco').classList.add('hidden');
+            document.getElementById('gara').classList.add('hidden'); 
+            document.getElementById('schermataBlocco').classList.add('hidden'); 
             document.getElementById('classificaFinale').classList.remove('hidden');
             
             if (arr.length > 0 && !arr[0].ritirato && arr[0].id === mioId && !windowAssegnazionePremio) {
                 windowAssegnazionePremio = true; 
-                get(ref(db, `utenti/${mioId}`)).then(s => { if(s.exists()) update(ref(db, `utenti/${mioId}`), { vittorie: (s.val().vittorie || 0) + 1 }); });
+                get(ref(db, `utenti/${mioId}`)).then(s => { 
+                    if(s.exists()) {
+                        update(ref(db, `utenti/${mioId}`), { vittorie: (s.val().vittorie || 0) + 1 }); 
+                    }
+                });
             }
 
             document.getElementById('contenutoPodio').innerHTML = arr.map((u,i) => {
                 let statusClass = u.ritirato ? 'ritirato' : (u.arrivato ? '' : 'attesa');
                 let statusText = "";
                 
-                if (u.ritirato) statusText = `<br><i>Ritirato a ${Math.floor(u.percorsa)}m</i>`;
-                else if (u.arrivato) statusText = `<br>Tempo: ${Math.floor(u.tempo/60)}m ${Math.floor(u.tempo%60)}s`;
-                else statusText = `<br><span style="color:#ffaa00;">In pista... (${Math.floor(u.percorsa)}m)</span>`;
-
+                if (u.ritirato) {
+                    statusText = `<br><i>Ritirato a ${Math.floor(u.percorsa)}m</i>`; 
+                } else if (u.arrivato) {
+                    statusText = `<br>Tempo: ${Math.floor(u.tempo/60)}m ${Math.floor(u.tempo%60)}s`; 
+                } else {
+                    statusText = `<br><span style="color:#ffaa00;">In pista... (${Math.floor(u.percorsa)}m)</span>`;
+                }
+                
                 return `
                 <div class="riga-podio ${statusClass}">
                     <strong>${u.ritirato ? '❌' : (u.arrivato ? (i===0?'🥇 1°':(i+1)+'°') : '🏃')} ${u.nome}</strong> 
@@ -1148,7 +1435,9 @@
             }).join('');
         }
 
-        document.getElementById('btnEsciPodio').addEventListener('click', () => location.reload());
+        document.getElementById('btnEsciPodio').addEventListener('click', () => {
+            location.reload();
+        });
         
         document.getElementById('btnInterrompi').addEventListener('click', async () => { 
             if(confirm("Sei sicuro di voler abbandonare la gara in corso?")) { 
@@ -1159,14 +1448,25 @@
         });
         
         let tSblocco;
+        
         document.getElementById('btnBloccaSchermo').addEventListener('click', async () => { 
-            await attivaWakeLock(); document.getElementById('schermataBlocco').classList.remove('hidden'); 
+            await attivaWakeLock(); 
+            document.getElementById('schermataBlocco').classList.remove('hidden'); 
         });
-        document.getElementById('btnSblocca').addEventListener('touchstart', (e) => {
-            e.preventDefault(); document.getElementById('btnSblocca').style.borderColor = "#00ff88";
-            tSblocco = setTimeout(() => { document.getElementById('schermataBlocco').classList.add('hidden'); document.getElementById('btnSblocca').style.borderColor = "#333"; }, 2000);
+        
+        document.getElementById('btnSblocca').addEventListener('touchstart', (e) => { 
+            e.preventDefault(); 
+            document.getElementById('btnSblocca').style.borderColor = "#00ff88"; 
+            tSblocco = setTimeout(() => { 
+                document.getElementById('schermataBlocco').classList.add('hidden'); 
+                document.getElementById('btnSblocca').style.borderColor = "#333"; 
+            }, 2000); 
         });
-        document.getElementById('btnSblocca').addEventListener('touchend', () => { clearTimeout(tSblocco); document.getElementById('btnSblocca').style.borderColor = "#333"; });
+        
+        document.getElementById('btnSblocca').addEventListener('touchend', () => { 
+            clearTimeout(tSblocco); 
+            document.getElementById('btnSblocca').style.borderColor = "#333"; 
+        });
 
     </script>
 </body>
