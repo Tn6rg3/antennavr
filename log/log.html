@@ -446,7 +446,7 @@
         </div>
     </div>
 
-    <!-- MODAL CONDIVISIONE DRIVE/CLOUD A DUE STEP -->
+    <!-- MODAL CONDIVISIONE DRIVE/CLOUD MULTI-OPZIONE -->
     <div id="shareModal" class="modal-overlay" onclick="this.style.display='none'">
         <div class="stats-content" style="max-width: 400px; text-align: center;" onclick="event.stopPropagation()">
             <h3 id="shareModalTitle" style="margin-top:0; color:#2980b9;">⏳ Preparazione Backup...</h3>
@@ -455,7 +455,14 @@
             </p>
             <div id="shareSpinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
             
-            <button id="btnRealShare" class="btn-green" style="display:none; width:100%; font-size: 1.2em; padding: 15px; margin-top:10px;" onclick="executeRealShare()">📤 APRI MENU CONDIVISIONE</button>
+            <div id="shareButtonsArea" style="display:none; flex-direction:column; gap:10px; margin-top:15px;">
+                <button class="btn-green" style="width:100%; font-size: 1.1em; padding: 12px;" onclick="executeRealShare()">📤 INVIA COME FILE (Drive/WA/TG)</button>
+                <button class="btn-cyan" style="width:100%; font-size: 1.1em; padding: 12px;" onclick="shareTextOnly()">💬 INVIA COME TESTO (WA/Telegram)</button>
+                <button class="btn-orange" style="width:100%; font-size: 1.1em; padding: 12px;" onclick="shareViaEmail()">📧 INVIA VIA EMAIL (Testo)</button>
+                <hr style="border: 0; border-top: 1px dashed #ccc; width: 100%; margin: 5px 0;">
+                <button class="btn-purple" style="width:100%; font-size: 1.1em; padding: 12px;" onclick="copyBackupToClipboard()">📋 COPIA TESTO NEGLI APPUNTI</button>
+            </div>
+            
             <button class="btn-grey" style="width:100%; margin-top:15px;" onclick="document.getElementById('shareModal').style.display='none'">ANNULLA</button>
         </div>
     </div>
@@ -500,6 +507,7 @@
     let liveCallFilter=""; let map=null; let imageDB=null; 
     let currentViewBlob = null;
     let preparedShareFile = null;
+    let preparedBackupText = "";
 
     // --- VARIABILI QSL EDITOR LIVE ---
     let qslCanvas, qslCtx;
@@ -1047,22 +1055,97 @@
     }
 
     async function startShareProcess() {
-        if (!navigator.canShare) { alert("⚠️ Il tuo browser o telefono non supportano la condivisione nativa da questo tasto.\n\nUsa il tasto viola '⬇️ SCARICA BACKUP'."); return; }
-        const modal = document.getElementById('shareModal'); const title = document.getElementById('shareModalTitle'); const text = document.getElementById('shareModalText'); const spinner = document.getElementById('shareSpinner'); const btn = document.getElementById('btnRealShare');
-        modal.style.display = 'flex'; title.style.color = "#2980b9"; title.innerText = "⏳ Preparazione Backup..."; text.innerText = "Sto impacchettando foto e dati...\nL'operazione può richiedere qualche secondo."; spinner.style.display = "block"; btn.style.display = "none";
+        const modal = document.getElementById('shareModal'); 
+        const title = document.getElementById('shareModalTitle'); 
+        const text = document.getElementById('shareModalText'); 
+        const spinner = document.getElementById('shareSpinner'); 
+        const btns = document.getElementById('shareButtonsArea');
+        
+        modal.style.display = 'flex'; 
+        title.style.color = "#2980b9"; title.innerText = "⏳ Preparazione Backup..."; 
+        text.innerText = "Sto impacchettando foto e dati...\nL'operazione può richiedere qualche secondo."; 
+        spinner.style.display = "block"; 
+        if(btns) btns.style.display = "none";
+
         try {
             const { blob, photosCount } = await generateBackupBlob();
+            preparedBackupText = await blob.text();
             const fileName = `LogRadio_Backup_${new Date().toISOString().split('T')[0]}_JSON.txt`; 
             preparedShareFile = new File([blob], fileName, { type: "text/plain" });
-            if (!navigator.canShare({ files: [preparedShareFile] })) { modal.style.display = 'none'; alert("⚠️ Il tuo telefono blocca la condivisione di questo file.\n\nUsa il tasto viola '⬇️ SCARICA BACKUP'."); return; }
-            title.style.color = "#27ae60"; title.innerText = "✅ Backup Pronto!"; text.innerHTML = `File creato con successo (${photosCount} foto).<br><br><b>Tocca il tasto verde qui sotto</b> per inviare il file direttamente al tuo Google Drive, Email o WhatsApp!`; spinner.style.display = "none"; btn.style.display = "block";
-        } catch (e) { modal.style.display = 'none'; alert("Errore durante la preparazione: " + e.message); }
+            
+            title.style.color = "#27ae60"; 
+            title.innerText = "✅ Backup Pronto!"; 
+            text.innerHTML = `File creato con successo (${photosCount} foto).<br><br>Scegli un metodo di invio:`; 
+            spinner.style.display = "none"; 
+            if(btns) btns.style.display = "flex";
+        } catch (e) { 
+            modal.style.display = 'none'; 
+            alert("Errore durante la preparazione: " + e.message); 
+        }
     }
 
     async function executeRealShare() {
         if (!preparedShareFile) return;
-        try { await navigator.share({ title: 'Backup Log Radio Pro', text: 'Ecco il file completo di backup (Log e Foto).', files: [preparedShareFile] }); document.getElementById('shareModal').style.display = 'none'; showToast("Condivisione riuscita!"); } 
-        catch (e) { if (e.name !== "AbortError") { alert("Condivisione non completata o bloccata dal sistema."); } }
+        if (!navigator.share) {
+            alert("Il tuo browser non supporta la condivisione nativa. Usa il tasto Copia Testo o Email.");
+            return;
+        }
+        try { 
+            await navigator.share({ title: 'Backup Log Radio Pro', text: 'Ecco il file completo di backup.', files: [preparedShareFile] }); 
+            document.getElementById('shareModal').style.display = 'none'; 
+            showToast("Condivisione file riuscita!");
+        } catch (e) { 
+            if (e.name !== "AbortError") alert("Invio File bloccato dal sistema. Prova 'Invia come Testo', 'Invia via Email' o 'Copia Testo'."); 
+        }
+    }
+
+    async function shareTextOnly() {
+        if (!preparedBackupText) return;
+        if (!navigator.share) {
+            alert("Il tuo browser non supporta la condivisione nativa. Usa il tasto Copia Testo o Email.");
+            return;
+        }
+        try {
+            await navigator.share({ title: 'Backup Log Radio Pro', text: preparedBackupText });
+            document.getElementById('shareModal').style.display = 'none';
+            showToast("Condivisione testo riuscita!");
+        } catch (e) {
+            if (e.name !== "AbortError") alert("Invio Testo bloccato dal sistema. Usa 'Copia Testo negli appunti'.");
+        }
+    }
+
+    function shareViaEmail() {
+        if (!preparedBackupText) return;
+        const subject = encodeURIComponent('Backup Log Radio Pro');
+        let bodyText = preparedBackupText;
+        if (bodyText.length > 2000) {
+            bodyText = bodyText.substring(0, 2000) + "\n\n...[TESTO TRONCATO PER LIMITI EMAIL. USA 'INVIA COME FILE' O 'COPIA TESTO' PER AVERE IL BACKUP COMPLETO]";
+        }
+        window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
+    }
+
+    async function copyBackupToClipboard() {
+        if (!preparedBackupText) return;
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(preparedBackupText);
+                showToast("Testo copiato negli appunti!");
+            } else {
+                throw new Error("Clipboard API non disponibile");
+            }
+        } catch (err) {
+            const textArea = document.createElement("textarea");
+            textArea.value = preparedBackupText;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast("Testo copiato negli appunti!");
+            } catch(e) {
+                alert("Errore nella copia del testo.");
+            }
+            document.body.removeChild(textArea);
+        }
     }
 
     async function restoreFullBackup() { 
@@ -1176,7 +1259,32 @@
     }
     
     function renderSnapshots() { const ul=document.getElementById('snapshotList'); ul.innerHTML=''; if(snapshots.length===0)ul.innerHTML='<li style="padding:5px;">Nessun backup.</li>'; snapshots.forEach(s => { ul.innerHTML += `<li class="snapshot-item"><span><b>${s.time}</b> ${s.desc} (${s.count})</span><div><button class="btn-cyan" style="padding:2px 6px;" onclick="restoreSnapshot(${s.id})">R</button><button class="btn-red" style="padding:2px 6px;" onclick="deleteSnapshot(${s.id})">X</button></div></li>`; }); }
-    function restoreSnapshot(id) { const s=snapshots.find(x=>x.id===id); if(s&&confirm(`Ripristinare backup delle ${s.time}?`)){db=JSON.parse(JSON.stringify(s.data));saveDB();renderUI();alert("Ripristinato!");}}
+    
+    // LOGICA DI RIPRISTINO BACKUP MIGLIORATA
+    function restoreSnapshot(id) { 
+        const s = snapshots.find(x => x.id === id); 
+        if (s && confirm(`Ripristinare backup delle ${s.time}? I dati verranno AGGIUNTI al database attuale senza cancellare i nuovi QSO registrati nel frattempo.`)) {
+            let added = 0;
+            const snapData = s.data;
+            for (let logName in snapData) {
+                if (!db[logName]) db[logName] = [];
+                snapData[logName].forEach(qso => {
+                    const exists = db[logName].some(existing => {
+                        if (existing.id && qso.id && existing.id === qso.id) return true;
+                        return existing.call === qso.call && existing.date === qso.date && existing.timeOn === qso.timeOn && existing.band === qso.band;
+                    });
+                    if (!exists) {
+                        db[logName].push(JSON.parse(JSON.stringify(qso)));
+                        added++;
+                    }
+                });
+            }
+            saveDB(); 
+            renderUI(); 
+            alert(`Ripristino completato con successo! Sono stati aggiunti ${added} QSO mancanti.`);
+        }
+    }
+
     function deleteSnapshot(id) { snapshots=snapshots.filter(x=>x.id!==id); localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(snapshots)); renderSnapshots(); }
     function clearAllSnapshots() { if(confirm("Cancellare tutto?")){snapshots=[];localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(snapshots));renderSnapshots();}}
 
