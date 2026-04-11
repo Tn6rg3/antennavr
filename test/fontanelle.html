@@ -28,7 +28,6 @@
         button.main-action { padding: 15px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 14px; transition: all 0.2s; }
         
         .btn-add-gps { background: #28a745; color: white; grid-column: span 2; display: none;}
-        .btn-add-map { background: #007bff; color: white; grid-column: span 2; display: none;}
         
         .btn-exp { background: #f8f9fa; color: #333; border: 1px solid #ddd; padding: 10px;}
         .btn-imp { background: #f8f9fa; color: #333; border: 1px solid #ddd; padding: 10px;}
@@ -38,23 +37,13 @@
         .popup-content { text-align: center; min-width: 150px; }
         .popup-status { font-weight: bold; margin: 5px 0; padding: 2px 5px; border-radius: 4px; display: inline-block;}
         .status-active { background: #d4edda; color: #155724; }
-        .status-inactive { background: #f8d7da; color: #721c24; }
+        .status-inactive { background: #e2e3e5; color: #383d41; }
         .popup-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 10px; }
         .btn-pop { padding: 8px 5px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;}
         .btn-toggle { background: #ffc107; color: #333; }
         .btn-del { background: #dc3545; color: white; }
 
-        /* Aggiunto cursore mirino quando si è in modalità mappa */
         .map-crosshair { cursor: crosshair !important; }
-
-        .water-icon-svg {
-            width: 30px; height: 30px;
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="%23007bff" d="M224 96c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32zm64 96c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32zM320 288c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32zM288 384c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32zM224 480c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32zM160 384c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32zM128 288c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32zM192 192c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32zM63.1 30.1C78.7 16 102.2 21.6 110.3 40.2c2.2 5 3.1 10.1 3.1 15.2c0 20.8-14 38.5-33.1 43.8C65.5 103.3 51.1 90.6 48 74.3C46.8 67.9 48 61.2 51.1 55c5.3-10.7 15.6-18.4 27.2-21c10.4-2.3 21.5-1.1 31 3.5c4 2 8 4.6 11.6 7.6c31.1 26.2 51.1 65.5 51.1 109.1c0 88.4-71.6 160-160 160C28.6 360 0 331.4 0 296.9c0-15.3 5.4-30.1 15.3-41.9l6.2-7.4c29.1-34.9 66.8-63 111-82.7c-21.6-9.6-45.1-14.9-69.8-14.9C28.3 150 0 178.3 0 213.1c0 6.6 1 13.1 3 19.3c5.1 16 21 26.1 37 22.8c12.2-2.5 20.5-12.7 20.5-24.3c0-1.8-.2-3.6-.6-5.4C56.3 207 72.1 190 91.1 190C110 190 125 205.1 125 224.1c0 10.4-4.8 19.8-12.2 26.3l-5.6 4.9C86.1 271.7 65.3 280 43 280C19.3 280 0 299.3 0 323c0 9.7 3.3 19 9.3 26.6l5.7 7.2C38 381.1 76.5 400 119.1 400C207.5 400 280 327.5 280 239.1c0-43.6-17.5-83.1-45.8-111.7l-5.4-5.5c-7.3-7.5-11.2-17.2-11.2-27.4c0-21.7 17.6-39.3 39.3-39.3s39.3 17.6 39.3 39.3c0 6.6-1.7 13-4.8 18.6L288 120.3C343.8 143.6 384 199.1 384 263.1c0 101.6-82.4 184-184 184C86.6 447.1 0 360.5 0 248.9c0-11.2 1-22.1 3.1-32.8C8.5 190.1 29.5 170 54 170C81.6 170 104 192.4 104 220.1c0 2.2-.1 4.3-.4 6.5C100 252 119.7 270 142.1 270c22.4 0 40.5-18.1 40.5-40.5c0-1.4-.1-2.9-.3-4.3C179 201 197.8 180 223 180c25.1 0 45.6 20.5 45.6 45.6c0 1.9-.1 3.7-.4 5.6C264.4 256 283.4 275 308.2 275c24.9 0 45-20.2 45-45.1c0-1.3-.1-2.7-.2-4C349.3 201.2 368 180 393 180s45.6 20.5 45.6 45.6c0 1.9-.1 3.7-.4 5.6C434.4 256 453.4 275 478.2 275c24.9 0 45-20.1 45-45s-20.1-45-45-45H436c-11.1 0-20-9-20-20V92c0-11.1 9-20 20-20h22.2C481.4 72 512 41.4 512 8.2V0h-8v8.2C504 36.6 480.6 60 458.2 60H436c-17.7 0-32 14.3-32 32v73.1c-22.1 4.1-39 23.4-39 46.9s16.9 42.8 39 46.9V270c-22.1 4.1-39 23.4-39 46.9s16.9 42.8 39 46.9V432c0 17.7-14.3 32-32 32H128c-17.7 0-32-14.3-32-32V360c15 0 29.1-3.1 41.9-8.7L144 345.1C164.8 328.6 180 304.1 180 276.1c0-21.2-8.1-40.6-21.4-55.2l-5-5.5C146.4 207.1 140 196.4 140 185.1c0-22.1 17.9-40 40-40h22.1c11.1 0 20 8.9 20 20v23.1c22.1 4.1 39 23.4 39 46.9s-16.9 42.8-39 46.9V270c22.1 4.1 39 23.4 39 46.9s-16.9 42.8-39 46.9v71.1c0 11.1-8.9 20-20 20H144.1C133 475 124 466.1 124 455V383.9c22.1-4.1 39-23.4 39-46.9s-16.9-42.8-39-46.9v-71.1c22.1-4.1 39-23.4 39-46.9S146.1 128.1 124 124V92c0-17.7 14.3-32 32-32h22.2c17.7 0 32-14.3 32-32S195.9 0 178.2 0H156C107.5 0 68 39.5 68 88V124H32c-17.7 0-32 14.3-32 32v12c0 17.7 14.3 32 32 32H68v71.1C45.9 273.1 29 292.4 29 316c0 23.5 16.9 42.8 39 46.9v71.1c-22.1 4.1-39 23.4-39 46.9c0 23.5 16.9 42.8 39 46.9V512h8v-31.1c22.1-4.1 39-23.4 39-46.9c0-23.5-16.9-42.8-39-46.9v-71.1c22.1-4.1 39-23.4 39-46.9s-16.9-42.8-39-46.9V200h36c17.7 0 32-14.3 32-32V88c0-4.4-3.6-8-8-8H92.2c1.2-2.6 2.1-5.2 2.7-8C98.4 46.7 125 24 156 24h22.2C201.2 24 220 42.8 220 66V156h-21.9c-23.5 0-42.8 16.9-46.9 39s23.4 39 46.9 39V270c-23.5 0-42.8 16.9-46.9 39s23.4 39 46.9 39v71.1c-23.5 0-42.8 16.9-46.9 39s23.4 39 46.9 39V512h8v-31.1c23.5 0 42.8-16.9 46.9-39s-23.4-39-46.9-39V372h22.1c21.2 0 38.6-16.5 40.3-37.4l.6-5.4C268.2 291 291.6 264 320 264c26.5 0 48 21.5 48 48s-21.5 48-48 48H272v15.1l-.3 3.6c-2 20.3-19 36.3-40 36.3h-22.1v23.1l-.3 3.6c-2 20.3-19 36.3-40 36.3H128.1l-.3-3.6c-2-20.3-19-36.3-40-36.3V512h8v-31.1l.3-3.6c2-20.3 19-36.3 40-36.3h41.6l.3 3.6c2 20.3 19 36.3 40 36.3h22.1l.3 3.6c2 20.3 19 36.3 40 36.3h104v-23.1l.3-3.6c2-20.3 19-36.3 40-36.3H436v-15.1l.3-3.6c2-20.3 19-36.3 40-36.3h43.9c-31.1 26.2-71.1 41.9-115.9 41.9C299.1 440 200 340.9 200 217.1c0-43.6 12.5-84.1 34.1-118.4l5.4-5.5c11.7-12 18.2-27.9 18.2-44.3c0-35.3-28.7-64-64-64S129.7 14.3 129.7 49.6c0 10.4 2.5 20.2 7 29l5.6 11.2C157.8 111.9 170 139.6 170 169.1c0 88.4-71.6 160-160 160V337.1c84.1 0 152.1-68.1 152.1-152.1c0-26.6-6.8-51.6-18.7-73.4l-5.6-11.2C130.6 84.1 125.7 67.5 125.7 49.6c0-42.1 34.2-76.3 76.3-76.3s76.3 34.2 76.3 76.3c0 20.3-8 39.8-22.3 54.1L250.6 110C218.4 142.2 200 186.2 200 235.1c0 110.5 89.5 200 200 200c49.4 0 94.6-17.9 129.7-47.3l5.6-7.2c31.1-34.9 51.1-78.1 51.1-125.7c0-101.6-82.4-184-184-184zm0 216c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32zM384 192c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32zM320 96c0-17.7 14.3-32 32-32h8c17.7 0 32 14.3 32 32s-14.3 32-32 32h-8c-17.7 0-32-14.3-32-32z"/></svg>');
-            background-size: contain;
-            background-repeat: no-repeat;
-            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
-        }
-        .water-icon-inactive { filter: saturate(0) opacity(0.6); }
 
     </style>
 </head>
@@ -83,7 +72,7 @@
 
     <div class="action-btns">
         <button id="main-add-btn" class="main-action btn-add-gps" onclick="addViaGps()">📍 SEGNA QUI CON GPS</button>
-        <div id="map-instruction" style="grid-column: span 2; display:none; text-align:center; color: #007bff; font-size: 13px; font-weight:bold; padding: 10px 0;">👉 Scorri e tocca un punto sulla mappa per segnare la fontanella</div>
+        <div id="map-instruction" style="grid-column: span 2; display:none; text-align:center; color: #007bff; font-size: 13px; font-weight:bold; padding: 10px 0;">👉 Scorri la mappa e tocca il punto in cui si trova la fontanella</div>
         
         <button class="btn-exp" onclick="exportData()">💾 Backup</button>
         <button class="btn-imp" onclick="document.getElementById('importFile').click()">📂 Carica</button>
@@ -98,24 +87,43 @@
     let markersLayer;
     let alertedFountains = new Set();
     let addMode = 'gps'; 
-    let firstLocationFound = false; // Variabile per tracciare il primo fix del GPS
+    let firstLocationFound = false; 
     const ALERT_RADIUS = 50;
 
     try {
         myFountains = JSON.parse(localStorage.getItem('fountains_v2')) || [];
     } catch (e) {
-        console.warn("Il browser sta bloccando la memoria locale.");
         myFountains = [];
     }
 
+    // NUOVA ICONA: Pin vettoriale CSS ultra nitido
     function createFountainIcon(isActive) {
-        let className = 'water-icon-svg';
-        if (!isActive) className += ' water-icon-inactive';
+        // Azzurro per attiva, Grigio scuro per inattiva
+        const bgColor = isActive ? '#007bff' : '#6c757d'; 
+        
+        const pinHtml = `
+            <div style="
+                background-color: ${bgColor}; 
+                width: 30px; 
+                height: 30px; 
+                border-radius: 50% 50% 50% 0; 
+                transform: rotate(-45deg); 
+                border: 2px solid white; 
+                box-shadow: -2px 2px 4px rgba(0,0,0,0.4); 
+                display: flex; 
+                align-items: center; 
+                justify-content: center;
+            ">
+                <span style="transform: rotate(45deg); font-size: 16px;">💧</span>
+            </div>
+        `;
+
         return L.divIcon({
-            className: className,
-            iconSize: [30, 30],
-            iconAnchor: [15, 30],
-            popupAnchor: [0, -30]
+            html: pinHtml,
+            className: '', // Rimuove stili standard Leaflet
+            iconSize: [34, 34],
+            iconAnchor: [17, 34], // Punta esatta alla base del pin
+            popupAnchor: [0, -34]
         });
     }
 
@@ -126,18 +134,16 @@
 
     markersLayer = L.layerGroup().addTo(map);
 
-    // MODIFICA: setView disattivato. Impedisce alla mappa di "rimbalzare" continuamente
+    // Mappa libera (non si blocca al centro)
     map.locate({setView: false, maxZoom: 17, watch: true, enableHighAccuracy: true});
     
     map.on('locationfound', (e) => { 
         userPos = e.latlng;
-        
-        // MODIFICA: Centra la mappa SOLO la primissima volta
+        // Centra solo la primissima volta
         if (!firstLocationFound) {
             map.setView(userPos, 16);
             firstLocationFound = true;
         }
-
         updateRadar(e.latlng);
     });
     
@@ -160,14 +166,14 @@
         myFountains.forEach((f, index) => {
             const marker = L.marker([f.lat, f.lng], {icon: createFountainIcon(f.active)});
             const statusClass = f.active ? 'status-active' : 'status-inactive';
-            const statusText = f.active ? 'Attiva' : 'Non Attiva';
+            const statusText = f.active ? 'Attiva (Eroga acqua)' : 'Non Attiva (Chiusa/Rotta)';
             
             marker.bindPopup(`
                 <div class="popup-content">
-                    <b>Fontanella Pro</b>
+                    <b>Fontanella</b>
                     <div class="popup-status ${statusClass}">${statusText}</div>
                     <div class="popup-btns">
-                        <button class="btn-pop btn-toggle" onclick="toggleFountainStatus(${index})">Stato</button>
+                        <button class="btn-pop btn-toggle" onclick="toggleFountainStatus(${index})">Cambia Stato</button>
                         <button class="btn-pop btn-del" onclick="deletePoint(${index})">Elimina</button>
                     </div>
                 </div>
@@ -181,12 +187,11 @@
         document.getElementById('mode-gps-btn').className = `mode-btn ${mode === 'gps' ? 'active' : ''}`;
         document.getElementById('mode-map-btn').className = `mode-btn ${mode === 'map' ? 'active' : ''}`;
         
-        // MODIFICA: Se si clicca "Sul Posto (GPS)", la mappa fa un'animazione e si ricentra sull'utente
+        // Se si torna a GPS, l'app ti "vola" di nuovo sulla tua posizione attuale
         if (mode === 'gps' && userPos) {
-            map.flyTo(userPos, 16, { duration: 1 });
+            map.flyTo(userPos, 16, { duration: 0.8 });
             document.getElementById('map').classList.remove('map-crosshair');
         } else {
-            // Aggiunge un cursore a croce per far capire che si può cliccare
             document.getElementById('map').classList.add('map-crosshair');
         }
 
@@ -213,20 +218,20 @@
     window.addViaGps = function() {
         if (!userPos) return alert("Attendi il segnale GPS...");
         executeAdd(userPos.lat, userPos.lng);
-        // Ricentra per sicurezza quando si segna il punto
         map.flyTo(userPos, 16);
     }
 
     function addViaMap(latlng) {
-        if(confirm("Vuoi segnare una fontanella in questo punto?")) {
+        if(confirm("Vuoi segnare una fontanella in questo punto della mappa?")) {
             executeAdd(latlng.lat, latlng.lng);
+            setAddMode('gps'); // Torna in modalità corsa dopo averla segnata
         }
     }
 
     function executeAdd(lat, lng) {
         const isDup = myFountains.some(p => map.distance([lat, lng], [p.lat, p.lng]) < 10);
         if (isDup) {
-            alert("Esiste già una fontanella in questo punto!");
+            alert("Esiste già una fontanella in questo punto (raggio di 10m)!");
         } else {
             myFountains.push(createNewFountainObject(lat, lng));
             save();
@@ -252,7 +257,7 @@
 
         if (activeFountains.length === 0) {
             document.getElementById('dist-val').innerText = "---";
-            document.getElementById('status-label').innerText = "Nessuna segnata";
+            document.getElementById('status-label').innerText = "Nessuna attiva nei dintorni";
             document.getElementById('status-label').className = "status-far";
             return;
         }
@@ -306,7 +311,7 @@
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = "backup_fontanelle_pro.json";
+        link.download = "backup_fontanelle.json";
         link.click();
     }
 
