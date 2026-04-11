@@ -3,128 +3,180 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fontanelle Auto-Backup</title>
+    <title>Runner Water Radar</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; display: flex; flex-direction: column; height: 100vh; background: #f0f2f5; }
+        
+        /* Tabella Distanza sopra la mappa */
+        .info-table { background: white; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 1001; }
+        table { width: 100%; border-collapse: collapse; text-align: center; }
+        th { font-size: 12px; color: #666; text-transform: uppercase; padding-bottom: 5px; }
+        td { font-size: 18px; font-weight: bold; color: #007bff; }
+        .status-near { color: #28a745; }
+        .status-far { color: #dc3545; }
+
         #map { flex-grow: 1; width: 100%; }
+        
         .ui-panel { padding: 15px; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 1000; }
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-        button { padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        .btn-add { background: #28a745; color: white; grid-column: span 2; margin-bottom: 5px; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        button { padding: 15px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .btn-add { background: #28a745; color: white; width: 100%; box-shadow: 0 4px #1e7e34; }
+        .btn-add:active { box-shadow: 0 2px #1e7e34; transform: translateY(2px); }
         .btn-exp { background: #007bff; color: white; }
         .btn-imp { background: #6c757d; color: white; }
         input[type="file"] { display: none; }
-        .status { font-size: 10px; color: #666; text-align: center; margin-top: 5px; }
     </style>
 </head>
 <body>
 
+<div class="info-table">
+    <table>
+        <tr>
+            <th>Fontanella più vicina</th>
+            <th>Stato</th>
+        </tr>
+        <tr>
+            <td id="dist-val">--- m</td>
+            <td id="status-label" class="status-far">In cerca...</td>
+        </tr>
+    </table>
+</div>
+
 <div id="map"></div>
 
 <div class="ui-panel">
-    <button class="btn-add" onclick="addCurrentLocation()">📍 Segna Fontanella Qui</button>
+    <button class="btn-add" onclick="addCurrentLocation()">📍 SEGNA FONTANELLA QUI</button>
     <div class="btn-group">
-        <button class="btn-exp" onclick="exportData()">💾 Salva Backup File</button>
-        <button class="btn-imp" onclick="document.getElementById('importFile').click()">📂 Carica da File</button>
+        <button class="btn-exp" onclick="exportData()">📤 Backup</button>
+        <button class="btn-imp" onclick="document.getElementById('importFile').click()">📥 Importa</button>
     </div>
     <input type="file" id="importFile" accept=".json" onchange="importData(event)">
-    <div id="status-msg" class="status">Dati caricati automaticamente dalla memoria locale</div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     let map, userPos;
-    // --- CARICAMENTO AUTOMATICO ALL'AVVIO ---
     let myFountains = JSON.parse(localStorage.getItem('fountains_db')) || [];
     let markersLayer = L.layerGroup();
+    let alertedFountains = new Set();
+    const ALERT_RADIUS = 50; // Metri per l'avviso vocale
 
-    map = L.map('map').setView([41.9, 12.5], 13);
+    // Inizializzazione Mappa
+    map = L.map('map', { zoomControl: false }).setView([41.9, 12.5], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     markersLayer.addTo(map);
 
-    map.locate({setView: true, maxZoom: 16, watch: true});
-    map.on('locationfound', (e) => { userPos = e.latlng; });
+    // Gestione Posizione Real-time
+    map.locate({setView: true, maxZoom: 17, watch: true, enableHighAccuracy: true});
+    
+    map.on('locationfound', (e) => { 
+        userPos = e.latlng;
+        updateRadar(e.latlng);
+    });
 
-    // Disegna le fontanelle caricate all'avvio
     renderFountains();
 
     function renderFountains() {
         markersLayer.clearLayers();
         myFountains.forEach((f, index) => {
             const m = L.marker([f.lat, f.lng]);
-            m.bindPopup(`Fontanella<br><button onclick="deletePoint(${index})">Elimina</button>`);
+            m.bindPopup(`<b>Fontanella</b><br><button onclick="deletePoint(${index})">Rimuovi</button>`);
             markersLayer.addLayer(m);
         });
-        updateStatus();
     }
 
-    // --- SOVRASCRITTURA AUTOMATICA DELLA MEMORIA ---
-    function saveAndSync() {
+    // --- LOGICA RADAR E TABELLA ---
+    function updateRadar(currentPos) {
+        if (myFountains.length === 0) return;
+
+        let minDistance = Infinity;
+        let nearestId = null;
+
+        myFountains.forEach((f, index) => {
+            const dist = currentPos.distanceTo([f.lat, f.lng]);
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearestId = index;
+            }
+        });
+
+        // Aggiorna interfaccia tabella
+        const distTd = document.getElementById('dist-val');
+        const statusTd = document.getElementById('status-label');
+        
+        const dRounded = Math.round(minDistance);
+        distTd.innerText = dRounded > 1000 ? (dRounded/1000).toFixed(1) + " km" : dRounded + " m";
+
+        if (minDistance <= ALERT_RADIUS) {
+            statusTd.innerText = "VICINA!";
+            statusTd.className = "status-near";
+            triggerVoiceAlert(nearestId, dRounded);
+        } else {
+            statusTd.innerText = "In corsa...";
+            statusTd.className = "status-far";
+        }
+    }
+
+    function triggerVoiceAlert(id, dist) {
+        if (!alertedFountains.has(id)) {
+            const msg = new SpeechSynthesisUtterance(`Fontanella a ${dist} metri`);
+            msg.lang = 'it-IT';
+            window.speechSynthesis.speak(msg);
+            alertedFountains.add(id);
+            // Reset avviso dopo 2 minuti per permettere nuovi avvisi se si ripassa
+            setTimeout(() => alertedFountains.delete(id), 120000);
+        }
+    }
+
+    // --- FUNZIONI CORE ---
+    function addCurrentLocation() {
+        if (!userPos) return alert("Attendi il GPS...");
+        const newP = { lat: userPos.lat, lng: userPos.lng };
+        
+        // Controllo doppioni 10m
+        const isDup = myFountains.some(p => map.distance([newP.lat, newP.lng], [p.lat, p.lng]) < 10);
+        
+        if (isDup) {
+            alert("Già segnata!");
+        } else {
+            myFountains.push(newP);
+            save();
+            alert("Fontanella salvata!");
+        }
+    }
+
+    function deletePoint(index) {
+        if(confirm("Eliminare?")) {
+            myFountains.splice(index, 1);
+            save();
+        }
+    }
+
+    function save() {
         localStorage.setItem('fountains_db', JSON.stringify(myFountains));
         renderFountains();
     }
 
-    function addCurrentLocation() {
-        if (!userPos) return alert("GPS non ancora pronto...");
-        const newPoint = { lat: userPos.lat, lng: userPos.lng };
-        
-        if (isDuplicate(newPoint)) {
-            alert("Esiste già una fontanella entro 10 metri!");
-        } else {
-            myFountains.push(newPoint);
-            saveAndSync(); // Sovrascrive il "database" locale
-        }
-    }
-
-    function isDuplicate(newPoint) {
-        return myFountains.some(existing => {
-            const dist = map.distance([newPoint.lat, newPoint.lng], [existing.lat, existing.lng]);
-            return dist < 10;
-        });
-    }
-
-    function deletePoint(index) {
-        if(confirm("Eliminare questo punto?")) {
-            myFountains.splice(index, 1);
-            saveAndSync();
-        }
-    }
-
-    function updateStatus() {
-        document.getElementById('status-msg').innerText = `Memoria: ${myFountains.length} fontanelle salvate`;
-    }
-
-    // --- IMPORT/EXPORT FISICO ---
     function exportData() {
-        const dataStr = JSON.stringify(myFountains);
-        const blob = new Blob([dataStr], {type: "application/json"});
-        const url = URL.createObjectURL(blob);
+        const blob = new Blob([JSON.stringify(myFountains)], {type: "application/json"});
         const a = document.createElement('a');
-        a.href = url;
-        a.download = "backup_fontanelle.json";
+        a.href = URL.createObjectURL(blob);
+        a.download = "fontanelle.json";
         a.click();
     }
 
     function importData(event) {
-        const file = event.target.files[0];
-        if (!file) return;
         const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const imported = JSON.parse(e.target.result);
-                let added = 0;
-                imported.forEach(p => {
-                    if (!isDuplicate(p)) {
-                        myFountains.push(p);
-                        added++;
-                    }
-                });
-                saveAndSync(); // Salva i nuovi dati uniti
-                alert(`Importati ${added} nuovi punti!`);
-            } catch (err) { alert("File non valido"); }
+        reader.onload = (e) => {
+            const imported = JSON.parse(e.target.result);
+            imported.forEach(p => {
+                const isDup = myFountains.some(ex => map.distance([p.lat, p.lng], [ex.lat, ex.lng]) < 10);
+                if (!isDup) myFountains.push(p);
+            });
+            save();
         };
-        reader.readAsText(file);
+        reader.readAsText(event.target.files[0]);
     }
 </script>
 </body>
