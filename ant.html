@@ -300,6 +300,13 @@
         let tempGroundMarkers = [];
         
         let currentAction = 'NONE'; 
+        
+        // VARIABILI NUOVE PER FIXARE IL DRIFT (Scivolamento)
+        let mathMode = false;
+        let anchors = { A: null, B: null, C: null, Grid: null };
+        let pendingAnchors = { A: false, B: false, C: false, Grid: false };
+        let heightOffsets = { A: 0, B: 0, C: 0 };
+        let lastHitPose = null;
 
         let lastTouchY = 0;
         let isDragging = false, hasDragged = false; 
@@ -350,10 +357,10 @@
             renderer.xr.enabled = true;
             container.appendChild( renderer.domElement );
 
-            // FIX REDMI/XIAOMI: Rimosso 'depth-sensing' dai required/optional features.
-            // Spesso è la causa principale dei crash della fotocamera sui telefoni di fascia media.
+            // Aggiunto 'anchors' (Ancore AR) per incollare fisicamente gli oggetti al mondo reale
             document.body.appendChild( ARButton.createButton( renderer, { 
                 requiredFeatures: [ 'hit-test', 'dom-overlay' ],
+                optionalFeatures: [ 'anchors' ],
                 domOverlay: { root: document.getElementById('ui-container') }
             } ) );
 
@@ -479,10 +486,19 @@
                 groundLevel = camera.position.y - height;
                 groundGrid.position.set(camera.position.x, groundLevel, camera.position.z);
                 groundGrid.visible = true; isGroundSet = true;
+                
+                // Forza modalità Matematica
+                mathMode = true; 
+                anchors.Grid = null; // Rimuove ancore che causerebbero drift
+                
                 setAction('NONE'); updateCalculations(); drawAntenna();
             });
 
-            document.getElementById('btnSetByTouch').addEventListener('click', () => setAction('PLACE_GROUND'));
+            document.getElementById('btnSetByTouch').addEventListener('click', () => { 
+                mathMode = false; // Torna alla modalità Scansione AR
+                setAction('PLACE_GROUND'); 
+            });
+            
             document.getElementById('btnA').addEventListener('click', () => setAction('PLACE_BASE_A'));
             document.getElementById('btnB').addEventListener('click', () => setAction('PLACE_BASE_B'));
             document.getElementById('btnC').addEventListener('click', () => setAction('PLACE_BASE_C'));
@@ -523,6 +539,12 @@
 
                 isGroundSet = false;
                 groundLevel = 0;
+                
+                anchors = { A: null, B: null, C: null, Grid: null };
+                pendingAnchors = { A: false, B: false, C: false, Grid: false };
+                heightOffsets = { A: 0, B: 0, C: 0 };
+                mathMode = false;
+                lastHitPose = null;
 
                 document.getElementById('hA').innerText = '--';
                 document.getElementById('hB').innerText = '--';
@@ -549,6 +571,7 @@
                 hasDragged = true; 
                 if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B' || currentAction === 'SET_HEIGHT_C')) {
                     let pt = currentAction === 'SET_HEIGHT_A' ? point1 : (currentAction === 'SET_HEIGHT_B' ? point2 : point3);
+                    let key = currentAction === 'SET_HEIGHT_A' ? 'A' : (currentAction === 'SET_HEIGHT_B' ? 'B' : 'C');
                     if (!pt || !pt.visible) return;
 
                     let touchY = e.touches[0].clientY;
@@ -559,8 +582,10 @@
                     let visibleHeight = 2 * Math.tan(vFov / 2) * dist;
                     let sensitivity = visibleHeight / window.innerHeight; 
 
-                    pt.position.y += deltaY * sensitivity;
+                    heightOffsets[key] += deltaY * sensitivity;
+                    if (heightOffsets[key] < 0) heightOffsets[key] = 0;
 
+                    pt.position.y += deltaY * sensitivity;
                     if (isGroundSet && pt.position.y < groundLevel) pt.position.y = groundLevel;
 
                     lastTouchY = touchY;
@@ -674,7 +699,9 @@
                 if (groundCalibrationPoints.length === 3) {
                     groundLevel = groundCalibrationPoints.reduce((a, b) => a + b, 0) / 3;
                     groundGrid.position.set(reticle.position.x, groundLevel, reticle.position.z);
-                    groundGrid.visible = true; isGroundSet = true; clearTempMarkers(); setAction('NONE'); updateCalculations(); drawAntenna();
+                    groundGrid.visible = true; isGroundSet = true; clearTempMarkers(); 
+                    if (!mathMode) pendingAnchors.Grid = true;
+                    setAction('NONE'); updateCalculations(); drawAntenna();
                 }
             } else if (currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B' || currentAction === 'PLACE_BASE_C') {
                 if (reticle.visible) {
@@ -682,29 +709,39 @@
                         groundLevel = reticle.position.y;
                         groundGrid.position.set(camera.position.x, groundLevel, camera.position.z);
                         groundGrid.visible = true; isGroundSet = true;
+                        if (!mathMode) pendingAnchors.Grid = true;
                     }
 
                     if (currentAction === 'PLACE_BASE_A') {
                         point1.position.copy(reticle.position);
                         point1.visible = true;
+                        heightOffsets.A = 0;
+                        if (!mathMode) pendingAnchors.A = true;
                         setAction('SET_HEIGHT_A');
                     } else if (currentAction === 'PLACE_BASE_B') {
                         point2.position.copy(reticle.position);
                         point2.visible = true;
+                        heightOffsets.B = 0;
+                        if (!mathMode) pendingAnchors.B = true;
                         setAction('SET_HEIGHT_B');
                     } else if (currentAction === 'PLACE_BASE_C') {
                         point3.position.copy(reticle.position);
                         point3.visible = true;
+                        heightOffsets.C = 0;
+                        if (!mathMode) pendingAnchors.C = true;
                         setAction('SET_HEIGHT_C');
                     }
                     updateCalculations();
                     drawAntenna(); 
                 }
             } else if (currentAction === 'MOVE_BASE_A') {
+                if (!mathMode) pendingAnchors.A = true;
                 setAction('SET_HEIGHT_A');
             } else if (currentAction === 'MOVE_BASE_B') {
+                if (!mathMode) pendingAnchors.B = true;
                 setAction('SET_HEIGHT_B');
             } else if (currentAction === 'MOVE_BASE_C') {
+                if (!mathMode) pendingAnchors.C = true;
                 setAction('SET_HEIGHT_C');
             }
         }
@@ -1077,20 +1114,77 @@
                 }
 
                 let hitFound = false;
-                if (currentAction === 'PLACE_GROUND' || currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B' || currentAction === 'PLACE_BASE_C' || currentAction === 'MOVE_BASE_A' || currentAction === 'MOVE_BASE_B' || currentAction === 'MOVE_BASE_C') {
-                    
-                    if ( hitTestSource ) {
-                        const hitTestResults = frame.getHitTestResults( hitTestSource );
-                        if ( hitTestResults.length ) {
-                            const pose = hitTestResults[0].getPose( referenceSpace );
-                            reticle.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
-                            reticle.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
-                            reticle.visible = true;
-                            hitFound = true;
+
+                // 1) ACQUISISCI POSA HIT-TEST
+                if (hitTestSource) {
+                    const hitTestResults = frame.getHitTestResults( hitTestSource );
+                    if ( hitTestResults.length ) {
+                        lastHitPose = hitTestResults[0].getPose( referenceSpace );
+                    } else {
+                        lastHitPose = null;
+                    }
+                }
+
+                // 2) GESTISCI ANCORE AR PENDENTI (Per bloccare fisicamente i punti al mondo)
+                if (frame.createAnchor && lastHitPose && !mathMode) {
+                    if (pendingAnchors.Grid) { pendingAnchors.Grid = false; frame.createAnchor(lastHitPose.transform, referenceSpace).then(a => anchors.Grid = a).catch(()=>{}); }
+                    if (pendingAnchors.A) { pendingAnchors.A = false; frame.createAnchor(lastHitPose.transform, referenceSpace).then(a => anchors.A = a).catch(()=>{}); }
+                    if (pendingAnchors.B) { pendingAnchors.B = false; frame.createAnchor(lastHitPose.transform, referenceSpace).then(a => anchors.B = a).catch(()=>{}); }
+                    if (pendingAnchors.C) { pendingAnchors.C = false; frame.createAnchor(lastHitPose.transform, referenceSpace).then(a => anchors.C = a).catch(()=>{}); }
+                } else {
+                    pendingAnchors = { A: false, B: false, C: false, Grid: false };
+                }
+
+                let pointsMoved = false;
+
+                // 3) APPLICA CORREZIONI DELLE ANCORE AR AI MODELLI (Evita il Drift)
+                if (anchors.Grid) {
+                    const pose = frame.getPose(anchors.Grid.anchorSpace, referenceSpace);
+                    if (pose && Math.abs(groundLevel - pose.transform.position.y) > 0.005) {
+                        groundLevel = pose.transform.position.y;
+                        groundGrid.position.y = groundLevel;
+                        pointsMoved = true;
+                    }
+                }
+                
+                ['A', 'B', 'C'].forEach(key => {
+                    if (anchors[key]) {
+                        const pose = frame.getPose(anchors[key].anchorSpace, referenceSpace);
+                        if (pose) {
+                            let pt = key === 'A' ? point1 : (key === 'B' ? point2 : point3);
+                            let newY = pose.transform.position.y + heightOffsets[key];
+                            
+                            // Aggiorna solo se c'è uno scivolamento maggiore di 5mm (ottimizzazione prestazioni)
+                            if (Math.abs(pt.position.x - pose.transform.position.x) > 0.005 ||
+                                Math.abs(pt.position.z - pose.transform.position.z) > 0.005 ||
+                                Math.abs(pt.position.y - newY) > 0.005) {
+                                
+                                pt.position.x = pose.transform.position.x;
+                                pt.position.z = pose.transform.position.z;
+                                pt.position.y = newY;
+                                pointsMoved = true;
+                            }
                         }
                     }
+                });
 
-                    if (!hitFound && isGroundSet && currentAction !== 'PLACE_GROUND') {
+                if (pointsMoved) {
+                    updateCalculations();
+                    drawAntenna();
+                }
+
+                // 4) GESTISCI MIRINO (RETICLE) E SPOSTAMENTI
+                if (currentAction === 'PLACE_GROUND' || currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B' || currentAction === 'PLACE_BASE_C' || currentAction === 'MOVE_BASE_A' || currentAction === 'MOVE_BASE_B' || currentAction === 'MOVE_BASE_C') {
+                    
+                    if ( !mathMode && lastHitPose ) {
+                        reticle.position.set(lastHitPose.transform.position.x, lastHitPose.transform.position.y, lastHitPose.transform.position.z);
+                        reticle.quaternion.set(lastHitPose.transform.orientation.x, lastHitPose.transform.orientation.y, lastHitPose.transform.orientation.z, lastHitPose.transform.orientation.w);
+                        reticle.visible = true;
+                        hitFound = true;
+                    }
+
+                    // Se non ci sono punti AR tracciati O se l'utente ha forzato la matematica (Usa Altezza)
+                    if (!hitFound && (mathMode || (isGroundSet && currentAction !== 'PLACE_GROUND'))) {
                         const cameraDirection = new THREE.Vector3();
                         camera.getWorldDirection(cameraDirection);
                         
@@ -1117,14 +1211,17 @@
                         if (currentAction === 'MOVE_BASE_A') {
                             point1.position.x = reticle.position.x;
                             point1.position.z = reticle.position.z;
+                            anchors.A = null; // Rimuove l'ancora finché viene trascinato
                             drawAntenna(); updateCalculations();
                         } else if (currentAction === 'MOVE_BASE_B') {
                             point2.position.x = reticle.position.x;
                             point2.position.z = reticle.position.z;
+                            anchors.B = null; 
                             drawAntenna(); updateCalculations();
                         } else if (currentAction === 'MOVE_BASE_C') {
                             point3.position.x = reticle.position.x;
                             point3.position.z = reticle.position.z;
+                            anchors.C = null; 
                             drawAntenna(); updateCalculations();
                         }
                     } else {
