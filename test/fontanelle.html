@@ -45,6 +45,14 @@
 
         .map-crosshair { cursor: crosshair !important; }
 
+        /* Stili per il Modal della Privacy */
+        .modal-overlay { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
+        .modal-box { background-color: #fff; padding: 25px; border-radius: 12px; width: 85%; max-width: 400px; position: relative; font-size: 14px; color: #333; line-height: 1.5; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .modal-box h3 { margin-top: 0; color: #007bff; font-size: 18px; border-bottom: 2px solid #eee; padding-bottom: 10px;}
+        .modal-close { position: absolute; top: 15px; right: 20px; font-size: 24px; font-weight: bold; color: #aaa; cursor: pointer; text-decoration: none;}
+        .modal-close:hover { color: #000; }
+        .privacy-link { display: block; text-align: center; margin-top: 12px; color: #6c757d; font-size: 12px; text-decoration: underline; cursor: pointer; }
+
     </style>
 </head>
 <body>
@@ -78,6 +86,19 @@
         <button class="btn-imp" onclick="document.getElementById('importFile').click()">📂 Carica</button>
     </div>
     <input type="file" id="importFile" accept=".json" onchange="importData(event)">
+    
+    <a class="privacy-link" onclick="openPrivacy()">🛡️ Info Privacy e Gestione Dati</a>
+</div>
+
+<div id="privacy-modal" class="modal-overlay">
+    <div class="modal-box">
+        <a class="modal-close" onclick="closePrivacy()">&times;</a>
+        <h3>Trattamento dei Dati</h3>
+        <p><b>📍 Posizione GPS:</b> La tua posizione viene utilizzata esclusivamente in tempo reale dal tuo telefono per calcolare la distanza dalle fontanelle. <b>Nessun dato GPS viene inviato a server esterni o memorizzato online.</b></p>
+        <p><b>💾 Salvataggio Dati:</b> I punti delle fontanelle che segni vengono salvati solo nella memoria locale del tuo dispositivo (<i>LocalStorage</i>). Nessuno, tranne te, vi ha accesso a meno che tu non decida di esportare il file per condividerlo.</p>
+        <p><b>🍪 Cookie:</b> Questa app <b>non utilizza alcun cookie di tracciamento</b>, profilazione o pubblicità.</p>
+        <p><b>🗺️ Servizi Terzi:</b> La mappa visualizzata è fornita da OpenStreetMap, che riceve esclusivamente le richieste di base (anonime) per caricare i tasselli visivi della mappa secondo le loro policy pubbliche.</p>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -96,11 +117,17 @@
         myFountains = [];
     }
 
-    // NUOVA ICONA: Pin vettoriale CSS ultra nitido
+    // Gestione Finestra Privacy
+    window.openPrivacy = function() {
+        document.getElementById('privacy-modal').style.display = 'flex';
+    }
+    window.closePrivacy = function() {
+        document.getElementById('privacy-modal').style.display = 'none';
+    }
+
+    // Pin vettoriale CSS 
     function createFountainIcon(isActive) {
-        // Azzurro per attiva, Grigio scuro per inattiva
         const bgColor = isActive ? '#007bff' : '#6c757d'; 
-        
         const pinHtml = `
             <div style="
                 background-color: ${bgColor}; 
@@ -120,9 +147,9 @@
 
         return L.divIcon({
             html: pinHtml,
-            className: '', // Rimuove stili standard Leaflet
+            className: '',
             iconSize: [34, 34],
-            iconAnchor: [17, 34], // Punta esatta alla base del pin
+            iconAnchor: [17, 34],
             popupAnchor: [0, -34]
         });
     }
@@ -134,12 +161,10 @@
 
     markersLayer = L.layerGroup().addTo(map);
 
-    // Mappa libera (non si blocca al centro)
     map.locate({setView: false, maxZoom: 17, watch: true, enableHighAccuracy: true});
     
     map.on('locationfound', (e) => { 
         userPos = e.latlng;
-        // Centra solo la primissima volta
         if (!firstLocationFound) {
             map.setView(userPos, 16);
             firstLocationFound = true;
@@ -187,7 +212,6 @@
         document.getElementById('mode-gps-btn').className = `mode-btn ${mode === 'gps' ? 'active' : ''}`;
         document.getElementById('mode-map-btn').className = `mode-btn ${mode === 'map' ? 'active' : ''}`;
         
-        // Se si torna a GPS, l'app ti "vola" di nuovo sulla tua posizione attuale
         if (mode === 'gps' && userPos) {
             map.flyTo(userPos, 16, { duration: 0.8 });
             document.getElementById('map').classList.remove('map-crosshair');
@@ -224,7 +248,7 @@
     function addViaMap(latlng) {
         if(confirm("Vuoi segnare una fontanella in questo punto della mappa?")) {
             executeAdd(latlng.lat, latlng.lng);
-            setAddMode('gps'); // Torna in modalità corsa dopo averla segnata
+            setAddMode('gps'); 
         }
     }
 
