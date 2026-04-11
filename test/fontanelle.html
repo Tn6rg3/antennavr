@@ -6,7 +6,6 @@
     <title>Runner Water Radar Pro</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        /* FIX: Assicuriamoci che l'html occupi tutto lo schermo */
         html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto; display: flex; flex-direction: column; background: #f0f2f5; overflow: hidden; }
         
         .info-table { background: white; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 1001; position: relative; }
@@ -17,7 +16,6 @@
         .status-far { color: #6c757d; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-        /* FIX: Forza un'altezza minima alla mappa */
         #map { flex-grow: 1; width: 100%; min-height: 50vh; z-index: 1; background: #e5e5e5; }
         
         .ui-panel { padding: 12px; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 1000; position: relative; }
@@ -45,6 +43,9 @@
         .btn-pop { padding: 8px 5px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;}
         .btn-toggle { background: #ffc107; color: #333; }
         .btn-del { background: #dc3545; color: white; }
+
+        /* Aggiunto cursore mirino quando si è in modalità mappa */
+        .map-crosshair { cursor: crosshair !important; }
 
         .water-icon-svg {
             width: 30px; height: 30px;
@@ -77,12 +78,12 @@
 <div class="ui-panel">
     <div class="add-mode-selector">
         <div id="mode-gps-btn" class="mode-btn active" onclick="setAddMode('gps')">Sul Posto (GPS)</div>
-        <div id="mode-map-btn" class="mode-btn" onclick="setAddMode('map')">Distanza (Mappa)</div>
+        <div id="mode-map-btn" class="mode-btn" onclick="setAddMode('map')">Scegli sulla Mappa</div>
     </div>
 
     <div class="action-btns">
         <button id="main-add-btn" class="main-action btn-add-gps" onclick="addViaGps()">📍 SEGNA QUI CON GPS</button>
-        <div id="map-instruction" style="grid-column: span 2; display:none; text-align:center; color: #007bff; font-size: 13px; font-weight:bold; padding: 10px 0;">👉 Tocca un punto sulla mappa per segnarla</div>
+        <div id="map-instruction" style="grid-column: span 2; display:none; text-align:center; color: #007bff; font-size: 13px; font-weight:bold; padding: 10px 0;">👉 Scorri e tocca un punto sulla mappa per segnare la fontanella</div>
         
         <button class="btn-exp" onclick="exportData()">💾 Backup</button>
         <button class="btn-imp" onclick="document.getElementById('importFile').click()">📂 Carica</button>
@@ -97,13 +98,13 @@
     let markersLayer;
     let alertedFountains = new Set();
     let addMode = 'gps'; 
+    let firstLocationFound = false; // Variabile per tracciare il primo fix del GPS
     const ALERT_RADIUS = 50;
 
-    // FIX 1: Blocco Try/Catch per aggirare i blocchi di sicurezza dei browser sui file locali
     try {
         myFountains = JSON.parse(localStorage.getItem('fountains_v2')) || [];
     } catch (e) {
-        console.warn("Il browser sta bloccando la memoria locale (normale se aperto come file:/// su alcuni PC). I punti verranno persi ricaricando la pagina.");
+        console.warn("Il browser sta bloccando la memoria locale.");
         myFountains = [];
     }
 
@@ -118,27 +119,31 @@
         });
     }
 
-    // Inizializzazione Mappa
     map = L.map('map', { zoomControl: false }).setView([41.9, 12.5], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     
-    // FIX 2: Forza l'aggiornamento delle dimensioni della mappa dopo un istante
     setTimeout(() => { map.invalidateSize(); }, 500);
 
     markersLayer = L.layerGroup().addTo(map);
 
-    map.locate({setView: true, maxZoom: 17, watch: true, enableHighAccuracy: true});
+    // MODIFICA: setView disattivato. Impedisce alla mappa di "rimbalzare" continuamente
+    map.locate({setView: false, maxZoom: 17, watch: true, enableHighAccuracy: true});
     
     map.on('locationfound', (e) => { 
         userPos = e.latlng;
+        
+        // MODIFICA: Centra la mappa SOLO la primissima volta
+        if (!firstLocationFound) {
+            map.setView(userPos, 16);
+            firstLocationFound = true;
+        }
+
         updateRadar(e.latlng);
     });
     
-    // Mostra errore se il GPS è bloccato
     map.on('locationerror', (e) => {
         document.getElementById('status-label').innerText = "GPS Bloccato";
         document.getElementById('status-label').className = "status-far";
-        console.error(e.message);
     });
 
     map.on('click', (e) => {
@@ -175,6 +180,16 @@
         addMode = mode;
         document.getElementById('mode-gps-btn').className = `mode-btn ${mode === 'gps' ? 'active' : ''}`;
         document.getElementById('mode-map-btn').className = `mode-btn ${mode === 'map' ? 'active' : ''}`;
+        
+        // MODIFICA: Se si clicca "Sul Posto (GPS)", la mappa fa un'animazione e si ricentra sull'utente
+        if (mode === 'gps' && userPos) {
+            map.flyTo(userPos, 16, { duration: 1 });
+            document.getElementById('map').classList.remove('map-crosshair');
+        } else {
+            // Aggiunge un cursore a croce per far capire che si può cliccare
+            document.getElementById('map').classList.add('map-crosshair');
+        }
+
         updateUiButtons();
     }
 
@@ -198,6 +213,8 @@
     window.addViaGps = function() {
         if (!userPos) return alert("Attendi il segnale GPS...");
         executeAdd(userPos.lat, userPos.lng);
+        // Ricentra per sicurezza quando si segna il punto
+        map.flyTo(userPos, 16);
     }
 
     function addViaMap(latlng) {
@@ -277,9 +294,7 @@
     function save() {
         try {
             localStorage.setItem('fountains_v2', JSON.stringify(myFountains));
-        } catch (e) {
-            // Ignora errore di salvataggio se bloccato dal browser locale
-        }
+        } catch (e) {}
         renderFountains();
         if(userPos) updateRadar(userPos); 
     }
