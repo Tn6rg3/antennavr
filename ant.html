@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Extended Range</title>
+    <title>AR Ham Radio Planner - Compatibilità Estesa</title>
     
     <!-- Meta tag per la PWA e collegamento al Manifest -->
     <link rel="manifest" href="./manifest.json">
@@ -67,7 +67,6 @@
         
         #btnInfo { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); border: 2px solid #2ed573; color: #2ed573; border-radius: 50%; width: 35px; height: 35px; font-weight: bold; font-size: 18px; cursor: pointer; z-index: 200; pointer-events: auto; display: flex; align-items: center; justify-content: center;}
         
-        /* Tasto Settings */
         #btnSettings { position: absolute; top: 10px; right: 55px; background: rgba(0,0,0,0.7); border: 2px solid #1e90ff; color: #1e90ff; border-radius: 50%; width: 35px; height: 35px; font-weight: bold; font-size: 18px; cursor: pointer; z-index: 200; pointer-events: auto; display: flex; align-items: center; justify-content: center;}
 
         .custom-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px; background: rgba(20, 30, 40, 0.98); padding: 15px; border: 2px solid #2ed573; border-radius: 10px; z-index: 300; pointer-events: auto; color: white; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); max-height: 85vh; overflow-y: auto;}
@@ -78,7 +77,6 @@
         #settingsModal h3 { color: #1e90ff; margin-bottom: 15px;}
         .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 13px; text-align: left;}
         
-        /* Controlli stepper e color */
         .stepper { display: flex; align-items: center; gap: 5px; }
         .step-btn { background: #444; color: white; border: 1px solid #777; width: 30px; height: 30px; border-radius: 5px; font-size: 18px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .step-btn:active { background: #1e90ff; color: white; border-color: white;}
@@ -88,26 +86,30 @@
 
         .modal-close-btn { padding: 10px 20px; background: #2ed573; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; margin-top: 10px;}
         #btnCloseSettings { background: #1e90ff; color: white; }
+
+        /* Avviso Browser per Xiaomi/Redmi */
+        #browserWarning { display: none; position: absolute; top: 0; left: 0; width: 100%; background: #ff4757; color: white; padding: 10px; box-sizing: border-box; text-align: center; font-size: 13px; font-weight: bold; z-index: 1000; }
     </style>
 </head>
 <body>
 
+    <div id="browserWarning">
+        ⚠️ Attenzione: Sembra che tu non stia usando Google Chrome. Su dispositivi Redmi/Xiaomi usa Chrome per far funzionare la fotocamera AR!
+    </div>
+
     <div id="ui-container" style="display: none;">
         <div id="touchArea"></div>
         
-        <!-- Tasti in alto a destra -->
         <button id="btnInfo">i</button>
         <button id="btnSettings">⚙️</button>
 
-        <!-- Pannello Info Modal -->
         <div id="infoModal" class="custom-modal">
             <h3>Info Privacy & Offline</h3>
             <p>Questa app è progettata per i radioamatori: <strong>non raccoglie dati personali</strong> e salva i file essenziali sul tuo dispositivo per funzionare perfettamente al 100% in modalità offline, anche dove non c'è copertura di rete.</p>
-            <p style="font-size: 13px; color: #ffdd59; margin-top: -10px;">⚠️ <strong>Requisiti:</strong> Per funzionare, richiede un browser compatibile con la Realtà Aumentata (WebXR), come <strong>Google Chrome</strong> (consigliato su Android) o browser abilitati su iOS.</p>
+            <p style="font-size: 13px; color: #ffdd59; margin-top: -10px;">⚠️ <strong>Requisiti Xiaomi/Redmi:</strong> Usa sempre <strong>Google Chrome</strong>. Se vedi schermo nero, aggiorna "Google Play Services for AR" dal Play Store.</p>
             <button id="btnCloseInfo" class="modal-close-btn">Ho capito</button>
         </div>
 
-        <!-- Pannello Settings Modal -->
         <div id="settingsModal" class="custom-modal">
             <h3>Impostazioni Visive</h3>
             
@@ -276,6 +278,14 @@
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
+        // Check browser (Avviso per utenti Android non su Chrome)
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        const isChrome = /Chrome/i.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+        if (isAndroid && !isChrome) {
+            document.getElementById('browserWarning').style.display = 'block';
+            setTimeout(() => { document.getElementById('browserWarning').style.display = 'none'; }, 8000);
+        }
+
         let container, camera, scene, renderer, controller, reticle;
         let hitTestSource = null, hitTestSourceRequested = false;
 
@@ -294,7 +304,6 @@
         let lastTouchY = 0;
         let isDragging = false, hasDragged = false; 
 
-        // Variabili per le impostazioni
         let globalGridSize = 50;
         let globalGridSquareSize = 0.5;
         let globalPointScale = 0.1;
@@ -330,7 +339,6 @@
             document.body.appendChild( container );
             scene = new THREE.Scene();
             
-            // AGGIORNAMENTO 1: Aumentato il limite visivo (far plane) da 200m a 2000m
             camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 2000 );
 
             const light = new THREE.HemisphereLight( 0xffffff, 0xbbbbff, 3 );
@@ -342,13 +350,10 @@
             renderer.xr.enabled = true;
             container.appendChild( renderer.domElement );
 
+            // FIX REDMI/XIAOMI: Rimosso 'depth-sensing' dai required/optional features.
+            // Spesso è la causa principale dei crash della fotocamera sui telefoni di fascia media.
             document.body.appendChild( ARButton.createButton( renderer, { 
                 requiredFeatures: [ 'hit-test', 'dom-overlay' ],
-                optionalFeatures: [ 'depth-sensing' ],
-                depthSensing: {
-                    usagePreference: [ 'cpu-optimized', 'gpu-optimized' ],
-                    dataFormatPreference: [ 'luminance-alpha', 'float32' ]
-                },
                 domOverlay: { root: document.getElementById('ui-container') }
             } ) );
 
@@ -378,7 +383,6 @@
                 document.getElementById('ui-container').style.display = 'flex';
                 setAction('MENU_GROUND');
                 
-                // Sblocca il limite visivo nativo dell'ARCore (che spesso taglia la grafica a 50-100m)
                 const session = renderer.xr.getSession();
                 if (session) {
                     try { session.updateRenderState({ depthNear: 0.1, depthFar: 2500 }); } catch (e) {}
@@ -441,7 +445,6 @@
             }
 
             document.getElementById('btnGridMinus').addEventListener('click', () => { if (globalGridSize > 5) { globalGridSize -= 1; updateGridVisuals(); } });
-            // Aggiornamento per assecondare la nuova distanza
             document.getElementById('btnGridPlus').addEventListener('click', () => { if (globalGridSize < 500) { globalGridSize += 10; updateGridVisuals(); } });
             document.getElementById('btnSqMinus').addEventListener('click', () => { if (globalGridSquareSize > 0.2) { globalGridSquareSize -= 0.1; updateGridVisuals(); } });
             document.getElementById('btnSqPlus').addEventListener('click', () => { if (globalGridSquareSize < 5.0) { globalGridSquareSize += 0.1; updateGridVisuals(); } });
@@ -1054,7 +1057,6 @@
                     marker.scale.setScalar(0.5 + (dist * 0.05));
                 });
                 
-                // --- AGGIORNAMENTO SCALATURA TESTO ---
                 textSprites.forEach(sprite => {
                     const dist = camera.position.distanceTo(sprite.position);
                     const textScale = (0.4 + (dist * 0.05)) * globalTextScale; 
@@ -1088,14 +1090,11 @@
                         }
                     }
 
-                    // FALLBACK MATEMATICO POTENZIATO
                     if (!hitFound && isGroundSet && currentAction !== 'PLACE_GROUND') {
                         const cameraDirection = new THREE.Vector3();
                         camera.getWorldDirection(cameraDirection);
                         
                         let dirY = cameraDirection.y;
-                        // TRUCCO CRUCIALE: Se guardi dritto o in alto, forza il raggio leggermente in basso
-                        // per incrociare il terreno lontanissimo (evita che il raggio sparisca nel cielo)
                         if (dirY > -0.01) {
                             dirY = -0.01;
                         }
@@ -1103,7 +1102,7 @@
                         const t = (groundLevel - camera.position.y) / dirY;
                         if (t > 0 && t < 2500) { 
                             const hitPoint = new THREE.Vector3().copy(camera.position).add(cameraDirection.multiplyScalar(t));
-                            hitPoint.y = groundLevel; // Assicura che sia perfettamente spiaccicato a terra
+                            hitPoint.y = groundLevel; 
                             reticle.position.copy(hitPoint);
                             reticle.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
                             reticle.visible = true;
@@ -1112,7 +1111,6 @@
                     }
 
                     if (hitFound) {
-                        // SCALATURA COSTANTE: Mantiene il mirino sempre grande e visibile sullo schermo
                         const reticleDist = camera.position.distanceTo(reticle.position);
                         reticle.scale.setScalar(Math.max(1, reticleDist * 0.5));
 
