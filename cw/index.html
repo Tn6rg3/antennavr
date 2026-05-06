@@ -157,8 +157,6 @@
         <label style="display:block; margin-top: 10px;"><input type="checkbox" id="a_rx_enable" checked onchange="saveConfig()"> Ricezione Audio Abilitata</label>
         <button onclick="playTone(parseInt(document.getElementById('c_freq').value)); setTimeout(()=>stopTone(), 300);" style="margin-top:15px; width:100%; background-color:#444;">🔊 TEST AUDIO LOCALE</button>
     </details>
-
-    <button onclick="document.getElementById('privacy-modal').style.display='flex'" style="background-color: #2c3e50; font-size: 14px; margin-top: auto; padding: 10px;">ℹ️ Info, Privacy & Funzionamento</button>
 </div>
 
 <div class="panel-right">
@@ -178,6 +176,8 @@
             <button onclick="clearChat()" style="background-color: #c0392b; padding: 12px 10px;" title="Pulisci">🗑️</button>
         </div>
     </div>
+    
+    <button onclick="document.getElementById('privacy-modal').style.display='flex'" style="background-color: #2c3e50; font-size: 14px; margin-top: 5px; padding: 10px; border-radius: 8px; width: 100%;">ℹ️ Info, Privacy & Funzionamento</button>
 </div>
 
 <div id="privacy-modal" class="modal-overlay">
@@ -186,13 +186,13 @@
         <p>Benvenuto! Questa applicazione è progettata per il massimo rispetto della tua privacy. Ecco come trattiamo i tuoi dati:</p>
         
         <h3>Niente Cookie di Tracciamento</h3>
-        <p>Questa piattaforma <strong>non fa uso di Cookie di profilazione</strong>. Non tracciamo il tuo comportamento e non vendiamo dati a terzi (non c'è Google Analytics né banner pubblicitari). Le tue impostazioni (Nome, WPM, frequenze) vengono salvate esclusivamente all'interno della memoria del tuo browser (tramite tecnologia <em>localStorage</em>) in modo da ritrovarle al prossimo avvio.</p>
+        <p>Questa piattaforma <strong>non fa uso di Cookie di profilazione</strong>. Non tracciamo il tuo comportamento e non vendiamo dati a terzi. Le tue impostazioni vengono salvate esclusivamente all'interno della memoria del tuo browser (tramite tecnologia <em>localStorage</em>).</p>
         
         <h3>Messaggi Auto-Distruggenti (Stateless)</h3>
-        <p>I messaggi scritti nella Lobby Globale transitano attraverso il nostro database sicuro (Firebase). Tuttavia, la loro permanenza è effimera: <strong>ogni messaggio viene cancellato fisicamente e irreversibilmente dal database 5 secondi dopo l'invio</strong>, o nell'esatto momento in cui chiudi la pagina. Non esiste uno "storico" salvato da nessuna parte.</p>
+        <p>I messaggi scritti nella Lobby Globale transitano attraverso il nostro database sicuro (Firebase). Tuttavia, <strong>ogni messaggio viene cancellato fisicamente e irreversibilmente dal database 5 secondi dopo l'invio</strong>, o nell'esatto momento in cui chiudi la pagina.</p>
 
-        <h3>Connessione Diretta P2P</h3>
-        <p>Quando entri in una "Stanza P2P" inserendo una password, la tecnologia WebRTC fa comunicare il tuo computer <strong>direttamente</strong> con quello del tuo partner, bypassando i nostri server. Il suono CW (i punti e le linee) non viaggia come file audio, ma come minuscoli comandi di testo crittografati che vengono riconvertiti in suono dalla scheda audio di chi riceve.</p>
+        <h3>Connessione Diretta P2P Garantita</h3>
+        <p>Quando entri in una "Stanza P2P", la tecnologia WebRTC fa comunicare il tuo computer direttamente con quello del partner. Usiamo l'impostazione <code>reliable: true</code> (simile al TCP) sul canale dati per assicurare che <strong>ogni punto e linea arrivino al partner nel perfetto ordine cronologico</strong> in cui sono stati battuti, senza mai corrompere il segnale Morse.</p>
         
         <button onclick="document.getElementById('privacy-modal').style.display='none'" style="background-color: #c0392b; width: 100%; margin-top: 20px;">Ho capito, Chiudi</button>
     </div>
@@ -285,6 +285,7 @@
     let audioCtx = null, peer = null, conn = null, port = null, serialWriter = null;
     let isTx = false, rxIsTx = false, localOsc = null, localGain = null, rxOsc = null, rxGain = null;
     let myPresenceRef = null;
+    let knownUsers = new Set(); // Per tracciare chi era già nella lobby
 
     // =======================================================
     // 1.B LOBBY E PRESENZA (SOCIAL)
@@ -299,27 +300,38 @@
         myPresenceRef.set({ t: Date.now() });
         myPresenceRef.onDisconnect().remove();
         
-        // Ascolta i messaggi privati in arrivo per me
+        // Ascolta i messaggi privati
         db.ref('lobby/pms/' + user).on('child_added', (snap) => {
             const data = snap.val();
             if(data) appendChat(data.from, data.msg, "chat-pm");
-            snap.ref.remove(); // Elimina istantaneamente dopo aver letto dal database
+            snap.ref.remove(); 
         });
     }
 
-    // Ascolta chi c'è nella lobby
     db.ref('lobby/users').on('value', (snap) => {
         const listDiv = document.getElementById('lobby-list');
         listDiv.innerHTML = '';
-        const users = snap.val();
+        const users = snap.val() || {};
+        const currentUsers = Object.keys(users);
         const myName = document.getElementById('n_user').value.trim();
         
-        if(!users) {
+        if(currentUsers.length === 0) {
             listDiv.innerHTML = '<div style="color:#7f8c8d; text-align:center; margin-top: 20px;">Nessuno online</div>';
+            knownUsers.clear();
             return;
         }
 
-        Object.keys(users).forEach(u => {
+        // --- GESTIONE NOTIFICA ACUSTICA CW ---
+        currentUsers.forEach(u => {
+            if (u !== myName && !knownUsers.has(u)) {
+                // Nuovo utente entrato! Emette CW (in locale)
+                playSystemCW(u + " IN");
+            }
+        });
+        knownUsers = new Set(currentUsers); // Aggiorna la memoria di chi è dentro
+        // ------------------------------------
+
+        currentUsers.forEach(u => {
             const userDiv = document.createElement('div');
             userDiv.className = 'lobby-user';
             
@@ -337,13 +349,8 @@
                     if(msg && msg.trim()) {
                         const pmRef = db.ref('lobby/pms/' + u).push({ from: myName, msg: msg });
                         appendChat(`A ${u}`, msg, "chat-pm");
-                        
-                        // Autodistruzione PM sicura
                         pmRef.onDisconnect().remove();
-                        setTimeout(() => { 
-                            pmRef.remove(); 
-                            pmRef.onDisconnect().cancel(); 
-                        }, 5000);
+                        setTimeout(() => { pmRef.remove(); pmRef.onDisconnect().cancel(); }, 5000);
                     }
                 };
                 userDiv.appendChild(btn);
@@ -352,11 +359,10 @@
         });
     });
 
-    // Ascolta la chat globale
     db.ref('lobby/global_chat').on('child_added', (snap) => {
         const data = snap.val();
         const myName = document.getElementById('n_user').value.trim();
-        if(data && data.from !== myName && !conn) { 
+        if(data && data.from !== myName && !conn && (Date.now() - data.t < 10000)) { 
             appendChat("🌎 " + data.from, data.msg);
         }
     });
@@ -380,15 +386,16 @@
         return f;
     }
 
-    function playTone(freq, isLocal = true) {
+    // Aggiunto parametro "isSystem" per non trasmettere i suoni di notifica sulla rete
+    function playTone(freq, isLocal = true, isSystem = false) {
         initAudio();
         if (isLocal && isTx) return;
         if (!isLocal && rxIsTx) return;
         
         if (isLocal) {
             isTx = true;
-            document.getElementById('mouse-pad').classList.add('active');
-            if (conn && conn.open) conn.send({type: 'DN', f: freq});
+            if(!isSystem) document.getElementById('mouse-pad').classList.add('active');
+            if (!isSystem && conn && conn.open) conn.send({type: 'DN', f: freq});
         } else {
             rxIsTx = true;
         }
@@ -410,13 +417,13 @@
         else { rxOsc = osc; rxGain = gain; }
     }
 
-    function stopTone(isLocal = true) {
+    function stopTone(isLocal = true, isSystem = false) {
         const rel = parseFloat(document.getElementById('a_release').value) / 1000;
         
         if (isLocal && isTx) {
             isTx = false;
-            document.getElementById('mouse-pad').classList.remove('active');
-            if(conn && conn.open) conn.send({type: 'UP'});
+            if(!isSystem) document.getElementById('mouse-pad').classList.remove('active');
+            if(!isSystem && conn && conn.open) conn.send({type: 'UP'});
             
             if(localGain && localOsc) {
                 localGain.gain.cancelScheduledValues(audioCtx.currentTime);
@@ -549,7 +556,7 @@
     });
 
     // =======================================================
-    // 4. RETE P2P WEBRTC (PeerJS)
+    // 4. RETE P2P WEBRTC (PeerJS) CON RELIABLE DATA
     // =======================================================
     function setStatus(msg, color) {
         const bar = document.getElementById('status-bar');
@@ -578,7 +585,8 @@
                 if (data && data.hostId) {
                     if (data.password !== pass) { alert("Accesso negato: Password errata!"); location.reload(); return; }
                     setStatus("Password OK! Stabilendo P2P...", "#3498db");
-                    const call = peer.connect(data.hostId, { metadata: { user: user } });
+                    // AGGIUNTA GARANZIA RELIABLE (ORDINE E CONSEGNA SICURA)
+                    const call = peer.connect(data.hostId, { metadata: { user: user }, reliable: true });
                     setupDataChannel(call, user, true);
                 } else {
                     ref.set({ hostId: myId, hostName: user, password: pass });
@@ -590,6 +598,11 @@
 
         peer.on('error', (err) => setStatus("Errore P2P: " + err.type, "#e74c3c"));
     }
+
+    // Permette la connessione premendo "Invio" nel campo Password
+    document.getElementById('n_pass').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); connectP2P(); }
+    });
 
     function setupDataChannel(c, myUser, isJoiner) {
         conn = c;
@@ -617,7 +630,7 @@
         location.reload();
     }
 
-    // --- CHAT MULTIUSO CON AUTODISTRUZIONE INFALLIBILE ---
+    // --- CHAT MULTIUSO ---
     function sendChat() {
         const el = document.getElementById('chat-input');
         const msg = el.value.trim();
@@ -625,26 +638,21 @@
         if(!msg) return;
         
         if(conn && conn.open) {
-            // Se in stanza P2P (NON tocca Firebase, sicuro via WebRTC)
             appendChat("Tu", msg, "chat-p2p");
             conn.send({type: 'CHAT', msg: msg});
         } else {
-            // Se in Lobby Globale: Creazione messaggio e autodistruzione
             appendChat("🌎 Tu", msg);
             const msgRef = db.ref('lobby/global_chat').push({ from: myName, msg: msg, t: Date.now() });
-            
-            // SICUREZZA 1: Cancella se l'utente chiude brutalmente il browser
             msgRef.onDisconnect().remove();
-            
-            // SICUREZZA 2: Cancella in condizioni normali dopo 5 secondi
-            setTimeout(() => {
-                msgRef.remove();
-                msgRef.onDisconnect().cancel(); // Pulisce la memoria sul server
-            }, 5000);
+            setTimeout(() => { msgRef.remove(); msgRef.onDisconnect().cancel(); }, 5000);
         }
         el.value = '';
     }
-    document.getElementById('chat-input').addEventListener('keypress', e => { if(e.key === 'Enter') sendChat(); });
+    
+    // Tasto Invio nella Chat
+    document.getElementById('chat-input').addEventListener('keydown', e => { 
+        if(e.key === 'Enter') { e.preventDefault(); sendChat(); } 
+    });
     
     function appendChat(s, m, cls="") { 
         const b = document.getElementById('chat-box');
@@ -654,7 +662,7 @@
     function clearChat() { document.getElementById('chat-box').innerHTML = ''; }
 
     // =======================================================
-    // 5. GENERATORE AUTOMATICO (TESTO LIVE)
+    // 5. GENERATORE AUTOMATICO E SISTEMA NOTIFICHE CW
     // =======================================================
     const textQueue = [];
     let isPlayingAuto = false;
@@ -691,6 +699,44 @@
             await new Promise(r => setTimeout(r, dot * 2)); 
         }
         isPlayingAuto = false;
+    }
+
+    // --- CODA DI SISTEMA (Per le Notifiche Utenti) ---
+    const systemQueue = [];
+    let isPlayingSystem = false;
+
+    function playSystemCW(text) {
+        if (!document.getElementById('a_rx_enable').checked) return; // Suona solo se l'audio in ricezione è acceso
+        for(let c of text.toUpperCase()) {
+            if(MORSE_CODE[c] || c === ' ') systemQueue.push(c);
+        }
+        if(!isPlayingSystem) processSystemQueue();
+    }
+
+    async function processSystemQueue() {
+        isPlayingSystem = true;
+        initAudio();
+        while(systemQueue.length > 0) {
+            const c = systemQueue.shift();
+            const dot = parseInt(document.getElementById('c_dot_ms').value);
+            const dash = parseInt(document.getElementById('c_dash_ms').value);
+            const spc = parseInt(document.getElementById('c_spc_ms').value);
+            
+            if(c === ' ') { await new Promise(r => setTimeout(r, dot * 7)); continue; }
+            const syms = MORSE_CODE[c];
+            if(!syms) continue;
+            
+            for(let s of syms) {
+                const type = s === '.' ? 'dot' : 'dash';
+                // isSystem = true (il terzo parametro) previene l'invio via P2P di questo suono!
+                playTone(getFreq(type), true, true); 
+                await new Promise(r => setTimeout(r, type === 'dot' ? dot : dash));
+                stopTone(true, true);
+                await new Promise(r => setTimeout(r, spc)); 
+            }
+            await new Promise(r => setTimeout(r, dot * 2)); 
+        }
+        isPlayingSystem = false;
     }
 
     // =======================================================
