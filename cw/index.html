@@ -27,7 +27,7 @@
         .grid-4 { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 10px; align-items: center; margin-bottom: 10px; }
         
         label { text-align: right; color: #bdc3c7; font-size: 14px; }
-        input[type="text"], input[type="password"], input[type="number"], select { background-color: #111; color: white; border: 1px solid #555; padding: 10px; border-radius: 4px; width: 100%; box-sizing: border-box; font-size: 16px;}
+        input[type="text"], input[type="password"], input[type="number"], select { background-color: #111; color: white; border: 1px solid #555; padding: 10px; border-radius: 4px; width: 100%; box-sizing: border-box; }
         
         button { background-color: #34495e; color: white; border: none; padding: 12px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.2s; font-size: 15px;}
         button:hover { background-color: #2c3e50; }
@@ -40,7 +40,7 @@
         #area-auto.active, #area-manuale.active { display: block; }
         #txt-live { font-size: 18px; background-color: #111; border: 1px solid #555; padding: 12px; color: #f1c40f; width: 100%;}
         
-        #mouse-pad { height: 140px; background-color: #111; border: 2px dashed #7f8c8d; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #7f8c8d; cursor: crosshair; user-select: none; margin-top: 10px; transition: 0.1s; touch-action: none;}
+        #mouse-pad { height: 140px; background-color: #111; border: 2px dashed #7f8c8d; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #7f8c8d; cursor: crosshair; }
         #mouse-pad.active { background-color: #f1c40f; color: #111; border: 2px solid #fff; font-weight: bold;}
         
         /* LOBBY E CHAT */
@@ -54,8 +54,8 @@
         .chat-pm { color: #9b59b6; font-weight: bold; }
 
         /* MODALE PRIVACY */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;}
-        .modal-content { background: #222; border: 2px solid #3498db; border-radius: 8px; max-width: 650px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 25px; box-sizing: border-box; line-height: 1.5; font-size: 15px;}
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; padding: 20px; }
+        .modal-content { background: #222; border: 2px solid #3498db; border-radius: 8px; max-width: 650px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 25px; box-sizing: border-box; line-height: 1.6; }
         .modal-content h2 { color: #3498db; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px;}
         .modal-content h3 { color: #e67e22; margin-bottom: 5px; }
         .modal-content p { color: #bdc3c7; margin-top: 0;}
@@ -184,7 +184,7 @@
         </div>
     </div>
     
-    <button onclick="document.getElementById('privacy-modal').style.display='flex'" style="background-color: #2c3e50; font-size: 14px; margin-top: 5px; padding: 10px; border-radius: 8px; width: 100%;">ℹ️ Info, Privacy & Funzionamento</button>
+    <button onclick="document.getElementById('privacy-modal').style.display='flex'" style="background-color: #2c3e50; font-size: 14px; margin-top: 5px; padding: 10px; border-radius: 8px; width: 100%;">ℹ️ Info & Privacy</button>
 </div>
 
 <div id="privacy-modal" class="modal-overlay">
@@ -193,13 +193,13 @@
         <p>Benvenuto! Questa applicazione è progettata per il massimo rispetto della tua privacy. Ecco come trattiamo i tuoi dati:</p>
         
         <h3>Niente Cookie di Tracciamento</h3>
-        <p>Questa piattaforma <strong>non fa uso di Cookie di profilazione</strong>. Non tracciamo il tuo comportamento e non vendiamo dati a terzi. Le tue impostazioni vengono salvate esclusivamente all'interno della memoria del tuo browser (tramite tecnologia <em>localStorage</em>).</p>
+        <p>Questa piattaforma <strong>non fa uso di Cookie di profilazione</strong>. Non tracciamo il tuo comportamento e non vendiamo dati a terzi. Le tue impostazioni vengono salvate esclusivamente nel localStorage del tuo browser.</p>
         
         <h3>Messaggi Auto-Distruggenti (Stateless)</h3>
-        <p>I messaggi scritti nella Lobby Globale transitano attraverso il nostro database sicuro (Firebase). Tuttavia, <strong>ogni messaggio viene cancellato fisicamente e irreversibilmente dal database 5 secondi dopo l'invio</strong>, o nell'esatto momento in cui chiudi la pagina.</p>
+        <p>I messaggi scritti nella Lobby Globale transitano attraverso il nostro database sicuro (Firebase). Tuttavia, <strong>ogni messaggio viene cancellato fisicamente e irreversibilmente dal database dopo 5 secondi</strong>.</p>
 
         <h3>Connessione Diretta P2P Garantita</h3>
-        <p>Quando entri in una "Stanza P2P", la tecnologia WebRTC fa comunicare il tuo computer direttamente con quello del partner. Usiamo l'impostazione <code>reliable: true</code> (simile al TCP) sul canale dati per assicurare che <strong>ogni punto e linea arrivino al partner nel perfetto ordine cronologico</strong> in cui sono stati battuti, senza mai corrompere il segnale Morse.</p>
+        <p>Quando entri in una "Stanza P2P", la tecnologia WebRTC fa comunicare il tuo computer direttamente con quello del partner. Usiamo l'impostazione <code>reliable: true</code> (simile al TCP) senza bisogno di server intermedi.</p>
         
         <button onclick="document.getElementById('privacy-modal').style.display='none'" style="background-color: #c0392b; width: 100%; margin-top: 20px;">Ho capito, Chiudi</button>
     </div>
@@ -287,12 +287,16 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    const MORSE_CODE = { 'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.', '0': '-----', ' ': ' ' };
+    const MORSE_CODE = { 'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.', '.': '.-.-.-', ',': '--..--', '?': '..--..', "'": '.----.' };
 
     let audioCtx = null, peer = null, conn = null, port = null, serialWriter = null;
-    let isTx = false, rxIsTx = false, localOsc = null, localGain = null, rxOsc = null, rxGain = null;
+    let isTx = false, rxIsTx = false;
     let myPresenceRef = null;
     let knownUsers = new Set();
+
+    // 🎯 OSCILLATORI PRE-CREATI PER BASSA LATENZA
+    let preOscLocal = null, preGainLocal = null;
+    let preOscRemote = null, preGainRemote = null;
 
     // =======================================================
     // 1.B LOBBY E PRESENZA (SOCIAL)
@@ -317,7 +321,7 @@
 
     db.ref('lobby/users').on('value', (snap) => {
         const listDiv = document.getElementById('lobby-list');
-        listDiv.textContent = ''; // Svuota il contenuto in modo sicuro per prevenire XSS
+        listDiv.textContent = '';
 
         const users = snap.val() || {};
         const currentUsers = Object.keys(users);
@@ -337,11 +341,10 @@
         // --- GESTIONE NOTIFICA ACUSTICA CW ---
         currentUsers.forEach(u => {
             if (u !== myName && !knownUsers.has(u)) {
-                // Nuovo utente entrato! Emette CW (in locale)
                 playSystemCW(u + " IN");
             }
         });
-        knownUsers = new Set(currentUsers); // Aggiorna la memoria
+        knownUsers = new Set(currentUsers);
         // ------------------------------------
 
         currentUsers.forEach(u => {
@@ -381,14 +384,38 @@
     });
 
     // =======================================================
-    // 2. MOTORE AUDIO WEB
+    // 2. MOTORE AUDIO WEB OTTIMIZZATO (LOW LATENCY)
     // =======================================================
-    function initAudio() {
+    function initAudioOptimized() {
         if (!audioCtx) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext({ latencyHint: 'interactive', sampleRate: 44100 });
+            audioCtx = new AudioContext({ 
+                latencyHint: 'interactive',
+                sampleRate: 48000
+            });
         }
-        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        // Forza resume SUBITO
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(e => console.log("Audio resume:", e));
+        }
+
+        // 🎯 PRE-CREA OSCILLATORI (ONE-SHOT READY)
+        if (!preOscLocal) {
+            preOscLocal = audioCtx.createOscillator();
+            preGainLocal = audioCtx.createGain();
+            preOscLocal.connect(preGainLocal).connect(audioCtx.destination);
+            preGainLocal.gain.value = 0;
+            preOscLocal.start();
+        }
+        
+        if (!preOscRemote) {
+            preOscRemote = audioCtx.createOscillator();
+            preGainRemote = audioCtx.createGain();
+            preOscRemote.connect(preGainRemote).connect(audioCtx.destination);
+            preGainRemote.gain.value = 0;
+            preOscRemote.start();
+        }
     }
 
     function getFreq(type) {
@@ -400,7 +427,7 @@
     }
 
     function playTone(freq, isLocal = true, isSystem = false) {
-        initAudio();
+        initAudioOptimized();
         if (isLocal && isTx) return;
         if (!isLocal && rxIsTx) return;
         
@@ -408,52 +435,40 @@
             isTx = true;
             if(!isSystem) document.getElementById('mouse-pad').classList.add('active');
             if (!isSystem && conn && conn.open) conn.send({type: 'DN', f: freq});
+
+            // 🎯 ATTIVA IMMEDIATAMENTE (ZERO RAMP!)
+            preOscLocal.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.001);
+            let vol = parseFloat(document.getElementById('a_vol').value);
+            preGainLocal.gain.cancelScheduledValues(audioCtx.currentTime);
+            preGainLocal.gain.setValueAtTime(vol, audioCtx.currentTime);
+            
         } else {
             rxIsTx = true;
+            preOscRemote.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.001);
+            let vol = parseFloat(document.getElementById('a_vol_rx').value);
+            if(!document.getElementById('a_rx_enable').checked) vol = 0;
+            preGainRemote.gain.cancelScheduledValues(audioCtx.currentTime);
+            preGainRemote.gain.setValueAtTime(vol, audioCtx.currentTime);
         }
-
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.frequency.value = freq;
-        
-        let vol = isLocal ? parseFloat(document.getElementById('a_vol').value) : parseFloat(document.getElementById('a_vol_rx').value);
-        if(!isLocal && !document.getElementById('a_rx_enable').checked) vol = 0;
-        
-        const att = parseFloat(document.getElementById('a_attack').value) / 1000;
-        gain.gain.setValueAtTime(0, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + att);
-        osc.connect(gain).connect(audioCtx.destination);
-        osc.start();
-
-        if (isLocal) { localOsc = osc; localGain = gain; } 
-        else { rxOsc = osc; rxGain = gain; }
     }
 
     function stopTone(isLocal = true, isSystem = false) {
-        const rel = parseFloat(document.getElementById('a_release').value) / 1000;
+        const rel = Math.max(1, parseFloat(document.getElementById('a_release').value)) / 1000;
         
         if (isLocal && isTx) {
             isTx = false;
             if(!isSystem) document.getElementById('mouse-pad').classList.remove('active');
             if(!isSystem && conn && conn.open) conn.send({type: 'UP'});
             
-            if(localGain && localOsc) {
-                localGain.gain.cancelScheduledValues(audioCtx.currentTime);
-                localGain.gain.setValueAtTime(localGain.gain.value, audioCtx.currentTime);
-                localGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + rel);
-                const oStop = localOsc; setTimeout(() => { try{ oStop.stop(); }catch(e){} }, rel*1000 + 50);
-                localOsc = null; localGain = null;
-            }
+            preGainLocal.gain.cancelScheduledValues(audioCtx.currentTime);
+            preGainLocal.gain.setValueAtTime(preGainLocal.gain.value, audioCtx.currentTime);
+            preGainLocal.gain.linearRampToValueAtTime(0, audioCtx.currentTime + rel);
         } 
         else if (!isLocal && rxIsTx) {
             rxIsTx = false;
-            if(rxGain && rxOsc) {
-                rxGain.gain.cancelScheduledValues(audioCtx.currentTime);
-                rxGain.gain.setValueAtTime(rxGain.gain.value, audioCtx.currentTime);
-                rxGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + rel);
-                const oStop = rxOsc; setTimeout(() => { try{ oStop.stop(); }catch(e){} }, rel*1000 + 50);
-                rxOsc = null; rxGain = null;
-            }
+            preGainRemote.gain.cancelScheduledValues(audioCtx.currentTime);
+            preGainRemote.gain.setValueAtTime(preGainRemote.gain.value, audioCtx.currentTime);
+            preGainRemote.gain.linearRampToValueAtTime(0, audioCtx.currentTime + rel);
         }
     }
 
@@ -489,7 +504,7 @@
 
     function handlePadStart(isRight) {
         if(document.getElementById('v_input_source').value !== 'manual') return;
-        initAudio();
+        initAudioOptimized();
         const mode = document.getElementById('c_mode').value;
         const type = isRight ? 'dash' : 'dot';
         if (mode === 'Iambic') {
@@ -545,7 +560,7 @@
         
         if(e.code === kDotCode || e.code === kDashCode) {
             e.preventDefault(); 
-            initAudio();
+            initAudioOptimized();
             if (mode === 'Iambic') {
                 if (e.code === kDotCode) dotPressed = true;
                 if (e.code === kDashCode) dashPressed = true;
@@ -590,7 +605,7 @@
 
         if(!room || !pass || !user) return alert("Inserisci Nome, Stanza e Password!");
         
-        initAudio();
+        initAudioOptimized();
         setStatus("Ricerca Stanza...", "#f39c12");
         document.getElementById('btn-net-connect').style.display = 'none';
         document.getElementById('btn-net-disconnect').style.display = 'block';
@@ -712,7 +727,7 @@
 
     async function processAutoQueue() {
         isPlayingAuto = true;
-        initAudio();
+        initAudioOptimized();
         while(textQueue.length > 0) {
             const c = textQueue.shift();
             const dot = parseInt(document.getElementById('c_dot_ms').value);
@@ -749,7 +764,7 @@
 
     async function processSystemQueue() {
         isPlayingSystem = true;
-        initAudio();
+        initAudioOptimized();
         while(systemQueue.length > 0) {
             const c = systemQueue.shift();
             const dot = parseInt(document.getElementById('c_dot_ms').value);
@@ -791,17 +806,15 @@ async function connectSerial() {
         if (!serialAPI) return alert("Browser o Sistema non supportato per USB.");
 
         try {
-            // Selezionando requestPort() vuoto, Chrome mostrerà TUTTI i dispositivi seriali/CDC che riesce a vedere.
             port = await serialAPI.requestPort({
                 filters: [
-                    { usbVendorId: 0x2341 }, // Arduino Originale (Leonardo/Micro)
-                    { usbVendorId: 0x1B4F }, // SparkFun (Cloni Pro Micro)
-                    { usbVendorId: 0x239A }, // Adafruit (ItsyBitsy 32u4)
-                    { usbVendorId: 0x1A86 }  // In caso di cloni anomali
+                    { usbVendorId: 0x2341 },
+                    { usbVendorId: 0x1B4F },
+                    { usbVendorId: 0x239A },
+                    { usbVendorId: 0x1A86 }
                 ]
             });
             
-            // Il 32U4 a volte richiede che il DTR sia attivato per avviare la comunicazione nativa
             await port.open({ baudRate: 115200 });
             await port.setSignals({ dataTerminalReady: true, requestToSend: true });
             
@@ -886,6 +899,7 @@ async function connectSerial() {
     // Avvio Iniziale
     window.onload = () => {
         loadConfig();
+        initAudioOptimized();
         updateLobbyPresence();
     };
 </script>
