@@ -28,6 +28,7 @@
         
         label { text-align: right; color: #bdc3c7; font-size: 14px; }
         input[type="text"], input[type="password"], input[type="number"], select { background-color: #111; color: white; border: 1px solid #555; padding: 10px; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        input[readonly] { background-color: #2a2a2a; color: #7f8c8d; cursor: not-allowed; } /* Stile per campi bloccati */
         input[type="range"] { cursor: pointer; }
         
         button { background-color: #34495e; color: white; border: none; padding: 12px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.2s; font-size: 15px;}
@@ -116,12 +117,12 @@
             <div class="grid-4">
                 <label>Tasto Punto:</label>
                 <input type="text" id="k_dot" value="KeyZ" placeholder="Premi un tasto..." 
-                       readonly style="text-align: center; cursor: pointer; background: #222;" 
+                       readonly style="text-align: center; cursor: pointer; background: #222; color: #fff;" 
                        onkeydown="this.value=event.code; saveConfig(); event.preventDefault();">
                 
                 <label>Tasto Linea:</label>
                 <input type="text" id="k_dash" value="KeyX" placeholder="Premi un tasto..." 
-                       readonly style="text-align: center; cursor: pointer; background: #222;" 
+                       readonly style="text-align: center; cursor: pointer; background: #222; color: #fff;" 
                        onkeydown="this.value=event.code; saveConfig(); event.preventDefault();">
             </div>
             <div id="mouse-pad">TOUCH PADDLE (Metà Sx = Punto, Metà Dx = Linea)</div>
@@ -137,14 +138,14 @@
                 <option value="Verticale">Verticale</option>
                 <option value="Manuale">Manuale Assoluto</option>
             </select>
-            <label>WPM:</label><input type="number" id="c_wpm" value="20" onchange="updateWPM(); sendParamsToArduino(); saveConfig();">
-            <label>Tono (Hz):</label><input type="number" id="c_freq" value="750" onchange="sendParamsToArduino(); saveConfig();">
-            <label>Sgancio:</label><input type="number" id="c_hang" value="500" onchange="saveConfig()">
+            <label>WPM:</label><input type="number" id="c_wpm" value="20" oninput="updateWPM(); sendParamsToArduino(); saveConfig();">
+            <label>Tono (Hz):</label><input type="number" id="c_freq" value="750" oninput="sendParamsToArduino(); saveConfig();">
+            <label>Sgancio:</label><input type="number" id="c_hang" value="500" oninput="saveConfig()">
         </div>
         <div class="grid-4" style="margin-top: 15px;">
-            <label>Punto ms:</label><input type="number" id="c_dot_ms" value="60" onchange="saveConfig()">
-            <label>Linea ms:</label><input type="number" id="c_dash_ms" value="180" onchange="saveConfig()">
-            <label>Spazio ms:</label><input type="number" id="c_spc_ms" value="60" onchange="saveConfig()">
+            <label>Punto ms:</label><input type="number" id="c_dot_ms" value="60" oninput="updateFromMS(); saveConfig()">
+            <label>Linea ms:</label><input type="number" id="c_dash_ms" value="180" oninput="updateFromMS(); saveConfig()">
+            <label>Spazio ms:</label><input type="number" id="c_spc_ms" value="60" oninput="updateFromMS(); saveConfig()">
         </div>
     </details>
 
@@ -491,6 +492,7 @@
     async function runIambicKeyer() {
         keyerActive = true;
         while (dotPressed || dashPressed) {
+            // Lettura istantanea ad ogni ciclo
             const dotTime = parseInt(document.getElementById('c_dot_ms').value);
             const dashTime = parseInt(document.getElementById('c_dash_ms').value);
             const spcTime = parseInt(document.getElementById('c_spc_ms').value) || dotTime;
@@ -519,13 +521,13 @@
         const mode = document.getElementById('c_mode').value;
         const type = isRight ? 'dash' : 'dot';
         
-        // Fix: Se è Iambic o Manuale (Assoluto), usa il keyer interno per rispettare le tempistiche
+        // Se è Iambic o Manuale (Assoluto), usa il keyer interno per le tempistiche
         if (mode === 'Iambic' || mode === 'Manuale') {
             if (type === 'dot') dotPressed = true;
             if (type === 'dash') dashPressed = true;
             if (!keyerActive) runIambicKeyer();
         } else { 
-            // Modalità Verticale (Tono dritto finché non rilasci)
+            // Modalità Verticale (Tono dritto)
             playTone(getFreq(type), true); 
         }
     }
@@ -815,7 +817,7 @@
     }
 
     // =======================================================
-    // 6. SERIALE ARDUINO (Chrome/Edge Desktop)
+    // 6. SERIALE ARDUINO E LOGICA CALCOLO TEMPI/WPM
     // =======================================================
         
     async function connectSerial() {
@@ -867,7 +869,6 @@
         const spc = document.getElementById('c_spc_ms').value;
         const freq = document.getElementById('c_freq').value;
         
-        // Modalità Iambic o Manuale = Motore Iambic in Arduino
         const mode = document.getElementById('c_mode').value;
         const m = (mode === 'Iambic' || mode === 'Manuale') ? 0 : 1;
         
@@ -890,7 +891,7 @@
     }
 
     // =======================================================
-    // 7. FUNZIONI INTERFACCIA
+    // 7. FUNZIONI INTERFACCIA E REATTIVITÀ WPM/MS
     // =======================================================
     function changeSource() {
         const s = document.getElementById('v_input_source').value;
@@ -907,6 +908,9 @@
         document.getElementById('c_dot_ms').readOnly = !isManual;
         document.getElementById('c_dash_ms').readOnly = !isManual;
         document.getElementById('c_spc_ms').readOnly = !isManual;
+        
+        // In Manuale Assoluto, i WPM non si possono forzare
+        document.getElementById('c_wpm').readOnly = isManual;
 
         if(!isManual) {
             const wpm = parseInt(document.getElementById('c_wpm').value) || 20;
@@ -924,6 +928,30 @@
                 document.getElementById('a_attack').value = env;
                 document.getElementById('a_release').value = env;
             }
+        } else {
+            // Se appena passato in Manuale, allinea i WPM ai ms presenti
+            updateFromMS();
+        }
+    }
+
+    // Nuova funzione per far comandare i millisecondi (in Manuale Assoluto) e ricalcolare i WPM
+    function updateFromMS() {
+        const mode = document.getElementById('c_mode').value;
+        if(mode === 'Manuale') {
+            const dot = parseInt(document.getElementById('c_dot_ms').value) || 60;
+            const wpm = Math.round(1200 / dot);
+            document.getElementById('c_wpm').value = wpm; // Mostra i WPM generati dai ms
+            
+            if(document.getElementById('a_auto_env').checked) {
+                let env = Math.round(dot * 0.1);
+                if (wpm >= 30) env = 1; 
+                else if (wpm >= 20) env = 2;
+                else env = Math.max(2, Math.min(5, env));
+                
+                document.getElementById('a_attack').value = env;
+                document.getElementById('a_release').value = env;
+            }
+            sendParamsToArduino();
         }
     }
 
