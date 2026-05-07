@@ -674,11 +674,23 @@
         if(e.key === 'Enter') { e.preventDefault(); sendChat(); } 
     });
     
-    function appendChat(s, m, cls="") { 
-        const b = document.getElementById('chat-box');
-        b.innerHTML += `<div class="${cls}">[${s}]: ${m}</div>`; 
-        b.scrollTop = b.scrollHeight;
-    }
+    function appendChat(s, m, cls = "") {
+    const b = document.getElementById('chat-box');
+    const div = document.createElement('div');
+    if (cls) div.className = cls;
+
+    const spanName = document.createElement('strong');
+    spanName.textContent = `[${s}]: `; // Sicuro
+    
+    const spanMsg = document.createElement('span');
+    spanMsg.textContent = m; // Sicuro
+
+    div.appendChild(spanName);
+    div.appendChild(spanMsg);
+    b.appendChild(div);
+    
+    b.scrollTop = b.scrollHeight;
+}
     function clearChat() { document.getElementById('chat-box').innerHTML = ''; }
 
     // =======================================================
