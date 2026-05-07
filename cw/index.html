@@ -28,6 +28,7 @@
         
         label { text-align: right; color: #bdc3c7; font-size: 14px; }
         input[type="text"], input[type="password"], input[type="number"], select { background-color: #111; color: white; border: 1px solid #555; padding: 10px; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        input[type="range"] { cursor: pointer; }
         
         button { background-color: #34495e; color: white; border: none; padding: 12px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.2s; font-size: 15px;}
         button:hover { background-color: #2c3e50; }
@@ -150,10 +151,14 @@
     <details>
         <summary>⚙️ 3. Regolazioni Audio e Colori</summary>
         <div class="grid-4" style="margin-top: 10px;">
-            <label>Vol TX:</label><input type="number" id="a_vol" value="0.35" step="0.1" onchange="saveConfig()">
+            <label>Vol TX (Monitor):</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="range" id="a_vol_slider" min="0" max="1" step="0.01" value="0.35" oninput="document.getElementById('a_vol').value=this.value; saveConfig();" style="flex: 1; margin: 0;">
+                <input type="number" id="a_vol" value="0.35" step="0.05" onchange="document.getElementById('a_vol_slider').value=this.value; saveConfig();" style="width: 60px; padding: 5px;">
+            </div>
             <label>Vol RX:</label><input type="number" id="a_vol_rx" value="1.0" step="0.1" onchange="saveConfig()">
-            <label>Attacco:</label><input type="number" id="a_attack" value="2" onchange="saveConfig()">
-            <label>Stacco:</label><input type="number" id="a_release" value="5" onchange="saveConfig()">
+            <label>Attacco (ms):</label><input type="number" id="a_attack" value="2" onchange="saveConfig()">
+            <label>Stacco (ms):</label><input type="number" id="a_release" value="5" onchange="saveConfig()">
         </div>
         <div class="grid-4" style="margin-top: 10px;">
             <label><input type="checkbox" id="c_bitonal" onchange="saveConfig()"> BITONALE</label><span></span>
@@ -162,7 +167,6 @@
         </div>
         <label style="display:block; margin-top: 15px;"><input type="checkbox" id="a_auto_env" checked onchange="saveConfig()"> Auto Inviluppo (Adatta a WPM)</label>
         <label style="display:block; margin-top: 10px;"><input type="checkbox" id="a_rx_enable" checked onchange="saveConfig()"> Ricezione Audio Abilitata</label>
-        <button onclick="playTone(parseInt(document.getElementById('c_freq').value)); setTimeout(()=>stopTone(), 300);" style="margin-top:15px; width:100%; background-color:#444;">🔊 TEST AUDIO LOCALE</button>
     </details>
 </div>
 
@@ -260,7 +264,10 @@
                 if(c.f_dot) document.getElementById('c_f_dot').value = c.f_dot;
                 if(c.f_dash) document.getElementById('c_f_dash').value = c.f_dash;
                 
-                if(c.vol) document.getElementById('a_vol').value = c.vol;
+                if(c.vol) {
+                    document.getElementById('a_vol').value = c.vol;
+                    document.getElementById('a_vol_slider').value = c.vol;
+                }
                 if(c.vol_rx) document.getElementById('a_vol_rx').value = c.vol_rx;
                 if(c.attack) document.getElementById('a_attack').value = c.attack;
                 if(c.release) document.getElementById('a_release').value = c.release;
@@ -429,6 +436,8 @@
         if (isLocal && isTx) return;
         if (!isLocal && rxIsTx) return;
         
+        const attack = (parseInt(document.getElementById('a_attack').value) || 2) / 1000;
+
         if (isLocal) {
             isTx = true;
             if(!isSystem) document.getElementById('mouse-pad').classList.add('active');
@@ -437,10 +446,10 @@
             preOscLocal.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.0005);
             let vol = parseFloat(document.getElementById('a_vol').value);
             
-            // 🎯 ANTI-CLIP: Rampa gain da 0 in ~2ms
+            // 🎯 ANTI-CLIP: Rampa gain calcolata sull'attacco
             preGainLocal.gain.cancelScheduledValues(audioCtx.currentTime);
             preGainLocal.gain.setValueAtTime(0, audioCtx.currentTime);
-            preGainLocal.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + 0.002);
+            preGainLocal.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + attack);
             
         } else {
             rxIsTx = true;
@@ -450,12 +459,12 @@
             
             preGainRemote.gain.cancelScheduledValues(audioCtx.currentTime);
             preGainRemote.gain.setValueAtTime(0, audioCtx.currentTime);
-            preGainRemote.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + 0.002);
+            preGainRemote.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + attack);
         }
     }
 
     function stopTone(isLocal = true, isSystem = false) {
-        const rel = Math.max(1, parseFloat(document.getElementById('a_release').value)) / 1000;
+        const rel = (parseInt(document.getElementById('a_release').value) || 5) / 1000;
         
         if (isLocal && isTx) {
             isTx = false;
@@ -475,7 +484,7 @@
     }
 
     // =======================================================
-    // 3. MOTORE IAMBIC (TASTIERA E TOUCH/MOUSE)
+    // 3. MOTORE IAMBIC E MANUALE ASSOLUTO (TASTIERA E TOUCH/MOUSE)
     // =======================================================
     let dotPressed = false, dashPressed = false, keyerActive = false, lastIambic = null;
 
@@ -509,16 +518,25 @@
         initAudioOptimized();
         const mode = document.getElementById('c_mode').value;
         const type = isRight ? 'dash' : 'dot';
-        if (mode === 'Iambic') {
+        
+        // Fix: Se è Iambic o Manuale (Assoluto), usa il keyer interno per rispettare le tempistiche
+        if (mode === 'Iambic' || mode === 'Manuale') {
             if (type === 'dot') dotPressed = true;
             if (type === 'dash') dashPressed = true;
             if (!keyerActive) runIambicKeyer();
-        } else { playTone(getFreq(type), true); }
+        } else { 
+            // Modalità Verticale (Tono dritto finché non rilasci)
+            playTone(getFreq(type), true); 
+        }
     }
 
     function handlePadStop() {
         if(document.getElementById('v_input_source').value !== 'manual') return;
-        if (document.getElementById('c_mode').value === 'Iambic') { dotPressed = false; dashPressed = false; } 
+        const mode = document.getElementById('c_mode').value;
+        
+        if (mode === 'Iambic' || mode === 'Manuale') { 
+            dotPressed = false; dashPressed = false; 
+        } 
         else { stopTone(true); }
     }
 
@@ -539,7 +557,11 @@
 
     pad.addEventListener('touchend', (e) => {
         e.preventDefault();
-        if (e.touches.length === 0) { handlePadStop(); } 
+        const mode = document.getElementById('c_mode').value;
+
+        if (e.touches.length === 0) { 
+            handlePadStop(); 
+        } 
         else {
             dotPressed = false; dashPressed = false;
             const rect = pad.getBoundingClientRect();
@@ -547,7 +569,9 @@
                 const isRight = (e.touches[i].clientX - rect.left) > (rect.width / 2);
                 if (isRight) dashPressed = true; else dotPressed = true;
             }
-            if(!dotPressed && !dashPressed && document.getElementById('c_mode').value !== 'Iambic') stopTone(true);
+            if(!dotPressed && !dashPressed && mode !== 'Iambic' && mode !== 'Manuale') {
+                stopTone(true);
+            }
         }
     }, {passive: false});
 
@@ -563,7 +587,8 @@
         if(e.code === kDotCode || e.code === kDashCode) {
             e.preventDefault(); 
             initAudioOptimized();
-            if (mode === 'Iambic') {
+            
+            if (mode === 'Iambic' || mode === 'Manuale') {
                 if (e.code === kDotCode) dotPressed = true;
                 if (e.code === kDashCode) dashPressed = true;
                 if (!keyerActive) runIambicKeyer();
@@ -582,7 +607,7 @@
         
         if(e.code === kDotCode || e.code === kDashCode) {
             e.preventDefault();
-            if (mode === 'Iambic') {
+            if (mode === 'Iambic' || mode === 'Manuale') {
                 if (e.code === kDotCode) dotPressed = false;
                 if (e.code === kDashCode) dashPressed = false;
             } else { 
@@ -793,7 +818,7 @@
     // 6. SERIALE ARDUINO (Chrome/Edge Desktop)
     // =======================================================
         
-async function connectSerial() {
+    async function connectSerial() {
         let serialAPI = navigator.serial;
         
         if (!serialAPI) {
@@ -841,7 +866,11 @@ async function connectSerial() {
         const dash = document.getElementById('c_dash_ms').value;
         const spc = document.getElementById('c_spc_ms').value;
         const freq = document.getElementById('c_freq').value;
-        const m = document.getElementById('c_mode').value === 'Iambic' ? 0 : 1;
+        
+        // Modalità Iambic o Manuale = Motore Iambic in Arduino
+        const mode = document.getElementById('c_mode').value;
+        const m = (mode === 'Iambic' || mode === 'Manuale') ? 0 : 1;
+        
         try { await serialWriter.write(`C:${dot},${dash},${spc},${freq},${freq},${m}\n`); } catch (e) {}
     }
 
