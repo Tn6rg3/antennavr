@@ -203,8 +203,8 @@
         <h3>Messaggi Auto-Distruggenti (Stateless)</h3>
         <p>I messaggi scritti nella Lobby Globale transitano attraverso il nostro database sicuro (Firebase). Tuttavia, <strong>ogni messaggio viene cancellato fisicamente e irreversibilmente dal database dopo 5 secondi</strong>.</p>
 
-        <h3>Connessione Diretta P2P Garantita</h3>
-        <p>Quando entri in una "Stanza P2P", la tecnologia WebRTC fa comunicare il tuo computer direttamente con quello del partner. Usiamo l'impostazione <code>reliable: true</code> (simile al TCP) sia per audio che per messaggi, garantendo la consegna.</p>
+        <h3>Connessione Diretta P2P a Bassa Latenza (UDP-Style)</h3>
+        <p>Quando entri in una "Stanza P2P", la tecnologia WebRTC fa comunicare il tuo computer direttamente con quello del partner. Utilizziamo l'impostazione <code>reliable: false</code> (una modalità inaffidabile stile UDP). In questo modo, l'audio del CW viaggia in tempo reale senza essere bloccato da controlli d'errore. La perdita di un piccolo pacchetto non disturberà il tempismo della tua digitazione (niente lag improvvisi o ritardi ritmici).</p>
         
         <button onclick="document.getElementById('privacy-modal').style.display='none'" style="background-color: #c0392b; width: 100%; margin-top: 20px;">Ho capito, Chiudi</button>
     </div>
@@ -304,6 +304,7 @@
 
     let preOscLocal = null, preGainLocal = null;
     let preOscRemote = null, preGainRemote = null;
+    let remoteWatchdog = null; // Timer di sicurezza per chiusura forzata nota
 
     // =======================================================
     // 1.B LOBBY E PRESENZA (SOCIAL)
@@ -457,6 +458,13 @@
             preGainRemote.gain.cancelScheduledValues(audioCtx.currentTime);
             preGainRemote.gain.setValueAtTime(0, audioCtx.currentTime);
             preGainRemote.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + attack);
+            
+            // Watchdog di sicurezza: poichè usiamo pacchetti inaffidabili (UDP style),
+            // se il pacchetto UP viene perso, spegniamo la nota forzatamente dopo un limite massimo.
+            if (remoteWatchdog) clearTimeout(remoteWatchdog);
+            remoteWatchdog = setTimeout(() => {
+                if(rxIsTx) stopTone(false);
+            }, 1500); // 1.5 secondi è oltre qualsiasi linea di ragionevole velocità CW
         }
     }
 
@@ -476,6 +484,10 @@
         } 
         else if (!isLocal && rxIsTx) {
             rxIsTx = false;
+            
+            // Pulizia del watchdog dato che abbiamo ricevuto regolarmente il pacchetto di UP
+            if (remoteWatchdog) clearTimeout(remoteWatchdog);
+            
             preGainRemote.gain.cancelScheduledValues(audioCtx.currentTime);
             preGainRemote.gain.setValueAtTime(preGainRemote.gain.value, audioCtx.currentTime);
             preGainRemote.gain.linearRampToValueAtTime(0, audioCtx.currentTime + rel);
@@ -648,7 +660,8 @@
                 if (data && data.hostId) {
                     if (data.password !== pass) { alert("Accesso negato: Password errata!"); location.reload(); return; }
                     setStatus("Password OK! Stabilendo P2P...", "#3498db");
-                    const call = peer.connect(data.hostId, { metadata: { user: user }, reliable: true });
+                    // MODIFICA CRUCIALE UDP-STYLE: reliable: false
+                    const call = peer.connect(data.hostId, { metadata: { user: user }, reliable: false });
                     setupDataChannel(call, user, true);
                 } else {
                     ref.set({ hostId: myId, hostName: user, password: pass });
