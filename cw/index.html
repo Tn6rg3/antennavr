@@ -678,7 +678,8 @@
         
         conn.on('data', (d) => {
             if (d.type === 'CHAT') {
-                appendChat(conn.metadata ? conn.metadata.user : "Partner", d.msg, "chat-p2p");
+                // Utilizza il nome inviato nel pacchetto per evitare confusioni
+                appendChat(d.from || "Partner", d.msg, "chat-p2p");
             }
             // Gestione dei toni puri in ingresso
             else if (d.type === 'DN') {
@@ -707,7 +708,8 @@
         
         if(conn && conn.open) {
             appendChat("Tu", msg, "chat-p2p");
-            conn.send({type: 'CHAT', msg: msg});
+            // Invio il mio nome esplicitamente nel pacchetto
+            conn.send({type: 'CHAT', msg: msg, from: myName});
         } else {
             appendChat("🌎 Tu", msg);
             const msgRef = db.ref('lobby/global_chat').push({ from: myName, msg: msg, t: Date.now() });
