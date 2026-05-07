@@ -775,22 +775,43 @@
     // =======================================================
     // 6. SERIALE ARDUINO (Chrome/Edge Desktop)
     // =======================================================
-    async function connectSerial() {
-        if (!("serial" in navigator)) return alert("Browser non supportato per USB. Usa Chrome/Edge su PC.");
+        async function connectSerial() {
+        let serialAPI = navigator.serial;
+        
+        // Se la seriale nativa non c'è (come sui cellulari Android standard), 
+        // carichiamo dinamicamente il Polyfill che sfrutta il WebUSB!
+        if (!serialAPI) {
+            try {
+                const module = await import('https://unpkg.com/web-serial-polyfill');
+                serialAPI = module.serial;
+            } catch(e) {
+                console.error("Fallito caricamento polyfill", e);
+            }
+        }
+
+        // Se anche dopo il trucco non c'è supporto (es. sei su un iPhone)
+        if (!serialAPI) return alert("Browser o Sistema non supportato per USB (Usa Chrome su Android o PC).");
+
         try {
-            port = await navigator.serial.requestPort();
+            // Usiamo serialAPI invece di navigator.serial
+            port = await serialAPI.requestPort();
             await port.open({ baudRate: 115200 });
+            
             const encoder = new TextEncoderStream();
             encoder.readable.pipeTo(port.writable);
             serialWriter = encoder.writable.getWriter();
+            
             readSerialData();
             sendParamsToArduino();
+            
             document.getElementById('btn-serial').textContent = "✅ USB OK";
             document.getElementById('btn-serial').style.backgroundColor = "#27ae60";
         } catch (e) { 
-            console.error(e); alert("Nessuna porta selezionata.");
+            console.error(e); 
+            alert("Nessuna porta selezionata o dispositivo non riconosciuto.");
         }
     }
+
 
     async function sendParamsToArduino() {
         if (!serialWriter) return;
