@@ -28,7 +28,7 @@
         
         label { text-align: right; color: #bdc3c7; font-size: 14px; }
         input[type="text"], input[type="password"], input[type="number"], select { background-color: #111; color: white; border: 1px solid #555; padding: 10px; border-radius: 4px; width: 100%; box-sizing: border-box; }
-        input[readonly] { background-color: #2a2a2a; color: #7f8c8d; cursor: not-allowed; } 
+        input[readonly] { background-color: #2a2a2a; color: #7f8c8d; cursor: not-allowed; } /* Stile per campi bloccati */
         input[type="range"] { cursor: pointer; }
         
         button { background-color: #34495e; color: white; border: none; padding: 12px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.2s; font-size: 15px;}
@@ -302,16 +302,9 @@
     let myPresenceRef = null;
     let knownUsers = new Set();
 
-    // 🎯 VARIABILI PER IL MOTORE ANTI-JITTER
+    // 🎯 OSCILLATORI PRE-CREATI PER BASSA LATENZA
     let preOscLocal = null, preGainLocal = null;
     let preOscRemote = null, preGainRemote = null;
-    
-    let txStartTime = 0;
-    let txFreq = 0;
-    let lastTxEndTime = performance.now();
-    
-    let rxQueue = [];
-    let isRxQueuePlaying = false;
 
     // =======================================================
     // 1.B LOBBY E PRESENZA (SOCIAL)
@@ -448,16 +441,13 @@
 
         if (isLocal) {
             isTx = true;
-            
-            // Salvataggio Timestamp per invio pacchetto completo
-            txStartTime = performance.now();
-            txFreq = freq;
-            
             if(!isSystem) document.getElementById('mouse-pad').classList.add('active');
+            if (!isSystem && conn && conn.open) conn.send({type: 'DN', f: freq});
 
             preOscLocal.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.0005);
             let vol = parseFloat(document.getElementById('a_vol').value);
             
+            // 🎯 ANTI-CLIP: Rampa gain calcolata sull'attacco
             preGainLocal.gain.cancelScheduledValues(audioCtx.currentTime);
             preGainLocal.gain.setValueAtTime(0, audioCtx.currentTime);
             preGainLocal.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + attack);
@@ -479,17 +469,8 @@
         
         if (isLocal && isTx) {
             isTx = false;
-            
-            // Calcolo e Invio Pacchetto CW (Anti-Jitter)
-            let duration = Math.round(performance.now() - txStartTime);
-            let space = Math.round(txStartTime - lastTxEndTime);
-            lastTxEndTime = performance.now();
-            
             if(!isSystem) document.getElementById('mouse-pad').classList.remove('active');
-            
-            if(!isSystem && conn && conn.open) {
-                conn.send({type: 'CW', f: txFreq, d: duration, s: space});
-            }
+            if(!isSystem && conn && conn.open) conn.send({type: 'UP'});
             
             preGainLocal.gain.cancelScheduledValues(audioCtx.currentTime);
             preGainLocal.gain.setValueAtTime(preGainLocal.gain.value, audioCtx.currentTime);
@@ -501,25 +482,6 @@
             preGainRemote.gain.setValueAtTime(preGainRemote.gain.value, audioCtx.currentTime);
             preGainRemote.gain.linearRampToValueAtTime(0, audioCtx.currentTime + rel);
         }
-    }
-
-    // --- MOTORE CODA RX ANTI-JITTER ---
-    async function processRxQueue() {
-        isRxQueuePlaying = true;
-        initAudioOptimized();
-        while (rxQueue.length > 0) {
-            const el = rxQueue.shift();
-            
-            // Attende lo spazio stabilito prima di suonare la nota
-            if (el.s > 0) {
-                await new Promise(r => setTimeout(r, el.s));
-            }
-            
-            playTone(el.f, false, true); 
-            await new Promise(r => setTimeout(r, el.d));
-            stopTone(false, true);
-        }
-        isRxQueuePlaying = false;
     }
 
     // =======================================================
@@ -715,19 +677,9 @@
         });
         
         conn.on('data', (d) => {
-            if (d.type === 'CHAT') {
-                appendChat(conn.metadata ? conn.metadata.user : "Partner", d.msg, "chat-p2p");
-            }
-            else if (d.type === 'CW') {
-                // Buffer Anti-Jitter
-                if (!isRxQueuePlaying && rxQueue.length === 0) {
-                    d.s = 0; // Se non suona nulla, azzera lo spazio per evitare latenza inziale
-                } else {
-                    if (d.s > 2000) d.s = 2000; // Limite massimo 2s spazio
-                }
-                rxQueue.push(d);
-                if (!isRxQueuePlaying) processRxQueue();
-            }
+            if (d.type === 'CHAT') appendChat(conn.metadata ? conn.metadata.user : "Partner", d.msg, "chat-p2p");
+            else if (d.type === 'DN') playTone(d.f, false);
+            else if (d.type === 'UP') stopTone(false); 
         });
         
         conn.on('close', () => { alert("Il partner ha chiuso il collegamento."); location.reload(); });
@@ -982,12 +934,13 @@
         }
     }
 
+    // Nuova funzione per far comandare i millisecondi (in Manuale Assoluto) e ricalcolare i WPM
     function updateFromMS() {
         const mode = document.getElementById('c_mode').value;
         if(mode === 'Manuale') {
             const dot = parseInt(document.getElementById('c_dot_ms').value) || 60;
             const wpm = Math.round(1200 / dot);
-            document.getElementById('c_wpm').value = wpm; 
+            document.getElementById('c_wpm').value = wpm; // Mostra i WPM generati dai ms
             
             if(document.getElementById('a_auto_env').checked) {
                 let env = Math.round(dot * 0.1);
