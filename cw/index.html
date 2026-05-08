@@ -408,6 +408,18 @@
             audioCtx.resume().catch(e => console.log("Audio resume:", e));
         }
 
+        // --- INIZIO MODIFICA: GHOST OSCILLATOR (DAC KEEP-ALIVE) ---
+        if (!window.keepAliveOsc) {
+            window.keepAliveOsc = audioCtx.createOscillator();
+            const keepAliveGain = audioCtx.createGain();
+            // Un volume di 0.0001 (o anche inferiore) tiene sveglia la scheda audio 
+            // ma garantisce silenzio assoluto per l'utente
+            keepAliveGain.gain.value = 0.0001; 
+            window.keepAliveOsc.connect(keepAliveGain).connect(audioCtx.destination);
+            window.keepAliveOsc.start();
+        }
+        // --- FINE MODIFICA ---
+
         if (!preOscLocal) {
             preOscLocal = audioCtx.createOscillator();
             preGainLocal = audioCtx.createGain();
