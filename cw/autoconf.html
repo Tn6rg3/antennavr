@@ -2499,20 +2499,18 @@
     `;
 
 
-    function flashSelectedArduino() {
-        // Verifica che la libreria sia stata caricata dal browser
+    async function flashSelectedArduino() {
         if (typeof AvrgirlArduino === 'undefined') {
-            return alert("Errore: Impossibile caricare la libreria di configurazione. Controlla la connessione internet.");
+            return alert("Errore: Impossibile caricare la libreria. Controlla la connessione internet.");
         }
 
         const model = document.getElementById('arduino_model').value;
         let hexData = "";
         let boardName = "";
 
-        // Traduciamo la tua scelta nei parametri che vuole la libreria
         if (model === "leonardo") {
             hexData = firmwareHexLeonardo;
-            boardName = "micro"; // AVRGirl usa "micro" per il chip 32U4
+            boardName = "micro"; // AVRGirl riconosce l'ATmega32U4 come "micro"
         } else if (model === "uno") {
             hexData = firmwareHexUno;
             boardName = "uno";
@@ -2522,24 +2520,37 @@
         }
 
         if (!hexData || hexData.trim() === "INSERISCI_QUI_IL_TUO_TESTO_HEX...") {
-            return alert("Sviluppatore: Ricordati di incollare il codice HEX nel file JavaScript!");
+            return alert("Errore: Codice HEX non inserito nello script.");
         }
 
-        // Inizializza la magia della libreria
+        // Se è un Leonardo/Micro, diamo un'istruzione a schermo invece di un alert bloccante
+        if (model === "leonardo") {
+            const confirmed = confirm("ATTENZIONE PER MICRO/LEONARDO:\n\nPrima di cliccare OK, fai un DOPPIO CLICK VELOCE sul bottoncino 'RESET' fisico della tua scheda Arduino (il LED inizierà a pulsare).\n\nHai fatto il doppio click?");
+            if (!confirmed) return;
+        }
+
+        // Nessun alert da qui in poi! Dobbiamo invocare l'USB istantaneamente.
         const avrgirl = new AvrgirlArduino({
             board: boardName,
-            debug: true // Utile da tenere a true: premi F12 per vedere i log se qualcosa va storto
+            debug: true
         });
 
-        alert("Passaggio 1: Seleziona la tua scheda Arduino dalla lista che apparirà.\nPassaggio 2: Attendi il termine (ci vorranno circa 5-10 secondi).");
+        // Cambiamo il testo del bottone per dare feedback visivo
+        const btn = document.getElementById('btn-flash');
+        const originalText = btn.textContent;
+        btn.textContent = "⏳ Caricamento in corso...";
+        btn.style.backgroundColor = "#f39c12";
 
-        // La libreria fa tutto: apre la porta, resetta la scheda e invia i byte!
         avrgirl.flash(hexData, (error) => {
+            // Ripristiniamo il bottone
+            btn.textContent = originalText;
+            btn.style.backgroundColor = "#8e44ad";
+
             if (error) {
                 console.error("Errore di configurazione:", error);
-                alert("Si è verificato un errore: " + error.message);
+                alert("Operazione annullata o fallita.\n\nSe usi ATmega32U4, ricordati di fare il doppio click sul tasto RESET della scheda prima di iniziare!");
             } else {
-                alert("✅ Configurazione completata! Il tuo Arduino è ora un telegrafo P2P.\nClicca su 'Connetti USB' per iniziare.");
+                alert("✅ Configurazione completata con successo!\n\nIl tuo Arduino è pronto. Ora puoi cliccare su 'Connetti USB'.");
             }
         });
     }
