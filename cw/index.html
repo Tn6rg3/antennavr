@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CW Gateway P2P (Jitter Buffer V2)</title>
+    <title>CW Gateway P2P (Zero Latency V3)</title>
     
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
@@ -42,7 +42,7 @@
         #area-auto.active, #area-manuale.active { display: block; }
         #txt-live { font-size: 18px; background-color: #111; border: 1px solid #555; padding: 12px; color: #f1c40f; width: 100%;}
         
-        #mouse-pad { height: 140px; background-color: #111; border: 2px dashed #7f8c8d; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #7f8c8d; cursor: crosshair; }
+        #mouse-pad { height: 140px; background-color: #111; border: 2px dashed #7f8c8d; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #7f8c8d; cursor: crosshair; touch-action: none; }
         #mouse-pad.active { background-color: #f1c40f; color: #111; border: 2px solid #fff; font-weight: bold;}
         
         /* LOBBY E CHAT */
@@ -319,7 +319,7 @@
 
     // VARIABILI PER IL JITTER BUFFER E SINCRONIZZAZIONE
     let timeOffset = 0;
-    const PLAYBACK_DELAY = 150; // Ritardo in millisecondi per assorbire il Jitter
+    const PLAYBACK_DELAY = 150; 
     let syncInterval = null;
 
     // =======================================================
@@ -339,7 +339,6 @@
             const data = snap.val();
             if(data) {
                 if (data.type === 'INVITE') {
-                    // Box speciale di invito nella chat globale
                     const div = document.createElement('div');
                     div.className = 'chat-pm';
                     div.style.backgroundColor = '#2c3e50';
@@ -436,7 +435,6 @@
         const randRoom = "cw-" + Math.random().toString(36).substr(2, 5);
         const randPass = Math.random().toString(36).substr(2, 4);
         
-        // Imposto client per fare da Host
         document.getElementById('n_room').value = randRoom;
         document.getElementById('n_pass').value = randPass;
         saveConfig();
@@ -464,7 +462,6 @@
         appendChat("SISTEMA", `Accettazione invito. Connessione in corso...`, "chat-sys", "global");
         connectP2P();
     }
-
 
     // =======================================================
     // CHAT A SCHEDE (TABS)
@@ -584,6 +581,7 @@
         return f;
     }
 
+    // OTTIMIZZAZIONE LATENZA: L'audio viene eseguito PRIMA della chiamata di rete
     function playTone(freq, isLocal = true, isSystem = false) {
         initAudioOptimized();
         if (isLocal && isTx) return;
@@ -594,16 +592,18 @@
             isTx = true;
             if(!isSystem) document.getElementById('mouse-pad').classList.add('active');
             
-            if (!isSystem && conn && conn.open) {
-                conn.send({type: 'DN', f: freq, ts: Date.now()});
-            }
-
+            // 1. SCHEDULA L'AUDIO LOCALE ISTANTANEAMENTE
             preOscLocal.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.0005);
             let vol = parseFloat(document.getElementById('a_vol').value);
             
             preGainLocal.gain.cancelScheduledValues(audioCtx.currentTime);
             preGainLocal.gain.setValueAtTime(preGainLocal.gain.value, audioCtx.currentTime);
             preGainLocal.gain.setTargetAtTime(vol, audioCtx.currentTime, attack / 3);
+            
+            // 2. INVIA ALLA RETE DOPO L'ESECUZIONE AUDIO
+            if (!isSystem && conn && conn.open) {
+                conn.send({type: 'DN', f: freq, ts: Date.now()});
+            }
         }
     }
 
@@ -614,13 +614,15 @@
             isTx = false;
             if(!isSystem) document.getElementById('mouse-pad').classList.remove('active');
             
-            if(!isSystem && conn && conn.open) {
-                conn.send({type: 'UP', ts: Date.now()});
-            }
-            
+            // 1. FERMA L'AUDIO LOCALE ISTANTANEAMENTE
             preGainLocal.gain.cancelScheduledValues(audioCtx.currentTime);
             preGainLocal.gain.setValueAtTime(preGainLocal.gain.value, audioCtx.currentTime);
             preGainLocal.gain.setTargetAtTime(0, audioCtx.currentTime, rel / 3);
+            
+            // 2. INVIA ALLA RETE DOPO
+            if(!isSystem && conn && conn.open) {
+                conn.send({type: 'UP', ts: Date.now()});
+            }
         } 
     }
 
@@ -655,7 +657,7 @@
     }
 
     // =======================================================
-    // 3. MOTORE IAMBIC E MANUALE ASSOLUTO
+    // 3. MOTORE IAMBIC E MANUALE ASSOLUTO (POINTER EVENTS OTTMIZZATI)
     // =======================================================
     let dotPressed = false, dashPressed = false, keyerActive = false, lastIambic = null;
 
@@ -712,40 +714,28 @@
         }
     }
 
+    // SOSTITUZIONE CON POINTER EVENTS (Elimina il ritardo Mobile/Touch)
     const pad = document.getElementById('mouse-pad');
-    pad.addEventListener('mousedown', (e) => { handlePadStart(e.button === 2); });
-    pad.addEventListener('mouseup', handlePadStop);
-    pad.addEventListener('mouseleave', handlePadStop);
-    pad.addEventListener('contextmenu', e => e.preventDefault()); 
+    pad.style.touchAction = 'none'; // Disabilita scroll e zoom nativo del browser sul pad
 
-    pad.addEventListener('touchstart', (e) => {
-        e.preventDefault(); 
-        const rect = pad.getBoundingClientRect();
-        for(let i=0; i<e.changedTouches.length; i++) {
-            const isRight = (e.changedTouches[i].clientX - rect.left) > (rect.width / 2);
-            handlePadStart(isRight);
-        }
-    }, {passive: false});
-
-    pad.addEventListener('touchend', (e) => {
+    pad.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        const mode = document.getElementById('c_mode').value;
+        pad.setPointerCapture(e.pointerId); // Cattura il tocco anche se esce dal div
+        
+        const rect = pad.getBoundingClientRect();
+        const isRight = (e.clientX - rect.left) > (rect.width / 2);
+        
+        handlePadStart(e.button === 2 || isRight);
+    });
 
-        if (e.touches.length === 0) { 
-            handlePadStop(); 
-        } 
-        else {
-            dotPressed = false; dashPressed = false;
-            const rect = pad.getBoundingClientRect();
-            for(let i=0; i<e.touches.length; i++) {
-                const isRight = (e.touches[i].clientX - rect.left) > (rect.width / 2);
-                if (isRight) dashPressed = true; else dotPressed = true;
-            }
-            if(!dotPressed && !dashPressed && mode !== 'Iambic' && mode !== 'Manuale') {
-                stopTone(true);
-            }
-        }
-    }, {passive: false});
+    pad.addEventListener('pointerup', (e) => {
+        e.preventDefault();
+        pad.releasePointerCapture(e.pointerId);
+        handlePadStop();
+    });
+
+    pad.addEventListener('pointercancel', handlePadStop);
+    pad.addEventListener('contextmenu', e => e.preventDefault()); 
 
     document.addEventListener('keydown', (e) => {
         if(document.getElementById('v_input_source').value !== 'manual') return;
@@ -847,7 +837,6 @@
         conn.on('open', () => {
             setStatus("CONNESSO P2P DIRETTO!", "#2ecc71");
             
-            // Switch automatico UI alla chat di stanza
             document.getElementById('p2p-status').textContent = '🟢';
             switchChat('p2p');
             appendChat("SISTEMA", "Sei connesso P2P con il partner. Comunicazione CW attiva.", "chat-sys", "p2p");
@@ -904,18 +893,15 @@
         if(conn) { conn.close(); conn = null; }
         if(peer) { peer.destroy(); peer = null; }
         
-        // Reset Suoni pendenti
         stopTone(true);
         if(rxIsTx) stopToneScheduled(audioCtx ? audioCtx.currentTime : 0);
         
-        // Ripristino Interfaccia
         setStatus("In attesa...", "#f1c40f");
         document.getElementById('btn-net-connect').style.display = 'block';
         document.getElementById('btn-net-disconnect').style.display = 'none';
         document.getElementById('p2p-status').textContent = '🔴';
         switchChat('global');
     }
-
 
     // =======================================================
     // 5. GENERATORE AUTOMATICO E SISTEMA NOTIFICHE CW
@@ -998,7 +984,7 @@
     }
 
     // =======================================================
-    // 6. SERIALE ARDUINO E LOGICA CALCOLO TEMPI/WPM
+    // 6. SERIALE ARDUINO E LOGICA CALCOLO TEMPI/WPM (OTTIMIZZATI RAW BYTES)
     // =======================================================
         
     async function connectSerial() {
@@ -1025,7 +1011,8 @@
                 ]
             });
             
-            await port.open({ baudRate: 115200 });
+            // Baud Rate allineato con il nuovo sketch Arduino
+            await port.open({ baudRate: 500000 });
             await port.setSignals({ dataTerminalReady: true, requestToSend: true });
             
             const encoder = new TextEncoderStream();
@@ -1057,17 +1044,31 @@
     }
 
     async function readSerialData() {
-        const decoder = new TextDecoderStream();
-        port.readable.pipeTo(decoder.writable);
-        const reader = decoder.readable.getReader();
+        // Lettura ultrarapida Raw Bytes invece che Text Strings
+        const reader = port.readable.getReader();
+        
         while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
+            const { value, done } = await reader.read(); // value è un Uint8Array
+            if (done) {
+                reader.releaseLock();
+                break;
+            }
             if (document.getElementById('v_input_source').value !== 'serial') continue;
-            const char = value.trim();
-            if (char === '1' || char === 'D') { playTone(getFreq('dot'), true); } 
-            else if (char === 'L') { playTone(getFreq('dash'), true); } 
-            else if (char === '0') { stopTone(true); }
+
+            for (let i = 0; i < value.length; i++) {
+                const byte = value[i];
+                
+                // Leggiamo byte puri (1, 2, 0) o ASCII in caso di fallback
+                if (byte === 1 || byte === 49 || byte === 68) { 
+                    playTone(getFreq('dot'), true); 
+                } 
+                else if (byte === 2 || byte === 76) { 
+                    playTone(getFreq('dash'), true); 
+                } 
+                else if (byte === 0 || byte === 48) { 
+                    stopTone(true); 
+                }
+            }
         }
     }
 
