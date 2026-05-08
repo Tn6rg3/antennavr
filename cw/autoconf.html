@@ -8,7 +8,7 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
-
+    <script src="https://unpkg.com/avrgirl-arduino-browser/avrgirl-arduino.bundle.js"></script>
     <style>
         /* --- STILI BASE --- */
         body { background-color: #1a1a1a; color: white; font-family: Arial, sans-serif; margin: 0; padding: 20px; display: flex; gap: 20px; justify-content: center; box-sizing: border-box; }
@@ -2498,69 +2498,50 @@
 
     `;
 
-    async function flashSelectedArduino() {
-        let serialAPI = navigator.serial;
-        if (!serialAPI) return alert("Web Serial API non supportata dal tuo browser.");
+
+    function flashSelectedArduino() {
+        // Verifica che la libreria sia stata caricata dal browser
+        if (typeof AvrgirlArduino === 'undefined') {
+            return alert("Errore: Impossibile caricare la libreria di configurazione. Controlla la connessione internet.");
+        }
 
         const model = document.getElementById('arduino_model').value;
-        let port;
+        let hexData = "";
+        let boardName = "";
 
-        try {
-            // FASE 1: Seleziona la porta
-            alert("Seleziona la tua scheda Arduino dalla lista che apparirà.");
-            port = await serialAPI.requestPort({
-                filters: [
-                    { usbVendorId: 0x2341 }, // Arduino originali
-                    { usbVendorId: 0x1B4F }, // SparkFun
-                    { usbVendorId: 0x239A }, // Adafruit
-                    { usbVendorId: 0x1A86 }  // CH340 (Cloni Uno/Nano)
-                ]
-            });
-
-            // FASE 2: Logica in base al modello
-            if (model === "leonardo") {
-                // Procedura "1200bps Touch" per riavviare il 32U4 nel Bootloader
-                await port.open({ baudRate: 1200 });
-                await port.setSignals({ dataTerminalReady: false, requestToSend: false });
-                await new Promise(resolve => setTimeout(resolve, 100));
-                await port.close();
-
-                alert("L'Arduino si sta riavviando. Clicca OK e seleziona la NUOVA porta (Bootloader) che apparirà.");
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                const bootloaderPort = await serialAPI.requestPort();
-                
-                // NOTA: Qui serve implementare/importare la libreria AVR109 in JS
-                await uploadHexToAVR109(bootloaderPort, firmwareHexLeonardo);
-                
-            } else {
-                // Procedura DTR (Arduino Uno / Nano)
-                const baud = (model === "uno") ? 115200 : 57600;
-                await port.open({ baudRate: baud });
-                
-                alert("Avvio procedura di Flash... Non scollegare il cavo.");
-
-                // Trucco DTR per forzare il Reset del chip
-                await port.setSignals({ dataTerminalReady: false, requestToSend: false });
-                await new Promise(resolve => setTimeout(resolve, 250));
-                await port.setSignals({ dataTerminalReady: true, requestToSend: true });
-                await new Promise(resolve => setTimeout(resolve, 50)); // Attesa avvio optiboot
-                
-                const hexString = (model === "uno") ? firmwareHexUno : firmwareHexNanoOld;
-                
-                // NOTA: Qui serve implementare/importare la libreria STK500v1 in JS
-                await uploadHexToSTK500v1(port, hexString);
-                
-                await port.close();
-            }
-
-            alert("✅ Configurazione completata! La scheda è pronta. Clicca su 'Connetti USB'.");
-
-        } catch (e) {
-            console.error("Errore durante il flashing:", e);
-            alert("Operazione annullata o fallita: " + e.message);
-            if (port && port.readable) await port.close().catch(()=>{});
+        // Traduciamo la tua scelta nei parametri che vuole la libreria
+        if (model === "leonardo") {
+            hexData = firmwareHexLeonardo;
+            boardName = "micro"; // AVRGirl usa "micro" per il chip 32U4
+        } else if (model === "uno") {
+            hexData = firmwareHexUno;
+            boardName = "uno";
+        } else if (model === "nano_old") {
+            hexData = firmwareHexNanoOld;
+            boardName = "nano";
         }
+
+        if (!hexData || hexData.trim() === "INSERISCI_QUI_IL_TUO_TESTO_HEX...") {
+            return alert("Sviluppatore: Ricordati di incollare il codice HEX nel file JavaScript!");
+        }
+
+        // Inizializza la magia della libreria
+        const avrgirl = new AvrgirlArduino({
+            board: boardName,
+            debug: true // Utile da tenere a true: premi F12 per vedere i log se qualcosa va storto
+        });
+
+        alert("Passaggio 1: Seleziona la tua scheda Arduino dalla lista che apparirà.\nPassaggio 2: Attendi il termine (ci vorranno circa 5-10 secondi).");
+
+        // La libreria fa tutto: apre la porta, resetta la scheda e invia i byte!
+        avrgirl.flash(hexData, (error) => {
+            if (error) {
+                console.error("Errore di configurazione:", error);
+                alert("Si è verificato un errore: " + error.message);
+            } else {
+                alert("✅ Configurazione completata! Il tuo Arduino è ora un telegrafo P2P.\nClicca su 'Connetti USB' per iniziare.");
+            }
+        });
     }
 
     // Placeholder per i protocolli reali
