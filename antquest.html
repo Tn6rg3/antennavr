@@ -10,37 +10,28 @@
     <link rel="apple-touch-icon" href="./icon-192.png">
 
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            font-family: sans-serif; 
-            background-color: #111; 
-            touch-action: none; 
-            color: white;
-        }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
         
-        /* Schermata pre-VR per evitare lo schermo nero */
-        #pre-vr-screen {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(20, 30, 40, 0.95);
-            padding: 30px;
-            border-radius: 15px;
-            border: 2px solid #2ed573;
-            text-align: center;
-            z-index: 50;
-            width: 80%;
-            max-width: 500px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        #ui-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: space-between;
+            z-index: 100; pointer-events: none; padding: 5px; box-sizing: border-box;
+            transition: opacity 0.3s ease;
         }
 
-        #ui-container {
-            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            display: flex; flex-direction: column; justify-content: space-between;
-            z-index: 100; pointer-events: none; padding: 20px; box-sizing: border-box;
-            transition: opacity 0.3s ease;
+        /* CLASSE SPECIALE PER IL PANNELLO IN VR SUL QUEST 3 */
+        .vr-panel {
+            position: relative !important;
+            width: 800px !important;
+            height: 600px !important;
+            max-width: 100% !important;
+            margin: auto !important; /* Centra il pannello nel DOM Overlay del visore */
+            background: rgba(15, 20, 25, 0.95) !important;
+            border: 3px solid #2ed573 !important;
+            border-radius: 15px !important;
+            padding: 15px !important;
+            pointer-events: auto !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
 
         #top-bar { display: flex; justify-content: space-between; width: 100%; }
@@ -59,7 +50,7 @@
         .ant-settings { display: none; }
         #warning { color: #ff4757; font-weight: bold; font-size: 12px; display: none; margin-top: 5px;}
 
-        .bottom-controls { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; margin-bottom: 80px; }
+        .bottom-controls { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; }
         .btn-row { display: flex; gap: 5px; pointer-events: auto; width: 100%; justify-content: center; }
         .main-btn {
             padding: 10px 5px; font-size: 13px; font-weight: bold; flex: 1; border-radius: 8px;
@@ -75,14 +66,22 @@
         #btnReset { background: #ff9f43; color: black; font-size: 14px; }
         #btnToggleLobe { background: #9b59b6; color: white; font-size: 14px; }
         
-        #instruction { text-align: center; color: #fff; font-weight: bold; background: #e1b12c; padding: 6px; border-radius: 5px; width: 100%; box-sizing: border-box; font-size: 14px; margin-bottom: 10px;}
+        #instruction { text-align: center; color: #fff; font-weight: bold; background: #e1b12c; padding: 6px; border-radius: 5px; width: 100%; box-sizing: border-box; font-size: 13px;}
         
         .edit-panel { background: rgba(30,30,30,0.95); padding: 8px; border-radius: 8px; width: 100%; pointer-events: auto; box-sizing: border-box; text-align: center;}
         .edit-row { display: flex; justify-content: center; gap: 10px; margin-top: 5px; }
         .edit-btn { padding: 10px 15px; font-size: 14px; background: #444; color: white; border: 1px solid #777; border-radius: 5px; font-weight: bold; cursor: pointer;}
         .edit-btn:active { background: #888; }
         
+        .height-input-container { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; }
+        #phoneHeight { width: 60px; padding: 5px; font-size: 16px; text-align: center; font-weight: bold; border-radius: 4px; border: none;}
+        
+        #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
+        
+        #photoOverlay { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(46, 213, 115, 0.9); color: black; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: bold; display: none; z-index: 200; box-shadow: 0 4px 6px rgba(0,0,0,0.5);}
+        
         #btnInfo { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); border: 2px solid #2ed573; color: #2ed573; border-radius: 50%; width: 35px; height: 35px; font-weight: bold; font-size: 18px; cursor: pointer; z-index: 200; pointer-events: auto; display: flex; align-items: center; justify-content: center;}
+        
         #btnSettings { position: absolute; top: 10px; right: 55px; background: rgba(0,0,0,0.7); border: 2px solid #1e90ff; color: #1e90ff; border-radius: 50%; width: 35px; height: 35px; font-weight: bold; font-size: 18px; cursor: pointer; z-index: 200; pointer-events: auto; display: flex; align-items: center; justify-content: center;}
 
         .custom-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px; background: rgba(20, 30, 40, 0.98); padding: 15px; border: 2px solid #2ed573; border-radius: 10px; z-index: 300; pointer-events: auto; color: white; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); max-height: 85vh; overflow-y: auto;}
@@ -99,29 +98,29 @@
         .stepper span { width: 50px; text-align: center; font-weight: bold; font-size: 14px; color: #ffdd59;}
         
         input[type="color"] { border: none; width: 40px; height: 30px; background: transparent; cursor: pointer; border-radius: 5px; padding: 0;}
+
         .modal-close-btn { padding: 10px 20px; background: #2ed573; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; margin-top: 10px;}
         #btnCloseSettings { background: #1e90ff; color: white; }
 
-        #photoOverlay { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(46, 213, 115, 0.9); color: black; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: bold; display: none; z-index: 200; box-shadow: 0 4px 6px rgba(0,0,0,0.5);}
+        #browserWarning { display: none; position: absolute; top: 0; left: 0; width: 100%; background: #ff4757; color: white; padding: 10px; box-sizing: border-box; text-align: center; font-size: 13px; font-weight: bold; z-index: 1000; }
     </style>
 </head>
 <body>
 
-    <div id="pre-vr-screen">
-        <h2 style="color: #2ed573; margin-top: 0;">Ham Radio AR</h2>
-        <p>Premi il pulsante <strong>"ENTER AR"</strong> in basso per avviare la modalità VR/AR.</p>
-        <p style="font-size: 13px; color: #aaa;">Se ti viene richiesto, concedi al browser i permessi per utilizzare l'ambiente 3D (WebXR).</p>
+    <div id="browserWarning">
+        ⚠️ Attenzione: Sembra che tu non stia usando Google Chrome.
     </div>
 
     <div id="ui-container" style="display: none;">
+        <div id="touchArea"></div>
         
         <button id="btnInfo">i</button>
         <button id="btnSettings">⚙️</button>
 
         <div id="infoModal" class="custom-modal">
             <h3>Info Quest 3 Edition</h3>
-            <p><strong>NOVITÀ:</strong> Premi il tasto <strong>Y</strong> o <strong>X</strong> sul controller sinistro per nascondere o mostrare l'intero pannello in qualsiasi momento!</p>
-            <p>Usa il raggio laser dei controller e premi il grilletto per interagire con il mondo reale e i menu.</p>
+            <p><strong>NOVITÀ VR:</strong> Il pannello è fluttuante! Puoi afferrarlo dalla barra bianca sottostante per spostarlo nello spazio.</p>
+            <p>Usa il <strong>Grilletto</strong> per confermare. Premi il tasto <strong>Y</strong> o <strong>X</strong> sul controller sinistro per nascondere il pannello.</p>
             <button id="btnCloseInfo" class="modal-close-btn">Ho capito</button>
         </div>
 
@@ -132,7 +131,7 @@
                 <label>Lato Griglia:</label>
                 <div class="stepper">
                     <button id="btnGridMinus" class="step-btn">-</button>
-                    <span id="gridVal">5m</span>
+                    <span id="gridVal">50m</span>
                     <button id="btnGridPlus" class="step-btn">+</button>
                 </div>
             </div>
@@ -141,7 +140,7 @@
                 <label>Dim. Quadrati:</label>
                 <div class="stepper">
                     <button id="btnSqMinus" class="step-btn">-</button>
-                    <span id="sqVal">0.1m</span>
+                    <span id="sqVal">0.5m</span>
                     <button id="btnSqPlus" class="step-btn">+</button>
                 </div>
             </div>
@@ -180,7 +179,8 @@
             </div>
             
             <hr style="border-color:#444; margin: 15px 0;">
-            <button id="btnForceUpdate" style="padding: 10px 20px; background: #ff9f43; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; margin-bottom: 10px;">🔄 Ricarica App / Aggiorna</button>
+            <button id="btnForceUpdate" style="padding: 10px 20px; background: #ff9f43; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; margin-bottom: 10px;">🔄 Scarica Ultima Versione App</button>
+
             <button id="btnCloseSettings" class="modal-close-btn">Chiudi</button>
         </div>
         
@@ -223,21 +223,15 @@
 
                 <div id="setEndFed" class="ant-settings">
                     Start:<br>
-                    <select id="efStart">
-                        <option value="A">Punto A</option>
-                        <option value="B">Punto B</option>
-                    </select>
-                    Corda (m): <input type="number" id="efDist" value="1" step="0.5">
+                    <select id="efStart"><option value="A">Punto A</option><option value="B">Punto B</option></select>
+                    Corda Tirante (m): <input type="number" id="efDist" value="1" step="0.5">
                     L1 (m): <input type="number" id="efL1" value="10" step="0.5">
                     L2 (m): <input type="number" id="efL2" value="2" step="0.5">
                 </div>
 
                 <div id="setLongWire" class="ant-settings">
                     Start:<br>
-                    <select id="lwStart">
-                        <option value="A">Punto A</option>
-                        <option value="B">Punto B</option>
-                    </select>
+                    <select id="lwStart"><option value="A">Punto A</option><option value="B">Punto B</option></select>
                     Lunghezza (m): <input type="number" id="lwLen" value="20" step="1">
                 </div>
                 
@@ -246,12 +240,22 @@
         </div>
 
         <div class="bottom-controls">
+            
+            <div id="panel-setup-ground" class="edit-panel" style="display: none;">
+                <div style="font-size: 13px; margin-bottom: 8px; color: #2ed573;">Il Quest calcola il pavimento in automatico. Se serve, forzalo:</div>
+                <div class="height-input-container">
+                    Altezza visore: <input type="number" id="phoneHeight" value="1.60" step="0.05"> m
+                </div>
+                <div class="edit-row">
+                    <button class="edit-btn" id="btnSetByHeight" style="background:#2ed573; color:black;">Forza Pavimento con Altezza</button>
+                </div>
+            </div>
 
             <div id="panel-edit-point" class="edit-panel" style="display: none;">
-                <div style="font-size: 13px; margin-bottom: 5px; color: #fff;">Regola Altezza dell'albero:</div>
+                <div style="font-size: 13px; margin-bottom: 5px; color: #fff;">Regola altezza in VR:</div>
                 <div class="edit-row">
-                    <button class="edit-btn" id="btnHMinus" style="font-size: 16px; background: #ff4757;">⬇️ -0.5m</button>
-                    <button class="edit-btn" id="btnHPlus" style="font-size: 16px; background: #2ed573; color: black;">⬆️ +0.5m</button>
+                    <button class="edit-btn" id="btnHMinus" style="font-size: 16px; background: #ff4757;">⬇️ Giù 0.5m</button>
+                    <button class="edit-btn" id="btnHPlus" style="font-size: 16px; background: #2ed573; color: black;">⬆️ Su 0.5m</button>
                 </div>
                 <div class="edit-row">
                     <button class="edit-btn" id="btnMoveBase">Sposta Base 🎯</button>
@@ -276,7 +280,7 @@
         </div>
     </div>
     
-    <div id="photoOverlay">Usa il tasto screenshot del visore! (Menu nascosto per 5s)</div>
+    <div id="photoOverlay">Usa i tasti fisici del Quest per lo screenshot! (L'interfaccia torna tra 5 sec)</div>
 
     <script type="importmap">
         {
@@ -292,6 +296,13 @@
         import { ARButton } from 'three/addons/webxr/ARButton.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        const isChrome = /Chrome/i.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+        if (isAndroid && !isChrome && !navigator.userAgent.includes('Quest')) {
+            document.getElementById('browserWarning').style.display = 'block';
+            setTimeout(() => { document.getElementById('browserWarning').style.display = 'none'; }, 8000);
+        }
+
         let container, camera, scene, renderer, reticle;
         let controller1, controller2, controllerGrip1, controllerGrip2;
 
@@ -301,22 +312,18 @@
         let textSprites = []; 
         
         let groundLevel = 0; 
-        let isGroundSet = false; 
+        let isGroundSet = false;
         
         let currentAction = 'NONE'; 
         
-        let hitTestSource = null;
-        let hitTestSourceRequested = false;
-        let lastHitPose = null;
-        
-        let globalGridSize = 5;       
-        let globalGridSquareSize = 0.1; 
-        let globalPointScale = 0.1; 
+        let globalGridSize = 50;
+        let globalGridSquareSize = 0.5;
+        let globalPointScale = 0.1;
         let globalTextScale = 1.2; 
         let isLobeVisible = false; 
         
-        let colorA = 0xff4757; 
-        let colorB = 0x1e90ff; 
+        let colorA = 0xff4757;
+        let colorB = 0x1e90ff;
         let colorC = 0xf1c40f;
 
         let isUIVisible = true;
@@ -348,13 +355,12 @@
         function init() {
             container = document.createElement( 'div' );
             document.body.appendChild( container );
-            
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 2000 );
             
+            camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 2000 );
+
             const light = new THREE.HemisphereLight( 0xffffff, 0xbbbbff, 3 );
-            light.position.set( 0.5, 1, 0.25 );
-            scene.add( light );
+            light.position.set( 0.5, 1, 0.25 ); scene.add( light );
 
             renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
             renderer.setPixelRatio( window.devicePixelRatio );
@@ -362,104 +368,85 @@
             renderer.xr.enabled = true;
             container.appendChild( renderer.domElement );
 
-            // Configurazione WebXR corretta
+            // CONFIGURAZIONE ARButton per Quest 3: local-floor imposta Y=0 sul pavimento reale. dom-overlay gestisce l'interfaccia.
             document.body.appendChild( ARButton.createButton( renderer, { 
-                requiredFeatures: [ 'hit-test' ], 
-                optionalFeatures: [ 'dom-overlay', 'local-floor' ],
+                requiredFeatures: [ 'local-floor' ],
+                optionalFeatures: [ 'dom-overlay' ],
                 domOverlay: { root: document.getElementById('ui-container') }
             } ) );
 
             let divisions = Math.max(1, Math.round(globalGridSize / globalGridSquareSize));
             groundGrid = new THREE.GridHelper( globalGridSize, divisions, 0x2ed573, 0x2ed573 );
-            groundGrid.material.opacity = 0.8; 
-            groundGrid.material.transparent = true; 
-            groundGrid.visible = false;
+            groundGrid.material.opacity = 0.8; groundGrid.material.transparent = true; groundGrid.visible = false;
             scene.add( groundGrid );
 
             const pointGeo = new THREE.SphereGeometry( 0.1, 32, 32 );
-            point1 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: colorA } ) ); 
-            point1.visible = false; 
-            scene.add( point1 );
-            
-            point2 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: colorB } ) ); 
-            point2.visible = false; 
-            scene.add( point2 );
-            
-            point3 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: colorC } ) ); 
-            point3.visible = false; 
-            scene.add( point3 );
+            point1 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: colorA } ) ); point1.visible = false; scene.add( point1 );
+            point2 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: colorB } ) ); point2.visible = false; scene.add( point2 );
+            point3 = new THREE.Mesh( pointGeo, new THREE.MeshPhongMaterial( { color: colorC } ) ); point3.visible = false; scene.add( point3 );
 
-            lineAB = new THREE.Line(
-                new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), 
-                new THREE.LineBasicMaterial({ color: 0xffdd59, linewidth: 1, transparent: true, opacity: 0.5 })
-            );
-            lineAB.visible = false; 
-            scene.add(lineAB);
+            lineAB = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffdd59, linewidth: 1, transparent: true, opacity: 0.5 }));
+            lineAB.visible = false; scene.add(lineAB);
 
-            reticle = new THREE.Mesh( 
-                new THREE.RingGeometry( 0.05, 0.08, 32 ).rotateX( - Math.PI / 2 ), 
-                new THREE.MeshBasicMaterial( { color: 0xffffff } ) 
-            );
-            reticle.matrixAutoUpdate = true; 
-            reticle.visible = false; 
-            scene.add( reticle );
+            reticle = new THREE.Mesh( new THREE.RingGeometry( 0.05, 0.08, 32 ).rotateX( - Math.PI / 2 ), new THREE.MeshBasicMaterial( { color: 0xffffff } ) );
+            reticle.matrixAutoUpdate = true; reticle.visible = false; scene.add( reticle );
 
             const controllerModelFactory = new XRControllerModelFactory();
 
-            // Controller 1 (Destro) - Usato per mirare
+            // Setup Controller VR Destro
             controller1 = renderer.xr.getController( 0 );
             controller1.addEventListener( 'select', onSelect );
             scene.add( controller1 );
-            
             controllerGrip1 = renderer.xr.getControllerGrip( 0 );
             controllerGrip1.add( controllerModelFactory.createControllerModel( controllerGrip1 ) );
             scene.add( controllerGrip1 );
 
-            // Controller 2 (Sinistro)
+            // Setup Controller VR Sinistro
             controller2 = renderer.xr.getController( 1 );
             controller2.addEventListener( 'select', onSelect );
             scene.add( controller2 );
-            
             controllerGrip2 = renderer.xr.getControllerGrip( 1 );
             controllerGrip2.add( controllerModelFactory.createControllerModel( controllerGrip2 ) );
             scene.add( controllerGrip2 );
 
-            // Creazione dei raggi laser visivi per i controller
-            const laserGeo = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(0, 0, 0), 
-                new THREE.Vector3(0, 0, -5)
-            ]);
+            // Aggiungo i Laser visivi ai controller
+            const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -5)]);
             const laserMat = new THREE.LineBasicMaterial({ color: 0x2ed573, transparent: true, opacity: 0.8 });
-            
             controller1.add(new THREE.Line(laserGeo.clone(), laserMat));
             controller2.add(new THREE.Line(laserGeo.clone(), laserMat));
 
             window.addEventListener( 'resize', onWindowResize );
 
             renderer.xr.addEventListener('sessionstart', () => {
-                // Nascondi la schermata pre-vr
-                document.getElementById('pre-vr-screen').style.display = 'none';
-                
                 const ui = document.getElementById('ui-container');
                 ui.style.display = 'flex';
-                ui.style.opacity = '1';
-                isUIVisible = true;
+                // Trasforma l'interfaccia 2D in un pannello fisico fluttuante
+                ui.classList.add('vr-panel');
                 
-                isGroundSet = false; 
-                groundLevel = 0; 
-                setAction('PLACE_GROUND'); 
+                // Su Quest, il local-floor conosce già il pavimento!
+                isGroundSet = true;
+                groundLevel = 0;
+                groundGrid.position.set(0, 0, 0);
+                groundGrid.visible = true;
+
+                setAction('NONE');
                 
                 const session = renderer.xr.getSession();
                 if (session) {
-                    try { 
-                        session.updateRenderState({ depthNear: 0.1, depthFar: 2500 }); 
-                    } catch (e) {
-                        console.warn(e);
-                    }
+                    try { session.updateRenderState({ depthNear: 0.1, depthFar: 2500 }); } catch (e) {}
                 }
             });
 
-            // Gestione Pulsanti UI
+            renderer.xr.addEventListener('sessionend', () => {
+                document.getElementById('ui-container').classList.remove('vr-panel');
+            });
+
+            // Evita che cliccare sul pannello in VR faccia partire il laser e piazzare punti
+            document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
+                ev.preventDefault();
+            });
+
+            // LOGICA PULSANTI FRECCE ALTEZZA (Sostituisce il trascinamento touch in VR)
             document.getElementById('btnHMinus').addEventListener('click', () => { adjustHeight(-0.5); });
             document.getElementById('btnHPlus').addEventListener('click', () => { adjustHeight(0.5); });
 
@@ -471,12 +458,14 @@
                 
                 if (pt && pt.visible) {
                     pt.position.y += delta;
-                    if (pt.position.y < groundLevel) pt.position.y = groundLevel;
+                    if (pt.position.y < groundLevel) pt.position.y = groundLevel; // Non sprofondare sotto terra
                     updateCalculations();
                     drawAntenna();
                 }
             }
 
+            document.getElementById('btnGround').addEventListener('click', () => setAction('MENU_GROUND'));
+            
             document.getElementById('btnToggleLobe').addEventListener('click', () => {
                 isLobeVisible = !isLobeVisible;
                 document.getElementById('btnToggleLobe').style.opacity = isLobeVisible ? '1' : '0.7';
@@ -484,41 +473,57 @@
                 drawAntenna();
             });
             
-            document.getElementById('btnInfo').addEventListener('click', () => {
-                document.getElementById('infoModal').style.display = 'block';
-            });
-            document.getElementById('btnCloseInfo').addEventListener('click', () => {
-                document.getElementById('infoModal').style.display = 'none';
-            });
+            document.getElementById('btnInfo').addEventListener('click', () => { document.getElementById('infoModal').style.display = 'block'; });
+            document.getElementById('btnCloseInfo').addEventListener('click', () => { document.getElementById('infoModal').style.display = 'none'; });
             
-            document.getElementById('btnSettings').addEventListener('click', () => {
-                document.getElementById('settingsModal').style.display = 'block';
-            });
-            document.getElementById('btnCloseSettings').addEventListener('click', () => {
-                document.getElementById('settingsModal').style.display = 'none';
-            });
+            document.getElementById('btnSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'block'; });
+            document.getElementById('btnCloseSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'none'; });
+
             document.getElementById('btnForceUpdate').addEventListener('click', () => {
-                window.location.reload(true);
+                document.getElementById('btnForceUpdate').innerText = "Aggiornamento in corso...";
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                        for(let registration of registrations) { registration.unregister(); }
+                        caches.keys().then((keyList) => { return Promise.all(keyList.map((key) => caches.delete(key))); })
+                        .then(() => { window.location.reload(true); });
+                    });
+                } else { window.location.reload(true); }
+            });
+
+            function updateGridVisuals() {
+                document.getElementById('gridVal').innerText = globalGridSize + 'm';
+                document.getElementById('sqVal').innerText = globalGridSquareSize.toFixed(1) + 'm';
+                scene.remove(groundGrid);
+                let divs = Math.max(1, Math.round(globalGridSize / globalGridSquareSize));
+                groundGrid = new THREE.GridHelper( globalGridSize, divs, 0x2ed573, 0x2ed573 );
+                groundGrid.material.opacity = 0.8; groundGrid.material.transparent = true;
+                if (isGroundSet) { groundGrid.position.set(camera.position.x, groundLevel, camera.position.z); groundGrid.visible = true; } else { groundGrid.visible = false; }
+                scene.add( groundGrid );
+            }
+
+            document.getElementById('btnGridMinus').addEventListener('click', () => { if (globalGridSize > 5) { globalGridSize -= 1; updateGridVisuals(); } });
+            document.getElementById('btnGridPlus').addEventListener('click', () => { if (globalGridSize < 500) { globalGridSize += 10; updateGridVisuals(); } });
+            document.getElementById('btnSqMinus').addEventListener('click', () => { if (globalGridSquareSize > 0.2) { globalGridSquareSize -= 0.1; updateGridVisuals(); } });
+            document.getElementById('btnSqPlus').addEventListener('click', () => { if (globalGridSquareSize < 5.0) { globalGridSquareSize += 0.1; updateGridVisuals(); } });
+            
+            document.getElementById('btnPtMinus').addEventListener('click', () => { if (globalPointScale > 0.04) { globalPointScale -= 0.02; document.getElementById('ptVal').innerText = Math.round(globalPointScale * 1000) + '%'; } });
+            document.getElementById('btnPtPlus').addEventListener('click', () => { if (globalPointScale < 0.3) { globalPointScale += 0.02; document.getElementById('ptVal').innerText = Math.round(globalPointScale * 1000) + '%'; } });
+            document.getElementById('btnTextMinus').addEventListener('click', () => { if (globalTextScale > 0.5) { globalTextScale -= 0.1; document.getElementById('textVal').innerText = Math.round(globalTextScale * 100) + '%'; } });
+            document.getElementById('btnTextPlus').addEventListener('click', () => { if (globalTextScale < 3.0) { globalTextScale += 0.1; document.getElementById('textVal').innerText = Math.round(globalTextScale * 100) + '%'; } });
+            
+            document.getElementById('colorPickerA').addEventListener('input', (e) => { colorA = parseInt(e.target.value.replace('#', '0x')); point1.material.color.setHex(colorA); drawAntenna(); });
+            document.getElementById('colorPickerB').addEventListener('input', (e) => { colorB = parseInt(e.target.value.replace('#', '0x')); point2.material.color.setHex(colorB); drawAntenna(); });
+            document.getElementById('colorPickerC').addEventListener('input', (e) => { colorC = parseInt(e.target.value.replace('#', '0x')); point3.material.color.setHex(colorC); drawAntenna(); });
+
+            document.getElementById('btnSetByHeight').addEventListener('click', () => {
+                const height = parseFloat(document.getElementById('phoneHeight').value);
+                if(isNaN(height) || height <= 0) return;
+                groundLevel = camera.position.y - height;
+                groundGrid.position.set(camera.position.x, groundLevel, camera.position.z);
+                groundGrid.visible = true; isGroundSet = true;
+                setAction('NONE'); updateCalculations(); drawAntenna();
             });
             
-            // Funzionalità Foto
-            document.getElementById('btnPhoto').addEventListener('click', () => {
-                document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'hidden');
-                document.getElementById('antennaPanel').style.visibility = 'hidden';
-                
-                const toast = document.getElementById('photoOverlay');
-                toast.style.display = 'block';
-                
-                setTimeout(() => {
-                    toast.style.display = 'none';
-                    document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'visible');
-                    if (point1.visible && point2.visible) {
-                        document.getElementById('antennaPanel').style.visibility = 'visible';
-                    }
-                }, 5000);
-            });
-            
-            document.getElementById('btnGround').addEventListener('click', () => setAction('PLACE_GROUND'));
             document.getElementById('btnA').addEventListener('click', () => setAction('PLACE_BASE_A'));
             document.getElementById('btnB').addEventListener('click', () => setAction('PLACE_BASE_B'));
             document.getElementById('btnC').addEventListener('click', () => setAction('PLACE_BASE_C'));
@@ -528,147 +533,94 @@
                 else if (currentAction === 'SET_HEIGHT_B') setAction('MOVE_BASE_B');
                 else if (currentAction === 'SET_HEIGHT_C') setAction('MOVE_BASE_C');
             });
-            
             document.getElementById('btnDoneEdit').addEventListener('click', () => setAction('NONE'));
 
             document.getElementById('antType').addEventListener('change', updateAntennaUI);
             document.querySelectorAll('#antennaPanel select, #antennaPanel input').forEach(el => el.addEventListener('input', drawAntenna));
 
+            document.getElementById('btnPhoto').addEventListener('click', () => {
+                document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'hidden');
+                document.getElementById('antennaPanel').style.visibility = 'hidden';
+                const toast = document.getElementById('photoOverlay');
+                toast.style.display = 'block';
+                setTimeout(() => {
+                    toast.style.display = 'none';
+                    document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'visible');
+                    if (point1.visible && point2.visible) document.getElementById('antennaPanel').style.visibility = 'visible';
+                }, 5000);
+            });
+
             document.getElementById('btnReset').addEventListener('click', () => {
-                point1.visible = false;
-                point2.visible = false;
-                point3.visible = false;
-                lineAB.visible = false;
+                point1.visible = false; point2.visible = false; point3.visible = false; lineAB.visible = false;
+                antennaMeshes.forEach(m => disposeNode(m)); antennaMeshes = [];
+                markerMeshes.forEach(m => disposeNode(m)); markerMeshes = [];
+                textSprites.forEach(m => disposeNode(m)); textSprites = [];
 
-                antennaMeshes.forEach(m => disposeNode(m));
-                antennaMeshes = [];
-                markerMeshes.forEach(m => disposeNode(m));
-                markerMeshes = [];
-                textSprites.forEach(m => disposeNode(m));
-                textSprites = [];
+                document.getElementById('hA').innerText = '--'; document.getElementById('hB').innerText = '--'; document.getElementById('hC').innerText = '--';
+                document.getElementById('distAB').innerText = '--'; document.getElementById('distV_container').style.display = 'none';
+                document.getElementById('antennaPanel').style.display = 'none'; document.getElementById('warning').style.display = 'none';
 
-                document.getElementById('hA').innerText = '--';
-                document.getElementById('hB').innerText = '--';
-                document.getElementById('hC').innerText = '--';
-                document.getElementById('distAB').innerText = '--';
-                document.getElementById('distV_container').style.display = 'none';
-                
-                document.getElementById('antennaPanel').style.display = 'none';
-                document.getElementById('warning').style.display = 'none';
-
-                setAction('PLACE_GROUND');
-            });
-            
-            // Impostazioni Grafiche Modali
-            function updateGridVisuals() {
-                document.getElementById('gridVal').innerText = globalGridSize + 'm';
-                document.getElementById('sqVal').innerText = globalGridSquareSize.toFixed(1) + 'm';
-                
-                scene.remove(groundGrid);
-                let divs = Math.max(1, Math.round(globalGridSize / globalGridSquareSize));
-                groundGrid = new THREE.GridHelper( globalGridSize, divs, 0x2ed573, 0x2ed573 );
-                groundGrid.material.opacity = 0.8;
-                groundGrid.material.transparent = true;
-                
-                if (isGroundSet) {
-                    groundGrid.position.set(camera.position.x, groundLevel, camera.position.z);
-                    groundGrid.visible = true;
-                } else {
-                    groundGrid.visible = false;
-                }
-                scene.add( groundGrid );
-            }
-
-            document.getElementById('btnGridMinus').addEventListener('click', () => {
-                if (globalGridSize > 1) { globalGridSize -= 1; updateGridVisuals(); }
-            });
-            document.getElementById('btnGridPlus').addEventListener('click', () => {
-                if (globalGridSize < 500) { globalGridSize += 1; updateGridVisuals(); }
-            });
-            document.getElementById('btnSqMinus').addEventListener('click', () => {
-                if (globalGridSquareSize > 0.05) { globalGridSquareSize -= 0.05; updateGridVisuals(); }
-            });
-            document.getElementById('btnSqPlus').addEventListener('click', () => {
-                if (globalGridSquareSize < 5.0) { globalGridSquareSize += 0.05; updateGridVisuals(); }
-            });
-            
-            document.getElementById('btnPtMinus').addEventListener('click', () => {
-                if (globalPointScale > 0.04) {
-                    globalPointScale -= 0.02;
-                    document.getElementById('ptVal').innerText = Math.round(globalPointScale * 1000) + '%';
-                }
-            });
-            document.getElementById('btnPtPlus').addEventListener('click', () => {
-                if (globalPointScale < 0.3) {
-                    globalPointScale += 0.02;
-                    document.getElementById('ptVal').innerText = Math.round(globalPointScale * 1000) + '%';
-                }
+                setAction('MENU_GROUND');
             });
 
-            document.getElementById('btnTextMinus').addEventListener('click', () => {
-                if (globalTextScale > 0.5) {
-                    globalTextScale -= 0.1;
-                    document.getElementById('textVal').innerText = Math.round(globalTextScale * 100) + '%';
+            // Fallback per 2D touch (non interferisce con la VR)
+            const touchArea = document.getElementById('touchArea');
+            touchArea.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B' || currentAction === 'SET_HEIGHT_C')) {
+                    isDragging = true; hasDragged = false; lastTouchY = e.touches[0].clientY;
                 }
             });
-            document.getElementById('btnTextPlus').addEventListener('click', () => {
-                if (globalTextScale < 3.0) {
-                    globalTextScale += 0.1;
-                    document.getElementById('textVal').innerText = Math.round(globalTextScale * 100) + '%';
+            touchArea.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                hasDragged = true; 
+                if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B' || currentAction === 'SET_HEIGHT_C')) {
+                    let pt = currentAction === 'SET_HEIGHT_A' ? point1 : (currentAction === 'SET_HEIGHT_B' ? point2 : point3);
+                    if (!pt || !pt.visible) return;
+                    let deltaY = lastTouchY - e.touches[0].clientY; 
+                    let sensitivity = (2 * Math.tan((camera.fov * Math.PI / 180) / 2) * camera.position.distanceTo(pt.position)) / window.innerHeight; 
+                    pt.position.y += deltaY * sensitivity;
+                    if (isGroundSet && pt.position.y < groundLevel) pt.position.y = groundLevel;
+                    lastTouchY = e.touches[0].clientY;
+                    updateCalculations(); drawAntenna(); 
                 }
             });
-            
-            document.getElementById('colorPickerA').addEventListener('input', (e) => {
-                colorA = parseInt(e.target.value.replace('#', '0x'));
-                point1.material.color.setHex(colorA);
-                drawAntenna();
-            });
-            document.getElementById('colorPickerB').addEventListener('input', (e) => {
-                colorB = parseInt(e.target.value.replace('#', '0x'));
-                point2.material.color.setHex(colorB);
-                drawAntenna();
-            });
-            document.getElementById('colorPickerC').addEventListener('input', (e) => {
-                colorC = parseInt(e.target.value.replace('#', '0x'));
-                point3.material.color.setHex(colorC);
-                drawAntenna();
-            });
+            touchArea.addEventListener('touchend', () => { isDragging = false; });
         }
 
         function setAction(action) {
             currentAction = action;
+            document.getElementById('panel-setup-ground').style.display = 'none';
             document.getElementById('panel-edit-point').style.display = 'none';
             document.querySelectorAll('.main-btn').forEach(b => b.classList.remove('active'));
 
             let inst = document.getElementById('instruction');
 
-            if (action === 'PLACE_GROUND') {
+            if (action === 'MENU_GROUND') {
                 document.getElementById('btnGround').classList.add('active');
-                inst.innerText = "MIRA col laser a terra e PREMI IL GRILLETTO per fissare la Griglia.";
-                inst.style.background = "#2ed573";
+                document.getElementById('panel-setup-ground').style.display = 'block';
+                inst.innerText = "VR: Il pavimento è automatico. Clicca un Punto Base."; inst.style.background = "#2ed573";
             } else if (action === 'PLACE_BASE_A' || action === 'PLACE_BASE_B' || action === 'PLACE_BASE_C') {
                 const btn = action === 'PLACE_BASE_A' ? 'btnA' : (action === 'PLACE_BASE_B' ? 'btnB' : 'btnC');
                 document.getElementById(btn).classList.add('active');
-                inst.innerText = "MIRA col laser sulla griglia e PREMI IL GRILLETTO per fissare la BASE."; 
+                inst.innerText = "MIRA al pavimento col laser e PREMI IL GRILLETTO per posizionare la base."; 
                 inst.style.background = action === 'PLACE_BASE_A' ? "#ff4757" : (action === 'PLACE_BASE_B' ? "#1e90ff" : "#f1c40f");
             } else if (action === 'SET_HEIGHT_A' || action === 'SET_HEIGHT_B' || action === 'SET_HEIGHT_C') {
                 const btn = action === 'SET_HEIGHT_A' ? 'btnA' : (action === 'SET_HEIGHT_B' ? 'btnB' : 'btnC');
                 document.getElementById(btn).classList.add('active');
                 document.getElementById('panel-edit-point').style.display = 'block';
-                inst.innerText = "Clicca le FRECCE per alzare la quota (o premi 'Y' per nascondere i menu)."; 
+                inst.innerText = "Usa i tasti Su/Giù nel pannello per regolare l'altezza dell'albero."; 
                 inst.style.background = action === 'SET_HEIGHT_A' ? "#ff4757" : (action === 'SET_HEIGHT_B' ? "#1e90ff" : "#f1c40f");
             } else if (action === 'MOVE_BASE_A' || action === 'MOVE_BASE_B' || action === 'MOVE_BASE_C') {
                 const btn = action === 'MOVE_BASE_A' ? 'btnA' : (action === 'MOVE_BASE_B' ? 'btnB' : 'btnC');
                 document.getElementById(btn).classList.add('active');
-                inst.innerText = "MIRA sulla griglia per spostare la base e PREMI IL GRILLETTO."; 
+                inst.innerText = "MIRA al terreno e premi il grilletto per spostare la base."; 
                 inst.style.background = action === 'MOVE_BASE_A' ? "#ff4757" : (action === 'MOVE_BASE_B' ? "#1e90ff" : "#f1c40f");
             } else {
-                inst.innerText = "(Tasto Y = On/Off Menu) Seleziona un Punto. L'antenna appare in automatico.";
-                inst.style.background = "#555";
+                inst.innerText = "Punti posizionati. Configura l'Antenna."; inst.style.background = "#555";
             }
         }
 
-        // --- SISTEMA DI PUNTAMENTO (Calcola la direzione del controller) ---
+        // --- IL CUORE DEL SISTEMA VR: RAYCASTING MATEMATICO SUL CONTROLLER ---
         function getControllerRay(ctrl) {
             const tempMat = new THREE.Matrix4().extractRotation(ctrl.matrixWorld);
             const origin = new THREE.Vector3().setFromMatrixPosition(ctrl.matrixWorld);
@@ -677,102 +629,46 @@
         }
 
         function onSelect(event) {
+            if (currentAction === 'NONE' || currentAction === 'MENU_GROUND') return;
+
             const ctrl = event.target;
+            const ray = getControllerRay(ctrl);
+            raycaster.set(ray.origin, ray.dir);
+            floorPlane.constant = -groundLevel;
             
-            if (currentAction === 'PLACE_GROUND') {
-                // Imposta il pavimento basandosi sull'Hit-Test del sensore
-                if(!reticle.visible) return;
+            const intersectPoint = new THREE.Vector3();
+            
+            // Controlla se il laser colpisce il pavimento matematico
+            if(raycaster.ray.intersectPlane(floorPlane, intersectPoint)) {
                 
-                groundLevel = reticle.position.y;
-                groundGrid.position.set(reticle.position.x, groundLevel, reticle.position.z);
-                groundGrid.visible = true; 
-                isGroundSet = true;
-                
-                setAction('NONE');
-                updateCalculations();
-                drawAntenna();
-            } 
-            else if (currentAction.includes('PLACE_BASE') || currentAction.includes('MOVE_BASE')) {
-                // Imposta le basi basandosi sulla geometria del piano calcolato
-                const ray = getControllerRay(ctrl);
-                raycaster.set(ray.origin, ray.dir);
-                floorPlane.constant = -groundLevel;
-                const hPt = new THREE.Vector3();
-                
-                if(raycaster.ray.intersectPlane(floorPlane, hPt)) {
-                    if (currentAction === 'PLACE_BASE_A') {
-                        point1.position.copy(hPt);
-                        point1.visible = true;
-                        setAction('SET_HEIGHT_A');
-                        updateCalculations();
-                        drawAntenna();
-                    } else if (currentAction === 'PLACE_BASE_B') {
-                        point2.position.copy(hPt);
-                        point2.visible = true;
-                        setAction('SET_HEIGHT_B');
-                        updateCalculations();
-                        drawAntenna();
-                    } else if (currentAction === 'PLACE_BASE_C') {
-                        point3.position.copy(hPt);
-                        point3.visible = true;
-                        setAction('SET_HEIGHT_C');
-                        updateCalculations();
-                        drawAntenna();
-                    } else if (currentAction === 'MOVE_BASE_A') {
-                        point1.position.x = hPt.x;
-                        point1.position.z = hPt.z;
-                        setAction('SET_HEIGHT_A');
-                        updateCalculations();
-                        drawAntenna();
-                    } else if (currentAction === 'MOVE_BASE_B') {
-                        point2.position.x = hPt.x;
-                        point2.position.z = hPt.z;
-                        setAction('SET_HEIGHT_B');
-                        updateCalculations();
-                        drawAntenna();
-                    } else if (currentAction === 'MOVE_BASE_C') {
-                        point3.position.x = hPt.x;
-                        point3.position.z = hPt.z;
-                        setAction('SET_HEIGHT_C');
-                        updateCalculations();
-                        drawAntenna();
-                    }
+                // Evita di piazzare punti se stai puntando all'orizzonte (troppo lontano)
+                if (ray.origin.distanceTo(intersectPoint) > 200) return;
+
+                if (currentAction === 'PLACE_BASE_A') {
+                    point1.position.copy(intersectPoint); point1.visible = true; setAction('SET_HEIGHT_A'); updateCalculations(); drawAntenna();
+                } else if (currentAction === 'PLACE_BASE_B') {
+                    point2.position.copy(intersectPoint); point2.visible = true; setAction('SET_HEIGHT_B'); updateCalculations(); drawAntenna();
+                } else if (currentAction === 'PLACE_BASE_C') {
+                    point3.position.copy(intersectPoint); point3.visible = true; setAction('SET_HEIGHT_C'); updateCalculations(); drawAntenna();
+                } else if (currentAction === 'MOVE_BASE_A') {
+                    point1.position.x = intersectPoint.x; point1.position.z = intersectPoint.z; setAction('SET_HEIGHT_A'); updateCalculations(); drawAntenna();
+                } else if (currentAction === 'MOVE_BASE_B') {
+                    point2.position.x = intersectPoint.x; point2.position.z = intersectPoint.z; setAction('SET_HEIGHT_B'); updateCalculations(); drawAntenna();
+                } else if (currentAction === 'MOVE_BASE_C') {
+                    point3.position.x = intersectPoint.x; point3.position.z = intersectPoint.z; setAction('SET_HEIGHT_C'); updateCalculations(); drawAntenna();
                 }
             }
         }
 
-        // Generazione del testo nello spazio 3D
         function makeTextSprite(message, textColor = '#ffffff', bgColor = 'rgba(0, 0, 0, 0.7)', isVertical = false) {
             const canvas = document.createElement('canvas');
-            if (isVertical) {
-                canvas.width = 128;
-                canvas.height = 512;
-            } else {
-                canvas.width = 512;
-                canvas.height = 128;
-            }
-            
+            if (isVertical) { canvas.width = 128; canvas.height = 512; } else { canvas.width = 512; canvas.height = 128; }
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.font = 'bold 46px sans-serif';
-            ctx.fillStyle = textColor;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            if (isVertical) {
-                ctx.translate(64, 256);
-                ctx.rotate(-Math.PI / 2);
-                ctx.fillText(message, 0, 0);
-            } else {
-                ctx.fillText(message, 256, 64);
-            }
-            
-            const texture = new THREE.CanvasTexture(canvas);
-            const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-            const sprite = new THREE.Sprite(spriteMat);
-            sprite.userData.isVertical = isVertical; 
-            return sprite;
+            ctx.fillStyle = bgColor; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = 'bold 46px sans-serif'; ctx.fillStyle = textColor; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            if (isVertical) { ctx.translate(64, 256); ctx.rotate(-Math.PI / 2); ctx.fillText(message, 0, 0); } else { ctx.fillText(message, 256, 64); }
+            const texture = new THREE.CanvasTexture(canvas); const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+            const sprite = new THREE.Sprite(spriteMat); sprite.userData.isVertical = isVertical; return sprite;
         }
 
         function drawDropLine(position, color, labelText) {
@@ -780,50 +676,31 @@
             const groundPos = new THREE.Vector3(position.x, groundLevel, position.z);
             const geo = new THREE.BufferGeometry().setFromPoints([position, groundPos]);
             const mat = new THREE.LineDashedMaterial({ color: color, dashSize: 0.2, gapSize: 0.2 });
-            const line = new THREE.Line(geo, mat);
-            line.computeLineDistances();
-            scene.add(line);
-            antennaMeshes.push(line);
-
-            const labelY = groundLevel + (position.y - groundLevel) * 0.5;
-            const hexColorStr = `#${color.toString(16).padStart(6, '0')}`;
+            const line = new THREE.Line(geo, mat); line.computeLineDistances(); scene.add(line); antennaMeshes.push(line);
+            const labelY = groundLevel + (position.y - groundLevel) * 0.5; const hexColorStr = `#${color.toString(16).padStart(6, '0')}`;
             const sprite = makeTextSprite(labelText, hexColorStr, 'rgba(0,0,0,0.7)', true);
-            sprite.position.set(position.x, labelY, position.z);
-            scene.add(sprite);
-            textSprites.push(sprite);
+            sprite.position.set(position.x, labelY, position.z); scene.add(sprite); textSprites.push(sprite);
         }
 
         function drawRopeLabel(pStart, pEnd) {
-            const dist = pStart.distanceTo(pEnd);
-            if (dist < 0.1) return;
+            const dist = pStart.distanceTo(pEnd); if (dist < 0.1) return;
             const midPoint = new THREE.Vector3().copy(pStart).lerp(pEnd, 0.5);
             const sprite = makeTextSprite(`Corda: ${dist.toFixed(1)}m`, '#ffdd59', 'rgba(50, 50, 0, 0.8)', false);
-            sprite.position.copy(midPoint);
-            scene.add(sprite);
-            textSprites.push(sprite);
+            sprite.position.copy(midPoint); scene.add(sprite); textSprites.push(sprite);
         }
 
         function updateCalculations() {
-            if (isGroundSet && point1.visible) {
-                document.getElementById('hA').innerText = (point1.position.y - groundLevel).toFixed(1);
-            }
-            if (isGroundSet && point2.visible) {
-                document.getElementById('hB').innerText = (point2.position.y - groundLevel).toFixed(1);
-            }
-            if (isGroundSet && point3.visible) {
-                document.getElementById('hC').innerText = (point3.position.y - groundLevel).toFixed(1);
-            }
+            if (isGroundSet && point1.visible) document.getElementById('hA').innerText = (point1.position.y - groundLevel).toFixed(1);
+            if (isGroundSet && point2.visible) document.getElementById('hB').innerText = (point2.position.y - groundLevel).toFixed(1);
+            if (isGroundSet && point3.visible) document.getElementById('hC').innerText = (point3.position.y - groundLevel).toFixed(1);
             
             if (point1.visible && point2.visible) {
                 let distAB = point1.position.distanceTo(point2.position);
-                
                 if (point3.visible) {
-                    let distAC = point1.position.distanceTo(point3.position);
-                    let distCB = point3.position.distanceTo(point2.position);
+                    let distAC = point1.position.distanceTo(point3.position); let distCB = point3.position.distanceTo(point2.position);
                     document.getElementById('distAB').innerText = (distAC + distCB).toFixed(1);
                     document.getElementById('distV_container').style.display = 'block';
-                    document.getElementById('distAC').innerText = distAC.toFixed(1);
-                    document.getElementById('distCB').innerText = distCB.toFixed(1);
+                    document.getElementById('distAC').innerText = distAC.toFixed(1); document.getElementById('distCB').innerText = distCB.toFixed(1);
                 } else {
                     document.getElementById('distAB').innerText = distAB.toFixed(1);
                     document.getElementById('distV_container').style.display = 'none';
@@ -842,25 +719,17 @@
         }
 
         function buildWire(pStart, pEnd, color, thickness=0.015) {
-            const dist = pStart.distanceTo(pEnd);
-            if (dist < 0.01) return; 
-            
-            const cylinder = new THREE.Mesh( 
-                new THREE.CylinderGeometry(thickness, thickness, dist, 8), 
-                new THREE.MeshBasicMaterial({color: color}) 
-            );
+            const dist = pStart.distanceTo(pEnd); if (dist < 0.01) return; 
+            const cylinder = new THREE.Mesh( new THREE.CylinderGeometry(thickness, thickness, dist, 8), new THREE.MeshBasicMaterial({color: color}) );
             cylinder.position.copy(pStart).lerp(pEnd, 0.5);
             cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3().subVectors(pEnd, pStart).normalize());
-            scene.add(cylinder);
-            antennaMeshes.push(cylinder);
+            scene.add(cylinder); antennaMeshes.push(cylinder);
         }
 
         function getPointAlongPath(distance, points) {
             let currentDist = 0;
             for (let i = 0; i < points.length - 1; i++) {
-                let segLen = points[i].distanceTo(points[i+1]);
-                if (segLen < 0.001) continue; 
-                
+                let segLen = points[i].distanceTo(points[i+1]); if (segLen < 0.001) continue; 
                 if (currentDist + segLen >= distance - 0.001) {
                     let excess = Math.max(0, distance - currentDist);
                     let dir = new THREE.Vector3().subVectors(points[i+1], points[i]).normalize();
@@ -872,267 +741,118 @@
         }
 
         function buildWirePath(startDist, endDist, pathPoints, color) {
-            let pStart = getPointAlongPath(startDist, pathPoints);
-            let pEnd = getPointAlongPath(endDist, pathPoints);
-            
-            if (pathPoints.length === 2) {
-                buildWire(pStart, pEnd, color);
-                return;
-            }
-            
-            let C = pathPoints[1];
-            let distToC = pathPoints[0].distanceTo(C);
-            
-            if (endDist <= distToC + 0.01) {
-                buildWire(pStart, pEnd, color); 
-            } else if (startDist >= distToC - 0.01) {
-                buildWire(pStart, pEnd, color); 
-            } else {
-                buildWire(pStart, C, color);
-                buildWire(C, pEnd, color);
-            }
+            let pStart = getPointAlongPath(startDist, pathPoints); let pEnd = getPointAlongPath(endDist, pathPoints);
+            if (pathPoints.length === 2) { buildWire(pStart, pEnd, color); return; }
+            let C = pathPoints[1]; let distToC = pathPoints[0].distanceTo(C);
+            if (endDist <= distToC + 0.01) { buildWire(pStart, pEnd, color); } else if (startDist >= distToC - 0.01) { buildWire(pStart, pEnd, color); } else { buildWire(pStart, C, color); buildWire(C, pEnd, color); }
         }
 
         function applyEnvironmentalDeformation(mesh, baseGeometry, centerPoint, isOmni) {
-            mesh.updateMatrixWorld(true);
-            baseGeometry.applyMatrix4(mesh.matrixWorld);
-            mesh.position.set(0,0,0);
-            mesh.quaternion.identity();
-            mesh.scale.set(1,1,1);
-            mesh.updateMatrix();
-            
-            const positions = baseGeometry.attributes.position;
-            const v = new THREE.Vector3();
-            const treeRadius = 2.0;
-            
+            mesh.updateMatrixWorld(true); baseGeometry.applyMatrix4(mesh.matrixWorld);
+            mesh.position.set(0,0,0); mesh.quaternion.identity(); mesh.scale.set(1,1,1); mesh.updateMatrix();
+            const positions = baseGeometry.attributes.position; const v = new THREE.Vector3(); const treeRadius = 2.0;
+
             for (let i = 0; i < positions.count; i++) {
                 v.fromBufferAttribute(positions, i);
-                
                 if (v.y < groundLevel + 0.1) {
-                    let depth = (groundLevel + 0.1) - v.y;
-                    v.y = groundLevel + 0.1; 
-                    v.x += (v.x - centerPoint.x) * 0.15 * depth;
-                    v.z += (v.z - centerPoint.z) * 0.15 * depth;
+                    let depth = (groundLevel + 0.1) - v.y; v.y = groundLevel + 0.1; v.x += (v.x - centerPoint.x) * 0.15 * depth; v.z += (v.z - centerPoint.z) * 0.15 * depth;
                 }
-                
-                let distA = v.distanceTo(point1.position);
-                let distB = v.distanceTo(point2.position);
-                let distC = point3.visible ? v.distanceTo(point3.position) : 9999;
-                
+                let distA = v.distanceTo(point1.position); let distB = v.distanceTo(point2.position); let distC = point3.visible ? v.distanceTo(point3.position) : 9999;
                 if (distA < treeRadius) { let squish = 1.0 - (distA / treeRadius); v.lerp(centerPoint, squish * 0.6); }
                 if (distB < treeRadius) { let squish = 1.0 - (distB / treeRadius); v.lerp(centerPoint, squish * 0.6); }
                 if (distC < treeRadius) { let squish = 1.0 - (distC / treeRadius); v.lerp(centerPoint, squish * 0.6); }
-                
                 positions.setXYZ(i, v.x, v.y, v.z);
             }
             baseGeometry.computeVertexNormals(); 
         }
 
         function drawAntenna() {
-            antennaMeshes.forEach(m => disposeNode(m));
-            antennaMeshes = [];
-            markerMeshes.forEach(m => disposeNode(m));
-            markerMeshes = [];
-            textSprites.forEach(m => disposeNode(m));
-            textSprites = [];
+            antennaMeshes.forEach(m => disposeNode(m)); antennaMeshes = []; markerMeshes.forEach(m => disposeNode(m)); markerMeshes = []; textSprites.forEach(m => disposeNode(m)); textSprites = [];
             document.getElementById('warning').style.display = 'none';
 
             if (point1.visible) drawDropLine(point1.position, colorA, `Alb.A: ${(point1.position.y - groundLevel).toFixed(1)}m`);
             if (point2.visible) drawDropLine(point2.position, colorB, `Alb.B: ${(point2.position.y - groundLevel).toFixed(1)}m`);
             if (point3.visible) drawDropLine(point3.position, colorC, `Centro: ${(point3.position.y - groundLevel).toFixed(1)}m`);
 
-            if (!point1.visible || !point2.visible) {
-                lineAB.visible = false;
-                return;
-            }
+            if (!point1.visible || !point2.visible) { lineAB.visible = false; return; }
 
-            const A = point1.position;
-            const B = point2.position;
-            const C = point3.visible ? point3.position : null;
+            const A = point1.position; const B = point2.position; const C = point3.visible ? point3.position : null;
             const pathBase = C ? [A, C, B] : [A, B];
-            
             let totalDist = C ? A.distanceTo(C) + C.distanceTo(B) : A.distanceTo(B);
             
-            if (totalDist < 0.1) {
-                document.getElementById('warning').innerText = "⚠️ Punti troppo vicini!";
-                document.getElementById('warning').style.display = 'block';
-                return;
-            } else {
-                document.getElementById('warning').innerText = "⚠️ Antenna più lunga dello spazio!";
-            }
+            if (totalDist < 0.1) { document.getElementById('warning').innerText = "⚠️ Punti troppo vicini tra loro!"; document.getElementById('warning').style.display = 'block'; return;
+            } else { document.getElementById('warning').innerText = "⚠️ Antenna più lunga dello spazio!"; }
 
-            lineAB.geometry.setFromPoints(pathBase);
-            lineAB.visible = true;
-            
+            lineAB.geometry.setFromPoints(pathBase); lineAB.visible = true;
+
             const type = document.getElementById('antType').value;
-            
-            if (type === 'none') {
-                if (C) { drawRopeLabel(A, C); drawRopeLabel(C, B); } else { drawRopeLabel(A, B); }
-                return;
-            }
+            if (type === 'none') { if (C) { drawRopeLabel(A, C); drawRopeLabel(C, B); } else { drawRopeLabel(A, B); } return; }
 
             const copperColor = 0xe67e22;
 
             if (type === 'dipole') {
-                const band = parseFloat(document.getElementById('dipoleBand').value);
-                let wireLength = band / 2;
-                const armLen = wireLength / 2;
-                
-                const FeedNode = C ? C : new THREE.Vector3().copy(A).lerp(B, 0.5);
-                const path1 = [FeedNode, A];
-                const path2 = [FeedNode, B];
-                
-                if (armLen > FeedNode.distanceTo(A) || armLen > FeedNode.distanceTo(B)) {
-                    document.getElementById('warning').style.display = 'block'; 
+                const band = parseFloat(document.getElementById('dipoleBand').value); let wireLength = band / 2; const armLen = wireLength / 2;
+                const FeedNode = C ? C : new THREE.Vector3().copy(A).lerp(B, 0.5); const path1 = [FeedNode, A]; const path2 = [FeedNode, B];
+                if (armLen > FeedNode.distanceTo(A) || armLen > FeedNode.distanceTo(B)) { document.getElementById('warning').style.display = 'block'; 
                 } else {
-                    buildWirePath(0, armLen, path1, copperColor);
-                    buildWirePath(0, armLen, path2, copperColor);
-                    
-                    let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                    balun.position.copy(FeedNode);
-                    scene.add(balun);
-                    markerMeshes.push(balun);
-                    
+                    buildWirePath(0, armLen, path1, copperColor); buildWirePath(0, armLen, path2, copperColor);
+                    let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff})); balun.position.copy(FeedNode); scene.add(balun); markerMeshes.push(balun);
                     if (!C) drawDropLine(FeedNode, 0x00ffff, `Feed: ${(FeedNode.y - groundLevel).toFixed(1)}m`);
-                    drawRopeLabel(getPointAlongPath(armLen, path1), A);
-                    drawRopeLabel(getPointAlongPath(armLen, path2), B);
+                    drawRopeLabel(getPointAlongPath(armLen, path1), A); drawRopeLabel(getPointAlongPath(armLen, path2), B);
                 }
-
             } else if (type === 'endfed') {
-                const isStartA = document.getElementById('efStart').value === 'A';
-                const path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]);
-                
-                const dist = parseFloat(document.getElementById('efDist').value);
-                const L1 = parseFloat(document.getElementById('efL1').value);
-                const L2 = parseFloat(document.getElementById('efL2').value);
-                let wireLength = dist + L1 + L2;
-                
-                if (wireLength > totalDist) {
-                    document.getElementById('warning').style.display = 'block'; 
+                const isStartA = document.getElementById('efStart').value === 'A'; const path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]);
+                const dist = parseFloat(document.getElementById('efDist').value); const L1 = parseFloat(document.getElementById('efL1').value); const L2 = parseFloat(document.getElementById('efL2').value); let wireLength = dist + L1 + L2;
+                if (wireLength > totalDist) { document.getElementById('warning').style.display = 'block'; 
                 } else {
-                    const feedDist = dist + L1;
-                    buildWirePath(dist, feedDist, path, copperColor);
-                    buildWirePath(feedDist, wireLength, path, copperColor);
-                    
-                    let balunPos = getPointAlongPath(feedDist, path);
-                    let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                    balun.position.copy(balunPos);
-                    scene.add(balun);
-                    markerMeshes.push(balun);
-                    
-                    drawDropLine(balunPos, 0x2ed573, `Trafo: ${(balunPos.y - groundLevel).toFixed(1)}m`);
-                    drawRopeLabel(path[0], getPointAlongPath(dist, path));
-                    drawRopeLabel(getPointAlongPath(wireLength, path), path[path.length - 1]);
+                    const feedDist = dist + L1; buildWirePath(dist, feedDist, path, copperColor); buildWirePath(feedDist, wireLength, path, copperColor);
+                    let balunPos = getPointAlongPath(feedDist, path); let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff})); balun.position.copy(balunPos); scene.add(balun); markerMeshes.push(balun);
+                    drawDropLine(balunPos, 0x2ed573, `Trafo: ${(balunPos.y - groundLevel).toFixed(1)}m`); drawRopeLabel(path[0], getPointAlongPath(dist, path)); drawRopeLabel(getPointAlongPath(wireLength, path), path[path.length - 1]);
                 }
-
             } else if (type === 'longwire') {
-                const isStartA = document.getElementById('lwStart').value === 'A';
-                const path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]);
-                const L = parseFloat(document.getElementById('lwLen').value);
-                
-                if (L > totalDist) {
-                    document.getElementById('warning').style.display = 'block'; 
+                const isStartA = document.getElementById('lwStart').value === 'A'; const path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]); const L = parseFloat(document.getElementById('lwLen').value);
+                if (L > totalDist) { document.getElementById('warning').style.display = 'block'; 
                 } else {
-                    buildWirePath(0, L, path, copperColor);
-                    let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                    balun.position.copy(path[0]);
-                    scene.add(balun);
-                    markerMeshes.push(balun);
+                    buildWirePath(0, L, path, copperColor); let balun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), new THREE.MeshBasicMaterial({color: 0xffffff})); balun.position.copy(path[0]); scene.add(balun); markerMeshes.push(balun);
                     drawRopeLabel(getPointAlongPath(L, path), path[path.length - 1]);
                 }
             }
 
             if (isLobeVisible && type !== 'none') {
-                let feedHeight = (point1.position.y + point2.position.y) / 2;
-                if (point3.visible) feedHeight = point3.position.y;
+                let feedHeight = (point1.position.y + point2.position.y) / 2; if (point3.visible) feedHeight = point3.position.y;
                 const heightCenter = feedHeight - groundLevel;
-
-                let lobeMaterial = new THREE.MeshPhongMaterial({ 
-                    color: 0xff0055, 
-                    transparent: true, 
-                    opacity: 0.6, 
-                    side: THREE.DoubleSide, 
-                    blending: THREE.AdditiveBlending, 
-                    wireframe: true 
-                });
+                let lobeMaterial = new THREE.MeshPhongMaterial({ color: 0xff0055, transparent: true, opacity: 0.6, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, wireframe: true });
 
                 if (type === 'dipole') {
-                    const band = parseFloat(document.getElementById('dipoleBand').value);
-                    const wireLength = band / 2;
-                    const FeedNode = C ? C : new THREE.Vector3().copy(A).lerp(B, 0.5);
-                    let wireDir = new THREE.Vector3().subVectors(B, A).normalize();
+                    const band = parseFloat(document.getElementById('dipoleBand').value); const wireLength = band / 2; const FeedNode = C ? C : new THREE.Vector3().copy(A).lerp(B, 0.5); let wireDir = new THREE.Vector3().subVectors(B, A).normalize();
                     let geo, mesh;
-                    
-                    if (heightCenter < band * 0.3) {
-                        geo = new THREE.SphereGeometry(wireLength * 0.55, 64, 32);
-                        geo.scale(1, 0.7, 1);
-                        geo.translate(0, wireLength * 0.25, 0);
-                        mesh = new THREE.Mesh(geo, lobeMaterial);
-                        mesh.position.copy(FeedNode);
-                    } else {
-                        geo = new THREE.TorusGeometry(wireLength * 0.3, wireLength * 0.25, 32, 64);
-                        mesh = new THREE.Mesh(geo, lobeMaterial);
-                        mesh.position.copy(FeedNode);
-                        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), wireDir);
-                    }
-                    
-                    applyEnvironmentalDeformation(mesh, geo, FeedNode, true);
-                    scene.add(mesh);
-                    antennaMeshes.push(mesh);
-
+                    if (heightCenter < band * 0.3) { geo = new THREE.SphereGeometry(wireLength * 0.55, 64, 32); geo.scale(1, 0.7, 1); geo.translate(0, wireLength * 0.25, 0); mesh = new THREE.Mesh(geo, lobeMaterial); mesh.position.copy(FeedNode);
+                    } else { geo = new THREE.TorusGeometry(wireLength * 0.3, wireLength * 0.25, 32, 64); mesh = new THREE.Mesh(geo, lobeMaterial); mesh.position.copy(FeedNode); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), wireDir); }
+                    applyEnvironmentalDeformation(mesh, geo, FeedNode, true); scene.add(mesh); antennaMeshes.push(mesh);
                 } else if (type === 'endfed' || type === 'longwire') {
                     let isStartA = type === 'endfed' ? (document.getElementById('efStart').value === 'A') : (document.getElementById('lwStart').value === 'A');
-                    let startPos = isStartA ? A : B;
-                    let endPos = isStartA ? B : A;
-                    let mainDir = new THREE.Vector3().subVectors(endPos, startPos).normalize();
-                    let feedNode = startPos;
-                    let activeLength = 0; 
-                    
+                    let startPos = isStartA ? A : B; let endPos = isStartA ? B : A; let mainDir = new THREE.Vector3().subVectors(endPos, startPos).normalize(); let feedNode = startPos; let activeLength = 0; 
                     if (type === 'endfed') {
-                        let L1 = parseFloat(document.getElementById('efL1').value);
-                        let L2 = parseFloat(document.getElementById('efL2').value);
-                        activeLength = L1 + L2; 
-                        let dist = parseFloat(document.getElementById('efDist').value);
-                        let path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]);
-                        feedNode = getPointAlongPath(dist, path); 
+                        let L1 = parseFloat(document.getElementById('efL1').value); let L2 = parseFloat(document.getElementById('efL2').value); activeLength = L1 + L2; 
+                        let dist = parseFloat(document.getElementById('efDist').value); let path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]); feedNode = getPointAlongPath(dist, path); 
                     } else {
-                        activeLength = parseFloat(document.getElementById('lwLen').value);
-                        let path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]);
-                        feedNode = path[0];
+                        activeLength = parseFloat(document.getElementById('lwLen').value); let path = C ? (isStartA ? [A, C, B] : [B, C, A]) : (isStartA ? [A, B] : [B, A]); feedNode = path[0];
                     }
-                    
-                    let geo = new THREE.ConeGeometry(activeLength * 0.25, activeLength, 64, 32);
-                    geo.translate(0, activeLength * 0.45, 0); 
-                    
-                    let mesh = new THREE.Mesh(geo, lobeMaterial);
-                    mesh.position.copy(feedNode);
-                    let up = new THREE.Vector3(0,1,0);
-                    mesh.quaternion.setFromUnitVectors(up, mainDir);
-                    mesh.rotateOnAxis(new THREE.Vector3(1,0,0), -Math.PI / 8); 
-                    
-                    applyEnvironmentalDeformation(mesh, geo, feedNode, false);
-                    scene.add(mesh);
-                    antennaMeshes.push(mesh);
+                    let geo = new THREE.ConeGeometry(activeLength * 0.25, activeLength, 64, 32); geo.translate(0, activeLength * 0.45, 0); 
+                    let mesh = new THREE.Mesh(geo, lobeMaterial); mesh.position.copy(feedNode); let up = new THREE.Vector3(0,1,0); mesh.quaternion.setFromUnitVectors(up, mainDir); mesh.rotateOnAxis(new THREE.Vector3(1,0,0), -Math.PI / 8); 
+                    applyEnvironmentalDeformation(mesh, geo, feedNode, false); scene.add(mesh); antennaMeshes.push(mesh);
                 }
             }
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize( window.innerWidth, window.innerHeight );
-        }
-
-        function animate() {
-            renderer.setAnimationLoop( render );
-        }
+        function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize( window.innerWidth, window.innerHeight ); }
+        function animate() { renderer.setAnimationLoop( render ); }
 
         function render( timestamp, frame ) {
             if ( frame ) {
                 const session = renderer.xr.getSession();
-                const referenceSpace = renderer.xr.getReferenceSpace();
 
-                // GESTIONE TOGGLE MENU CON TASTO Y / X (Controller Sinistro)
+                // GESTIONE DEL TASTO Y/X PER IL MENU FLUTTUANTE
                 if (session && session.inputSources) {
                     let togglePressed = false;
                     for (const source of session.inputSources) {
@@ -1142,95 +862,32 @@
                             }
                         }
                     }
-                    
                     if (togglePressed && !lastTogglePress) {
                         isUIVisible = !isUIVisible;
-                        
-                        // Applica la transizione visiva al pannello
                         const ui = document.getElementById('ui-container');
                         ui.style.opacity = isUIVisible ? '1' : '0';
-                        
-                        // Disabilita i click quando invisibile
-                        Array.from(ui.children).forEach(child => {
-                            if(child.id !== 'touchArea') {
-                                child.style.pointerEvents = isUIVisible ? 'auto' : 'none';
-                            }
-                        });
+                        ui.style.pointerEvents = isUIVisible ? 'auto' : 'none';
                     }
                     lastTogglePress = togglePressed;
                 }
 
-                [point1, point2, point3].forEach(pt => {
-                    if (pt.visible) {
-                        const dist = camera.position.distanceTo(pt.position);
-                        const scaleFactor = globalPointScale * (0.5 + (dist * 0.05));
-                        pt.scale.setScalar(scaleFactor);
-                    }
-                });
-
-                markerMeshes.forEach(marker => {
-                    const dist = camera.position.distanceTo(marker.position);
-                    marker.scale.setScalar(0.5 + (dist * 0.05));
-                });
-                
+                [point1, point2, point3].forEach(pt => { if (pt.visible) { const dist = camera.position.distanceTo(pt.position); const scaleFactor = globalPointScale * (0.5 + (dist * 0.05)); pt.scale.setScalar(scaleFactor); }});
+                markerMeshes.forEach(marker => { const dist = camera.position.distanceTo(marker.position); marker.scale.setScalar(0.5 + (dist * 0.05)); });
                 textSprites.forEach(sprite => {
-                    const dist = camera.position.distanceTo(sprite.position);
-                    const textScale = (0.4 + (dist * 0.05)) * globalTextScale; 
-                    if (sprite.userData.isVertical) {
-                        sprite.scale.set(textScale * 0.15, textScale * 0.6, 1);
-                    } else {
-                        sprite.scale.set(textScale * 0.6, textScale * 0.15, 1);
-                    }
+                    const dist = camera.position.distanceTo(sprite.position); const textScale = (0.4 + (dist * 0.05)) * globalTextScale; 
+                    if (sprite.userData.isVertical) { sprite.scale.set(textScale * 0.15, textScale * 0.6, 1); } else { sprite.scale.set(textScale * 0.6, textScale * 0.15, 1); }
                 });
 
-                if ( hitTestSourceRequested === false ) {
-                    session.requestReferenceSpace( 'viewer' ).then( function ( referenceSpace ) {
-                        session.requestHitTestSource( { space: referenceSpace } ).then( function ( source ) {
-                            hitTestSource = source;
-                        } );
-                    } );
-                    session.addEventListener( 'end', function () {
-                        hitTestSourceRequested = false;
-                        hitTestSource = null;
-                    } );
-                    hitTestSourceRequested = true;
-                }
+                // AGGIORNAMENTO LASER E MIRINO
+                const activeCtrl = controller1; // Usiamo la mano destra per mirare il suolo
                 
-                if ( hitTestSource ) {
-                    const hitTestResults = frame.getHitTestResults( hitTestSource );
-                    if ( hitTestResults.length ) {
-                        lastHitPose = hitTestResults[0].getPose( referenceSpace );
-                    } else {
-                        lastHitPose = null;
-                    }
-                }
-
-                const activeCtrl = controller1; 
-                
-                if (currentAction === 'PLACE_GROUND') {
-                    if ( lastHitPose ) {
-                        reticle.position.set(lastHitPose.transform.position.x, lastHitPose.transform.position.y, lastHitPose.transform.position.z);
-                        reticle.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
-                        reticle.visible = true;
-                        
-                        let dist = activeCtrl.position.distanceTo(reticle.position);
-                        const laser = activeCtrl.children.find(c => c.type === 'Line');
-                        if (laser) {
-                            laser.geometry.attributes.position.array[5] = -dist;
-                            laser.geometry.attributes.position.needsUpdate = true;
-                        }
-                    } else {
-                        reticle.visible = false;
-                        resetLasers();
-                    }
-                } 
-                else if (currentAction.includes('PLACE_BASE') || currentAction.includes('MOVE_BASE')) {
+                if (currentAction.includes('PLACE_') || currentAction.includes('MOVE_')) {
                     floorPlane.constant = -groundLevel;
                     const ray = getControllerRay(activeCtrl);
                     raycaster.set(ray.origin, ray.dir);
                     const hPt = new THREE.Vector3();
                     
-                    if (raycaster.ray.intersectPlane(floorPlane, hPt) && activeCtrl.position.distanceTo(hPt) < 2500) {
+                    if (raycaster.ray.intersectPlane(floorPlane, hPt) && ray.origin.distanceTo(hPt) < 150) {
                         reticle.position.copy(hPt);
                         reticle.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
                         reticle.visible = true;
@@ -1245,8 +902,7 @@
                         reticle.visible = false;
                         resetLasers();
                     }
-                } 
-                else { 
+                } else { 
                     reticle.visible = false;
                     resetLasers();
                 }
@@ -1256,17 +912,18 @@
 
         function resetLasers() {
             [controller1, controller2].forEach(ctrl => {
+                if(!ctrl) return;
                 const laser = ctrl.children.find(c => c.type === 'Line');
                 if (laser) {
-                    laser.geometry.attributes.position.array[5] = -5;
+                    laser.geometry.attributes.position.array[5] = -5; // Laser fisso a 5 metri quando non mira il suolo
                     laser.geometry.attributes.position.needsUpdate = true;
                 }
             });
         }
     </script>
-
-    <!-- Motore Offline PWA Ripristinato -->
+    
     <script>
+        // MOTORE PWA OFFLINE ORIGINALE MANTENUTO INTATTO
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
