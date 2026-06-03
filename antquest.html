@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Quest 3 Pro Fix</title>
+    <title>AR Ham Radio Planner - Quest 3 Edition Completa</title>
     
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#2ed573">
@@ -49,6 +49,7 @@
         #btnC { background: #f1c40f; color: black; }
         #btnReset { background: #ff9f43; color: black; font-size: 14px; }
         #btnToggleLobe { background: #9b59b6; color: white; font-size: 14px; }
+        #btnPhoto { background: #ffffff; color: black; font-size: 14px; }
         
         #instruction { text-align: center; color: #fff; font-weight: bold; background: #e1b12c; padding: 6px; border-radius: 5px; width: 100%; box-sizing: border-box; font-size: 14px; margin-bottom: 10px;}
         
@@ -74,9 +75,11 @@
         .stepper span { width: 50px; text-align: center; font-weight: bold; font-size: 14px; color: #ffdd59;}
         
         input[type="color"] { border: none; width: 40px; height: 30px; background: transparent; cursor: pointer; border-radius: 5px; padding: 0;}
-
         .modal-close-btn { padding: 10px 20px; background: #2ed573; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; margin-top: 10px;}
         #btnCloseSettings { background: #1e90ff; color: white; }
+
+        /* Ripristino Overlay Foto */
+        #photoOverlay { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(46, 213, 115, 0.9); color: black; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: bold; display: none; z-index: 200; box-shadow: 0 4px 6px rgba(0,0,0,0.5);}
     </style>
 </head>
 <body>
@@ -89,44 +92,16 @@
         <div id="infoModal" class="custom-modal">
             <h3>Info Quest 3 Edition</h3>
             <p><strong>NOVITÀ:</strong> Premi il tasto <strong>Y</strong> o <strong>X</strong> sul controller sinistro per nascondere o mostrare l'intero pannello in qualsiasi momento!</p>
-            <p>Usa i grilletti posteriori dei controller per confermare le azioni.</p>
+            <p>Usa i grilletti posteriori dei controller per confermare le azioni e posizionare l'antenna.</p>
             <button id="btnCloseInfo" class="modal-close-btn">Ho capito</button>
         </div>
 
         <div id="settingsModal" class="custom-modal">
             <h3>Impostazioni Visive</h3>
-            <div class="setting-row">
-                <label>Lato Griglia:</label>
-                <div class="stepper">
-                    <button id="btnGridMinus" class="step-btn">-</button>
-                    <span id="gridVal">5m</span>
-                    <button id="btnGridPlus" class="step-btn">+</button>
-                </div>
-            </div>
-            <div class="setting-row">
-                <label>Dim. Quadrati:</label>
-                <div class="stepper">
-                    <button id="btnSqMinus" class="step-btn">-</button>
-                    <span id="sqVal">0.1m</span>
-                    <button id="btnSqPlus" class="step-btn">+</button>
-                </div>
-            </div>
-            <div class="setting-row">
-                <label>Grandezza Punti:</label>
-                <div class="stepper">
-                    <button id="btnPtMinus" class="step-btn">-</button>
-                    <span id="ptVal">100%</span>
-                    <button id="btnPtPlus" class="step-btn">+</button>
-                </div>
-            </div>
-            <div class="setting-row">
-                <label>Grandezza Testo:</label>
-                <div class="stepper">
-                    <button id="btnTextMinus" class="step-btn">-</button>
-                    <span id="textVal">120%</span>
-                    <button id="btnTextPlus" class="step-btn">+</button>
-                </div>
-            </div>
+            <div class="setting-row"><label>Lato Griglia:</label><div class="stepper"><button id="btnGridMinus" class="step-btn">-</button><span id="gridVal">5m</span><button id="btnGridPlus" class="step-btn">+</button></div></div>
+            <div class="setting-row"><label>Dim. Quadrati:</label><div class="stepper"><button id="btnSqMinus" class="step-btn">-</button><span id="sqVal">0.1m</span><button id="btnSqPlus" class="step-btn">+</button></div></div>
+            <div class="setting-row"><label>Grandezza Punti:</label><div class="stepper"><button id="btnPtMinus" class="step-btn">-</button><span id="ptVal">100%</span><button id="btnPtPlus" class="step-btn">+</button></div></div>
+            <div class="setting-row"><label>Grandezza Testo:</label><div class="stepper"><button id="btnTextMinus" class="step-btn">-</button><span id="textVal">120%</span><button id="btnTextPlus" class="step-btn">+</button></div></div>
 
             <hr style="border-color:#444; margin: 15px 0;">
             <div class="setting-row"><label>Colore Punto A:</label><input type="color" id="colorPickerA" value="#ff4757"></div>
@@ -211,9 +186,12 @@
             <div class="btn-row">
                 <button id="btnReset" class="main-btn">🔄 Reset</button>
                 <button id="btnToggleLobe" class="main-btn">🌐 Lobo 3D</button>
+                <button id="btnPhoto" class="main-btn">📸 Foto</button>
             </div>
         </div>
     </div>
+    
+    <div id="photoOverlay">Usa il tasto rapido del Quest per lo screenshot!</div>
 
     <script type="importmap">
         {
@@ -272,11 +250,10 @@
             camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 2000 );
             const light = new THREE.HemisphereLight( 0xffffff, 0xbbbbff, 3 ); light.position.set( 0.5, 1, 0.25 ); scene.add( light );
 
-            renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
+            renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true, preserveDrawingBuffer: true } );
             renderer.setPixelRatio( window.devicePixelRatio ); renderer.setSize( window.innerWidth, window.innerHeight );
             renderer.xr.enabled = true; container.appendChild( renderer.domElement );
 
-            // RIPRISTINATO IL SETUP CORRETTO DEL PULSANTE VR (Evita crash browser)
             document.body.appendChild( ARButton.createButton( renderer, { 
                 requiredFeatures: [ 'hit-test' ], 
                 optionalFeatures: [ 'dom-overlay', 'local-floor' ],
@@ -322,7 +299,7 @@
                 isUIVisible = true;
                 
                 isGroundSet = false; groundLevel = 0; 
-                setAction('PLACE_GROUND'); // Forza l'impostazione fisica del pavimento!
+                setAction('PLACE_GROUND'); 
                 
                 const session = renderer.xr.getSession();
                 if (session) { try { session.updateRenderState({ depthNear: 0.1, depthFar: 2500 }); } catch (e) {} }
@@ -350,6 +327,19 @@
             document.getElementById('btnSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'block'; });
             document.getElementById('btnCloseSettings').addEventListener('click', () => { document.getElementById('settingsModal').style.display = 'none'; });
             document.getElementById('btnForceUpdate').addEventListener('click', () => { window.location.reload(true); });
+            
+            // Ripristinata la logica del pulsante Foto
+            document.getElementById('btnPhoto').addEventListener('click', () => {
+                document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'hidden');
+                document.getElementById('antennaPanel').style.visibility = 'hidden';
+                const toast = document.getElementById('photoOverlay');
+                toast.style.display = 'block';
+                setTimeout(() => {
+                    toast.style.display = 'none';
+                    document.querySelectorAll('.btn-row').forEach(row => row.style.visibility = 'visible');
+                    if (point1.visible && point2.visible) document.getElementById('antennaPanel').style.visibility = 'visible';
+                }, 5000);
+            });
             
             document.getElementById('btnGround').addEventListener('click', () => setAction('PLACE_GROUND'));
             document.getElementById('btnA').addEventListener('click', () => setAction('PLACE_BASE_A'));
@@ -416,7 +406,6 @@
             }
         }
 
-        // --- SISTEMA DI PUNTAMENTO CORRETTO (SPARA DALLA MANO NELLO SPAZIO MONDO) ---
         function getControllerRay(ctrl) {
             const tempMat = new THREE.Matrix4().extractRotation(ctrl.matrixWorld);
             const origin = new THREE.Vector3().setFromMatrixPosition(ctrl.matrixWorld);
@@ -427,7 +416,6 @@
         function onSelect(event) {
             const ctrl = event.target;
             
-            // FISSAGGIO GRIGLIA (Usa la profondità del Quest per il terreno vero)
             if (currentAction === 'PLACE_GROUND') {
                 if(!reticle.visible) return;
                 groundLevel = reticle.position.y;
@@ -436,7 +424,6 @@
                 isGroundSet = true;
                 setAction('NONE'); updateCalculations(); drawAntenna();
             } 
-            // FISSAGGIO PUNTI ANTENNA (Usa il laser geometrico sulla griglia per non saltare)
             else if (currentAction.includes('PLACE_BASE') || currentAction.includes('MOVE_BASE')) {
                 const ray = getControllerRay(ctrl);
                 raycaster.set(ray.origin, ray.dir);
@@ -461,7 +448,6 @@
             }
         }
 
-        // Testo fluttuante e linee verticali
         function makeTextSprite(message, textColor = '#ffffff', bgColor = 'rgba(0, 0, 0, 0.7)', isVertical = false) {
             const canvas = document.createElement('canvas'); if (isVertical) { canvas.width = 128; canvas.height = 512; } else { canvas.width = 512; canvas.height = 128; }
             const ctx = canvas.getContext('2d'); ctx.fillStyle = bgColor; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.font = 'bold 46px sans-serif'; ctx.fillStyle = textColor; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -479,7 +465,6 @@
             const sprite = makeTextSprite(`Corda: ${dist.toFixed(1)}m`, '#ffdd59', 'rgba(50, 50, 0, 0.8)', false); sprite.position.copy(midPoint); scene.add(sprite); textSprites.push(sprite);
         }
 
-        // Setup calcoli e geometria base
         function updateCalculations() {
             if (isGroundSet && point1.visible) document.getElementById('hA').innerText = (point1.position.y - groundLevel).toFixed(1);
             if (isGroundSet && point2.visible) document.getElementById('hB').innerText = (point2.position.y - groundLevel).toFixed(1);
@@ -532,7 +517,6 @@
             } baseGeometry.computeVertexNormals(); 
         }
 
-        // Crea le Forme dell'Antenna
         function drawAntenna() {
             antennaMeshes.forEach(m => disposeNode(m)); antennaMeshes = []; markerMeshes.forEach(m => disposeNode(m)); markerMeshes = []; textSprites.forEach(m => disposeNode(m)); textSprites = [];
             document.getElementById('warning').style.display = 'none';
@@ -619,7 +603,6 @@
                 const session = renderer.xr.getSession();
                 const referenceSpace = renderer.xr.getReferenceSpace();
 
-                // GESTIONE TOGGLE MENU CON TASTO Y / X (Controller Sinistro)
                 if (session && session.inputSources) {
                     let togglePressed = false;
                     for (const source of session.inputSources) {
@@ -630,7 +613,7 @@
                     if (togglePressed && !lastTogglePress) {
                         isUIVisible = !isUIVisible;
                         document.getElementById('ui-container').style.opacity = isUIVisible ? '1' : '0';
-                        document.getElementById('ui-container').style.pointerEvents = isUIVisible ? 'none' : 'none'; // I bottoni mantengono i loro eventi via classi interne
+                        document.getElementById('ui-container').style.pointerEvents = isUIVisible ? 'none' : 'none'; 
                     }
                     lastTogglePress = togglePressed;
                 }
@@ -642,7 +625,6 @@
                     if (sprite.userData.isVertical) { sprite.scale.set(textScale * 0.15, textScale * 0.6, 1); } else { sprite.scale.set(textScale * 0.6, textScale * 0.15, 1); }
                 });
 
-                // Gestione Hit-Test nativo (Usato SOLO per piazzare la Griglia a terra reale)
                 if ( hitTestSourceRequested === false ) {
                     session.requestReferenceSpace( 'viewer' ).then( function ( referenceSpace ) {
                         session.requestHitTestSource( { space: referenceSpace } ).then( function ( source ) { hitTestSource = source; } );
@@ -658,7 +640,6 @@
                 const activeCtrl = controller1; 
                 
                 if (currentAction === 'PLACE_GROUND') {
-                    // Cerca il terreno VERO
                     if ( lastHitPose ) {
                         reticle.position.set(lastHitPose.transform.position.x, lastHitPose.transform.position.y, lastHitPose.transform.position.z);
                         reticle.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
@@ -672,7 +653,6 @@
                     }
                 } 
                 else if (currentAction.includes('PLACE_BASE') || currentAction.includes('MOVE_BASE')) {
-                    // Usa il laser geometrico sulla griglia per le antenne
                     floorPlane.constant = -groundLevel;
                     const ray = getControllerRay(activeCtrl);
                     raycaster.set(ray.origin, ray.dir);
@@ -701,6 +681,16 @@
             [controller1, controller2].forEach(ctrl => {
                 const laser = ctrl.children.find(c => c.type === 'Line');
                 if (laser) { laser.geometry.attributes.position.array[5] = -5; laser.geometry.attributes.position.needsUpdate = true; }
+            });
+        }
+    </script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Offline Engine Pronto!'))
+                    .catch(err => console.log('Errore Service Worker:', err));
             });
         }
     </script>
