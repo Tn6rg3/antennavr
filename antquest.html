@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Quest 3 Pro</title>
+    <title>AR Ham Radio Planner - Quest 3 Pro Fix</title>
     
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#2ed573">
@@ -16,6 +16,7 @@
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
             display: flex; flex-direction: column; justify-content: space-between;
             z-index: 100; pointer-events: none; padding: 20px; box-sizing: border-box;
+            transition: opacity 0.3s ease; /* Transizione morbida quando si preme Y */
         }
 
         #top-bar { display: flex; justify-content: space-between; width: 100%; }
@@ -87,7 +88,8 @@
 
         <div id="infoModal" class="custom-modal">
             <h3>Info Quest 3 Edition</h3>
-            <p>Usa il laser dei controller. Premi il grilletto per posizionare i punti sul terreno. Usa le frecce del pannello per regolarne l'altezza.</p>
+            <p><strong>NOVITÀ:</strong> Premi il tasto <strong>Y</strong> o <strong>X</strong> sul controller sinistro per nascondere o mostrare l'intero pannello!</p>
+            <p>Se vedi la griglia fluttuare alta, tieni premuto il pulsante "Meta/Oculus" sul controller destro per ricalibrare la vista.</p>
             <button id="btnCloseInfo" class="modal-close-btn">Ho capito</button>
         </div>
 
@@ -263,8 +265,8 @@
         
         let currentAction = 'NONE'; 
         
-        let globalGridSize = 5;       // DI DEFAULT: 5 METRI
-        let globalGridSquareSize = 0.1; // DI DEFAULT: 10 CENTIMETRI
+        let globalGridSize = 5;       
+        let globalGridSquareSize = 0.1; 
         let globalPointScale = 0.1;
         let globalTextScale = 1.2; 
         let isLobeVisible = false; 
@@ -273,7 +275,9 @@
         let colorB = 0x1e90ff;
         let colorC = 0xf1c40f;
 
-        // Nuovi strumenti di Raycasting diretti per il Quest
+        let isUIVisible = true;
+        let lastTogglePress = false;
+
         const raycaster = new THREE.Raycaster();
         const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
@@ -311,11 +315,14 @@
             renderer.setPixelRatio( window.devicePixelRatio );
             renderer.setSize( window.innerWidth, window.innerHeight );
             renderer.xr.enabled = true;
+            
+            // FORZATURA DEL PAVIMENTO REALE
+            renderer.xr.setReferenceSpaceType( 'local-floor' );
+            
             container.appendChild( renderer.domElement );
 
             document.body.appendChild( ARButton.createButton( renderer, { 
-                requiredFeatures: [ 'local-floor' ], 
-                optionalFeatures: [ 'dom-overlay' ],
+                requiredFeatures: [ 'local-floor', 'dom-overlay' ], 
                 domOverlay: { root: document.getElementById('ui-container') }
             } ) );
 
@@ -337,7 +344,7 @@
 
             const controllerModelFactory = new XRControllerModelFactory();
 
-            // Controller 1 (Destro)
+            // Controller Destro
             controller1 = renderer.xr.getController( 0 );
             controller1.addEventListener( 'select', onSelect );
             scene.add( controller1 );
@@ -345,7 +352,7 @@
             controllerGrip1.add( controllerModelFactory.createControllerModel( controllerGrip1 ) );
             scene.add( controllerGrip1 );
 
-            // Controller 2 (Sinistro)
+            // Controller Sinistro
             controller2 = renderer.xr.getController( 1 );
             controller2.addEventListener( 'select', onSelect );
             scene.add( controller2 );
@@ -362,8 +369,9 @@
 
             renderer.xr.addEventListener('sessionstart', () => {
                 document.getElementById('ui-container').style.display = 'flex';
+                document.getElementById('ui-container').style.visibility = 'visible';
+                isUIVisible = true;
                 
-                // Il Quest conosce già il pavimento!
                 isGroundSet = true;
                 groundLevel = 0; 
                 groundGrid.position.set(0, 0, 0); 
@@ -377,7 +385,6 @@
                 }
             });
 
-            // Gestione dei bottoni di Altezza
             document.getElementById('btnHMinus').addEventListener('click', () => { adjustHeight(-0.5); });
             document.getElementById('btnHPlus').addEventListener('click', () => { adjustHeight(0.5); });
 
@@ -389,7 +396,7 @@
                 
                 if (pt && pt.visible) {
                     pt.position.y += delta;
-                    if (pt.position.y < groundLevel) pt.position.y = groundLevel; // Non scendere sotto terra
+                    if (pt.position.y < groundLevel) pt.position.y = groundLevel;
                     updateCalculations();
                     drawAntenna();
                 }
@@ -497,13 +504,13 @@
             if (action === 'PLACE_BASE_A' || action === 'PLACE_BASE_B' || action === 'PLACE_BASE_C') {
                 const btn = action === 'PLACE_BASE_A' ? 'btnA' : (action === 'PLACE_BASE_B' ? 'btnB' : 'btnC');
                 document.getElementById(btn).classList.add('active');
-                inst.innerText = "MIRA col laser e PREMI IL GRILLETTO per fissare la BASE."; 
+                inst.innerText = "MIRA col laser a terra e PREMI IL GRILLETTO per fissare la BASE."; 
                 inst.style.background = action === 'PLACE_BASE_A' ? "#ff4757" : (action === 'PLACE_BASE_B' ? "#1e90ff" : "#f1c40f");
             } else if (action === 'SET_HEIGHT_A' || action === 'SET_HEIGHT_B' || action === 'SET_HEIGHT_C') {
                 const btn = action === 'SET_HEIGHT_A' ? 'btnA' : (action === 'SET_HEIGHT_B' ? 'btnB' : 'btnC');
                 document.getElementById(btn).classList.add('active');
                 document.getElementById('panel-edit-point').style.display = 'block';
-                inst.innerText = "Clicca le FRECCE SUL PANNELLO per alzare la quota."; 
+                inst.innerText = "Clicca le FRECCE per alzare la quota (o premi 'Y' per nascondere i menu)."; 
                 inst.style.background = action === 'SET_HEIGHT_A' ? "#ff4757" : (action === 'SET_HEIGHT_B' ? "#1e90ff" : "#f1c40f");
             } else if (action === 'MOVE_BASE_A' || action === 'MOVE_BASE_B' || action === 'MOVE_BASE_C') {
                 const btn = action === 'MOVE_BASE_A' ? 'btnA' : (action === 'MOVE_BASE_B' ? 'btnB' : 'btnC');
@@ -511,21 +518,18 @@
                 inst.innerText = "MIRA al terreno per spostare la base e PREMI IL GRILLETTO."; 
                 inst.style.background = action === 'MOVE_BASE_A' ? "#ff4757" : (action === 'MOVE_BASE_B' ? "#1e90ff" : "#f1c40f");
             } else {
-                inst.innerText = "Seleziona un Punto da posizionare. L'antenna apparirà in automatico."; inst.style.background = "#555";
+                inst.innerText = "(Tasto Y = On/Off Menu) Seleziona un Punto. L'antenna appare in automatico."; inst.style.background = "#555";
             }
         }
 
         function makeTextSprite(message, textColor = '#ffffff', bgColor = 'rgba(0, 0, 0, 0.7)', isVertical = false) {
             const canvas = document.createElement('canvas');
             if (isVertical) { canvas.width = 128; canvas.height = 512; } else { canvas.width = 512; canvas.height = 128; }
-            
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = bgColor; ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.font = 'bold 46px sans-serif'; ctx.fillStyle = textColor; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            
             if (isVertical) { ctx.translate(64, 256); ctx.rotate(-Math.PI / 2); ctx.fillText(message, 0, 0);
             } else { ctx.fillText(message, 256, 64); }
-            
             const texture = new THREE.CanvasTexture(canvas);
             const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
             const sprite = new THREE.Sprite(spriteMat);
@@ -558,19 +562,22 @@
             scene.add(sprite); textSprites.push(sprite);
         }
 
-        // --- SISTEMA DI PUNTAMENTO MODIFICATO ---
+        // --- SISTEMA DI PUNTAMENTO CORRETTO (SPARA DALLA MANO) ---
+        function getControllerRay(ctrl) {
+            const tempMat = new THREE.Matrix4().identity().extractRotation(ctrl.matrixWorld);
+            const origin = new THREE.Vector3().setFromMatrixPosition(ctrl.matrixWorld);
+            const dir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMat);
+            return { origin, dir };
+        }
+
         function onSelect(event) {
             const ctrl = event.target;
-            
-            // Creiamo un raggio dritto fuori dal controller al momento del click
-            const tempMat = new THREE.Matrix4().identity().extractRotation(ctrl.matrixWorld);
-            const rayDir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMat);
-            raycaster.set(ctrl.position, rayDir);
+            const ray = getControllerRay(ctrl);
+            raycaster.set(ray.origin, ray.dir);
             
             floorPlane.constant = -groundLevel;
             const hPt = new THREE.Vector3();
             
-            // Se il raggio interseca il pavimento geometrico
             if(raycaster.ray.intersectPlane(floorPlane, hPt)) {
                 
                 if (currentAction === 'PLACE_BASE_A') {
@@ -596,7 +603,6 @@
             
             if (point1.visible && point2.visible) {
                 let distAB = point1.position.distanceTo(point2.position);
-                
                 if (point3.visible) {
                     let distAC = point1.position.distanceTo(point3.position);
                     let distCB = point3.position.distanceTo(point2.position);
@@ -649,8 +655,7 @@
             let pStart = getPointAlongPath(startDist, pathPoints);
             let pEnd = getPointAlongPath(endDist, pathPoints);
             if (pathPoints.length === 2) { buildWire(pStart, pEnd, color); return; }
-            let C = pathPoints[1];
-            let distToC = pathPoints[0].distanceTo(C);
+            let C = pathPoints[1]; let distToC = pathPoints[0].distanceTo(C);
             if (endDist <= distToC + 0.01) { buildWire(pStart, pEnd, color); 
             } else if (startDist >= distToC - 0.01) { buildWire(pStart, pEnd, color); 
             } else { buildWire(pStart, C, color); buildWire(C, pEnd, color); }
@@ -697,8 +702,7 @@
             let totalDist = C ? A.distanceTo(C) + C.distanceTo(B) : A.distanceTo(B);
             
             if (totalDist < 0.1) {
-                document.getElementById('warning').innerText = "⚠️ Punti troppo vicini tra loro!";
-                document.getElementById('warning').style.display = 'block'; return;
+                document.getElementById('warning').innerText = "⚠️ Punti troppo vicini!"; document.getElementById('warning').style.display = 'block'; return;
             } else { document.getElementById('warning').innerText = "⚠️ Antenna più lunga dello spazio!"; }
 
             lineAB.geometry.setFromPoints(pathBase); lineAB.visible = true;
@@ -809,6 +813,27 @@
 
         function render( timestamp, frame ) {
             if ( frame ) {
+                const session = renderer.xr.getSession();
+
+                // GESTIONE TOGGLE MENU CON TASTO Y / X (Controller Sinistro)
+                if (session && session.inputSources) {
+                    let togglePressed = false;
+                    for (const source of session.inputSources) {
+                        if (source.gamepad && source.handedness === 'left') {
+                            // Pulsante 4 (X) o Pulsante 5 (Y)
+                            if (source.gamepad.buttons[4]?.pressed || source.gamepad.buttons[5]?.pressed) {
+                                togglePressed = true;
+                            }
+                        }
+                    }
+                    if (togglePressed && !lastTogglePress) {
+                        isUIVisible = !isUIVisible;
+                        document.getElementById('ui-container').style.opacity = isUIVisible ? '1' : '0';
+                        document.getElementById('ui-container').style.visibility = isUIVisible ? 'visible' : 'hidden';
+                    }
+                    lastTogglePress = togglePressed;
+                }
+
                 [point1, point2, point3].forEach(pt => { if (pt.visible) { const dist = camera.position.distanceTo(pt.position); const scaleFactor = globalPointScale * (0.5 + (dist * 0.05)); pt.scale.setScalar(scaleFactor); }});
                 markerMeshes.forEach(marker => { const dist = camera.position.distanceTo(marker.position); marker.scale.setScalar(0.5 + (dist * 0.05)); });
                 textSprites.forEach(sprite => {
@@ -816,26 +841,20 @@
                     if (sprite.userData.isVertical) { sprite.scale.set(textScale * 0.15, textScale * 0.6, 1); } else { sprite.scale.set(textScale * 0.6, textScale * 0.15, 1); }
                 });
 
-                // Aggiornamento Mirino Fisico basato sul controller destro
                 if (currentAction.includes('PLACE_') || currentAction.includes('MOVE_')) {
                     floorPlane.constant = -groundLevel;
                     
-                    // Usa il controller destro (0) per la mira
                     const activeCtrl = controller1; 
-                    const tempMat = new THREE.Matrix4().identity().extractRotation(activeCtrl.matrixWorld);
-                    const rDir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMat);
+                    const ray = getControllerRay(activeCtrl);
+                    raycaster.set(ray.origin, ray.dir);
                     
-                    raycaster.set(activeCtrl.position, rDir);
                     const hPt = new THREE.Vector3();
                     
                     if (raycaster.ray.intersectPlane(floorPlane, hPt) && activeCtrl.position.distanceTo(hPt) < 2500) {
                         reticle.position.copy(hPt);
-                        
-                        // FORZA IL MIRINO IN ORIZZONTALE
                         reticle.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
                         reticle.visible = true;
                         
-                        // Ferma il laser visivo esattamante dove tocca terra
                         let dist = activeCtrl.position.distanceTo(hPt);
                         const laser = activeCtrl.children.find(c => c.type === 'Line');
                         if (laser) {
@@ -847,8 +866,6 @@
                     }
                 } else { 
                     reticle.visible = false; 
-                    
-                    // Ripristina la lunghezza base del laser a 5m
                     [controller1, controller2].forEach(ctrl => {
                         const laser = ctrl.children.find(c => c.type === 'Line');
                         if (laser) {
