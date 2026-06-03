@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Ham Radio Planner - Quest 3 Edition</title>
+    <title>AR Ham Radio Planner - Quest 3 Pro</title>
     
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#2ed573">
@@ -12,7 +12,6 @@
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #000; touch-action: none; color: white;}
         
-        /* Modifica per centrare e visualizzare bene il pannello in VR */
         #ui-container {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
             display: flex; flex-direction: column; justify-content: space-between;
@@ -35,7 +34,6 @@
         .ant-settings { display: none; }
         #warning { color: #ff4757; font-weight: bold; font-size: 12px; display: none; margin-top: 5px;}
 
-        /* Rialzato leggermente il blocco inferiore per non finire fuori dalla finestra VR */
         .bottom-controls { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; margin-bottom: 80px; }
         .btn-row { display: flex; gap: 5px; pointer-events: auto; width: 100%; justify-content: center; }
         .main-btn {
@@ -44,11 +42,10 @@
         }
         .main-btn.active { opacity: 1; border-color: white; transform: scale(1.02); }
         
-        #btnGround { background: #2ed573; color: black; } /* Ripristinato il pulsante Suolo */
+        #btnGround { background: #2ed573; color: black; }
         #btnA { background: #ff4757; }
         #btnB { background: #1e90ff; }
         #btnC { background: #f1c40f; color: black; }
-        #btnPhoto { background: #ffffff; color: black; font-size: 14px; }
         #btnReset { background: #ff9f43; color: black; font-size: 14px; }
         #btnToggleLobe { background: #9b59b6; color: white; font-size: 14px; }
         
@@ -59,10 +56,7 @@
         .edit-btn { padding: 10px 15px; font-size: 14px; background: #444; color: white; border: 1px solid #777; border-radius: 5px; font-weight: bold; cursor: pointer;}
         .edit-btn:active { background: #888; }
         
-        #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
-        
         #btnInfo { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); border: 2px solid #2ed573; color: #2ed573; border-radius: 50%; width: 35px; height: 35px; font-weight: bold; font-size: 18px; cursor: pointer; z-index: 200; pointer-events: auto; display: flex; align-items: center; justify-content: center;}
-        
         #btnSettings { position: absolute; top: 10px; right: 55px; background: rgba(0,0,0,0.7); border: 2px solid #1e90ff; color: #1e90ff; border-radius: 50%; width: 35px; height: 35px; font-weight: bold; font-size: 18px; cursor: pointer; z-index: 200; pointer-events: auto; display: flex; align-items: center; justify-content: center;}
 
         .custom-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px; background: rgba(20, 30, 40, 0.98); padding: 15px; border: 2px solid #2ed573; border-radius: 10px; z-index: 300; pointer-events: auto; color: white; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); max-height: 85vh; overflow-y: auto;}
@@ -87,14 +81,13 @@
 <body>
 
     <div id="ui-container" style="display: none;">
-        <div id="touchArea"></div>
         
         <button id="btnInfo">i</button>
         <button id="btnSettings">⚙️</button>
 
         <div id="infoModal" class="custom-modal">
             <h3>Info Quest 3 Edition</h3>
-            <p>Interagisci con il pannello fluttuante usando il raggio laser dei controller e premi il grilletto. Imposta prima lo "Zero" mirando al pavimento fisico.</p>
+            <p>Usa il laser dei controller. Premi il grilletto per posizionare i punti sul terreno. Usa le frecce del pannello per regolarne l'altezza.</p>
             <button id="btnCloseInfo" class="modal-close-btn">Ho capito</button>
         </div>
 
@@ -105,7 +98,7 @@
                 <label>Lato Griglia:</label>
                 <div class="stepper">
                     <button id="btnGridMinus" class="step-btn">-</button>
-                    <span id="gridVal">50m</span>
+                    <span id="gridVal">5m</span>
                     <button id="btnGridPlus" class="step-btn">+</button>
                 </div>
             </div>
@@ -114,7 +107,7 @@
                 <label>Dim. Quadrati:</label>
                 <div class="stepper">
                     <button id="btnSqMinus" class="step-btn">-</button>
-                    <span id="sqVal">0.5m</span>
+                    <span id="sqVal">0.1m</span>
                     <button id="btnSqPlus" class="step-btn">+</button>
                 </div>
             </div>
@@ -216,20 +209,24 @@
         <div class="bottom-controls">
 
             <div id="panel-edit-point" class="edit-panel" style="display: none;">
-                <div style="font-size: 12px; margin-bottom: 5px; color: #aaa;">Punta il laser su questo pannello vuoto e TRASCINA SU/GIÙ premendo il grilletto per alzare la quota.</div>
+                <div style="font-size: 13px; margin-bottom: 5px; color: #fff;">Regola Altezza (Usa il puntatore):</div>
+                <div class="edit-row">
+                    <button class="edit-btn" id="btnHMinus" style="font-size: 16px; background: #ff4757;">⬇️ -0.5m</button>
+                    <button class="edit-btn" id="btnHPlus" style="font-size: 16px; background: #2ed573; color: black;">⬆️ +0.5m</button>
+                </div>
                 <div class="edit-row">
                     <button class="edit-btn" id="btnMoveBase">Sposta Base 🎯</button>
-                    <button class="edit-btn" id="btnDoneEdit" style="background: #2ed573; color: black;">✔ OK</button>
+                    <button class="edit-btn" id="btnDoneEdit" style="background: white; color: black;">✔ OK</button>
                 </div>
             </div>
 
             <div id="instruction">Inizializzazione...</div>
 
             <div class="btn-row">
-                <button id="btnGround" class="main-btn">1. Zero</button>
-                <button id="btnA" class="main-btn">2. Alb.A</button>
-                <button id="btnB" class="main-btn">3. Alb.B</button>
-                <button id="btnC" class="main-btn">4. C (Opz)</button>
+                <button id="btnGround" class="main-btn" style="display: none;">1. Zero</button>
+                <button id="btnA" class="main-btn">1. Alb.A</button>
+                <button id="btnB" class="main-btn">2. Alb.B</button>
+                <button id="btnC" class="main-btn">3. C (Opz)</button>
             </div>
             
             <div class="btn-row">
@@ -255,7 +252,6 @@
 
         let container, camera, scene, renderer, reticle;
         let controller1, controller2, controllerGrip1, controllerGrip2;
-        let hitTestSource = null, hitTestSourceRequested = false;
 
         let point1, point2, point3, groundGrid, lineAB;
         let antennaMeshes = []; 
@@ -263,19 +259,12 @@
         let textSprites = []; 
         
         let groundLevel = 0; 
-        let isGroundSet = false; 
+        let isGroundSet = true; 
         
         let currentAction = 'NONE'; 
         
-        let anchors = { A: null, B: null, C: null, Grid: null };
-        let heightOffsets = { A: 0, B: 0, C: 0 };
-        let lastHitPose = null;
-
-        let lastTouchY = 0;
-        let isDragging = false, hasDragged = false; 
-
-        let globalGridSize = 50;
-        let globalGridSquareSize = 0.5;
+        let globalGridSize = 5;       // DI DEFAULT: 5 METRI
+        let globalGridSquareSize = 0.1; // DI DEFAULT: 10 CENTIMETRI
         let globalPointScale = 0.1;
         let globalTextScale = 1.2; 
         let isLobeVisible = false; 
@@ -283,6 +272,10 @@
         let colorA = 0xff4757;
         let colorB = 0x1e90ff;
         let colorC = 0xf1c40f;
+
+        // Nuovi strumenti di Raycasting diretti per il Quest
+        const raycaster = new THREE.Raycaster();
+        const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
         function disposeNode(node) {
             if (!node) return;
@@ -321,7 +314,7 @@
             container.appendChild( renderer.domElement );
 
             document.body.appendChild( ARButton.createButton( renderer, { 
-                requiredFeatures: [ 'hit-test', 'local-floor' ], 
+                requiredFeatures: [ 'local-floor' ], 
                 optionalFeatures: [ 'dom-overlay' ],
                 domOverlay: { root: document.getElementById('ui-container') }
             } ) );
@@ -362,18 +355,21 @@
 
             const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -5)]);
             const laserMat = new THREE.LineBasicMaterial({ color: 0x2ed573, transparent: true, opacity: 0.8 });
-            controller1.add(new THREE.Line(laserGeo, laserMat));
-            controller2.add(new THREE.Line(laserGeo, laserMat));
+            controller1.add(new THREE.Line(laserGeo.clone(), laserMat));
+            controller2.add(new THREE.Line(laserGeo.clone(), laserMat));
 
             window.addEventListener( 'resize', onWindowResize );
 
             renderer.xr.addEventListener('sessionstart', () => {
                 document.getElementById('ui-container').style.display = 'flex';
                 
-                isGroundSet = false;
+                // Il Quest conosce già il pavimento!
+                isGroundSet = true;
                 groundLevel = 0; 
+                groundGrid.position.set(0, 0, 0); 
+                groundGrid.visible = true;
                 
-                setAction('PLACE_GROUND'); // Obbliga l'utente a impostare lo zero col pavimento reale
+                setAction('NONE');
                 
                 const session = renderer.xr.getSession();
                 if (session) {
@@ -381,11 +377,24 @@
                 }
             });
 
-            document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
-                if (ev.target.id !== 'touchArea') ev.preventDefault();
-            });
+            // Gestione dei bottoni di Altezza
+            document.getElementById('btnHMinus').addEventListener('click', () => { adjustHeight(-0.5); });
+            document.getElementById('btnHPlus').addEventListener('click', () => { adjustHeight(0.5); });
 
-            document.getElementById('btnGround').addEventListener('click', () => setAction('PLACE_GROUND'));
+            function adjustHeight(delta) {
+                let pt = null;
+                if (currentAction === 'SET_HEIGHT_A') pt = point1;
+                else if (currentAction === 'SET_HEIGHT_B') pt = point2;
+                else if (currentAction === 'SET_HEIGHT_C') pt = point3;
+                
+                if (pt && pt.visible) {
+                    pt.position.y += delta;
+                    if (pt.position.y < groundLevel) pt.position.y = groundLevel; // Non scendere sotto terra
+                    updateCalculations();
+                    drawAntenna();
+                }
+            }
+
             document.getElementById('btnToggleLobe').addEventListener('click', () => {
                 isLobeVisible = !isLobeVisible;
                 document.getElementById('btnToggleLobe').style.opacity = isLobeVisible ? '1' : '0.7';
@@ -418,10 +427,10 @@
                 scene.add( groundGrid );
             }
 
-            document.getElementById('btnGridMinus').addEventListener('click', () => { if (globalGridSize > 5) { globalGridSize -= 1; updateGridVisuals(); } });
-            document.getElementById('btnGridPlus').addEventListener('click', () => { if (globalGridSize < 500) { globalGridSize += 10; updateGridVisuals(); } });
-            document.getElementById('btnSqMinus').addEventListener('click', () => { if (globalGridSquareSize > 0.2) { globalGridSquareSize -= 0.1; updateGridVisuals(); } });
-            document.getElementById('btnSqPlus').addEventListener('click', () => { if (globalGridSquareSize < 5.0) { globalGridSquareSize += 0.1; updateGridVisuals(); } });
+            document.getElementById('btnGridMinus').addEventListener('click', () => { if (globalGridSize > 1) { globalGridSize -= 1; updateGridVisuals(); } });
+            document.getElementById('btnGridPlus').addEventListener('click', () => { if (globalGridSize < 500) { globalGridSize += 1; updateGridVisuals(); } });
+            document.getElementById('btnSqMinus').addEventListener('click', () => { if (globalGridSquareSize > 0.05) { globalGridSquareSize -= 0.05; updateGridVisuals(); } });
+            document.getElementById('btnSqPlus').addEventListener('click', () => { if (globalGridSquareSize < 5.0) { globalGridSquareSize += 0.05; updateGridVisuals(); } });
             
             document.getElementById('btnPtMinus').addEventListener('click', () => {
                 if (globalPointScale > 0.04) { globalPointScale -= 0.02; document.getElementById('ptVal').innerText = Math.round(globalPointScale * 1000) + '%'; }
@@ -465,9 +474,6 @@
                 markerMeshes.forEach(m => disposeNode(m)); markerMeshes = [];
                 textSprites.forEach(m => disposeNode(m)); textSprites = [];
 
-                heightOffsets = { A: 0, B: 0, C: 0 };
-                lastHitPose = null;
-
                 document.getElementById('hA').innerText = '--';
                 document.getElementById('hB').innerText = '--';
                 document.getElementById('hC').innerText = '--';
@@ -477,45 +483,8 @@
                 document.getElementById('antennaPanel').style.display = 'none';
                 document.getElementById('warning').style.display = 'none';
 
-                setAction('PLACE_GROUND');
+                setAction('NONE');
             });
-
-            const touchArea = document.getElementById('touchArea');
-            touchArea.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B' || currentAction === 'SET_HEIGHT_C')) {
-                    isDragging = true; hasDragged = false; 
-                    lastTouchY = e.touches[0].clientY;
-                }
-            });
-
-            touchArea.addEventListener('touchmove', (e) => {
-                if (!isDragging) return;
-                hasDragged = true; 
-                if (e.touches.length === 1 && (currentAction === 'SET_HEIGHT_A' || currentAction === 'SET_HEIGHT_B' || currentAction === 'SET_HEIGHT_C')) {
-                    let pt = currentAction === 'SET_HEIGHT_A' ? point1 : (currentAction === 'SET_HEIGHT_B' ? point2 : point3);
-                    let key = currentAction === 'SET_HEIGHT_A' ? 'A' : (currentAction === 'SET_HEIGHT_B' ? 'B' : 'C');
-                    if (!pt || !pt.visible) return;
-
-                    let touchY = e.touches[0].clientY;
-                    let deltaY = lastTouchY - touchY; 
-                    
-                    let dist = camera.position.distanceTo(pt.position);
-                    let vFov = camera.fov * Math.PI / 180; 
-                    let visibleHeight = 2 * Math.tan(vFov / 2) * dist;
-                    let sensitivity = visibleHeight / window.innerHeight; 
-
-                    heightOffsets[key] += deltaY * sensitivity;
-                    if (heightOffsets[key] < 0) heightOffsets[key] = 0;
-
-                    pt.position.y += deltaY * sensitivity;
-                    if (isGroundSet && pt.position.y < groundLevel) pt.position.y = groundLevel;
-
-                    lastTouchY = touchY;
-                    updateCalculations();
-                    drawAntenna(); 
-                }
-            });
-            touchArea.addEventListener('touchend', () => { isDragging = false; });
         }
 
         function setAction(action) {
@@ -525,27 +494,24 @@
 
             let inst = document.getElementById('instruction');
 
-            if (action === 'PLACE_GROUND') {
-                document.getElementById('btnGround').classList.add('active');
-                inst.innerText = "MIRA al pavimento reale col laser e PREMI il Grilletto per fissare lo Zero."; inst.style.background = "#2ed573";
-            } else if (action === 'PLACE_BASE_A' || action === 'PLACE_BASE_B' || action === 'PLACE_BASE_C') {
+            if (action === 'PLACE_BASE_A' || action === 'PLACE_BASE_B' || action === 'PLACE_BASE_C') {
                 const btn = action === 'PLACE_BASE_A' ? 'btnA' : (action === 'PLACE_BASE_B' ? 'btnB' : 'btnC');
                 document.getElementById(btn).classList.add('active');
-                inst.innerText = action === 'PLACE_BASE_C' ? "MIRA al terreno per il CENTRO e PREMI il Grilletto." : "MIRA al terreno per posizionare la BASE e PREMI il Grilletto."; 
+                inst.innerText = "MIRA col laser e PREMI IL GRILLETTO per fissare la BASE."; 
                 inst.style.background = action === 'PLACE_BASE_A' ? "#ff4757" : (action === 'PLACE_BASE_B' ? "#1e90ff" : "#f1c40f");
             } else if (action === 'SET_HEIGHT_A' || action === 'SET_HEIGHT_B' || action === 'SET_HEIGHT_C') {
                 const btn = action === 'SET_HEIGHT_A' ? 'btnA' : (action === 'SET_HEIGHT_B' ? 'btnB' : 'btnC');
                 document.getElementById(btn).classList.add('active');
                 document.getElementById('panel-edit-point').style.display = 'block';
-                inst.innerText = "Trascina col grilletto premuto sull'interfaccia per alzare la quota."; 
+                inst.innerText = "Clicca le FRECCE SUL PANNELLO per alzare la quota."; 
                 inst.style.background = action === 'SET_HEIGHT_A' ? "#ff4757" : (action === 'SET_HEIGHT_B' ? "#1e90ff" : "#f1c40f");
             } else if (action === 'MOVE_BASE_A' || action === 'MOVE_BASE_B' || action === 'MOVE_BASE_C') {
                 const btn = action === 'MOVE_BASE_A' ? 'btnA' : (action === 'MOVE_BASE_B' ? 'btnB' : 'btnC');
                 document.getElementById(btn).classList.add('active');
-                inst.innerText = "MIRA al terreno per spostare la base e PREMI per confermare."; 
+                inst.innerText = "MIRA al terreno per spostare la base e PREMI IL GRILLETTO."; 
                 inst.style.background = action === 'MOVE_BASE_A' ? "#ff4757" : (action === 'MOVE_BASE_B' ? "#1e90ff" : "#f1c40f");
             } else {
-                inst.innerText = "Punti posizionati. Puoi personalizzare l'Antenna."; inst.style.background = "#555";
+                inst.innerText = "Seleziona un Punto da posizionare. L'antenna apparirà in automatico."; inst.style.background = "#555";
             }
         }
 
@@ -592,42 +558,34 @@
             scene.add(sprite); textSprites.push(sprite);
         }
 
-        function onSelect() {
-            if (hasDragged) { hasDragged = false; return; }
-
-            if (currentAction === 'PLACE_GROUND') {
-                if(!reticle.visible) return;
+        // --- SISTEMA DI PUNTAMENTO MODIFICATO ---
+        function onSelect(event) {
+            const ctrl = event.target;
+            
+            // Creiamo un raggio dritto fuori dal controller al momento del click
+            const tempMat = new THREE.Matrix4().identity().extractRotation(ctrl.matrixWorld);
+            const rayDir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMat);
+            raycaster.set(ctrl.position, rayDir);
+            
+            floorPlane.constant = -groundLevel;
+            const hPt = new THREE.Vector3();
+            
+            // Se il raggio interseca il pavimento geometrico
+            if(raycaster.ray.intersectPlane(floorPlane, hPt)) {
                 
-                // Nel Quest basta 1 solo click sul pavimento!
-                groundLevel = reticle.position.y;
-                groundGrid.position.set(reticle.position.x, groundLevel, reticle.position.z);
-                groundGrid.visible = true; 
-                isGroundSet = true;
-                
-                setAction('NONE'); 
-                updateCalculations(); 
-                drawAntenna();
-
-            } else if (currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B' || currentAction === 'PLACE_BASE_C') {
-                if (reticle.visible) {
-                    if (!isGroundSet) {
-                        groundLevel = reticle.position.y;
-                        groundGrid.position.set(camera.position.x, groundLevel, camera.position.z);
-                        groundGrid.visible = true; isGroundSet = true;
-                    }
-
-                    if (currentAction === 'PLACE_BASE_A') {
-                        point1.position.copy(reticle.position); point1.visible = true; heightOffsets.A = 0; setAction('SET_HEIGHT_A');
-                    } else if (currentAction === 'PLACE_BASE_B') {
-                        point2.position.copy(reticle.position); point2.visible = true; heightOffsets.B = 0; setAction('SET_HEIGHT_B');
-                    } else if (currentAction === 'PLACE_BASE_C') {
-                        point3.position.copy(reticle.position); point3.visible = true; heightOffsets.C = 0; setAction('SET_HEIGHT_C');
-                    }
-                    updateCalculations(); drawAntenna(); 
+                if (currentAction === 'PLACE_BASE_A') {
+                    point1.position.copy(hPt); point1.visible = true; setAction('SET_HEIGHT_A'); updateCalculations(); drawAntenna();
+                } else if (currentAction === 'PLACE_BASE_B') {
+                    point2.position.copy(hPt); point2.visible = true; setAction('SET_HEIGHT_B'); updateCalculations(); drawAntenna();
+                } else if (currentAction === 'PLACE_BASE_C') {
+                    point3.position.copy(hPt); point3.visible = true; setAction('SET_HEIGHT_C'); updateCalculations(); drawAntenna();
+                } else if (currentAction === 'MOVE_BASE_A') {
+                    point1.position.x = hPt.x; point1.position.z = hPt.z; setAction('SET_HEIGHT_A'); updateCalculations(); drawAntenna();
+                } else if (currentAction === 'MOVE_BASE_B') {
+                    point2.position.x = hPt.x; point2.position.z = hPt.z; setAction('SET_HEIGHT_B'); updateCalculations(); drawAntenna();
+                } else if (currentAction === 'MOVE_BASE_C') {
+                    point3.position.x = hPt.x; point3.position.z = hPt.z; setAction('SET_HEIGHT_C'); updateCalculations(); drawAntenna();
                 }
-            } else if (currentAction === 'MOVE_BASE_A') { setAction('SET_HEIGHT_A');
-            } else if (currentAction === 'MOVE_BASE_B') { setAction('SET_HEIGHT_B');
-            } else if (currentAction === 'MOVE_BASE_C') { setAction('SET_HEIGHT_C');
             }
         }
 
@@ -851,9 +809,6 @@
 
         function render( timestamp, frame ) {
             if ( frame ) {
-                const referenceSpace = renderer.xr.getReferenceSpace();
-                const session = renderer.xr.getSession();
-
                 [point1, point2, point3].forEach(pt => { if (pt.visible) { const dist = camera.position.distanceTo(pt.position); const scaleFactor = globalPointScale * (0.5 + (dist * 0.05)); pt.scale.setScalar(scaleFactor); }});
                 markerMeshes.forEach(marker => { const dist = camera.position.distanceTo(marker.position); marker.scale.setScalar(0.5 + (dist * 0.05)); });
                 textSprites.forEach(sprite => {
@@ -861,42 +816,47 @@
                     if (sprite.userData.isVertical) { sprite.scale.set(textScale * 0.15, textScale * 0.6, 1); } else { sprite.scale.set(textScale * 0.6, textScale * 0.15, 1); }
                 });
 
-                if ( hitTestSourceRequested === false ) {
-                    session.requestReferenceSpace( 'viewer' ).then( function ( referenceSpace ) {
-                        session.requestHitTestSource( { space: referenceSpace } ).then( function ( source ) { hitTestSource = source; } );
-                    } );
-                    session.addEventListener( 'end', function () { hitTestSourceRequested = false; hitTestSource = null; } );
-                    hitTestSourceRequested = true;
-                }
-
-                let hitFound = false;
-
-                if (hitTestSource) {
-                    const hitTestResults = frame.getHitTestResults( hitTestSource );
-                    if ( hitTestResults.length ) { lastHitPose = hitTestResults[0].getPose( referenceSpace ); } else { lastHitPose = null; }
-                }
-
-                if (currentAction === 'PLACE_GROUND' || currentAction === 'PLACE_BASE_A' || currentAction === 'PLACE_BASE_B' || currentAction === 'PLACE_BASE_C' || currentAction === 'MOVE_BASE_A' || currentAction === 'MOVE_BASE_B' || currentAction === 'MOVE_BASE_C') {
+                // Aggiornamento Mirino Fisico basato sul controller destro
+                if (currentAction.includes('PLACE_') || currentAction.includes('MOVE_')) {
+                    floorPlane.constant = -groundLevel;
                     
-                    if ( lastHitPose ) {
-                        reticle.position.set(lastHitPose.transform.position.x, lastHitPose.transform.position.y, lastHitPose.transform.position.z);
-                        reticle.quaternion.set(lastHitPose.transform.orientation.x, lastHitPose.transform.orientation.y, lastHitPose.transform.orientation.z, lastHitPose.transform.orientation.w);
-                        reticle.visible = true; hitFound = true;
-                    }
-
-                    if (hitFound) {
-                        const reticleDist = camera.position.distanceTo(reticle.position);
-                        reticle.scale.setScalar(Math.max(1, reticleDist * 0.5));
-
-                        if (currentAction === 'MOVE_BASE_A') {
-                            point1.position.x = reticle.position.x; point1.position.z = reticle.position.z; drawAntenna(); updateCalculations();
-                        } else if (currentAction === 'MOVE_BASE_B') {
-                            point2.position.x = reticle.position.x; point2.position.z = reticle.position.z; drawAntenna(); updateCalculations();
-                        } else if (currentAction === 'MOVE_BASE_C') {
-                            point3.position.x = reticle.position.x; point3.position.z = reticle.position.z; drawAntenna(); updateCalculations();
+                    // Usa il controller destro (0) per la mira
+                    const activeCtrl = controller1; 
+                    const tempMat = new THREE.Matrix4().identity().extractRotation(activeCtrl.matrixWorld);
+                    const rDir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMat);
+                    
+                    raycaster.set(activeCtrl.position, rDir);
+                    const hPt = new THREE.Vector3();
+                    
+                    if (raycaster.ray.intersectPlane(floorPlane, hPt) && activeCtrl.position.distanceTo(hPt) < 2500) {
+                        reticle.position.copy(hPt);
+                        
+                        // FORZA IL MIRINO IN ORIZZONTALE
+                        reticle.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
+                        reticle.visible = true;
+                        
+                        // Ferma il laser visivo esattamante dove tocca terra
+                        let dist = activeCtrl.position.distanceTo(hPt);
+                        const laser = activeCtrl.children.find(c => c.type === 'Line');
+                        if (laser) {
+                            laser.geometry.attributes.position.array[5] = -dist;
+                            laser.geometry.attributes.position.needsUpdate = true;
                         }
-                    } else { reticle.visible = false; }
-                } else { reticle.visible = false; }
+                    } else {
+                        reticle.visible = false;
+                    }
+                } else { 
+                    reticle.visible = false; 
+                    
+                    // Ripristina la lunghezza base del laser a 5m
+                    [controller1, controller2].forEach(ctrl => {
+                        const laser = ctrl.children.find(c => c.type === 'Line');
+                        if (laser) {
+                            laser.geometry.attributes.position.array[5] = -5;
+                            laser.geometry.attributes.position.needsUpdate = true;
+                        }
+                    });
+                }
             }
             renderer.render( scene, camera );
         }
