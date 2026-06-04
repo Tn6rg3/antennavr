@@ -2,10 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V6 - Hand Tracking & Mappatura</title>
+  <title>Antenne AR Pro V7 - Fix Input Universale</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script>
-    // Forza le scritte a guardare sempre gli occhi dell'utente
+    // Componente per forzare i testi a guardare sempre l'utente
     AFRAME.registerComponent('look-at-camera', {
       tick: function () {
         let cameraEl = document.querySelector('#camera');
@@ -15,7 +15,7 @@
       }
     });
 
-    // Feedback visivo dei bottoni alla pressione
+    // Feedback visivo bottoni
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el;
@@ -37,18 +37,15 @@
       }
     });
 
-    // CORRETTO: Gestisce la pressione prolungata (funziona sia con Mani che con Joystick)
+    // Gestione pressione prolungata (Bug-fix)
     AFRAME.registerComponent('hold-clickable', {
       init: function () {
         let el = this.el;
         this.timeoutId = null;
         this.intervalId = null;
 
-        let startTrigger = (evt) => {
-          // Esegui la funzione legata al bottone immediatamente
-          if(el.components["ar-antenna-system"]) return; 
+        let startTrigger = () => {
           el.emit('holdaction', null, false);
-          
           this.timeoutId = setTimeout(() => {
             this.intervalId = setInterval(() => {
               el.emit('holdaction', null, false);
@@ -61,29 +58,27 @@
           clearInterval(this.intervalId);
         };
 
-        // Ascolta sia i click del mouse/laser sia i pinch delle mani WebXR
         el.addEventListener('mousedown', startTrigger);
         el.addEventListener('mouseup', stopTrigger);
         el.addEventListener('mouseleave', stopTrigger);
-        el.addEventListener('click', () => { stopTrigger(); });
+        el.addEventListener('click', stopTrigger);
       }
     });
 
+    // Sistema Principale
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         this.state = 'PLACE_GROUND_A'; 
         
-        // Strutture nodi 3D fissi
+        // Strutture dati nodi 3D
         this.pointA = { base: null, top: null, sphere: null, pole: null, label: null };
         this.pointB = { base: null, top: null, sphere: null, pole: null, label: null };
         this.pointC = { top: null, sphere: null, pole: null, label: null, percent: 0.5 }; 
-        
-        // NUOVO: Punto di misurazione per mappare oggetti nella stanza (Viola)
         this.pointX = { top: null, sphere: null, pole: null, label: null };
-        this.lineMeasureX = null;
-
+        
         this.labelSegA = null;
         this.labelSegB = null;
+        this.lineMeasureX = null;
 
         this.antennaTypes = ['Dipolo', 'End Fed', 'Longwire', 'Verticale'];
         this.bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
@@ -103,7 +98,6 @@
         this.globalTextScale = 0.35; 
         this.currentHeight = 1.5; 
         
-        // Usiamo un selettore generico per i puntatori (Mani o Controller)
         this.cursorRing = document.querySelector('#cursor-ring');
         this.verticalCylinder = document.querySelector('#vertical-cylinder');
         this.heightText = document.querySelector('#height-text');
@@ -112,17 +106,14 @@
         this.antennaTube1 = null;
         this.antennaTube2 = null;
 
-        // Gestione degli input da tasto grilletto / pinch delle mani
-        window.addEventListener('selectstart', this.onSelectStart.bind(this));
-        // Alternativa per i controller fisici
-        window.addEventListener('triggerdown', this.onSelectStart.bind(this));
-
-        // Ascoltatore universale joystick (se presente)
-        window.addEventListener('thumbstickmoved', this.onThumbstickMoved.bind(this));
-
-        // Controller sinistro o gesto mano per aprire menu (Pinch prolungato mano sinistra o tasto Y)
-        document.addEventListener('ybuttondown', this.toggleMenu.bind(this));
+        // Ascoltatori di click universali (Mani, Controller, Mouse)
+        this.el.sceneEl.addEventListener('click', this.onSceneClick.bind(this));
         
+        // Ascoltatore universale per tasto Y o click menu
+        window.addEventListener('keydown', (e) => {
+          if(e.key === 'y' || e.key === 'Y') this.toggleMenu();
+        });
+
         this.initPersistentElements();
         this.resetAntennaLengths();
         this.updateMenuText();
@@ -167,10 +158,8 @@
         this.pointA = Object.assign(this.pointA, createPointStructure('#FF1744'));
         this.pointB = Object.assign(this.pointB, createPointStructure('#2979FF'));
         this.pointC = Object.assign(this.pointC, createPointStructure('#00E676'));
-        
-        // Inizializza il punto di mappatura dell'oggetto (Viola)
         this.pointX = Object.assign(this.pointX, createPointStructure('#E040FB'));
-        this.pointX.label.setAttribute('color', '#E040FB'); // Testo viola coordinato
+        this.pointX.label.setAttribute('color', '#E040FB');
 
         this.labelSegA = document.createElement('a-text');
         this.labelSegA.setAttribute('align', 'center');
@@ -198,7 +187,6 @@
         this.antennaTube2.setAttribute('visible', 'false');
         scene.appendChild(this.antennaTube2);
 
-        // Linea tratteggiata di misurazione verso l'oggetto mappato
         this.lineMeasureX = document.createElement('a-entity');
         scene.appendChild(this.lineMeasureX);
 
@@ -219,46 +207,33 @@
         this.longwireLen = baseLen;
       },
 
-      getActiveRaycaster: function() {
-        // Cerca l'intersezione valida proveniente dalla mano destra o dal controller destro
-        let rHand = document.querySelector('#right-hand');
-        let rCtrl = document.querySelector('#right-controller');
-        if (rHand && rHand.components.raycaster && rHand.components.raycaster.getIntersection(document.querySelector('#ar-ground'))) return rHand;
-        return rCtrl;
-      },
-
       tick: function () {
-        let activeHand = this.getActiveRaycaster();
-        if (!activeHand || !activeHand.components.raycaster) return;
-
-        // Tracciamento cerchio AR sul pavimento o sugli oggetti reali
-        if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state === 'MAP_OBJECT_X') {
-          // Se stiamo mappando un oggetto cerchiamo intersezioni libere nell'ambiente (anche il pavimento va bene)
-          let targetEl = this.state === 'MAP_OBJECT_X' ? document.querySelector('#ar-ground') : document.querySelector('#ar-ground');
-          let intersection = activeHand.components.raycaster.getIntersection(targetEl);
-          
-          if (intersection) {
-            this.cursorRing.setAttribute('visible', 'true');
-            this.cursorRing.setAttribute('position', intersection.point);
-          } else {
-            this.cursorRing.setAttribute('visible', 'false');
+        // Cerca l'intersezione attiva da un qualunque puntatore laser registrato (mano o controller)
+        let raycasters = document.querySelectorAll('[raycaster]');
+        let intersection = null;
+        
+        for (let i = 0; i < raycasters.length; i++) {
+          let comp = raycasters[i].components.raycaster;
+          if (comp) {
+            let inter = comp.getIntersection(document.querySelector('#ar-ground'));
+            if (inter) { intersection = inter; break; }
           }
         }
+
+        if ((this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state === 'MAP_OBJECT_X') && intersection) {
+          this.cursorRing.setAttribute('visible', 'true');
+          this.cursorRing.setAttribute('position', intersection.point);
+        } else if (!this.state.includes('HEIGHT')) {
+          this.cursorRing.setAttribute('visible', 'false');
+        }
       },
 
-      onSelectStart: function () {
-        let activeHand = this.getActiveRaycaster();
-        if (!activeHand || !activeHand.components.raycaster) return;
-
-        // Se clicco sul menu, non posizionare elementi a terra
-        if (this.menuUI.getAttribute('visible')) {
-          let intersectionMenu = activeHand.components.raycaster.getIntersection(this.menuUI);
-          if (intersectionMenu) return;
-        }
+      onSceneClick: function (evt) {
+        // Intercetta se il click è avvenuto sui componenti del menu, in tal caso blocca il codice sotto
+        if (evt.detail.intersectedEl && evt.detail.intersectedEl.classList.contains('clickable')) return;
 
         let currentCursorPos = this.cursorRing.getAttribute('position');
 
-        // --- GESTIONE STATO MAPPATURA NUOVO OGGETTO ---
         if (this.state === 'MAP_OBJECT_X') {
           this.pointX.top = Object.assign({}, currentCursorPos);
           this.state = 'IDLE';
@@ -268,7 +243,6 @@
           return;
         }
 
-        // --- MACCHINA A STATI PIAZZAMENTO ANTENNA ---
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
           this.pointA.base = Object.assign({}, currentCursorPos);
           this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
@@ -305,33 +279,16 @@
         }
       },
 
-      onThumbstickMoved: function (evt) {
-        if (this.state.includes('HEIGHT')) {
-          if (Math.abs(evt.detail.y) > 0.4) {
-            if (!this.lastThumbTime || Date.now() - this.lastThumbTime > 110) {
-              let step = evt.detail.y < 0 ? 0.1 : -0.1; 
-              this.currentHeight = Math.max(0.1, this.currentHeight + step);
-              let basePos = this.state.includes('_A') ? this.pointA.base : this.pointB.base;
-              
-              this.verticalCylinder.setAttribute('position', `${basePos.x} ${this.currentHeight / 2} ${basePos.z}`);
-              this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${this.currentHeight}`);
-              this.heightText.setAttribute('position', `${basePos.x} ${this.currentHeight + 0.2} ${basePos.z}`);
-              this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
-              this.lastThumbTime = Date.now();
-            }
-          }
-        }
-      },
-
       setupVerticalPreviewMode: function (basePos) {
-        this.cursorRing.setAttribute('visible', 'false');
         this.currentHeight = 1.5; 
         this.verticalCylinder.setAttribute('visible', 'true');
         this.verticalCylinder.setAttribute('position', `${basePos.x} 0.75 ${basePos.z}`);
         this.verticalCylinder.setAttribute('geometry', 'primitive: cylinder; radius: 0.01; height: 1.5');
         this.heightText.setAttribute('visible', 'true');
         this.heightText.setAttribute('position', `${basePos.x} 1.7 ${basePos.z}`);
-        this.heightText.setAttribute('value', '1.5m');
+        this.heightText.setAttribute('value', '1.5m (Usa menu o alza testa per confermare)');
+        
+        // Se non hai il joystick, l'app ti permette di confermare l'altezza semplicemente facendo un secondo click/pinch!
       },
 
       resetVerticalPreviewMode: function () {
@@ -403,7 +360,7 @@
         if (!this.pointA.top) return;
 
         let type = this.antennaTypes[this.antIdx];
-        let antennaCenterPos = new THREE.Vector3(); // Variabile di appoggio per calcolare la distanza dall'oggetto X
+        let antennaCenterPos = new THREE.Vector3(); 
 
         if (type === 'Verticale') {
           this.hideStructure(this.pointB);
@@ -413,7 +370,7 @@
           this.antennaTube2.setAttribute('visible', 'false');
 
           this.renderPoleAndLabel(this.pointA, this.pointA.top, 'STILO VERTICALE');
-          antennaCenterPos.copy(this.pointA.top); // Per la verticale calcoliamo la distanza dal vertice alto A
+          antennaCenterPos.copy(this.pointA.top); 
 
           let h = this.pointA.top.y;
           this.antennaTube1.setAttribute('visible', 'true');
@@ -437,7 +394,6 @@
             }
           }
         } else {
-          // --- LOGICHE ANTENNE FILARI ---
           for(let i=0; i<this.maxRadials; i++) this.radialPool[i].setAttribute('visible', 'false');
           if (!this.pointB.top) return;
 
@@ -453,9 +409,9 @@
             let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
             this.pointC.top = vecC;
             this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
-            antennaCenterPos.copy(vecC); // Filari bilanciate: distanza misurata dal punto di alimentazione C
+            antennaCenterPos.copy(vecC); 
           } else {
-            antennaCenterPos.lerpVectors(vecA, vecB, 0.5); // Longwire: distanza dal centro geometrico della retta
+            antennaCenterPos.lerpVectors(vecA, vecB, 0.5); 
           }
 
           if (type === 'Dipolo') {
@@ -532,18 +488,11 @@
           }
         }
 
-        // --- CALCOLO GEOMETRICO DISTANZA DALL'OGGETTO REALE MAPPATO (PUNTO X VIOLA) ---
         if (this.pointX.top) {
           let vecX = new THREE.Vector3(this.pointX.top.x, this.pointX.top.y, this.pointX.top.z);
-          
-          // Disegna il palo viola fisso sull'oggetto
           this.renderPoleAndLabel(this.pointX, vecX, 'OGGETTO REALE MAPPA');
-
-          // Genera una linea tratteggiata viola olografica che unisce l'oggetto all'antenna
           let distToAntenna = antennaCenterPos.distanceTo(vecX);
           this.lineMeasureX.setAttribute('line', `start: ${antennaCenterPos.x} ${antennaCenterPos.y} ${antennaCenterPos.z}; end: ${vecX.x} ${vecX.y} ${vecX.z}; color: #E040FB; opacity: 0.8`);
-          
-          // Posiziona un'etichetta al centro esatto della retta viola che indica i metri di distanza
           let midMeasurePoint = new THREE.Vector3().lerpVectors(antennaCenterPos, vecX, 0.5);
           this.pointX.label.setAttribute('position', `${midMeasurePoint.x} ${midMeasurePoint.y + 0.15} ${midMeasurePoint.z}`);
           this.pointX.label.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
@@ -566,7 +515,6 @@
           this.updateGeometriesAndDrawings();
         });
 
-        // SUB-MENU DIPOLO
         document.querySelector('#btn-c-left').addEventListener('click', () => {
           this.pointC.percent = Math.max(0.02, this.pointC.percent - 0.05);
           this.updateGeometriesAndDrawings();
@@ -576,7 +524,6 @@
           this.updateGeometriesAndDrawings();
         });
 
-        // ASCOLTO DEGLI EVENTI HOLD-ACTION CORRETTI (END FED)
         let adjustArm = (arm, amount) => {
           if(arm === 'AC') this.endFed_AC_Len = Math.max(0.05, this.endFed_AC_Len + amount);
           if(arm === 'CB') this.endFed_CB_Len = Math.max(0.05, this.endFed_CB_Len + amount);
@@ -588,7 +535,6 @@
         document.querySelector('#btn-cb-minus').addEventListener('holdaction', () => adjustArm('CB', -0.01));
         document.querySelector('#btn-cb-plus').addEventListener('holdaction', () => adjustArm('CB', 0.01));
 
-        // SUB-MENU LONGWIRE
         document.querySelector('#btn-lw-vertex').addEventListener('click', () => {
           this.longwireVertex = this.longwireVertex === 'A' ? 'B' : 'A';
           this.updateMenuText();
@@ -602,7 +548,6 @@
         document.querySelector('#btn-lw-minus').addEventListener('holdaction', () => adjustLWLen(-0.01));
         document.querySelector('#btn-lw-plus').addEventListener('holdaction', () => adjustLWLen(0.01));
 
-        // SUB-MENU VERTICALE
         document.querySelector('#btn-rad-num-minus').addEventListener('click', () => {
           this.numRadials = Math.max(1, this.numRadials - 1);
           this.updateMenuText();
@@ -621,13 +566,23 @@
         document.querySelector('#btn-rad-len-minus').addEventListener('holdaction', () => adjustRadLen(-0.1));
         document.querySelector('#btn-rad-len-plus').addEventListener('holdaction', () => adjustRadLen(0.1));
 
-        // NUOVO TASTO: ATTIVA MAPPATURA OGGETTO X
         document.querySelector('#btn-map-x').addEventListener('click', () => {
           this.state = 'MAP_OBJECT_X';
-          this.menuUI.setAttribute('visible', false); // Chiudi il menu per prendere bene la mira sull'oggetto reale
+          this.menuUI.setAttribute('visible', false); 
         });
 
-        // CONTROLLI SCALA ETICHETTE
+        // Controlli per l'altezza manuale da menu (Se i joystick non vanno)
+        document.querySelector('#btn-h-minus').addEventListener('holdaction', () => {
+          if(!this.state.includes('HEIGHT')) return;
+          this.currentHeight = Math.max(0.1, this.currentHeight - 0.1);
+          this.updateHeightPreview();
+        });
+        document.querySelector('#btn-h-plus').addEventListener('holdaction', () => {
+          if(!this.state.includes('HEIGHT')) return;
+          this.currentHeight = this.currentHeight + 0.1;
+          this.updateHeightPreview();
+        });
+
         document.querySelector('#btn-txt-minus').addEventListener('click', () => {
           this.globalTextScale = Math.max(0.15, this.globalTextScale - 0.05);
           this.updateGeometriesAndDrawings();
@@ -637,7 +592,6 @@
           this.updateGeometriesAndDrawings();
         });
 
-        // RIPOSIZIONAMENTO
         document.querySelector('#btn-repo-a').addEventListener('click', () => {
           this.state = 'REPOSITION_GROUND_A';
           this.menuUI.setAttribute('visible', false);
@@ -646,22 +600,34 @@
           this.state = 'REPOSITION_GROUND_B';
           this.menuUI.setAttribute('visible', false);
         });
+        
+        // Tasto Apri/Chiudi Menu Olografico se non hai il tasto Y funzionante
+        document.querySelector('#btn-toggle-menu').addEventListener('click', () => {
+          this.toggleMenu();
+        });
+      },
+
+      updateHeightPreview: function() {
+        let basePos = this.state.includes('_A') ? this.pointA.base : this.pointB.base;
+        this.verticalCylinder.setAttribute('position', `${basePos.x} ${this.currentHeight / 2} ${basePos.z}`);
+        this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${this.currentHeight}`);
+        this.heightText.setAttribute('position', `${basePos.x} ${this.currentHeight + 0.2} ${basePos.z}`);
+        this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
       }
     });
   </script>
 </head>
 <body>
   
-  <a-scene ar-antenna-system webxr="optionalFeatures: passthrough, hand-tracking; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
+  <a-scene ar-antenna-system webxr="optionalFeatures: passthrough, hand-tracking; referenceSpaceType: local-floor" cursor="rayOrigin: mouse; fuse: false">
     
     <a-entity id="cameraRig">
-      <a-camera id="camera" position="0 1.6 0"></a-camera>
+      <a-camera id="camera" position="0 1.6 0">
+        <a-cursor id="eyes-cursor" raycaster="objects: .clickable" material="color: cyan; shader: flat; opacity: 0.4" scale="0.5 0.5 0.5" position="0 0 -0.1"></a-cursor>
+      </a-camera>
       
-      <a-entity id="left-hand" hand-tracking-controls="hand: left;"></a-entity>
-      <a-entity id="right-hand" hand-tracking-controls="hand: right;" raycaster="objects: .clickable, #ar-ground; far: 30;"></a-entity>
-
-      <a-entity id="left-controller" laser-controls="hand: left" windows-motion-controls="hand: left"></a-entity>
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 40;"></a-entity>
+      <a-entity id="left-hand" hand-tracking-controls="hand: left" laser-controls="hand: left" raycaster="objects: .clickable; far: 10;"></a-entity>
+      <a-entity id="right-hand" hand-tracking-controls="hand: right" laser-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 40;"></a-entity>
     </a-entity>
 
     <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="100" height="100" material="opacity: 0.0; transparent: true"></a-plane>
@@ -673,7 +639,7 @@
     <a-entity id="menu-ui" visible="false" position="0 1.3 -0.5">
       <a-plane width="0.5" height="0.55" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
       
-      <a-text value="CONFIGURATORE ANTENNE V6" position="0 0.24 0.01" align="center" scale="0.13 0.13 0.13" color="#FFEB3B"></a-text>
+      <a-text value="CONFIGURATORE ANTENNE V7" position="0 0.24 0.01" align="center" scale="0.13 0.13 0.13" color="#FFEB3B"></a-text>
       <a-plane width="0.44" height="0.06" color="#2A2A2A" position="0 0.17 0.01">
         <a-text id="info-text" value="Caricamento..." position="-0.21 0 0.01" scale="0.085 0.085 0.085" color="#00E676"></a-text>
       </a-plane>
@@ -748,8 +714,15 @@
       </a-entity>
 
 
-      <a-plane id="btn-map-x" class="clickable" btn-interaction width="0.4" height="0.03" color="#4A148C" position="0 -0.08 0.01">
-        <a-text value="MAPPA OGGETTO NELL'AMBIENTE (MISURA DISTANZA)" align="center" scale="0.075 0.075 0.075" position="0 0 0.005" color="#FFF"></a-text>
+      <a-plane id="btn-map-x" class="clickable" btn-interaction width="0.22" height="0.03" color="#4A148C" position="-0.11 -0.08 0.01">
+        <a-text value="MAPPA OGGETTO" align="center" scale="0.07 0.07 0.07" position="0 0 0.005" color="#FFF"></a-text>
+      </a-plane>
+
+      <a-plane id="btn-h-minus" class="clickable" btn-interaction hold-clickable width="0.1" height="0.03" color="#E65100" position="0.05 -0.08 0.01">
+        <a-text value="QUOTA -" align="center" scale="0.07 0.07 0.07" position="0 0 0.005"></a-text>
+      </a-plane>
+      <a-plane id="btn-h-plus" class="clickable" btn-interaction hold-clickable width="0.1" height="0.03" color="#E65100" position="0.16 -0.08 0.01">
+        <a-text value="QUOTA +" align="center" scale="0.07 0.07 0.07" position="0 0 0.005"></a-text>
       </a-plane>
 
       <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.13" height="0.025" color="#424242" position="-0.08 -0.14 0.01">
@@ -767,6 +740,10 @@
         <a-text value="Riposiziona PUNTO B" align="center" scale="0.075 0.075 0.075" position="0 0 0.005" color="#FFFFFF"></a-text>
       </a-plane>
     </a-entity>
+
+    <a-plane id="btn-toggle-menu" class="clickable" btn-interaction width="0.15" height="0.04" color="#00E676" position="0 0.8 -0.4" rotation="-30 0 0">
+      <a-text value="APRI/CHIUDI MENU" align="center" scale="0.07 0.07 0.07" position="0 0 0.005" color="#000"></a-text>
+    </a-plane>
 
   </a-scene>
 </body>
