@@ -2,95 +2,131 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V9 - Parser MMANA-GAL (.maa)</title>
+  <title>Antenne AR Pro V10 - Solo Controller & MMANA Fix</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
+    /* Pannello visibile sul visore prima di cliccare su ENTER AR */
     #ui-2d-container {
       position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 999;
-      background: rgba(0,0,0,0.85);
-      color: white;
-      padding: 15px;
-      border-radius: 8px;
-      font-family: sans-serif;
-      max-width: 300px;
+      top: 20px;
+      left: 20px;
+      z-index: 9999;
+      background: #121212;
+      color: #00E676;
+      padding: 20px;
+      border: 2px solid #FFEB3B;
+      border-radius: 10px;
+      font-family: 'Courier New', monospace;
+      max-width: 320px;
     }
+    #ui-2d-container h3 { margin: 0 0 10px 0; font-size: 16px; text-transform: uppercase; }
+    #ui-2d-container p { margin: 0 0 15px 0; font-size: 12px; color: #FFF; line-height: 1.4; }
     #ui-2d-container input {
-      margin-top: 10px;
-      padding: 6px;
-      width: 100%;
-      background: #333;
+      padding: 8px;
+      width: 90%;
+      background: #222;
       color: white;
-      border: 1px solid #555;
+      border: 1px solid #00E676;
+      cursor: pointer;
     }
   </style>
   <script>
+    // Componente per orientare i testi verso il visore
     AFRAME.registerComponent('look-at-camera', {
       tick: function () {
         let cameraEl = document.querySelector('#camera');
-        if (cameraEl && cameraEl.object3D) { this.el.object3D.lookAt(cameraEl.object3D.position); }
+        if (cameraEl && cameraEl.object3D) {
+          this.el.object3D.lookAt(cameraEl.object3D.position);
+        }
       }
     });
 
+    // Feedback visivo dei bottoni alla pressione del laser
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el;
-        let originalColor = el.material.color;
+        let originalColor = el.getAttribute('material').color;
         el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
         el.addEventListener('mouseleave', () => {
-          el.setAttribute('material', 'opacity', 1.0); el.setAttribute('scale', '1 1 1'); el.setAttribute('material', 'color', originalColor);
+          el.setAttribute('material', 'opacity', 1.0);
+          el.setAttribute('scale', '1 1 1');
+          el.setAttribute('material', 'color', originalColor);
         });
         el.addEventListener('mousedown', () => {
-          el.setAttribute('scale', '0.95 0.95 0.8'); el.setAttribute('material', 'color', '#00FFCC');
+          el.setAttribute('scale', '0.95 0.95 0.8');
+          el.setAttribute('material', 'color', '#00FFCC');
         });
-        el.addEventListener('mouseup', () => { el.setAttribute('scale', '1 1 1'); el.setAttribute('material', 'color', originalColor); });
+        el.addEventListener('mouseup', () => {
+          el.setAttribute('scale', '1 1 1');
+          el.setAttribute('material', 'color', originalColor);
+        });
       }
     });
 
+    // Componente di sistema principale
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         this.state = 'PLACE_GROUND_A'; 
         
+        // Strutture nodi geometrici 3D permanenti
         this.pointA = { base: null, top: null, sphere: null, pole: null, label: null };
         this.pointB = { base: null, top: null, sphere: null, pole: null, label: null };
         this.pointC = { top: null, sphere: null, pole: null, label: null, percent: 0.5 }; 
         
-        this.labelSegA = null; this.labelSegB = null;
+        this.labelSegA = null;
+        this.labelSegB = null;
 
-        // Aggiunta la voce MMANA-GAL nell'elenco
         this.antennaTypes = ['Dipolo', 'End Fed', 'Longwire', 'Verticale', 'MMANA-GAL'];
         this.bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
-        this.antIdx = 0; this.bandIdx = 2; 
+        this.antIdx = 0;
+        this.bandIdx = 2; // Default 40m
         
-        this.endFed_AC_Len = 10.0; this.endFed_CB_Len = 10.0; this.longwireLen = 20.0; this.longwireVertex = 'A'; 
-        this.numRadials = 4; this.radialLen = 5.0; this.radialPool = []; this.maxRadials = 16; 
+        // Configurazione bracci
+        this.endFed_AC_Len = 10.0;
+        this.endFed_CB_Len = 10.0;
+        this.longwireLen = 20.0;
+        this.longwireVertex = 'A'; 
+        
+        // Configurazione Verticale e Radiali
+        this.numRadials = 4;
+        this.radialLen = 5.0; 
+        this.radialPool = []; 
+        this.maxRadials = 16; 
 
-        // Struttura dati per contenere i fili estratti dal file .maa
-        this.mmanaWires = []; 
-        this.mmanaContainerEl = document.querySelector('#mmana-wires-container');
+        // Nuova variabile per la rotazione controllata dal Joystick Sinistro
+        this.antennaRotationY = 0;
 
-        this.globalTextScale = 0.35; this.currentHeight = 1.5; 
+        this.globalTextScale = 0.35; 
+        this.currentHeight = 1.5; 
+        
         this.raycasterEl = document.querySelector('#right-controller');
+        this.leftControllerEl = document.querySelector('#left-controller');
         this.cursorRing = document.querySelector('#cursor-ring');
         this.verticalCylinder = document.querySelector('#vertical-cylinder');
         this.heightText = document.querySelector('#height-text');
         this.menuUI = document.querySelector('#menu-ui');
         
-        this.antennaTube1 = null; this.antennaTube2 = null;
+        this.antennaTube1 = null;
+        this.antennaTube2 = null;
+        this.mmanaContainerEl = document.querySelector('#mmana-wires-container');
+        this.mmanaWires = []; // Buffer fili .maa
 
+        // Eventi Controller Destro (Piazzamento e Altezza)
         this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this));
-        this.raycasterEl.addEventListener('thumbstickmoved', this.onThumbstickMoved.bind(this));
+        this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this));
+
+        // Eventi Controller Sinistro (Apertura Menu con Y e Rotazione con Joystick)
+        this.leftControllerEl.addEventListener('ybuttondown', () => { this.toggleMenu(); });
+        this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this));
+
+        // Listener universale per i click della scena
         this.el.sceneEl.addEventListener('click', this.onSceneClick.bind(this));
 
-        document.querySelector('#left-controller').addEventListener('ybuttondown', () => { this.toggleMenu(); });
-
         this.initPersistentElements();
-        this.resetAntennaLengths();
+        this.resetAntennaLengthsAndHeight();
         this.updateMenuText();
-        this.setupMenuInteractions();
         this.setupMmanaFileLoader();
+        this.setupMenuInteractions();
       },
 
       toggleMenu: function() {
@@ -108,16 +144,23 @@
         let scene = this.el.sceneEl;
         let createPointStructure = (color) => {
           let struct = {};
-          struct.sphere = document.createElement('a-sphere'); struct.sphere.setAttribute('radius', '0.05');
-          struct.sphere.setAttribute('material', `color: ${color}; roughness: 0.3`); struct.sphere.setAttribute('visible', 'false');
+          struct.sphere = document.createElement('a-sphere');
+          struct.sphere.setAttribute('radius', '0.05');
+          struct.sphere.setAttribute('material', `color: ${color}; roughness: 0.3`);
+          struct.sphere.setAttribute('visible', 'false');
           scene.appendChild(struct.sphere);
 
-          struct.pole = document.createElement('a-cylinder'); struct.pole.setAttribute('radius', '0.008');
-          struct.pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat'); struct.pole.setAttribute('visible', 'false');
+          struct.pole = document.createElement('a-cylinder');
+          struct.pole.setAttribute('radius', '0.008');
+          struct.pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat');
+          struct.pole.setAttribute('visible', 'false');
           scene.appendChild(struct.pole);
 
-          struct.label = document.createElement('a-text'); struct.label.setAttribute('align', 'center');
-          struct.label.setAttribute('color', '#00FF00'); struct.label.setAttribute('look-at-camera', ''); struct.label.setAttribute('visible', 'false');
+          struct.label = document.createElement('a-text');
+          struct.label.setAttribute('align', 'center');
+          struct.label.setAttribute('color', '#00FF00');
+          struct.label.setAttribute('look-at-camera', ''); 
+          struct.label.setAttribute('visible', 'false');
           scene.appendChild(struct.label);
           return struct;
         };
@@ -133,67 +176,29 @@
         this.antennaTube2 = document.createElement('a-cylinder'); this.antennaTube2.setAttribute('radius', '0.015'); this.antennaTube2.setAttribute('material', 'color: #FF5722; shader: flat'); this.antennaTube2.setAttribute('visible', 'false'); scene.appendChild(this.antennaTube2);
 
         for(let i=0; i<this.maxRadials; i++) {
-          let radCyl = document.createElement('a-cylinder'); radCyl.setAttribute('radius', '0.004'); radCyl.setAttribute('material', 'color: #5D4037; shader: flat'); radCyl.setAttribute('visible', 'false'); scene.appendChild(radCyl); this.radialPool.push(radCyl);
+          let radCyl = document.createElement('a-cylinder'); radCyl.setAttribute('radius', '0.005'); radCyl.setAttribute('material', 'color: #5D4037; shader: flat'); radCyl.setAttribute('visible', 'false'); scene.appendChild(radCyl); this.radialPool.push(radCyl);
         }
       },
 
-      resetAntennaLengths: function() {
-        let baseLen = this.getCalculatedLength();
-        this.endFed_AC_Len = baseLen / 2; this.endFed_CB_Len = baseLen / 2; this.longwireLen = baseLen;
+      // Calcola la lunghezza/altezza di default in base alla banda (quarto d'onda per verticale/dipoli)
+      getCalculatedLength: function() {
+        let bandMeters = parseInt(this.bands[this.bandIdx]);
+        let type = this.antennaTypes[this.antIdx];
+        if (type === 'Dipolo' || type === 'Verticale') return bandMeters / 4; 
+        if (type === 'End Fed') return bandMeters * 0.45; 
+        return bandMeters;                                
       },
 
-      // INTERPRETE INTERNO FILE .MAA DI MMANA-GAL
-      setupMmanaFileLoader: function() {
-        let fileInput = document.querySelector('#file-mmana');
-        if(fileInput) {
-          fileInput.addEventListener('change', (evt) => {
-            let file = evt.target.files[0];
-            if(!file) return;
-            
-            let reader = new FileReader();
-            reader.onload = (e) => {
-              let text = e.target.result;
-              let lines = text.split('\n');
-              this.mmanaWires = []; // Reset vecchi fili
-              
-              let insideWiresSection = false;
-              let numWires = 0;
-
-              for(let i=0; i<lines.length; i++) {
-                let line = lines[i].trim();
-                if(line.startsWith('*** Wires ***') || line.startsWith('*** WIRES ***')) {
-                  insideWiresSection = true;
-                  // La riga successiva di solito indica il numero totale di fili
-                  if(lines[i+1]) numWires = parseInt(lines[i+1].trim());
-                  i++; // salta la riga del conteggio
-                  continue;
-                }
-                // Se incontriamo la sezione successiva (es. Source), usciamo dai fili
-                if(line.startsWith('*** Source ***') || line.startsWith('*** SOURCE ***') || line.startsWith('***')) {
-                  insideWiresSection = false;
-                }
-
-                if(insideWiresSection && line !== "") {
-                  let tokens = line.split(/[\s,]+/); // divide per spazi o virgole
-                  if(tokens.length >= 7) {
-                    // MMANA salva in metri: X1, Y1, Z1, X2, Y2, Z2, Raggio(mm)
-                    this.mmanaWires.push({
-                      x1: parseFloat(tokens[0]), y1: parseFloat(tokens[1]), z1: parseFloat(tokens[2]),
-                      x2: parseFloat(tokens[3]), y2: parseFloat(tokens[4]), z2: parseFloat(tokens[5]),
-                      radius: parseFloat(tokens[6]) > 0 ? parseFloat(tokens[6])/1000 : 0.002 // converti raggio in metri
-                    });
-                  }
-                }
-              }
-
-              // Passa automaticamente alla modalità MMANA
-              this.antIdx = this.antennaTypes.indexOf('MMANA-GAL');
-              this.updateMenuText();
-              this.updateGeometriesAndDrawings();
-              alert(`File MMANA letto correttamente! Rilevati ${this.mmanaWires.length} fili conduttori.`);
-            };
-            reader.readAsText(file);
-          });
+      resetAntennaLengthsAndHeight: function() {
+        let baseLen = this.getCalculatedLength();
+        this.endFed_AC_Len = baseLen / 2;
+        this.endFed_CB_Len = baseLen / 2;
+        this.longwireLen = baseLen;
+        
+        // Se siamo in modalità Verticale, aggiorna l'altezza corrente con la misura di banda
+        if (this.antennaTypes[this.antIdx] === 'Verticale') {
+          this.currentHeight = baseLen;
+          if (this.pointA.top) { this.pointA.top.y = baseLen; }
         }
       },
 
@@ -201,47 +206,32 @@
         if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND')) {
           let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if (intersection) {
-            this.cursorRing.setAttribute('visible', 'true'); this.cursorRing.setAttribute('position', intersection.point);
-          } else { this.cursorRing.setAttribute('visible', 'false'); }
-        }
-      },
-
-      onSceneClick: function (evt) {
-        if (evt.detail.intersectedEl && evt.detail.intersectedEl.classList.contains('clickable')) return;
-        let currentCursorPos = this.cursorRing.getAttribute('position');
-
-        if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
-          this.pointA.base = Object.assign({}, currentCursorPos);
-          this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
-          this.setupVerticalPreviewMode(this.pointA.base);
-        } else if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
-          this.pointA.top = { x: this.pointA.base.x, y: this.currentHeight, z: this.pointA.base.z };
-          this.resetVerticalPreviewMode();
-          if(this.state === 'REPOSITION_HEIGHT_A') {
-            this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
+            this.cursorRing.setAttribute('visible', 'true');
+            this.cursorRing.setAttribute('position', intersection.point);
           } else {
-            if (this.antennaTypes[this.antIdx] === 'Verticale') {
-              this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
-            } else { this.state = 'PLACE_GROUND_B'; }
+            this.cursorRing.setAttribute('visible', 'false');
           }
-        } else if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
-          this.pointB.base = Object.assign({}, currentCursorPos);
-          this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B';
-          this.setupVerticalPreviewMode(this.pointB.base);
-        } else if (this.state === 'PLACE_HEIGHT_B' || this.state === 'REPOSITION_HEIGHT_B') {
-          this.pointB.top = { x: this.pointB.base.x, y: this.currentHeight, z: this.pointB.base.z };
-          this.resetVerticalPreviewMode();
-          this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
         }
       },
 
-      onThumbstickMoved: function (evt) {
+      // ASCOLTATORE JOYSTICK SINISTRO: Gestisce la rotazione dell'antenna (Asse X destra/sinistra)
+      onLeftThumbstick: function(evt) {
+        if (Math.abs(evt.detail.x) > 0.3) {
+          let speed = evt.detail.x > 0 ? 2 : -2;
+          this.antennaRotationY += speed;
+          this.updateGeometriesAndDrawings();
+        }
+      },
+
+      // ASCOLTATORE JOYSTICK DESTRO: Gestisce l'altezza a passi di 10cm
+      onRightThumbstick: function (evt) {
         if (this.state.includes('HEIGHT')) {
           if (Math.abs(evt.detail.y) > 0.4) {
             if (!this.lastThumbTime || Date.now() - this.lastThumbTime > 110) {
               let step = evt.detail.y < 0 ? 0.1 : -0.1; 
               this.currentHeight = Math.max(0.1, this.currentHeight + step);
-              this.updateHeightPreview(); this.lastThumbTime = Date.now();
+              this.updateHeightPreview();
+              this.lastThumbTime = Date.now();
             }
           }
         }
@@ -255,26 +245,61 @@
         this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
       },
 
-      setupVerticalPreviewMode: function (basePos) {
-        this.currentHeight = 1.5; 
+      onTriggerDown: function () {
+        if (this.menuUI.getAttribute('visible')) {
+          let intersectionMenu = this.raycasterEl.components.raycaster.getIntersection(this.menuUI);
+          if (intersectionMenu) return; 
+        }
+
+        if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
+          this.pointA.base = Object.assign({}, this.cursorRing.getAttribute('position'));
+          this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
+          
+          // Imposta l'altezza iniziale standard per la banda prima di permettere modifiche col joystick
+          this.currentHeight = this.getCalculatedLength();
+          this.setupVerticalPreviewMode(this.pointA.base, this.currentHeight);
+
+        } else if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
+          this.pointA.top = { x: this.pointA.base.x, y: this.currentHeight, z: this.pointA.base.z };
+          this.resetVerticalPreviewMode();
+          if(this.state === 'REPOSITION_HEIGHT_A') {
+            this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
+          } else {
+            if (this.antennaTypes[this.antIdx] === 'Verticale') {
+              this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
+            } else { this.state = 'PLACE_GROUND_B'; }
+          }
+
+        } else if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
+          this.pointB.base = Object.assign({}, this.cursorRing.getAttribute('position'));
+          this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B';
+          this.currentHeight = 1.5; // Altezza di partenza comoda per palo B
+          this.setupVerticalPreviewMode(this.pointB.base, this.currentHeight);
+
+        } else if (this.state === 'PLACE_HEIGHT_B' || this.state === 'REPOSITION_HEIGHT_B') {
+          this.pointB.top = { x: this.pointB.base.x, y: this.currentHeight, z: this.pointB.base.z };
+          this.resetVerticalPreviewMode();
+          this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
+        }
+      },
+
+      onSceneClick: function(evt) {
+        // Evita attivazioni a terra se si usano i bottoni del menu
+        if (evt.detail.intersectedEl && evt.detail.intersectedEl.classList.contains('clickable')) return;
+      },
+
+      setupVerticalPreviewMode: function (basePos, startHeight) {
+        this.cursorRing.setAttribute('visible', 'false');
         this.verticalCylinder.setAttribute('visible', 'true');
-        this.verticalCylinder.setAttribute('position', `${basePos.x} 0.75 ${basePos.z}`);
-        this.verticalCylinder.setAttribute('geometry', 'primitive: cylinder; radius: 0.01; height: 1.5');
+        this.verticalCylinder.setAttribute('position', `${basePos.x} ${startHeight / 2} ${basePos.z}`);
+        this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${startHeight}`);
         this.heightText.setAttribute('visible', 'true');
-        this.heightText.setAttribute('position', `${basePos.x} 1.7 ${basePos.z}`);
-        this.heightText.setAttribute('value', '1.5m\n(Regola con QUOTA + / - o clicca per confermare)');
+        this.heightText.setAttribute('position', `${basePos.x} ${startHeight + 0.2} ${basePos.z}`);
+        this.heightText.setAttribute('value', `${startHeight.toFixed(1)}m`);
       },
 
       resetVerticalPreviewMode: function () {
         this.verticalCylinder.setAttribute('visible', 'false'); this.heightText.setAttribute('visible', 'false');
-      },
-
-      getCalculatedLength: function() {
-        let bandMeters = parseInt(this.bands[this.bandIdx]);
-        let type = this.antennaTypes[this.antIdx];
-        if (type === 'Dipolo' || type === 'Verticale') return bandMeters / 4; 
-        if (type === 'End Fed') return bandMeters * 0.45; 
-        return bandMeters;                                
       },
 
       renderPoleAndLabel: function(struct, topPos, labelName) {
@@ -304,7 +329,7 @@
         document.querySelector('#btn-repo-b').setAttribute('visible', type !== 'Verticale');
 
         let infoTextStr = "";
-        if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA: ${this.getCalculatedLength().toFixed(2)}m`; } 
+        if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA CALCOLATA: ${this.getCalculatedLength().toFixed(2)}m`; } 
         else if (type === 'End Fed') {
           infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nAC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`;
           document.querySelector('#txt-ef-values').setAttribute('value', `AC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`);
@@ -313,24 +338,57 @@
           document.querySelector('#txt-lw-vertex-val').setAttribute('value', `VERTICE: DA ${this.longwireVertex}`);
           document.querySelector('#txt-lw-len-val').setAttribute('value', `LUNGH: ${this.longwireLen.toFixed(2)}m`);
         } else if (type === 'Verticale') {
-          infoTextStr = `ANTENNA: VERTICALE | BANDA: ${band}\nSTILO: ${this.pointA.top ? this.pointA.top.y.toFixed(2) : 0}m | RADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`;
+          infoTextStr = `ANTENNA: VERTICALE ¼λ | BANDA: ${band}\nSTILO (ALTEZZA): ${this.pointA.top ? this.pointA.top.y.toFixed(2) : 0}m\nRADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`;
           document.querySelector('#txt-rad-num-val').setAttribute('value', `RADIALI: ${this.numRadials}`);
           document.querySelector('#txt-rad-len-val').setAttribute('value', `LUNGH R: ${this.radialLen.toFixed(1)}m`);
-        } else if (type === 'MMANA-GAL') { infoTextStr = `MODELLO MMANA-GAL (.MAA)\nConduttori estratti: ${this.mmanaWires.length}\nAncorato su C, orientato lungo AB.`; }
+        } else if (type === 'MMANA-GAL') { infoTextStr = `MODELLO MMANA-GAL (.MAA)\nFili caricati: ${this.mmanaWires.length}\nUsa Joystick Sinistro per ruotare la struttura.`; }
         document.querySelector('#info-text').setAttribute('value', infoTextStr);
       },
 
       updateGeometriesAndDrawings: function() {
         if (!this.pointA.top) return;
-        let type = this.antennaTypes[this.antIdx);
+        let type = this.antennaTypes[this.antIdx];
 
-        // ================= LOGICA RENDERIZZAZIONE FILE MMANA-GAL =================
+        // ================= LOGICA ANTENNA VERTICALE =================
+        if (type === 'Verticale') {
+          this.hideStructure(this.pointB); this.hideStructure(this.pointC);
+          this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false'); this.antennaTube2.setAttribute('visible', 'false');
+          
+          this.renderPoleAndLabel(this.pointA, this.pointA.top, 'STILO VERTICALE');
+
+          let h = this.pointA.top.y;
+          this.antennaTube1.setAttribute('visible', 'true');
+          this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
+          this.antennaTube1.object3D.position.set(this.pointA.top.x, h / 2, this.pointA.top.z);
+          this.antennaTube1.object3D.rotation.set(0, 0, 0); // Lo stilo sale dritto
+
+          // Radiali a terra marroni che ruotano col joystick sinistro
+          let base = new THREE.Vector3(this.pointA.base.x, 0.002, this.pointA.base.z);
+          let radRotationRad = this.antennaRotationY * Math.PI / 180;
+
+          for (let i = 0; i < this.maxRadials; i++) {
+            if (i < this.numRadials) {
+              this.radialPool[i].setAttribute('visible', 'true');
+              this.radialPool[i].setAttribute('geometry', `primitive: cylinder; radius: 0.004; height: ${this.radialLen}`);
+              
+              let angle = ((i * 2 * Math.PI) / this.numRadials) + radRotationRad;
+              let targetVec = new THREE.Vector3(base.x + Math.cos(angle) * this.radialLen, 0.002, base.z + Math.sin(angle) * this.radialLen);
+              let midPoint = new THREE.Vector3().lerpVectors(base, targetVec, 0.5);
+              
+              this.radialPool[i].object3D.position.copy(midPoint); 
+              this.radialPool[i].object3D.lookAt(targetVec); 
+              this.radialPool[i].object3D.rotateX(Math.PI / 2);
+            } else { this.radialPool[i].setAttribute('visible', 'false'); }
+          }
+          return;
+        }
+
+        // ================= LOGICA FILE MMANA-GAL =================
         if (type === 'MMANA-GAL') {
           this.antennaTube1.setAttribute('visible', 'false'); this.antennaTube2.setAttribute('visible', 'false');
           for(let i=0; i<this.maxRadials; i++) this.radialPool[i].setAttribute('visible', 'false');
+          this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false');
           
-          // Svuota i vecchi cilindri disegnati precedentemente nel contenitore olografico
-          this.mmanaContainerEl.innerHTML = '';
           if (!this.pointB.top || this.mmanaWires.length === 0) return;
 
           this.renderPoleAndLabel(this.pointA, this.pointA.top, 'PUNTO A');
@@ -342,64 +400,35 @@
           this.pointC.top = vecC;
           this.renderPoleAndLabel(this.pointC, this.pointC.top, 'ALIMENTAZIONE MMANA (C)');
 
-          // Sposta e orienta l'intero blocco del contenitore olografico dei fili MMANA
+          // Riposiziona il contenitore e applica la rotazione extra del joystick sinistro
           this.mmanaContainerEl.object3D.position.copy(vecC);
           this.mmanaContainerEl.object3D.lookAt(vecB);
+          this.mmanaContainerEl.object3D.rotateY(this.antennaRotationY * Math.PI / 180);
 
-          // Genera i cilindri 3D reali leggendo le coordinate caricate dal file .maa
-          this.mmanaWires.forEach((w) => {
-            let cyl = document.createElement('a-cylinder');
-            // MMANA usa coordinate relative o assolute, le proiettiamo in scala 1:1
-            let p1 = new THREE.Vector3(w.x1, w.y1, w.z1);
-            let p2 = new THREE.Vector3(w.x2, w.y2, w.z2);
-            
-            let distance = p1.distanceTo(p2);
-            if(distance < 0.01) return; // salta fili invisibili
+          // Genera i conduttori se il contenitore è vuoto
+          if(this.mmanaContainerEl.children.length === 0) {
+            this.mmanaWires.forEach((w) => {
+              let cyl = document.createElement('a-cylinder');
+              let p1 = new THREE.Vector3(w.x1, w.y1, w.z1);
+              let p2 = new THREE.Vector3(w.x2, w.y2, w.z2);
+              let d = p1.distanceTo(p2);
+              if(d < 0.01) return;
 
-            cyl.setAttribute('geometry', `primitive: cylinder; radius: ${Math.max(0.005, w.radius * 3.0)}; height: ${distance}`); // Bracci leggermente spessi per AR
-            cyl.setAttribute('material', 'color: #00E676; shader: flat'); // Colore verde brillante per i conduttori MMANA
-
-            // Posizionamento matematico del cilindro tra p1 e p2 dentro il contenitore relativo
-            let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
-            cyl.object3D.position.copy(mid);
-            cyl.object3D.lookAt(p2);
-            cyl.object3D.rotateX(Math.PI / 2);
-
-            this.mmanaContainerEl.appendChild(cyl);
-          });
-          return;
-        }
-
-        // Pulisci contenitore MMANA se passiamo alle antenne normali
-        this.mmanaContainerEl.innerHTML = '';
-
-        if (type === 'Verticale') {
-          this.hideStructure(this.pointB); this.hideStructure(this.pointC);
-          this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false'); this.antennaTube2.setAttribute('visible', 'false');
-          this.renderPoleAndLabel(this.pointA, this.pointA.top, 'STILO VERTICALE');
-
-          let h = this.pointA.top.y;
-          this.antennaTube1.setAttribute('visible', 'true');
-          this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
-          this.antennaTube1.object3D.position.set(this.pointA.top.x, h / 2, this.pointA.top.z);
-          this.antennaTube1.object3D.rotation.set(0, 0, 0);
-
-          let base = new THREE.Vector3(this.pointA.base.x, 0.002, this.pointA.base.z);
-          for (let i = 0; i < this.maxRadials; i++) {
-            if (i < this.numRadials) {
-              this.radialPool[i].setAttribute('visible', 'true');
-              this.radialPool[i].setAttribute('geometry', `primitive: cylinder; radius: 0.004; height: ${this.radialLen}`);
-              let angle = (i * 2 * Math.PI) / this.numRadials;
-              let targetVec = new THREE.Vector3(base.x + Math.cos(angle) * this.radialLen, 0.002, base.z + Math.sin(angle) * this.radialLen);
-              let midPoint = new THREE.Vector3().lerpVectors(base, targetVec, 0.5);
-              this.radialPool[i].object3D.position.copy(midPoint); this.radialPool[i].object3D.lookAt(targetVec); this.radialPool[i].object3D.rotateX(Math.PI / 2);
-            } else { this.radialPool[i].setAttribute('visible', 'false'); }
+              cyl.setAttribute('geometry', `primitive: cylinder; radius: ${Math.max(0.006, w.radius * 2)}; height: ${d}`);
+              cyl.setAttribute('material', 'color: #00E676; shader: flat');
+              let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+              cyl.object3D.position.copy(mid); cyl.object3D.lookAt(p2); cyl.object3D.rotateX(Math.PI / 2);
+              this.mmanaContainerEl.appendChild(cyl);
+            });
           }
           return;
         }
 
-        // FILARI STANDARD
+        // ================= LOGICA ANTENNE FILARI STANDARD =================
+        this.mmanaContainerEl.innerHTML = '';
+        for(let i=0; i<this.maxRadials; i++) this.radialPool[i].setAttribute('visible', 'false');
         if (!this.pointB.top) return;
+
         this.renderPoleAndLabel(this.pointA, this.pointA.top, 'PUNTO A');
         this.renderPoleAndLabel(this.pointB, this.pointB.top, 'PUNTO B');
 
@@ -408,10 +437,8 @@
         let dirAB = new THREE.Vector3().subVectors(vecB, vecA).normalize();
         let dirBA = new THREE.Vector3().subVectors(vecA, vecB).normalize();
 
-        if (type === 'Dipolo' || type === 'End Fed') {
-          let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
-          this.pointC.top = vecC; this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
-        }
+        let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
+        this.pointC.top = vecC; this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
 
         if (type === 'Dipolo') {
           this.antennaTube2.setAttribute('visible', 'false'); let antLen = this.getCalculatedLength();
@@ -421,11 +448,9 @@
           let extAntStart = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, -(antLen / 2));
           let extAntEnd = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, antLen / 2);
           this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5));
-          this.labelSegA.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
-          this.labelSegA.setAttribute('value', `A-Ant:\n${vecA.distanceTo(extAntStart).toFixed(2)}m`);
+          this.labelSegA.setAttribute('value', `A-Ant: ${vecA.distanceTo(extAntStart).toFixed(2)}m`);
           this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extAntEnd, vecB, 0.5));
-          this.labelSegB.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
-          this.labelSegB.setAttribute('value', `Ant-B:\n${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
+          this.labelSegB.setAttribute('value', `Ant-B: ${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
 
         } else if (type === 'End Fed') {
           this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.endFed_AC_Len}`);
@@ -439,11 +464,9 @@
           let extAC = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len);
           let extCB = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len);
           this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAC, 0.5));
-          this.labelSegA.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
-          this.labelSegA.setAttribute('value', `Vuoto A-Ant:\n${vecA.distanceTo(extAC).toFixed(2)}m`);
+          this.labelSegA.setAttribute('value', `Vuoto AC: ${vecA.distanceTo(extAC).toFixed(2)}m`);
           this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extCB, vecB, 0.5));
-          this.labelSegB.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
-          this.labelSegB.setAttribute('value', `Vuoto Ant-B:\n${extCB.distanceTo(vecB).toFixed(2)}m`);
+          this.labelSegB.setAttribute('value', `Vuoto CB: ${extCB.distanceTo(vecB).toFixed(2)}m`);
 
         } else if (type === 'Longwire') {
           this.hideStructure(this.pointC); this.antennaTube2.setAttribute('visible', 'false');
@@ -456,25 +479,62 @@
 
           let extLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen);
           this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5));
-          this.labelSegB.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
-          this.labelSegB.setAttribute('value', `Restante:\n${extLW.distanceTo(targetVec).toFixed(2)}m`);
+          this.labelSegB.setAttribute('value', `Restante: ${extLW.distanceTo(targetVec).toFixed(2)}m`);
+        }
+        
+        // Applica i moltiplicatori di testo scelti da menu
+        this.labelSegA.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
+        this.labelSegB.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
+      },
+
+      setupMmanaFileLoader: function() {
+        let fileInput = document.querySelector('#file-mmana');
+        if(fileInput) {
+          fileInput.addEventListener('change', (evt) => {
+            let file = evt.target.files[0]; if(!file) return;
+            let reader = new FileReader();
+            reader.onload = (e) => {
+              let text = e.target.result; let lines = text.split('\n');
+              this.mmanaWires = []; let insideWiresSection = false;
+              for(let i=0; i<lines.length; i++) {
+                let line = lines[i].trim();
+                if(line.toUpperCase().startsWith('*** WIRES ***')) { insideWiresSection = true; i++; continue; }
+                if(line.toUpperCase().startsWith('*** SOURCE ***') || line.startsWith('***')) { insideWiresSection = false; }
+                if(insideWiresSection && line !== "") {
+                  let tokens = line.split(/[\s,]+/);
+                  if(tokens.length >= 7) {
+                    this.mmanaWires.push({
+                      x1: parseFloat(tokens[0]), y1: parseFloat(tokens[1]), z1: parseFloat(tokens[2]),
+                      x2: parseFloat(tokens[3]), y2: parseFloat(tokens[4]), z2: parseFloat(tokens[5]),
+                      radius: parseFloat(tokens[6]) > 0 ? parseFloat(tokens[6])/1000 : 0.002
+                    });
+                  }
+                }
+              }
+              this.mmanaContainerEl.innerHTML = ''; // Svuota vecchi render
+              this.antIdx = this.antennaTypes.indexOf('MMANA-GAL');
+              this.updateMenuText(); this.updateGeometriesAndDrawings();
+              alert(`File letto! Rilevati ${this.mmanaWires.length} conduttori MMANA.`);
+            };
+            reader.readAsText(file);
+          });
         }
       },
 
       setupMenuInteractions: function() {
+        // Tasti di Selezione Menu Principali
         document.querySelector('#btn-ant').addEventListener('click', () => {
-          this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.updateMenuText(); this.updateGeometriesAndDrawings();
+          this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengthsAndHeight(); this.updateMenuText(); this.updateGeometriesAndDrawings();
         });
         document.querySelector('#btn-band').addEventListener('click', () => {
-          this.bandIdx = (this.bandIdx + 1) % this.bands.length; this.resetAntennaLengths(); this.updateMenuText(); this.updateGeometriesAndDrawings();
-        });
-        document.querySelector('#btn-c-left').addEventListener('click', () => {
-          this.pointC.percent = Math.max(0.02, this.pointC.percent - 0.05); this.updateGeometriesAndDrawings();
-        });
-        document.querySelector('#btn-c-right').addEventListener('click', () => {
-          this.pointC.percent = Math.min(0.98, this.pointC.percent + 0.05); this.updateGeometriesAndDrawings();
+          this.bandIdx = (this.bandIdx + 1) % this.bands.length; this.resetAntennaLengthsAndHeight(); this.updateMenuText(); this.updateGeometriesAndDrawings();
         });
 
+        // Controlli Scorrimento C (Dipolo)
+        document.querySelector('#btn-c-left').addEventListener('click', () => { this.pointC.percent = Math.max(0.02, this.pointC.percent - 0.05); this.updateGeometriesAndDrawings(); });
+        document.querySelector('#btn-c-right').addEventListener('click', () => { this.pointC.percent = Math.min(0.98, this.pointC.percent + 0.05); this.updateGeometriesAndDrawings(); });
+
+        // CONTROLLI MODIFICA DIRETTI SUI BOTTONI (Risolti ed esenti da bug)
         document.querySelector('#btn-ac-m1').addEventListener('click', () => { this.endFed_AC_Len = Math.max(0.1, this.endFed_AC_Len - 1.0); this.refreshAll(); });
         document.querySelector('#btn-ac-m01').addEventListener('click', () => { this.endFed_AC_Len = Math.max(0.01, this.endFed_AC_Len - 0.01); this.refreshAll(); });
         document.querySelector('#btn-ac-p01').addEventListener('click', () => { this.endFed_AC_Len += 0.01; this.refreshAll(); });
@@ -485,24 +545,36 @@
         document.querySelector('#btn-cb-p01').addEventListener('click', () => { this.endFed_CB_Len += 0.01; this.refreshAll(); });
         document.querySelector('#btn-cb-p1').addEventListener('click', () => { this.endFed_CB_Len += 1.0; this.refreshAll(); });
 
+        // Controlli Longwire
         document.querySelector('#btn-lw-vertex').addEventListener('click', () => { this.longwireVertex = this.longwireVertex === 'A' ? 'B' : 'A'; this.refreshAll(); });
         document.querySelector('#btn-lw-m1').addEventListener('click', () => { this.longwireLen = Math.max(0.1, this.longwireLen - 1.0); this.refreshAll(); });
         document.querySelector('#btn-lw-m01').addEventListener('click', () => { this.longwireLen = Math.max(0.01, this.longwireLen - 0.01); this.refreshAll(); });
         document.querySelector('#btn-lw-p01').addEventListener('click', () => { this.longwireLen += 0.01; this.refreshAll(); });
         document.querySelector('#btn-lw-p1').addEventListener('click', () => { this.longwireLen += 1.0; this.refreshAll(); });
 
+        // Controlli Verticale e Radiali
         document.querySelector('#btn-rad-num-minus').addEventListener('click', () => { this.numRadials = Math.max(1, this.numRadials - 1); this.refreshAll(); });
         document.querySelector('#btn-rad-num-plus').addEventListener('click', () => { this.numRadials = Math.min(this.maxRadials, this.numRadials + 1); this.refreshAll(); });
         document.querySelector('#btn-rad-len-minus').addEventListener('click', () => { this.radialLen = Math.max(0.1, this.radialLen - 0.1); this.refreshAll(); });
         document.querySelector('#btn-rad-len-plus').addEventListener('click', () => { this.radialLen += 0.1; this.refreshAll(); });
 
+        // INIEZIONE DEMO IN CASO DI ASSENZA FILE MMANA (Per test rapidi in VR)
+        document.querySelector('#btn-load-demo-yagi').addEventListener('click', () => {
+          this.mmanaWires = [
+            { x1: 0, y1: 0, z1: -1.5, x2: 0, y2: 2.1, z2: -1.5, radius: 0.005 }, // Riflettore
+            { x1: 1.2, y1: 0, z1: -1.4, x2: 1.2, y2: 2.0, z2: -1.4, radius: 0.005 }, // Radiatore
+            { x1: 2.5, y1: 0, z1: -1.3, x2: 2.5, y2: 1.8, z2: -1.3, radius: 0.005 }  // Direttore
+          ];
+          this.mmanaContainerEl.innerHTML = ''; this.antIdx = this.antennaTypes.indexOf('MMANA-GAL'); this.refreshAll();
+        });
+
+        // Controlli extra e riposizionamenti
         document.querySelector('#btn-h-minus').addEventListener('click', () => {
           if(!this.state.includes('HEIGHT')) return; this.currentHeight = Math.max(0.1, this.currentHeight - 0.1); this.updateHeightPreview();
         });
         document.querySelector('#btn-h-plus').addEventListener('click', () => {
           if(!this.state.includes('HEIGHT')) return; this.currentHeight += 0.1; this.updateHeightPreview();
         });
-
         document.querySelector('#btn-txt-minus').addEventListener('click', () => { this.globalTextScale = Math.max(0.15, this.globalTextScale - 0.05); this.updateGeometriesAndDrawings(); });
         document.querySelector('#btn-txt-plus').addEventListener('click', () => { this.globalTextScale = Math.min(1.2, this.globalTextScale + 0.05); this.updateGeometriesAndDrawings(); });
         document.querySelector('#btn-repo-a').addEventListener('click', () => { this.state = 'REPOSITION_GROUND_A'; this.menuUI.setAttribute('visible', false); });
@@ -517,8 +589,8 @@
 <body>
   
   <div id="ui-2d-container">
-    <h3 style="margin:0;font-size:13px;color:#FFEB3B;">Importa File MMANA-GAL</h3>
-    <p style="margin:5px 0 0 0;font-size:10px;color:#bbb;">Seleziona un file antenna .maa dal Quest o dal computer:</p>
+    <h3>Importazione MMANA-GAL</h3>
+    <p>Seleziona un file antenna .maa sul computer o sul Quest prima di cliccare su ENTER AR:</p>
     <input type="file" id="file-mmana" accept=".maa">
   </div>
 
@@ -526,7 +598,7 @@
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0">
-        <a-cursor id="eyes-cursor" raycaster="objects: .clickable" material="color: #00FFFF; shader: flat; opacity: 0.5" scale="0.4 0.4 0.4" position="0 0 -0.1"></a-cursor>
+        <a-cursor id="eyes-cursor" raycaster="objects: .clickable" material="color: #00FFFF; shader: flat; opacity: 0.4" scale="0.4 0.4 0.4" position="0 0 -0.1"></a-cursor>
       </a-camera>
       <a-entity id="left-controller" laser-controls="hand: left" windows-motion-controls="hand: left"></a-entity>
       <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 50; lineFilled: true; lineColor: #FF0000;"></a-entity>
@@ -543,19 +615,19 @@
     <a-entity id="menu-ui" visible="false" position="0 1.3 -0.5">
       <a-plane width="0.5" height="0.55" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
       
-      <a-text value="CONFIGURATORE ANTENNE V5" position="0 0.24 0.01" align="center" scale="0.13 0.13 0.13" color="#FFEB3B"></a-text>
+      <a-text value="CONFIGURATORE ANTENNE V10" position="0 0.24 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
       <a-plane width="0.44" height="0.06" color="#2A2A2A" position="0 0.17 0.01">
-        <a-text id="info-text" value="Scegli i punti a terra col grilletto destro." position="-0.21 0 0.01" scale="0.082 0.082 0.082" color="#00E676"></a-text>
+        <a-text id="info-text" value="Scegli i punti a terra col grilletto destro." position="-0.21 0 0.01" scale="0.078 0.078 0.078" color="#00E676"></a-text>
       </a-plane>
 
       <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.09 0.01">
-        <a-text value="TIPO ANTENNA:" align="center" scale="0.07 0.07 0.07" position="0 0.008 0.005" color="#B0BEC5"></a-text>
+        <a-text value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
         <a-text id="txt-ant-val" value="-" align="center" scale="0.09 0.09 0.09" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
       </a-plane>
 
       <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.09 0.01">
-        <a-text value="BANDA RADIO:" align="center" scale="0.07 0.07 0.07" position="0 0.008 0.005" color="#9FA8DA"></a-text>
-        <a-text id="txt-band-val" value="-" align="center" scale="0.11 0.11 0.11" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
+        <a-text value="BANDA RADIO:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#9FA8DA"></a-text>
+        <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
       </a-plane>
 
       <a-entity id="sub-dipolo" position="0 0.01 0" visible="false">
@@ -566,57 +638,60 @@
         <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="0.09 -0.015 0.01">
           <a-text value="Verso PUNTO B ->" align="center" scale="0.07 0.07 0.07" position="0 0 0.005"></a-text>
         </a-plane>
+        <a-plane id="btn-load-demo-yagi" class="clickable" btn-interaction width="0.26" height="0.02" color="#4A148C" position="0 -0.05 0.01">
+          <a-text value="CARICA DEMO YAGI (.MAA)" align="center" scale="0.065 0.065 0.065" position="0 0 0.003"></a-text>
+        </a-plane>
       </a-entity>
 
       <a-entity id="sub-endfed" position="0 0.01 0" visible="false">
-        <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
-        <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#3e2723" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
-        <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#5d4037" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-        <a-plane id="btn-ac-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#5d4037" position="-0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-        <a-plane id="btn-ac-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#3e2723" position="-0.06 -0.01 0.01"><a-text value="+1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+        <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
+        <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#3e2723" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+        <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#5d4037" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+        <a-plane id="btn-ac-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#5d4037" position="-0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+        <a-plane id="btn-ac-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#3e2723" position="-0.06 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-        <a-plane id="btn-cb-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#0d47a1" position="0.06 -0.01 0.01"><a-text value="-1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
-        <a-plane id="btn-cb-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#1565c0" position="0.11 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-        <a-plane id="btn-cb-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#1565c0" position="0.16 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-        <a-plane id="btn-cb-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#0d47a1" position="0.21 -0.01 0.01"><a-text value="+1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+        <a-plane id="btn-cb-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#0d47a1" position="0.06 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+        <a-plane id="btn-cb-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#1565c0" position="0.11 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+        <a-plane id="btn-cb-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#1565c0" position="0.16 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+        <a-plane id="btn-cb-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#0d47a1" position="0.21 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
         <a-text id="txt-ef-values" value="AC: 10.00m | CB: 10.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
       </a-entity>
 
       <a-entity id="sub-longwire" position="0 0.01 0" visible="false">
-        <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
+        <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
         <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#006064" position="-0.14 -0.01 0.01">
-          <a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.06 0.06 0.06" position="0 0 0.005"></a-text>
+          <a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.055 0.055 0.055" position="0 0 0.005"></a-text>
         </a-plane>
-        <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#212121" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
-        <a-plane id="btn-lw-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#424242" position="0.06 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-        <a-plane id="btn-lw-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#424242" position="0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-        <a-plane id="btn-lw-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#212121" position="0.16 -0.01 0.01"><a-text value="+1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+        <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#212121" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+        <a-plane id="btn-lw-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#424242" position="0.06 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+        <a-plane id="btn-lw-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#424242" position="0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+        <a-plane id="btn-lw-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#212121" position="0.16 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
         <a-text id="txt-lw-len-val" value="LUNGH: 20.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
       </a-entity>
 
       <a-entity id="sub-verticale" position="0 0.01 0" visible="false">
-        <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
-        <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#3e2723" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
-        <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#3e2723" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
-        <a-plane id="btn-rad-len-minus" class="clickable" btn-interaction width="0.06" height="0.025" color="#4e342e" position="0.09 -0.01 0.01"><a-text value="LENG -" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
-        <a-plane id="btn-rad-len-plus" class="clickable" btn-interaction width="0.06" height="0.025" color="#4e342e" position="0.16 -0.01 0.01"><a-text value="LENG +" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+        <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
+        <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#3e2723" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+        <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#3e2723" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+        <a-plane id="btn-rad-len-minus" class="clickable" btn-interaction width="0.06" height="0.025" color="#4e342e" position="0.09 -0.01 0.01"><a-text value="RAD -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+        <a-plane id="btn-rad-len-plus" class="clickable" btn-interaction width="0.06" height="0.025" color="#4e342e" position="0.16 -0.01 0.01"><a-text value="RAD +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
         <a-text id="txt-rad-num-val" value="RADIALI: 4" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="-0.13 -0.05 0"></a-text>
         <a-text id="txt-rad-len-val" value="LUNGH R: 5.0m" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="0.12 -0.05 0"></a-text>
       </a-entity>
 
-      <a-plane id="btn-h-minus" class="clickable" btn-interaction width="0.1" height="0.025" color="#E65100" position="-0.18 -0.08 0.01"><a-text value="QUOTA -" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
-      <a-plane id="btn-h-plus" class="clickable" btn-interaction width="0.1" height="0.025" color="#E65100" position="-0.06 -0.08 0.01"><a-text value="QUOTA +" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+      <a-plane id="btn-h-minus" class="clickable" btn-interaction width="0.1" height="0.025" color="#E65100" position="-0.18 -0.08 0.01"><a-text value="QUOTA -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+      <a-plane id="btn-h-plus" class="clickable" btn-interaction width="0.1" height="0.025" color="#E65100" position="-0.06 -0.08 0.01"><a-text value="QUOTA +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-      <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.025" color="#424242" position="0.06 -0.08 0.01"><a-text value="TESTO [-]" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
-      <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.025" color="#424242" position="0.18 -0.08 0.01"><a-text value="TESTO [+]" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+      <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.025" color="#424242" position="0.06 -0.08 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+      <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.025" color="#424242" position="0.18 -0.08 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-      <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.16 0.01" align="center" scale="0.07 0.07 0.07" color="#FF1744"></a-text>
-      <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.19" height="0.03" color="#C62828" position="-0.11 -0.21 0.01"><a-text value="Riposiziona PUNTO A" align="center" scale="0.075 0.075 0.075" color="#FFFFFF"></a-text></a-plane>
-      <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.19" height="0.03" color="#1565C0" position="0.11 -0.21 0.01"><a-text value="Riposiziona PUNTO B" align="center" scale="0.075 0.075 0.075" color="#FFFFFF"></a-text></a-plane>
+      <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.16 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
+      <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.19" height="0.03" color="#C62828" position="-0.11 -0.21 0.01"><a-text value="Riposiziona PUNTO A" align="center" scale="0.07 0.07 0.07" color="#FFFFFF"></a-text></a-plane>
+      <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.19" height="0.03" color="#1565C0" position="0.11 -0.21 0.01"><a-text value="Riposiziona PUNTO B" align="center" scale="0.07 0.07 0.07" color="#FFFFFF"></a-text></a-plane>
     </a-entity>
 
     <a-plane id="btn-toggle-menu" class="clickable" btn-interaction width="0.15" height="0.035" color="#00E676" position="0 0.8 -0.4" rotation="-20 0 0">
-      <a-text value="APRI/CHIUDI MENU" align="center" scale="0.065 0.065 0.065" color="#000"></a-text>
+      <a-text value="APRI/CHIUDI MENU" align="center" scale="0.06 0.06 0.06" color="#000"></a-text>
     </a-plane>
 
   </a-scene>
