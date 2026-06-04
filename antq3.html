@@ -2,31 +2,24 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro - Meta Quest 3</title>
+  <title>Antenne AR Pro v2 - Meta Quest 3</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script>
-    // Componente per il feedback visivo dei bottoni (pressione e colore)
+    // Componente per il feedback visivo dei bottoni
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el;
         let originalColor = el.getAttribute('material').color;
-        
-        // Quando il laser passa sopra
-        el.addEventListener('mouseenter', () => {
-          el.setAttribute('material', 'opacity', 0.8);
-        });
-        // Quando il laser esce
+        el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
         el.addEventListener('mouseleave', () => {
           el.setAttribute('material', 'opacity', 1.0);
           el.setAttribute('scale', '1 1 1');
           el.setAttribute('material', 'color', originalColor);
         });
-        // Quando viene premuto il grilletto
         el.addEventListener('mousedown', () => {
-          el.setAttribute('scale', '0.95 0.95 0.8'); // Si schiaccia
-          el.setAttribute('material', 'color', '#00FFCC'); // Colore di attivazione temporaneo
+          el.setAttribute('scale', '0.95 0.95 0.8');
+          el.setAttribute('material', 'color', '#00FFCC');
         });
-        // Quando viene rilasciato
         el.addEventListener('mouseup', () => {
           el.setAttribute('scale', '1 1 1');
           el.setAttribute('material', 'color', originalColor);
@@ -34,32 +27,26 @@
       }
     });
 
-    // Dimensione costante per i punti nello spazio (10cm vicini, non enormi lontani)
-    AFRAME.registerComponent('constant-size', {
-      tick: function () {
-        var camera = this.el.sceneEl.camera;
-        if (!camera) return;
-        var distance = camera.position.distanceTo(this.el.object3D.position);
-        var scale = distance * 0.06; 
-        scale = Math.min(Math.max(scale, 0.05), 0.5); // Limite minimo 5cm, massimo 50cm ad altissime distanze
-        this.el.object3D.scale.set(scale, scale, scale);
-      }
-    });
-
-    // Logica di sistema principale
+    // Componente principale di gestione AR
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         this.state = 'PLACE_GROUND_A'; 
-        this.pointA = { base: null, top: null, el: null };
-        this.pointB = { base: null, top: null, el: null };
-        this.pointC = { top: null, el: null, percent: 0.5 }; 
+        this.pointA = { base: null, top: null, el: null, pole: null, lbl: null };
+        this.pointB = { base: null, top: null, el: null, pole: null, lbl: null };
+        this.pointC = { top: null, el: null, pole: null, lbl: null, percent: 0.5 }; 
         
+        // Nuove etichette per le distanze dagli estremi dell'antenna ai punti A e B
+        this.lblSegA = null;
+        this.lblSegB = null;
+
         this.antennaTypes = ['Dipolo', 'End Fed', 'Longwire'];
         this.bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
         this.antIdx = 0;
         this.bandIdx = 2; // 40m di default
         
-        this.currentHeight = 1.0;
+        this.textSize = 0.35; // Dimensione iniziale dei testi modificabile da menu
+        this.currentHeight = 1.5;
+        
         this.raycasterEl = document.querySelector('#right-controller');
         this.cursorRing = document.querySelector('#cursor-ring');
         this.verticalCylinder = document.querySelector('#vertical-cylinder');
@@ -68,16 +55,15 @@
         this.mainLineEl = null;
         this.antennaLineEl = null;
 
-        // Controller Destro (Piazzamento e Altezza)
+        // Controller Destro
         this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this));
         this.raycasterEl.addEventListener('thumbstickmoved', this.onThumbstickMoved.bind(this));
 
-        // Controller Sinistro (Tasto Y mostra/nasconde menu)
+        // Controller Sinistro (Tasto Y apre/chiude menu)
         document.querySelector('#left-controller').addEventListener('ybuttondown', () => {
           let visible = this.menuUI.getAttribute('visible');
           this.menuUI.setAttribute('visible', !visible);
           if(!visible) {
-            // Posiziona il menu davanti alla visuale attuale dell'utente
             let camera = document.querySelector('#camera').object3D;
             let forward = new THREE.Vector3(0, 0, -0.6).applyQuaternion(camera.quaternion);
             this.menuUI.object3D.position.copy(camera.position).add(forward);
@@ -90,7 +76,6 @@
       },
 
       tick: function () {
-        // Tracciamento cerchio sul terreno reale
         if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND')) {
           let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if (intersection) {
@@ -103,7 +88,6 @@
       },
 
       onTriggerDown: function () {
-        // Ignora il click sul terreno se stiamo cliccando sul menu aperto
         let intersectionMenu = this.raycasterEl.components.raycaster.getIntersection(this.menuUI);
         if (this.menuUI.getAttribute('visible') && intersectionMenu) return;
 
@@ -114,13 +98,12 @@
 
         } else if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
           this.pointA.top = { x: this.pointA.base.x, y: this.currentHeight, z: this.pointA.base.z };
-          this.updateOrCreateMarker('A', this.pointA.top, '#FF1744');
           this.resetVerticalMode();
           
           if(this.state === 'REPOSITION_HEIGHT_A') {
             this.state = 'IDLE';
             this.updateDrawings();
-            this.menuUI.setAttribute('visible', true); // Riapri il menu finito il posizionamento
+            this.menuUI.setAttribute('visible', true);
           } else {
             this.state = 'PLACE_GROUND_B';
           }
@@ -132,12 +115,10 @@
 
         } else if (this.state === 'PLACE_HEIGHT_B' || this.state === 'REPOSITION_HEIGHT_B') {
           this.pointB.top = { x: this.pointB.base.x, y: this.currentHeight, z: this.pointB.base.z };
-          this.updateOrCreateMarker('B', this.pointB.top, '#2979FF');
           this.resetVerticalMode();
-
           this.state = 'IDLE';
           this.updateDrawings();
-          this.menuUI.setAttribute('visible', true); // Riapri il menu
+          this.menuUI.setAttribute('visible', true);
         }
       },
 
@@ -146,18 +127,14 @@
           if (Math.abs(evt.detail.y) > 0.4) {
             if (!this.lastThumbTime || Date.now() - this.lastThumbTime > 120) {
               let step = evt.detail.y < 0 ? 0.1 : -0.1; 
-              this.currentHeight = Math.max(0.1, this.currentHeight + step); // Minimo 10cm da terra
-              
+              this.currentHeight = Math.max(0.1, this.currentHeight + step);
               let basePos = this.state.includes('_A') ? this.pointA.base : this.pointB.base;
               
-              // Aggiorna il cilindro verticale (Posizione mediana e altezza/scala)
               this.verticalCylinder.setAttribute('position', `${basePos.x} ${this.currentHeight / 2} ${basePos.z}`);
               this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${this.currentHeight}`);
               
-              // Testo olografico altezza
               this.heightText.setAttribute('position', `${basePos.x} ${this.currentHeight + 0.2} ${basePos.z}`);
               this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
-              
               this.lastThumbTime = Date.now();
             }
           }
@@ -166,15 +143,13 @@
 
       setupVerticalMode: function (basePos) {
         this.cursorRing.setAttribute('visible', 'false');
-        this.currentHeight = 1.5; // Parte da un'altezza comoda di 1.5m
-        
+        this.currentHeight = 2.0; 
         this.verticalCylinder.setAttribute('visible', 'true');
-        this.verticalCylinder.setAttribute('position', `${basePos.x} 0.75 ${basePos.z}`);
-        this.verticalCylinder.setAttribute('geometry', 'primitive: cylinder; radius: 0.01; height: 1.5');
-        
+        this.verticalCylinder.setAttribute('position', `${basePos.x} 1.0 ${basePos.z}`);
+        this.verticalCylinder.setAttribute('geometry', 'primitive: cylinder; radius: 0.01; height: 2.0');
         this.heightText.setAttribute('visible', 'true');
-        this.heightText.setAttribute('position', `${basePos.x} 1.7 ${basePos.z}`);
-        this.heightText.setAttribute('value', '1.5m');
+        this.heightText.setAttribute('position', `${basePos.x} 2.2 ${basePos.z}`);
+        this.heightText.setAttribute('value', '2.0m');
       },
 
       resetVerticalMode: function () {
@@ -182,195 +157,96 @@
         this.heightText.setAttribute('visible', 'false');
       },
 
-      updateOrCreateMarker: function(id, pos, color) {
-        let pData = id === 'A' ? this.pointA : this.pointB;
-        if (!pData.el) {
-          pData.el = document.createElement('a-entity');
-          pData.el.setAttribute('geometry', 'primitive: sphere; radius: 0.05'); // 10cm reali vicino
-          pData.el.setAttribute('material', `color: ${color}; roughness: 0.3`);
-          pData.el.setAttribute('constant-size', '');
-          
-          let textEl = document.createElement('a-text');
-          textEl.setAttribute('id', `label-${id}`);
-          textEl.setAttribute('align', 'center');
-          textEl.setAttribute('position', '0 0.18 0');
-          textEl.setAttribute('scale', '0.4 0.4 0.4');
-          pData.el.appendChild(textEl);
-          this.el.sceneEl.appendChild(pData.el);
-        }
-        pData.el.setAttribute('position', pos);
-        document.querySelector(`#label-${id}`).setAttribute('value', `Punto ${id}\n${pos.y.toFixed(1)}m`);
-      },
-
       getCalculatedLength: function() {
         let bandMeters = parseInt(this.bands[this.bandIdx]);
         let type = this.antennaTypes[this.antIdx];
-        if (type === 'Dipolo') return bandMeters / 2;     // Mezza onda
-        if (type === 'End Fed') return bandMeters * 0.45; // ~Mezza onda accorciata
-        return bandMeters;                                // Longwire onda intera
+        if (type === 'Dipolo') return bandMeters / 2;     
+        if (type === 'End Fed') return bandMeters * 0.45; 
+        return bandMeters;                                
+      },
+
+      // Funzione di utilità per creare/aggiornare i pali fissi e le scritte a metà altezza
+      updatePoleAndLabel: function(pData, topPos, color, labelText) {
+        // 1. Crea/Sposta Sfera di cima
+        if (!pData.el) {
+          pData.el = document.createElement('a-entity');
+          pData.el.setAttribute('geometry', 'primitive: sphere; radius: 0.05');
+          pData.el.setAttribute('material', `color: ${color}; roughness: 0.3`);
+          this.el.sceneEl.appendChild(pData.el);
+        }
+        pData.el.setAttribute('position', topPos);
+
+        // 2. Crea/Aggiorna Palo dal terreno (Cilindro permanente)
+        if (!pData.pole) {
+          pData.pole = document.createElement('a-entity');
+          pData.pole.setAttribute('geometry', 'primitive: cylinder; radius: 0.008');
+          pData.pole.setAttribute('material', 'color: #757575; opacity: 0.6');
+          this.el.sceneEl.appendChild(pData.pole);
+        }
+        pData.pole.setAttribute('position', `${topPos.x} ${topPos.y / 2} ${topPos.z}`);
+        pData.pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${topPos.y}`);
+
+        // 3. Crea/Aggiorna Etichetta Quota a METÀ ALTEZZA
+        if (!pData.lbl) {
+          pData.lbl = document.createElement('a-text');
+          pData.lbl.setAttribute('align', 'center');
+          pData.lbl.setAttribute('color', '#00FF00');
+          pData.lbl.setAttribute('look-at', '#camera');
+          this.el.sceneEl.appendChild(pData.lbl);
+        }
+        pData.lbl.setAttribute('position', `${topPos.x} ${topPos.y / 2} ${topPos.z + 0.15}`); // leggermente scostato in avanti per leggerlo bene
+        pData.lbl.setAttribute('scale', `${this.textSize} ${this.textSize} ${this.textSize}`);
+        pData.lbl.setAttribute('value', `${labelText}\nH: ${topPos.y.toFixed(1)}m`);
       },
 
       updateMenuText: function() {
         let type = this.antennaTypes[this.antIdx];
         let band = this.bands[this.bandIdx];
         let len = this.getCalculatedLength();
-
-        // Aggiorna scritte dentro i bottoni e il pannello info
         document.querySelector('#txt-ant-val').setAttribute('value', type.toUpperCase());
         document.querySelector('#txt-band-val').setAttribute('value', band);
-        document.querySelector('#info-text').setAttribute('value', `ANTENNA: ${type}\nBANDA: ${band}\nLUNGHEZZA: ${len.toFixed(1)}m`);
+        document.querySelector('#info-text').setAttribute('value', `ANTENNA: ${type} | BANDA: ${band}\nLUNGHEZZA CALCOLATA: ${len.toFixed(1)}m`);
       },
 
       updateDrawings: function() {
         if (!this.pointA.top || !this.pointB.top) return;
 
-        // 1. Linea filare bianca tra A e B
+        // Disegna Pali e Quote Mediane per A e B
+        this.updatePoleAndLabel(this.pointA, this.pointA.top, '#FF1744', 'PUNTO A');
+        this.updatePoleAndLabel(this.pointB, this.pointB.top, '#2979FF', 'PUNTO B');
+
+        // Linea di supporto bianca elastica AB
         if (this.mainLineEl) this.mainLineEl.remove();
         this.mainLineEl = document.createElement('a-entity');
-        this.mainLineEl.setAttribute('line', `start: ${this.pointA.top.x} ${this.pointA.top.y} ${this.pointA.top.z}; end: ${this.pointB.top.x} ${this.pointB.top.y} ${this.pointB.top.z}; color: #FFFFFF; opacity: 0.5`);
+        this.mainLineEl.setAttribute('line', `start: ${this.pointA.top.x} ${this.pointA.top.y} ${this.pointA.top.z}; end: ${this.pointB.top.x} ${this.pointB.top.y} ${this.pointB.top.z}; color: #FFFFFF; opacity: 0.3`);
         this.el.sceneEl.appendChild(this.mainLineEl);
 
-        // Vettori Three.js
+        // Vettori Matematici Three.js
         let vecA = new THREE.Vector3(this.pointA.top.x, this.pointA.top.y, this.pointA.top.z);
         let vecB = new THREE.Vector3(this.pointB.top.x, this.pointB.top.y, this.pointB.top.z);
         
-        // Calcolo Punto C (Alimentazione) lungo la retta AB
+        // Calcolo e disegno Punto C (Alimentazione) con il suo palo dedicato a terra e altezza relativa a metà
         let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
         this.pointC.top = vecC;
+        this.updatePoleAndLabel(this.pointC, this.pointC.top, '#00E676', 'CENTRO C');
 
-        // Disegna Sfera Punto C
-        if (!this.pointC.el) {
-          this.pointC.el = document.createElement('a-entity');
-          this.pointC.el.setAttribute('geometry', 'primitive: sphere; radius: 0.04');
-          this.pointC.el.setAttribute('material', 'color: #00E676');
-          this.pointC.el.setAttribute('constant-size', '');
-          let textC = document.createElement('a-text');
-          textC.setAttribute('id', 'label-C');
-          textC.setAttribute('align', 'center');
-          textC.setAttribute('position', '0 -0.18 0');
-          textC.setAttribute('scale', '0.3 0.3 0.3');
-          this.pointC.el.appendChild(textC);
-          this.el.sceneEl.appendChild(this.pointC.el);
-        }
-        this.pointC.el.setAttribute('position', vecC);
-        
-        // Calcolo distanze dai bracci
-        let distA_C = vecA.distanceTo(vecC);
-        let distB_C = vecB.distanceTo(vecC);
-        document.querySelector('#label-C').setAttribute('value', `C (${vecC.y.toFixed(1)}m)\nDist da A: ${distA_C.toFixed(1)}m\nDist da B: ${distB_C.toFixed(1)}m`);
-
-        // 2. Disegna l'Antenna Fisica (Cilindro Arancione Spesso)
+        // Disegna l'Antenna Fisica (Cilindro Arancione)
         if (this.antennaLineEl) this.antennaLineEl.remove();
-        
         let antLen = this.getCalculatedLength();
         this.antennaLineEl = document.createElement('a-entity');
         this.antennaLineEl.setAttribute('geometry', `primitive: cylinder; radius: 0.02; height: ${antLen}`);
         this.antennaLineEl.setAttribute('material', 'color: #FF5722; shader: flat');
-        
-        // Posiziona e orienta il cilindro lungo la retta AB centrato su C
         this.antennaLineEl.object3D.position.copy(vecC);
         this.antennaLineEl.object3D.lookAt(vecB);
-        this.antennaLineEl.object3D.rotateX(Math.PI / 2); // Rotazione di sfasamento necessaria in A-Frame
-        
+        this.antennaLineEl.object3D.rotateX(Math.PI / 2);
         this.el.sceneEl.appendChild(this.antennaLineEl);
-      },
 
-      setupMenuInteractions: function() {
-        // Click Cambio Tipo Antenna
-        document.querySelector('#btn-ant').addEventListener('click', () => {
-          this.antIdx = (this.antIdx + 1) % this.antennaTypes.length;
-          this.updateMenuText();
-          this.updateDrawings();
-        });
+        // --- CALCOLO DISTANZE ESTREMI ANTENNA AI PUNTI A e B ---
+        let dir = new THREE.Vector3().subVectors(vecB, vecA).normalize();
+        let halfLen = antLen / 2;
+        
+        // Calcolo punti esatti nello spazio 3D dove finisce fisicamente l'antenna arancione
+        let antStart = new THREE.Vector3().copy(vecC).addScaledVector(dir, -halfLen);
+        let antEnd = new THREE.Vector3().copy(vecC).addScaledVector(dir, halfLen);
 
-        // Click Cambio Banda
-        document.querySelector('#btn-band').addEventListener('click', () => {
-          this.bandIdx = (this.bandIdx + 1) % this.bands.length;
-          this.updateMenuText();
-          this.updateDrawings();
-        });
-
-        // Frecce Spostamento C verso A
-        document.querySelector('#btn-c-left').addEventListener('click', () => {
-          this.pointC.percent = Math.max(0.05, this.pointC.percent - 0.05);
-          this.updateDrawings();
-        });
-
-        // Frecce Spostamento C verso B
-        document.querySelector('#btn-c-right').addEventListener('click', () => {
-          this.pointC.percent = Math.min(0.95, this.pointC.percent + 0.05);
-          this.updateDrawings();
-        });
-
-        // Pulsanti di Riposizionamento Totale
-        document.querySelector('#btn-repo-a').addEventListener('click', () => {
-          this.state = 'REPOSITION_GROUND_A';
-          this.menuUI.setAttribute('visible', false); // Nascondi il menu per liberare la visuale di mira
-        });
-
-        document.querySelector('#btn-repo-b').addEventListener('click', () => {
-          this.state = 'REPOSITION_GROUND_B';
-          this.menuUI.setAttribute('visible', false);
-        });
-      }
-    });
-  </script>
-</head>
-<body>
-  
-  <a-scene ar-antenna-system webxr="optionalFeatures: passthrough; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
-    
-    <a-entity id="cameraRig">
-      <a-camera id="camera" position="0 1.6 0"></a-camera>
-      <a-entity id="left-controller" laser-controls="hand: left" windows-motion-controls="hand: left"></a-entity>
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 30;"></a-entity>
-    </a-entity>
-
-    <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="100" height="100" material="opacity: 0.0; transparent: true"></a-plane>
-
-    <a-ring id="cursor-ring" color="#FFFFFF" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" visible="false"></a-ring>
-    <a-entity id="vertical-cylinder" geometry="primitive: cylinder" material="color: #FFEB3B; shader: flat" visible="false"></a-entity>
-    <a-text id="height-text" value="" align="center" color="#00FF00" scale="0.5 0.5 0.5" visible="false" look-at="#camera"></a-text>
-
-    <a-entity id="menu-ui" visible="false" position="0 1.3 -0.5">
-      <a-plane width="0.5" height="0.5" color="#1A1A1A" material="opacity: 0.95; shader: flat"></a-plane>
-      
-      <a-text value="CONFIGURATORE ANTENNE" position="0 0.21 0.01" align="center" scale="0.3 0.3 0.3" color="#FFEB3B"></a-text>
-      <a-plane width="0.42" height="0.07" color="#2A2A2A" position="0 0.13 0.01">
-        <a-text id="info-text" value="Caricamento..." position="-0.19 0 0.01" scale="0.22 0.22 0.22" color="#00E676"></a-text>
-      </a-plane>
-
-      <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.05" color="#37474F" position="-0.11 0.03 0.01">
-        <a-text value="TIPO ANTENNA:" align="center" scale="0.16 0.16 0.16" position="0 0.01 0.005" color="#B0BEC5"></a-text>
-        <a-text id="txt-ant-val" value="-" align="center" scale="0.22 0.22 0.22" position="0 -0.01 0.005" color="#FFFFFF"></a-text>
-      </a-plane>
-
-      <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.05" color="#1A237E" position="0.11 0.03 0.01">
-        <a-text value="BANDA ATTIVA:" align="center" scale="0.16 0.16 0.16" position="0 0.01 0.005" color="#9FA8DA"></a-text>
-        <a-text id="txt-band-val" value="-" align="center" scale="0.25 0.25 0.25" position="0 -0.01 0.005" color="#FFFFFF"></a-text>
-      </a-plane>
-
-      <a-text value="SPOSTA ALIMENTAZIONE (PUNTO C)" position="0 -0.04 0.01" align="center" scale="0.18 0.18 0.18" color="#B0BEC5"></a-text>
-      
-      <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.15" height="0.04" color="#004D40" position="-0.09 -0.09 0.01">
-        <a-text value="<- Verso PUNTO A" align="center" scale="0.18 0.18 0.18" position="0 0 0.005" color="#FFFFFF"></a-text>
-      </a-plane>
-
-      <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.15" height="0.04" color="#004D40" position="0.09 -0.09 0.01">
-        <a-text value="Verso PUNTO B ->" align="center" scale="0.18 0.18 0.18" position="0 0 0.005" color="#FFFFFF"></a-text>
-      </a-plane>
-
-      <a-text value="MODIFICA E MODELLAZIONE GEOMETRIE" position="0 -0.15 0.01" align="center" scale="0.18 0.18 0.18" color="#FF1744"></a-text>
-      
-      <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.19" height="0.04" color="#C62828" position="-0.11 -0.2 0.01">
-        <a-text value="Riposiziona PUNTO A" align="center" scale="0.18 0.18 0.18" position="0 0 0.005" color="#FFFFFF"></a-text>
-      </a-plane>
-
-      <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.19" height="0.04" color="#1565C0" position="0.11 -0.2 0.01">
-        <a-text value="Riposiziona PUNTO B" align="center" scale="0.18 0.18 0.18" position="0 0 0.005" color="#FFFFFF"></a-text>
-      </a-plane>
-    </a-entity>
-
-  </a-scene>
-</body>
-</html>
+        // Tratto Vuoto
