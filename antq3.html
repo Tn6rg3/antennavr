@@ -2,10 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro v2 - Meta Quest 3</title>
+  <title>Antenne AR Pro V3 - Meta Quest 3</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script>
-    // Componente per il feedback visivo dei bottoni
+    // Componente per gestire il feedback visivo dei bottoni alla pressione
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el;
@@ -27,55 +27,122 @@
       }
     });
 
-    // Componente principale di gestione AR
+    // Sistema principale che coordina tutta la logica delle antenne
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
+        // Stati dell'applicazione
         this.state = 'PLACE_GROUND_A'; 
-        this.pointA = { base: null, top: null, el: null, pole: null, lbl: null };
-        this.pointB = { base: null, top: null, el: null, pole: null, lbl: null };
-        this.pointC = { top: null, el: null, pole: null, lbl: null, percent: 0.5 }; 
         
-        // Nuove etichette per le distanze dagli estremi dell'antenna ai punti A e B
-        this.lblSegA = null;
-        this.lblSegB = null;
+        // Strutture dati fisse per i tre punti chiave. I nodi 3D vengono generati una volta sola.
+        this.pointA = { base: null, top: null, sphere: null, pole: null, label: null };
+        this.pointB = { base: null, top: null, sphere: null, pole: null, label: null };
+        this.pointC = { top: null, sphere: null, pole: null, label: null, percent: 0.5 }; 
+        
+        // Etichette per le distanze rimanenti tra la fine dell'antenna e i pali portanti
+        this.labelSegA = null;
+        this.labelSegB = null;
 
+        // Liste per le configurazioni radio
         this.antennaTypes = ['Dipolo', 'End Fed', 'Longwire'];
         this.bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
         this.antIdx = 0;
-        this.bandIdx = 2; // 40m di default
+        this.bandIdx = 2; // Default 40 metri
         
-        this.textSize = 0.35; // Dimensione iniziale dei testi modificabile da menu
-        this.currentHeight = 1.5;
+        // Dimensione globale dei testi (modificabile da menu)
+        this.globalTextScale = 0.4; 
+        this.currentHeight = 1.5; // Altezza di partenza durante il disegno
         
+        // Cache degli elementi della scena
         this.raycasterEl = document.querySelector('#right-controller');
         this.cursorRing = document.querySelector('#cursor-ring');
         this.verticalCylinder = document.querySelector('#vertical-cylinder');
         this.heightText = document.querySelector('#height-text');
         this.menuUI = document.querySelector('#menu-ui');
-        this.mainLineEl = null;
-        this.antennaLineEl = null;
+        this.antennaTube = null;
+        this.supportLine = null;
 
-        // Controller Destro
+        // Registrazione eventi dei controller
         this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this));
         this.raycasterEl.addEventListener('thumbstickmoved', this.onThumbstickMoved.bind(this));
 
-        // Controller Sinistro (Tasto Y apre/chiude menu)
+        // Controller sinistro: Tasto Y per aprire/chiudere il menu di controllo
         document.querySelector('#left-controller').addEventListener('ybuttondown', () => {
-          let visible = this.menuUI.getAttribute('visible');
-          this.menuUI.setAttribute('visible', !visible);
-          if(!visible) {
+          let isVisible = this.menuUI.getAttribute('visible');
+          this.menuUI.setAttribute('visible', !isVisible);
+          if(!isVisible) {
+            // Riposiziona il menu fluttuante esattamente davanti alla maschera del visore
             let camera = document.querySelector('#camera').object3D;
-            let forward = new THREE.Vector3(0, 0, -0.6).applyQuaternion(camera.quaternion);
+            let forward = new THREE.Vector3(0, 0, -0.5).applyQuaternion(camera.quaternion);
             this.menuUI.object3D.position.copy(camera.position).add(forward);
             this.menuUI.object3D.lookAt(camera.position);
           }
         });
 
+        // Inizializza i nodi grafici permanenti per evitare che spariscano
+        this.initPersistentElements();
         this.updateMenuText();
         this.setupMenuInteractions();
       },
 
+      // Genera gli oggetti 3D nella scena una volta sola all'avvio dell'app
+      initPersistentElements: function() {
+        let scene = this.el.sceneEl;
+
+        // Funzione helper interna per creare la struttura di un punto (Sfera + Palo + Testo)
+        let createPointStructure = (color) => {
+          let struct = {};
+          
+          struct.sphere = document.createElement('a-sphere');
+          struct.sphere.setAttribute('radius', '0.05'); // 10cm di diametro reali
+          struct.sphere.setAttribute('material', `color: ${color}; roughness: 0.3`);
+          struct.sphere.setAttribute('visible', 'false');
+          scene.appendChild(struct.sphere);
+
+          struct.pole = document.createElement('a-cylinder');
+          struct.pole.setAttribute('radius', '0.008'); // Palo filiforme sottile
+          struct.pole.setAttribute('material', 'color: #888888; opacity: 0.7; shader: flat');
+          struct.pole.setAttribute('visible', 'false');
+          scene.appendChild(struct.pole);
+
+          struct.label = document.createElement('a-text');
+          struct.label.setAttribute('align', 'center');
+          struct.label.setAttribute('color', '#00FF00'); // Verde per le quote altezze
+          struct.label.setAttribute('look-at', '#camera');
+          struct.label.setAttribute('visible', 'false');
+          scene.appendChild(struct.label);
+
+          return struct;
+        };
+
+        this.pointA = Object.assign(this.pointA, createPointStructure('#FF1744')); // Rosso per A
+        this.pointB = Object.assign(this.pointB, createPointStructure('#2979FF')); // Blu per B
+        this.pointC = Object.assign(this.pointC, createPointStructure('#00E676')); // Verde per C
+
+        // Etichette distanze bracci antenna (Gialle)
+        this.labelSegA = document.createElement('a-text');
+        this.labelSegA.setAttribute('align', 'center');
+        this.labelSegA.setAttribute('color', 'yellow');
+        this.labelSegA.setAttribute('look-at', '#camera');
+        this.labelSegA.setAttribute('visible', 'false');
+        scene.appendChild(this.labelSegA);
+
+        this.labelSegB = document.createElement('a-text');
+        this.labelSegB.setAttribute('align', 'center');
+        this.labelSegB.setAttribute('color', 'yellow');
+        this.labelSegB.setAttribute('look-at', '#camera');
+        this.labelSegB.setAttribute('visible', 'false');
+        scene.appendChild(this.labelSegB);
+
+        // Tubo fisico dell'antenna (Arancione spesso)
+        this.antennaTube = document.createElement('a-cylinder');
+        this.antennaTube.setAttribute('radius', '0.02'); // Spessore 4cm totale per visibilità a distanza
+        this.antennaTube.setAttribute('material', 'color: #FF5722; shader: flat');
+        this.antennaTube.setAttribute('visible', 'false');
+        scene.appendChild(this.antennaTube);
+      },
+
       tick: function () {
+        // Gestione del cerchio bianco di puntamento sul pavimento reale (Passthrough)
         if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND')) {
           let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if (intersection) {
@@ -88,22 +155,26 @@
       },
 
       onTriggerDown: function () {
-        let intersectionMenu = this.raycasterEl.components.raycaster.getIntersection(this.menuUI);
-        if (this.menuUI.getAttribute('visible') && intersectionMenu) return;
+        // Se il menu è aperto e sto cliccando sui suoi bottoni, blocca il piazzamento sul terreno
+        if (this.menuUI.getAttribute('visible')) {
+          let intersectionMenu = this.raycasterEl.components.raycaster.getIntersection(this.menuUI);
+          if (intersectionMenu) return;
+        }
 
+        // --- MACCHINA A STATI PER IL POSIZIONAMENTO ---
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
           this.pointA.base = Object.assign({}, this.cursorRing.getAttribute('position'));
           this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
-          this.setupVerticalMode(this.pointA.base);
+          this.setupVerticalPreviewMode(this.pointA.base);
 
         } else if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
           this.pointA.top = { x: this.pointA.base.x, y: this.currentHeight, z: this.pointA.base.z };
-          this.resetVerticalMode();
+          this.resetVerticalPreviewMode();
           
           if(this.state === 'REPOSITION_HEIGHT_A') {
             this.state = 'IDLE';
-            this.updateDrawings();
-            this.menuUI.setAttribute('visible', true);
+            this.updateGeometriesAndDrawings();
+            this.menuUI.setAttribute('visible', true); // Mostra di nuovo il menu
           } else {
             this.state = 'PLACE_GROUND_B';
           }
@@ -111,48 +182,53 @@
         } else if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
           this.pointB.base = Object.assign({}, this.cursorRing.getAttribute('position'));
           this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B';
-          this.setupVerticalMode(this.pointB.base);
+          this.setupVerticalPreviewMode(this.pointB.base);
 
         } else if (this.state === 'PLACE_HEIGHT_B' || this.state === 'REPOSITION_HEIGHT_B') {
           this.pointB.top = { x: this.pointB.base.x, y: this.currentHeight, z: this.pointB.base.z };
-          this.resetVerticalMode();
+          this.resetVerticalPreviewMode();
           this.state = 'IDLE';
-          this.updateDrawings();
+          this.updateGeometriesAndDrawings();
           this.menuUI.setAttribute('visible', true);
         }
       },
 
+      // Gestione del Joystick destro per regolare l'altezza a passi di 10cm
       onThumbstickMoved: function (evt) {
         if (this.state.includes('HEIGHT')) {
           if (Math.abs(evt.detail.y) > 0.4) {
-            if (!this.lastThumbTime || Date.now() - this.lastThumbTime > 120) {
+            if (!this.lastThumbTime || Date.now() - this.lastThumbTime > 110) {
               let step = evt.detail.y < 0 ? 0.1 : -0.1; 
-              this.currentHeight = Math.max(0.1, this.currentHeight + step);
+              this.currentHeight = Math.max(0.1, this.currentHeight + step); // Blocca a minimo 10cm da terra
+              
               let basePos = this.state.includes('_A') ? this.pointA.base : this.pointB.base;
               
+              // Aggiorna cilindro giallo temporaneo e testo quota volante
               this.verticalCylinder.setAttribute('position', `${basePos.x} ${this.currentHeight / 2} ${basePos.z}`);
               this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${this.currentHeight}`);
-              
               this.heightText.setAttribute('position', `${basePos.x} ${this.currentHeight + 0.2} ${basePos.z}`);
               this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
+              
               this.lastThumbTime = Date.now();
             }
           }
         }
       },
 
-      setupVerticalMode: function (basePos) {
+      setupVerticalPreviewMode: function (basePos) {
         this.cursorRing.setAttribute('visible', 'false');
-        this.currentHeight = 2.0; 
+        this.currentHeight = 1.5; // Parte da un'altezza comoda ad altezza uomo
+        
         this.verticalCylinder.setAttribute('visible', 'true');
-        this.verticalCylinder.setAttribute('position', `${basePos.x} 1.0 ${basePos.z}`);
-        this.verticalCylinder.setAttribute('geometry', 'primitive: cylinder; radius: 0.01; height: 2.0');
+        this.verticalCylinder.setAttribute('position', `${basePos.x} 0.75 ${basePos.z}`);
+        this.verticalCylinder.setAttribute('geometry', 'primitive: cylinder; radius: 0.01; height: 1.5');
+        
         this.heightText.setAttribute('visible', 'true');
-        this.heightText.setAttribute('position', `${basePos.x} 2.2 ${basePos.z}`);
-        this.heightText.setAttribute('value', '2.0m');
+        this.heightText.setAttribute('position', `${basePos.x} 1.7 ${basePos.z}`);
+        this.heightText.setAttribute('value', '1.5m');
       },
 
-      resetVerticalMode: function () {
+      resetVerticalPreviewMode: function () {
         this.verticalCylinder.setAttribute('visible', 'false');
         this.heightText.setAttribute('visible', 'false');
       },
@@ -160,43 +236,31 @@
       getCalculatedLength: function() {
         let bandMeters = parseInt(this.bands[this.bandIdx]);
         let type = this.antennaTypes[this.antIdx];
-        if (type === 'Dipolo') return bandMeters / 2;     
-        if (type === 'End Fed') return bandMeters * 0.45; 
-        return bandMeters;                                
+        if (type === 'Dipolo') return bandMeters / 2;     // Mezza onda
+        if (type === 'End Fed') return bandMeters * 0.45; // Mezza onda accorciata
+        return bandMeters;                                // Longwire
       },
 
-      // Funzione di utilità per creare/aggiornare i pali fissi e le scritte a metà altezza
-      updatePoleAndLabel: function(pData, topPos, color, labelText) {
-        // 1. Crea/Sposta Sfera di cima
-        if (!pData.el) {
-          pData.el = document.createElement('a-entity');
-          pData.el.setAttribute('geometry', 'primitive: sphere; radius: 0.05');
-          pData.el.setAttribute('material', `color: ${color}; roughness: 0.3`);
-          this.el.sceneEl.appendChild(pData.el);
-        }
-        pData.el.setAttribute('position', topPos);
+      // Aggiorna la posizione dei pali fissi e sposta i testi esatti a META ALTEZZA
+      renderPoleAndLabel: function(struct, topPos, labelName) {
+        if (!topPos) return;
+        
+        // Attiva visibilità
+        struct.sphere.setAttribute('visible', 'true');
+        struct.pole.setAttribute('visible', 'true');
+        struct.label.setAttribute('visible', 'true');
 
-        // 2. Crea/Aggiorna Palo dal terreno (Cilindro permanente)
-        if (!pData.pole) {
-          pData.pole = document.createElement('a-entity');
-          pData.pole.setAttribute('geometry', 'primitive: cylinder; radius: 0.008');
-          pData.pole.setAttribute('material', 'color: #757575; opacity: 0.6');
-          this.el.sceneEl.appendChild(pData.pole);
-        }
-        pData.pole.setAttribute('position', `${topPos.x} ${topPos.y / 2} ${topPos.z}`);
-        pData.pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${topPos.y}`);
+        // Posiziona la sfera di aggancio in cima
+        struct.sphere.setAttribute('position', topPos);
 
-        // 3. Crea/Aggiorna Etichetta Quota a METÀ ALTEZZA
-        if (!pData.lbl) {
-          pData.lbl = document.createElement('a-text');
-          pData.lbl.setAttribute('align', 'center');
-          pData.lbl.setAttribute('color', '#00FF00');
-          pData.lbl.setAttribute('look-at', '#camera');
-          this.el.sceneEl.appendChild(pData.lbl);
-        }
-        pData.lbl.setAttribute('position', `${topPos.x} ${topPos.y / 2} ${topPos.z + 0.15}`); // leggermente scostato in avanti per leggerlo bene
-        pData.lbl.setAttribute('scale', `${this.textSize} ${this.textSize} ${this.textSize}`);
-        pData.lbl.setAttribute('value', `${labelText}\nH: ${topPos.y.toFixed(1)}m`);
+        // Disegna il palo fisso da terra (y=0) fino alla quota del punto
+        struct.pole.setAttribute('position', `${topPos.x} ${topPos.y / 2} ${topPos.z}`);
+        struct.pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${topPos.y}`);
+
+        // Sposta il testo esattamente a META ALTEZZA del palo
+        struct.label.setAttribute('position', `${topPos.x} ${topPos.y / 2} ${topPos.z}`);
+        struct.label.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
+        struct.label.setAttribute('value', `${labelName}\nH: ${topPos.y.toFixed(1)}m`);
       },
 
       updateMenuText: function() {
@@ -208,45 +272,172 @@
         document.querySelector('#info-text').setAttribute('value', `ANTENNA: ${type} | BANDA: ${band}\nLUNGHEZZA CALCOLATA: ${len.toFixed(1)}m`);
       },
 
-      updateDrawings: function() {
+      // Ricalcola l'intera geometria 3D nello spazio
+      updateGeometriesAndDrawings: function() {
         if (!this.pointA.top || !this.pointB.top) return;
 
-        // Disegna Pali e Quote Mediane per A e B
-        this.updatePoleAndLabel(this.pointA, this.pointA.top, '#FF1744', 'PUNTO A');
-        this.updatePoleAndLabel(this.pointB, this.pointB.top, '#2979FF', 'PUNTO B');
+        // Disegna o aggiorna i pali fissi di A e B con le loro altezze a metà asse
+        this.renderPoleAndLabel(this.pointA, this.pointA.top, 'PUNTO A');
+        this.renderPoleAndLabel(this.pointB, this.pointB.top, 'PUNTO B');
 
-        // Linea di supporto bianca elastica AB
-        if (this.mainLineEl) this.mainLineEl.remove();
-        this.mainLineEl = document.createElement('a-entity');
-        this.mainLineEl.setAttribute('line', `start: ${this.pointA.top.x} ${this.pointA.top.y} ${this.pointA.top.z}; end: ${this.pointB.top.x} ${this.pointB.top.y} ${this.pointB.top.z}; color: #FFFFFF; opacity: 0.3`);
-        this.el.sceneEl.appendChild(this.mainLineEl);
-
-        // Vettori Matematici Three.js
+        // Vettori matematici nativi Three.js
         let vecA = new THREE.Vector3(this.pointA.top.x, this.pointA.top.y, this.pointA.top.z);
         let vecB = new THREE.Vector3(this.pointB.top.x, this.pointB.top.y, this.pointB.top.z);
         
-        // Calcolo e disegno Punto C (Alimentazione) con il suo palo dedicato a terra e altezza relativa a metà
+        // 1. Calcolo del Punto C (Alimentazione) scorrevole lungo la linea AB
         let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
         this.pointC.top = vecC;
-        this.updatePoleAndLabel(this.pointC, this.pointC.top, '#00E676', 'CENTRO C');
-
-        // Disegna l'Antenna Fisica (Cilindro Arancione)
-        if (this.antennaLineEl) this.antennaLineEl.remove();
-        let antLen = this.getCalculatedLength();
-        this.antennaLineEl = document.createElement('a-entity');
-        this.antennaLineEl.setAttribute('geometry', `primitive: cylinder; radius: 0.02; height: ${antLen}`);
-        this.antennaLineEl.setAttribute('material', 'color: #FF5722; shader: flat');
-        this.antennaLineEl.object3D.position.copy(vecC);
-        this.antennaLineEl.object3D.lookAt(vecB);
-        this.antennaLineEl.object3D.rotateX(Math.PI / 2);
-        this.el.sceneEl.appendChild(this.antennaLineEl);
-
-        // --- CALCOLO DISTANZE ESTREMI ANTENNA AI PUNTI A e B ---
-        let dir = new THREE.Vector3().subVectors(vecB, vecA).normalize();
-        let halfLen = antLen / 2;
         
-        // Calcolo punti esatti nello spazio 3D dove finisce fisicamente l'antenna arancione
-        let antStart = new THREE.Vector3().copy(vecC).addScaledVector(dir, -halfLen);
-        let antEnd = new THREE.Vector3().copy(vecC).addScaledVector(dir, halfLen);
+        // Disegna il palo verticale passante per il Punto C con la relativa altezza a metà
+        this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
 
-        // Tratto Vuoto
+        // 2. Calcolo e disegno del cilindro dell'Antenna Fisica
+        let antLen = this.getCalculatedLength();
+        this.antennaTube.setAttribute('visible', 'true');
+        this.antennaTube.setAttribute('geometry', `primitive: cylinder; radius: 0.02; height: ${antLen}`);
+        
+        // Posizionamento e rotazione corretta del cilindro lungo il vettore AB centrato su C
+        this.antennaTube.object3D.position.copy(vecC);
+        this.antennaTube.object3D.lookAt(vecB);
+        this.antennaTube.object3D.rotateX(Math.PI / 2); // Rotazione di offset obbligatoria per cilindri A-Frame
+
+        // 3. CALCOLO QUOTE DEI TRATTI ESTREMI (Da fine bracci antenna a Pali A e B)
+        let dirAB = new THREE.Vector3().subVectors(vecB, vecA).normalize();
+        let halfAntLen = antLen / 2;
+        
+        // Coordinate spaziali di dove finiscono i bracci dell'antenna
+        let extAntStart = new THREE.Vector3().copy(vecC).addScaledVector(dirAB, -halfAntLen);
+        let extAntEnd = new THREE.Vector3().copy(vecC).addScaledVector(dirAB, halfAntLen);
+
+        // Tratto vuoto sinistro: da Punto A a inizio antenna
+        let distA_to_Ant = vecA.distanceTo(extAntStart);
+        let midPointSegA = new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5);
+        
+        this.labelSegA.setAttribute('visible', 'true');
+        this.labelSegA.setAttribute('position', midPointSegA);
+        this.labelSegA.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
+        this.labelSegA.setAttribute('value', `Distanza A-Ant:\n${distA_to_Ant.toFixed(1)}m`);
+
+        // Tratto vuoto destro: da fine antenna a Punto B
+        let distB_to_Ant = vecB.distanceTo(extAntEnd);
+        let midPointSegB = new THREE.Vector3().lerpVectors(extAntEnd, vecB, 0.5);
+
+        this.labelSegB.setAttribute('visible', 'true');
+        this.labelSegB.setAttribute('position', midPointSegB);
+        this.labelSegB.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
+        this.labelSegB.setAttribute('value', `Distanza Ant-B:\n${distB_to_Ant.toFixed(1)}m`);
+      },
+
+      setupMenuInteractions: function() {
+        // Evento tasto Tipo Antenna
+        document.querySelector('#btn-ant').addEventListener('click', () => {
+          this.antIdx = (this.antIdx + 1) % this.antennaTypes.length;
+          this.updateMenuText();
+          this.updateGeometriesAndDrawings();
+        });
+
+        // Evento tasto Cambio Banda
+        document.querySelector('#btn-band').addEventListener('click', () => {
+          this.bandIdx = (this.bandIdx + 1) % this.bands.length;
+          this.updateMenuText();
+          this.updateGeometriesAndDrawings();
+        });
+
+        // Frecce Spostamento Punto C verso il Punto A
+        document.querySelector('#btn-c-left').addEventListener('click', () => {
+          this.pointC.percent = Math.max(0.01, this.pointC.percent - 0.05);
+          this.updateGeometriesAndDrawings();
+        });
+
+        // Frecce Spostamento Punto C verso il Punto B
+        document.querySelector('#btn-c-right').addEventListener('click', () => {
+          this.pointC.percent = Math.min(0.99, this.pointC.percent + 0.05);
+          this.updateGeometriesAndDrawings();
+        });
+
+        // --- GESTIONE DELLA DIMENSIONE DELLE QUOTE (Richiesta sistemata) ---
+        document.querySelector('#btn-txt-minus').addEventListener('click', () => {
+          this.globalTextScale = Math.max(0.15, this.globalTextScale - 0.05); // Minimo leggibile
+          this.updateGeometriesAndDrawings();
+        });
+        document.querySelector('#btn-txt-plus').addEventListener('click', () => {
+          this.globalTextScale = Math.min(1.2, this.globalTextScale + 0.05); // Massimo gigante
+          this.updateGeometriesAndDrawings();
+        });
+
+        // Tasti di riposizionamento dei punti sul terreno
+        document.querySelector('#btn-repo-a').addEventListener('click', () => {
+          this.state = 'REPOSITION_GROUND_A';
+          this.menuUI.setAttribute('visible', false); // Chiude temporaneamente per non coprire il pavimento
+        });
+
+        document.querySelector('#btn-repo-b').addEventListener('click', () => {
+          this.state = 'REPOSITION_GROUND_B';
+          this.menuUI.setAttribute('visible', false);
+        });
+      }
+    });
+  </script>
+</head>
+<body>
+  
+  <a-scene ar-antenna-system webxr="optionalFeatures: passthrough; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
+    
+    <a-entity id="cameraRig">
+      <a-camera id="camera" position="0 1.6 0"></a-camera>
+      <a-entity id="left-controller" laser-controls="hand: left" windows-motion-controls="hand: left"></a-entity>
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 40;"></a-entity>
+    </a-entity>
+
+    <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="100" height="100" material="opacity: 0.0; transparent: true"></a-plane>
+
+    <a-ring id="cursor-ring" color="#FFFFFF" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" visible="false"></a-ring>
+    <a-entity id="vertical-cylinder" geometry="primitive: cylinder" material="color: #FFEB3B; shader: flat" visible="false"></a-entity>
+    <a-text id="height-text" value="" align="center" color="#00FF00" scale="0.5 0.5 0.5" visible="false" look-at="#camera"></a-text>
+
+    <a-entity id="menu-ui" visible="false" position="0 1.3 -0.5">
+      <a-plane width="0.5" height="0.55" color="#1A1A1A" material="opacity: 0.95; shader: flat"></a-plane>
+      
+      <a-text value="CONFIGURATORE ANTENNE V3" position="0 0.24 0.01" align="center" scale="0.28 0.28 0.28" color="#FFEB3B"></a-text>
+      <a-plane width="0.44" height="0.07" color="#2A2A2A" position="0 0.16 0.01">
+        <a-text id="info-text" value="Seleziona i punti A e B nell'ambiente..." position="-0.20 0 0.01" scale="0.22 0.22 0.22" color="#00E676"></a-text>
+      </a-plane>
+
+      <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.05" color="#37474F" position="-0.11 0.07 0.01">
+        <a-text value="TIPO ANTENNA:" align="center" scale="0.15 0.15 0.15" position="0 0.012 0.005" color="#B0BEC5"></a-text>
+        <a-text id="txt-ant-val" value="-" align="center" scale="0.22 0.22 0.22" position="0 -0.012 0.005" color="#FFFFFF"></a-text>
+      </a-plane>
+
+      <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.05" color="#1A237E" position="0.11 0.07 0.01">
+        <a-text value="BANDA RADIO:" align="center" scale="0.15 0.15 0.15" position="0 0.012 0.005" color="#9FA8DA"></a-text>
+        <a-text id="txt-band-val" value="-" align="center" scale="0.25 0.25 0.25" position="0 -0.012 0.005" color="#FFFFFF"></a-text>
+      </a-plane>
+
+      <a-text value="SPOSTA FILO ALIMENTAZIONE (PUNTO C)" position="0 0.01 0.01" align="center" scale="0.18 0.18 0.18" color="#B0BEC5"></a-text>
+      <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.16" height="0.04" color="#004D40" position="-0.09 -0.04 0.01">
+        <a-text value="<- Verso PUNTO A" align="center" scale="0.18 0.18 0.18" position="0 0 0.005" color="#FFFFFF"></a-text>
+      </a-plane>
+      <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.04" color="#004D40" position="0.09 -0.04 0.01">
+        <a-text value="Verso PUNTO B ->" align="center" scale="0.18 0.18 0.18" position="0 0 0.005" color="#FFFFFF"></a-text>
+      </a-plane>
+
+      <a-text value="DIMENSIONE QUOTE E TESTI 3D" position="0 -0.1 0.01" align="center" scale="0.18 0.18 0.18" color="#B0BEC5"></a-text>
+      <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.13" height="0.035" color="#424242" position="-0.08 -0.14 0.01">
+        <a-text value="DIM. TESTO [-]" align="center" scale="0.18 0.18 0.18" position="0 0 0.005" color="#FFFFFF"></a-text>
+      </a-plane>
+      <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.13" height="0.035" color="#424242" position="0.08 -0.14 0.01">
+        <a-text value="DIM. TESTO [+]" align="center" scale="0.18 0.18 0.18" position="0 0 0.005" color="#FFFFFF"></a-text>
+      </a-plane>
+
+      <a-text value="RIPOSIZIONAMENTO" position="0 -0.19 0.01" align="center" scale="0.18 0.18 0.18" color="#FF1744"></a-text>
+      <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.19" height="0.04" color="#C62828" position="-0.11 -0.24 0.01">
+        <a-text value="Riposiziona PUNTO A" align="center" scale="0.17 0.17 0.17" position="0 0 0.005" color="#FFFFFF"></a-text>
+      </a-plane>
+      <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.19" height="0.04" color="#1565C0" position="0.11 -0.24 0.01">
+        <a-text value="Riposiziona PUNTO B" align="center" scale="0.17 0.17 0.17" position="0 0 0.005" color="#FFFFFF"></a-text>
+      </a-plane>
+    </a-entity>
+
+  </a-scene>
+</body>
+</html>
