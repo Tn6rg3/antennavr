@@ -2,10 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V5 - Solo Joystick Ripristinato</title>
+  <title>Antenne AR - Fix Menu e Controller</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script>
-    // Forza tutte le scritte di quota 3D a inseguire lo sguardo del visore
+    // Forza i testi delle quote a guardare sempre l'utente
     AFRAME.registerComponent('look-at-camera', {
       tick: function () {
         let cameraEl = document.querySelector('#camera');
@@ -15,70 +15,12 @@
       }
     });
 
-    // Gestione feedback di colore e schiacciamento dei bottoni
-    AFRAME.registerComponent('btn-interaction', {
-      init: function () {
-        let el = this.el;
-        let originalColor = el.getAttribute('material').color;
-        el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
-        el.addEventListener('mouseleave', () => {
-          el.setAttribute('material', 'opacity', 1.0);
-          el.setAttribute('scale', '1 1 1');
-          el.setAttribute('material', 'color', originalColor);
-        });
-        el.addEventListener('mousedown', () => {
-          el.setAttribute('scale', '0.95 0.95 0.8');
-          el.setAttribute('material', 'color', '#00FFCC');
-        });
-        el.addEventListener('mouseup', () => {
-          el.setAttribute('scale', '1 1 1');
-          el.setAttribute('material', 'color', originalColor);
-        });
-      }
-    });
-
-    // BUG-FIX: Gestione nativa e solida del "Tieni Premuto" per i tasti del menu
-    AFRAME.registerComponent('hold-clickable', {
-      schema: {
-        action: {type: 'string', default: ''}
-      },
-      init: function () {
-        let el = this.el;
-        this.timeoutId = null;
-        this.intervalId = null;
-
-        let startLoop = () => {
-          // Invia il primo scatto immediato alla pressione
-          let system = document.querySelector('a-scene').components['ar-antenna-system'];
-          if (system && this.data.action) {
-            system.executeHoldAction(this.data.action);
-            
-            // Se l'utente tiene premuto il grilletto, avvia la ripetizione veloce dopo 250ms
-            this.timeoutId = setTimeout(() => {
-              this.intervalId = setInterval(() => {
-                system.executeHoldAction(this.data.action);
-              }, 50); // Velocità di incremento (50ms)
-            }, 250);
-          }
-        };
-
-        let stopLoop = () => {
-          clearTimeout(this.timeoutId);
-          clearInterval(this.intervalId);
-        };
-
-        el.addEventListener('mousedown', startLoop);
-        el.addEventListener('mouseup', stopLoop);
-        el.addEventListener('mouseleave', stopLoop);
-      }
-    });
-
-    // Architettura di sistema principale
+    // Gestione sistema principale
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         this.state = 'PLACE_GROUND_A'; 
         
-        // Nodi geometrici permanenti
+        // Strutture nodi 3D
         this.pointA = { base: null, top: null, sphere: null, pole: null, label: null };
         this.pointB = { base: null, top: null, sphere: null, pole: null, label: null };
         this.pointC = { top: null, sphere: null, pole: null, label: null, percent: 0.5 }; 
@@ -89,15 +31,15 @@
         this.antennaTypes = ['Dipolo', 'End Fed', 'Longwire', 'Verticale'];
         this.bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
         this.antIdx = 0;
-        this.bandIdx = 2; // Default 40 metri
+        this.bandIdx = 2; // Default 40m
         
-        // Misure bracci personalizzabili
+        // Misure bracci
         this.endFed_AC_Len = 10.0;
         this.endFed_CB_Len = 10.0;
         this.longwireLen = 20.0;
         this.longwireVertex = 'A'; 
         
-        // Configurazione Antenna Verticale
+        // Antenna Verticale
         this.numRadials = 4;
         this.radialLen = 5.0; 
         this.radialPool = []; 
@@ -115,11 +57,11 @@
         this.antennaTube1 = null;
         this.antennaTube2 = null;
 
-        // Associazione eventi Joystick Fisici
+        // Associazione eventi controller destro (Piazzamento e Altezza)
         this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this));
         this.raycasterEl.addEventListener('thumbstickmoved', this.onThumbstickMoved.bind(this));
 
-        // Tasto Y sul controller sinistro apre/chiude il menu a mezz'aria
+        // Tasto Y (Controller sinistro) mostra/nasconde menu
         document.querySelector('#left-controller').addEventListener('ybuttondown', () => {
           let isVisible = this.menuUI.getAttribute('visible');
           this.menuUI.setAttribute('visible', !isVisible);
@@ -134,6 +76,7 @@
         this.initPersistentElements();
         this.resetAntennaLengths();
         this.updateMenuText();
+        this.setupMenuInteractions();
       },
 
       initPersistentElements: function() {
@@ -209,7 +152,6 @@
       },
 
       tick: function () {
-        // Tracciamento cerchio di puntamento a terra tramite raggio del controller destro
         if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND')) {
           let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if (intersection) {
@@ -222,10 +164,9 @@
       },
 
       onTriggerDown: function () {
-        // Se sto cliccando sulla faccia del menu, blocca il posizionamento dei pali
         if (this.menuUI.getAttribute('visible')) {
           let intersectionMenu = this.raycasterEl.components.raycaster.getIntersection(this.menuUI);
-          if (intersectionMenu) return;
+          if (intersectionMenu) return; // Se clicco sul menu, ignora il terreno
         }
 
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
@@ -241,7 +182,6 @@
             this.updateGeometriesAndDrawings();
             this.menuUI.setAttribute('visible', true);
           } else {
-            // Se l'antenna scelta è la Verticale, non necessita del punto B. Salta a IDLE.
             if (this.antennaTypes[this.antIdx] === 'Verticale') {
               this.state = 'IDLE';
               this.updateGeometriesAndDrawings();
@@ -328,21 +268,6 @@
         struct.label.setAttribute('visible', 'false');
       },
 
-      // Esecuzione centralizzata dei comandi a scorrimento continuo (Hold)
-      executeHoldAction: function(action) {
-        if (action === 'AC_MINUS') this.endFed_AC_Len = Math.max(0.05, this.endFed_AC_Len - 0.01);
-        if (action === 'AC_PLUS')  this.endFed_AC_Len = this.endFed_AC_Len + 0.01;
-        if (action === 'CB_MINUS') this.endFed_CB_Len = Math.max(0.05, this.endFed_CB_Len - 0.01);
-        if (action === 'CB_PLUS')  this.endFed_CB_Len = this.endFed_CB_Len + 0.01;
-        if (action === 'LW_MINUS') this.longwireLen = Math.max(0.1, this.longwireLen - 0.01);
-        if (action === 'LW_PLUS')  this.longwireLen = this.longwireLen + 0.01;
-        if (action === 'RAD_LEN_MINUS') this.radialLen = Math.max(0.1, this.radialLen - 0.1); // Passo 10cm
-        if (action === 'RAD_LEN_PLUS')  this.radialLen = this.radialLen + 0.1;
-
-        this.updateMenuText();
-        this.updateGeometriesAndDrawings();
-      },
-
       updateMenuText: function() {
         let type = this.antennaTypes[this.antIdx];
         let band = this.bands[this.bandIdx];
@@ -358,16 +283,16 @@
 
         let infoTextStr = "";
         if (type === 'Dipolo') {
-          infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA FISICA CORPO: ${this.getCalculatedLength().toFixed(2)}m`;
+          infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA CORPO: ${this.getCalculatedLength().toFixed(2)}m`;
         } else if (type === 'End Fed') {
           infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nBRACCIO AC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`;
           document.querySelector('#txt-ef-values').setAttribute('value', `AC: ${this.endFed_AC_Len.toFixed(2)}m  |  CB: ${this.endFed_CB_Len.toFixed(2)}m`);
         } else if (type === 'Longwire') {
-          infoTextStr = `ANTENNA: LONGWIRE | BANDA: ${band}\nORIGINE VERTICE: PUNTO ${this.longwireVertex} | LUNGHEZZA: ${this.longwireLen.toFixed(2)}m`;
+          infoTextStr = `ANTENNA: LONGWIRE | BANDA: ${band}\nVERTICE: PUNTO ${this.longwireVertex} | LUNGH: ${this.longwireLen.toFixed(2)}m`;
           document.querySelector('#txt-lw-vertex-val').setAttribute('value', `VERTICE: DA ${this.longwireVertex}`);
           document.querySelector('#txt-lw-len-val').setAttribute('value', `LUNGH: ${this.longwireLen.toFixed(2)}m`);
         } else if (type === 'Verticale') {
-          infoTextStr = `ANTENNA: VERTICALE ¼λ | BANDA: ${band}\nSTILO CORPO: ${this.pointA.top ? this.pointA.top.y.toFixed(2) : 0}m | RADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`;
+          infoTextStr = `ANTENNA: VERTICALE | BANDA: ${band}\nSTILO: ${this.pointA.top ? this.pointA.top.y.toFixed(2) : 0}m | RADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`;
           document.querySelector('#txt-rad-num-val').setAttribute('value', `RADIALI: ${this.numRadials}`);
           document.querySelector('#txt-rad-len-val').setAttribute('value', `LUNGH R: ${this.radialLen.toFixed(1)}m`);
         }
@@ -412,7 +337,7 @@
           return;
         }
 
-        // --- CALCOLO STRUTTURE PER ANTENNE FILARI ---
+        // --- FILARI ---
         for(let i=0; i<this.maxRadials; i++) this.radialPool[i].setAttribute('visible', 'false');
         if (!this.pointB.top) return;
 
@@ -424,12 +349,14 @@
         let dirAB = new THREE.Vector3().subVectors(vecB, vecA).normalize();
         let dirBA = new THREE.Vector3().subVectors(vecA, vecB).normalize();
 
-        if (type === 'Dipolo') {
-          this.antennaTube2.setAttribute('visible', 'false');
+        if (type === 'Dipolo' || type === 'End Fed') {
           let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
           this.pointC.top = vecC;
           this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
+        }
 
+        if (type === 'Dipolo') {
+          this.antennaTube2.setAttribute('visible', 'false');
           let antLen = this.getCalculatedLength();
           this.antennaTube1.setAttribute('visible', 'true');
           this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${antLen}`);
@@ -443,18 +370,14 @@
           this.labelSegA.setAttribute('visible', 'true');
           this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5));
           this.labelSegA.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
-          this.labelSegA.setAttribute('value', `Distanza A-Ant:\n${vecA.distanceTo(extAntStart).toFixed(2)}m`);
+          this.labelSegA.setAttribute('value', `A-Ant:\n${vecA.distanceTo(extAntStart).toFixed(2)}m`);
 
           this.labelSegB.setAttribute('visible', 'true');
           this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extAntEnd, vecB, 0.5));
           this.labelSegB.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
-          this.labelSegB.setAttribute('value', `Distanza Ant-B:\n${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
+          this.labelSegB.setAttribute('value', `Ant-B:\n${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
 
         } else if (type === 'End Fed') {
-          let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
-          this.pointC.top = vecC;
-          this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
-
           this.antennaTube1.setAttribute('visible', 'true');
           this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.endFed_AC_Len}`);
           let posTube1 = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len / 2);
@@ -499,15 +422,15 @@
 
           let extLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen);
           this.labelSegA.setAttribute('visible', 'false');
-          this.labelSegB.setAttribute('visible', 'true');
+          this.labelSegB.setAttribute('true');
           this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5));
           this.labelSegB.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
-          this.labelSegB.setAttribute('value', `Restante a palo:\n${extLW.distanceTo(targetVec).toFixed(2)}m`);
+          this.labelSegB.setAttribute('value', `Restante:\n${extLW.distanceTo(targetVec).toFixed(2)}m`);
         }
       },
 
       setupMenuInteractions: function() {
-        // Tasti Principali di Selezione
+        // Selettori Principali Nativi
         document.querySelector('#btn-ant').addEventListener('click', () => {
           this.antIdx = (this.antIdx + 1) % this.antennaTypes.length;
           this.resetAntennaLengths();
@@ -522,7 +445,7 @@
           this.updateGeometriesAndDrawings();
         });
 
-        // Dipolo Centro
+        // Controlli Centro C (Dipolo)
         document.querySelector('#btn-c-left').addEventListener('click', () => {
           this.pointC.percent = Math.max(0.02, this.pointC.percent - 0.05);
           this.updateGeometriesAndDrawings();
@@ -532,14 +455,29 @@
           this.updateGeometriesAndDrawings();
         });
 
-        // Longwire Inversione
+        // Controlli End Fed (Scatti Singoli ma stabili con tasti grandi e piccoli)
+        document.querySelector('#btn-ac-m1').addEventListener('click', () => { this.endFed_AC_Len = Math.max(0.1, this.endFed_AC_Len - 1.0); this.refreshEF(); });
+        document.querySelector('#btn-ac-p1').addEventListener('click', () => { this.endFed_AC_Len += 1.0; this.refreshEF(); });
+        document.querySelector('#btn-ac-m01').addEventListener('click', () => { this.endFed_AC_Len = Math.max(0.01, this.endFed_AC_Len - 0.01); this.refreshEF(); });
+        document.querySelector('#btn-ac-p01').addEventListener('click', () => { this.endFed_AC_Len += 0.01; this.refreshEF(); });
+
+        document.querySelector('#btn-cb-m1').addEventListener('click', () => { this.endFed_CB_Len = Math.max(0.1, this.endFed_CB_Len - 1.0); this.refreshEF(); });
+        document.querySelector('#btn-cb-p1').addEventListener('click', () => { this.endFed_CB_Len += 1.0; this.refreshEF(); });
+        document.querySelector('#btn-cb-m01').addEventListener('click', () => { this.endFed_CB_Len = Math.max(0.01, this.endFed_CB_Len - 0.01); this.refreshEF(); });
+        document.querySelector('#btn-cb-p01').addEventListener('click', () => { this.endFed_CB_Len += 0.01; this.refreshEF(); });
+
+        // Controlli Longwire
         document.querySelector('#btn-lw-vertex').addEventListener('click', () => {
           this.longwireVertex = this.longwireVertex === 'A' ? 'B' : 'A';
           this.updateMenuText();
           this.updateGeometriesAndDrawings();
         });
+        document.querySelector('#btn-lw-m1').addEventListener('click', () => { this.longwireLen = Math.max(0.1, this.longwireLen - 1.0); this.refreshLW(); });
+        document.querySelector('#btn-lw-p1').addEventListener('click', () => { this.longwireLen += 1.0; this.refreshLW(); });
+        document.querySelector('#btn-lw-m01').addEventListener('click', () => { this.longwireLen = Math.max(0.01, this.longwireLen - 0.01); this.refreshLW(); });
+        document.querySelector('#btn-lw-p01').addEventListener('click', () => { this.longwireLen += 0.01; this.refreshLW(); });
 
-        // Verticale Scatto Singolo Numero Radiali
+        // Controlli Verticale
         document.querySelector('#btn-rad-num-minus').addEventListener('click', () => {
           this.numRadials = Math.max(1, this.numRadials - 1);
           this.updateMenuText();
@@ -550,8 +488,18 @@
           this.updateMenuText();
           this.updateGeometriesAndDrawings();
         });
+        document.querySelector('#btn-rad-len-minus').addEventListener('click', () => {
+          this.radialLen = Math.max(0.1, this.radialLen - 0.1); // Passo 10cm richiesto
+          this.updateMenuText();
+          this.updateGeometriesAndDrawings();
+        });
+        document.querySelector('#btn-rad-len-plus').addEventListener('click', () => {
+          this.radialLen += 0.1;
+          this.updateMenuText();
+          this.updateGeometriesAndDrawings();
+        });
 
-        // Controlli Generici Scala Testi 3D
+        // Tasti Scala Quote Esterne
         document.querySelector('#btn-txt-minus').addEventListener('click', () => {
           this.globalTextScale = Math.max(0.15, this.globalTextScale - 0.05);
           this.updateGeometriesAndDrawings();
@@ -561,7 +509,7 @@
           this.updateGeometriesAndDrawings();
         });
 
-        // Riposizionamenti
+        // Riposizionamento
         document.querySelector('#btn-repo-a').addEventListener('click', () => {
           this.state = 'REPOSITION_GROUND_A';
           this.menuUI.setAttribute('visible', false);
@@ -570,7 +518,10 @@
           this.state = 'REPOSITION_GROUND_B';
           this.menuUI.setAttribute('visible', false);
         });
-      }
+      },
+
+      refreshEF: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); },
+      refreshLW: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); }
     });
   </script>
 </head>
@@ -581,7 +532,7 @@
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
       <a-entity id="left-controller" laser-controls="hand: left" windows-motion-controls="hand: left"></a-entity>
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 40;"></a-entity>
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 40; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;"></a-entity>
     </a-entity>
 
     <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="100" height="100" material="opacity: 0.0; transparent: true"></a-plane>
@@ -595,17 +546,17 @@
       
       <a-text value="CONFIGURATORE ANTENNE V5" position="0 0.24 0.01" align="center" scale="0.13 0.13 0.13" color="#FFEB3B"></a-text>
       <a-plane width="0.44" height="0.06" color="#2A2A2A" position="0 0.17 0.01">
-        <a-text id="info-text" value="Seleziona i pali a terra tramite trigger destro." position="-0.21 0 0.01" scale="0.085 0.085 0.085" color="#00E676"></a-text>
+        <a-text id="info-text" value="Usa il trigger destro per piazzare i punti." position="-0.21 0 0.01" scale="0.082 0.082 0.082" color="#00E676"></a-text>
       </a-plane>
 
       <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.09 0.01">
         <a-text value="TIPO ANTENNA:" align="center" scale="0.07 0.07 0.07" position="0 0.008 0.005" color="#B0BEC5"></a-text>
-        <a-text id="txt-ant-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
+        <a-text id="txt-ant-val" value="-" align="center" scale="0.09 0.09 0.09" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
       </a-plane>
 
       <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.09 0.01">
         <a-text value="BANDA RADIO:" align="center" scale="0.07 0.07 0.07" position="0 0.008 0.005" color="#9FA8DA"></a-text>
-        <a-text id="txt-band-val" value="-" align="center" scale="0.11 0.11 0.11" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
+        <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
       </a-plane>
 
       <a-entity id="sub-dipolo" position="0 0.01 0" visible="false">
@@ -619,52 +570,48 @@
       </a-entity>
 
       <a-entity id="sub-endfed" position="0 0.01 0" visible="false">
-        <a-text value="LUNGHEZZA BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
+        <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
         
-        <a-plane id="btn-ac-minus" class="clickable" btn-interaction hold-clickable="action: AC_MINUS" width="0.06" height="0.03" color="#3e2723" position="-0.16 -0.01 0.01">
-          <a-text value="AC -" align="center" scale="0.08 0.08 0.08" position="0 0 0.005"></a-text>
-        </a-plane>
-        <a-plane id="btn-ac-plus" class="clickable" btn-interaction hold-clickable="action: AC_PLUS" width="0.06" height="0.03" color="#3e2723" position="-0.09 -0.01 0.01">
-          <a-text value="AC +" align="center" scale="0.08 0.08 0.08" position="0 0 0.005"></a-text>
-        </a-plane>
-        
-        <a-plane id="btn-cb-minus" class="clickable" btn-interaction hold-clickable="action: CB_MINUS" width="0.06" height="0.03" color="#1565c0" position="0.09 -0.01 0.01">
-          <a-text value="CB -" align="center" scale="0.08 0.08 0.08" position="0 0 0.005"></a-text>
-        </a-plane>
-        <a-plane id="btn-cb-plus" class="clickable" btn-interaction hold-clickable="action: CB_PLUS" width="0.06" height="0.03" color="#1565c0" position="0.16 -0.01 0.01">
-          <a-text value="CB +" align="center" scale="0.08 0.08 0.08" position="0 0 0.005"></a-text>
-        </a-plane>
-        <a-text id="txt-ef-values" value="AC: 0.00m | CB: 0.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
+        <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#3e2723" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+        <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#5d4037" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
+        <a-plane id="btn-ac-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#5d4037" position="-0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
+        <a-plane id="btn-ac-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#3e2723" position="-0.06 -0.01 0.01"><a-text value="+1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+
+        <a-plane id="btn-cb-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#0d47a1" position="0.06 -0.01 0.01"><a-text value="-1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+        <a-plane id="btn-cb-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#1565c0" position="0.11 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
+        <a-plane id="btn-cb-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#1565c0" position="0.16 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
+        <a-plane id="btn-cb-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#0d47a1" position="0.21 -0.01 0.01"><a-text value="+1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+
+        <a-text id="txt-ef-values" value="AC: 10.00m | CB: 10.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
       </a-entity>
 
       <a-entity id="sub-longwire" position="0 0.01 0" visible="false">
         <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
-        <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.16" height="0.03" color="#006064" position="-0.11 -0.01 0.01">
-          <a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.07 0.07 0.07" position="0 0 0.005"></a-text>
+        <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#006064" position="-0.14 -0.01 0.01">
+          <a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.06 0.06 0.06" position="0 0 0.005"></a-text>
         </a-plane>
-        <a-plane id="btn-lw-minus" class="clickable" btn-interaction hold-clickable="action: LW_MINUS" width="0.06" height="0.03" color="#424242" position="0.06 -0.01 0.01">
-          <a-text value="L. -" align="center" scale="0.08 0.08 0.08" position="0 0 0.005"></a-text>
-        </a-plane>
-        <a-plane id="btn-lw-plus" class="clickable" btn-interaction hold-clickable="action: LW_PLUS" width="0.06" height="0.03" color="#424242" position="0.14 -0.01 0.01">
-          <a-text value="L. +" align="center" scale="0.08 0.08 0.08" position="0 0 0.005"></a-text>
-        </a-plane>
-        <a-text id="txt-lw-len-val" value="LUNGH: 0.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
+        
+        <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#212121" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+        <a-plane id="btn-lw-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#424242" position="0.06 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
+        <a-plane id="btn-lw-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#424242" position="0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
+        <a-plane id="btn-lw-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#212121" position="0.16 -0.01 0.01"><a-text value="+1m" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+
+        <a-text id="txt-lw-len-val" value="LUNGH: 20.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
       </a-entity>
 
       <a-entity id="sub-verticale" position="0 0.01 0" visible="false">
-        <a-text value="SISTEMA DI RADIALI TERRESTRI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
-        <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.03" color="#3e2723" position="-0.16 -0.01 0.01">
-          <a-text value="N -" align="center" scale="0.08 0.08 0.08" position="0 0 0.005"></a-text>
+        <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
+        <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#3e2723" position="-0.16 -0.01 0.01">
+          <a-text value="N -" align="center" scale="0.07 0.07 0.07"></a-text>
         </a-plane>
-        <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.03" color="#3e2723" position="-0.10 -0.01 0.01">
-          <a-text value="N +" align="center" scale="0.08 0.08 0.08" position="0 0 0.005"></a-text>
+        <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#3e2723" position="-0.10 -0.01 0.01">
+          <a-text value="N +" align="center" scale="0.07 0.07 0.07"></a-text>
         </a-plane>
-        
-        <a-plane id="btn-rad-len-minus" class="clickable" btn-interaction hold-clickable="action: RAD_LEN_MINUS" width="0.06" height="0.03" color="#4e342e" position="0.09 -0.01 0.01">
-          <a-text value="LENG -" align="center" scale="0.07 0.07 0.07" position="0 0 0.005"></a-text>
+        <a-plane id="btn-rad-len-minus" class="clickable" btn-interaction width="0.06" height="0.025" color="#4e342e" position="0.09 -0.01 0.01">
+          <a-text value="LENG -" align="center" scale="0.07 0.07 0.07"></a-text>
         </a-plane>
-        <a-plane id="btn-rad-len-plus" class="clickable" btn-interaction hold-clickable="action: RAD_LEN_PLUS" width="0.06" height="0.03" color="#4e342e" position="0.16 -0.01 0.01">
-          <a-text value="LENG +" align="center" scale="0.07 0.07 0.07" position="0 0 0.005"></a-text>
+        <a-plane id="btn-rad-len-plus" class="clickable" btn-interaction width="0.06" height="0.025" color="#4e342e" position="0.16 -0.01 0.01">
+          <a-text value="LENG +" align="center" scale="0.07 0.07 0.07"></a-text>
         </a-plane>
         <a-text id="txt-rad-num-val" value="RADIALI: 4" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="-0.13 -0.05 0"></a-text>
         <a-text id="txt-rad-len-val" value="LUNGH R: 5.0m" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="0.12 -0.05 0"></a-text>
@@ -678,7 +625,7 @@
         <a-text value="DIM. TESTO [+]" align="center" scale="0.075 0.075 0.075" position="0 0 0.005" color="#FFFFFF"></a-text>
       </a-plane>
 
-      <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.19 0.01" align="center" scale="0.07 0.07 0.07" color="#FF1744"></a-text>
+      <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.18 0.01" align="center" scale="0.07 0.07 0.07" color="#FF1744"></a-text>
       <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.19" height="0.03" color="#C62828" position="-0.11 -0.22 0.01">
         <a-text value="Riposiziona PUNTO A" align="center" scale="0.075 0.075 0.075" position="0 0 0.005" color="#FFFFFF"></a-text>
       </a-plane>
