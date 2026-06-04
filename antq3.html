@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V5 - Meta Quest 3</title>
+  <title>Antenne AR Pro V5.1 - Fix Fluidità Menu</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script>
     // COMPONENTE CRITICO: Forza tutti i testi 3D a guardare sempre gli occhi dell'utente (Visore)
@@ -38,14 +38,18 @@
       }
     });
 
-    // Gestisce la pressione prolungata dei tasti
+    // COMPONENTE CORRETTO: Gestisce la pressione prolungata dei tasti in modo fluido e senza inceppamenti
     AFRAME.registerComponent('hold-clickable', {
       init: function () {
         let el = this.el;
         this.timeoutId = null;
         this.intervalId = null;
+        this.isHolding = false; // Flag di sicurezza contro i micro-tremori
 
         let startTrigger = () => {
+          if (this.isHolding) return; // Evita loop sovrapposti
+          this.isHolding = true;
+          
           el.emit('holdaction'); 
           this.timeoutId = setTimeout(() => {
             this.intervalId = setInterval(() => {
@@ -55,6 +59,8 @@
         };
 
         let stopTrigger = () => {
+          if (!this.isHolding) return;
+          this.isHolding = false;
           clearTimeout(this.timeoutId);
           clearInterval(this.intervalId);
         };
@@ -62,6 +68,7 @@
         el.addEventListener('mousedown', startTrigger);
         el.addEventListener('mouseup', stopTrigger);
         el.addEventListener('mouseleave', stopTrigger);
+        el.addEventListener('click', stopTrigger); // Cattura click sintetici del browser
       }
     });
 
@@ -358,54 +365,45 @@
 
         let type = this.antennaTypes[this.antIdx];
 
-        // Se l'antenna è VERTICALE, eseguiamo una logica di disegno completamente dedicata
         if (type === 'Verticale') {
-          // Nascondi elementi inutilizzati delle antenne filari
           this.hideStructure(this.pointB);
           this.hideStructure(this.pointC);
           this.labelSegA.setAttribute('visible', 'false');
           this.labelSegB.setAttribute('visible', 'false');
           this.antennaTube2.setAttribute('visible', 'false');
 
-          // Disegna il punto A di testa e il suo palo di quota
           this.renderPoleAndLabel(this.pointA, this.pointA.top, 'STILO VERTICALE');
 
-          // L'antenna Tube 1 diventa il radiatore verticale stesso (Sale dritta da terra y=0 a quota A)
           let h = this.pointA.top.y;
           this.antennaTube1.setAttribute('visible', 'true');
           this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
           this.antennaTube1.object3D.position.set(this.pointA.top.x, h / 2, this.pointA.top.z);
-          this.antennaTube1.object3D.rotation.set(0, 0, 0); // Nessuna rotazione, sta dritta in piedi
+          this.antennaTube1.object3D.rotation.set(0, 0, 0); 
 
-          // --- DISEGNO DEI RADIALI A TERRA (Marrone e a raggiera) ---
-          let base = new THREE.Vector3(this.pointA.base.x, 0.002, this.pointA.base.z); // leggermente sopra 0 per evitare z-fighting col pavimento
+          let base = new THREE.Vector3(this.pointA.base.x, 0.002, this.pointA.base.z); 
           
           for (let i = 0; i < this.maxRadials; i++) {
             if (i < this.numRadials) {
               this.radialPool[i].setAttribute('visible', 'true');
               this.radialPool[i].setAttribute('geometry', `primitive: cylinder; radius: 0.004; height: ${this.radialLen}`);
               
-              // Calcolo angolo simmetrico
               let angle = (i * 2 * Math.PI) / this.numRadials;
               let targetX = base.x + Math.cos(angle) * this.radialLen;
               let targetZ = base.z + Math.sin(angle) * this.radialLen;
               let targetVec = new THREE.Vector3(targetX, 0.002, targetZ);
 
-              // Posiziona il cilindro a metà del segmento radiale
               let midPoint = new THREE.Vector3().lerpVectors(base, targetVec, 0.5);
               this.radialPool[i].object3D.position.copy(midPoint);
               this.radialPool[i].object3D.lookAt(targetVec);
-              this.radialPool[i].object3D.rotateX(Math.PI / 2); // stendilo piatto sul terreno
+              this.radialPool[i].object3D.rotateX(Math.PI / 2);
             } else {
-              // Spegni i radiali nel pool non utilizzati
               this.radialPool[i].setAttribute('visible', 'false');
             }
           }
-          return; // Fine logica verticale
+          return;
         }
 
-        // --- SE INVECE SIAMO IN MODALITÀ FILARE (DIPOLO, ENDFED, LONGWIRE) ---
-        // Spegni tutti i radiali a terra del pool
+        // --- ANTENNE FILARI ---
         for(let i=0; i<this.maxRadials; i++) this.radialPool[i].setAttribute('visible', 'false');
 
         if (!this.pointB.top) return;
@@ -527,8 +525,9 @@
 
         // SUB-MENU END FED
         let adjustArm = (arm, amount) => {
-          if(arm === 'AC') this.endFed_AC_Len = Math.max(0.05, this.endFed_AC_Len + amount);
-          if(arm === 'CB') this.endFed_CB_Len = Math.max(0.05, this.endFed_CB_Len + amount);
+          // Uso parseFloat e toFixed(2) per impedire glitch sui decimali
+          if(arm === 'AC') this.endFed_AC_Len = parseFloat(Math.max(0.05, this.endFed_AC_Len + amount).toFixed(2));
+          if(arm === 'CB') this.endFed_CB_Len = parseFloat(Math.max(0.05, this.endFed_CB_Len + amount).toFixed(2));
           this.updateMenuText();
           this.updateGeometriesAndDrawings();
         };
@@ -544,14 +543,14 @@
           this.updateGeometriesAndDrawings();
         });
         let adjustLWLen = (amount) => {
-          this.longwireLen = Math.max(0.1, this.longwireLen + amount);
+          this.longwireLen = parseFloat(Math.max(0.1, this.longwireLen + amount).toFixed(2));
           this.updateMenuText();
           this.updateGeometriesAndDrawings();
         };
         document.querySelector('#btn-lw-minus').addEventListener('holdaction', () => adjustLWLen(-0.01));
         document.querySelector('#btn-lw-plus').addEventListener('holdaction', () => adjustLWLen(0.01));
 
-        // --- INTERAZIONI EVENTI NUOVI SOTTO-MENÙ ANTENNA VERTICALE ---
+        // SUB-MENU VERTICALE
         document.querySelector('#btn-rad-num-minus').addEventListener('click', () => {
           this.numRadials = Math.max(1, this.numRadials - 1);
           this.updateMenuText();
@@ -563,26 +562,25 @@
           this.updateGeometriesAndDrawings();
         });
         let adjustRadLen = (amount) => {
-          this.radialLen = Math.max(0.1, this.radialLen + amount); // Modifiche a passi di 10cm (0.1m) come richiesto
+          this.radialLen = parseFloat(Math.max(0.1, this.radialLen + amount).toFixed(2));
           this.updateMenuText();
           this.updateGeometriesAndDrawings();
         };
         document.querySelector('#btn-rad-len-minus').addEventListener('holdaction', () => adjustRadLen(-0.1));
         document.querySelector('#btn-rad-len-plus').addEventListener('holdaction', () => adjustRadLen(0.1));
 
-        // CONTROLLI SCALA ETICHETTE
-        document.querySelector('#btn-txt-minus').addEventListener('click', () => {
-          this.globalTextScale = Math.max(0.15, this.globalTextScale - 0.05);
+        // CONTROLLI SCALA ETICHETTE - ORA SUPPORTANO ANCHE IL TIENI PREMUTO!
+        document.querySelector('#btn-txt-minus').addEventListener('holdaction', () => {
+          this.globalTextScale = parseFloat(Math.max(0.15, this.globalTextScale - 0.01).toFixed(2));
           this.updateGeometriesAndDrawings();
         });
-        document.querySelector('#btn-txt-plus').addEventListener('click', () => {
-          this.globalTextScale = Math.min(1.2, this.globalTextScale + 0.05);
+        document.querySelector('#btn-txt-plus').addEventListener('holdaction', () => {
+          this.globalTextScale = parseFloat(Math.min(1.2, this.globalTextScale + 0.01).toFixed(2));
           this.updateGeometriesAndDrawings();
         });
 
         // RIPOSIZIONAMENTO
         document.querySelector('#btn-repo-a').addEventListener('click', () => {
-          // Se passiamo a riposizionare mentre siamo in verticale, lo stato torna a terra per A
           this.state = this.antennaTypes[this.antIdx] === 'Verticale' ? 'REPOSITION_GROUND_A' : 'REPOSITION_GROUND_A';
           this.menuUI.setAttribute('visible', false);
         });
@@ -613,7 +611,7 @@
     <a-entity id="menu-ui" visible="false" position="0 1.3 -0.5">
       <a-plane width="0.5" height="0.55" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
       
-      <a-text value="CONFIGURATORE ANTENNE V5" position="0 0.24 0.01" align="center" scale="0.13 0.13 0.13" color="#FFEB3B"></a-text>
+      <a-text value="CONFIGURATORE ANTENNE V5.1" position="0 0.24 0.01" align="center" scale="0.13 0.13 0.13" color="#FFEB3B"></a-text>
       <a-plane width="0.44" height="0.06" color="#2A2A2A" position="0 0.17 0.01">
         <a-text id="info-text" value="Caricamento..." position="-0.21 0 0.01" scale="0.09 0.09 0.09" color="#00E676"></a-text>
       </a-plane>
@@ -692,10 +690,10 @@
 
 
       <a-text value="DIMENSIONE SCALE TESTI E QUOTE 3D" position="0 -0.1 0.01" align="center" scale="0.08 0.08 0.08" color="#B0BEC5"></a-text>
-      <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.13" height="0.03" color="#424242" position="-0.08 -0.14 0.01">
+      <a-plane id="btn-txt-minus" class="clickable" btn-interaction hold-clickable width="0.13" height="0.03" color="#424242" position="-0.08 -0.14 0.01">
         <a-text value="DIM. TESTO [-]" align="center" scale="0.08 0.08 0.08" position="0 0 0.005" color="#FFFFFF"></a-text>
       </a-plane>
-      <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.13" height="0.03" color="#424242" position="0.08 -0.14 0.01">
+      <a-plane id="btn-txt-plus" class="clickable" btn-interaction hold-clickable width="0.13" height="0.03" color="#424242" position="0.08 -0.14 0.01">
         <a-text value="DIM. TESTO [+]" align="center" scale="0.08 0.08 0.08" position="0 0 0.005" color="#FFFFFF"></a-text>
       </a-plane>
 
