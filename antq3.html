@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V11 - Menu Ancorato & MMANA Fix</title>
+  <title>Antenne AR Pro V12 - Solo Joystick & MMANA-GAL Fix</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     /* Interfaccia 2D visibile sul browser del Quest PRIMA di cliccare su ENTER AR */
@@ -73,14 +73,13 @@
         this.mmanaModelIdx = 0;
 
         this.antennaRotationY = 0; 
-        this.globalTextScale = 0.35; this.currentHeight = 0.1; // Parte da zero
+        this.globalTextScale = 0.35; this.currentHeight = 0.1; 
         
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
         this.cursorRing = document.querySelector('#cursor-ring');
         this.verticalCylinder = document.querySelector('#vertical-cylinder');
         this.heightText = document.querySelector('#height-text');
-        this.menuUI = document.querySelector('#menu-ui');
         
         this.antennaTube1 = null; this.antennaTube2 = null;
         this.mmanaContainerEl = document.querySelector('#mmana-wires-container');
@@ -99,12 +98,19 @@
         this.resetAntennaLengths();
         this.updateMenuText();
         this.setupMmanaFileLoader();
-        this.setupMenuInteractions();
+        this.setupGlobalEventDelegation(); // Delegazione globale per eliminare i lag dei tasti
+      },
+
+      // Risolve la ricerca preventiva degli elementi della UI nel thread XR
+      getMenuUI: function() {
+        if (!this.menuUICache) { this.menuUICache = document.querySelector('#menu-ui'); }
+        return this.menuUICache;
       },
 
       toggleMenu: function() {
-        let isVisible = this.menuUI.getAttribute('visible');
-        this.menuUI.setAttribute('visible', !isVisible);
+        let menu = this.getMenuUI(); if(!menu) return;
+        let isVisible = menu.getAttribute('visible');
+        menu.setAttribute('visible', !isVisible);
       },
 
       initPersistentElements: function() {
@@ -149,7 +155,6 @@
       },
 
       tick: function () {
-        // Tracciamento anello a terra
         if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND')) {
           let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if (intersection) {
@@ -157,7 +162,7 @@
           } else { this.cursorRing.setAttribute('visible', 'false'); }
         }
 
-        // Esecuzione dello scorrimento continuo per i bracci del menu (Hold Action)
+        // Gestione scorrimento continuo veloce (Hold Action)
         if (this.activeHoldAction) {
           if (!this.holdThrottler || Date.now() - this.holdThrottler > 40) {
             this.applyHoldStep(this.activeHoldAction);
@@ -193,34 +198,45 @@
       },
 
       onTriggerDown: function () {
-        if (this.menuUI.getAttribute('visible')) {
-          let intersectionMenu = this.raycasterEl.components.raycaster.getIntersection(this.menuUI); if (intersectionMenu) return; 
+        let menu = this.getMenuUI();
+        if (menu && menu.getAttribute('visible')) {
+          let intersectionMenu = this.raycasterEl.components.raycaster.getIntersection(menu); if (intersectionMenu) return; 
         }
 
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
           this.pointA.base = Object.assign({}, this.cursorRing.getAttribute('position'));
           this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
-          this.currentHeight = 0.1; // COMINCIA RIGIDAMENTE DA ALTEZZA ZERO
+          // PERMETTI DI CONFIGURARE L'ALTEZZA PARTENDO DA ZERO
+          this.currentHeight = 0.1; 
           this.setupVerticalPreviewMode(this.pointA.base);
-        } else if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
+        } 
+        else if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
           this.pointA.top = { x: this.pointA.base.x, y: this.currentHeight, z: this.pointA.base.z };
           this.resetVerticalPreviewMode();
+          
+          // CRITICO: MOSTRA SUBITO IL PUNTO A NELLO SPAZIO PRIMA DI PASSARE A B!
+          this.renderPoleAndLabel(this.pointA, this.pointA.top, 'PUNTO A');
+
           if(this.state === 'REPOSITION_HEIGHT_A') {
-            this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
+            this.state = 'IDLE'; this.updateGeometriesAndDrawings(); if(menu) menu.setAttribute('visible', true);
           } else {
             if (this.antennaTypes[this.antIdx] === 'Verticale') {
-              this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
-            } else { this.state = 'PLACE_GROUND_B'; }
+              this.state = 'IDLE'; this.updateGeometriesAndDrawings(); if(menu) menu.setAttribute('visible', true);
+            } else { 
+              this.state = 'PLACE_GROUND_B'; 
+            }
           }
-        } else if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
+        } 
+        else if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
           this.pointB.base = Object.assign({}, this.cursorRing.getAttribute('position'));
           this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B';
-          this.currentHeight = 0.1; // COMINCIA DA ALTEZZA ZERO
+          this.currentHeight = 0.1; 
           this.setupVerticalPreviewMode(this.pointB.base);
-        } else if (this.state === 'PLACE_HEIGHT_B' || this.state === 'REPOSITION_HEIGHT_B') {
+        } 
+        else if (this.state === 'PLACE_HEIGHT_B' || this.state === 'REPOSITION_HEIGHT_B') {
           this.pointB.top = { x: this.pointB.base.x, y: this.currentHeight, z: this.pointB.base.z };
           this.resetVerticalPreviewMode();
-          this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
+          this.state = 'IDLE'; this.updateGeometriesAndDrawings(); if(menu) menu.setAttribute('visible', true);
         }
       },
 
@@ -249,7 +265,6 @@
         struct.sphere.setAttribute('visible', 'false'); struct.pole.setAttribute('visible', 'false'); struct.label.setAttribute('visible', 'false');
       },
 
-      // CARICAMENTO CORRETTO MODELLI .MAA CON ASSE ORTOGONALE INVERTITO (Z -> ALTEZZA Y)
       loadPreloadedMmanaModel: function() {
         let mName = this.mmanaModels[this.mmanaModelIdx];
         if (mName === 'Yagi 3 Elementi') {
@@ -273,38 +288,39 @@
 
       updateMenuText: function() {
         let type = this.antennaTypes[this.antIdx]; let band = this.bands[this.bandIdx];
-        document.querySelector('#txt-ant-val').setAttribute('value', type.toUpperCase());
-        document.querySelector('#txt-band-val').setAttribute('value', band);
+        let menu = this.getMenuUI(); if(!menu) return;
+        menu.querySelector('#txt-ant-val').setAttribute('value', type.toUpperCase());
+        menu.querySelector('#txt-band-val').setAttribute('value', band);
 
-        document.querySelector('#sub-dipolo').setAttribute('visible', type === 'Dipolo');
-        document.querySelector('#sub-endfed').setAttribute('visible', type === 'End Fed');
-        document.querySelector('#sub-longwire').setAttribute('visible', type === 'Longwire');
-        document.querySelector('#sub-verticale').setAttribute('visible', type === 'Verticale');
-        document.querySelector('#sub-mmana').setAttribute('visible', type === 'MMANA-GAL');
-        document.querySelector('#btn-repo-b').setAttribute('visible', type !== 'Verticale');
+        menu.querySelector('#sub-dipolo').setAttribute('visible', type === 'Dipolo');
+        menu.querySelector('#sub-endfed').setAttribute('visible', type === 'End Fed');
+        menu.querySelector('#sub-longwire').setAttribute('visible', type === 'Longwire');
+        menu.querySelector('#sub-verticale').setAttribute('visible', type === 'Verticale');
+        menu.querySelector('#sub-mmana').setAttribute('visible', type === 'MMANA-GAL');
+        menu.querySelector('#btn-repo-b').setAttribute('visible', type !== 'Verticale');
 
         let infoTextStr = "";
         if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA CALCOLATA: ${this.getCalculatedLength().toFixed(2)}m`; } 
         else if (type === 'End Fed') {
           infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nAC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`;
-          document.querySelector('#txt-ef-values').setAttribute('value', `AC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`);
+          menu.querySelector('#txt-ef-values').setAttribute('value', `AC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`);
         } else if (type === 'Longwire') {
           infoTextStr = `ANTENNA: LONGWIRE | BANDA: ${band}\nVERTICE: ${this.longwireVertex} | LUNGH: ${this.longwireLen.toFixed(2)}m`;
-          document.querySelector('#txt-lw-vertex-val').setAttribute('value', `VERTICE: DA ${this.longwireVertex}`);
-          document.querySelector('#txt-lw-len-val').setAttribute('value', `LUNGH: ${this.longwireLen.toFixed(2)}m`);
+          menu.querySelector('#txt-lw-vertex-val').setAttribute('value', `VERTICE: DA ${this.longwireVertex}`);
+          menu.querySelector('#txt-lw-len-val').setAttribute('value', `LUNGH: ${this.longwireLen.toFixed(2)}m`);
         } else if (type === 'Verticale') {
           infoTextStr = `ANTENNA: VERTICALE | BANDA: ${band}\nSTILO: ${this.pointA.top ? this.pointA.top.y.toFixed(2) : 0}m | RADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`;
-          document.querySelector('#txt-rad-num-val').setAttribute('value', `RADIALI: ${this.numRadials}`);
-          document.querySelector('#txt-rad-len-val').setAttribute('value', `LUNGH R: ${this.radialLen.toFixed(1)}m`);
+          menu.querySelector('#txt-rad-num-val').setAttribute('value', `RADIALI: ${this.numRadials}`);
+          menu.querySelector('#txt-rad-len-val').setAttribute('value', `LUNGH R: ${this.radialLen.toFixed(1)}m`);
         } else if (type === 'MMANA-GAL') { 
           infoTextStr = `MMANA-GAL: ${this.mmanaModels[this.mmanaModelIdx]}\nFili: ${this.mmanaWires.length} | Muovi analogico sinistro per ruotare.`; 
-          document.querySelector('#txt-mmana-model-val').setAttribute('value', this.mmanaModels[this.mmanaModelIdx].toUpperCase());
+          menu.querySelector('#txt-mmana-model-val').setAttribute('value', this.mmanaModels[this.mmanaModelIdx].toUpperCase());
         }
-        document.querySelector('#info-text').setAttribute('value', infoTextStr);
+        menu.querySelector('#info-text').setAttribute('value', infoTextStr);
       },
 
       updateGeometriesAndDrawings: function() {
-        this.mmanaContainerEl.innerHTML = ''; // Svuota per evitare sovrapposizioni ghost
+        this.mmanaContainerEl.innerHTML = ''; // SVUOTA SEMPRE PER EVITARE EFFETTI GHOST
 
         if (!this.pointA.top) return;
         let type = this.antennaTypes[this.antIdx];
@@ -354,7 +370,6 @@
 
           this.mmanaWires.forEach((w) => {
             let cyl = document.createElement('a-cylinder');
-            // INVERSIONE DEGLI ASSI CORRETTA: MMANA Z (ALTEZZA) MAPPA SU THREE.JS Y (ALTEZZA)
             let p1 = new THREE.Vector3(w.x1, w.z1, w.y1); 
             let p2 = new THREE.Vector3(w.x2, w.z2, w.y2); 
             let d = p1.distanceTo(p2);
@@ -425,45 +440,76 @@
           this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5));
           this.labelSegB.setAttribute('value', `Restante:\n${extLW.distanceTo(targetVec).toFixed(2)}m`);
         }
+        
         this.labelSegA.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
         this.labelSegB.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
       },
 
-      setupMmanaFileLoader: function() {
-        let fileInput = document.querySelector('#file-mmana'); if(!fileInput) return;
-        fileInput.addEventListener('change', (evt) => {
-          let file = evt.target.files[0]; if(!file) return;
-          let reader = new FileReader();
-          reader.onload = (e) => {
-            let text = e.target.result; let lines = text.split('\n');
-            this.mmanaWires = []; let insideWiresSection = false;
-            for(let i=0; i<lines.length; i++) {
-              let line = lines[i].trim();
-              if(line.toUpperCase().startsWith('*** WIRES ***')) { insideWiresSection = true; i++; continue; }
-              if(line.toUpperCase().startsWith('*** SOURCE ***') || line.startsWith('***')) { insideWiresSection = false; }
-              if(insideWiresSection && line !== "") {
-                let tokens = line.split(/[\s,]+/);
-                if(tokens.length >= 7) {
-                  this.mmanaWires.push({
-                    x1: parseFloat(tokens[0]), y1: parseFloat(tokens[1]), z1: parseFloat(tokens[2]),
-                    x2: parseFloat(tokens[3]), y2: parseFloat(tokens[4]), z2: parseFloat(tokens[5]),
-                    radius: parseFloat(tokens[6]) > 0 ? parseFloat(tokens[6])/1000 : 0.002
-                  });
-                }
-              }
-            }
-            this.mmanaContainerEl.innerHTML = ''; this.antIdx = this.antennaTypes.indexOf('MMANA-GAL'); this.refreshAll();
-            alert(`File .maa letto! Conduttori importati: ${this.mmanaWires.length}`);
-          };
-          reader.readAsText(file);
-        });
-      },
+      // INNOVAZIONE: DELEGAZIONE COMPLETA DEGLI EVENTI DELLA SCENA (Elimina conflitti dei puntatori)
+      setupGlobalEventDelegation: function() {
+        let scene = this.el.sceneEl;
 
-      setupHoldButton: function(selector, actionKey) {
-        let el = document.querySelector(selector); if(!el) return;
-        el.addEventListener('mousedown', () => { this.activeHoldAction = actionKey; this.holdThrottler = Date.now(); });
-        let stop = () => { if(this.activeHoldAction === actionKey) this.activeHoldAction = null; };
-        el.addEventListener('mouseup', stop); el.addEventListener('mouseleave', stop);
+        // Gestione di tutti i Click del Raggio Laser
+        scene.addEventListener('click', (evt) => {
+          let id = evt.target.id; if(!id) return;
+
+          if (id === 'btn-ant') {
+            this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll();
+          } 
+          else if (id === 'btn-band') {
+            this.bandIdx = (this.bandIdx + 1) % this.bands.length; this.resetAntennaLengths();
+            // Se l'antenna è Verticale, il cambio banda aggiorna lo stilo verticale!
+            if (this.antennaTypes[this.antIdx] === 'Verticale' && this.pointA.top) {
+              this.pointA.top.y = this.getCalculatedLength();
+            }
+            this.refreshAll();
+          } 
+          else if (id === 'btn-c-left') {
+            this.pointC.percent = Math.max(0.02, this.pointC.percent - 0.05); this.updateGeometriesAndDrawings();
+          } 
+          else if (id === 'btn-c-right') {
+            this.pointC.percent = Math.min(0.98, this.pointC.percent + 0.05); this.updateGeometriesAndDrawings();
+          } 
+          else if (id === 'btn-lw-vertex') {
+            this.longwireVertex = this.longwireVertex === 'A' ? 'B' : 'A'; this.refreshAll();
+          } 
+          else if (id === 'btn-mmana-model') {
+            this.mmanaModelIdx = (this.mmanaModelIdx + 1) % this.mmanaModels.length; this.loadPreloadedMmanaModel(); this.refreshAll();
+          } 
+          else if (id === 'btn-txt-minus') {
+            this.globalTextScale = Math.max(0.15, this.globalTextScale - 0.05); this.updateGeometriesAndDrawings();
+          } 
+          else if (id === 'btn-txt-plus') {
+            this.globalTextScale = Math.min(1.2, this.globalTextScale + 0.05); this.updateGeometriesAndDrawings();
+          } 
+          else if (id === 'btn-repo-a') {
+            this.state = 'REPOSITION_GROUND_A'; let menu = this.getMenuUI(); if(menu) menu.setAttribute('visible', false);
+          } 
+          else if (id === 'btn-repo-b') {
+            this.state = 'REPOSITION_GROUND_B'; let menu = this.getMenuUI(); if(menu) menu.setAttribute('visible', false);
+          } 
+          else if (id === 'btn-global-reset') {
+            this.triggerGlobalReset();
+          }
+        });
+
+        // Gestione Hold Continuo (Mousedown / Pollice e Grilletto premuti)
+        scene.addEventListener('mousedown', (evt) => {
+          let id = evt.target.id; if(!id) return;
+          let validActions = {
+            'btn-ac-m1': 'AC_M1', 'btn-ac-m01': 'AC_M01', 'btn-ac-p01': 'AC_P01', 'btn-ac-p1': 'AC_P1',
+            'btn-cb-m1': 'CB_M1', 'btn-cb-m01': 'CB_M01', 'btn-cb-p01': 'CB_P01', 'btn-cb-p1': 'CB_P1',
+            'btn-lw-m1': 'LW_M1', 'btn-lw-m01': 'LW_M01', 'btn-lw-p01': 'LW_P01', 'btn-lw-p1': 'LW_P1',
+            'btn-rad-num-minus': 'RAD_N_MINUS', 'btn-rad-num-plus': 'RAD_N_PLUS',
+            'btn-rad-len-minus': 'RAD_LEN_MINUS', 'btn-rad-len-plus': 'RAD_LEN_PLUS',
+            'btn-h-minus': 'H_MINUS', 'btn-h-plus': 'H_PLUS'
+          };
+          if(validActions[id]) { this.activeHoldAction = validActions[id]; this.holdThrottler = Date.now(); }
+        });
+
+        let releaseHold = () => { this.activeHoldAction = null; };
+        scene.addEventListener('mouseup', releaseHold);
+        scene.addEventListener('mouseleave', releaseHold);
       },
 
       applyHoldStep: function(action) {
@@ -471,14 +517,25 @@
         if (action === 'AC_M01')  this.endFed_AC_Len = Math.max(0.01, this.endFed_AC_Len - 0.01);
         if (action === 'AC_P01')  this.endFed_AC_Len += 0.01;
         if (action === 'AC_P1')   this.endFed_AC_Len += 1.0;
+        
         if (action === 'CB_M1')   this.endFed_CB_Len = Math.max(0.1, this.endFed_CB_Len - 1.0);
         if (action === 'CB_M01')  this.endFed_CB_Len = Math.max(0.01, this.endFed_CB_Len - 0.01);
         if (action === 'CB_P01')  this.endFed_CB_Len += 0.01;
         if (action === 'CB_P1')   this.endFed_CB_Len += 1.0;
+
         if (action === 'LW_M1')   this.longwireLen = Math.max(0.1, this.longwireLen - 1.0);
         if (action === 'LW_M01')  this.longwireLen = Math.max(0.01, this.longwireLen - 0.01);
-        if (action === 'RAD_M')   this.radialLen = Math.max(0.1, this.radialLen - 0.1);
-        if (action === 'RAD_P')   this.radialLen += 0.1;
+        if (action === 'LW_P01')  this.longwireLen += 0.01;
+        if (action === 'LW_P1')   this.longwireLen += 1.0;
+
+        if (action === 'RAD_N_MINUS') this.numRadials = Math.max(1, this.numRadials - 1);
+        if (action === 'RAD_N_PLUS')  this.numRadials = Math.min(this.maxRadials, this.numRadials + 1);
+        if (action === 'RAD_LEN_MINUS') this.radialLen = Math.max(0.1, this.radialLen - 0.1);
+        if (action === 'RAD_LEN_PLUS')  this.radialLen += 0.1;
+
+        if (action === 'H_MINUS' && this.state.includes('HEIGHT')) { this.currentHeight = Math.max(0.0, this.currentHeight - 0.1); this.updateHeightPreview(); }
+        if (action === 'H_PLUS' && this.state.includes('HEIGHT'))  { this.currentHeight += 0.1; this.updateHeightPreview(); }
+
         this.updateMenuText(); this.updateGeometriesAndDrawings();
       },
 
@@ -490,46 +547,9 @@
         for(let i=0; i<this.maxRadials; i++) this.radialPool[i].setAttribute('visible', 'false');
         this.mmanaContainerEl.innerHTML = '';
         this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; this.cursorRing.setAttribute('visible', 'false');
+        let menu = this.getMenuUI(); if(menu) menu.setAttribute('visible', false);
       },
 
-      setupMenuInteractions: function() {
-        document.querySelector('#btn-ant').addEventListener('click', () => {
-          this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll();
-        });
-        document.querySelector('#btn-band').addEventListener('click', () => {
-          this.bandIdx = (this.bandIdx + 1) % this.bands.length; this.resetAntennaLengths(); this.refreshAll();
-        });
-        document.querySelector('#btn-c-left').addEventListener('click', () => { this.pointC.percent = Math.max(0.02, this.pointC.percent - 0.05); this.updateGeometriesAndDrawings(); });
-        document.querySelector('#btn-c-right').addEventListener('click', () => { this.pointC.percent = Math.min(0.98, this.pointC.percent + 0.05); this.updateGeometriesAndDrawings(); });
-
-        this.holdThrottler = 0;
-        this.setupHoldButton('#btn-ac-m1', 'AC_M1'); this.setupHoldButton('#btn-ac-m01', 'AC_M01');
-        this.setupHoldButton('#btn-ac-p01', 'AC_P01'); this.setupHoldButton('#btn-ac-p1', 'AC_P1');
-        this.setupHoldButton('#btn-cb-m1', 'CB_M1'); this.setupHoldButton('#btn-cb-m01', 'CB_M01');
-        this.setupHoldButton('#btn-cb-p01', 'CB_P01'); this.setupHoldButton('#btn-cb-p1', 'CB_P1');
-        
-        document.querySelector('#btn-lw-vertex').addEventListener('click', () => { this.longwireVertex = this.longwireVertex === 'A' ? 'B' : 'A'; this.refreshAll(); });
-        this.setupHoldButton('#btn-lw-m1', 'LW_M1'); this.setupHoldButton('#btn-lw-m01', 'LW_M01');
-
-        document.querySelector('#btn-rad-num-minus').addEventListener('click', () => { this.numRadials = Math.max(1, this.numRadials - 1); this.refreshAll(); });
-        document.querySelector('#btn-rad-num-plus').addEventListener('click', () => { this.numRadials = Math.min(this.maxRadials, this.numRadials + 1); this.refreshAll(); });
-        this.setupHoldButton('#btn-rad-len-minus', 'RAD_M'); this.setupHoldButton('#btn-rad-len-plus', 'RAD_P');
-
-        document.querySelector('#btn-mmana-model').addEventListener('click', () => {
-          this.mmanaModelIdx = (this.mmanaModelIdx + 1) % this.mmanaModels.length;
-          this.loadPreloadedMmanaModel(); this.refreshAll();
-        });
-
-        this.setupHoldButton('#btn-h-minus', () => { if(!this.state.includes('HEIGHT')) return; this.currentHeight = Math.max(0.0, this.currentHeight - 0.1); this.updateHeightPreview(); });
-        this.setupHoldButton('#btn-h-plus', () => { if(!this.state.includes('HEIGHT')) return; this.currentHeight += 0.1; this.updateHeightPreview(); });
-        document.querySelector('#btn-txt-minus').addEventListener('click', () => { this.globalTextScale = Math.max(0.15, this.globalTextScale - 0.05); this.updateGeometriesAndDrawings(); });
-        document.querySelector('#btn-txt-plus').addEventListener('click', () => { this.globalTextScale = Math.min(1.2, this.globalTextScale + 0.05); this.updateGeometriesAndDrawings(); });
-        document.querySelector('#btn-repo-a').addEventListener('click', () => { this.state = 'REPOSITION_GROUND_A'; this.menuUI.setAttribute('visible', false); });
-        document.querySelector('#btn-repo-b').setAttribute('visible', true);
-        document.querySelector('#btn-repo-b').addEventListener('click', () => { this.state = 'REPOSITION_GROUND_B'; this.menuUI.setAttribute('visible', false); });
-        document.querySelector('#btn-global-reset').addEventListener('click', () => { this.triggerGlobalReset(); });
-      },
-      parentQuery: function(selector) { return this.menuUI.querySelector(selector); },
       refreshAll: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); }
     });
   </script>
@@ -560,12 +580,12 @@
           </a-plane>
 
           <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.09 0.01">
-            <a-text value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
+            <a-text id="txt-ant-lbl" value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
             <a-text id="txt-ant-val" value="-" align="center" scale="0.09 0.09 0.09" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
           <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.09 0.01">
-            <a-text value="BANDA RADIO:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#9FA8DA"></a-text>
+            <a-text id="txt-band-lbl" value="BANDA RADIO:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#9FA8DA"></a-text>
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
