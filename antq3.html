@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V17 - Step-by-Step & Anti-Drift</title>
+  <title>Antenne AR Pro V18 - Profondità e Filo a Piombo</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -55,29 +55,30 @@
         this.antennaRotationY = 0; 
         this.globalTextScale = 0.35; 
         
-        // VARIABILI TRANSIZIONALI (Per il nuovo flusso in 3 step)
         this.currentHeight = 0.1; 
         this.tempBasePos = null;
         this.tempElevation = 0;
 
         this.mmanaWires = []; this.importedMmanaWires = []; 
 
-        // GESTIONE TIRANTI
         this.guyWiresData = []; 
         this.activeAnchor = null; 
         this.gwState = 'OFF'; 
         this.lastTriggerTime = 0; 
 
-        // GESTIONE CALIBRAZIONE
         this.beaconLocalPos = null;
 
         // Cache DOM
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
+        
+        // Cache Cursore e Filo a Piombo
         this.cursorContainer = document.querySelector('#cursor-container');
+        this.cursorElevGroup = document.querySelector('#cursor-elevation-group');
+        this.cursorGroundRing = document.querySelector('#cursor-ground-ring');
+        this.cursorPlumbLine = document.querySelector('#cursor-plumb-line');
         this.cursorText = document.querySelector('#cursor-text');
         
-        // Cache Vassoio
         this.worldPivotEl = document.querySelector('#world-pivot');
         this.worldContentEl = document.querySelector('#world-content');
 
@@ -88,7 +89,6 @@
         this.mmanaContainerEl = document.querySelector('#mmana-wires-container');
         this.gwContainerEl = document.querySelector('#guy-wires-container');
 
-        // Eventi
         this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this));
         this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this));
         this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this));
@@ -216,35 +216,52 @@
       },
 
       tick: function () {
-        // FASE 1: Scelta Punto Libero a Terra col Laser (Raycaster Libero)
+        // FASE 1: Scelta Punto Libero a Terra col Laser
         if (this.state.includes('PLACE_GROUND') || this.state.includes('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
           let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if (intersection) {
             this.cursorContainer.setAttribute('visible', 'true'); 
             this.cursorContainer.setAttribute('position', intersection.point);
+            this.cursorElevGroup.setAttribute('position', '0 0 0');
+            this.cursorPlumbLine.setAttribute('visible', 'false');
+            this.cursorGroundRing.setAttribute('visible', 'false');
             this.cursorText.setAttribute('value', 'GRILLETTO: Blocca Punto');
             this.cursorText.setAttribute('color', '#00E676');
           } else { 
             this.cursorContainer.setAttribute('visible', 'false'); 
           }
         } 
-        // FASE 2: Regolazione Altezza Terreno (Punto bloccato in X e Z)
+        // FASE 2: Regolazione Altezza Terreno (Filo a piombo visibile)
         else if (this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE') {
           if (this.tempBasePos) {
-            // Calcolo posizione matematicamente perfetta senza laser
-            let localPt = new THREE.Vector3(this.tempBasePos.x, this.tempBasePos.y + this.tempElevation, this.tempBasePos.z);
-            let worldPt = new THREE.Vector3();
-            this.worldContentEl.object3D.localToWorld(worldPt.copy(localPt));
+            let localZero = new THREE.Vector3(this.tempBasePos.x, this.tempBasePos.y, this.tempBasePos.z);
+            let worldZero = new THREE.Vector3();
+            this.worldContentEl.object3D.localToWorld(worldZero.copy(localZero));
 
             this.cursorContainer.setAttribute('visible', 'true');
-            this.cursorContainer.setAttribute('position', worldPt);
+            this.cursorContainer.setAttribute('position', worldZero);
+            
+            this.cursorElevGroup.setAttribute('position', `0 ${this.tempElevation} 0`);
+
+            if (Math.abs(this.tempElevation) > 0.01) {
+              this.cursorPlumbLine.setAttribute('visible', 'true');
+              this.cursorGroundRing.setAttribute('visible', 'true');
+              this.cursorPlumbLine.setAttribute('height', Math.abs(this.tempElevation));
+              this.cursorPlumbLine.setAttribute('position', `0 ${this.tempElevation / 2} 0`);
+              
+              // Colore Stelo: Azzurro = Rialzato, Rosso = Infossato
+              let lineColor = this.tempElevation > 0 ? '#00FFFF' : '#FF1744'; 
+              this.cursorPlumbLine.setAttribute('material', 'color', lineColor);
+            } else {
+              this.cursorPlumbLine.setAttribute('visible', 'false');
+              this.cursorGroundRing.setAttribute('visible', 'false');
+            }
             
             let sign = this.tempElevation >= 0 ? '+' : '';
             this.cursorText.setAttribute('value', `Quota: ${sign}${this.tempElevation.toFixed(2)}m\n<- Joystick SX ->\nGRILLETTO: Conferma`);
             this.cursorText.setAttribute('color', '#FFEB3B');
           }
         } 
-        // FASE 3/IDLE: Nascondi Cursore
         else {
           this.cursorContainer.setAttribute('visible', 'false');
         }
@@ -253,19 +270,18 @@
       onLeftThumbstick: function(evt) {
         let now = Date.now();
 
-        // COMPENSAZIONE ALTEZZA TERRENO (Y-AXIS) - ATTIVO SOLO NELLA FASE ADJUST_BASE
+        // COMPENSAZIONE ALTEZZA TERRENO (Y-AXIS)
         let isAdjustingBase = this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE';
         if (isAdjustingBase) {
           if (!this.lastElevTime || now - this.lastElevTime > 110) {
             if (Math.abs(evt.detail.y) > 0.4) {
-              // Y negativo = spinta in alto = Alza la quota
               let step = evt.detail.y < 0 ? 0.05 : -0.05; 
               this.tempElevation += step;
               this.lastElevTime = now;
             }
           }
         } 
-        // ROTAZIONE ANTENNA (X-AXIS) - ATTIVO SOLO SE IDLE
+        // ROTAZIONE ANTENNA (X-AXIS) 
         else if (this.gwState === 'OFF' && !this.state.includes('HEIGHT') && !this.state.includes('GROUND')) {
           if (Math.abs(evt.detail.x) > 0.3) {
               let delta = evt.detail.x > 0 ? 2.0 : -2.0;
@@ -305,7 +321,6 @@
         let basePos = this.state.includes('_A') ? this.pointA.base : this.pointB.base;
         let cy = basePos.y + (this.currentHeight / 2);
         
-        // Uso coordinate locali perché verticalCylinder è dentro worldContentEl
         this.verticalCylinder.setAttribute('position', `${basePos.x} ${cy} ${basePos.z}`);
         this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${this.currentHeight}`);
         
@@ -421,11 +436,10 @@
         }
 
         // ----------------------------------------------------
-        // LOGICA NORMALE ANTENNA (MACCHINA A STATI A 3 FASI)
+        // LOGICA NORMALE ANTENNA
         // ----------------------------------------------------
         let type = this.antennaTypes[this.antIdx];
 
-        // ------------------- PUNTO A -------------------
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
           let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if(!hitGround) return;
@@ -463,7 +477,6 @@
           return;
         }
 
-        // ------------------- PUNTO B -------------------
         if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
           let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if(!hitGround) return;
@@ -712,7 +725,7 @@
         let dirBA = new THREE.Vector3().subVectors(vecA, vecB).normalize();
 
         let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
-        // Calcolo interpolato della quota terreno per il punto C
+        
         let baseC_y = this.pointA.base.y + (this.pointB.base.y - this.pointA.base.y) * this.pointC.percent;
         this.pointC.base = { x: vecC.x, y: baseC_y, z: vecC.z };
         this.pointC.top = vecC; 
@@ -783,7 +796,6 @@
           let id = target.id;
           let mathRound = (num) => Math.round(num * 100) / 100;
 
-          // CONTROLLI CALIBRAZIONE (ANTI-DRIFT)
           if (id === 'btn-cal-set') {
             this.state = 'CALIB_SET';
             this.menuUI.setAttribute('visible', false);
@@ -796,7 +808,6 @@
             document.querySelector('#info-text').setAttribute('value', 'Punta di nuovo la VERA base albero per riallineare il prato.');
           }
 
-          // CONTROLLI MENU TIRANTI
           else if (id === 'btn-gw-new-a') {
             this.startCollarPlacement('A');
           }
@@ -821,7 +832,6 @@
             this.toggleGuyWireMode();
           }
 
-          // CONTROLLI NORMALI MENU ANTENNA
           else if (id === 'btn-ant') {
             this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll();
           } 
@@ -941,16 +951,13 @@
         for(let i=0; i<this.maxRadials; i++) { if(this.radialPool[i]) this.radialPool[i].setAttribute('visible', 'false'); }
         this.mmanaContainerEl.innerHTML = ''; this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; 
         
-        // Reset Quota
         this.tempElevation = 0;
         this.tempBasePos = null;
 
-        // Reset Tiranti
         this.guyWiresData = []; this.drawGuyWires(); this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false);
         this.previewCollar.setAttribute('visible', 'false');
         this.previewCollarText.setAttribute('visible', 'false');
 
-        // Reset Calibrazione
         this.worldPivotEl.object3D.position.set(0,0,0);
         this.worldPivotEl.object3D.rotation.set(0,0,0);
         this.worldContentEl.object3D.position.set(0,0,0);
@@ -1100,10 +1107,15 @@
 
     <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="1000" height="1000" material="opacity: 0.0; transparent: true"></a-plane>
     
-    <!-- Contenitore indipendente per non subire le rotazioni o bug visivi -->
     <a-entity id="cursor-container" visible="false">
-      <a-ring id="cursor-ring" color="#00FF00" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0"></a-ring>
-      <a-text id="cursor-text" value="" position="0.08 0.08 0" color="#FFEB3B" scale="0.25 0.25 0.25" look-at-camera></a-text>
+      <a-ring id="cursor-ground-ring" color="#FF9800" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" material="opacity: 0.4; shader: flat" visible="false"></a-ring>
+      
+      <a-cylinder id="cursor-plumb-line" radius="0.002" color="#00FFFF" material="shader: flat" position="0 0 0" visible="false"></a-cylinder>
+
+      <a-entity id="cursor-elevation-group">
+        <a-ring id="cursor-ring" color="#00E676" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" material="shader: flat"></a-ring>
+        <a-text id="cursor-text" value="" position="0.08 0.08 0" color="#FFEB3B" scale="0.25 0.25 0.25" look-at-camera></a-text>
+      </a-entity>
     </a-entity>
 
     <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
