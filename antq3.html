@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V12 - Stabilità Assoluta</title>
+  <title>Antenne AR Pro V13 - Solo Joystick & MMANA-GAL Stabile</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     /* Interfaccia 2D visibile sul Quest PRIMA di cliccare su ENTER AR */
@@ -17,7 +17,7 @@
     #ui-2d-container button { width: 100%; padding: 6px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; }
   </style>
   <script>
-    // Forza i testi olografici 3D a inseguire sempre lo sguardo del visore
+    // Componente per orientare le quote fluttuanti verso il visore dell'utente
     AFRAME.registerComponent('look-at-camera', {
       tick: function () {
         let cameraEl = document.querySelector('#camera');
@@ -25,19 +25,23 @@
       }
     });
 
-    // Feedback visivo luminoso alla pressione dei tasti
+    // Feedback visivo dei bottoni alla pressione del raggio laser
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el;
         let originalColor = el.getAttribute('material').color;
         el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
-        el.addEventListener('mouseleave', () => { el.setAttribute('material', 'opacity', 1.0); el.setAttribute('scale', '1 1 1'); el.setAttribute('material', 'color', originalColor); });
-        el.addEventListener('mousedown', () => { el.setAttribute('scale', '0.95 0.95 0.8'); el.setAttribute('material', 'color', '#00FFCC'); });
+        el.addEventListener('mouseleave', () => {
+          el.setAttribute('material', 'opacity', 1.0); el.setAttribute('scale', '1 1 1'); el.setAttribute('material', 'color', originalColor);
+        });
+        el.addEventListener('mousedown', () => {
+          el.setAttribute('scale', '0.95 0.95 0.8'); el.setAttribute('material', 'color', '#00FFCC');
+        });
         el.addEventListener('mouseup', () => { el.setAttribute('scale', '1 1 1'); el.setAttribute('material', 'color', originalColor); });
       }
     });
 
-    // Architettura Centrale dell'Applicazione
+    // Sistema Principale dell'Applicazione
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         this.state = 'PLACE_GROUND_A'; 
@@ -62,8 +66,9 @@
         
         this.mmanaWires = []; 
         this.importedMmanaWires = []; 
+        this.activeHoldAction = null; 
 
-        // Cache degli elementi XR hardware
+        // Cache degli elementi hardware
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
         this.cursorRing = document.querySelector('#cursor-ring');
@@ -72,7 +77,11 @@
         this.menuUI = document.querySelector('#menu-ui');
         this.mmanaContainerEl = document.querySelector('#mmana-wires-container');
 
-        // Eventi analogici dei controller fisici
+        // Materiali nativi Three.js per il rendering istantaneo privo di bug
+        this.filariMaterial = new THREE.MeshBasicMaterial({color: 0xFF5722}); // Arancione antenna
+        this.mmanaMaterial = new THREE.MeshBasicMaterial({color: 0x00E676});  // Verde MMANA
+
+        // Eventi controller fisici
         this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this));
         this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this));
         this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this));
@@ -92,24 +101,20 @@
         this.menuUI.setAttribute('visible', !isVisible);
       },
 
-      // Generazione dinamica e controllata di tutte le entità per evitare errori di sincronizzazione nel DOM
       initPersistentElements: function() {
         let scene = this.el.sceneEl;
         let createPointStructure = (color) => {
           let struct = {};
           struct.sphere = document.createElement('a-sphere'); struct.sphere.setAttribute('radius', '0.05'); struct.sphere.setAttribute('material', `color: ${color}; roughness: 0.3`); struct.sphere.setAttribute('visible', 'false'); scene.appendChild(struct.sphere);
           struct.pole = document.createElement('a-cylinder'); struct.pole.setAttribute('radius', '0.008'); struct.pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat'); struct.pole.setAttribute('visible', 'false'); scene.appendChild(struct.pole);
-          struct.label = document.createElement('a-text'); struct.label.setAttribute('align', 'center'); struct.label.setAttribute('color', '#00FF00'); struct.label.setAttribute('look-at-camera', ''); struct.label.setAttribute('visible', 'false'); scene.appendChild(struct.label);
+          struct.label = document.createElement('a-text'); struct.label.setAttribute('align', 'center');
+          struct.label.setAttribute('color', '#00FF00'); struct.label.setAttribute('look-at-camera', ''); struct.label.setAttribute('visible', 'false'); scene.appendChild(struct.label);
           return struct;
         };
 
         this.pointA = Object.assign(this.pointA, createPointStructure('#FF1744'));
         this.pointB = Object.assign(this.pointB, createPointStructure('#2979FF'));
         this.pointC = Object.assign(this.pointC, createPointStructure('#00E676'));
-
-        // Generazione programmatica delle antenne filari
-        this.antennaTube1 = document.createElement('a-cylinder'); this.antennaTube1.setAttribute('radius', '0.015'); this.antennaTube1.setAttribute('material', 'color: #FF5722; shader: flat'); this.antennaTube1.setAttribute('visible', 'false'); scene.appendChild(this.antennaTube1);
-        this.antennaTube2 = document.createElement('a-cylinder'); this.antennaTube2.setAttribute('radius', '0.015'); this.antennaTube2.setAttribute('material', 'color: #FF5722; shader: flat'); this.antennaTube2.setAttribute('visible', 'false'); scene.appendChild(this.antennaTube2);
 
         this.labelSegA = document.createElement('a-text'); this.labelSegA.setAttribute('align', 'center'); this.labelSegA.setAttribute('color', 'yellow'); this.labelSegA.setAttribute('look-at-camera', ''); this.labelSegA.setAttribute('visible', 'false'); scene.appendChild(this.labelSegA);
         this.labelSegB = document.createElement('a-text'); this.labelSegB.setAttribute('align', 'center'); this.labelSegB.setAttribute('color', 'yellow'); this.labelSegB.setAttribute('look-at-camera', ''); this.labelSegB.setAttribute('visible', 'false'); scene.appendChild(this.labelSegB);
@@ -138,6 +143,12 @@
           if (intersection) {
             this.cursorRing.setAttribute('visible', 'true'); this.cursorRing.setAttribute('position', intersection.point);
           } else { this.cursorRing.setAttribute('visible', 'false'); }
+        }
+
+        if (this.activeHoldAction) {
+          if (!this.holdThrottler || Date.now() - this.holdThrottler > 40) {
+            this.applyHoldStep(this.activeHoldAction); this.holdThrottler = Date.now();
+          }
         }
       },
 
@@ -177,7 +188,7 @@
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
           this.pointA.base = Object.assign({}, this.cursorRing.getAttribute('position'));
           this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
-          this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1;
+          this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1; // Se verticale parte dal quarto d'onda, altrimenti da 0
           this.setupVerticalPreviewMode(this.pointA.base);
         } 
         else if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
@@ -275,11 +286,11 @@
           infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nAC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`;
           document.querySelector('#txt-ef-values').setAttribute('value', `AC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`);
         } else if (type === 'Longwire') {
-          infoTextStr = `ANTENNA: LONGWIRE | BANDA: ${band}\nVERTICE: DA ${this.longwireVertex} | LUNGH: ${this.longwireLen.toFixed(2)}m`;
+          infoTextStr = `ANTENNA: LONGWIRE | BANDA: ${band}\nVERTICE: ${this.longwireVertex} | LUNGH: ${this.longwireLen.toFixed(2)}m`;
           document.querySelector('#txt-lw-vertex-val').setAttribute('value', `VERTICE: DA ${this.longwireVertex}`);
           document.querySelector('#txt-lw-len-val').setAttribute('value', `LUNGH: ${this.longwireLen.toFixed(2)}m`);
         } else if (type === 'Verticale') {
-          infoTextStr = `ANTENNA: VERTICALE | BANDA: ${band}\nSTILO: ${this.pointA.top ? this.pointA.top.y.toFixed(2) : 0}m | RADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`;
+          infoTextStr = `ANTENNA: VERTICALE | BANDA: ${band}\nSTILO: ${this.pointA.top ? this.pointA.top.y.toFixed(2) : 0}m\nRADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`;
           document.querySelector('#txt-rad-num-val').setAttribute('value', `RADIALI: ${this.numRadials}`);
           document.querySelector('#txt-rad-len-val').setAttribute('value', `LUNGH R: ${this.radialLen.toFixed(1)}m`);
         } else if (type === 'MMANA-GAL') { 
@@ -289,46 +300,53 @@
         document.querySelector('#info-text').setAttribute('value', infoTextStr);
       },
 
+      // INNOVAZIONE: Disegno nativo in Three.js per evitare i crash invisibili del DOM di A-Frame
+      drawCylinderMesh: function(p1, p2, radius, material) {
+        let distance = p1.distanceTo(p2);
+        if(distance < 0.01) return;
+        let geom = new THREE.CylinderGeometry(radius, radius, distance, 6);
+        let mesh = new THREE.Mesh(geom, material);
+        let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+        mesh.position.copy(mid);
+        let direction = new THREE.Vector3().subVectors(p2, p1).normalize();
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+        this.mmanaContainerEl.object3D.add(mesh);
+      },
+
       updateGeometriesAndDrawings: function() {
-        this.mmanaContainerEl.innerHTML = ''; // Svuota per evitare sovrapposizioni ghost
+        // Svuota completamente il contenitore per evitare sovrapposizioni e accumuli
+        while(this.mmanaContainerEl.object3D.children.length > 0) {
+          this.mmanaContainerEl.object3D.remove(this.mmanaContainerEl.object3D.children[0]);
+        }
 
         if (!this.pointA.top) return;
         let type = this.antennaTypes[this.antIdx];
 
-        // ================= LOGICA VERTICALE =================
         if (type === 'Verticale') {
           this.hideStructure(this.pointB); this.hideStructure(this.pointC);
-          this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false'); this.antennaTube2.setAttribute('visible', 'false');
+          this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false');
           this.renderPoleAndLabel(this.pointA, this.pointA.top, 'STILO VERTICALE');
 
-          let h = this.pointA.top.y;
-          this.antennaTube1.setAttribute('visible', 'true');
-          this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
-          this.antennaTube1.object3D.position.set(this.pointA.top.x, h / 2, this.pointA.top.z);
-          this.antennaTube1.object3D.rotation.set(0, 0, 0);
+          let vecStart = new THREE.Vector3(this.pointA.top.x, 0, this.pointA.top.z);
+          let vecEnd = new THREE.Vector3(this.pointA.top.x, this.pointA.top.y, this.pointA.top.z);
+          this.drawCylinderMesh(vecStart, vecEnd, 0.018, this.filariMaterial);
 
           let base = new THREE.Vector3(this.pointA.base.x, 0.002, this.pointA.base.z);
           let radRot = this.antennaRotationY * Math.PI / 180;
           for (let i = 0; i < this.maxRadials; i++) {
             if (i < this.numRadials) {
-              this.radialPool[i].setAttribute('visible', 'true');
-              this.radialPool[i].setAttribute('geometry', `primitive: cylinder; radius: 0.004; height: ${this.radialLen}`);
               let angle = ((i * 2 * Math.PI) / this.numRadials) + radRot;
               let targetVec = new THREE.Vector3(base.x + Math.cos(angle) * this.radialLen, 0.002, base.z + Math.sin(angle) * this.radialLen);
-              let midPoint = new THREE.Vector3().lerpVectors(base, targetVec, 0.5);
-              this.radialPool[i].object3D.position.copy(midPoint); this.radialPool[i].object3D.lookAt(targetVec); this.radialPool[i].object3D.rotateX(Math.PI / 2);
-            } else { this.radialPool[i].setAttribute('visible', 'false'); }
+              this.drawCylinderMesh(base, targetVec, 0.004, new THREE.MeshBasicMaterial({color: 0x5D4037}));
+            }
           }
           return;
         }
 
-        // ================= LOGICA MMANA-GAL =================
         if (type === 'MMANA-GAL') {
-          this.antennaTube1.setAttribute('visible', 'false'); this.antennaTube2.setAttribute('visible', 'false');
           for(let i=0; i<this.maxRadials; i++) this.radialPool[i].setAttribute('visible', 'false');
           this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false');
           this.hideStructure(this.pointB); this.hideStructure(this.pointC);
-          
           if (this.mmanaWires.length === 0) return;
 
           this.renderPoleAndLabel(this.pointA, this.pointA.top, 'PILONE MMANA');
@@ -338,25 +356,16 @@
           this.mmanaContainerEl.object3D.rotation.set(0, this.antennaRotationY * Math.PI / 180, 0);
 
           this.mmanaWires.forEach((w) => {
-            let cyl = document.createElement('a-cylinder');
+            // Conversione Assi MMANA Z (Altezza) -> Three.js Y (Altezza)
             let p1 = new THREE.Vector3(w.x1, w.z1, w.y1); 
             let p2 = new THREE.Vector3(w.x2, w.z2, w.y2); 
-            let d = p1.distanceTo(p2);
-            if(d < 0.01) return;
-
-            cyl.setAttribute('geometry', `primitive: cylinder; radius: ${Math.max(0.005, w.radius * 2.8)}; height: ${d}`);
-            cyl.setAttribute('material', 'color: #00E676; shader: flat');
-            let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
-            cyl.object3D.position.copy(mid); cyl.object3D.lookAt(p2); cyl.object3D.rotateX(Math.PI / 2);
-            this.mmanaContainerEl.appendChild(cyl);
+            this.drawCylinderMesh(p1, p2, Math.max(0.005, w.radius * 2.8), this.mmanaMaterial);
           });
           return;
         }
 
-        // ================= LOGICA FILARI STANDARD =================
-        for(let i=0; i<this.maxRadials; i++) this.radialPool[i].setAttribute('visible', 'false');
+        // FILARI STANDARD (Richiedono Punto B)
         if (!this.pointB.top) return;
-
         this.renderPoleAndLabel(this.pointA, this.pointA.top, 'PUNTO A');
         this.renderPoleAndLabel(this.pointB, this.pointB.top, 'PUNTO B');
 
@@ -369,44 +378,37 @@
         this.pointC.top = vecC; this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
 
         if (type === 'Dipolo') {
-          this.antennaTube2.setAttribute('visible', 'false'); let antLen = this.getCalculatedLength();
-          this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${antLen}`);
-          this.antennaTube1.object3D.position.copy(this.pointC.top); this.antennaTube1.object3D.lookAt(vecB); this.antennaTube1.object3D.rotateX(Math.PI / 2);
-
+          let antLen = this.getCalculatedLength();
           let extAntStart = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, -(antLen / 2));
           let extAntEnd = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, antLen / 2);
+          
+          this.drawCylinderMesh(extAntStart, extAntEnd, 0.015, this.filariMaterial);
+
           this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5));
           this.labelSegA.setAttribute('value', `A-Ant:\n${vecA.distanceTo(extAntStart).toFixed(2)}m`);
           this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extAntEnd, vecB, 0.5));
           this.labelSegB.setAttribute('value', `Ant-B:\n${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
 
         } else if (type === 'End Fed') {
-          this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.endFed_AC_Len}`);
-          let posTube1 = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len / 2);
-          this.antennaTube1.object3D.position.copy(posTube1); this.antennaTube1.object3D.lookAt(vecA); this.antennaTube1.object3D.rotateX(Math.PI / 2);
-
-          // ERRORE CORRETTO: RIMOSSO IL "this.this." CHE MANDAVA IN CRASH IL CODICE
-          this.antennaTube2.setAttribute('visible', 'true'); this.antennaTube2.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.endFed_CB_Len}`);
-          let posTube2 = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len / 2);
-          this.antennaTube2.object3D.position.copy(posTube2); this.antennaTube2.object3D.lookAt(vecB); this.antennaTube2.object3D.rotateX(Math.PI / 2);
-
           let extAC = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len);
           let extCB = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len);
+          
+          this.drawCylinderMesh(this.pointC.top, extAC, 0.015, this.filariMaterial);
+          this.drawCylinderMesh(this.pointC.top, extCB, 0.015, this.filariMaterial);
+
           this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAC, 0.5));
           this.labelSegA.setAttribute('value', `Vuoto AC:\n${vecA.distanceTo(extAC).toFixed(2)}m`);
           this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extCB, vecB, 0.5));
           this.labelSegB.setAttribute('value', `Vuoto CB:\n${extCB.distanceTo(vecB).toFixed(2)}m`);
 
         } else if (type === 'Longwire') {
-          this.hideStructure(this.pointC); this.antennaTube2.setAttribute('visible', 'false');
+          this.hideStructure(this.pointC);
           let startVec = this.longwireVertex === 'A' ? vecA : vecB; let targetVec = this.longwireVertex === 'A' ? vecB : vecA;
           let dirLW = new THREE.Vector3().subVectors(targetVec, startVec).normalize();
-
-          this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.longwireLen}`);
-          let posTubeLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen / 2);
-          this.antennaTube1.object3D.position.copy(posTubeLW); this.antennaTube1.object3D.lookAt(targetVec); this.antennaTube1.object3D.rotateX(Math.PI / 2);
-
           let extLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen);
+          
+          this.drawCylinderMesh(startVec, extLW, 0.015, this.filariMaterial);
+
           this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5));
           this.labelSegB.setAttribute('value', `Restante:\n${extLW.distanceTo(targetVec).toFixed(2)}m`);
         }
@@ -415,19 +417,30 @@
         this.labelSegB.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
       },
 
-      // DELEGAZIONE COMPLETA E ROBUSTA DEGLI EVENTI
+      setupMmanaFileLoader: function() {
+        let fileInput = document.querySelector('#file-mmana'); if(!fileInput) return;
+        fileInput.addEventListener('change', (evt) => {
+          let file = evt.target.files[0]; if(!file) return;
+          let reader = new FileReader();
+          reader.onload = (e) => { this.parseMmanaText(e.target.result); document.querySelector('#alert-msg').innerText = "File letto! Entra in AR."; };
+          reader.readAsText(file);
+        });
+        
+        let btnPaste = document.querySelector('#btn-load-paste');
+        if(btnPaste) {
+          btnPaste.addEventListener('click', () => {
+            let textData = document.querySelector('#text-mmana-paste').value;
+            if(textData.trim() !== "") { this.parseMmanaText(textData); document.querySelector('#alert-msg').innerText = "Testo iniettato!"; }
+          });
+        }
+      },
+
+      // SISTEMA DI INTERCETTAZIONE COMPLETO: Riconosce i click discreti e i salti grandi/piccoli
       setupGlobalEventDelegation: function() {
         let scene = this.el.sceneEl;
 
         scene.addEventListener('click', (evt) => {
           let target = evt.target.closest('.clickable'); if(!target) return;
-          
-          // ERRORE CORRETTO: IMPEDISCE I CLICK SU ELEMENTI INVISIBILI DEI SOTTOMENU SOVRAPPOSTI
-          let isVis = target.getAttribute('visible');
-          if (isVis === false || isVis === 'false') return;
-          let parent = target.parentElement;
-          if (parent && (parent.getAttribute('visible') === false || parent.getAttribute('visible') === 'false')) return;
-
           let id = target.id;
 
           if (id === 'btn-ant') {
@@ -456,97 +469,84 @@
           else if (id === 'btn-txt-plus') {
             this.globalTextScale = Math.min(1.2, this.globalTextScale + 0.05); this.updateGeometriesAndDrawings();
           } 
-          else if (id === 'btn-ac-m1')   { this.endFed_AC_Len = Math.max(0.1, this.endFed_AC_Len - 1.0); this.refreshAll(); }
-          else if (id === 'btn-ac-m01')  { this.endFed_AC_Len = Math.max(0.01, this.endFed_AC_Len - 0.01); this.refreshAll(); }
-          else if (id === 'btn-ac-p01')  { this.endFed_AC_Len += 0.01; this.refreshAll(); }
-          else if (id === 'btn-ac-p1')   { this.endFed_AC_Len += 1.0; this.refreshAll(); }
-          else if (id === 'btn-cb-m1')   { this.endFed_CB_Len = Math.max(0.1, this.endFed_CB_Len - 1.0); this.refreshAll(); }
-          else if (id === 'btn-cb-m01')  { this.endFed_CB_Len = Math.max(0.01, this.endFed_CB_Len - 0.01); this.refreshAll(); }
-          else if (id === 'btn-cb-p01')  { this.endFed_CB_Len += 0.01; this.refreshAll(); }
-          else if (id === 'btn-cb-p1')   { this.endFed_CB_Len += 1.0; this.refreshAll(); }
-          else if (id === 'btn-lw-m1')   { this.longwireLen = Math.max(0.1, this.longwireLen - 1.0); this.refreshAll(); }
-          else if (id === 'btn-lw-m01')  { this.longwireLen = Math.max(0.01, this.longwireLen - 0.01); this.refreshAll(); }
-          else if (id === 'btn-lw-p01')  { this.longwireLen += 0.01; this.refreshAll(); }
-          else if (id === 'btn-lw-p1')   { this.longwireLen += 1.0; this.refreshAll(); }
-          else if (id === 'btn-rad-num-minus') { this.numRadials = Math.max(1, this.numRadials - 1); this.refreshAll(); }
-          else if (id === 'btn-rad-num-plus')  { this.numRadials = Math.min(this.maxRadials, this.numRadials + 1); this.refreshAll(); }
-          else if (id === 'btn-rad-m1')   { this.radialLen = Math.max(0.1, this.radialLen - 1.0); this.refreshAll(); }
-          else if (id === 'btn-rad-m01')  { this.radialLen = Math.max(0.1, this.radialLen - 0.1); this.refreshAll(); }
-          else if (id === 'btn-rad-p01')  { this.radialLen += 0.1; this.refreshAll(); }
-          else if (id === 'btn-rad-p1')   { this.radialLen += 1.0; this.refreshAll(); }
           else if (id === 'btn-repo-a') {
-            this.state = 'REPOSITION_GROUND_A'; this.menuUI.setAttribute('visible', false);
+            this.state = 'REPOSITION_GROUND_A'; if(this.menuUI) this.menuUI.setAttribute('visible', false);
           } 
           else if (id === 'btn-repo-b') {
-            this.state = 'REPOSITION_GROUND_B'; this.menuUI.setAttribute('visible', false);
+            this.state = 'REPOSITION_GROUND_B'; if(this.menuUI) this.menuUI.setAttribute('visible', false);
           }
           else if (id === 'btn-global-reset') {
             this.triggerGlobalReset();
           }
-        });
-      },
 
-      parseMmanaText: function(text) {
-        let lines = text.split('\n'); this.importedMmanaWires = [];
-        let insideWiresSection = false;
-        for(let i=0; i<lines.length; i++) {
-          let line = lines[i].trim();
-          if(line.toUpperCase().startsWith('*** WIRES ***')) { insideWiresSection = true; i++; continue; }
-          if(line.toUpperCase().startsWith('*** SOURCE ***') || line.startsWith('***')) { insideWiresSection = false; }
-          if(insideWiresSection && line !== "") {
-            // ERRORE CORRETTO: filtro gli spazi vuoti, altrimenti la libreria sballava le colonne
-            let tokens = line.split(/[\s,]+/).filter(t => t !== '');
-            if(tokens.length >= 7) {
-              this.importedMmanaWires.push({
-                x1: parseFloat(tokens[0]), y1: parseFloat(tokens[1]), z1: parseFloat(tokens[2]),
-                x2: parseFloat(tokens[3]), y2: parseFloat(tokens[4]), z2: parseFloat(tokens[5]),
-                radius: parseFloat(tokens[6]) > 0 ? parseFloat(tokens[6])/1000 : 0.002
-              });
-            }
-          }
-        }
-        
-        if (this.importedMmanaWires.length > 0) {
-          this.mmanaWires = this.importedMmanaWires;
-          this.mmanaModelIdx = this.mmanaModels.indexOf('Modello Importato');
-          this.antIdx = this.antennaTypes.indexOf('MMANA-GAL'); 
-          this.refreshAll();
-          document.querySelector('#alert-msg').innerText = "Caricati " + this.mmanaWires.length + " fili! Entra in AR.";
-        } else {
-          document.querySelector('#alert-msg').innerText = "Errore: Nessun filo trovato.";
-        }
-      },
-
-      setupMmanaFileLoader: function() {
-        let fileInput = document.querySelector('#file-mmana'); if(!fileInput) return;
-        fileInput.addEventListener('change', (evt) => {
-          let file = evt.target.files[0]; if(!file) return;
-          let reader = new FileReader();
-          reader.onload = (e) => { 
-            this.parseMmanaText(e.target.result); 
+          // Pulsanti numerici a scatto singolo
+          let clickActions = {
+            'btn-ac-m1': () => this.endFed_AC_Len = Math.max(0.1, this.endFed_AC_Len - 1.0),
+            'btn-ac-m01': () => this.endFed_AC_Len = Math.max(0.01, this.endFed_AC_Len - 0.01),
+            'btn-ac-p01': () => this.endFed_AC_Len += 0.01,
+            'btn-ac-p1': () => this.endFed_AC_Len += 1.0,
+            'btn-cb-m1': () => this.endFed_CB_Len = Math.max(0.1, this.endFed_CB_Len - 1.0),
+            'btn-cb-m01': () => this.endFed_CB_Len = Math.max(0.01, this.endFed_CB_Len - 0.01),
+            'btn-cb-p01': () => this.endFed_CB_Len += 0.01,
+            'btn-cb-p1': () => this.endFed_CB_Len += 1.0,
+            'btn-lw-m1': () => this.longwireLen = Math.max(0.1, this.longwireLen - 1.0),
+            'btn-lw-m01': () => this.longwireLen = Math.max(0.01, this.longwireLen - 0.01),
+            'btn-lw-p01': () => this.longwireLen += 0.01,
+            'btn-lw-p1': () => this.longwireLen += 1.0,
+            'btn-rad-num-minus': () => this.numRadials = Math.max(1, this.numRadials - 1),
+            'btn-rad-num-plus': () => this.numRadials = Math.min(this.maxRadials, this.numRadials + 1),
+            'btn-rad-m1': () => this.radialLen = Math.max(0.1, this.radialLen - 1.0),
+            'btn-rad-m01': () => this.radialLen = Math.max(0.1, this.radialLen - 0.1),
+            'btn-rad-p01': () => this.radialLen += 0.1,
+            'btn-rad-p1': () => this.radialLen += 1.0
           };
-          reader.readAsText(file);
+          if(clickActions[id]) { clickActions[id](); this.refreshAll(); }
         });
-        
-        let btnPaste = document.querySelector('#btn-load-paste');
-        if(btnPaste) {
-          btnPaste.addEventListener('click', () => {
-            let textData = document.querySelector('#text-mmana-paste').value;
-            if(textData.trim() !== "") { 
-              this.parseMmanaText(textData); 
-            }
-          });
-        }
+
+        // Configurazione hold continuo ad accumulo
+        scene.addEventListener('mousedown', (evt) => {
+          let target = evt.target.closest('.clickable'); if(!target) return;
+          let id = target.id;
+          let validHoldActions = {
+            'btn-ac-m1': 'AC_M1', 'btn-ac-m01': 'AC_M01', 'btn-ac-p01': 'AC_P01', 'btn-ac-p1': 'AC_P1',
+            'btn-cb-m1': 'CB_M1', 'btn-cb-m01': 'CB_M01', 'btn-cb-p01': 'CB_P01', 'btn-cb-p1': 'CB_P1',
+            'btn-lw-m1': 'LW_M1', 'btn-lw-m01': 'LW_M01', 'btn-lw-p01': 'LW_P01', 'btn-lw-p1': 'LW_P1',
+            'btn-rad-m1': 'RAD_M1', 'btn-rad-m01': 'RAD_M01', 'btn-rad-p01': 'RAD_P01', 'btn-rad-p1': 'RAD_P1'
+          };
+          if(validHoldActions[id]) { this.activeHoldAction = validHoldActions[id]; this.holdThrottler = Date.now(); }
+        });
+
+        let releaseHold = () => { this.activeHoldAction = null; };
+        scene.addEventListener('mouseup', releaseHold); scene.addEventListener('mouseleave', releaseHold);
+      },
+
+      applyHoldStep: function(action) {
+        if (action === 'AC_M1')   this.endFed_AC_Len = Math.max(0.1, this.endFed_AC_Len - 1.0);
+        if (action === 'AC_M01')  this.endFed_AC_Len = Math.max(0.01, this.endFed_AC_Len - 0.01);
+        if (action === 'AC_P01')  this.endFed_AC_Len += 0.01;
+        if (action === 'AC_P1')   this.endFed_AC_Len += 1.0;
+        if (action === 'CB_M1')   this.endFed_CB_Len = Math.max(0.1, this.endFed_CB_Len - 1.0);
+        if (action === 'CB_M01')  this.endFed_CB_Len = Math.max(0.01, this.endFed_CB_Len - 0.01);
+        if (action === 'CB_P01')  this.endFed_CB_Len += 0.01;
+        if (action === 'CB_P1')   this.endFed_CB_Len += 1.0;
+        if (action === 'LW_M1')   this.longwireLen = Math.max(0.1, this.longwireLen - 1.0);
+        if (action === 'LW_M01')  this.longwireLen = Math.max(0.01, this.longwireLen - 0.01);
+        if (action === 'LW_P01')  this.longwireLen += 0.01;
+        if (action === 'LW_P1')   this.longwireLen += 1.0;
+        if (action === 'RAD_M1')   this.radialLen = Math.max(0.1, this.radialLen - 1.0);
+        if (action === 'RAD_M01')  this.radialLen = Math.max(0.1, this.radialLen - 0.1);
+        if (action === 'RAD_P01')  this.radialLen += 0.1;
+        if (action === 'RAD_P1')   this.radialLen += 1.0;
+
+        this.updateMenuText(); this.updateGeometriesAndDrawings();
       },
 
       triggerGlobalReset: function() {
         this.hideStructure(this.pointA); this.hideStructure(this.pointB); this.hideStructure(this.pointC);
         this.pointA.top = null; this.pointA.base = null; this.pointB.top = null; this.pointB.base = null;
         this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false');
-        if(this.antennaTube1) this.antennaTube1.setAttribute('visible', 'false'); if(this.antennaTube2) this.antennaTube2.setAttribute('visible', 'false');
-        for(let i=0; i<this.maxRadials; i++) { if(this.radialPool[i]) this.radialPool[i].setAttribute('visible', 'false'); }
-        this.mmanaContainerEl.innerHTML = ''; this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; 
-        this.cursorRing.setAttribute('visible', 'false'); this.menuUI.setAttribute('visible', false);
+        while(this.mmanaContainerEl.object3D.children.length > 0) { this.mmanaContainerEl.object3D.remove(this.mmanaContainerEl.object3D.children[0]); }
+        this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; this.cursorRing.setAttribute('visible', 'false'); this.menuUI.setAttribute('visible', false);
       },
 
       refreshAll: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); }
@@ -557,15 +557,15 @@
   
   <div id="ui-2d-container">
     <h3>MMANA-GAL (.maa)</h3>
-    <p><b>Opzione A:</b> Carica un file salvato sul visore:</p>
+    <p><b>Opzione A:</b> Carica un file dal visore:</p>
     <input type="file" id="file-mmana" accept=".maa">
-    <p style="margin-top:10px;"><b>Opzione B:</b> O incolla qui il testo da Drive:</p>
-    <textarea id="text-mmana-paste" rows="3" placeholder="Incolla le righe del file..."></textarea>
+    <p><b>Opzione B:</b> O incolla qui il testo copiato da Drive:</p>
+    <textarea id="text-mmana-paste" rows="3" placeholder="Incolla le righe del file .maa..."></textarea>
     <button id="btn-load-paste" class="clickable">INIETTA ANTENNA</button>
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
   </div>
 
-  <a-scene webxr="optionalFeatures: passthrough; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
+  <a-scene ar-antenna-system webxr="optionalFeatures: passthrough; referenceSpaceType: local-floor">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
@@ -597,45 +597,45 @@
 
           <a-entity id="sub-endfed" position="0 0.01 0" visible="false">
             <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
-            <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-            <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-ac-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#43A047" position="-0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-ac-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#1B5E20" position="-0.06 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#3e2723" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#5d4037" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-ac-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#5d4037" position="-0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-ac-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#3e2723" position="-0.06 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-            <a-plane id="btn-cb-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.06 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-            <a-plane id="btn-cb-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="0.11 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-cb-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#43A047" position="0.16 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-cb-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#1B5E20" position="0.21 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-cb-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#0d47a1" position="0.06 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-cb-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#1565c0" position="0.11 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-cb-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#1565c0" position="0.16 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-cb-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#0d47a1" position="0.21 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-text id="txt-ef-values" value="AC: 10.00m | CB: 10.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
           <a-entity id="sub-longwire" position="0 0.01 0" visible="false">
             <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
-            <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#F57C00" position="-0.14 -0.01 0.01"><a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.055 0.055 0.055" position="0 0 0.005"></a-text></a-plane>
-            <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-            <a-plane id="btn-lw-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="0.06 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-lw-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#43A047" position="0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-lw-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#1B5E20" position="0.16 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#006064" position="-0.14 -0.01 0.01"><a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.055 0.055 0.055" position="0 0 0.005"></a-text></a-plane>
+            <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#212121" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-lw-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#424242" position="0.06 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-lw-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#424242" position="0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-lw-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#212121" position="0.16 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-text id="txt-lw-len-val" value="LUNGH: 20.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
           <a-entity id="sub-verticale" position="0 0.01 0" visible="false">
             <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
-            <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#B71C1C" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-            <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#1B5E20" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#3e2723" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#3e2723" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             
-            <a-plane id="btn-rad-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-            <a-plane id="btn-rad-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="0.06 -0.01 0.01"><a-text value="-10c" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-rad-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#43A047" position="0.11 -0.01 0.01"><a-text value="+10c" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-rad-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#1B5E20" position="0.16 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-rad-len-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#4e342e" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-rad-len-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#5d4037" position="0.06 -0.01 0.01"><a-text value="-10c" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-rad-len-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#5d4037" position="0.11 -0.01 0.01"><a-text value="+10c" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-rad-len-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#4e342e" position="0.16 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             
             <a-text id="txt-rad-num-val" value="RADIALI: 4" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="-0.13 -0.05 0"></a-text>
             <a-text id="txt-rad-len-val" value="LUNGH R: 5.0m" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="0.12 -0.05 0"></a-text>
           </a-entity>
 
           <a-entity id="sub-mmana" position="0 0.01 0" visible="false">
-            <a-text value="MODELLI SELEZIONABILI IN REALTA AUMENTATA" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
-            <a-plane id="btn-mmana-model" class="clickable" btn-interaction width="0.32" height="0.03" color="#006064" position="0 -0.01 0.01">
+            <a-text value="MODELLI IN MEMORIA (MMANA-GAL)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
+            <a-plane id="btn-mmana-model" class="clickable" btn-interaction width="0.35" height="0.03" color="#006064" position="0 -0.01 0.01">
               <a-text id="txt-mmana-model-val" value="-" align="center" scale="0.065 0.065 0.065"></a-text>
             </a-plane>
           </a-entity>
@@ -654,6 +654,7 @@
     </a-entity>
 
     <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="100" height="100" material="opacity: 0.0; transparent: true"></a-plane>
+    
     <a-entity id="mmana-wires-container"></a-entity>
 
     <a-ring id="cursor-ring" color="#FFFFFF" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" visible="false"></a-ring>
