@@ -3,9 +3,8 @@
 <head>
   <meta charset="utf-8">
   <title>Antenne AR Pro V15 - Quest 3 Mesh & Smart Laser</title>
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@v1.4.2/examples/showcase/ar-hit-test/ar-hit-test.js"></script>
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<script src="https://raw.githack.com/aframevr/aframe/master/examples/showcase/ar-hit-test/ar-hit-test.js"></script>
   <style>
     #ui-2d-container {
       position: absolute; top: 15px; left: 15px; z-index: 9999;
@@ -25,7 +24,42 @@
         if (cameraEl && cameraEl.object3D) { this.el.object3D.lookAt(cameraEl.object3D.position); }
       }
     });
+    // COMPONENTE LASER DINAMICO: Si ferma esattamente sulla Mesh Fisica (i triangoli) o sui menu
+    AFRAME.registerComponent('smart-ar-laser', {
+      tick: function () {
+        let raycaster = this.el.components.raycaster;
+        let cursorRing = document.querySelector('#cursor-ring');
 
+        // Protezione anti-crash: se il raycaster non è ancora caricato in memoria, fermati.
+        if (raycaster && raycaster.intersectedEls && raycaster.intersectedEls.length > 0) {
+           let hit = raycaster.getIntersection(raycaster.intersectedEls[0]);
+           if (hit) {
+             let localHit = new THREE.Vector3().copy(hit.point);
+             this.el.object3D.worldToLocal(localHit);
+             this.el.setAttribute('line', `start: 0 0 0; end: ${localHit.x} ${localHit.y} ${localHit.z}; color: #00BFFF; opacity: 0.8`);
+             if (cursorRing) cursorRing.setAttribute('visible', 'false');
+             return;
+           }
+        }
+
+        if (cursorRing) {
+          let isRingVisible = cursorRing.getAttribute('visible');
+          if (isRingVisible === true || isRingVisible === 'true') {
+             let worldPos = new THREE.Vector3();
+             cursorRing.object3D.getWorldPosition(worldPos);
+             
+             // Converti da coordinate globali a locali per il controller
+             this.el.object3D.worldToLocal(worldPos);
+             
+             this.el.setAttribute('line', `start: 0 0 0; end: ${worldPos.x} ${worldPos.y} ${worldPos.z}; color: #00E676; opacity: 0.9`);
+             return;
+          }
+        }
+
+        // Niente toccato: laser standard rosso
+        this.el.setAttribute('line', `start: 0 0 0; end: 0 0 -2; color: #FF1744; opacity: 0.2`);
+      }
+    });
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el;
@@ -843,8 +877,7 @@
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
   </div>
 
-<a-scene webxr="optionalFeatures: hit-test, dom-overlay; overlayElement: #ui-2d-container" vr-mode-ui="enabled: true">    
-    <a-entity id="cameraRig">
+<a-scene webxr="optionalFeatures: hit-test; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">    <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
