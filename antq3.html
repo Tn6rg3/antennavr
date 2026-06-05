@@ -415,19 +415,27 @@
         this.labelSegB.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
       },
 
-      // DELEGAZIONE COMPLETA E ROBUSTA DEGLI EVENTI
       setupGlobalEventDelegation: function() {
         let scene = this.el.sceneEl;
+        
+        // VARIABILE PER L'ANTI-RIMBALZO
+        this.lastClickTime = 0; 
 
         scene.addEventListener('click', (evt) => {
+          // DEBOUNCE: Se sono passati meno di 250 millisecondi dall'ultimo click, ignoralo
+          let now = Date.now();
+          if (now - this.lastClickTime < 250) return;
+
           let target = evt.target.closest('.clickable'); if(!target) return;
           
-          // ERRORE CORRETTO: IMPEDISCE I CLICK SU ELEMENTI INVISIBILI DEI SOTTOMENU SOVRAPPOSTI
+          // Impedisce i click su menu invisibili
           let isVis = target.getAttribute('visible');
           if (isVis === false || isVis === 'false') return;
           let parent = target.parentElement;
           if (parent && (parent.getAttribute('visible') === false || parent.getAttribute('visible') === 'false')) return;
 
+          // SE IL CLICK E' VALIDO, AGGIORNO IL TIMER E PROCEDO
+          this.lastClickTime = now;
           let id = target.id;
 
           if (id === 'btn-ant') {
@@ -485,7 +493,6 @@
           }
         });
       },
-
       parseMmanaText: function(text) {
         let lines = text.split('\n'); 
         this.importedMmanaWires = [];
