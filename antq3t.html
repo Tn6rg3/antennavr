@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V16 - Topografia Ibrida (Laser/Contatto)</title>
+  <title>Antenne AR Pro V17 - Scansione 3D Hit-Test</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -64,14 +64,15 @@
         this.lastTriggerTime = 0; 
         this.beaconLocalPos = null;
 
-        // MODALITA' POSIZIONAMENTO (LASER o CONTATTO REALE)
-        this.placementMode = 'LASER'; // o 'CONTACT'
+        // MODALITA' POSIZIONAMENTO 
+        this.placementMode = 'LASER'; // 'LASER', 'CONTACT', 'SCAN'
 
         // Cache DOM
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
         this.cursorRing = document.querySelector('#cursor-ring');
         this.contactCursor = document.querySelector('#contact-cursor');
+        this.hitReticle = document.querySelector('#hit-reticle');
         
         this.worldPivotEl = document.querySelector('#world-pivot');
         this.worldContentEl = document.querySelector('#world-content');
@@ -98,19 +99,24 @@
         this.updateMenuText();
       },
 
-      // Trasforma un punto del mondo reale nelle coordinate locali del "Vassoio"
       getLocalPoint: function(worldVec) {
         let local = new THREE.Vector3();
         this.worldContentEl.object3D.worldToLocal(local.copy(worldVec));
         return { x: local.x, y: local.y, z: local.z };
       },
 
-      // UNIFICA IL POSIZIONAMENTO (Laser o Contatto Reale)
       getWorldTargetPoint: function() {
         if (this.placementMode === 'CONTACT') {
             let pos = new THREE.Vector3();
-            this.raycasterEl.object3D.getWorldPosition(pos);
+            this.contactCursor.object3D.getWorldPosition(pos);
             return pos;
+        } else if (this.placementMode === 'SCAN') {
+            if (this.hitReticle && this.hitReticle.getAttribute('visible')) {
+                let pos = new THREE.Vector3();
+                this.hitReticle.object3D.getWorldPosition(pos);
+                return pos;
+            }
+            return null;
         } else {
             let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
             if (hitGround) return hitGround.point.clone();
@@ -202,7 +208,6 @@
         this.previewCollar = document.createElement('a-torus'); this.previewCollar.setAttribute('radius', '0.04'); this.previewCollar.setAttribute('radius-tubular', '0.006'); this.previewCollar.setAttribute('material', 'color: #FFEB3B; shader: flat'); this.previewCollar.setAttribute('visible', 'false'); this.previewCollar.setAttribute('rotation', '90 0 0'); this.worldContentEl.appendChild(this.previewCollar);
         this.previewCollarText = document.createElement('a-text'); this.previewCollarText.setAttribute('align', 'center'); this.previewCollarText.setAttribute('color', '#FFEB3B'); this.previewCollarText.setAttribute('look-at-camera', ''); this.previewCollarText.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.previewCollarText);
 
-        // IL FARO DI CALIBRAZIONE (DIAMANTE)
         this.beaconVisual = document.createElement('a-entity');
         let outerDiamond = document.createElement('a-octahedron'); outerDiamond.setAttribute('radius', '0.08'); outerDiamond.setAttribute('color', '#00BFFF'); outerDiamond.setAttribute('material', 'shader: flat; wireframe: true');
         let innerDiamond = document.createElement('a-octahedron'); innerDiamond.setAttribute('radius', '0.04'); innerDiamond.setAttribute('color', '#00BFFF'); innerDiamond.setAttribute('material', 'shader: flat; opacity: 0.8');
@@ -225,19 +230,27 @@
       },
 
       tick: function () {
-        if (this.placementMode === 'CONTACT') {
-          this.cursorRing.setAttribute('visible', 'false');
-          this.contactCursor.setAttribute('visible', 'true');
-        } else {
-          this.contactCursor.setAttribute('visible', 'false');
-          if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
-            let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-            if (intersection) {
-              this.cursorRing.setAttribute('visible', 'true'); this.cursorRing.setAttribute('position', intersection.point);
-            } else { this.cursorRing.setAttribute('visible', 'false'); }
-          } else {
+        if (this.placementMode === 'SCAN') {
             this.cursorRing.setAttribute('visible', 'false');
-          }
+            this.contactCursor.setAttribute('visible', 'false');
+        } 
+        else if (this.placementMode === 'CONTACT') {
+            this.cursorRing.setAttribute('visible', 'false');
+            this.contactCursor.setAttribute('visible', 'true');
+        } 
+        else {
+            this.contactCursor.setAttribute('visible', 'false');
+            if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
+                let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
+                if (intersection) {
+                    this.cursorRing.setAttribute('visible', 'true'); 
+                    this.cursorRing.setAttribute('position', intersection.point);
+                } else { 
+                    this.cursorRing.setAttribute('visible', 'false'); 
+                }
+            } else {
+                this.cursorRing.setAttribute('visible', 'false');
+            }
         }
       },
 
@@ -258,13 +271,11 @@
       onRightThumbstick: function (evt) {
         let thumbTime = Date.now();
         if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
-          
           if (this.state.includes('HEIGHT') && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1; 
             this.currentHeight = Math.max(0.0, this.currentHeight + step);
             this.updateHeightPreview(); this.lastThumbTime = thumbTime;
           }
-          
           else if (this.gwState === 'ADJUST_HEIGHT' && this.activeAnchor && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1;
             let poleData = this.activeAnchor.pole === 'A' ? this.pointA : this.pointB;
@@ -312,7 +323,6 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        // SCUDO ANTI-TRAPASSO MENU
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         if (intersects) {
           for (let i = 0; i < intersects.length; i++) {
@@ -322,9 +332,7 @@
           }
         }
 
-        // ----------------------------------------------------
-        // LOGICA CALIBRAZIONE (IL VASSOIO)
-        // ----------------------------------------------------
+        // CALIBRAZIONE (IL VASSOIO)
         if (this.state === 'CALIB_SET') {
             let worldPt = this.getWorldTargetPoint();
             if (worldPt) {
@@ -347,21 +355,18 @@
             let worldPt = this.getWorldTargetPoint();
             if (worldPt) {
                 this.worldPivotEl.object3D.position.copy(worldPt);
-                let instText = this.placementMode === 'LASER' ? 'RIALLINEATO.\nJoystick SX: Ruota. Y: Esci.' : 'RIALLINEATO.\nSpostati per correggere o usa Joystick SX.';
-                document.querySelector('#info-text').setAttribute('value', instText);
+                document.querySelector('#info-text').setAttribute('value', 'RIALLINEATO.\nSpostati per correggere o usa Joystick SX.');
             }
             return;
         }
 
-        // ----------------------------------------------------
-        // LOGICA MODALITA' TIRANTI
-        // ----------------------------------------------------
+        // TIRANTI
         if (this.gwState !== 'OFF') {
           if (this.gwState === 'ADJUST_HEIGHT') {
             this.gwState = 'PLACE_PEGS';
             this.guyWiresData.push(this.activeAnchor); 
             this.previewCollar.setAttribute('material', 'color: #FF0000');
-            this.updateGWStatus("POSIZIONA IL PICCHETTO E PREMI IL GRILLETTO");
+            this.updateGWStatus("PUNTA IL TERRENO E PREMI IL GRILLETTO PER I PICCHETTI");
             return;
           }
 
@@ -377,9 +382,7 @@
           return; 
         }
 
-        // ----------------------------------------------------
-        // LOGICA NORMALE ANTENNA
-        // ----------------------------------------------------
+        // NORMALE ANTENNA
         let type = this.antennaTypes[this.antIdx];
 
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
@@ -433,7 +436,7 @@
       renderPoleAndLabel: function(struct, topPos, labelName) {
         if (!topPos) return;
         let baseHeight = struct.base.y;
-        let realHeight = topPos.y - baseHeight; // Calcolo altezza relativa alla sua base
+        let realHeight = topPos.y - baseHeight; 
         
         struct.sphere.setAttribute('visible', 'true'); struct.pole.setAttribute('visible', 'true'); struct.label.setAttribute('visible', 'true');
         struct.sphere.setAttribute('position', topPos);
@@ -493,12 +496,12 @@
         toggleSubMenu('#sub-mmana', type === 'MMANA-GAL');
         
         document.querySelector('#btn-repo-b').setAttribute('visible', type !== 'Verticale' && type !== 'MMANA-GAL');
-
         this.refreshRaycaster();
 
-        let infoTextStr = this.placementMode === 'LASER' 
-            ? "Usa il raggio laser e premi il grilletto per piazzare."
-            : "Appoggia il controller a terra e premi il grilletto per piazzare.";
+        let infoTextStr = "";
+        if (this.placementMode === 'LASER') infoTextStr = "Punta il laser a terra e premi il grilletto.";
+        else if (this.placementMode === 'CONTACT') infoTextStr = "Tocca il suolo vero col controller e premi grilletto.";
+        else infoTextStr = "Guarda il prato vero con la testa (anello fucsia) e premi.";
 
         if (this.state === 'IDLE') {
             if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA: ${this.getCalculatedLength().toFixed(2)}m`; } 
@@ -545,7 +548,6 @@
             let peg = document.createElement('a-cone');
             peg.setAttribute('radius-bottom', '0.04'); peg.setAttribute('radius-top', '0.005'); peg.setAttribute('height', '0.15');
             peg.setAttribute('material', 'color: #FF9800; shader: flat');
-            // Alza leggermente il picchetto in base alla Y reale
             peg.setAttribute('position', `${pVec.x} ${pVec.y + 0.075} ${pVec.z}`);
             this.gwContainerEl.appendChild(peg);
 
@@ -711,33 +713,47 @@
           let id = target.id;
           let mathRound = (num) => Math.round(num * 100) / 100;
 
-          // CONTROLLI MODALITA POSA (LASER / CONTATTO)
+          // MODALITA POSA (LASER / CONTATTO / SCAN)
           if (id === 'btn-mode-placement') {
-            this.placementMode = this.placementMode === 'LASER' ? 'CONTACT' : 'LASER';
-            let txt = this.placementMode === 'LASER' ? "MODALITA' POSA: LASER (A DISTANZA)" : "MODALITA' POSA: REALE (TOCCA TERRA)";
+            let modes = ['LASER', 'CONTACT', 'SCAN'];
+            let idx = modes.indexOf(this.placementMode);
+            this.placementMode = modes[(idx + 1) % modes.length];
+
+            let txt = ""; let color = "";
+            if (this.placementMode === 'LASER') {
+                txt = "MODALITA' POSA: LASER (A DISTANZA)"; color = "#4A148C";
+                this.hitReticle.removeAttribute('ar-hit-test'); this.hitReticle.setAttribute('visible', 'false');
+            } else if (this.placementMode === 'CONTACT') {
+                txt = "MODALITA' POSA: REALE (TOCCA TERRA)"; color = "#00695C";
+                this.hitReticle.removeAttribute('ar-hit-test'); this.hitReticle.setAttribute('visible', 'false');
+            } else {
+                txt = "MODALITA' POSA: SCANSIONE 3D (GUARDA)"; color = "#E65100";
+                this.hitReticle.setAttribute('ar-hit-test', ''); 
+            }
             document.querySelector('#txt-placement-mode').setAttribute('value', txt);
-            let color = this.placementMode === 'LASER' ? "#4A148C" : "#00695C";
             document.querySelector('#btn-mode-placement').setAttribute('color', color);
-            document.querySelector('#btn-mode-placement').setAttribute('material', 'color', color);
             this.updateMenuText();
           }
 
-          // CONTROLLI CALIBRAZIONE (ANTI-DRIFT)
+          // APRI MENU TIRANTI
+          else if (id === 'btn-open-gw') {
+            this.toggleGuyWireMode();
+          }
+
+          // CALIBRAZIONE (ANTI-DRIFT)
           else if (id === 'btn-cal-set') {
             this.state = 'CALIB_SET';
             this.menuUI.setAttribute('visible', false);
-            let txt = this.placementMode === 'LASER' ? 'Punta un sasso o albero col laser e premi grilletto per piazzare il Faro.' : 'Tocca un sasso o albero con la punta del controller e premi grilletto per piazzare il Faro.';
-            document.querySelector('#info-text').setAttribute('value', txt);
+            document.querySelector('#info-text').setAttribute('value', 'Piazza il Faro con la modalità di posa attuale.');
           }
           else if (id === 'btn-cal-snap') {
             if (!this.beaconLocalPos) return; 
             this.state = 'CALIB_SNAP';
             this.menuUI.setAttribute('visible', false);
-            let txt = this.placementMode === 'LASER' ? 'Punta di nuovo la VERA base albero per riallineare il prato.' : 'Tocca di nuovo la VERA base albero col controller per riallineare il prato.';
-            document.querySelector('#info-text').setAttribute('value', txt);
+            document.querySelector('#info-text').setAttribute('value', 'Aggancia la VERA base albero per riallineare.');
           }
 
-          // CONTROLLI MENU TIRANTI
+          // MENU TIRANTI
           else if (id === 'btn-gw-new-a') { this.startCollarPlacement('A'); }
           else if (id === 'btn-gw-new-b') { this.startCollarPlacement('B'); }
           else if (id === 'btn-gw-undo') {
@@ -755,7 +771,7 @@
           }
           else if (id === 'btn-gw-close') { this.toggleGuyWireMode(); }
 
-          // CONTROLLI NORMALI MENU ANTENNA
+          // MENU ANTENNA
           else if (id === 'btn-ant') { this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); } 
           else if (id === 'btn-band') { this.bandIdx = (this.bandIdx + 1) % this.bands.length; this.resetAntennaLengths(); if (this.antennaTypes[this.antIdx] === 'Verticale' && this.pointA.top) { this.pointA.top.y = this.getCalculatedLength(); } this.refreshAll(); } 
           else if (id === 'btn-c-left') { this.pointC.percent = Math.max(0.02, mathRound(this.pointC.percent - 0.05)); this.updateGeometriesAndDrawings(); } 
@@ -806,7 +822,6 @@
             }
           }
         }
-        
         let alertBox = document.querySelector('#alert-msg');
         if (this.importedMmanaWires.length > 0) {
           this.mmanaWires = this.importedMmanaWires;
@@ -816,7 +831,7 @@
           alertBox.style.color = "#00FF00";
           alertBox.innerText = `Caricati ${this.mmanaWires.length} fili! Entra in AR e posiziona.`;
         } else {
-          alertBox.style.color = "#FF0000"; alertBox.innerText = "Errore: Nessun filo trovato. Verifica file.";
+          alertBox.style.color = "#FF0000"; alertBox.innerText = "Errore: Nessun filo trovato.";
         }
       },
 
@@ -847,8 +862,7 @@
         this.mmanaContainerEl.innerHTML = ''; this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; 
         
         this.guyWiresData = []; this.drawGuyWires(); this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false);
-        this.previewCollar.setAttribute('visible', 'false');
-        this.previewCollarText.setAttribute('visible', 'false');
+        this.previewCollar.setAttribute('visible', 'false'); this.previewCollarText.setAttribute('visible', 'false');
 
         this.worldPivotEl.object3D.position.set(0,0,0);
         this.worldPivotEl.object3D.rotation.set(0,0,0);
@@ -875,46 +889,45 @@
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
   </div>
 
-  <a-scene webxr="optionalFeatures: passthrough; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
+  <!-- Aggiunto hit-test nelle features opzionali -->
+  <a-scene webxr="optionalFeatures: hit-test, local-floor; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
         <!-- MENU NORMALE ANTENNA -->
-        <a-entity id="menu-ui" visible="false" position="0 0.20 -0.4" rotation="-30 0 0">
-          <a-plane width="0.5" height="0.65" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
+        <a-entity id="menu-ui" visible="false" position="0 0.30 -0.4" rotation="-30 0 0">
+          <a-plane width="0.5" height="0.80" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.29 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.35 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
           
-          <a-plane width="0.44" height="0.04" color="#2A2A2A" position="0 0.24 0.01">
-            <a-text id="info-text" value="Usa il raggio laser per posizionare i punti." position="0 0 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
+          <a-plane width="0.46" height="0.04" color="#2A2A2A" position="0 0.28 0.01">
+            <a-text id="info-text" value="-" position="0 0 0.01" align="center" scale="0.06 0.06 0.06" color="#00E676"></a-text>
           </a-plane>
 
-          <a-text value="PREMI IL TASTO [ X ] SUL CONTROLLER PER GESTIRE I TIRANTI" position="0 0.19 0.01" align="center" scale="0.055 0.055 0.055" color="#FF9800"></a-text>
-
-          <!-- NUOVO: TOGGLE MODALITA' TOPOGRAFO (LASER / CONTATTO) -->
-          <a-plane id="btn-mode-placement" class="clickable" btn-interaction width="0.42" height="0.03" color="#4A148C" position="0 0.14 0.01">
+          <!-- TOGGLE MODALITA' POSIZIONAMENTO -->
+          <a-plane id="btn-mode-placement" class="clickable" btn-interaction width="0.46" height="0.04" color="#4A148C" position="0 0.22 0.01">
             <a-text id="txt-placement-mode" value="MODALITA' POSA: LASER (A DISTANZA)" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.08 0.01">
+          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.22" height="0.04" color="#37474F" position="-0.12 0.16 0.01">
             <a-text value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
             <a-text id="txt-ant-val" value="-" align="center" scale="0.09 0.09 0.09" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.08 0.01">
+          <a-plane id="btn-band" class="clickable" btn-interaction width="0.22" height="0.04" color="#1A237E" position="0.12 0.16 0.01">
             <a-text value="BANDA RADIO:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#9FA8DA"></a-text>
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-entity id="sub-dipolo" position="0 0.01 0" visible="false">
+          <a-entity id="sub-dipolo" position="0 0.09 0" visible="false">
             <a-text value="SPOSTA ALIMENTAZIONE (PUNTO C)" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.02 0"></a-text>
             <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="-0.09 -0.015 0.01"><a-text value="<- Verso PUNTO A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="0.09 -0.015 0.01"><a-text value="Verso PUNTO B ->" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           </a-entity>
 
-          <a-entity id="sub-endfed" position="0 0.01 0" visible="false">
+          <a-entity id="sub-endfed" position="0 0.09 0" visible="false">
             <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
@@ -927,7 +940,7 @@
             <a-text id="txt-ef-values" value="AC: 10.00m | CB: 10.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-longwire" position="0 0.01 0" visible="false">
+          <a-entity id="sub-longwire" position="0 0.09 0" visible="false">
             <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#F57C00" position="-0.14 -0.01 0.01"><a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.055 0.055 0.055" position="0 0 0.005"></a-text></a-plane>
             <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -937,7 +950,7 @@
             <a-text id="txt-lw-len-val" value="LUNGH: 20.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-verticale" position="0 0.01 0" visible="false">
+          <a-entity id="sub-verticale" position="0 0.09 0" visible="false">
             <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#B71C1C" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#1B5E20" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -949,28 +962,33 @@
             <a-text id="txt-rad-len-val" value="LUNGH R: 5.0m" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="0.12 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-mmana" position="0 0.01 0" visible="false">
+          <a-entity id="sub-mmana" position="0 0.09 0" visible="false">
             <a-text value="MODELLI SELEZIONABILI IN REALTA AUMENTATA" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-mmana-model" class="clickable" btn-interaction width="0.32" height="0.03" color="#006064" position="0 -0.01 0.01">
               <a-text id="txt-mmana-model-val" value="-" align="center" scale="0.065 0.065 0.065"></a-text>
             </a-plane>
           </a-entity>
 
-          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 -0.08 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 -0.08 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 -0.03 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 -0.03 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-          <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.13 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
-          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.14" height="0.025" color="#C62828" position="-0.15 -0.17 0.01"><a-text value="EDIT A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.14" height="0.025" color="#1565C0" position="0 -0.17 0.01"><a-text value="EDIT B" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.17 0.01"><a-text value="RESET" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+          <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.08 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
+          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.14" height="0.025" color="#C62828" position="-0.15 -0.12 0.01"><a-text value="EDIT A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.14" height="0.025" color="#1565C0" position="0 -0.12 0.01"><a-text value="EDIT B" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.12 0.01"><a-text value="RESET" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
 
           <!-- SEZIONE CALIBRAZIONE ANTI-DRIFT -->
-          <a-text value="SISTEMA DI CALIBRAZIONE ANTI-DRIFT (VASSOIO GLOBALE)" position="0 -0.23 0.01" align="center" scale="0.06 0.06 0.06" color="#00E676"></a-text>
-          <a-plane id="btn-cal-set" class="clickable" btn-interaction width="0.22" height="0.03" color="#004D40" position="-0.12 -0.28 0.01">
+          <a-text value="SISTEMA DI CALIBRAZIONE ANTI-DRIFT (VASSOIO GLOBALE)" position="0 -0.18 0.01" align="center" scale="0.06 0.06 0.06" color="#00E676"></a-text>
+          <a-plane id="btn-cal-set" class="clickable" btn-interaction width="0.22" height="0.03" color="#004D40" position="-0.12 -0.23 0.01">
             <a-text value="1. PIAZZA FARO" align="center" scale="0.065 0.065 0.065"></a-text>
           </a-plane>
-          <a-plane id="btn-cal-snap" class="clickable" btn-interaction width="0.22" height="0.03" color="#004D40" position="0.12 -0.28 0.01">
-            <a-text value="2. RIALINEA / RUOTA" align="center" scale="0.065 0.065 0.065"></a-text>
+          <a-plane id="btn-cal-snap" class="clickable" btn-interaction width="0.22" height="0.03" color="#004D40" position="0.12 -0.23 0.01">
+            <a-text value="2. RIALINEA E RUOTA" align="center" scale="0.065 0.065 0.065"></a-text>
+          </a-plane>
+
+          <!-- BOTTONE GIGANTE TIRANTI -->
+          <a-plane id="btn-open-gw" class="clickable" btn-interaction width="0.46" height="0.04" color="#E65100" position="0 -0.32 0.01">
+            <a-text value="-> APRI MENU TIRANTI E ANCORAGGI <-" align="center" scale="0.075 0.075 0.075" color="#FFFFFF"></a-text>
           </a-plane>
 
         </a-entity>
@@ -997,19 +1015,21 @@
           </a-plane>
 
           <a-plane id="btn-gw-close" class="clickable" btn-interaction width="0.32" height="0.03" color="#1A1A1A" position="0 -0.15 0.01">
-            <a-text value="ESCI E TORNA ALL'ANTENNA (TASTO X)" align="center" scale="0.06 0.06 0.06" color="#9E9E9E"></a-text>
+            <a-text value="ESCI E TORNA ALL'ANTENNA" align="center" scale="0.06 0.06 0.06" color="#9E9E9E"></a-text>
           </a-plane>
         </a-entity>
       </a-entity>
       
       <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;">
-          <!-- IL PUNTATORE DI CONTATTO -->
           <a-sphere id="contact-cursor" radius="0.035" color="#00FF00" material="shader: flat; opacity: 0.9" position="0 -0.02 -0.05" visible="false"></a-sphere>
       </a-entity>
     </a-entity>
 
     <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="1000" height="1000" material="opacity: 0.0; transparent: true"></a-plane>
     <a-ring id="cursor-ring" color="#FFFFFF" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" visible="false"></a-ring>
+
+    <!-- IL RETICOLO DI SCANSIONE HIT-TEST -->
+    <a-entity id="hit-reticle" geometry="primitive: ring; radiusInner: 0.04; radiusOuter: 0.06" rotation="-90 0 0" material="color: #FF00FF; shader: flat" visible="false"></a-entity>
 
     <!-- IL VASSOIO INVISIBILE (World Master) -->
     <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
