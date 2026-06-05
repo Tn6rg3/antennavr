@@ -257,17 +257,36 @@
         }
       },
 
-      updateMenuText: function() {
+     updateMenuText: function() {
         let type = this.antennaTypes[this.antIdx]; let band = this.bands[this.bandIdx];
         document.querySelector('#txt-ant-val').setAttribute('value', type.toUpperCase());
         document.querySelector('#txt-band-val').setAttribute('value', band);
 
-        document.querySelector('#sub-dipolo').setAttribute('visible', type === 'Dipolo');
-        document.querySelector('#sub-endfed').setAttribute('visible', type === 'End Fed');
-        document.querySelector('#sub-longwire').setAttribute('visible', type === 'Longwire');
-        document.querySelector('#sub-verticale').setAttribute('visible', type === 'Verticale');
-        document.querySelector('#sub-mmana').setAttribute('visible', type === 'MMANA-GAL');
+        // FUNZIONE SALVA-LASER: Nasconde il menu e disabilita la collisione fisica
+        let toggleSubMenu = (id, isVisible) => {
+          let el = document.querySelector(id);
+          el.setAttribute('visible', isVisible);
+          let btns = el.querySelectorAll('[btn-interaction]');
+          btns.forEach(btn => {
+            if (isVisible) btn.classList.add('clickable');
+            else btn.classList.remove('clickable');
+          });
+        };
+
+        toggleSubMenu('#sub-dipolo', type === 'Dipolo');
+        toggleSubMenu('#sub-endfed', type === 'End Fed');
+        toggleSubMenu('#sub-longwire', type === 'Longwire');
+        toggleSubMenu('#sub-verticale', type === 'Verticale');
+        toggleSubMenu('#sub-mmana', type === 'MMANA-GAL');
+        
         document.querySelector('#btn-repo-b').setAttribute('visible', type !== 'Verticale' && type !== 'MMANA-GAL');
+
+        // Aggiorna il bersaglio del laser per fargli dimenticare i tasti nascosti
+        setTimeout(() => {
+          if (this.raycasterEl && this.raycasterEl.components.raycaster) {
+            this.raycasterEl.components.raycaster.refreshObjects();
+          }
+        }, 50);
 
         let infoTextStr = "";
         if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA: ${this.getCalculatedLength().toFixed(2)}m`; } 
@@ -288,7 +307,6 @@
         }
         document.querySelector('#info-text').setAttribute('value', infoTextStr);
       },
-
       updateGeometriesAndDrawings: function() {
         this.mmanaContainerEl.innerHTML = ''; // Svuota per evitare sovrapposizioni ghost
 
