@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <title>Antenne AR Pro V15 - Quest 3 Mesh & Smart Laser</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@v1.4.2/examples/showcase/ar-hit-test/ar-hit-test.js"></script>
   <style>
     #ui-2d-container {
       position: absolute; top: 15px; left: 15px; z-index: 9999;
@@ -16,8 +18,7 @@
     #ui-2d-container button { width: 100%; padding: 6px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; }
   </style>
   <script>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@v1.4.2/examples/showcase/ar-hit-test/ar-hit-test.js"></script>
+   
     AFRAME.registerComponent('look-at-camera', {
       tick: function () {
         let cameraEl = document.querySelector('#camera');
