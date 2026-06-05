@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <title>Antenne AR Pro V15 - Quest 3 Mesh & Smart Laser</title>
- <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@v1.5.0/examples/showcase/ar-hit-test/ar-hit-test.js"></script>
+  
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@v1.5.0/examples/showcase/ar-hit-test/ar-hit-test.js"></script>
   
   <style>
     #ui-2d-container {
@@ -25,13 +26,12 @@
       }
     });
 
-    // COMPONENTE LASER DINAMICO: Si ferma esattamente sulla Mesh Fisica (i triangoli) o sui menu
+    // COMPONENTE LASER DINAMICO
     AFRAME.registerComponent('smart-ar-laser', {
       tick: function () {
         let raycaster = this.el.components.raycaster;
         let cursorRing = document.querySelector('#cursor-ring');
 
-        // Protezione anti-crash: se il raycaster non è ancora caricato in memoria, fermati.
         if (raycaster && raycaster.intersectedEls && raycaster.intersectedEls.length > 0) {
            let hit = raycaster.getIntersection(raycaster.intersectedEls[0]);
            if (hit) {
@@ -48,16 +48,12 @@
           if (isRingVisible === true || isRingVisible === 'true') {
              let worldPos = new THREE.Vector3();
              cursorRing.object3D.getWorldPosition(worldPos);
-             
-             // Converti da coordinate globali a locali per il controller
              this.el.object3D.worldToLocal(worldPos);
-             
              this.el.setAttribute('line', `start: 0 0 0; end: ${worldPos.x} ${worldPos.y} ${worldPos.z}; color: #00E676; opacity: 0.9`);
              return;
           }
         }
 
-        // Niente toccato: laser standard rosso
         this.el.setAttribute('line', `start: 0 0 0; end: 0 0 -2; color: #FF1744; opacity: 0.2`);
       }
     });
@@ -65,7 +61,6 @@
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el;
-        // Leggiamo l'attributo colore nativo in modo sicuro
         let originalColor = el.getAttribute('color') || '#FFFFFF'; 
 
         el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
@@ -88,7 +83,6 @@
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         this.state = 'PLACE_GROUND_A'; 
-        
         this.pointA = { base: null, top: null, sphere: null, pole: null, label: null };
         this.pointB = { base: null, top: null, sphere: null, pole: null, label: null };
         this.pointC = { top: null, sphere: null, pole: null, label: null, percent: 0.5 }; 
@@ -114,7 +108,6 @@
         this.lastTriggerTime = 0; 
         this.beaconLocalPos = null;
 
-        // Cache DOM
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
         this.cursorRing = document.querySelector('#cursor-ring');
@@ -129,7 +122,6 @@
         this.mmanaContainerEl = document.querySelector('#mmana-wires-container');
         this.gwContainerEl = document.querySelector('#guy-wires-container');
 
-        // Eventi Analogici
         this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this));
         this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this));
         this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this));
@@ -324,15 +316,12 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        // 1. SCUDO UI: Se il laser tocca un menu, ignoriamo la logica dell'antenna
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         if (intersects && intersects.length > 0) return;
 
-        // 2. RECUPERA PUNTO FISICO: Se l'hit-test del Quest non vede nulla, non facciamo niente
         let isRingVisible = this.cursorRing.getAttribute('visible');
         if (isRingVisible === false || isRingVisible === 'false') return;
 
-        // Abbiamo un punto reale sicuro sulla mesh fisica!
         let targetPoint = new THREE.Vector3();
         this.cursorRing.object3D.getWorldPosition(targetPoint);
 
