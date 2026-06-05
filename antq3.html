@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V16 - Terreno Irregolare & Tiranti</title>
+  <title>Antenne AR Pro V17 - Step-by-Step & Anti-Drift</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -55,10 +55,10 @@
         this.antennaRotationY = 0; 
         this.globalTextScale = 0.35; 
         
-        // Lunghezza palo (altezza da terra)
+        // VARIABILI TRANSIZIONALI (Per il nuovo flusso in 3 step)
         this.currentHeight = 0.1; 
-        // Offset di quota per adattarsi al terreno irregolare
-        this.currentElevationOffset = 0;
+        this.tempBasePos = null;
+        this.tempElevation = 0;
 
         this.mmanaWires = []; this.importedMmanaWires = []; 
 
@@ -88,7 +88,7 @@
         this.mmanaContainerEl = document.querySelector('#mmana-wires-container');
         this.gwContainerEl = document.querySelector('#guy-wires-container');
 
-        // Eventi Analogici
+        // Eventi
         this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this));
         this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this));
         this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this));
@@ -111,7 +111,6 @@
 
       toggleMenu: function() {
         if(this.gwState !== 'OFF') return; 
-        
         if(this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
             this.state = 'IDLE';
             this.menuUI.setAttribute('visible', true);
@@ -217,26 +216,36 @@
       },
 
       tick: function () {
-        if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
+        // FASE 1: Scelta Punto Libero a Terra col Laser (Raycaster Libero)
+        if (this.state.includes('PLACE_GROUND') || this.state.includes('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
           let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if (intersection) {
-            let pt = intersection.point.clone();
-            pt.y += this.currentElevationOffset; // Applica l'offset per le irregolarità
-
             this.cursorContainer.setAttribute('visible', 'true'); 
-            this.cursorContainer.setAttribute('position', pt);
-
-            if (this.currentElevationOffset !== 0) {
-              this.cursorText.setAttribute('visible', 'true');
-              let sign = this.currentElevationOffset > 0 ? '+' : '';
-              this.cursorText.setAttribute('value', `Quota:\n${sign}${this.currentElevationOffset.toFixed(2)}m`);
-            } else {
-              this.cursorText.setAttribute('visible', 'false');
-            }
+            this.cursorContainer.setAttribute('position', intersection.point);
+            this.cursorText.setAttribute('value', 'GRILLETTO: Blocca Punto');
+            this.cursorText.setAttribute('color', '#00E676');
           } else { 
             this.cursorContainer.setAttribute('visible', 'false'); 
           }
-        } else {
+        } 
+        // FASE 2: Regolazione Altezza Terreno (Punto bloccato in X e Z)
+        else if (this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE') {
+          if (this.tempBasePos) {
+            // Calcolo posizione matematicamente perfetta senza laser
+            let localPt = new THREE.Vector3(this.tempBasePos.x, this.tempBasePos.y + this.tempElevation, this.tempBasePos.z);
+            let worldPt = new THREE.Vector3();
+            this.worldContentEl.object3D.localToWorld(worldPt.copy(localPt));
+
+            this.cursorContainer.setAttribute('visible', 'true');
+            this.cursorContainer.setAttribute('position', worldPt);
+            
+            let sign = this.tempElevation >= 0 ? '+' : '';
+            this.cursorText.setAttribute('value', `Quota: ${sign}${this.tempElevation.toFixed(2)}m\n<- Joystick SX ->\nGRILLETTO: Conferma`);
+            this.cursorText.setAttribute('color', '#FFEB3B');
+          }
+        } 
+        // FASE 3/IDLE: Nascondi Cursore
+        else {
           this.cursorContainer.setAttribute('visible', 'false');
         }
       },
@@ -244,8 +253,20 @@
       onLeftThumbstick: function(evt) {
         let now = Date.now();
 
-        // ROTAZIONE (X-AXIS)
-        if (this.gwState === 'OFF') {
+        // COMPENSAZIONE ALTEZZA TERRENO (Y-AXIS) - ATTIVO SOLO NELLA FASE ADJUST_BASE
+        let isAdjustingBase = this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE';
+        if (isAdjustingBase) {
+          if (!this.lastElevTime || now - this.lastElevTime > 110) {
+            if (Math.abs(evt.detail.y) > 0.4) {
+              // Y negativo = spinta in alto = Alza la quota
+              let step = evt.detail.y < 0 ? 0.05 : -0.05; 
+              this.tempElevation += step;
+              this.lastElevTime = now;
+            }
+          }
+        } 
+        // ROTAZIONE ANTENNA (X-AXIS) - ATTIVO SOLO SE IDLE
+        else if (this.gwState === 'OFF' && !this.state.includes('HEIGHT') && !this.state.includes('GROUND')) {
           if (Math.abs(evt.detail.x) > 0.3) {
               let delta = evt.detail.x > 0 ? 2.0 : -2.0;
               if (this.state === 'CALIB_SNAP') {
@@ -255,19 +276,6 @@
                   this.antennaRotationY += delta;
                   this.updateGeometriesAndDrawings();
               }
-          }
-        }
-
-        // COMPENSAZIONE ALTEZZA TERRENO (Y-AXIS)
-        let isPlacingGround = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS';
-        if (isPlacingGround) {
-          if (!this.lastElevTime || now - this.lastElevTime > 110) {
-            if (Math.abs(evt.detail.y) > 0.3) {
-              // Y < 0 corrisponde a spingere il joystick verso l'alto
-              let step = evt.detail.y < 0 ? 0.05 : -0.05; 
-              this.currentElevationOffset += step;
-              this.lastElevTime = now;
-            }
           }
         }
       },
@@ -285,7 +293,7 @@
           else if (this.gwState === 'ADJUST_HEIGHT' && this.activeAnchor && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1;
             let poleData = this.activeAnchor.pole === 'A' ? this.pointA : this.pointB;
-            let maxH = poleData.top.y - poleData.base.y; // Limitato all'altezza reale del palo
+            let maxH = poleData.top.y - poleData.base.y;
             this.activeAnchor.height = Math.max(0.1, Math.min(maxH, this.activeAnchor.height + step));
             this.updateCollarPreview();
             this.lastThumbTime = thumbTime;
@@ -296,10 +304,13 @@
       updateHeightPreview: function() {
         let basePos = this.state.includes('_A') ? this.pointA.base : this.pointB.base;
         let cy = basePos.y + (this.currentHeight / 2);
+        
+        // Uso coordinate locali perché verticalCylinder è dentro worldContentEl
         this.verticalCylinder.setAttribute('position', `${basePos.x} ${cy} ${basePos.z}`);
         this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${this.currentHeight}`);
+        
         this.heightText.setAttribute('position', `${basePos.x} ${basePos.y + this.currentHeight + 0.2} ${basePos.z}`);
-        this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
+        this.heightText.setAttribute('value', `Altezza: ${this.currentHeight.toFixed(1)}m\n<- Joystick DX ->\nGRILLETTO: OK`);
       },
 
       updateCollarPreview: function() {
@@ -308,7 +319,7 @@
         let cy = pData.base.y + this.activeAnchor.height;
         this.previewCollar.setAttribute('position', `${pData.base.x} ${cy} ${pData.base.z}`);
         this.previewCollarText.setAttribute('position', `${pData.base.x + 0.15} ${cy} ${pData.base.z}`);
-        this.previewCollarText.setAttribute('value', `H: ${this.activeAnchor.height.toFixed(1)}m`);
+        this.previewCollarText.setAttribute('value', `H: ${this.activeAnchor.height.toFixed(1)}m\n<- Joystick DX ->`);
       },
 
       startCollarPlacement: function(poleId) {
@@ -343,7 +354,42 @@
         }
 
         // ----------------------------------------------------
-        // LOGICA CALIBRAZIONE
+        // LOGICA MODALITA' TIRANTI
+        // ----------------------------------------------------
+        if (this.gwState !== 'OFF') {
+          if (this.gwState === 'ADJUST_HEIGHT') {
+            this.gwState = 'PLACE_PEGS';
+            this.guyWiresData.push(this.activeAnchor); 
+            this.previewCollar.setAttribute('material', 'color: #FF0000');
+            this.previewCollarText.setAttribute('value', '');
+            this.updateGWStatus("PUNTA IL TERRENO E PREMI GRILLETTO PER SCEGLIERE POSIZIONE PICCHETTO");
+            return;
+          }
+
+          if (this.gwState === 'PLACE_PEGS') {
+            let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
+            if (hitGround) {
+              this.tempBasePos = this.getLocalPoint(hitGround.point);
+              this.tempElevation = 0;
+              this.gwState = 'ADJUST_PEG_BASE';
+              this.updateGWStatus("USA JOYSTICK SX (SU/GIU) PER ADATTARE QUOTA\nPREMI GRILLETTO PER PIANTARE");
+            }
+            return;
+          }
+          
+          if (this.gwState === 'ADJUST_PEG_BASE') {
+            let localHit = { x: this.tempBasePos.x, y: this.tempBasePos.y + this.tempElevation, z: this.tempBasePos.z };
+            this.activeAnchor.pegs.push(localHit);
+            this.drawGuyWires(); 
+            this.gwState = 'PLACE_PEGS';
+            this.updateGWStatus("PUNTA IL TERRENO PER UN NUOVO PICCHETTO");
+            return;
+          }
+          return; 
+        }
+
+        // ----------------------------------------------------
+        // LOGICA CALIBRAZIONE (VASSOIO)
         // ----------------------------------------------------
         if (this.state === 'CALIB_SET') {
             let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
@@ -374,55 +420,32 @@
             return;
         }
 
-
         // ----------------------------------------------------
-        // LOGICA MODALITA' TIRANTI
-        // ----------------------------------------------------
-        if (this.gwState !== 'OFF') {
-          if (this.gwState === 'ADJUST_HEIGHT') {
-            this.gwState = 'PLACE_PEGS';
-            this.guyWiresData.push(this.activeAnchor); 
-            this.previewCollar.setAttribute('material', 'color: #FF0000');
-            this.updateGWStatus("JOYSTICK SX: ADATTA QUOTA\nGRILLETTO: PIAZZA PICCHETTO");
-            return;
-          }
-
-          if (this.gwState === 'PLACE_PEGS') {
-            let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-            if (hitGround) {
-              let pt = hitGround.point.clone();
-              pt.y += this.currentElevationOffset; // Applica quota irregolare
-              
-              let localHit = this.getLocalPoint(pt);
-              this.activeAnchor.pegs.push(localHit);
-              this.drawGuyWires(); 
-              this.currentElevationOffset = 0; // Reset
-            }
-            return;
-          }
-          return; 
-        }
-
-        // ----------------------------------------------------
-        // LOGICA NORMALE ANTENNA
+        // LOGICA NORMALE ANTENNA (MACCHINA A STATI A 3 FASI)
         // ----------------------------------------------------
         let type = this.antennaTypes[this.antIdx];
 
+        // ------------------- PUNTO A -------------------
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
           let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if(!hitGround) return;
-          
-          let pt = hitGround.point.clone();
-          pt.y += this.currentElevationOffset;
-
-          this.pointA.base = this.getLocalPoint(pt);
-          this.currentElevationOffset = 0; // Reset
-          
-          this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
+          this.tempBasePos = this.getLocalPoint(hitGround.point);
+          this.tempElevation = 0;
+          this.state = this.state.includes('REPOSITION') ? 'REPOSITION_ADJUST_BASE_A' : 'ADJUST_BASE_A';
+          document.querySelector('#info-text').setAttribute('value', "REGOLA QUOTA TERRENO (Joystick SX)");
+          return;
+        }
+        
+        if (this.state === 'ADJUST_BASE_A' || this.state === 'REPOSITION_ADJUST_BASE_A') {
+          this.pointA.base = { x: this.tempBasePos.x, y: this.tempBasePos.y + this.tempElevation, z: this.tempBasePos.z };
+          this.state = this.state.includes('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
           this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1;
           this.setupVerticalPreviewMode(this.pointA.base);
-        } 
-        else if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
+          document.querySelector('#info-text').setAttribute('value', "REGOLA ALTEZZA PALO (Joystick DX)");
+          return;
+        }
+
+        if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
           this.pointA.top = { x: this.pointA.base.x, y: this.pointA.base.y + this.currentHeight, z: this.pointA.base.z };
           this.resetVerticalPreviewMode();
           this.renderPoleAndLabel(this.pointA, this.pointA.top, type === 'Verticale' ? 'STILO VERTICALE' : (type === 'MMANA-GAL' ? 'PILONE MMANA' : 'PUNTO A'));
@@ -434,27 +457,37 @@
               this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
             } else { 
               this.state = 'PLACE_GROUND_B'; 
+              document.querySelector('#info-text').setAttribute('value', "SCEGLI POSIZIONE PUNTO B (Laser + Grilletto)");
             }
           }
-        } 
-        else if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
+          return;
+        }
+
+        // ------------------- PUNTO B -------------------
+        if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
           let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if(!hitGround) return;
+          this.tempBasePos = this.getLocalPoint(hitGround.point);
+          this.tempElevation = 0;
+          this.state = this.state.includes('REPOSITION') ? 'REPOSITION_ADJUST_BASE_B' : 'ADJUST_BASE_B';
+          document.querySelector('#info-text').setAttribute('value', "REGOLA QUOTA TERRENO (Joystick SX)");
+          return;
+        }
 
-          let pt = hitGround.point.clone();
-          pt.y += this.currentElevationOffset;
-
-          this.pointB.base = this.getLocalPoint(pt);
-          this.currentElevationOffset = 0; // Reset
-          
-          this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B';
-          this.currentHeight = 0.1; 
+        if (this.state === 'ADJUST_BASE_B' || this.state === 'REPOSITION_ADJUST_BASE_B') {
+          this.pointB.base = { x: this.tempBasePos.x, y: this.tempBasePos.y + this.tempElevation, z: this.tempBasePos.z };
+          this.state = this.state.includes('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B';
+          this.currentHeight = 0.1;
           this.setupVerticalPreviewMode(this.pointB.base);
-        } 
-        else if (this.state === 'PLACE_HEIGHT_B' || this.state === 'REPOSITION_HEIGHT_B') {
+          document.querySelector('#info-text').setAttribute('value', "REGOLA ALTEZZA PALO (Joystick DX)");
+          return;
+        }
+
+        if (this.state === 'PLACE_HEIGHT_B' || this.state === 'REPOSITION_HEIGHT_B') {
           this.pointB.top = { x: this.pointB.base.x, y: this.pointB.base.y + this.currentHeight, z: this.pointB.base.z };
           this.resetVerticalPreviewMode();
           this.state = 'IDLE'; this.updateGeometriesAndDrawings(); this.menuUI.setAttribute('visible', true);
+          return;
         }
       },
 
@@ -535,25 +568,27 @@
 
         this.refreshRaycaster();
 
-        let infoTextStr = "";
-        if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA: ${this.getCalculatedLength().toFixed(2)}m`; } 
-        else if (type === 'End Fed') {
-          infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nAC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`;
-          document.querySelector('#txt-ef-values').setAttribute('value', `AC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`);
-        } else if (type === 'Longwire') {
-          infoTextStr = `ANTENNA: LONGWIRE | BANDA: ${band}\nVERTICE: DA ${this.longwireVertex} | LUNGH: ${this.longwireLen.toFixed(2)}m`;
-          document.querySelector('#txt-lw-vertex-val').setAttribute('value', `VERTICE: DA ${this.longwireVertex}`);
-          document.querySelector('#txt-lw-len-val').setAttribute('value', `LUNGH: ${this.longwireLen.toFixed(2)}m`);
-        } else if (type === 'Verticale') {
-          let h = this.pointA.top ? (this.pointA.top.y - this.pointA.base.y).toFixed(2) : 0;
-          infoTextStr = `ANTENNA: VERTICALE | BANDA: ${band}\nSTILO: ${h}m | RADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`;
-          document.querySelector('#txt-rad-num-val').setAttribute('value', `RADIALI: ${this.numRadials}`);
-          document.querySelector('#txt-rad-len-val').setAttribute('value', `LUNGH R: ${this.radialLen.toFixed(1)}m`);
-        } else if (type === 'MMANA-GAL') { 
-          infoTextStr = `MMANA: ${this.mmanaModels[this.mmanaModelIdx]}\nFili conduttori: ${this.mmanaWires.length}\nRuota l'antenna col joystick sinistro.`; 
-          document.querySelector('#txt-mmana-model-val').setAttribute('value', this.mmanaModels[this.mmanaModelIdx].toUpperCase());
+        let infoTextStr = document.querySelector('#info-text').getAttribute('value');
+        if (this.state === 'IDLE') {
+          if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA: ${this.getCalculatedLength().toFixed(2)}m`; } 
+          else if (type === 'End Fed') {
+            infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nAC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`;
+            document.querySelector('#txt-ef-values').setAttribute('value', `AC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`);
+          } else if (type === 'Longwire') {
+            infoTextStr = `ANTENNA: LONGWIRE | BANDA: ${band}\nVERTICE: DA ${this.longwireVertex} | LUNGH: ${this.longwireLen.toFixed(2)}m`;
+            document.querySelector('#txt-lw-vertex-val').setAttribute('value', `VERTICE: DA ${this.longwireVertex}`);
+            document.querySelector('#txt-lw-len-val').setAttribute('value', `LUNGH: ${this.longwireLen.toFixed(2)}m`);
+          } else if (type === 'Verticale') {
+            let h = this.pointA.top ? (this.pointA.top.y - this.pointA.base.y).toFixed(2) : 0;
+            infoTextStr = `ANTENNA: VERTICALE | BANDA: ${band}\nSTILO: ${h}m | RADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`;
+            document.querySelector('#txt-rad-num-val').setAttribute('value', `RADIALI: ${this.numRadials}`);
+            document.querySelector('#txt-rad-len-val').setAttribute('value', `LUNGH R: ${this.radialLen.toFixed(1)}m`);
+          } else if (type === 'MMANA-GAL') { 
+            infoTextStr = `MMANA: ${this.mmanaModels[this.mmanaModelIdx]}\nFili conduttori: ${this.mmanaWires.length}\nRuota l'antenna col joystick sinistro.`; 
+            document.querySelector('#txt-mmana-model-val').setAttribute('value', this.mmanaModels[this.mmanaModelIdx].toUpperCase());
+          }
+          document.querySelector('#info-text').setAttribute('value', infoTextStr);
         }
-        document.querySelector('#info-text').setAttribute('value', infoTextStr);
       },
 
       drawGuyWires: function() {
@@ -836,9 +871,11 @@
           else if (id === 'btn-rad-p1')   { this.radialLen = mathRound(this.radialLen + 1.0); this.refreshAll(); }
           else if (id === 'btn-repo-a') {
             this.state = 'REPOSITION_GROUND_A'; this.menuUI.setAttribute('visible', false);
+            document.querySelector('#info-text').setAttribute('value', 'SCEGLI POSIZIONE PUNTO A (Laser + Grilletto)');
           } 
           else if (id === 'btn-repo-b') {
             this.state = 'REPOSITION_GROUND_B'; this.menuUI.setAttribute('visible', false);
+            document.querySelector('#info-text').setAttribute('value', 'SCEGLI POSIZIONE PUNTO B (Laser + Grilletto)');
           }
           else if (id === 'btn-global-reset') {
             this.triggerGlobalReset();
@@ -905,7 +942,8 @@
         this.mmanaContainerEl.innerHTML = ''; this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; 
         
         // Reset Quota
-        this.currentElevationOffset = 0;
+        this.tempElevation = 0;
+        this.tempBasePos = null;
 
         // Reset Tiranti
         this.guyWiresData = []; this.drawGuyWires(); this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false);
@@ -920,6 +958,7 @@
         this.beaconVisual.setAttribute('visible', 'false');
 
         this.cursorContainer.setAttribute('visible', 'false'); this.menuUI.setAttribute('visible', false);
+        document.querySelector('#info-text').setAttribute('value', 'SCEGLI POSIZIONE PUNTO A (Laser + Grilletto)');
       },
 
       refreshAll: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); }
@@ -949,11 +988,10 @@
           
           <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.29 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
           <a-plane width="0.44" height="0.05" color="#2A2A2A" position="0 0.22 0.01">
-            <a-text id="info-text" value="Scegli i punti a terra col grilletto destro." position="0 0 0.01" align="center" scale="0.075 0.075 0.075" color="#00E676"></a-text>
+            <a-text id="info-text" value="SCEGLI POSIZIONE PUNTO A (Laser + Grilletto)" position="0 0 0.01" align="center" scale="0.075 0.075 0.075" color="#00E676"></a-text>
           </a-plane>
 
           <a-text value="PREMI IL TASTO [ X ] SUL CONTROLLER PER GESTIRE I TIRANTI" position="0 0.17 0.01" align="center" scale="0.055 0.055 0.055" color="#FF9800"></a-text>
-          <a-text value="JOYSTICK SX (SU/GIU): ADATTA QUOTA TERRENO ALLE IRREGOLARITA'" position="0 0.14 0.01" align="center" scale="0.045 0.045 0.045" color="#00FFFF"></a-text>
 
           <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.10 0.01">
             <a-text value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
@@ -1036,7 +1074,7 @@
           <a-text value="MODALITA' TIRANTI E ANCORAGGI" position="0 0.15 0.01" align="center" scale="0.1 0.1 0.1" color="#FFEB3B"></a-text>
           
           <a-plane width="0.4" height="0.06" color="#3E2723" position="0 0.08 0.01">
-            <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.055 0.055 0.055" color="#00E676"></a-text>
+            <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text>
           </a-plane>
 
           <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.32" height="0.035" color="#006064" position="0 0.01 0.01" visible="false">
@@ -1046,8 +1084,6 @@
           <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.32" height="0.035" color="#006064" position="0 -0.04 0.01" visible="false">
             <a-text value="[+] AGGIUNGI COLLARE PALO B" align="center" scale="0.07 0.07 0.07" color="#FFFFFF"></a-text>
           </a-plane>
-
-          <a-text value="JOYSTICK SX (SU/GIU): MODIFICA QUOTA TERRENO" position="0 -0.07 0.01" align="center" scale="0.045 0.045 0.045" color="#00FFFF"></a-text>
 
           <a-plane id="btn-gw-undo" class="clickable" btn-interaction width="0.32" height="0.03" color="#D84315" position="0 -0.11 0.01">
             <a-text value="ANNULLA ULTIMO PICCHETTO" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
@@ -1064,9 +1100,10 @@
 
     <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="1000" height="1000" material="opacity: 0.0; transparent: true"></a-plane>
     
+    <!-- Contenitore indipendente per non subire le rotazioni o bug visivi -->
     <a-entity id="cursor-container" visible="false">
       <a-ring id="cursor-ring" color="#00FF00" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0"></a-ring>
-      <a-text id="cursor-text" value="+0.00m" position="0.06 0.05 0" color="#FFEB3B" scale="0.25 0.25 0.25" look-at-camera></a-text>
+      <a-text id="cursor-text" value="" position="0.08 0.08 0" color="#FFEB3B" scale="0.25 0.25 0.25" look-at-camera></a-text>
     </a-entity>
 
     <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
