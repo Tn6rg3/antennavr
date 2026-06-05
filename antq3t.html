@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V13 - Modalità Tiranti</title>
+  <title>Antenne AR Pro V14 - Tiranti Smart UI</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -38,8 +38,8 @@
       init: function () {
         this.state = 'PLACE_GROUND_A'; 
         
-        this.pointA = { base: null, top: null, sphere: null, pole: null, label: null, hitbox: null };
-        this.pointB = { base: null, top: null, sphere: null, pole: null, label: null, hitbox: null };
+        this.pointA = { base: null, top: null, sphere: null, pole: null, label: null };
+        this.pointB = { base: null, top: null, sphere: null, pole: null, label: null };
         this.pointC = { top: null, sphere: null, pole: null, label: null, percent: 0.5 }; 
         this.labelSegA = null; this.labelSegB = null;
 
@@ -58,10 +58,10 @@
         this.mmanaWires = []; this.importedMmanaWires = []; 
 
         // GESTIONE TIRANTI (GUY WIRES)
-        this.guyWiresData = []; // Array che conterrà tutti gli ancoraggi e i picchetti
-        this.activeAnchor = null; // L'ancoraggio che stiamo costruendo
-        this.gwState = 'OFF'; // 'SELECT_POLE', 'ADJUST_HEIGHT', 'PLACE_PEGS'
-        this.lastTriggerTime = 0; // Debounce per il grilletto AR
+        this.guyWiresData = []; 
+        this.activeAnchor = null; 
+        this.gwState = 'OFF'; // 'OFF', 'SELECT_POLE', 'ADJUST_HEIGHT', 'PLACE_PEGS'
+        this.lastTriggerTime = 0; 
 
         // Cache DOM
         this.raycasterEl = document.querySelector('#right-controller');
@@ -78,7 +78,7 @@
         this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this));
         this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this));
         this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this));
-        this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this)); // NUOVO EVENTO TASTO X
+        this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this));
 
         this.initPersistentElements();
         this.loadPreloadedMmanaModel();
@@ -89,38 +89,45 @@
       },
 
       toggleMenu: function() {
-        if(this.gwState !== 'OFF') return; // Se siamo nei tiranti, disabilita menu normale
+        if(this.gwState !== 'OFF') return; 
         if(!this.menuUI) return;
         let isVisible = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
         this.menuUI.setAttribute('visible', !isVisible);
       },
 
       toggleGuyWireMode: function() {
-        if (!this.pointA.top && !this.pointB.top) return; // Se non ci sono pali, inutile
+        if (!this.pointA.top && !this.pointB.top) return; 
         
         if (this.gwState === 'OFF') {
-          // ENTRA IN MODALITA' TIRANTI
-          this.state = 'IDLE'; // Ferma costruzioni antenna
+          this.state = 'IDLE'; 
           this.menuUI.setAttribute('visible', false);
           this.gwUI.setAttribute('visible', true);
           this.gwState = 'SELECT_POLE';
-          this.updateGWStatus("PUNTA UN PALO COL LASER E PREMI IL GRILLETTO");
+          this.updateGWStatus("SELEZIONA IL PALO DAL MENU QUI SOTTO");
           this.cursorRing.setAttribute('visible', 'false');
-          this.pointA.hitbox.classList.add('pole-hitbox');
-          this.pointB.hitbox.classList.add('pole-hitbox');
+          
+          // Gestione bottoni A e B in base all'antenna
+          this.toggleButton('#btn-gw-new-a', this.pointA.top !== null);
+          this.toggleButton('#btn-gw-new-b', this.pointB.top !== null);
+
           this.refreshRaycaster();
         } else {
-          // ESCI DA MODALITA' TIRANTI
           this.gwUI.setAttribute('visible', false);
           this.menuUI.setAttribute('visible', true);
           this.gwState = 'OFF';
           this.activeAnchor = null;
           this.previewCollar.setAttribute('visible', 'false');
           this.previewCollarText.setAttribute('visible', 'false');
-          this.pointA.hitbox.classList.remove('pole-hitbox');
-          this.pointB.hitbox.classList.remove('pole-hitbox');
           this.refreshAll();
         }
+      },
+
+      toggleButton: function(id, isVisible) {
+        let btn = document.querySelector(id);
+        if(!btn) return;
+        btn.setAttribute('visible', isVisible);
+        if(isVisible) btn.classList.add('clickable');
+        else btn.classList.remove('clickable');
       },
 
       updateGWStatus: function(msg) {
@@ -142,16 +149,11 @@
           struct.sphere = document.createElement('a-sphere'); struct.sphere.setAttribute('radius', '0.05'); struct.sphere.setAttribute('material', `color: ${color}; roughness: 0.3`); struct.sphere.setAttribute('visible', 'false'); scene.appendChild(struct.sphere);
           struct.pole = document.createElement('a-cylinder'); struct.pole.setAttribute('radius', '0.008'); struct.pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat'); struct.pole.setAttribute('visible', 'false'); scene.appendChild(struct.pole);
           struct.label = document.createElement('a-text'); struct.label.setAttribute('align', 'center'); struct.label.setAttribute('color', '#00FF00'); struct.label.setAttribute('look-at-camera', ''); struct.label.setAttribute('visible', 'false'); scene.appendChild(struct.label);
-          
-          // HITBOX INVISIBILE PER FACILITARE LA SELEZIONE CON IL LASER NEI TIRANTI
-          struct.hitbox = document.createElement('a-cylinder'); struct.hitbox.setAttribute('radius', '0.25'); struct.hitbox.setAttribute('material', 'visible: false'); struct.hitbox.setAttribute('visible', 'false'); scene.appendChild(struct.hitbox);
           return struct;
         };
 
         this.pointA = Object.assign(this.pointA, createPointStructure('#FF1744'));
-        this.pointA.hitbox.id = "hitbox-A";
         this.pointB = Object.assign(this.pointB, createPointStructure('#2979FF'));
-        this.pointB.hitbox.id = "hitbox-B";
         this.pointC = Object.assign(this.pointC, createPointStructure('#00E676'));
 
         this.antennaTube1 = document.createElement('a-cylinder'); this.antennaTube1.setAttribute('radius', '0.015'); this.antennaTube1.setAttribute('material', 'color: #FF5722; shader: flat'); this.antennaTube1.setAttribute('visible', 'false'); scene.appendChild(this.antennaTube1);
@@ -183,7 +185,6 @@
       },
 
       tick: function () {
-        // Cursore Terreno per Antenna Base o Picchetti Tiranti
         if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS') {
           let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
           if (intersection) {
@@ -205,15 +206,13 @@
         let thumbTime = Date.now();
         if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
           
-          // Regolazione Altezza Antenna Base
           if (this.state.includes('HEIGHT') && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1; 
             this.currentHeight = Math.max(0.0, this.currentHeight + step);
             this.updateHeightPreview(); this.lastThumbTime = thumbTime;
           }
           
-          // Regolazione Altezza Ancoraggio Tiranti
-          else if (this.gwState === 'ADJUST_HEIGHT' && Math.abs(evt.detail.y) > 0.4) {
+          else if (this.gwState === 'ADJUST_HEIGHT' && this.activeAnchor && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1;
             let poleData = this.activeAnchor.pole === 'A' ? this.pointA : this.pointB;
             let maxH = poleData.top.y;
@@ -241,12 +240,25 @@
         this.previewCollarText.setAttribute('value', `H: ${this.activeAnchor.height.toFixed(1)}m`);
       },
 
+      startCollarPlacement: function(poleId) {
+        let pData = poleId === 'A' ? this.pointA : this.pointB;
+        if (!pData || !pData.top) return;
+
+        this.activeAnchor = { pole: poleId, height: pData.top.y / 2, pegs: [] };
+        this.previewCollar.setAttribute('visible', 'true');
+        this.previewCollarText.setAttribute('visible', 'true');
+        this.previewCollar.setAttribute('material', 'color: #FFEB3B');
+        this.updateCollarPreview();
+        
+        this.gwState = 'ADJUST_HEIGHT';
+        this.updateGWStatus(`USA JOYSTICK SU/GIU,\nPREMI GRILLETTO PER CONFERMARE ALTEZZA`);
+      },
+
       onTriggerDown: function () {
         let now = Date.now();
-        if (now - this.lastTriggerTime < 300) return; // Debounce per trigger fisico
+        if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        // Blocca interazione ambientale se si punta un menu
         if (this.menuUI.getAttribute('visible') && this.raycasterEl.components.raycaster.getIntersection(this.menuUI)) return;
         if (this.gwUI.getAttribute('visible') && this.raycasterEl.components.raycaster.getIntersection(this.gwUI)) return;
 
@@ -254,35 +266,11 @@
         // LOGICA MODALITA' TIRANTI (GUY WIRES)
         // ----------------------------------------------------
         if (this.gwState !== 'OFF') {
-          
-          if (this.gwState === 'SELECT_POLE') {
-            let hitA = this.pointA.hitbox.getAttribute('visible') === 'true' && this.raycasterEl.components.raycaster.getIntersection(this.pointA.hitbox);
-            let hitB = this.pointB.hitbox.getAttribute('visible') === 'true' && this.raycasterEl.components.raycaster.getIntersection(this.pointB.hitbox);
-            
-            let selectedPole = null; let pData = null;
-            if (hitA) { selectedPole = 'A'; pData = this.pointA; }
-            else if (hitB) { selectedPole = 'B'; pData = this.pointB; }
-
-            if (selectedPole) {
-              this.activeAnchor = { pole: selectedPole, height: pData.top.y / 2, pegs: [] };
-              this.previewCollar.setAttribute('visible', 'true');
-              this.previewCollarText.setAttribute('visible', 'true');
-              this.updateCollarPreview();
-              
-              this.gwState = 'ADJUST_HEIGHT';
-              this.updateGWStatus(`PALO ${selectedPole} SCELTO.\nUSA JOYSTICK SU/GIU, PREMI GRILLETTO PER CONFERMARE`);
-              this.pointA.hitbox.classList.remove('pole-hitbox');
-              this.pointB.hitbox.classList.remove('pole-hitbox');
-              this.refreshRaycaster();
-            }
-            return;
-          }
-
           if (this.gwState === 'ADJUST_HEIGHT') {
             this.gwState = 'PLACE_PEGS';
-            this.guyWiresData.push(this.activeAnchor); // Salviamo l'ancoraggio nell'array definitivo
-            this.previewCollar.setAttribute('material', 'color: #FF0000'); // Diventa rosso per indicare che è "fissato"
-            this.updateGWStatus("PUNTA IL TERRENO E CLICCA PER PIAZZARE I PICCHETTI E TIRARE I CAVI");
+            this.guyWiresData.push(this.activeAnchor); 
+            this.previewCollar.setAttribute('material', 'color: #FF0000');
+            this.updateGWStatus("PUNTA IL TERRENO E CLICCA PER PIAZZARE I PICCHETTI");
             return;
           }
 
@@ -290,14 +278,12 @@
             let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
             if (hitGround) {
               this.activeAnchor.pegs.push({ x: hitGround.point.x, y: hitGround.point.y, z: hitGround.point.z });
-              this.drawGuyWires(); // Ridisegna l'intero sistema di tiranti
+              this.drawGuyWires(); 
             }
             return;
           }
-
-          return; // Fine logica trigger tiranti
+          return; 
         }
-
 
         // ----------------------------------------------------
         // LOGICA NORMALE ANTENNA
@@ -357,15 +343,10 @@
         struct.label.setAttribute('position', `${topPos.x} ${topPos.y / 2} ${topPos.z}`);
         struct.label.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
         struct.label.setAttribute('value', `${labelName}\nH: ${topPos.y.toFixed(1)}m`);
-        
-        // Aggiorna anche l'hitbox invisibile per i tiranti
-        struct.hitbox.setAttribute('position', `${topPos.x} ${topPos.y / 2} ${topPos.z}`);
-        struct.hitbox.setAttribute('geometry', `primitive: cylinder; radius: 0.25; height: ${topPos.y}`);
-        struct.hitbox.setAttribute('visible', 'true'); // Visibile ad A-Frame, ma material opacity 0
       },
 
       hideStructure: function(struct) {
-        struct.sphere.setAttribute('visible', 'false'); struct.pole.setAttribute('visible', 'false'); struct.label.setAttribute('visible', 'false'); struct.hitbox.setAttribute('visible', 'false');
+        struct.sphere.setAttribute('visible', 'false'); struct.pole.setAttribute('visible', 'false'); struct.label.setAttribute('visible', 'false');
       },
 
       loadPreloadedMmanaModel: function() {
@@ -437,37 +418,31 @@
       },
 
       drawGuyWires: function() {
-        // Svuota il contenitore 3D dei tiranti
         while (this.gwContainerEl.firstChild) { this.gwContainerEl.removeChild(this.gwContainerEl.firstChild); }
 
         this.guyWiresData.forEach((anchor) => {
           let pData = anchor.pole === 'A' ? this.pointA : this.pointB;
-          if (!pData.base || !pData.top) return; // Palo non esiste più
+          if (!pData.base || !pData.top) return;
 
-          // Assicura che l'ancoraggio non superi l'altezza attuale del palo
           let h = Math.min(anchor.height, pData.top.y);
           let anchorPos = new THREE.Vector3(pData.base.x, pData.base.y + h, pData.base.z);
 
-          // Disegna il Collarino Fisso
           let collar = document.createElement('a-torus');
           collar.setAttribute('radius', '0.04'); collar.setAttribute('radius-tubular', '0.006');
           collar.setAttribute('material', 'color: #FF1744; shader: flat'); collar.setAttribute('rotation', '90 0 0');
           collar.setAttribute('position', `${anchorPos.x} ${anchorPos.y} ${anchorPos.z}`);
           this.gwContainerEl.appendChild(collar);
 
-          // Disegna i Picchetti e i Cavi
           anchor.pegs.forEach((pegPos) => {
             let pVec = new THREE.Vector3(pegPos.x, pegPos.y, pegPos.z);
             let distance = anchorPos.distanceTo(pVec);
 
-            // Picchetto a terra
             let peg = document.createElement('a-cone');
             peg.setAttribute('radius-bottom', '0.04'); peg.setAttribute('radius-top', '0.005'); peg.setAttribute('height', '0.15');
             peg.setAttribute('material', 'color: #FF9800; shader: flat');
             peg.setAttribute('position', `${pVec.x} ${pVec.y + 0.075} ${pVec.z}`);
             this.gwContainerEl.appendChild(peg);
 
-            // Cavo in acciaio
             let wire = document.createElement('a-cylinder');
             wire.setAttribute('radius', '0.002'); wire.setAttribute('height', distance);
             wire.setAttribute('material', 'color: #B0BEC5; shader: flat');
@@ -476,7 +451,6 @@
             wire.object3D.lookAt(pVec); wire.object3D.rotateX(Math.PI / 2);
             this.gwContainerEl.appendChild(wire);
 
-            // Etichetta con la lunghezza del cavo (posizionata a 1/3 dal picchetto)
             let textPos = new THREE.Vector3().lerpVectors(pVec, anchorPos, 0.3);
             let label = document.createElement('a-text');
             label.setAttribute('value', `${distance.toFixed(2)}m`);
@@ -491,8 +465,6 @@
 
       updateGeometriesAndDrawings: function() {
         this.mmanaContainerEl.innerHTML = ''; 
-
-        // Aggiorna sempre anche i tiranti se i pali si muovono
         this.drawGuyWires();
 
         if (!this.pointA.top) return;
@@ -634,20 +606,24 @@
           let mathRound = (num) => Math.round(num * 100) / 100;
 
           // CONTROLLI MENU TIRANTI (GUY WIRES)
-          if (id === 'btn-gw-new') {
-            this.previewCollar.setAttribute('material', 'color: #FFEB3B');
-            this.gwState = 'SELECT_POLE';
-            this.updateGWStatus("PUNTA UN PALO COL LASER E PREMI IL GRILLETTO");
-            this.pointA.hitbox.classList.add('pole-hitbox');
-            this.pointB.hitbox.classList.add('pole-hitbox');
-            this.refreshRaycaster();
+          if (id === 'btn-gw-new-a') {
+            this.startCollarPlacement('A');
+          }
+          else if (id === 'btn-gw-new-b') {
+            this.startCollarPlacement('B');
           }
           else if (id === 'btn-gw-undo') {
             if (this.activeAnchor && this.activeAnchor.pegs.length > 0) {
               this.activeAnchor.pegs.pop();
               this.drawGuyWires();
-            } else if (this.guyWiresData.length > 0 && this.gwState === 'SELECT_POLE') {
-              this.guyWiresData.pop(); // Rimuove l'intero ultimo ancoraggio se non stiamo piazzando picchetti
+            } else if (this.activeAnchor && this.activeAnchor.pegs.length === 0) {
+              // Se annulli quando non hai piazzato picchetti, cancella il collarino e torna alla selezione palo
+              this.guyWiresData = this.guyWiresData.filter(a => a !== this.activeAnchor);
+              this.activeAnchor = null;
+              this.previewCollar.setAttribute('visible', 'false');
+              this.previewCollarText.setAttribute('visible', 'false');
+              this.gwState = 'SELECT_POLE';
+              this.updateGWStatus("SELEZIONA IL PALO DAL MENU QUI SOTTO");
               this.drawGuyWires();
             }
           }
@@ -772,6 +748,8 @@
         
         // Reset Tiranti
         this.guyWiresData = []; this.drawGuyWires(); this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false);
+        this.previewCollar.setAttribute('visible', 'false');
+        this.previewCollarText.setAttribute('visible', 'false');
 
         this.cursorRing.setAttribute('visible', 'false'); this.menuUI.setAttribute('visible', false);
       },
@@ -798,7 +776,6 @@
       <a-camera id="camera" position="0 1.6 0"></a-camera>
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
-        <!-- MENU NORMALE ANTENNA -->
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
           <a-plane width="0.5" height="0.55" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
@@ -807,7 +784,6 @@
             <a-text id="info-text" value="Scegli i punti a terra col grilletto destro." position="-0.21 0 0.01" scale="0.075 0.075 0.075" color="#00E676"></a-text>
           </a-plane>
 
-          <!-- Tasto X Istruzione -->
           <a-text value="PREMI IL TASTO [ X ] SUL CONTROLLER PER GESTIRE I TIRANTI" position="0 0.13 0.01" align="center" scale="0.055 0.055 0.055" color="#FF9800"></a-text>
 
           <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.09 0.01">
@@ -877,37 +853,38 @@
           <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.20 0.01"><a-text value="RESET" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
         </a-entity>
 
-        <!-- MENU TIRANTI (GUY WIRES) -->
         <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
-          <a-plane width="0.45" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
-          <a-text value="MODALITA' TIRANTI E ANCORAGGI" position="0 0.13 0.01" align="center" scale="0.1 0.1 0.1" color="#FFEB3B"></a-text>
+          <a-plane width="0.45" height="0.38" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
+          <a-text value="MODALITA' TIRANTI E ANCORAGGI" position="0 0.15 0.01" align="center" scale="0.1 0.1 0.1" color="#FFEB3B"></a-text>
           
-          <a-plane width="0.4" height="0.08" color="#3E2723" position="0 0.05 0.01">
-            <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.06 0.06 0.06" color="#00E676"></a-text>
+          <a-plane width="0.4" height="0.06" color="#3E2723" position="0 0.08 0.01">
+            <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.055 0.055 0.055" color="#00E676"></a-text>
           </a-plane>
 
-          <a-plane id="btn-gw-new" class="clickable" btn-interaction width="0.3" height="0.04" color="#006064" position="0 -0.03 0.01">
-            <a-text value="[+] NUOVO COLLARINO" align="center" scale="0.08 0.08 0.08" color="#FFFFFF"></a-text>
+          <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.3" height="0.035" color="#006064" position="0 0.01 0.01" visible="false">
+            <a-text value="[+] CREA COLLARE PALO A" align="center" scale="0.07 0.07 0.07" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-gw-undo" class="clickable" btn-interaction width="0.3" height="0.03" color="#D84315" position="0 -0.08 0.01">
+          <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.3" height="0.035" color="#006064" position="0 -0.04 0.01" visible="false">
+            <a-text value="[+] CREA COLLARE PALO B" align="center" scale="0.07 0.07 0.07" color="#FFFFFF"></a-text>
+          </a-plane>
+
+          <a-plane id="btn-gw-undo" class="clickable" btn-interaction width="0.3" height="0.03" color="#D84315" position="0 -0.10 0.01">
             <a-text value="ANNULLA ULTIMO PICCHETTO" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-gw-close" class="clickable" btn-interaction width="0.3" height="0.03" color="#1A1A1A" position="0 -0.13 0.01">
+          <a-plane id="btn-gw-close" class="clickable" btn-interaction width="0.3" height="0.03" color="#1A1A1A" position="0 -0.15 0.01">
             <a-text value="ESCI E TORNA ALL'ANTENNA (TASTO X)" align="center" scale="0.06 0.06 0.06" color="#9E9E9E"></a-text>
           </a-plane>
         </a-entity>
       </a-entity>
       
-      <!-- ATTENZIONE: Aggiunto .pole-hitbox al raggio laser -->
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground, .pole-hitbox; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;"></a-entity>
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;"></a-entity>
     </a-entity>
 
     <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="1000" height="1000" material="opacity: 0.0; transparent: true"></a-plane>
     <a-entity id="mmana-wires-container"></a-entity>
     
-    <!-- Contenitore dedicato ai Tiranti -->
     <a-entity id="guy-wires-container"></a-entity>
 
     <a-ring id="cursor-ring" color="#FFFFFF" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" visible="false"></a-ring>
