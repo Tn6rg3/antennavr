@@ -16,6 +16,8 @@
     #ui-2d-container button { width: 100%; padding: 6px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; }
   </style>
   <script>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@v1.4.2/examples/showcase/ar-hit-test/ar-hit-test.js"></script>
     AFRAME.registerComponent('look-at-camera', {
       tick: function () {
         let cameraEl = document.querySelector('#camera');
@@ -34,38 +36,28 @@
       }
     });
 
-    // COMPONENTE LASER DINAMICO: Si ferma esattamente sulla Mesh Fisica (i triangoli) o sui menu
-    AFRAME.registerComponent('smart-ar-laser', {
-      tick: function () {
-        let raycaster = this.el.components.raycaster;
-        let cursorRing = document.querySelector('#cursor-ring');
+  AFRAME.registerComponent('btn-interaction', {
+  init: function () {
+    let el = this.el;
+    // Leggiamo l'attributo colore nativo in modo sicuro
+    let originalColor = el.getAttribute('color') || '#FFFFFF'; 
 
-        // 1. Controlla se colpiamo la UI (Menu)
-        if (raycaster && raycaster.intersectedEls.length > 0) {
-           let hit = raycaster.getIntersection(raycaster.intersectedEls[0]);
-           if (hit) {
-             let localHit = this.el.object3D.worldToLocal(hit.point.clone());
-             this.el.setAttribute('line', `start: 0 0 0; end: ${localHit.x} ${localHit.y} ${localHit.z}; color: #00BFFF; opacity: 0.8`);
-             cursorRing.setAttribute('visible', 'false');
-             return;
-           }
-        }
-
-        // 2. Controlla se l'hit-test nativo ha trovato il terreno fisico del Quest 3
-        let isRingVisible = cursorRing.getAttribute('visible');
-        if (isRingVisible === true || isRingVisible === 'true') {
-           let worldPos = new THREE.Vector3();
-           cursorRing.object3D.getWorldPosition(worldPos);
-           let localHit = this.el.object3D.worldToLocal(worldPos);
-           
-           // Disegna il laser che si ferma ESATTAMENTE sul terreno fisico
-           this.el.setAttribute('line', `start: 0 0 0; end: ${localHit.x} ${localHit.y} ${localHit.z}; color: #00E676; opacity: 0.9`);
-        } else {
-           // Niente toccato: laser standard rosso trasparente che va dritto
-           this.el.setAttribute('line', `start: 0 0 0; end: 0 0 -2; color: #FF1744; opacity: 0.2`);
-        }
-      }
+    el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
+    el.addEventListener('mouseleave', () => { 
+      el.setAttribute('material', 'opacity', 1.0); 
+      el.setAttribute('scale', '1 1 1'); 
+      el.setAttribute('color', originalColor); 
     });
+    el.addEventListener('mousedown', () => { 
+      el.setAttribute('scale', '0.95 0.95 0.8'); 
+      el.setAttribute('color', '#00FFCC'); 
+    });
+    el.addEventListener('mouseup', () => { 
+      el.setAttribute('scale', '1 1 1'); 
+      el.setAttribute('color', originalColor); 
+    });
+  }
+});
 
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
@@ -850,8 +842,7 @@
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
   </div>
 
-  <a-scene webxr="optionalFeatures: hit-test; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
-    
+<a-scene webxr="optionalFeatures: hit-test, dom-overlay; overlayElement: #ui-2d-container" vr-mode-ui="enabled: true">    
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
       
