@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V15 - Anti Drift & Tiranti (Hit-Test Terrain)</title>
+  <title>Antenne AR Pro V15 - Anti Drift & Tiranti (Hit-Test Fixato)</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -63,11 +63,13 @@
         this.gwState = 'OFF'; 
         this.lastTriggerTime = 0; 
 
-        // GESTIONE CALIBRAZIONE E HIT-TEST
+        // GESTIONE CALIBRAZIONE E HIT-TEST ROBUSTO
         this.beaconLocalPos = null;
-        this.lastValidCursorPos = null; // Memorizza la posizione reale del terreno
-        this.hitTestSources = null;     // Mappa dei sensori raycaster nativi VR
-        this.xrRefSpace = null;
+        this.currentHitPoint = null; 
+        this.hitTestSource = null;     
+        this.localSpace = null;
+        this.lastRaySpace = null;
+        this.requestingHitTest = false;
 
         // Cache DOM
         this.raycasterEl = document.querySelector('#right-controller');
@@ -92,11 +94,8 @@
         this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this));
         this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this));
 
-        // Pulisci i dati del sensore se si esce dalla VR
-        this.el.sceneEl.addEventListener('exit-vr', () => {
-            this.hitTestSources = null;
-            this.xrRefSpace = null;
-        });
+        // Inizializza Sessione AR
+        this.setupXR();
 
         this.initPersistentElements();
         this.loadPreloadedMmanaModel();
@@ -104,6 +103,24 @@
         this.setupGlobalEventDelegation();
         this.setupMmanaFileLoader();
         this.updateMenuText();
+      },
+
+      setupXR: function() {
+        let sceneEl = this.el.sceneEl;
+        sceneEl.addEventListener('enter-vr', () => {
+            let session = sceneEl.renderer.xr.getSession();
+            if (session) {
+                session.requestReferenceSpace('local-floor').then((refSpace) => {
+                    this.localSpace = refSpace;
+                });
+            }
+        });
+        sceneEl.addEventListener('exit-vr', () => {
+            this.hitTestSource = null;
+            this.localSpace = null;
+            this.lastRaySpace = null;
+            this.requestingHitTest = false;
+        });
       },
 
       getLocalPoint: function(worldVec) {
@@ -171,6 +188,15 @@
       },
 
       initPersistentElements: function() {
+        // IL BLOCKER INVISIBILE PER FERMARE IL LASER SUL TERRENO FISICO
+        this.hitBlocker = document.createElement('a-plane');
+        this.hitBlocker.setAttribute('id', 'ar-hit-blocker');
+        this.hitBlocker.setAttribute('width', '2'); // Largo per non sfuggire al laser
+        this.hitBlocker.setAttribute('height', '2');
+        this.hitBlocker.setAttribute('material', 'opacity: 0.0; transparent: true');
+        this.hitBlocker.setAttribute('position', '0 -1000 0'); // Nascosto all'inizio
+        this.el.sceneEl.appendChild(this.hitBlocker);
+
         let createPointStructure = (color) => {
           let struct = {};
           struct.sphere = document.createElement('a-sphere'); struct.sphere.setAttribute('radius', '0.05'); struct.sphere.setAttribute('material', `color: ${color}; roughness: 0.3`); struct.sphere.setAttribute('visible', 'false'); this.worldContentEl.appendChild(struct.sphere);
@@ -218,70 +244,90 @@
       },
 
       tick: function () {
-        let currentTargetPos = null;
-        let isRealTerrain = false;
-        
         let sceneEl = this.el.sceneEl;
         let frame = sceneEl.frame;
         let session = sceneEl.renderer.xr.getSession();
+        let hitTestFound = false;
 
-        // LOGICA SCANSIONE TERRENO WEBXR HIT-TEST
-        if (frame && session) {
-            if (!this.xrRefSpace) {
-                this.xrRefSpace = sceneEl.renderer.xr.getReferenceSpace();
+        // 1. ESECUZIONE HIT TEST AR NATIVO
+        if (frame && session && this.localSpace) {
+            let inputSources = session.inputSources;
+            let rightSource = null;
+            for (let i = 0; i < inputSources.length; i++) {
+                if (inputSources[i].handedness === 'right') { rightSource = inputSources[i]; break; }
             }
-            if (this.xrRefSpace) {
-                let inputSources = session.inputSources;
-                let rightControllerSource = null;
-                for (let i = 0; i < inputSources.length; i++) {
-                    if (inputSources[i].handedness === 'right') { rightControllerSource = inputSources[i]; break; }
+
+            if (rightSource && rightSource.targetRaySpace) {
+                if (!this.hitTestSource && !this.requestingHitTest) {
+                    this.requestingHitTest = true;
+                    this.lastRaySpace = rightSource.targetRaySpace;
+                    session.requestHitTestSource({ space: rightSource.targetRaySpace }).then(source => {
+                        this.hitTestSource = source;
+                        this.requestingHitTest = false;
+                    }).catch(() => { this.requestingHitTest = false; });
                 }
 
-                if (rightControllerSource && rightControllerSource.targetRaySpace) {
-                    if (!this.hitTestSources) this.hitTestSources = new Map();
-                    let source = this.hitTestSources.get(rightControllerSource);
-                    
-                    if (!source && !this.requestingHitTest) {
-                        this.requestingHitTest = true;
-                        session.requestHitTestSource({ space: rightControllerSource.targetRaySpace }).then(newSource => {
-                            this.hitTestSources.set(rightControllerSource, newSource);
-                            this.requestingHitTest = false;
-                        }).catch(() => { this.requestingHitTest = false; });
-                    } else if (source) {
-                        let results = frame.getHitTestResults(source);
-                        if (results.length > 0) {
-                            let pose = results[0].getPose(this.xrRefSpace);
-                            if (pose) {
-                                currentTargetPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
-                                isRealTerrain = true;
-                            }
+                if (this.hitTestSource) {
+                    let results = frame.getHitTestResults(this.hitTestSource);
+                    if (results.length > 0) {
+                        let pose = results[0].getPose(this.localSpace);
+                        if (pose) {
+                            // Sposta il muro invisibile sul punto reale e giralo verso il controller
+                            this.hitBlocker.setAttribute('position', pose.transform.position);
+                            let ctrlPos = new THREE.Vector3();
+                            this.raycasterEl.object3D.getWorldPosition(ctrlPos);
+                            this.hitBlocker.object3D.lookAt(ctrlPos);
+                            this.hitBlocker.classList.add('ground-target'); // Rendi intersecabile dal laser
+                            hitTestFound = true;
                         }
                     }
                 }
             }
         }
 
-        // FALLBACK: Se il sensore di profondità non prende nulla (es. PC o troppo vicino/lontano), usa il piano infinito
-        if (!currentTargetPos) {
-            let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-            if (intersection) {
-                currentTargetPos = intersection.point;
-            }
+        // Se non troviamo terreno fisico, nascondi il Blocker
+        if (!hitTestFound) {
+            this.hitBlocker.setAttribute('position', '0 -1000 0');
+            this.hitBlocker.classList.remove('ground-target');
         }
 
-        // RENDER CURSORE E SALVATAGGIO POSIZIONE
+        // 2. LETTURA DEL RAYCASTER (Allineamento finale visivo e logico)
         if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
-          if (currentTargetPos) {
-            this.cursorRing.setAttribute('visible', 'true'); 
-            this.cursorRing.setAttribute('position', currentTargetPos);
-            // Verde se è il terreno fisico, Bianco se è il piano matematico
-            this.cursorRing.setAttribute('color', isRealTerrain ? '#00E676' : '#FFFFFF');
-            this.lastValidCursorPos = currentTargetPos.clone();
-          } else { 
-            this.cursorRing.setAttribute('visible', 'false'); 
-          }
+            let raycaster = this.raycasterEl.components.raycaster;
+            if (raycaster) {
+                let intersects = raycaster.intersectedEls;
+                let targetPoint = null;
+                let isPhysical = false;
+
+                // Cerca cosa ha colpito il laser di A-Frame
+                if (intersects) {
+                    for (let i = 0; i < intersects.length; i++) {
+                        let el = intersects[i];
+                        if (el.id === 'ar-hit-blocker') {
+                            targetPoint = raycaster.getIntersection(el).point;
+                            isPhysical = true; // È il terreno reale! Verde.
+                            break;
+                        } else if (el.id === 'ar-ground') {
+                            targetPoint = raycaster.getIntersection(el).point;
+                            isPhysical = false; // È il piano di fallback. Bianco.
+                            break;
+                        }
+                    }
+                }
+
+                if (targetPoint) {
+                    this.cursorRing.setAttribute('visible', 'true');
+                    this.cursorRing.setAttribute('position', targetPoint);
+                    this.cursorRing.setAttribute('color', isPhysical ? '#00E676' : '#FFFFFF');
+                    this.currentHitPoint = targetPoint.clone();
+                } else {
+                    this.cursorRing.setAttribute('visible', 'false');
+                    this.currentHitPoint = null;
+                }
+            }
         } else {
-          this.cursorRing.setAttribute('visible', 'false');
+            this.cursorRing.setAttribute('visible', 'false');
+            this.currentHitPoint = null;
         }
       },
 
@@ -355,19 +401,21 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
+        // SCUDO UI (Evita click attraverso i menu)
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         if (intersects) {
           for (let i = 0; i < intersects.length; i++) {
             let el = intersects[i];
             if (el.classList && el.classList.contains('clickable')) return;
-            if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) return;
           }
         }
 
-        // Se non abbiamo un punto scansionato valido dal tick, blocca
+        // VALIDAZIONE PUNTO (Se il ring non è attivo o non c'è punto, blocca il click)
         let isCursorVisible = this.cursorRing.getAttribute('visible');
-        if (!this.lastValidCursorPos || isCursorVisible === false || isCursorVisible === 'false') return;
-        let targetPoint = this.lastValidCursorPos;
+        if (!this.currentHitPoint || isCursorVisible === false || isCursorVisible === 'false') return;
+
+        // Ora siamo 100% sicuri di avere il punto allineato
+        let targetPoint = this.currentHitPoint;
 
         if (this.state === 'CALIB_SET') {
             let worldPt = targetPoint.clone();
@@ -902,7 +950,7 @@
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
   </div>
 
-  <a-scene webxr="optionalFeatures: passthrough, hit-test; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: hit-test; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
@@ -1020,7 +1068,7 @@
         </a-entity>
       </a-entity>
       
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;"></a-entity>
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .ground-target, #ar-ground; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;"></a-entity>
     </a-entity>
 
     <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="1000" height="1000" material="opacity: 0.0; transparent: true"></a-plane>
