@@ -418,25 +418,25 @@
       setupGlobalEventDelegation: function() {
         let scene = this.el.sceneEl;
         
-        // VARIABILE PER L'ANTI-RIMBALZO
         this.lastClickTime = 0; 
 
-        scene.addEventListener('click', (evt) => {
-          // DEBOUNCE: Se sono passati meno di 250 millisecondi dall'ultimo click, ignoralo
+        // FIX FONDAMENTALE: Usiamo 'mousedown' (azione immediata) invece di 'click' (press + rilascio)
+        scene.addEventListener('mousedown', (evt) => {
           let now = Date.now();
-          if (now - this.lastClickTime < 250) return;
+          if (now - this.lastClickTime < 250) return; // Mantiene l'anti-rimbalzo
 
           let target = evt.target.closest('.clickable'); if(!target) return;
           
-          // Impedisce i click su menu invisibili
           let isVis = target.getAttribute('visible');
           if (isVis === false || isVis === 'false') return;
           let parent = target.parentElement;
           if (parent && (parent.getAttribute('visible') === false || parent.getAttribute('visible') === 'false')) return;
 
-          // SE IL CLICK E' VALIDO, AGGIORNO IL TIMER E PROCEDO
           this.lastClickTime = now;
           let id = target.id;
+
+          // FIX MATEMATICO: Forza i calcoli a 2 decimali puliti per evitare blocchi (es. 0.9899999)
+          let mathRound = (num) => Math.round(num * 100) / 100;
 
           if (id === 'btn-ant') {
             this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll();
@@ -447,10 +447,10 @@
             this.refreshAll();
           } 
           else if (id === 'btn-c-left') {
-            this.pointC.percent = Math.max(0.02, this.pointC.percent - 0.05); this.updateGeometriesAndDrawings();
+            this.pointC.percent = Math.max(0.02, mathRound(this.pointC.percent - 0.05)); this.updateGeometriesAndDrawings();
           } 
           else if (id === 'btn-c-right') {
-            this.pointC.percent = Math.min(0.98, this.pointC.percent + 0.05); this.updateGeometriesAndDrawings();
+            this.pointC.percent = Math.min(0.98, mathRound(this.pointC.percent + 0.05)); this.updateGeometriesAndDrawings();
           } 
           else if (id === 'btn-lw-vertex') {
             this.longwireVertex = this.longwireVertex === 'A' ? 'B' : 'A'; this.refreshAll();
@@ -459,29 +459,29 @@
             this.mmanaModelIdx = (this.mmanaModelIdx + 1) % this.mmanaModels.length; this.loadPreloadedMmanaModel(); this.refreshAll();
           } 
           else if (id === 'btn-txt-minus') {
-            this.globalTextScale = Math.max(0.15, this.globalTextScale - 0.05); this.updateGeometriesAndDrawings();
+            this.globalTextScale = Math.max(0.15, mathRound(this.globalTextScale - 0.05)); this.updateGeometriesAndDrawings();
           } 
           else if (id === 'btn-txt-plus') {
-            this.globalTextScale = Math.min(1.2, this.globalTextScale + 0.05); this.updateGeometriesAndDrawings();
+            this.globalTextScale = Math.min(1.2, mathRound(this.globalTextScale + 0.05)); this.updateGeometriesAndDrawings();
           } 
-          else if (id === 'btn-ac-m1')   { this.endFed_AC_Len = Math.max(0.1, this.endFed_AC_Len - 1.0); this.refreshAll(); }
-          else if (id === 'btn-ac-m01')  { this.endFed_AC_Len = Math.max(0.01, this.endFed_AC_Len - 0.01); this.refreshAll(); }
-          else if (id === 'btn-ac-p01')  { this.endFed_AC_Len += 0.01; this.refreshAll(); }
-          else if (id === 'btn-ac-p1')   { this.endFed_AC_Len += 1.0; this.refreshAll(); }
-          else if (id === 'btn-cb-m1')   { this.endFed_CB_Len = Math.max(0.1, this.endFed_CB_Len - 1.0); this.refreshAll(); }
-          else if (id === 'btn-cb-m01')  { this.endFed_CB_Len = Math.max(0.01, this.endFed_CB_Len - 0.01); this.refreshAll(); }
-          else if (id === 'btn-cb-p01')  { this.endFed_CB_Len += 0.01; this.refreshAll(); }
-          else if (id === 'btn-cb-p1')   { this.endFed_CB_Len += 1.0; this.refreshAll(); }
-          else if (id === 'btn-lw-m1')   { this.longwireLen = Math.max(0.1, this.longwireLen - 1.0); this.refreshAll(); }
-          else if (id === 'btn-lw-m01')  { this.longwireLen = Math.max(0.01, this.longwireLen - 0.01); this.refreshAll(); }
-          else if (id === 'btn-lw-p01')  { this.longwireLen += 0.01; this.refreshAll(); }
-          else if (id === 'btn-lw-p1')   { this.longwireLen += 1.0; this.refreshAll(); }
+          else if (id === 'btn-ac-m1')   { this.endFed_AC_Len = Math.max(0.1, mathRound(this.endFed_AC_Len - 1.0)); this.refreshAll(); }
+          else if (id === 'btn-ac-m01')  { this.endFed_AC_Len = Math.max(0.01, mathRound(this.endFed_AC_Len - 0.01)); this.refreshAll(); }
+          else if (id === 'btn-ac-p01')  { this.endFed_AC_Len = mathRound(this.endFed_AC_Len + 0.01); this.refreshAll(); }
+          else if (id === 'btn-ac-p1')   { this.endFed_AC_Len = mathRound(this.endFed_AC_Len + 1.0); this.refreshAll(); }
+          else if (id === 'btn-cb-m1')   { this.endFed_CB_Len = Math.max(0.1, mathRound(this.endFed_CB_Len - 1.0)); this.refreshAll(); }
+          else if (id === 'btn-cb-m01')  { this.endFed_CB_Len = Math.max(0.01, mathRound(this.endFed_CB_Len - 0.01)); this.refreshAll(); }
+          else if (id === 'btn-cb-p01')  { this.endFed_CB_Len = mathRound(this.endFed_CB_Len + 0.01); this.refreshAll(); }
+          else if (id === 'btn-cb-p1')   { this.endFed_CB_Len = mathRound(this.endFed_CB_Len + 1.0); this.refreshAll(); }
+          else if (id === 'btn-lw-m1')   { this.longwireLen = Math.max(0.1, mathRound(this.longwireLen - 1.0)); this.refreshAll(); }
+          else if (id === 'btn-lw-m01')  { this.longwireLen = Math.max(0.01, mathRound(this.longwireLen - 0.01)); this.refreshAll(); }
+          else if (id === 'btn-lw-p01')  { this.longwireLen = mathRound(this.longwireLen + 0.01); this.refreshAll(); }
+          else if (id === 'btn-lw-p1')   { this.longwireLen = mathRound(this.longwireLen + 1.0); this.refreshAll(); }
           else if (id === 'btn-rad-num-minus') { this.numRadials = Math.max(1, this.numRadials - 1); this.refreshAll(); }
           else if (id === 'btn-rad-num-plus')  { this.numRadials = Math.min(this.maxRadials, this.numRadials + 1); this.refreshAll(); }
-          else if (id === 'btn-rad-m1')   { this.radialLen = Math.max(0.1, this.radialLen - 1.0); this.refreshAll(); }
-          else if (id === 'btn-rad-m01')  { this.radialLen = Math.max(0.1, this.radialLen - 0.1); this.refreshAll(); }
-          else if (id === 'btn-rad-p01')  { this.radialLen += 0.1; this.refreshAll(); }
-          else if (id === 'btn-rad-p1')   { this.radialLen += 1.0; this.refreshAll(); }
+          else if (id === 'btn-rad-m1')   { this.radialLen = Math.max(0.1, mathRound(this.radialLen - 1.0)); this.refreshAll(); }
+          else if (id === 'btn-rad-m01')  { this.radialLen = Math.max(0.1, mathRound(this.radialLen - 0.1)); this.refreshAll(); }
+          else if (id === 'btn-rad-p01')  { this.radialLen = mathRound(this.radialLen + 0.1); this.refreshAll(); }
+          else if (id === 'btn-rad-p1')   { this.radialLen = mathRound(this.radialLen + 1.0); this.refreshAll(); }
           else if (id === 'btn-repo-a') {
             this.state = 'REPOSITION_GROUND_A'; this.menuUI.setAttribute('visible', false);
           } 
@@ -493,6 +493,8 @@
           }
         });
       },
+
+      
       parseMmanaText: function(text) {
         let lines = text.split('\n'); 
         this.importedMmanaWires = [];
