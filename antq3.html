@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V18 - Profondità e Filo a Piombo</title>
+  <title>Antenne AR Pro V19 - Sensore Profondità Reale (Hit Test)</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -16,6 +16,7 @@
     #ui-2d-container button { width: 100%; padding: 6px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; }
   </style>
   <script>
+    // Componente per guardare sempre la telecamera
     AFRAME.registerComponent('look-at-camera', {
       tick: function () {
         let cameraEl = document.querySelector('#camera');
@@ -23,6 +24,7 @@
       }
     });
 
+    // Interazioni bottoni UI
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el;
@@ -34,6 +36,56 @@
       }
     });
 
+    // --- NUOVO: Integrazione WebXR Hit Test API sul Controller Destro ---
+    AFRAME.registerComponent('controller-hit-test', {
+      init: function () {
+        this.hitPoint = new THREE.Vector3();
+        this.isActive = false;
+        this.hitTestSource = null;
+        this.refSpace = null;
+
+        this.el.sceneEl.addEventListener('enter-vr', () => {
+          if (this.el.sceneEl.is('ar-mode')) {
+            let session = this.el.sceneEl.renderer.xr.getSession();
+
+            // Richiedi lo spazio di riferimento del pavimento locale
+            session.requestReferenceSpace('local-floor').then((space) => {
+              this.refSpace = space;
+            });
+
+            // Aggancia l'Hit Test al laser del controller destro
+            const setupHitTest = () => {
+              session.inputSources.forEach((source) => {
+                if (source.handedness === 'right' && source.targetRaySpace && !this.hitTestSource) {
+                  session.requestHitTestSource({ space: source.targetRaySpace }).then((hitTestSource) => {
+                    this.hitTestSource = hitTestSource;
+                  });
+                }
+              });
+            };
+
+            session.addEventListener('inputsourceschange', setupHitTest);
+            setupHitTest(); 
+          }
+        });
+      },
+      tick: function () {
+        if (!this.hitTestSource || !this.refSpace) return;
+        let frame = this.el.sceneEl.frame;
+        if (frame) {
+          let results = frame.getHitTestResults(this.hitTestSource);
+          if (results.length > 0) {
+            let pose = results[0].getPose(this.refSpace);
+            this.hitPoint.copy(pose.transform.position);
+            this.isActive = true;
+          } else {
+            this.isActive = false; // Nessuna superficie fisica trovata
+          }
+        }
+      }
+    });
+
+    // --- MOTORE PRINCIPALE ---
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         this.state = 'PLACE_GROUND_A'; 
@@ -116,7 +168,6 @@
             this.menuUI.setAttribute('visible', true);
             return;
         }
-
         if(!this.menuUI) return;
         let isVisible = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
         this.menuUI.setAttribute('visible', !isVisible);
@@ -216,12 +267,15 @@
       },
 
       tick: function () {
-        // FASE 1: Scelta Punto Libero a Terra col Laser
+        // Leggiamo i dati dal sensore di profondità fisico (Hit Test)
+        let hitTest = this.raycasterEl.components['controller-hit-test'];
+        let hasHit = hitTest && hitTest.isActive;
+
+        // FASE 1: Scelta Punto Libero a Terra col Sensore di Profondità
         if (this.state.includes('PLACE_GROUND') || this.state.includes('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
-          let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-          if (intersection) {
+          if (hasHit) {
             this.cursorContainer.setAttribute('visible', 'true'); 
-            this.cursorContainer.setAttribute('position', intersection.point);
+            this.cursorContainer.setAttribute('position', hitTest.hitPoint);
             this.cursorElevGroup.setAttribute('position', '0 0 0');
             this.cursorPlumbLine.setAttribute('visible', 'false');
             this.cursorGroundRing.setAttribute('visible', 'false');
@@ -231,7 +285,7 @@
             this.cursorContainer.setAttribute('visible', 'false'); 
           }
         } 
-        // FASE 2: Regolazione Altezza Terreno (Filo a piombo visibile)
+        // FASE 2: Regolazione Altezza Terreno (Filo a piombo visibile per erba/avvallamenti)
         else if (this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE') {
           if (this.tempBasePos) {
             let localZero = new THREE.Vector3(this.tempBasePos.x, this.tempBasePos.y, this.tempBasePos.z);
@@ -249,7 +303,6 @@
               this.cursorPlumbLine.setAttribute('height', Math.abs(this.tempElevation));
               this.cursorPlumbLine.setAttribute('position', `0 ${this.tempElevation / 2} 0`);
               
-              // Colore Stelo: Azzurro = Rialzato, Rosso = Infossato
               let lineColor = this.tempElevation > 0 ? '#00FFFF' : '#FF1744'; 
               this.cursorPlumbLine.setAttribute('material', 'color', lineColor);
             } else {
@@ -258,7 +311,7 @@
             }
             
             let sign = this.tempElevation >= 0 ? '+' : '';
-            this.cursorText.setAttribute('value', `Quota: ${sign}${this.tempElevation.toFixed(2)}m\n<- Joystick SX ->\nGRILLETTO: Conferma`);
+            this.cursorText.setAttribute('value', `Ritocco: ${sign}${this.tempElevation.toFixed(2)}m\n<- Joystick SX ->\nGRILLETTO: Conferma`);
             this.cursorText.setAttribute('color', '#FFEB3B');
           }
         } 
@@ -270,7 +323,7 @@
       onLeftThumbstick: function(evt) {
         let now = Date.now();
 
-        // COMPENSAZIONE ALTEZZA TERRENO (Y-AXIS)
+        // COMPENSAZIONE MANUALE (se l'Hit test rileva l'erba alta e vuoi scendere)
         let isAdjustingBase = this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE';
         if (isAdjustingBase) {
           if (!this.lastElevTime || now - this.lastElevTime > 110) {
@@ -368,6 +421,10 @@
           }
         }
 
+        // Variabile di supporto per l'Hit Test fisico
+        let hitTest = this.raycasterEl.components['controller-hit-test'];
+        let hasHit = hitTest && hitTest.isActive;
+
         // ----------------------------------------------------
         // LOGICA MODALITA' TIRANTI
         // ----------------------------------------------------
@@ -382,12 +439,11 @@
           }
 
           if (this.gwState === 'PLACE_PEGS') {
-            let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-            if (hitGround) {
-              this.tempBasePos = this.getLocalPoint(hitGround.point);
+            if (hasHit) {
+              this.tempBasePos = this.getLocalPoint(hitTest.hitPoint);
               this.tempElevation = 0;
               this.gwState = 'ADJUST_PEG_BASE';
-              this.updateGWStatus("USA JOYSTICK SX (SU/GIU) PER ADATTARE QUOTA\nPREMI GRILLETTO PER PIANTARE");
+              this.updateGWStatus("USA JOYSTICK SX PER RITOCCO QUOTA (Opzionale)\nPREMI GRILLETTO PER PIANTARE");
             }
             return;
           }
@@ -407,9 +463,8 @@
         // LOGICA CALIBRAZIONE (VASSOIO)
         // ----------------------------------------------------
         if (this.state === 'CALIB_SET') {
-            let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-            if (hitGround) {
-                let worldPt = hitGround.point.clone();
+            if (hasHit) {
+                let worldPt = hitTest.hitPoint.clone();
                 let localPt = this.getLocalPoint(worldPt);
                 this.beaconLocalPos = localPt;
 
@@ -426,9 +481,8 @@
         }
 
         if (this.state === 'CALIB_SNAP') {
-            let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-            if (hitGround) {
-                let newWorldPt = hitGround.point.clone();
+            if (hasHit) {
+                let newWorldPt = hitTest.hitPoint.clone();
                 this.worldPivotEl.object3D.position.copy(newWorldPt);
                 document.querySelector('#info-text').setAttribute('value', 'RIALLINEAMENTO COMPLETATO.\nUsa il Joystick SX per correggere la rotazione. Premi Y per finire.');
             }
@@ -441,12 +495,11 @@
         let type = this.antennaTypes[this.antIdx];
 
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
-          let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-          if(!hitGround) return;
-          this.tempBasePos = this.getLocalPoint(hitGround.point);
+          if(!hasHit) return;
+          this.tempBasePos = this.getLocalPoint(hitTest.hitPoint);
           this.tempElevation = 0;
           this.state = this.state.includes('REPOSITION') ? 'REPOSITION_ADJUST_BASE_A' : 'ADJUST_BASE_A';
-          document.querySelector('#info-text').setAttribute('value', "REGOLA QUOTA TERRENO (Joystick SX)");
+          document.querySelector('#info-text').setAttribute('value', "RITOCCO MANUALE QUOTA TERRENO (Joystick SX)");
           return;
         }
         
@@ -478,12 +531,11 @@
         }
 
         if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
-          let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-          if(!hitGround) return;
-          this.tempBasePos = this.getLocalPoint(hitGround.point);
+          if(!hasHit) return;
+          this.tempBasePos = this.getLocalPoint(hitTest.hitPoint);
           this.tempElevation = 0;
           this.state = this.state.includes('REPOSITION') ? 'REPOSITION_ADJUST_BASE_B' : 'ADJUST_BASE_B';
-          document.querySelector('#info-text').setAttribute('value', "REGOLA QUOTA TERRENO (Joystick SX)");
+          document.querySelector('#info-text').setAttribute('value', "RITOCCO MANUALE QUOTA TERRENO (Joystick SX)");
           return;
         }
 
@@ -984,7 +1036,7 @@
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
   </div>
 
-  <a-scene webxr="optionalFeatures: passthrough; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: hit-test, local-floor; requiredFeatures: hit-test" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
@@ -1102,10 +1154,8 @@
         </a-entity>
       </a-entity>
       
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;"></a-entity>
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;" controller-hit-test></a-entity>
     </a-entity>
-
-    <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="1000" height="1000" material="opacity: 0.0; transparent: true"></a-plane>
     
     <a-entity id="cursor-container" visible="false">
       <a-ring id="cursor-ground-ring" color="#FF9800" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" material="opacity: 0.4; shader: flat" visible="false"></a-ring>
