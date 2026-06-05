@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V15 - Anti Drift & Tiranti</title>
+  <title>Antenne AR Pro V15 - Anti Drift & Tiranti (Hit-Test Terrain)</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -63,8 +63,11 @@
         this.gwState = 'OFF'; 
         this.lastTriggerTime = 0; 
 
-        // GESTIONE CALIBRAZIONE (IL VASSOIO INVISIBILE)
+        // GESTIONE CALIBRAZIONE E HIT-TEST
         this.beaconLocalPos = null;
+        this.lastValidCursorPos = null; // Memorizza la posizione reale del terreno
+        this.hitTestSources = null;     // Mappa dei sensori raycaster nativi VR
+        this.xrRefSpace = null;
 
         // Cache DOM
         this.raycasterEl = document.querySelector('#right-controller');
@@ -89,6 +92,12 @@
         this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this));
         this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this));
 
+        // Pulisci i dati del sensore se si esce dalla VR
+        this.el.sceneEl.addEventListener('exit-vr', () => {
+            this.hitTestSources = null;
+            this.xrRefSpace = null;
+        });
+
         this.initPersistentElements();
         this.loadPreloadedMmanaModel();
         this.resetAntennaLengths();
@@ -97,7 +106,6 @@
         this.updateMenuText();
       },
 
-      // Trasforma un punto del mondo reale nelle coordinate locali del "Vassoio"
       getLocalPoint: function(worldVec) {
         let local = new THREE.Vector3();
         this.worldContentEl.object3D.worldToLocal(local.copy(worldVec));
@@ -106,14 +114,11 @@
 
       toggleMenu: function() {
         if(this.gwState !== 'OFF') return; 
-        
-        // Se siamo in calibrazione, uscire riporta a IDLE
         if(this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
             this.state = 'IDLE';
             this.menuUI.setAttribute('visible', true);
             return;
         }
-
         if(!this.menuUI) return;
         let isVisible = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
         this.menuUI.setAttribute('visible', !isVisible);
@@ -191,7 +196,6 @@
         this.previewCollar = document.createElement('a-torus'); this.previewCollar.setAttribute('radius', '0.04'); this.previewCollar.setAttribute('radius-tubular', '0.006'); this.previewCollar.setAttribute('material', 'color: #FFEB3B; shader: flat'); this.previewCollar.setAttribute('visible', 'false'); this.previewCollar.setAttribute('rotation', '90 0 0'); this.worldContentEl.appendChild(this.previewCollar);
         this.previewCollarText = document.createElement('a-text'); this.previewCollarText.setAttribute('align', 'center'); this.previewCollarText.setAttribute('color', '#FFEB3B'); this.previewCollarText.setAttribute('look-at-camera', ''); this.previewCollarText.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.previewCollarText);
 
-        // IL FARO DI CALIBRAZIONE (DIAMANTE)
         this.beaconVisual = document.createElement('a-entity');
         let outerDiamond = document.createElement('a-octahedron'); outerDiamond.setAttribute('radius', '0.08'); outerDiamond.setAttribute('color', '#00BFFF'); outerDiamond.setAttribute('material', 'shader: flat; wireframe: true');
         let innerDiamond = document.createElement('a-octahedron'); innerDiamond.setAttribute('radius', '0.04'); innerDiamond.setAttribute('color', '#00BFFF'); innerDiamond.setAttribute('material', 'shader: flat; opacity: 0.8');
@@ -214,11 +218,68 @@
       },
 
       tick: function () {
+        let currentTargetPos = null;
+        let isRealTerrain = false;
+        
+        let sceneEl = this.el.sceneEl;
+        let frame = sceneEl.frame;
+        let session = sceneEl.renderer.xr.getSession();
+
+        // LOGICA SCANSIONE TERRENO WEBXR HIT-TEST
+        if (frame && session) {
+            if (!this.xrRefSpace) {
+                this.xrRefSpace = sceneEl.renderer.xr.getReferenceSpace();
+            }
+            if (this.xrRefSpace) {
+                let inputSources = session.inputSources;
+                let rightControllerSource = null;
+                for (let i = 0; i < inputSources.length; i++) {
+                    if (inputSources[i].handedness === 'right') { rightControllerSource = inputSources[i]; break; }
+                }
+
+                if (rightControllerSource && rightControllerSource.targetRaySpace) {
+                    if (!this.hitTestSources) this.hitTestSources = new Map();
+                    let source = this.hitTestSources.get(rightControllerSource);
+                    
+                    if (!source && !this.requestingHitTest) {
+                        this.requestingHitTest = true;
+                        session.requestHitTestSource({ space: rightControllerSource.targetRaySpace }).then(newSource => {
+                            this.hitTestSources.set(rightControllerSource, newSource);
+                            this.requestingHitTest = false;
+                        }).catch(() => { this.requestingHitTest = false; });
+                    } else if (source) {
+                        let results = frame.getHitTestResults(source);
+                        if (results.length > 0) {
+                            let pose = results[0].getPose(this.xrRefSpace);
+                            if (pose) {
+                                currentTargetPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                                isRealTerrain = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // FALLBACK: Se il sensore di profondità non prende nulla (es. PC o troppo vicino/lontano), usa il piano infinito
+        if (!currentTargetPos) {
+            let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
+            if (intersection) {
+                currentTargetPos = intersection.point;
+            }
+        }
+
+        // RENDER CURSORE E SALVATAGGIO POSIZIONE
         if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
-          let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-          if (intersection) {
-            this.cursorRing.setAttribute('visible', 'true'); this.cursorRing.setAttribute('position', intersection.point);
-          } else { this.cursorRing.setAttribute('visible', 'false'); }
+          if (currentTargetPos) {
+            this.cursorRing.setAttribute('visible', 'true'); 
+            this.cursorRing.setAttribute('position', currentTargetPos);
+            // Verde se è il terreno fisico, Bianco se è il piano matematico
+            this.cursorRing.setAttribute('color', isRealTerrain ? '#00E676' : '#FFFFFF');
+            this.lastValidCursorPos = currentTargetPos.clone();
+          } else { 
+            this.cursorRing.setAttribute('visible', 'false'); 
+          }
         } else {
           this.cursorRing.setAttribute('visible', 'false');
         }
@@ -228,13 +289,10 @@
         if (this.gwState !== 'OFF') return;
         if (Math.abs(evt.detail.x) > 0.3) {
             let delta = evt.detail.x > 0 ? 2.0 : -2.0;
-            
-            // Se siamo in calibrazione, ruota l'INTERO MONDO facendo perno sul Faro
             if (this.state === 'CALIB_SNAP') {
                 let currentRot = this.worldPivotEl.object3D.rotation.y;
                 this.worldPivotEl.object3D.rotation.set(0, currentRot - (delta * Math.PI / 180), 0);
             } 
-            // Altrimenti ruota solo i fili dell'antenna MMANA/Radiali
             else {
                 this.antennaRotationY += delta;
                 this.updateGeometriesAndDrawings();
@@ -245,13 +303,11 @@
       onRightThumbstick: function (evt) {
         let thumbTime = Date.now();
         if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
-          
           if (this.state.includes('HEIGHT') && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1; 
             this.currentHeight = Math.max(0.0, this.currentHeight + step);
             this.updateHeightPreview(); this.lastThumbTime = thumbTime;
           }
-          
           else if (this.gwState === 'ADJUST_HEIGHT' && this.activeAnchor && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1;
             let poleData = this.activeAnchor.pole === 'A' ? this.pointA : this.pointB;
@@ -299,7 +355,6 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        // SCUDO ANTI-TRAPASSO MENU
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         if (intersects) {
           for (let i = 0; i < intersects.length; i++) {
@@ -309,49 +364,31 @@
           }
         }
 
-        // ----------------------------------------------------
-        // LOGICA CALIBRAZIONE (IL VASSOIO)
-        // ----------------------------------------------------
+        // Se non abbiamo un punto scansionato valido dal tick, blocca
+        let isCursorVisible = this.cursorRing.getAttribute('visible');
+        if (!this.lastValidCursorPos || isCursorVisible === false || isCursorVisible === 'false') return;
+        let targetPoint = this.lastValidCursorPos;
+
         if (this.state === 'CALIB_SET') {
-            let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-            if (hitGround) {
-                let worldPt = hitGround.point.clone();
-                let localPt = this.getLocalPoint(worldPt);
-
-                this.beaconLocalPos = localPt;
-
-                // Sposta il perno (Pivot) sul punto colpito
-                this.worldPivotEl.object3D.position.copy(worldPt);
-                // Sposta il contenuto al contrario, così non noti salti visivi
-                this.worldContentEl.object3D.position.set(-localPt.x, -localPt.y, -localPt.z);
-
-                // Mostra il Diamante
-                this.beaconVisual.setAttribute('visible', 'true');
-                this.beaconVisual.setAttribute('position', `${localPt.x} 0.08 ${localPt.z}`);
-
-                this.state = 'IDLE';
-                this.menuUI.setAttribute('visible', true);
-            }
+            let worldPt = targetPoint.clone();
+            let localPt = this.getLocalPoint(worldPt);
+            this.beaconLocalPos = localPt;
+            this.worldPivotEl.object3D.position.copy(worldPt);
+            this.worldContentEl.object3D.position.set(-localPt.x, -localPt.y, -localPt.z);
+            this.beaconVisual.setAttribute('visible', 'true');
+            this.beaconVisual.setAttribute('position', `${localPt.x} 0.08 ${localPt.z}`);
+            this.state = 'IDLE';
+            this.menuUI.setAttribute('visible', true);
             return;
         }
 
         if (this.state === 'CALIB_SNAP') {
-            let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-            if (hitGround) {
-                let newWorldPt = hitGround.point.clone();
-                // Trasla istantaneamente tutto il vassoio sul nuovo punto reale!
-                this.worldPivotEl.object3D.position.copy(newWorldPt);
-                
-                // Rimaniamo in SNAP per permettere all'utente di usare il joystick per ruotare
-                document.querySelector('#info-text').setAttribute('value', 'RIALLINEAMENTO COMPLETATO.\nUsa il Joystick SX per correggere la rotazione. Premi Y per finire.');
-            }
+            let newWorldPt = targetPoint.clone();
+            this.worldPivotEl.object3D.position.copy(newWorldPt);
+            document.querySelector('#info-text').setAttribute('value', 'RIALLINEAMENTO COMPLETATO.\nUsa il Joystick SX per correggere la rotazione. Premi Y per finire.');
             return;
         }
 
-
-        // ----------------------------------------------------
-        // LOGICA MODALITA' TIRANTI
-        // ----------------------------------------------------
         if (this.gwState !== 'OFF') {
           if (this.gwState === 'ADJUST_HEIGHT') {
             this.gwState = 'PLACE_PEGS';
@@ -360,28 +397,19 @@
             this.updateGWStatus("PUNTA IL TERRENO E PREMI IL GRILLETTO PER I PICCHETTI");
             return;
           }
-
           if (this.gwState === 'PLACE_PEGS') {
-            let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-            if (hitGround) {
-              let localHit = this.getLocalPoint(hitGround.point);
-              this.activeAnchor.pegs.push(localHit);
-              this.drawGuyWires(); 
-            }
+            let localHit = this.getLocalPoint(targetPoint);
+            this.activeAnchor.pegs.push(localHit);
+            this.drawGuyWires(); 
             return;
           }
           return; 
         }
 
-        // ----------------------------------------------------
-        // LOGICA NORMALE ANTENNA
-        // ----------------------------------------------------
         let type = this.antennaTypes[this.antIdx];
 
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
-          let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-          if(!hitGround) return;
-          this.pointA.base = this.getLocalPoint(hitGround.point);
+          this.pointA.base = this.getLocalPoint(targetPoint);
           this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
           this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1;
           this.setupVerticalPreviewMode(this.pointA.base);
@@ -402,9 +430,7 @@
           }
         } 
         else if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
-          let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
-          if(!hitGround) return;
-          this.pointB.base = this.getLocalPoint(hitGround.point);
+          this.pointB.base = this.getLocalPoint(targetPoint);
           this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B';
           this.currentHeight = 0.1; 
           this.setupVerticalPreviewMode(this.pointB.base);
@@ -697,20 +723,17 @@
           let id = target.id;
           let mathRound = (num) => Math.round(num * 100) / 100;
 
-          // CONTROLLI CALIBRAZIONE (ANTI-DRIFT)
           if (id === 'btn-cal-set') {
             this.state = 'CALIB_SET';
             this.menuUI.setAttribute('visible', false);
             document.querySelector('#info-text').setAttribute('value', 'Punta un sasso o base albero e premi grilletto per piazzare il Faro.');
           }
           else if (id === 'btn-cal-snap') {
-            if (!this.beaconLocalPos) return; // Niente faro, niente snap
+            if (!this.beaconLocalPos) return; 
             this.state = 'CALIB_SNAP';
             this.menuUI.setAttribute('visible', false);
             document.querySelector('#info-text').setAttribute('value', 'Punta di nuovo la VERA base albero per riallineare il prato.');
           }
-
-          // CONTROLLI MENU TIRANTI
           else if (id === 'btn-gw-new-a') {
             this.startCollarPlacement('A');
           }
@@ -734,8 +757,6 @@
           else if (id === 'btn-gw-close') {
             this.toggleGuyWireMode();
           }
-
-          // CONTROLLI NORMALI MENU ANTENNA
           else if (id === 'btn-ant') {
             this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll();
           } 
@@ -881,7 +902,7 @@
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
   </div>
 
-  <a-scene webxr="optionalFeatures: passthrough; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: passthrough, hit-test; referenceSpaceType: local-floor" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
