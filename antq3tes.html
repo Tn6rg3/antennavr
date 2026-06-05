@@ -60,16 +60,7 @@
         this.el.setAttribute('line', `start: 0 0 0; end: 0 0 -2; color: #FF1744; opacity: 0.2`);
       }
     });
-    AFRAME.registerComponent('btn-interaction', {
-      init: function () {
-        let el = this.el;
-        let originalColor = el.getAttribute('material').color;
-        el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
-        el.addEventListener('mouseleave', () => { el.setAttribute('material', 'opacity', 1.0); el.setAttribute('scale', '1 1 1'); el.setAttribute('material', 'color', originalColor); });
-        el.addEventListener('mousedown', () => { el.setAttribute('scale', '0.95 0.95 0.8'); el.setAttribute('material', 'color', '#00FFCC'); });
-        el.addEventListener('mouseup', () => { el.setAttribute('scale', '1 1 1'); el.setAttribute('material', 'color', originalColor); });
-      }
-    });
+    
 
   AFRAME.registerComponent('btn-interaction', {
   init: function () {
