@@ -103,10 +103,9 @@
           this.menuUI.setAttribute('visible', false);
           this.gwUI.setAttribute('visible', true);
           this.gwState = 'SELECT_POLE';
-          this.updateGWStatus("SELEZIONA IL PALO DAL MENU QUI SOTTO");
+          this.updateGWStatus("SCEGLI QUALE PALO TIRANTARE DAL MENU");
           this.cursorRing.setAttribute('visible', 'false');
           
-          // Gestione bottoni A e B in base all'antenna
           this.toggleButton('#btn-gw-new-a', this.pointA.top !== null);
           this.toggleButton('#btn-gw-new-b', this.pointB.top !== null);
 
@@ -166,7 +165,6 @@
           let radCyl = document.createElement('a-cylinder'); radCyl.setAttribute('radius', '0.005'); radCyl.setAttribute('material', 'color: #5D4037; shader: flat'); radCyl.setAttribute('visible', 'false'); scene.appendChild(radCyl); this.radialPool.push(radCyl);
         }
 
-        // Elementi Olografici Temporanei per creare i Tiranti
         this.previewCollar = document.createElement('a-torus'); this.previewCollar.setAttribute('radius', '0.04'); this.previewCollar.setAttribute('radius-tubular', '0.006'); this.previewCollar.setAttribute('material', 'color: #FFEB3B; shader: flat'); this.previewCollar.setAttribute('visible', 'false'); this.previewCollar.setAttribute('rotation', '90 0 0'); scene.appendChild(this.previewCollar);
         this.previewCollarText = document.createElement('a-text'); this.previewCollarText.setAttribute('align', 'center'); this.previewCollarText.setAttribute('color', '#FFEB3B'); this.previewCollarText.setAttribute('look-at-camera', ''); this.previewCollarText.setAttribute('visible', 'false'); scene.appendChild(this.previewCollarText);
       },
@@ -259,8 +257,16 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        if (this.menuUI.getAttribute('visible') && this.raycasterEl.components.raycaster.getIntersection(this.menuUI)) return;
-        if (this.gwUI.getAttribute('visible') && this.raycasterEl.components.raycaster.getIntersection(this.gwUI)) return;
+        // SCUDO ANTI-TRAPASSO: Impedisce al laser di bucare il menu e piazzare picchetti fantasma dietro
+        let intersects = this.raycasterEl.components.raycaster.intersectedEls;
+        if (intersects) {
+          for (let i = 0; i < intersects.length; i++) {
+            let el = intersects[i];
+            // Se tocchiamo un pulsante, oppure il pannello intero, ignora il trigger
+            if (el.classList && el.classList.contains('clickable')) return;
+            if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) return;
+          }
+        }
 
         // ----------------------------------------------------
         // LOGICA MODALITA' TIRANTI (GUY WIRES)
@@ -270,7 +276,7 @@
             this.gwState = 'PLACE_PEGS';
             this.guyWiresData.push(this.activeAnchor); 
             this.previewCollar.setAttribute('material', 'color: #FF0000');
-            this.updateGWStatus("PUNTA IL TERRENO E CLICCA PER PIAZZARE I PICCHETTI");
+            this.updateGWStatus("PUNTA IL TERRENO E PREMI IL GRILLETTO PER I PICCHETTI");
             return;
           }
 
@@ -617,7 +623,6 @@
               this.activeAnchor.pegs.pop();
               this.drawGuyWires();
             } else if (this.activeAnchor && this.activeAnchor.pegs.length === 0) {
-              // Se annulli quando non hai piazzato picchetti, cancella il collarino e torna alla selezione palo
               this.guyWiresData = this.guyWiresData.filter(a => a !== this.activeAnchor);
               this.activeAnchor = null;
               this.previewCollar.setAttribute('visible', 'false');
@@ -776,6 +781,7 @@
       <a-camera id="camera" position="0 1.6 0"></a-camera>
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
+        <!-- MENU NORMALE ANTENNA -->
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
           <a-plane width="0.5" height="0.55" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
@@ -784,6 +790,7 @@
             <a-text id="info-text" value="Scegli i punti a terra col grilletto destro." position="-0.21 0 0.01" scale="0.075 0.075 0.075" color="#00E676"></a-text>
           </a-plane>
 
+          <!-- Tasto X Istruzione -->
           <a-text value="PREMI IL TASTO [ X ] SUL CONTROLLER PER GESTIRE I TIRANTI" position="0 0.13 0.01" align="center" scale="0.055 0.055 0.055" color="#FF9800"></a-text>
 
           <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.09 0.01">
@@ -853,6 +860,7 @@
           <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.20 0.01"><a-text value="RESET" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
         </a-entity>
 
+        <!-- MENU TIRANTI (GUY WIRES) -->
         <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
           <a-plane width="0.45" height="0.38" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
           <a-text value="MODALITA' TIRANTI E ANCORAGGI" position="0 0.15 0.01" align="center" scale="0.1 0.1 0.1" color="#FFEB3B"></a-text>
@@ -861,19 +869,20 @@
             <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.055 0.055 0.055" color="#00E676"></a-text>
           </a-plane>
 
-          <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.3" height="0.035" color="#006064" position="0 0.01 0.01" visible="false">
-            <a-text value="[+] CREA COLLARE PALO A" align="center" scale="0.07 0.07 0.07" color="#FFFFFF"></a-text>
+          <!-- Tasti RINOMINATI in "AGGIUNGI" per chiarire che si possono mettere infiniti collari -->
+          <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.32" height="0.035" color="#006064" position="0 0.01 0.01" visible="false">
+            <a-text value="[+] AGGIUNGI COLLARE PALO A" align="center" scale="0.07 0.07 0.07" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.3" height="0.035" color="#006064" position="0 -0.04 0.01" visible="false">
-            <a-text value="[+] CREA COLLARE PALO B" align="center" scale="0.07 0.07 0.07" color="#FFFFFF"></a-text>
+          <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.32" height="0.035" color="#006064" position="0 -0.04 0.01" visible="false">
+            <a-text value="[+] AGGIUNGI COLLARE PALO B" align="center" scale="0.07 0.07 0.07" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-gw-undo" class="clickable" btn-interaction width="0.3" height="0.03" color="#D84315" position="0 -0.10 0.01">
+          <a-plane id="btn-gw-undo" class="clickable" btn-interaction width="0.32" height="0.03" color="#D84315" position="0 -0.10 0.01">
             <a-text value="ANNULLA ULTIMO PICCHETTO" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-gw-close" class="clickable" btn-interaction width="0.3" height="0.03" color="#1A1A1A" position="0 -0.15 0.01">
+          <a-plane id="btn-gw-close" class="clickable" btn-interaction width="0.32" height="0.03" color="#1A1A1A" position="0 -0.15 0.01">
             <a-text value="ESCI E TORNA ALL'ANTENNA (TASTO X)" align="center" scale="0.06 0.06 0.06" color="#9E9E9E"></a-text>
           </a-plane>
         </a-entity>
