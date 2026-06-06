@@ -2,87 +2,74 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Test Scansione Mesh AR - Meta Quest</title>
+  <title>Test Hit-Test Sicuro</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
-    // Questo componente interroga il visore 90 volte al secondo per estrarre la mappa 3D reale
-    AFRAME.registerComponent('real-world-mesh-tester', {
-      init: function () {
-        this.meshMap = new Map(); // Tiene traccia dei triangoli creati
-        
-        // Creiamo un materiale "a fil di ferro" verde acceso
-        this.material = new THREE.MeshBasicMaterial({
-          color: 0x00FF00,
-          wireframe: true,
-          transparent: true,
-          opacity: 0.8
-        });
-
+    AFRAME.registerComponent('debug-hit-test', {
+      init: function() {
         this.statusText = document.querySelector('#status-text');
+        this.reticle = document.querySelector('#reticle');
+        this.hitTestSource = null;
+        this.localSpace = null;
+
+        // Quando entri in AR, avvia il sensore di profondità
+        this.el.sceneEl.addEventListener('enter-vr', () => {
+          if (this.el.sceneEl.is('ar-mode')) {
+            this.statusText.setAttribute('value', 'Sei in AR!\nCerco superfici fisiche...');
+            this.statusText.setAttribute('color', '#00FF00');
+            this.startHitTest();
+          } else {
+            this.statusText.setAttribute('value', 'Sei entrato in VR (schermo nero).\nEsci e clicca il tasto "AR" in basso a destra.');
+            this.statusText.setAttribute('color', '#FF0000');
+          }
+        });
       },
 
-      tick: function () {
-        let renderer = this.el.sceneEl.renderer;
-        // Se non siamo in AR, esci
-        if (!renderer || !renderer.xr || !renderer.xr.isPresenting) return;
-
-        let xrSession = renderer.xr.getSession();
-        let xrFrame = this.el.sceneEl.frame;
-        let refSpace = renderer.xr.getReferenceSpace();
-
-        if (!xrSession || !xrFrame || !refSpace) return;
-
-        // CONTROLLO CRITICO: Il browser ci sta passando i dati?
-        if (!xrFrame.detectedMeshes) {
-            if (this.statusText && this.statusText.getAttribute('value') !== 'ERRORE: Dati spaziali bloccati.\nHai abilitato WebXR Incubations\nin chrome://flags?') {
-                this.statusText.setAttribute('value', 'ERRORE: Dati spaziali bloccati.\nHai abilitato WebXR Incubations\nin chrome://flags?');
-                this.statusText.setAttribute('color', '#FF0000');
-            }
-            return; // Interrompe il codice
-        }
-
-        // Se arriva fin qui, il sensore sta funzionando!
-        let meshCount = xrFrame.detectedMeshes.size;
-        if (this.statusText) {
-             this.statusText.setAttribute('value', `SUCCESSO!\nBlocchi di Mesh Rilevati: ${meshCount}\nGuarda in giro per mappare l'area.`);
-             this.statusText.setAttribute('color', '#00FFFF');
-        }
-
-        // Estrae i dati e costruisce i triangoli
-        xrFrame.detectedMeshes.forEach(xrMesh => {
-          // Se è una mesh nuova che non abbiamo ancora disegnato
-          if (!this.meshMap.has(xrMesh)) {
-            let geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.BufferAttribute(xrMesh.vertices, 3));
-            geometry.setIndex(new THREE.BufferAttribute(xrMesh.indices, 1));
-            
-            let mesh = new THREE.Mesh(geometry, this.material);
-            this.el.object3D.add(mesh);
-            this.meshMap.set(xrMesh, mesh);
-          }
-          
-          // Posiziona i triangoli esattamente sopra l'oggetto reale corrispondente
-          let pose = xrFrame.getPose(xrMesh.meshSpace, refSpace);
-          if (pose) {
-            let mesh = this.meshMap.get(xrMesh);
-            mesh.position.copy(pose.transform.position);
-            mesh.quaternion.copy(pose.transform.orientation);
-          }
+      startHitTest: function() {
+        let session = this.el.sceneEl.renderer.xr.getSession();
+        
+        // Chiediamo uno spazio ancorato al visore (il tuo sguardo)
+        session.requestReferenceSpace('viewer').then((refSpace) => {
+          session.requestHitTestSource({ space: refSpace }).then((source) => {
+            this.hitTestSource = source;
+          });
         });
 
-        // Elimina i triangoli che il visore non ritiene più validi
-        for (let [xrMesh, mesh] of this.meshMap) {
-          if (!xrFrame.detectedMeshes.has(xrMesh)) {
-            this.el.object3D.remove(mesh);
-            mesh.geometry.dispose();
-            this.meshMap.delete(xrMesh);
+        // Chiediamo il sistema di coordinate della stanza
+        session.requestReferenceSpace('local-floor').then((refSpace) => {
+          this.localSpace = refSpace;
+        });
+      },
+
+      tick: function() {
+        if (!this.hitTestSource || !this.localSpace) return;
+        
+        let frame = this.el.sceneEl.frame;
+        if (frame) {
+          // Eseguiamo il "lancio del raggio" contro il mondo reale
+          let hitTestResults = frame.getHitTestResults(this.hitTestSource);
+          
+          if (hitTestResults.length > 0) {
+            // Superficie fisica trovata!
+            let pose = hitTestResults[0].getPose(this.localSpace);
+            let pos = pose.transform.position;
+            
+            // Incolliamo il mirino verde nel punto reale
+            this.reticle.setAttribute('position', pos);
+            this.reticle.setAttribute('visible', 'true');
+            
+            this.statusText.setAttribute('value', `Superficie Trovata!\nQuota Terreno (Y): ${pos.y.toFixed(2)}m`);
+          } else {
+            // Niente trovato (es. stai guardando il cielo)
+            this.reticle.setAttribute('visible', 'false');
+            this.statusText.setAttribute('value', 'Guarda verso il pavimento o i muri...');
           }
         }
       }
     });
 
-    // Fai in modo che il testo guardi sempre verso di te
+    // Testo sempre rivolto a te
     AFRAME.registerComponent('look-at-camera', {
       tick: function () {
         let cameraEl = document.querySelector('#camera');
@@ -91,21 +78,20 @@
     });
   </script>
 </head>
-<body style="background-color: #111; color: white; font-family: sans-serif; text-align: center; padding-top: 50px;">
-  
-  <h2>Test Sensore Spaziale AR</h2>
-  <p>Entra in modalità AR dal tuo visore Meta Quest.</p>
+<body style="background-color: #111; color: white; text-align: center;">
 
-  <a-scene webxr="optionalFeatures: hit-test, local-floor, mesh; requiredFeatures: mesh" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: hit-test, local-floor" vr-mode-ui="enabled: true">
     
     <a-camera id="camera" position="0 1.6 0"></a-camera>
 
     <a-entity position="0 1.5 -1.5" look-at-camera>
         <a-plane width="1.2" height="0.6" color="#222" material="opacity: 0.8; shader: flat" position="0 0 -0.01"></a-plane>
-        <a-text id="status-text" value="In attesa di entrare in AR..." align="center" color="#FFFFFF" scale="0.4 0.4 0.4"></a-text>
+        <a-text id="status-text" value="In attesa di entrare in AR...\nClicca l'icona AR in basso a destra" align="center" color="#FFFFFF" scale="0.4 0.4 0.4"></a-text>
     </a-entity>
 
-    <a-entity real-world-mesh-tester></a-entity>
+    <a-ring id="reticle" color="#00FF00" radius-inner="0.08" radius-outer="0.1" rotation="-90 0 0" visible="false"></a-ring>
+
+    <a-entity debug-hit-test></a-entity>
 
   </a-scene>
 </body>
