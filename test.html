@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V27 - Menu Solido, Laser Fisso & UI Fix</title>
+  <title>Antenne AR Pro V28 - Fix Blocchi Invisibili & Calibrazione</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -31,7 +31,7 @@
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el;
-        if (!el.hasAttribute('material') || !el.getAttribute('material').color) return; // Evita errori sui background solidi
+        if (!el.hasAttribute('material') || !el.getAttribute('material').color) return; 
         let originalColor = el.getAttribute('material').color;
         el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
         el.addEventListener('mouseleave', () => { el.setAttribute('material', 'opacity', 1.0); el.setAttribute('scale', '1 1 1'); el.setAttribute('material', 'color', originalColor); });
@@ -80,7 +80,6 @@
         let controllerPos = new THREE.Vector3();
         this.el.object3D.getWorldPosition(controllerPos);
         
-        // 1. TENTATIVO SENSORE FISICO
         if (this.hitTestSource && this.refSpace && frame) {
           let results = frame.getHitTestResults(this.hitTestSource);
           if (results.length > 0) {
@@ -95,7 +94,6 @@
           }
         }
 
-        // 2. TENTATIVO MATEMATICO
         if (!rawHit) {
             let dir = new THREE.Vector3(0, 0, -1);
             let quat = new THREE.Quaternion();
@@ -159,12 +157,10 @@
         this.lastTriggerTime = 0; 
         this.currentHoveredGW = null; 
 
-        // Dati Calibrazione
         this.calibOriginalPoints = [];
         this.calibDiamonds = []; 
         this.loadedData = null;
 
-        // Cache DOM
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
         
@@ -199,6 +195,18 @@
         this.setupGlobalEventDelegation();
         this.setupFileIO();
         this.updateMenuText();
+      },
+
+      // FUNZIONE CRITICA PER IGNORARE GLI ELEMENTI INVISIBILI
+      isElementVisible: function(el) {
+        if (!el) return false;
+        let curr = el;
+        while (curr && curr.tagName && curr.tagName.toLowerCase() !== 'a-scene') {
+            let vis = curr.getAttribute('visible');
+            if (vis === false || vis === 'false') return false;
+            curr = curr.parentElement;
+        }
+        return true;
       },
 
       getLocalPoint: function(worldVec) {
@@ -323,19 +331,25 @@
         let isAdjusting = this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE';
         let isDeleting = this.gwState === 'DELETE_GW';
 
-        // GESTIONE GLOBO ROSSO ELIMINAZIONE
+        // GESTIONE GLOBO ROSSO ELIMINAZIONE 
         if (isDeleting) {
             this.cursorContainer.setAttribute('visible', 'false');
             this.currentHoveredGW = null;
             let raycasterComponent = this.raycasterEl.components.raycaster;
             if (raycasterComponent && raycasterComponent.intersectedEls.length > 0) {
-                let targetEl = raycasterComponent.intersectedEls.find(el => el.classList.contains('deletable'));
+                let targetEl = null;
+                for (let i = 0; i < raycasterComponent.intersectedEls.length; i++) {
+                    let el = raycasterComponent.intersectedEls[i];
+                    if (this.isElementVisible(el) && el.classList.contains('deletable')) {
+                        targetEl = el; break;
+                    }
+                }
+                
                 if (targetEl) {
                     this.currentHoveredGW = targetEl;
-                    let pos = new THREE.Vector3();
-                    targetEl.object3D.getWorldPosition(pos);
+                    // Prende la posizione locale e si aggancia perfettamente senza sfalsamenti
+                    this.gwDeleteCursor.setAttribute('position', targetEl.getAttribute('position'));
                     this.gwDeleteCursor.setAttribute('visible', 'true');
-                    this.gwDeleteCursor.setAttribute('position', pos);
                 } else { this.gwDeleteCursor.setAttribute('visible', 'false'); }
             } else { this.gwDeleteCursor.setAttribute('visible', 'false'); }
             return; 
@@ -343,18 +357,22 @@
             this.gwDeleteCursor.setAttribute('visible', 'false');
         }
 
-        // Controllo UI: Se puntiamo ai menu, spegni il cursore verde (ma il laser rosso resta!)
-        let menuVis = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
-        let gwVis = this.gwUI.getAttribute('visible') === 'true' || this.gwUI.getAttribute('visible') === true;
-        let raycasterComponent = this.raycasterEl.components.raycaster;
+        // SCUDO VISIBILE PER IL RAGGIO
         let isPointingUI = false;
+        let raycasterComponent = this.raycasterEl.components.raycaster;
         if (raycasterComponent && raycasterComponent.intersectedEls.length > 0) {
-             if (raycasterComponent.intersectedEls.some(el => el.classList.contains('menu-bg') || el.classList.contains('clickable'))) {
-                 isPointingUI = true;
-             }
+            for (let i = 0; i < raycasterComponent.intersectedEls.length; i++) {
+                let el = raycasterComponent.intersectedEls[i];
+                if (this.isElementVisible(el)) {
+                    if (el.classList.contains('menu-bg') || (el.classList.contains('clickable') && !el.classList.contains('deletable'))) {
+                        isPointingUI = true;
+                        break;
+                    }
+                }
+            }
         }
 
-        if ((menuVis || gwVis) && isPointingUI) {
+        if (isPointingUI) {
             this.cursorContainer.setAttribute('visible', 'false');
             return;
         }
@@ -362,7 +380,6 @@
         let hybrid = this.raycasterEl.components['controller-hybrid-target'];
         let hasTarget = hybrid && hybrid.isActive;
 
-        // Visualizza il Diamante d'anteprima se in calibrazione
         if (this.state.includes('CALIB')) {
             this.cursorDiamond.setAttribute('visible', 'true');
             this.mainRing.setAttribute('visible', 'false');
@@ -487,12 +504,17 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        // SCUDO MENU (Se premiamo su un elemento dell'UI che non è un vero pulsante, fermiamo il click sul terreno)
+        // SCUDO MENU (Se premiamo su un pulsante UI o pannello VISIBILE, fermiamo il terreno)
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         if (intersects && intersects.length > 0) {
-            let hitEl = intersects[0];
-            // Se becchiamo lo sfondo del menu o un pulsante UI, processiamo solo l'UI e blocchiamo il click "mondo"
-            if (hitEl.classList.contains('menu-bg') || (hitEl.classList.contains('clickable') && !hitEl.classList.contains('deletable'))) return;
+            for (let i = 0; i < intersects.length; i++) {
+                let hitEl = intersects[i];
+                if (this.isElementVisible(hitEl)) {
+                    if (hitEl.classList.contains('menu-bg') || (hitEl.classList.contains('clickable') && !hitEl.classList.contains('deletable'))) {
+                        return; // Ferma il click! L'utente stava puntando a un menu vero e visibile.
+                    }
+                }
+            }
         }
 
         if (this.gwState === 'DELETE_GW') {
@@ -829,8 +851,10 @@
         scene.addEventListener('mousedown', (evt) => {
           let now = Date.now(); if (now - this.lastClickTime < 250) return; 
           let target = evt.target.closest('.clickable'); if(!target) return;
-          let isVis = target.getAttribute('visible'); if (isVis === false || isVis === 'false') return;
-          let parent = target.parentElement; if (parent && (parent.getAttribute('visible') === false || parent.getAttribute('visible') === 'false')) return;
+          
+          // NUOVO SCUDO: Blocca il click se l'elemento che stiamo cliccando risulta invisibile
+          if (!this.isElementVisible(target)) return;
+
           this.lastClickTime = now; let id = target.id; let mathRound = (num) => Math.round(num * 100) / 100;
 
           if (id === 'btn-gw-new-a') { this.startCollarPlacement('A'); } else if (id === 'btn-gw-new-b') { this.startCollarPlacement('B'); }
@@ -869,7 +893,6 @@
       },
 
       setupFileIO: function() {
-        // Logica per il tasto salva nel browser
         document.querySelector('#btn-browser-save').addEventListener('click', () => {
             if(this.state !== 'IDLE') { alert("Finisci di piazzare l'antenna in AR prima di salvare."); return; }
             this.state = 'CALIB_SAVE_1';
@@ -892,7 +915,7 @@
                         this.gwUI.setAttribute('visible', 'false');
                         let alertBox = document.querySelector('#alert-msg');
                         alertBox.style.color = "#00FF00";
-                        alertBox.innerText = "File letto! Indossa il visore e posiziona i 2 Diamanti nei punti reali in cui li avevi salvati.";
+                        alertBox.innerText = "File letto! Indossa il visore e posiziona i 2 Diamanti nei punti in cui li avevi salvati.";
                     } else { alert("File incompatibile o privo di dati di calibrazione."); }
                 } catch(err) { alert("Errore lettura file JSON."); }
             };
@@ -958,6 +981,7 @@
         this.state = 'IDLE';
         document.querySelector('#alert-msg').style.color = "#00FF00";
         document.querySelector('#alert-msg').innerText = "Calibrazione Completata e Antenna Ripristinata!";
+        this.calibDiamonds.forEach(d => d.setAttribute('visible', 'false'));
         this.menuUI.setAttribute('visible', 'true');
         this.refreshAll();
       },
