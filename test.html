@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V22 - Sistema Ibrido & Lunga Distanza</title>
+  <title>Antenne AR Pro V23 - Selettore Magnetico & Cancellazione</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -34,22 +34,19 @@
       }
     });
 
-    // --- NUOVO: SITEMA IBRIDO (Hit Test + Proiezione Matematica Lunga Distanza) ---
+    // --- SITEMA IBRIDO (Hit Test + Proiezione Matematica Lunga Distanza) ---
     AFRAME.registerComponent('controller-hybrid-target', {
       init: function () {
         this.hitPoint = new THREE.Vector3();
-        this.isActive = false;   // C'è un punto valido da qualche parte?
-        this.isPhysical = false; // È reale (verde) o calcolato (azzurro)?
+        this.isActive = false;   
+        this.isPhysical = false; 
         this.hitTestSource = null;
         this.refSpace = null;
 
         this.el.sceneEl.addEventListener('enter-vr', () => {
           if (this.el.sceneEl.is('ar-mode')) {
             let session = this.el.sceneEl.renderer.xr.getSession();
-
-            session.requestReferenceSpace('local-floor').then((space) => {
-              this.refSpace = space;
-            });
+            session.requestReferenceSpace('local-floor').then((space) => { this.refSpace = space; });
 
             const setupHitTest = () => {
               if (this.hitTestSource) return; 
@@ -61,7 +58,6 @@
                 }
               });
             };
-
             setupHitTest();
             session.addEventListener('inputsourceschange', setupHitTest);
           }
@@ -73,7 +69,7 @@
         
         let frame = this.el.sceneEl.frame;
         
-        // 1. TENTATIVO SENSORE FISICO (Corto raggio: 0 - 4 metri)
+        // 1. TENTATIVO SENSORE FISICO
         if (this.hitTestSource && this.refSpace && frame) {
           let results = frame.getHitTestResults(this.hitTestSource);
           if (results.length > 0) {
@@ -82,13 +78,12 @@
                 this.hitPoint.copy(pose.transform.position);
                 this.isActive = true;
                 this.isPhysical = true;
-                return; // Trovato fisicamente, esci!
+                return;
             }
           }
         }
 
-        // 2. TENTATIVO MATEMATICO (Lungo raggio: fino a 150 metri)
-        // Se il sensore ha fallito, calcoliamo dove sta puntando il controller a terra
+        // 2. TENTATIVO MATEMATICO (Fino a 150 metri)
         let pos = new THREE.Vector3();
         let dir = new THREE.Vector3(0, 0, -1);
         let quat = new THREE.Quaternion();
@@ -97,13 +92,12 @@
         this.el.object3D.getWorldQuaternion(quat);
         dir.applyQuaternion(quat).normalize();
 
-        // Se stiamo puntando verso il basso
         if (dir.y < -0.02) { 
-            let distanceToGround = -pos.y / dir.y; // Geometria di intersezione col piano Y=0
+            let distanceToGround = -pos.y / dir.y; 
             if (distanceToGround > 0 && distanceToGround < 150) { 
                 this.hitPoint.copy(pos).add(dir.multiplyScalar(distanceToGround));
                 this.isActive = true;
-                this.isPhysical = false; // Segniamo che è un dato calcolato, non fisico
+                this.isPhysical = false; 
             }
         }
       }
@@ -142,6 +136,9 @@
         this.gwState = 'OFF'; 
         this.lastTriggerTime = 0; 
 
+        // Gestione Selezione per Cancellazione
+        this.currentHoveredGW = null; 
+
         // Cache DOM
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
@@ -155,6 +152,8 @@
         
         this.worldPivotEl = document.querySelector('#world-pivot');
         this.worldContentEl = document.querySelector('#world-content');
+
+        this.gwDeleteCursor = document.querySelector('#gw-delete-cursor'); // Globo rosso
 
         this.verticalCylinder = document.querySelector('#vertical-cylinder');
         this.heightText = document.querySelector('#height-text');
@@ -176,11 +175,9 @@
         this.setupMmanaFileLoader();
         this.updateMenuText();
         
-        // Spegne il laser rosso all'avvio
         this.toggleLaserVisuals(false);
       },
 
-      // Gestione Raggio Laser Rosso (attivo solo col menu aperto)
       toggleLaserVisuals: function(showMenu) {
         if(showMenu) {
             this.raycasterEl.setAttribute('raycaster', 'showLine', 'true');
@@ -212,14 +209,16 @@
           this.state = 'IDLE'; 
           this.menuUI.setAttribute('visible', false);
           this.gwUI.setAttribute('visible', true);
-          this.toggleLaserVisuals(true); // Serve per i bottoni dei tiranti
+          this.toggleLaserVisuals(true); 
 
           this.gwState = 'SELECT_POLE';
           this.updateGWStatus("SCEGLI QUALE PALO TIRANTARE DAL MENU");
           this.cursorContainer.setAttribute('visible', 'false');
+          this.gwDeleteCursor.setAttribute('visible', 'false');
           
           this.toggleButton('#btn-gw-new-a', this.pointA.top !== null);
           this.toggleButton('#btn-gw-new-b', this.pointB.top !== null);
+          document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', 'ELIMINA ANELLI / PICCHETTI');
           this.refreshRaycaster();
         } else {
           this.gwUI.setAttribute('visible', false);
@@ -227,8 +226,10 @@
           this.toggleLaserVisuals(true);
           this.gwState = 'OFF';
           this.activeAnchor = null;
+          this.currentHoveredGW = null;
           this.previewCollar.setAttribute('visible', 'false');
           this.previewCollarText.setAttribute('visible', 'false');
+          this.gwDeleteCursor.setAttribute('visible', 'false');
           this.refreshAll();
         }
       },
@@ -297,7 +298,80 @@
         let hybridTarget = this.raycasterEl.components['controller-hybrid-target'];
         let hasTarget = hybridTarget && hybridTarget.isActive;
 
-        // FASE 1: Ricerca punto sul terreno (Corto + Lungo Raggio)
+        // --- GESTIONE PUNTATORE MAGNETICO DI CANCELLAZIONE ---
+        if (this.gwState === 'DELETE_GW') {
+            this.cursorContainer.setAttribute('visible', 'false');
+            this.currentHoveredGW = null;
+            let minRayDist = Infinity;
+            let selectionThreshold = 0.25; // Raggio di aggancio (25cm)
+
+            // Vettore Raycaster Matematico
+            let worldPos = new THREE.Vector3();
+            let worldDir = new THREE.Vector3(0, 0, -1);
+            this.raycasterEl.object3D.getWorldPosition(worldPos);
+            let quat = new THREE.Quaternion();
+            this.raycasterEl.object3D.getWorldQuaternion(quat);
+            worldDir.applyQuaternion(quat).normalize();
+
+            // Trasforma in coordinate locali del prato
+            let localPos = this.getLocalPoint(worldPos);
+            let localPosVec = new THREE.Vector3(localPos.x, localPos.y, localPos.z);
+            let worldTarget = worldPos.clone().add(worldDir);
+            let localTarget = this.getLocalPoint(worldTarget);
+            let localTargetVec = new THREE.Vector3(localTarget.x, localTarget.y, localTarget.z);
+            let localDir = new THREE.Vector3().subVectors(localTargetVec, localPosVec).normalize();
+
+            // Controlla collisione con ogni collare e picchetto
+            this.guyWiresData.forEach((anchor, aIdx) => {
+                let pData = anchor.pole === 'A' ? this.pointA : this.pointB;
+                if (!pData.base || !pData.top) return;
+
+                let h = Math.min(anchor.height, pData.top.y - pData.base.y);
+                let anchorPos = new THREE.Vector3(pData.base.x, pData.base.y + h, pData.base.z);
+
+                // Check Anello
+                let vA = new THREE.Vector3().subVectors(anchorPos, localPosVec);
+                let distAlongA = vA.dot(localDir);
+                if (distAlongA > 0) {
+                    let closestPtA = localPosVec.clone().add(localDir.clone().multiplyScalar(distAlongA));
+                    let distToRayA = anchorPos.distanceTo(closestPtA);
+                    if (distToRayA < selectionThreshold && distToRayA < minRayDist) {
+                        minRayDist = distToRayA;
+                        this.currentHoveredGW = { type: 'anchor', aIdx: aIdx, pos: anchorPos };
+                    }
+                }
+
+                // Check Picchetti
+                anchor.pegs.forEach((pegPos, pIdx) => {
+                    let pVec = new THREE.Vector3(pegPos.x, pegPos.y, pegPos.z);
+                    let vP = new THREE.Vector3().subVectors(pVec, localPosVec);
+                    let distAlongP = vP.dot(localDir);
+                    if (distAlongP > 0) {
+                        let closestPtP = localPosVec.clone().add(localDir.clone().multiplyScalar(distAlongP));
+                        let distToRayP = pVec.distanceTo(closestPtP);
+                        if (distToRayP < selectionThreshold && distToRayP < minRayDist) {
+                            minRayDist = distToRayP;
+                            this.currentHoveredGW = { type: 'peg', aIdx: aIdx, pIdx: pIdx, pos: pVec };
+                        }
+                    }
+                });
+            });
+
+            // Disegna o nascondi il globo rosso
+            if (this.currentHoveredGW) {
+                this.gwDeleteCursor.setAttribute('position', `${this.currentHoveredGW.pos.x} ${this.currentHoveredGW.pos.y} ${this.currentHoveredGW.pos.z}`);
+                this.gwDeleteCursor.setAttribute('visible', 'true');
+            } else {
+                this.gwDeleteCursor.setAttribute('visible', 'false');
+            }
+
+            return; // Se siamo in Delete Mode saltiamo il codice sotto
+        } else {
+            this.gwDeleteCursor.setAttribute('visible', 'false');
+        }
+
+
+        // FASE 1: Ricerca punto sul terreno (Normale)
         if (this.state.includes('PLACE_GROUND') || this.state.includes('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS') {
           if (hasTarget) {
             this.cursorContainer.setAttribute('visible', 'true'); 
@@ -306,7 +380,6 @@
             this.cursorPlumbLine.setAttribute('visible', 'false');
             this.cursorGroundRing.setAttribute('visible', 'false');
             
-            // FEEDBACK VISIVO: Verde = Superficie reale vicina. Azzurro = Matematico lungo raggio
             if (hybridTarget.isPhysical) {
                 this.mainRing.setAttribute('color', '#00E676');
                 this.cursorText.setAttribute('value', 'GRILLETTO: Blocca (Superficie Reale)');
@@ -318,10 +391,10 @@
             this.cursorContainer.setAttribute('visible', 'false'); 
           }
         } 
-        // FASE 2: Regolazione fine (con filo a piombo visibile)
+        // FASE 2: Regolazione fine
         else if (this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE') {
           if (this.tempBasePos) {
-            this.mainRing.setAttribute('color', '#00E676'); // Torna verde di default
+            this.mainRing.setAttribute('color', '#00E676'); 
             let localZero = new THREE.Vector3(this.tempBasePos.x, this.tempBasePos.y, this.tempBasePos.z);
             let worldZero = new THREE.Vector3();
             this.worldContentEl.object3D.localToWorld(worldZero.copy(localZero));
@@ -437,7 +510,7 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        // SCUDO ANTI-TRAPASSO MENU (Blocca il grilletto se stai puntando la UI)
+        // SCUDO MENU
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         if (intersects) {
           for (let i = 0; i < intersects.length; i++) {
@@ -445,6 +518,20 @@
             if (el.classList && el.classList.contains('clickable')) return;
             if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) return;
           }
+        }
+
+        // AZIONE DI CANCELLAZIONE
+        if (this.gwState === 'DELETE_GW') {
+            if (this.currentHoveredGW) {
+                if (this.currentHoveredGW.type === 'anchor') {
+                    this.guyWiresData.splice(this.currentHoveredGW.aIdx, 1);
+                } else if (this.currentHoveredGW.type === 'peg') {
+                    this.guyWiresData[this.currentHoveredGW.aIdx].pegs.splice(this.currentHoveredGW.pIdx, 1);
+                }
+                this.drawGuyWires();
+                this.currentHoveredGW = null;
+            }
+            return;
         }
 
         let hybridTarget = this.raycasterEl.components['controller-hybrid-target'];
@@ -458,7 +545,7 @@
             this.previewCollar.setAttribute('material', 'color: #FF0000');
             this.previewCollarText.setAttribute('value', '');
             this.updateGWStatus("PUNTA IL TERRENO E PREMI GRILLETTO PER SCEGLIERE POSIZIONE PICCHETTO");
-            this.toggleLaserVisuals(false); // Spegne laser per mirare il suolo
+            this.toggleLaserVisuals(false); 
             return;
           }
 
@@ -850,18 +937,27 @@
           else if (id === 'btn-gw-new-b') {
             this.startCollarPlacement('B');
           }
-          else if (id === 'btn-gw-undo') {
-            if (this.activeAnchor && this.activeAnchor.pegs.length > 0) {
-              this.activeAnchor.pegs.pop();
-              this.drawGuyWires();
-            } else if (this.activeAnchor && this.activeAnchor.pegs.length === 0) {
-              this.guyWiresData = this.guyWiresData.filter(a => a !== this.activeAnchor);
-              this.activeAnchor = null;
-              this.previewCollar.setAttribute('visible', 'false');
-              this.previewCollarText.setAttribute('visible', 'false');
-              this.gwState = 'SELECT_POLE';
-              this.updateGWStatus("SCEGLI QUALE PALO TIRANTARE DAL MENU");
-              this.drawGuyWires();
+          else if (id === 'btn-gw-delete-mode') {
+            // Se eravamo in mezzo al piazzamento, annulla l'azione
+            if (this.gwState === 'ADJUST_HEIGHT' || this.gwState === 'PLACE_PEGS') {
+                this.activeAnchor = null;
+                this.previewCollar.setAttribute('visible', 'false');
+                this.previewCollarText.setAttribute('visible', 'false');
+            }
+            
+            // Attiva la modalità CANCELLAZIONE
+            if (this.gwState !== 'DELETE_GW') {
+                this.gwState = 'DELETE_GW';
+                this.updateGWStatus("PUNTA ANELLO O PICCHETTO E PREMI GRILLETTO PER ELIMINARLO");
+                document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', '[ TORNA A INSERIMENTO ]');
+                this.toggleLaserVisuals(false); // Nasconde laser rosso per evitare confusione visiva
+            } 
+            // Torna in modalità INSERIMENTO
+            else {
+                this.gwState = 'SELECT_POLE';
+                this.updateGWStatus("SCEGLI QUALE PALO TIRANTARE DAL MENU");
+                document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', 'ELIMINA ANELLI / PICCHETTI');
+                this.toggleLaserVisuals(true);
             }
           }
           else if (id === 'btn-gw-close') {
@@ -991,17 +1087,19 @@
         
         this.tempElevation = 0;
         this.tempBasePos = null;
+        this.currentHoveredGW = null;
 
         this.guyWiresData = []; this.drawGuyWires(); this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false);
         this.previewCollar.setAttribute('visible', 'false');
         this.previewCollarText.setAttribute('visible', 'false');
+        this.gwDeleteCursor.setAttribute('visible', 'false');
 
         this.worldPivotEl.object3D.position.set(0,0,0);
         this.worldPivotEl.object3D.rotation.set(0,0,0);
         this.worldContentEl.object3D.position.set(0,0,0);
 
         this.cursorContainer.setAttribute('visible', 'false'); this.menuUI.setAttribute('visible', false);
-        this.toggleLaserVisuals(false); // Spegne laser
+        this.toggleLaserVisuals(false);
         document.querySelector('#info-text').setAttribute('value', 'SCEGLI POSIZIONE PUNTO A');
       },
 
@@ -1119,8 +1217,8 @@
           <a-text value="[+] AGGIUNGI COLLARE PALO B" align="center" scale="0.07 0.07 0.07" color="#FFFFFF"></a-text>
         </a-plane>
 
-        <a-plane id="btn-gw-undo" class="clickable" btn-interaction width="0.32" height="0.03" color="#D84315" position="0 -0.11 0.01">
-          <a-text value="ANNULLA ULTIMO PICCHETTO" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
+        <a-plane id="btn-gw-delete-mode" class="clickable" btn-interaction width="0.32" height="0.03" color="#D84315" position="0 -0.11 0.01">
+          <a-text value="ELIMINA ANELLI / PICCHETTI" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
         </a-plane>
 
         <a-plane id="btn-gw-close" class="clickable" btn-interaction width="0.32" height="0.03" color="#1A1A1A" position="0 -0.16 0.01">
@@ -1136,9 +1234,7 @@
 
     <a-entity id="cursor-container" visible="false">
       <a-ring id="cursor-ground-ring" color="#FF9800" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" material="opacity: 0.4; shader: flat" visible="false"></a-ring>
-      
       <a-cylinder id="cursor-plumb-line" radius="0.002" color="#00FFFF" material="shader: flat" position="0 0 0" visible="false"></a-cylinder>
-
       <a-entity id="cursor-elevation-group">
         <a-ring id="cursor-ring" color="#00E676" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" material="shader: flat"></a-ring>
         <a-text id="cursor-text" value="" position="0.08 0.08 0" color="#FFEB3B" scale="0.25 0.25 0.25" look-at-camera></a-text>
@@ -1147,6 +1243,11 @@
 
     <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
         <a-entity id="world-content" position="0 0 0" rotation="0 0 0">
+            <a-entity id="gw-delete-cursor" visible="false">
+                <a-sphere radius="0.08" color="#FF1744" material="shader: flat; wireframe: true"></a-sphere>
+                <a-text value="ELIMINA" position="0 0.12 0" color="#FF1744" align="center" scale="0.3 0.3 0.3" look-at-camera></a-text>
+            </a-entity>
+            
             <a-entity id="mmana-wires-container"></a-entity>
             <a-entity id="guy-wires-container"></a-entity>
             <a-entity id="vertical-cylinder" geometry="primitive: cylinder" material="color: #FFEB3B; shader: flat" visible="false"></a-entity>
