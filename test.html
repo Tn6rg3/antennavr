@@ -828,25 +828,38 @@
 
 
 
-      setupGlobalEventDelegation: function() {
+setupGlobalEventDelegation: function() {
     let scene = this.el.sceneEl;
-
-    // Usiamo l'evento 'click' che è nativo di A-Frame per il laser
+    
+    // Usiamo l'evento 'click' che è più robusto per il laser
     scene.addEventListener('click', (evt) => {
         let target = evt.target.closest('.clickable'); 
         if (!target) return;
         
-        // Verifica di visibilità profonda
+        // Se l'elemento non è visibile, non cliccare
         if (!this.isElementVisible(target)) return;
 
         let id = target.id;
-        let mathRound = (num) => Math.round(num * 100) / 100;
+        console.log("Interazione su:", id);
 
-        console.log("Bottone cliccato:", id); // Controlla la console del browser se hai dubbi
-
-        // ... qui inserisci tutti i tuoi if/else per i bottoni ...
+        // Routing dei comandi
         if (id === 'btn-gw-new-a') { this.startCollarPlacement('A'); }
-        // ... (resto dei tuoi tasti)
+        else if (id === 'btn-gw-new-b') { this.startCollarPlacement('B'); }
+        else if (id === 'btn-gw-delete-mode') {
+            this.gwState = (this.gwState !== 'DELETE_GW') ? 'DELETE_GW' : 'SELECT_POLE';
+            this.updateGWStatus(this.gwState === 'DELETE_GW' ? "PUNTA E PREMI GRILLETTO PER ELIMINARE" : "SCEGLI PALO");
+            document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', this.gwState === 'DELETE_GW' ? '[ TORNA A INSERIMENTO ]' : 'ELIMINA ANELLI / PICCHETTI');
+        }
+        else if (id === 'btn-gw-close') { this.toggleGuyWireMode(); }
+        else if (id === 'btn-ar-save') { 
+            if(this.state !== 'IDLE') return;
+            this.state = 'CALIB_SAVE_1';
+            this.menuUI.setAttribute('visible', 'false');
+        }
+        else if (id === 'btn-ant') { this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); }
+        else if (id === 'btn-band') { this.bandIdx = (this.bandIdx + 1) % this.bands.length; this.resetAntennaLengths(); this.refreshAll(); }
+        // ... aggiungi qui gli altri tuoi id ...
+        else if (id === 'btn-global-reset') { this.triggerGlobalReset(); }
     });
 },
       setupFileIO: function() {
