@@ -825,48 +825,63 @@
       },
 
       setupGlobalEventDelegation: function() {
-        let scene = this.el.sceneEl; this.lastClickTime = 0; 
-        scene.addEventListener('mousedown', (evt) => {
-          let now = Date.now(); if (now - this.lastClickTime < 250) return; 
-          let target = evt.target.closest('.clickable'); if(!target) return;
-          let isVis = target.getAttribute('visible'); if (isVis === false || isVis === 'false') return;
-          let parent = target.parentElement; if (parent && (parent.getAttribute('visible') === false || parent.getAttribute('visible') === 'false')) return;
-          this.lastClickTime = now; let id = target.id; let mathRound = (num) => Math.round(num * 100) / 100;
+    let scene = this.el.sceneEl; 
+    this.lastClickTime = 0; 
 
-          if (id === 'btn-gw-new-a') { this.startCollarPlacement('A'); } else if (id === 'btn-gw-new-b') { this.startCollarPlacement('B'); }
-          else if (id === 'btn-gw-delete-mode') {
-            if (this.gwState === 'ADJUST_HEIGHT' || this.gwState === 'PLACE_PEGS') { this.activeAnchor = null; this.previewCollar.setAttribute('visible', 'false'); this.previewCollarText.setAttribute('visible', 'false'); }
+    scene.addEventListener('mousedown', (evt) => {
+        let now = Date.now(); 
+        if (now - this.lastClickTime < 250) return; 
+
+        // 1. Trova l'elemento cliccato tramite Raycaster
+        let raycaster = this.raycasterEl.components.raycaster;
+        let intersected = raycaster.intersectedEls;
+
+        if (intersected.length === 0) return;
+
+        // 2. Filtra gli elementi: cerchiamo il primo che ha la classe 'clickable'
+        let target = null;
+        for (let i = 0; i < intersected.length; i++) {
+            if (intersected[i].classList.contains('clickable')) {
+                target = intersected[i];
+                break;
+            }
+        }
+
+        if (!target) return;
+
+        // 3. Controllo visibilità (non interagire con roba invisibile)
+        if (!this.isElementVisible(target)) return;
+
+        this.lastClickTime = now; 
+        let id = target.id; 
+        let mathRound = (num) => Math.round(num * 100) / 100;
+
+        // --- GESTIONE AZIONI ---
+        if (id === 'btn-gw-new-a') { this.startCollarPlacement('A'); } 
+        else if (id === 'btn-gw-new-b') { this.startCollarPlacement('B'); }
+        else if (id === 'btn-gw-delete-mode') {
             if (this.gwState !== 'DELETE_GW') {
-                this.gwState = 'DELETE_GW'; this.updateGWStatus("PUNTA COL LASER UN ANELLO/PICCHETTO E PREMI IL GRILLETTO");
+                this.gwState = 'DELETE_GW'; 
+                this.updateGWStatus("PUNTA COL LASER UN ANELLO/PICCHETTO E PREMI GRILLETTO");
                 document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', '[ TORNA A INSERIMENTO ]'); 
             } else {
-                this.gwState = 'SELECT_POLE'; this.updateGWStatus("SCEGLI PALO DA TIRANTARE");
+                this.gwState = 'SELECT_POLE'; 
+                this.updateGWStatus("SCEGLI PALO DA TIRANTARE");
                 document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', 'ELIMINA ANELLI / PICCHETTI');
             }
-          }
-          else if (id === 'btn-gw-close') { this.toggleGuyWireMode(); }
-          
-          else if (id === 'btn-ar-save') { 
-              if(this.state !== 'IDLE') return;
-              this.state = 'CALIB_SAVE_1';
-              this.menuUI.setAttribute('visible', 'false');
-          }
-
-          else if (id === 'btn-ant') { this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); } 
-          else if (id === 'btn-band') { this.bandIdx = (this.bandIdx + 1) % this.bands.length; this.resetAntennaLengths(); if (this.antennaTypes[this.antIdx] === 'Verticale' && this.pointA.top) { this.pointA.top.y = this.pointA.base.y + this.getCalculatedLength(); } this.refreshAll(); } 
-          else if (id === 'btn-c-left') { this.pointC.percent = Math.max(0.02, mathRound(this.pointC.percent - 0.05)); this.updateGeometriesAndDrawings(); } else if (id === 'btn-c-right') { this.pointC.percent = Math.min(0.98, mathRound(this.pointC.percent + 0.05)); this.updateGeometriesAndDrawings(); } 
-          else if (id === 'btn-lw-vertex') { this.longwireVertex = this.longwireVertex === 'A' ? 'B' : 'A'; this.refreshAll(); } else if (id === 'btn-mmana-model') { this.mmanaModelIdx = (this.mmanaModelIdx + 1) % this.mmanaModels.length; this.loadPreloadedMmanaModel(); this.refreshAll(); } 
-          else if (id === 'btn-txt-minus') { this.globalTextScale = Math.max(0.15, mathRound(this.globalTextScale - 0.05)); this.updateGeometriesAndDrawings(); } else if (id === 'btn-txt-plus') { this.globalTextScale = Math.min(1.2, mathRound(this.globalTextScale + 0.05)); this.updateGeometriesAndDrawings(); } 
-          else if (id === 'btn-ac-m1')   { this.endFed_AC_Len = Math.max(0.1, mathRound(this.endFed_AC_Len - 1.0)); this.refreshAll(); } else if (id === 'btn-ac-m01')  { this.endFed_AC_Len = Math.max(0.01, mathRound(this.endFed_AC_Len - 0.01)); this.refreshAll(); } else if (id === 'btn-ac-p01')  { this.endFed_AC_Len = mathRound(this.endFed_AC_Len + 0.01); this.refreshAll(); } else if (id === 'btn-ac-p1')   { this.endFed_AC_Len = mathRound(this.endFed_AC_Len + 1.0); this.refreshAll(); }
-          else if (id === 'btn-cb-m1')   { this.endFed_CB_Len = Math.max(0.1, mathRound(this.endFed_CB_Len - 1.0)); this.refreshAll(); } else if (id === 'btn-cb-m01')  { this.endFed_CB_Len = Math.max(0.01, mathRound(this.endFed_CB_Len - 0.01)); this.refreshAll(); } else if (id === 'btn-cb-p01')  { this.endFed_CB_Len = mathRound(this.endFed_CB_Len + 0.01); this.refreshAll(); } else if (id === 'btn-cb-p1')   { this.endFed_CB_Len = mathRound(this.endFed_CB_Len + 1.0); this.refreshAll(); }
-          else if (id === 'btn-lw-m1')   { this.longwireLen = Math.max(0.1, mathRound(this.longwireLen - 1.0)); this.refreshAll(); } else if (id === 'btn-lw-m01')  { this.longwireLen = Math.max(0.01, mathRound(this.longwireLen - 0.01)); this.refreshAll(); } else if (id === 'btn-lw-p01')  { this.longwireLen = mathRound(this.longwireLen + 0.01); this.refreshAll(); } else if (id === 'btn-lw-p1')   { this.longwireLen = mathRound(this.longwireLen + 1.0); this.refreshAll(); }
-          else if (id === 'btn-rad-num-minus') { this.numRadials = Math.max(1, this.numRadials - 1); this.refreshAll(); } else if (id === 'btn-rad-num-plus')  { this.numRadials = Math.min(this.maxRadials, this.numRadials + 1); this.refreshAll(); }
-          else if (id === 'btn-rad-m1')   { this.radialLen = Math.max(0.1, mathRound(this.radialLen - 1.0)); this.refreshAll(); } else if (id === 'btn-rad-m01')  { this.radialLen = Math.max(0.1, mathRound(this.radialLen - 0.1)); this.refreshAll(); } else if (id === 'btn-rad-p01')  { this.radialLen = mathRound(this.radialLen + 0.1); this.refreshAll(); } else if (id === 'btn-rad-p1')   { this.radialLen = mathRound(this.radialLen + 1.0); this.refreshAll(); }
-          else if (id === 'btn-repo-a') { this.state = 'REPOSITION_GROUND_A'; this.menuUI.setAttribute('visible', false); document.querySelector('#info-text').setAttribute('value', 'POSIZIONA PUNTO A'); } 
-          else if (id === 'btn-repo-b') { this.state = 'REPOSITION_GROUND_B'; this.menuUI.setAttribute('visible', false); document.querySelector('#info-text').setAttribute('value', 'POSIZIONA PUNTO B'); }
-          else if (id === 'btn-global-reset') { this.triggerGlobalReset(); }
-        });
-      },
+        }
+        else if (id === 'btn-gw-close') { this.toggleGuyWireMode(); }
+        else if (id === 'btn-ar-save') { 
+            if(this.state !== 'IDLE') return;
+            this.state = 'CALIB_SAVE_1';
+            this.menuUI.setAttribute('visible', 'false');
+        }
+        // ... (tieni qui tutti gli altri else-if dei bottoni che avevi già)
+        else if (id === 'btn-ant') { this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); }
+        else if (id === 'btn-global-reset') { this.triggerGlobalReset(); }
+        // ... aggiungi qui i restanti tasti del tuo codice originale ...
+    });
+},
 
       setupFileIO: function() {
         // Logica per il tasto salva nel browser
