@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V25 - Calibrazione Diamante & Export</title>
+  <title>Antenne AR Pro V26 - Calibrazione AR & Export Sicuro</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -85,7 +85,7 @@
             let pose = results[0].getPose(this.refSpace);
             if (pose) {
                 let tempHit = pose.transform.position;
-                // FILTRO BLIND SPOT: Ignora superfici a meno di 40cm (mano, visore, joystick)
+                // FILTRO BLIND SPOT: Ignora superfici a meno di 40cm
                 if (controllerPos.distanceTo(tempHit) > 0.4) {
                     rawHit = tempHit;
                     this.isPhysical = true;
@@ -94,7 +94,7 @@
           }
         }
 
-        // 2. TENTATIVO MATEMATICO SE IL FISICO FALLISCE
+        // 2. TENTATIVO MATEMATICO
         if (!rawHit) {
             let dir = new THREE.Vector3(0, 0, -1);
             let quat = new THREE.Quaternion();
@@ -172,6 +172,7 @@
         this.cursorElevGroup = document.querySelector('#cursor-elevation-group');
         this.cursorGroundRing = document.querySelector('#cursor-ground-ring');
         this.cursorPlumbLine = document.querySelector('#cursor-plumb-line');
+        this.cursorText = document.querySelector('#cursor-text');
         this.mainRing = document.querySelector('#cursor-ring');
         
         this.worldPivotEl = document.querySelector('#world-pivot');
@@ -220,8 +221,22 @@
       },
 
       toggleGuyWireMode: function() {
-        if (!this.pointA.top && !this.pointB.top) return; 
         if (this.state.includes('CALIB')) return;
+
+        // Se stiamo attivamente piazzando un picchetto e l'utente preme X, 
+        // annulliamo l'inserimento e riportiamo il menu Tiranti.
+        if (this.gwState === 'ADJUST_HEIGHT' || this.gwState === 'PLACE_PEGS' || this.gwState === 'ADJUST_PEG_BASE') {
+            this.gwState = 'SELECT_POLE';
+            this.activeAnchor = null; 
+            this.gwUI.setAttribute('visible', 'true');
+            this.toggleLaserVisuals(true);
+            this.previewCollar.setAttribute('visible', 'false');
+            this.previewCollarText.setAttribute('visible', 'false');
+            this.updateGWStatus("SCEGLI PALO DA TIRANTARE");
+            return;
+        }
+
+        if (!this.pointA.top && !this.pointB.top) return; 
 
         if (this.gwState === 'OFF') {
           this.state = 'IDLE'; 
@@ -239,6 +254,7 @@
           document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', 'ELIMINA ANELLI / PICCHETTI');
           this.refreshRaycaster();
         } else {
+          // Esci del tutto dalla mod tiranti
           this.gwUI.setAttribute('visible', false);
           this.menuUI.setAttribute('visible', true);
           this.toggleLaserVisuals(true);
@@ -292,12 +308,12 @@
         this.previewCollar = document.createElement('a-torus'); this.previewCollar.setAttribute('radius', '0.04'); this.previewCollar.setAttribute('radius-tubular', '0.006'); this.previewCollar.setAttribute('material', 'color: #FFEB3B; shader: flat'); this.previewCollar.setAttribute('visible', 'false'); this.previewCollar.setAttribute('rotation', '90 0 0'); this.worldContentEl.appendChild(this.previewCollar);
         this.previewCollarText = document.createElement('a-text'); this.previewCollarText.setAttribute('align', 'center'); this.previewCollarText.setAttribute('color', '#FFEB3B'); this.previewCollarText.setAttribute('look-at-camera', ''); this.previewCollarText.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.previewCollarText);
 
-        // Elementi Diamanti per Calibrazione
+        // Elementi Diamanti
         for(let i=0; i<2; i++) {
             let dia = document.createElement('a-octahedron');
             dia.setAttribute('radius', '0.06'); dia.setAttribute('material', 'color: #FFD600; shader: flat; wireframe: true');
             dia.setAttribute('visible', 'false');
-            this.el.sceneEl.appendChild(dia); // Attaccati alla root per essere fissi nel mondo
+            this.el.sceneEl.appendChild(dia); 
             this.calibDiamonds.push(dia);
         }
       },
@@ -316,37 +332,50 @@
       },
 
       tick: function () {
-        // Nascondi sempre il cerchio verde se un menu è aperto
-        let menuVis = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
-        let gwVis = this.gwUI.getAttribute('visible') === 'true' || this.gwUI.getAttribute('visible') === true;
-        
-        if (menuVis || gwVis) {
+        let isPlacing = this.state.includes('PLACE_GROUND') || this.state.includes('REPOSITION_GROUND') || this.state.includes('CALIB') || this.gwState === 'PLACE_PEGS';
+        let isAdjusting = this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE';
+        let isDeleting = this.gwState === 'DELETE_GW';
+
+        // GESTIONE GLOBO ROSSO ELIMINAZIONE
+        if (isDeleting) {
             this.cursorContainer.setAttribute('visible', 'false');
-            
-            // Gestione Globo Rosso Eliminazione
-            if (this.gwState === 'DELETE_GW') {
-                this.currentHoveredGW = null;
-                let raycasterComponent = this.raycasterEl.components.raycaster;
-                if (raycasterComponent && raycasterComponent.intersectedEls.length > 0) {
-                    let targetEl = raycasterComponent.intersectedEls.find(el => el.classList.contains('deletable'));
-                    if (targetEl) {
-                        this.currentHoveredGW = targetEl;
-                        let pos = new THREE.Vector3();
-                        targetEl.object3D.getWorldPosition(pos);
-                        this.gwDeleteCursor.setAttribute('visible', 'true');
-                        this.gwDeleteCursor.setAttribute('position', pos);
-                    } else { this.gwDeleteCursor.setAttribute('visible', 'false'); }
+            this.currentHoveredGW = null;
+            let raycasterComponent = this.raycasterEl.components.raycaster;
+            if (raycasterComponent && raycasterComponent.intersectedEls.length > 0) {
+                let targetEl = raycasterComponent.intersectedEls.find(el => el.classList.contains('deletable'));
+                if (targetEl) {
+                    this.currentHoveredGW = targetEl;
+                    let pos = new THREE.Vector3();
+                    targetEl.object3D.getWorldPosition(pos);
+                    this.gwDeleteCursor.setAttribute('visible', 'true');
+                    this.gwDeleteCursor.setAttribute('position', pos);
                 } else { this.gwDeleteCursor.setAttribute('visible', 'false'); }
             } else { this.gwDeleteCursor.setAttribute('visible', 'false'); }
-            return; // Blocca ulteriori logiche del cursore verde
+            return; 
+        } else {
+            this.gwDeleteCursor.setAttribute('visible', 'false');
         }
 
-        this.gwDeleteCursor.setAttribute('visible', 'false');
+        // Se UI attive ma l'utente NON è in fase di inserimento (niente picchetti, niente calibrazione), nascondiamo il cerchio verde
+        let menuVis = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
+        let gwVis = this.gwUI.getAttribute('visible') === 'true' || this.gwUI.getAttribute('visible') === true;
+
+        if ((menuVis || gwVis) && !isPlacing && !isAdjusting) {
+            this.cursorContainer.setAttribute('visible', 'false');
+            return;
+        }
 
         let hybrid = this.raycasterEl.components['controller-hybrid-target'];
         let hasTarget = hybrid && hybrid.isActive;
 
-        if (this.state.includes('PLACE_GROUND') || this.state.includes('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state.includes('CALIB')) {
+        // TESTI FLUTTUANTI CALIBRAZIONE
+        this.cursorText.setAttribute('value', '');
+        if (this.state === 'CALIB_SAVE_1') this.cursorText.setAttribute('value', 'Piazza DIAMANTE 1\n(Punto Origine)');
+        if (this.state === 'CALIB_SAVE_2') this.cursorText.setAttribute('value', 'Piazza DIAMANTE 2\n(Orientamento)');
+        if (this.state === 'CALIB_LOAD_1') this.cursorText.setAttribute('value', 'Riposiziona DIAMANTE 1\n(Punto Origine)');
+        if (this.state === 'CALIB_LOAD_2') this.cursorText.setAttribute('value', 'Riposiziona DIAMANTE 2\n(Orientamento)');
+
+        if (isPlacing) {
             if (hasTarget) {
                 this.cursorContainer.setAttribute('visible', 'true'); 
                 this.cursorContainer.setAttribute('position', hybrid.hitPoint);
@@ -358,7 +387,7 @@
                 this.cursorContainer.setAttribute('visible', 'false'); 
             }
         } 
-        else if (this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE') {
+        else if (isAdjusting) {
             if (this.tempBasePos) {
                 this.mainRing.setAttribute('color', '#00E676'); 
                 let localZero = new THREE.Vector3(this.tempBasePos.x, this.tempBasePos.y, this.tempBasePos.z);
@@ -441,11 +470,15 @@
       startCollarPlacement: function(poleId) {
         let pData = poleId === 'A' ? this.pointA : this.pointB;
         if (!pData || !pData.top) return;
+        
+        // NASCONDE SUBITO IL MENU TIRANTI per non bloccare il cerchio verde
+        this.gwUI.setAttribute('visible', 'false');
+
         this.activeAnchor = { pole: poleId, height: (pData.top.y - pData.base.y)/2, pegs: [] };
         this.previewCollar.setAttribute('visible', 'true'); this.previewCollarText.setAttribute('visible', 'true');
         this.previewCollar.setAttribute('material', 'color: #FFEB3B');
         this.updateCollarPreview();
-        this.gwState = 'ADJUST_HEIGHT'; this.updateGWStatus(`REGOLA ALTEZZA, POI CONFERMA`);
+        this.gwState = 'ADJUST_HEIGHT'; 
       },
 
       onTriggerDown: function () {
@@ -485,14 +518,13 @@
                 this.calibDiamonds[0].setAttribute('position', hybridTarget.hitPoint);
                 this.calibDiamonds[0].setAttribute('visible', 'true');
                 this.state = 'CALIB_SAVE_2';
-                document.querySelector('#alert-msg').innerText = "Piazza il DIAMANTE 2 (Rotazione)";
             } else if (this.state === 'CALIB_SAVE_2') {
                 this.calibOriginalPoints[1] = this.getLocalPoint(hybridTarget.hitPoint);
                 this.calibDiamonds[1].setAttribute('position', hybridTarget.hitPoint);
                 this.calibDiamonds[1].setAttribute('visible', 'true');
                 this.state = 'IDLE';
                 this.toggleLaserVisuals(true);
-                this.executeExportJSON(); // Chiama la funzione di download
+                this.executeExportJSON(); // Chiama funzione download
             }
             return;
         }
@@ -502,7 +534,6 @@
             if (this.state === 'CALIB_LOAD_1') {
                 this.calibNewPoints = [hybridTarget.hitPoint.clone()];
                 this.state = 'CALIB_LOAD_2';
-                document.querySelector('#alert-msg').innerText = "Riposiziona DIAMANTE 2";
             } else if (this.state === 'CALIB_LOAD_2') {
                 this.calibNewPoints.push(hybridTarget.hitPoint.clone());
                 this.executeCalibrationAlignment();
@@ -514,21 +545,20 @@
           if (this.gwState === 'ADJUST_HEIGHT') {
             this.gwState = 'PLACE_PEGS'; this.guyWiresData.push(this.activeAnchor); 
             this.previewCollar.setAttribute('material', 'color: #FF0000'); this.previewCollarText.setAttribute('value', '');
-            this.updateGWStatus("PUNTA IL TERRENO E PIANTA PICCHETTO"); this.toggleLaserVisuals(false); 
+            this.toggleLaserVisuals(false); 
             return;
           }
           if (this.gwState === 'PLACE_PEGS') {
             if (hasTarget) {
               this.tempBasePos = this.getLocalPoint(hybridTarget.hitPoint);
               this.tempElevation = 0; this.gwState = 'ADJUST_PEG_BASE';
-              this.updateGWStatus("RITOCCO QUOTA -> GRILLETTO CONFERMA");
             }
             return;
           }
           if (this.gwState === 'ADJUST_PEG_BASE') {
             let localHit = { x: this.tempBasePos.x, y: this.tempBasePos.y + this.tempElevation, z: this.tempBasePos.z };
             this.activeAnchor.pegs.push(localHit); this.drawGuyWires(); 
-            this.gwState = 'PLACE_PEGS'; this.updateGWStatus("PUNTA PER NUOVO PICCHETTO");
+            this.gwState = 'PLACE_PEGS'; 
             return;
           }
           return; 
@@ -818,6 +848,15 @@
             }
           }
           else if (id === 'btn-gw-close') { this.toggleGuyWireMode(); }
+          
+          // Bottone Calibrazione AR Menu
+          else if (id === 'btn-ar-save') { 
+              if(this.state !== 'IDLE') return;
+              this.state = 'CALIB_SAVE_1';
+              this.menuUI.setAttribute('visible', 'false');
+              this.toggleLaserVisuals(false); // Accendiamo il mirino verde ibrido per i diamanti
+          }
+
           else if (id === 'btn-ant') { this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); } 
           else if (id === 'btn-band') { this.bandIdx = (this.bandIdx + 1) % this.bands.length; this.resetAntennaLengths(); if (this.antennaTypes[this.antIdx] === 'Verticale' && this.pointA.top) { this.pointA.top.y = this.pointA.base.y + this.getCalculatedLength(); } this.refreshAll(); } 
           else if (id === 'btn-c-left') { this.pointC.percent = Math.max(0.02, mathRound(this.pointC.percent - 0.05)); this.updateGeometriesAndDrawings(); } else if (id === 'btn-c-right') { this.pointC.percent = Math.min(0.98, mathRound(this.pointC.percent + 0.05)); this.updateGeometriesAndDrawings(); } 
@@ -834,17 +873,7 @@
         });
       },
 
-      // --- ESPORTAZIONE E IMPORTAZIONE FILE REALE ---
       setupFileIO: function() {
-        document.querySelector('#btn-save-file').addEventListener('click', () => {
-            if(this.state !== 'IDLE') { alert("Finisci di piazzare l'antenna prima di salvare."); return; }
-            // Inizia calibrazione a 2 punti
-            this.state = 'CALIB_SAVE_1';
-            this.menuUI.setAttribute('visible', 'false');
-            this.toggleLaserVisuals(false);
-            document.querySelector('#alert-msg').innerText = "CALIBRAZIONE: Piazza il DIAMANTE 1 (Origine)";
-        });
-
         document.querySelector('#file-load').addEventListener('change', (evt) => {
             let file = evt.target.files[0]; if(!file) return;
             let reader = new FileReader();
@@ -853,11 +882,13 @@
                     this.loadedData = JSON.parse(e.target.result);
                     if (this.loadedData.calib && this.loadedData.calib.length === 2) {
                         this.state = 'CALIB_LOAD_1';
-                        this.triggerGlobalReset(); // Pulisce
+                        this.triggerGlobalReset(); // Pulisce scena precedente
                         this.menuUI.setAttribute('visible', 'false');
-                        this.toggleLaserVisuals(false);
-                        document.querySelector('#alert-msg').style.color = "#00FF00";
-                        document.querySelector('#alert-msg').innerText = "File letto! Riposiziona il DIAMANTE 1 (Origine)";
+                        this.gwUI.setAttribute('visible', 'false');
+                        this.toggleLaserVisuals(false); // Attiva cursore ibrido
+                        let alertBox = document.querySelector('#alert-msg');
+                        alertBox.style.color = "#00FF00";
+                        alertBox.innerText = "File pronto! Mettiti il visore ed entra in AR per riposizionare i Diamanti.";
                     } else { alert("File incompatibile o privo di dati di calibrazione."); }
                 } catch(err) { alert("Errore lettura file JSON."); }
             };
@@ -866,7 +897,7 @@
       },
 
       executeExportJSON: function() {
-        let name = document.querySelector('#save-name').value.trim() || 'antenna';
+        let name = document.querySelector('#save-name').value.trim() || 'configurazione_antenna';
         let data = {
             pointA: { base: this.pointA.base, top: this.pointA.top },
             pointB: { base: this.pointB.base, top: this.pointB.top },
@@ -876,41 +907,39 @@
             longwireLen: this.longwireLen, longwireVertex: this.longwireVertex,
             numRadials: this.numRadials, radialLen: this.radialLen,
             guyWiresData: this.guyWiresData, antennaRotationY: this.antennaRotationY,
-            calib: this.calibOriginalPoints // Salva i due punti di ancoraggio locali
+            calib: this.calibOriginalPoints // Punti di ancoraggio
         };
         
-        let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+        let blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+        let url = URL.createObjectURL(blob);
         let downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", name + ".json");
+        downloadAnchor.href = url;
+        downloadAnchor.download = name + ".json";
         document.body.appendChild(downloadAnchor);
         downloadAnchor.click();
-        downloadAnchor.remove();
+        document.body.removeChild(downloadAnchor);
+        URL.revokeObjectURL(url);
         
         this.calibDiamonds.forEach(d => d.setAttribute('visible', 'false'));
-        document.querySelector('#alert-msg').innerText = "File salvato in Download!";
+        document.querySelector('#alert-msg').style.color = "#00FF00";
+        document.querySelector('#alert-msg').innerText = "File salvato nei Download!";
         this.menuUI.setAttribute('visible', 'true');
       },
 
       executeCalibrationAlignment: function() {
-        let O1 = this.loadedData.calib[0]; let O2 = this.loadedData.calib[1]; // Punti Originali Relativi al Pivot
-        let N1 = this.calibNewPoints[0]; let N2 = this.calibNewPoints[1]; // Nuovi Punti Assoluti Terrestri
+        let O1 = this.loadedData.calib[0]; let O2 = this.loadedData.calib[1]; 
+        let N1 = this.calibNewPoints[0]; let N2 = this.calibNewPoints[1]; 
 
-        // Calcolo Angolo di scostamento sul piano orizzontale XZ
         let origAngle = Math.atan2(O2.z - O1.z, O2.x - O1.x);
         let newAngle = Math.atan2(N2.z - N1.z, N2.x - N1.x);
         let deltaAngle = newAngle - origAngle;
 
         this.worldPivotEl.object3D.rotation.y = deltaAngle;
 
-        // Ruotiamo il vettore locale originale O1 per sapere dove punta adesso rispetto al pivot ruotato
         let rotatedO1 = new THREE.Vector3(O1.x, O1.y, O1.z);
         rotatedO1.applyAxisAngle(new THREE.Vector3(0,1,0), deltaAngle);
-        
-        // Il pivot globale deve essere spostato in modo che N1 corrisponda al punto originario rotato
         this.worldPivotEl.object3D.position.set(N1.x - rotatedO1.x, N1.y - rotatedO1.y, N1.z - rotatedO1.z);
 
-        // Ora inietto i dati
         let data = this.loadedData;
         this.pointA.base = data.pointA.base; this.pointA.top = data.pointA.top;
         this.pointB.base = data.pointB.base; this.pointB.top = data.pointB.top;
@@ -946,7 +975,6 @@
         this.toggleLaserVisuals(false); document.querySelector('#info-text').setAttribute('value', 'POSIZIONA PUNTO A');
       },
       
-      // MMANA Loader
       parseMmanaText: function(text) {
         let lines = text.split('\n'); this.importedMmanaWires = []; let insideWiresSection = false;
         for(let i=0; i<lines.length; i++) {
@@ -972,19 +1000,19 @@
 <body>
   
   <div id="ui-2d-container">
-    <h3>Esporta / Importa File (.json)</h3>
-    <input type="text" id="save-name" placeholder="Nome configurazione...">
-    <button id="btn-save-file">1. PIAZZA ANCORE E SALVA SU FILE</button>
+    <h3>Setup di Base (Da fare qui sul browser)</h3>
+    <p>1. Scrivi il nome per il tuo salvataggio:</p>
+    <input type="text" id="save-name" placeholder="Es. Monte_Subasio_1">
     
     <div class="divider"></div>
     
-    <p style="margin-top:5px;"><b>CARICA FILE ESISTENTE:</b></p>
+    <p>2. Oppure CARICA un file JSON esistente:</p>
     <input type="file" id="file-load" accept=".json">
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
     
     <div class="divider"></div>
 
-    <h3>Modelli MMANA (.maa)</h3>
+    <p>3. Carica file MMANA (.maa) personalizzato:</p>
     <input type="file" id="file-mmana" accept=".maa">
   </div>
 
@@ -994,30 +1022,30 @@
     
     <a-entity id="left-controller" oculus-touch-controls="hand: left">
       <a-entity id="menu-ui" visible="false" position="0 0.20 -0.4" rotation="-30 0 0">
-        <a-plane width="0.5" height="0.65" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
-        <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.29 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
-        <a-plane width="0.44" height="0.05" color="#2A2A2A" position="0 0.22 0.01">
+        <a-plane width="0.5" height="0.68" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
+        <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.31 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
+        <a-plane width="0.44" height="0.05" color="#2A2A2A" position="0 0.24 0.01">
           <a-text id="info-text" value="POSIZIONA PUNTO A" position="0 0 0.01" align="center" scale="0.075 0.075 0.075" color="#00E676"></a-text>
         </a-plane>
-        <a-text value="PREMI IL TASTO [ X ] SUL CONTROLLER PER GESTIRE I TIRANTI" position="0 0.17 0.01" align="center" scale="0.055 0.055 0.055" color="#FF9800"></a-text>
+        <a-text value="PREMI IL TASTO [ X ] SUL CONTROLLER PER GESTIRE I TIRANTI" position="0 0.19 0.01" align="center" scale="0.055 0.055 0.055" color="#FF9800"></a-text>
 
-        <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.10 0.01">
+        <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.12 0.01">
           <a-text value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
           <a-text id="txt-ant-val" value="-" align="center" scale="0.09 0.09 0.09" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
         </a-plane>
 
-        <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.10 0.01">
+        <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.12 0.01">
           <a-text value="BANDA RADIO:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#9FA8DA"></a-text>
           <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
         </a-plane>
 
-        <a-entity id="sub-dipolo" position="0 0.03 0" visible="false">
+        <a-entity id="sub-dipolo" position="0 0.05 0" visible="false">
           <a-text value="SPOSTA ALIMENTAZIONE (PUNTO C)" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.02 0"></a-text>
           <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="-0.09 -0.015 0.01"><a-text value="<- Verso PUNTO A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="0.09 -0.015 0.01"><a-text value="Verso PUNTO B ->" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
         </a-entity>
 
-        <a-entity id="sub-endfed" position="0 0.03 0" visible="false">
+        <a-entity id="sub-endfed" position="0 0.05 0" visible="false">
           <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
           <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
@@ -1030,7 +1058,7 @@
           <a-text id="txt-ef-values" value="AC: 10.00m | CB: 10.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
         </a-entity>
 
-        <a-entity id="sub-longwire" position="0 0.03 0" visible="false">
+        <a-entity id="sub-longwire" position="0 0.05 0" visible="false">
           <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
           <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#F57C00" position="-0.14 -0.01 0.01"><a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.055 0.055 0.055" position="0 0 0.005"></a-text></a-plane>
           <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -1040,7 +1068,7 @@
           <a-text id="txt-lw-len-val" value="LUNGH: 20.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
         </a-entity>
 
-        <a-entity id="sub-verticale" position="0 0.03 0" visible="false">
+        <a-entity id="sub-verticale" position="0 0.05 0" visible="false">
           <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
           <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#B71C1C" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#1B5E20" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -1052,20 +1080,25 @@
           <a-text id="txt-rad-len-val" value="LUNGH R: 5.0m" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="0.12 -0.05 0"></a-text>
         </a-entity>
 
-        <a-entity id="sub-mmana" position="0 0.03 0" visible="false">
+        <a-entity id="sub-mmana" position="0 0.05 0" visible="false">
           <a-text value="MODELLI SELEZIONABILI IN REALTA AUMENTATA" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
           <a-plane id="btn-mmana-model" class="clickable" btn-interaction width="0.32" height="0.03" color="#006064" position="0 -0.01 0.01">
             <a-text id="txt-mmana-model-val" value="-" align="center" scale="0.065 0.065 0.065"></a-text>
           </a-plane>
         </a-entity>
 
-        <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 -0.06 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-        <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 -0.06 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+        <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 -0.04 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+        <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 -0.04 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-        <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.11 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
-        <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.14" height="0.025" color="#C62828" position="-0.15 -0.15 0.01"><a-text value="EDIT A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-        <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.14" height="0.025" color="#1565C0" position="0 -0.15 0.01"><a-text value="EDIT B" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-        <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.15 0.01"><a-text value="RESET" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+        <a-text value="RIPOSIZIONAMENTO" position="0 -0.09 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
+        <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.14" height="0.025" color="#C62828" position="-0.15 -0.13 0.01"><a-text value="EDIT A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+        <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.14" height="0.025" color="#1565C0" position="0 -0.13 0.01"><a-text value="EDIT B" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+        <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.13 0.01"><a-text value="RESET" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+
+        <a-text value="SALVATAGGIO E CALIBRAZIONE" position="0 -0.21 0.01" align="center" scale="0.065 0.065 0.065" color="#00FFFF"></a-text>
+        <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.32" height="0.035" color="#00838F" position="0 -0.26 0.01">
+            <a-text value="INIZIA CALIBRAZIONE E SALVA FILE" align="center" scale="0.065 0.065 0.065"></a-text>
+        </a-plane>
       </a-entity>
 
       <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
@@ -1085,7 +1118,7 @@
           <a-text value="ELIMINA ANELLI / PICCHETTI" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
         </a-plane>
         <a-plane id="btn-gw-close" class="clickable" btn-interaction width="0.32" height="0.03" color="#1A1A1A" position="0 -0.16 0.01">
-          <a-text value="ESCI E TORNA ALL'ANTENNA (TASTO X)" align="center" scale="0.06 0.06 0.06" color="#9E9E9E"></a-text>
+          <a-text value="PREMI TASTO X PER CHIUDERE" align="center" scale="0.06 0.06 0.06" color="#9E9E9E"></a-text>
         </a-plane>
       </a-entity>
     </a-entity>
@@ -1102,6 +1135,7 @@
       <a-cylinder id="cursor-plumb-line" radius="0.002" color="#00FFFF" material="shader: flat" position="0 0 0" visible="false"></a-cylinder>
       <a-entity id="cursor-elevation-group">
         <a-ring id="cursor-ring" color="#00E676" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" material="shader: flat"></a-ring>
+        <a-text id="cursor-text" value="" position="0.08 0.08 0" color="#FFEB3B" scale="0.3 0.3 0.3" look-at-camera></a-text>
       </a-entity>
     </a-entity>
 
