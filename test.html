@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V26 - Calibrazione AR & Export Sicuro</title>
+  <title>Antenne AR Pro V27 - Menu Solido, Laser Fisso & UI Fix</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -17,6 +17,7 @@
     }
     #ui-2d-container button { width: 100%; padding: 6px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; }
     #ui-2d-container button:hover { background: #00FFCC; }
+    .btn-action { background: #FF9800 !important; color: #000 !important; }
     .divider { border-top: 1px solid #444; margin: 10px 0; }
   </style>
   <script>
@@ -30,6 +31,7 @@
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el;
+        if (!el.hasAttribute('material') || !el.getAttribute('material').color) return; // Evita errori sui background solidi
         let originalColor = el.getAttribute('material').color;
         el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
         el.addEventListener('mouseleave', () => { el.setAttribute('material', 'opacity', 1.0); el.setAttribute('scale', '1 1 1'); el.setAttribute('material', 'color', originalColor); });
@@ -85,7 +87,6 @@
             let pose = results[0].getPose(this.refSpace);
             if (pose) {
                 let tempHit = pose.transform.position;
-                // FILTRO BLIND SPOT: Ignora superfici a meno di 40cm
                 if (controllerPos.distanceTo(tempHit) > 0.4) {
                     rawHit = tempHit;
                     this.isPhysical = true;
@@ -152,7 +153,6 @@
         this.tempElevation = 0;
 
         this.mmanaWires = []; this.importedMmanaWires = []; 
-
         this.guyWiresData = []; 
         this.activeAnchor = null; 
         this.gwState = 'OFF'; 
@@ -174,6 +174,7 @@
         this.cursorPlumbLine = document.querySelector('#cursor-plumb-line');
         this.cursorText = document.querySelector('#cursor-text');
         this.mainRing = document.querySelector('#cursor-ring');
+        this.cursorDiamond = document.querySelector('#cursor-diamond');
         
         this.worldPivotEl = document.querySelector('#world-pivot');
         this.worldContentEl = document.querySelector('#world-content');
@@ -198,12 +199,6 @@
         this.setupGlobalEventDelegation();
         this.setupFileIO();
         this.updateMenuText();
-        
-        this.toggleLaserVisuals(false);
-      },
-
-      toggleLaserVisuals: function(showLine) {
-        this.raycasterEl.setAttribute('raycaster', 'showLine', showLine ? 'true' : 'false');
       },
 
       getLocalPoint: function(worldVec) {
@@ -217,19 +212,15 @@
         if(!this.menuUI) return;
         let isVisible = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
         this.menuUI.setAttribute('visible', !isVisible);
-        this.toggleLaserVisuals(!isVisible);
       },
 
       toggleGuyWireMode: function() {
         if (this.state.includes('CALIB')) return;
 
-        // Se stiamo attivamente piazzando un picchetto e l'utente preme X, 
-        // annulliamo l'inserimento e riportiamo il menu Tiranti.
         if (this.gwState === 'ADJUST_HEIGHT' || this.gwState === 'PLACE_PEGS' || this.gwState === 'ADJUST_PEG_BASE') {
             this.gwState = 'SELECT_POLE';
             this.activeAnchor = null; 
             this.gwUI.setAttribute('visible', 'true');
-            this.toggleLaserVisuals(true);
             this.previewCollar.setAttribute('visible', 'false');
             this.previewCollarText.setAttribute('visible', 'false');
             this.updateGWStatus("SCEGLI PALO DA TIRANTARE");
@@ -242,7 +233,6 @@
           this.state = 'IDLE'; 
           this.menuUI.setAttribute('visible', false);
           this.gwUI.setAttribute('visible', true);
-          this.toggleLaserVisuals(true); 
 
           this.gwState = 'SELECT_POLE';
           this.updateGWStatus("SCEGLI PALO DA TIRANTARE");
@@ -254,10 +244,8 @@
           document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', 'ELIMINA ANELLI / PICCHETTI');
           this.refreshRaycaster();
         } else {
-          // Esci del tutto dalla mod tiranti
           this.gwUI.setAttribute('visible', false);
           this.menuUI.setAttribute('visible', true);
-          this.toggleLaserVisuals(true);
           this.gwState = 'OFF';
           this.activeAnchor = null;
           this.currentHoveredGW = null;
@@ -308,7 +296,6 @@
         this.previewCollar = document.createElement('a-torus'); this.previewCollar.setAttribute('radius', '0.04'); this.previewCollar.setAttribute('radius-tubular', '0.006'); this.previewCollar.setAttribute('material', 'color: #FFEB3B; shader: flat'); this.previewCollar.setAttribute('visible', 'false'); this.previewCollar.setAttribute('rotation', '90 0 0'); this.worldContentEl.appendChild(this.previewCollar);
         this.previewCollarText = document.createElement('a-text'); this.previewCollarText.setAttribute('align', 'center'); this.previewCollarText.setAttribute('color', '#FFEB3B'); this.previewCollarText.setAttribute('look-at-camera', ''); this.previewCollarText.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.previewCollarText);
 
-        // Elementi Diamanti
         for(let i=0; i<2; i++) {
             let dia = document.createElement('a-octahedron');
             dia.setAttribute('radius', '0.06'); dia.setAttribute('material', 'color: #FFD600; shader: flat; wireframe: true');
@@ -356,11 +343,18 @@
             this.gwDeleteCursor.setAttribute('visible', 'false');
         }
 
-        // Se UI attive ma l'utente NON è in fase di inserimento (niente picchetti, niente calibrazione), nascondiamo il cerchio verde
+        // Controllo UI: Se puntiamo ai menu, spegni il cursore verde (ma il laser rosso resta!)
         let menuVis = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
         let gwVis = this.gwUI.getAttribute('visible') === 'true' || this.gwUI.getAttribute('visible') === true;
+        let raycasterComponent = this.raycasterEl.components.raycaster;
+        let isPointingUI = false;
+        if (raycasterComponent && raycasterComponent.intersectedEls.length > 0) {
+             if (raycasterComponent.intersectedEls.some(el => el.classList.contains('menu-bg') || el.classList.contains('clickable'))) {
+                 isPointingUI = true;
+             }
+        }
 
-        if ((menuVis || gwVis) && !isPlacing && !isAdjusting) {
+        if ((menuVis || gwVis) && isPointingUI) {
             this.cursorContainer.setAttribute('visible', 'false');
             return;
         }
@@ -368,7 +362,15 @@
         let hybrid = this.raycasterEl.components['controller-hybrid-target'];
         let hasTarget = hybrid && hybrid.isActive;
 
-        // TESTI FLUTTUANTI CALIBRAZIONE
+        // Visualizza il Diamante d'anteprima se in calibrazione
+        if (this.state.includes('CALIB')) {
+            this.cursorDiamond.setAttribute('visible', 'true');
+            this.mainRing.setAttribute('visible', 'false');
+        } else {
+            this.cursorDiamond.setAttribute('visible', 'false');
+            this.mainRing.setAttribute('visible', 'true');
+        }
+
         this.cursorText.setAttribute('value', '');
         if (this.state === 'CALIB_SAVE_1') this.cursorText.setAttribute('value', 'Piazza DIAMANTE 1\n(Punto Origine)');
         if (this.state === 'CALIB_SAVE_2') this.cursorText.setAttribute('value', 'Piazza DIAMANTE 2\n(Orientamento)');
@@ -471,7 +473,6 @@
         let pData = poleId === 'A' ? this.pointA : this.pointB;
         if (!pData || !pData.top) return;
         
-        // NASCONDE SUBITO IL MENU TIRANTI per non bloccare il cerchio verde
         this.gwUI.setAttribute('visible', 'false');
 
         this.activeAnchor = { pole: poleId, height: (pData.top.y - pData.base.y)/2, pegs: [] };
@@ -486,14 +487,12 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        // SCUDO MENU
+        // SCUDO MENU (Se premiamo su un elemento dell'UI che non è un vero pulsante, fermiamo il click sul terreno)
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
-        if (intersects) {
-          for (let i = 0; i < intersects.length; i++) {
-            let el = intersects[i];
-            if (el.classList && el.classList.contains('clickable') && !el.classList.contains('deletable')) return;
-            if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) return;
-          }
+        if (intersects && intersects.length > 0) {
+            let hitEl = intersects[0];
+            // Se becchiamo lo sfondo del menu o un pulsante UI, processiamo solo l'UI e blocchiamo il click "mondo"
+            if (hitEl.classList.contains('menu-bg') || (hitEl.classList.contains('clickable') && !hitEl.classList.contains('deletable'))) return;
         }
 
         if (this.gwState === 'DELETE_GW') {
@@ -523,8 +522,7 @@
                 this.calibDiamonds[1].setAttribute('position', hybridTarget.hitPoint);
                 this.calibDiamonds[1].setAttribute('visible', 'true');
                 this.state = 'IDLE';
-                this.toggleLaserVisuals(true);
-                this.executeExportJSON(); // Chiama funzione download
+                this.executeExportJSON();
             }
             return;
         }
@@ -545,7 +543,6 @@
           if (this.gwState === 'ADJUST_HEIGHT') {
             this.gwState = 'PLACE_PEGS'; this.guyWiresData.push(this.activeAnchor); 
             this.previewCollar.setAttribute('material', 'color: #FF0000'); this.previewCollarText.setAttribute('value', '');
-            this.toggleLaserVisuals(false); 
             return;
           }
           if (this.gwState === 'PLACE_PEGS') {
@@ -590,11 +587,11 @@
 
           if(this.state === 'REPOSITION_HEIGHT_A') {
             this.state = 'IDLE'; this.updateGeometriesAndDrawings(); 
-            this.menuUI.setAttribute('visible', true); this.toggleLaserVisuals(true);
+            this.menuUI.setAttribute('visible', true); 
           } else {
             if (type === 'Verticale' || type === 'MMANA-GAL') {
               this.state = 'IDLE'; this.updateGeometriesAndDrawings(); 
-              this.menuUI.setAttribute('visible', true); this.toggleLaserVisuals(true);
+              this.menuUI.setAttribute('visible', true); 
             } else { 
               this.state = 'PLACE_GROUND_B'; 
               document.querySelector('#info-text').setAttribute('value', "POSIZIONA PUNTO B");
@@ -624,7 +621,7 @@
           this.pointB.top = { x: this.pointB.base.x, y: this.pointB.base.y + this.currentHeight, z: this.pointB.base.z };
           this.resetVerticalPreviewMode();
           this.state = 'IDLE'; this.updateGeometriesAndDrawings(); 
-          this.menuUI.setAttribute('visible', true); this.toggleLaserVisuals(true);
+          this.menuUI.setAttribute('visible', true); 
           return;
         }
       },
@@ -841,20 +838,18 @@
             if (this.gwState === 'ADJUST_HEIGHT' || this.gwState === 'PLACE_PEGS') { this.activeAnchor = null; this.previewCollar.setAttribute('visible', 'false'); this.previewCollarText.setAttribute('visible', 'false'); }
             if (this.gwState !== 'DELETE_GW') {
                 this.gwState = 'DELETE_GW'; this.updateGWStatus("PUNTA COL LASER UN ANELLO/PICCHETTO E PREMI IL GRILLETTO");
-                document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', '[ TORNA A INSERIMENTO ]'); this.toggleLaserVisuals(true); 
+                document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', '[ TORNA A INSERIMENTO ]'); 
             } else {
                 this.gwState = 'SELECT_POLE'; this.updateGWStatus("SCEGLI PALO DA TIRANTARE");
-                document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', 'ELIMINA ANELLI / PICCHETTI'); this.toggleLaserVisuals(true);
+                document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', 'ELIMINA ANELLI / PICCHETTI');
             }
           }
           else if (id === 'btn-gw-close') { this.toggleGuyWireMode(); }
           
-          // Bottone Calibrazione AR Menu
           else if (id === 'btn-ar-save') { 
               if(this.state !== 'IDLE') return;
               this.state = 'CALIB_SAVE_1';
               this.menuUI.setAttribute('visible', 'false');
-              this.toggleLaserVisuals(false); // Accendiamo il mirino verde ibrido per i diamanti
           }
 
           else if (id === 'btn-ant') { this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); } 
@@ -867,13 +862,23 @@
           else if (id === 'btn-lw-m1')   { this.longwireLen = Math.max(0.1, mathRound(this.longwireLen - 1.0)); this.refreshAll(); } else if (id === 'btn-lw-m01')  { this.longwireLen = Math.max(0.01, mathRound(this.longwireLen - 0.01)); this.refreshAll(); } else if (id === 'btn-lw-p01')  { this.longwireLen = mathRound(this.longwireLen + 0.01); this.refreshAll(); } else if (id === 'btn-lw-p1')   { this.longwireLen = mathRound(this.longwireLen + 1.0); this.refreshAll(); }
           else if (id === 'btn-rad-num-minus') { this.numRadials = Math.max(1, this.numRadials - 1); this.refreshAll(); } else if (id === 'btn-rad-num-plus')  { this.numRadials = Math.min(this.maxRadials, this.numRadials + 1); this.refreshAll(); }
           else if (id === 'btn-rad-m1')   { this.radialLen = Math.max(0.1, mathRound(this.radialLen - 1.0)); this.refreshAll(); } else if (id === 'btn-rad-m01')  { this.radialLen = Math.max(0.1, mathRound(this.radialLen - 0.1)); this.refreshAll(); } else if (id === 'btn-rad-p01')  { this.radialLen = mathRound(this.radialLen + 0.1); this.refreshAll(); } else if (id === 'btn-rad-p1')   { this.radialLen = mathRound(this.radialLen + 1.0); this.refreshAll(); }
-          else if (id === 'btn-repo-a') { this.state = 'REPOSITION_GROUND_A'; this.menuUI.setAttribute('visible', false); this.toggleLaserVisuals(true); document.querySelector('#info-text').setAttribute('value', 'POSIZIONA PUNTO A'); } 
-          else if (id === 'btn-repo-b') { this.state = 'REPOSITION_GROUND_B'; this.menuUI.setAttribute('visible', false); this.toggleLaserVisuals(true); document.querySelector('#info-text').setAttribute('value', 'POSIZIONA PUNTO B'); }
+          else if (id === 'btn-repo-a') { this.state = 'REPOSITION_GROUND_A'; this.menuUI.setAttribute('visible', false); document.querySelector('#info-text').setAttribute('value', 'POSIZIONA PUNTO A'); } 
+          else if (id === 'btn-repo-b') { this.state = 'REPOSITION_GROUND_B'; this.menuUI.setAttribute('visible', false); document.querySelector('#info-text').setAttribute('value', 'POSIZIONA PUNTO B'); }
           else if (id === 'btn-global-reset') { this.triggerGlobalReset(); }
         });
       },
 
       setupFileIO: function() {
+        // Logica per il tasto salva nel browser
+        document.querySelector('#btn-browser-save').addEventListener('click', () => {
+            if(this.state !== 'IDLE') { alert("Finisci di piazzare l'antenna in AR prima di salvare."); return; }
+            this.state = 'CALIB_SAVE_1';
+            this.menuUI.setAttribute('visible', 'false');
+            let alertBox = document.querySelector('#alert-msg');
+            alertBox.style.color = "#00FFFF";
+            alertBox.innerText = "NOME SALVATO! Ora metti il visore e piazza i 2 Diamanti in Realtà Aumentata.";
+        });
+
         document.querySelector('#file-load').addEventListener('change', (evt) => {
             let file = evt.target.files[0]; if(!file) return;
             let reader = new FileReader();
@@ -882,13 +887,12 @@
                     this.loadedData = JSON.parse(e.target.result);
                     if (this.loadedData.calib && this.loadedData.calib.length === 2) {
                         this.state = 'CALIB_LOAD_1';
-                        this.triggerGlobalReset(); // Pulisce scena precedente
+                        this.triggerGlobalReset(); 
                         this.menuUI.setAttribute('visible', 'false');
                         this.gwUI.setAttribute('visible', 'false');
-                        this.toggleLaserVisuals(false); // Attiva cursore ibrido
                         let alertBox = document.querySelector('#alert-msg');
                         alertBox.style.color = "#00FF00";
-                        alertBox.innerText = "File pronto! Mettiti il visore ed entra in AR per riposizionare i Diamanti.";
+                        alertBox.innerText = "File letto! Indossa il visore e posiziona i 2 Diamanti nei punti reali in cui li avevi salvati.";
                     } else { alert("File incompatibile o privo di dati di calibrazione."); }
                 } catch(err) { alert("Errore lettura file JSON."); }
             };
@@ -907,7 +911,7 @@
             longwireLen: this.longwireLen, longwireVertex: this.longwireVertex,
             numRadials: this.numRadials, radialLen: this.radialLen,
             guyWiresData: this.guyWiresData, antennaRotationY: this.antennaRotationY,
-            calib: this.calibOriginalPoints // Punti di ancoraggio
+            calib: this.calibOriginalPoints 
         };
         
         let blob = new Blob([JSON.stringify(data)], { type: "application/json" });
@@ -922,7 +926,7 @@
         
         this.calibDiamonds.forEach(d => d.setAttribute('visible', 'false'));
         document.querySelector('#alert-msg').style.color = "#00FF00";
-        document.querySelector('#alert-msg').innerText = "File salvato nei Download!";
+        document.querySelector('#alert-msg').innerText = "File salvato nei Download del tuo visore/PC!";
         this.menuUI.setAttribute('visible', 'true');
       },
 
@@ -952,10 +956,9 @@
         this.antennaRotationY = data.antennaRotationY || 0;
         
         this.state = 'IDLE';
-        this.calibDiamonds.forEach(d => d.setAttribute('visible', 'false'));
-        document.querySelector('#alert-msg').innerText = "Calibrazione Completata!";
+        document.querySelector('#alert-msg').style.color = "#00FF00";
+        document.querySelector('#alert-msg').innerText = "Calibrazione Completata e Antenna Ripristinata!";
         this.menuUI.setAttribute('visible', 'true');
-        this.toggleLaserVisuals(true);
         this.refreshAll();
       },
 
@@ -972,7 +975,7 @@
         this.gwDeleteCursor.setAttribute('visible', 'false');
         this.worldPivotEl.object3D.position.set(0,0,0); this.worldPivotEl.object3D.rotation.set(0,0,0);
         this.cursorContainer.setAttribute('visible', 'false'); this.menuUI.setAttribute('visible', false);
-        this.toggleLaserVisuals(false); document.querySelector('#info-text').setAttribute('value', 'POSIZIONA PUNTO A');
+        document.querySelector('#info-text').setAttribute('value', 'POSIZIONA PUNTO A');
       },
       
       parseMmanaText: function(text) {
@@ -1000,19 +1003,20 @@
 <body>
   
   <div id="ui-2d-container">
-    <h3>Setup di Base (Da fare qui sul browser)</h3>
-    <p>1. Scrivi il nome per il tuo salvataggio:</p>
+    <h3>Esporta / Importa File (.json)</h3>
+    <p>1. Dai un nome al file:</p>
     <input type="text" id="save-name" placeholder="Es. Monte_Subasio_1">
+    <button id="btn-browser-save" class="btn-action">SALVA NOME E CALIBRA IN AR</button>
     
     <div class="divider"></div>
     
-    <p>2. Oppure CARICA un file JSON esistente:</p>
+    <p>2. CARICA un file JSON esistente:</p>
     <input type="file" id="file-load" accept=".json">
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
     
     <div class="divider"></div>
 
-    <p>3. Carica file MMANA (.maa) personalizzato:</p>
+    <h3>Modelli MMANA (.maa)</h3>
     <input type="file" id="file-mmana" accept=".maa">
   </div>
 
@@ -1022,7 +1026,8 @@
     
     <a-entity id="left-controller" oculus-touch-controls="hand: left">
       <a-entity id="menu-ui" visible="false" position="0 0.20 -0.4" rotation="-30 0 0">
-        <a-plane width="0.5" height="0.68" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
+        <a-plane class="clickable menu-bg" width="0.5" height="0.68" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
+        
         <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.31 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
         <a-plane width="0.44" height="0.05" color="#2A2A2A" position="0 0.24 0.01">
           <a-text id="info-text" value="POSIZIONA PUNTO A" position="0 0 0.01" align="center" scale="0.075 0.075 0.075" color="#00E676"></a-text>
@@ -1102,7 +1107,7 @@
       </a-entity>
 
       <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
-        <a-plane width="0.45" height="0.38" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
+        <a-plane class="clickable menu-bg" width="0.45" height="0.38" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
         <a-text value="MODALITA' TIRANTI E ANCORAGGI" position="0 0.15 0.01" align="center" scale="0.1 0.1 0.1" color="#FFEB3B"></a-text>
         <a-plane width="0.4" height="0.06" color="#3E2723" position="0 0.08 0.01">
           <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text>
@@ -1126,7 +1131,7 @@
   <a-entity id="right-controller" 
           laser-controls="hand: right" 
           oculus-touch-controls="hand: right" 
-          raycaster="objects: .clickable, .deletable; showLine: false; far: 150;" 
+          raycaster="objects: .clickable, .deletable, .menu-bg; showLine: true; far: 150;" 
           controller-hybrid-target>
   </a-entity>
 
@@ -1135,6 +1140,7 @@
       <a-cylinder id="cursor-plumb-line" radius="0.002" color="#00FFFF" material="shader: flat" position="0 0 0" visible="false"></a-cylinder>
       <a-entity id="cursor-elevation-group">
         <a-ring id="cursor-ring" color="#00E676" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" material="shader: flat"></a-ring>
+        <a-octahedron id="cursor-diamond" radius="0.06" color="#FFD600" material="wireframe: true" visible="false"></a-octahedron>
         <a-text id="cursor-text" value="" position="0.08 0.08 0" color="#FFEB3B" scale="0.3 0.3 0.3" look-at-camera></a-text>
       </a-entity>
     </a-entity>
