@@ -293,107 +293,72 @@
         let baseLen = this.getCalculatedLength();
         this.endFed_AC_Len = baseLen / 2; this.endFed_CB_Len = baseLen / 2; this.longwireLen = baseLen;
       },
+tick: function () {
+    let hybrid = this.raycasterEl.components['controller-hybrid-target'];
+    let hasTarget = hybrid && hybrid.isActive;
 
-      tick: function () {
-        let hybridTarget = this.raycasterEl.components['controller-hybrid-target'];
-        let hasTarget = hybridTarget && hybridTarget.isActive;
+    // --- 1. MODALITÀ CANCELLAZIONE (Magnetica: aggancia l'oggetto più vicino) ---
+    if (this.gwState === 'DELETE_GW') {
+        this.cursorContainer.setAttribute('visible', 'false');
+        this.currentHoveredGW = null;
+        let ctrlPos = new THREE.Vector3();
+        this.raycasterEl.object3D.getWorldPosition(ctrlPos);
+        let minDist = 0.3; // Raggio di cattura (30cm)
 
-        // --- GESTIONE PUNTATORE MAGNETICO DI CANCELLAZIONE ---
-        if (this.gwState === 'DELETE_GW') {
-            this.cursorContainer.setAttribute('visible', 'false');
-            this.currentHoveredGW = null;
-            let minRayDist = Infinity;
-            let selectionThreshold = 0.25; // Raggio di aggancio (25cm)
+        this.guyWiresData.forEach((anchor, aIdx) => {
+            let pData = anchor.pole === 'A' ? this.pointA : this.pointB;
+            if (!pData.base || !pData.top) return;
 
-            // Vettore Raycaster Matematico
-            let worldPos = new THREE.Vector3();
-            let worldDir = new THREE.Vector3(0, 0, -1);
-            this.raycasterEl.object3D.getWorldPosition(worldPos);
-            let quat = new THREE.Quaternion();
-            this.raycasterEl.object3D.getWorldQuaternion(quat);
-            worldDir.applyQuaternion(quat).normalize();
-
-            // Trasforma in coordinate locali del prato
-            let localPos = this.getLocalPoint(worldPos);
-            let localPosVec = new THREE.Vector3(localPos.x, localPos.y, localPos.z);
-            let worldTarget = worldPos.clone().add(worldDir);
-            let localTarget = this.getLocalPoint(worldTarget);
-            let localTargetVec = new THREE.Vector3(localTarget.x, localTarget.y, localTarget.z);
-            let localDir = new THREE.Vector3().subVectors(localTargetVec, localPosVec).normalize();
-
-            // Controlla collisione con ogni collare e picchetto
-            this.guyWiresData.forEach((anchor, aIdx) => {
-                let pData = anchor.pole === 'A' ? this.pointA : this.pointB;
-                if (!pData.base || !pData.top) return;
-
-                let h = Math.min(anchor.height, pData.top.y - pData.base.y);
-                let anchorPos = new THREE.Vector3(pData.base.x, pData.base.y + h, pData.base.z);
-
-                // Check Anello
-                let vA = new THREE.Vector3().subVectors(anchorPos, localPosVec);
-                let distAlongA = vA.dot(localDir);
-                if (distAlongA > 0) {
-                    let closestPtA = localPosVec.clone().add(localDir.clone().multiplyScalar(distAlongA));
-                    let distToRayA = anchorPos.distanceTo(closestPtA);
-                    if (distToRayA < selectionThreshold && distToRayA < minRayDist) {
-                        minRayDist = distToRayA;
-                        this.currentHoveredGW = { type: 'anchor', aIdx: aIdx, pos: anchorPos };
-                    }
-                }
-
-                // Check Picchetti
-                anchor.pegs.forEach((pegPos, pIdx) => {
-                    let pVec = new THREE.Vector3(pegPos.x, pegPos.y, pegPos.z);
-                    let vP = new THREE.Vector3().subVectors(pVec, localPosVec);
-                    let distAlongP = vP.dot(localDir);
-                    if (distAlongP > 0) {
-                        let closestPtP = localPosVec.clone().add(localDir.clone().multiplyScalar(distAlongP));
-                        let distToRayP = pVec.distanceTo(closestPtP);
-                        if (distToRayP < selectionThreshold && distToRayP < minRayDist) {
-                            minRayDist = distToRayP;
-                            this.currentHoveredGW = { type: 'peg', aIdx: aIdx, pIdx: pIdx, pos: pVec };
-                        }
-                    }
-                });
-            });
-
-            // Disegna o nascondi il globo rosso
-            if (this.currentHoveredGW) {
-                this.gwDeleteCursor.setAttribute('position', `${this.currentHoveredGW.pos.x} ${this.currentHoveredGW.pos.y} ${this.currentHoveredGW.pos.z}`);
-                this.gwDeleteCursor.setAttribute('visible', 'true');
-            } else {
-                this.gwDeleteCursor.setAttribute('visible', 'false');
+            let h = Math.min(anchor.height, pData.top.y - pData.base.y);
+            let anchorPos = new THREE.Vector3(pData.base.x, pData.base.y + h, pData.base.z);
+            let worldAnchorPos = new THREE.Vector3();
+            this.worldContentEl.object3D.localToWorld(worldAnchorPos.copy(anchorPos));
+            
+            if (ctrlPos.distanceTo(worldAnchorPos) < minDist) {
+                minDist = ctrlPos.distanceTo(worldAnchorPos);
+                this.currentHoveredGW = { type: 'anchor', aIdx: aIdx, pos: worldAnchorPos };
             }
 
-            return; // Se siamo in Delete Mode saltiamo il codice sotto
-        } else {
-            this.gwDeleteCursor.setAttribute('visible', 'false');
-        }
+            anchor.pegs.forEach((p, pIdx) => {
+                let worldPeg = new THREE.Vector3(p.x, p.y, p.z);
+                this.worldContentEl.object3D.localToWorld(worldPeg);
+                if (ctrlPos.distanceTo(worldPeg) < minDist) {
+                    minDist = ctrlPos.distanceTo(worldPeg);
+                    this.currentHoveredGW = { type: 'peg', aIdx: aIdx, pIdx: pIdx, pos: worldPeg };
+                }
+            });
+        });
 
+        this.gwDeleteCursor.setAttribute('visible', this.currentHoveredGW !== null);
+        if (this.currentHoveredGW) this.gwDeleteCursor.setAttribute('position', this.currentHoveredGW.pos);
+        return; 
+    } else {
+        this.gwDeleteCursor.setAttribute('visible', 'false');
+    }
 
-        // FASE 1: Ricerca punto sul terreno (Normale)
-        if (this.state.includes('PLACE_GROUND') || this.state.includes('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS') {
-          if (hasTarget) {
+    // --- 2. MODALITÀ PIAZZAMENTO (Standard con sensore ibrido) ---
+    if (this.state.includes('PLACE_GROUND') || this.state.includes('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS') {
+        if (hasTarget) {
             this.cursorContainer.setAttribute('visible', 'true'); 
-            this.cursorContainer.setAttribute('position', hybridTarget.hitPoint);
+            this.cursorContainer.setAttribute('position', hybrid.hitPoint);
             this.cursorElevGroup.setAttribute('position', '0 0 0');
             this.cursorPlumbLine.setAttribute('visible', 'false');
             this.cursorGroundRing.setAttribute('visible', 'false');
             
-            if (hybridTarget.isPhysical) {
+            if (hybrid.isPhysical) {
                 this.mainRing.setAttribute('color', '#00E676');
-                this.cursorText.setAttribute('value', 'GRILLETTO: Blocca (Superficie Reale)');
+                this.cursorText.setAttribute('value', 'GRILLETTO: Blocca (Suolo Reale)');
             } else {
                 this.mainRing.setAttribute('color', '#00BFFF');
-                this.cursorText.setAttribute('value', `GRILLETTO: Blocca (Distanza: Lunga)`);
+                this.cursorText.setAttribute('value', 'GRILLETTO: Blocca (Calcolato)');
             }
-          } else { 
+        } else { 
             this.cursorContainer.setAttribute('visible', 'false'); 
-          }
-        } 
-        // FASE 2: Regolazione fine
-        else if (this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE') {
-          if (this.tempBasePos) {
+        }
+    } 
+    // --- 3. MODALITÀ RITOCCO QUOTA (Filo a piombo) ---
+    else if (this.state.includes('ADJUST_BASE') || this.gwState === 'ADJUST_PEG_BASE') {
+        if (this.tempBasePos) {
             this.mainRing.setAttribute('color', '#00E676'); 
             let localZero = new THREE.Vector3(this.tempBasePos.x, this.tempBasePos.y, this.tempBasePos.z);
             let worldZero = new THREE.Vector3();
@@ -401,30 +366,28 @@
 
             this.cursorContainer.setAttribute('visible', 'true');
             this.cursorContainer.setAttribute('position', worldZero);
-            
             this.cursorElevGroup.setAttribute('position', `0 ${this.tempElevation} 0`);
 
             if (Math.abs(this.tempElevation) > 0.01) {
-              this.cursorPlumbLine.setAttribute('visible', 'true');
-              this.cursorGroundRing.setAttribute('visible', 'true');
-              this.cursorPlumbLine.setAttribute('height', Math.abs(this.tempElevation));
-              this.cursorPlumbLine.setAttribute('position', `0 ${this.tempElevation / 2} 0`);
-              
-              let lineColor = this.tempElevation > 0 ? '#00FFFF' : '#FF1744'; 
-              this.cursorPlumbLine.setAttribute('material', 'color', lineColor);
+                this.cursorPlumbLine.setAttribute('visible', 'true');
+                this.cursorGroundRing.setAttribute('visible', 'true');
+                this.cursorPlumbLine.setAttribute('height', Math.abs(this.tempElevation));
+                this.cursorPlumbLine.setAttribute('position', `0 ${this.tempElevation / 2} 0`);
+                this.cursorPlumbLine.setAttribute('material', 'color', this.tempElevation > 0 ? '#00FFFF' : '#FF1744');
             } else {
-              this.cursorPlumbLine.setAttribute('visible', 'false');
-              this.cursorGroundRing.setAttribute('visible', 'false');
+                this.cursorPlumbLine.setAttribute('visible', 'false');
+                this.cursorGroundRing.setAttribute('visible', 'false');
             }
             
             let sign = this.tempElevation >= 0 ? '+' : '';
             this.cursorText.setAttribute('value', `Ritocco: ${sign}${this.tempElevation.toFixed(2)}m\n<- Joystick SX ->\nGRILLETTO: Conferma`);
-          }
-        } 
-        else {
-          this.cursorContainer.setAttribute('visible', 'false');
         }
-      },
+    } 
+    else {
+        this.cursorContainer.setAttribute('visible', 'false');
+    }
+},
+      
 
       onLeftThumbstick: function(evt) {
         let now = Date.now();
@@ -1227,10 +1190,12 @@
       </a-entity>
     </a-entity>
     
-    <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" 
-              raycaster="objects: .clickable; far: 1.5; showLine: false; lineOpacity: 0.8; lineColor: #FF0000;" 
-              controller-hybrid-target>
-    </a-entity>
+  <a-entity id="right-controller" 
+          laser-controls="hand: right" 
+          oculus-touch-controls="hand: right" 
+          raycaster="objects: .clickable; showLine: false; far: 1.5;" 
+          controller-hybrid-target>
+</a-entity>
 
     <a-entity id="cursor-container" visible="false">
       <a-ring id="cursor-ground-ring" color="#FF9800" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" material="opacity: 0.4; shader: flat" visible="false"></a-ring>
