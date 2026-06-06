@@ -266,9 +266,19 @@
 
       updateGWStatus: function(msg) { document.querySelector('#txt-gw-status').setAttribute('value', msg); },
 
-      refreshRaycaster: function() {
-        setTimeout(() => { if (this.raycasterEl && this.raycasterEl.components.raycaster) this.raycasterEl.components.raycaster.refreshObjects(); }, 50);
-      },
+     refreshRaycaster: function() {
+  // tenta subito
+  if (this.raycasterEl && this.raycasterEl.components.raycaster) {
+    try { this.raycasterEl.components.raycaster.refreshObjects(); } catch(e) {}
+  }
+  // ritenta dopo il layout
+  setTimeout(() => {
+    if (this.raycasterEl && this.raycasterEl.components.raycaster) {
+      try { this.raycasterEl.components.raycaster.refreshObjects(); } catch(e) {}
+    }
+  }, 200);
+},
+
 
       initPersistentElements: function() {
         let createPointStructure = (color) => {
@@ -343,21 +353,26 @@
             this.gwDeleteCursor.setAttribute('visible', 'false');
         }
 
-        // Controllo UI: Se puntiamo ai menu, spegni il cursore verde (ma il laser rosso resta!)
-        let menuVis = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
-        let gwVis = this.gwUI.getAttribute('visible') === 'true' || this.gwUI.getAttribute('visible') === true;
-        let raycasterComponent = this.raycasterEl.components.raycaster;
-        let isPointingUI = false;
-        if (raycasterComponent && raycasterComponent.intersectedEls.length > 0) {
-             if (raycasterComponent.intersectedEls.some(el => el.classList.contains('menu-bg') || el.classList.contains('clickable'))) {
-                 isPointingUI = true;
-             }
-        }
+       let menuVis = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
+let gwVis = this.gwUI.getAttribute('visible') === 'true' || this.gwUI.getAttribute('visible') === true;
+let raycasterComponent = this.raycasterEl.components.raycaster;
+let isPointingUIButton = false;
 
-        if ((menuVis || gwVis) && isPointingUI) {
-            this.cursorContainer.setAttribute('visible', 'false');
-            return;
-        }
+if (raycasterComponent && Array.isArray(raycasterComponent.intersectedEls) && raycasterComponent.intersectedEls.length > 0) {
+  // considera "UI bloccante" solo un elemento cliccabile (pulsante), non lo sfondo
+  isPointingUIButton = raycasterComponent.intersectedEls.some(el => el.classList && el.classList.contains('clickable') && !el.classList.contains('deletable'));
+}
+
+// In modalità tiranti, tieni attivo il target ibrido anche se l'HUD è visibile,
+// a meno che il puntatore sia proprio su un pulsante cliccabile dell'UI.
+const inGuyWireMode = (this.gwState === 'SELECT_POLE' || this.gwState === 'ADJUST_HEIGHT' || this.gwState === 'PLACE_PEGS' || this.gwState === 'ADJUST_PEG_BASE' || this.gwState === 'DELETE_GW');
+
+if ((menuVis || gwVis) && isPointingUIButton) {
+  // stai puntando un vero pulsante => non mostrare cursore/target 3D
+  this.cursorContainer.setAttribute('visible', 'false');
+  return;
+}
+
 
         let hybrid = this.raycasterEl.components['controller-hybrid-target'];
         let hasTarget = hybrid && hybrid.isActive;
@@ -487,13 +502,21 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        // SCUDO MENU (Se premiamo su un elemento dell'UI che non è un vero pulsante, fermiamo il click sul terreno)
-        let intersects = this.raycasterEl.components.raycaster.intersectedEls;
-        if (intersects && intersects.length > 0) {
-            let hitEl = intersects[0];
-            // Se becchiamo lo sfondo del menu o un pulsante UI, processiamo solo l'UI e blocchiamo il click "mondo"
-            if (hitEl.classList.contains('menu-bg') || (hitEl.classList.contains('clickable') && !hitEl.classList.contains('deletable'))) return;
-        }
+     let rc = this.raycasterEl.components.raycaster;
+let intersects = rc && Array.isArray(rc.intersectedEls) ? rc.intersectedEls : [];
+if (intersects.length > 0) {
+  // Se stiamo puntando un VERO pulsante UI cliccabile, allora gestisce l’UI e blocca il mondo.
+  let blockingUIButton = intersects.find(el => el.classList && el.classList.contains('clickable') && !el.classList.contains('deletable'));
+  if (blockingUIButton) {
+    return; // il click è per l'UI
+  }
+  // Se è solo lo sfondo (.menu-bg), NON bloccare il mondo quando siamo in modalità tiranti/posizionamento
+  let onlyMenuBg = intersects.every(el => el.classList && el.classList.contains('menu-bg'));
+  if (onlyMenuBg) {
+    // lascia passare il click al mondo per PLACE_PEGS / ADJUST_PEG_BASE / CALIB ecc.
+  }
+}
+
 
         if (this.gwState === 'DELETE_GW') {
             if (this.currentHoveredGW) {
