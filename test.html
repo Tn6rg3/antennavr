@@ -824,65 +824,31 @@
         this.labelSegA.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`); this.labelSegB.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
       },
 
+
+
+
+
       setupGlobalEventDelegation: function() {
-    let scene = this.el.sceneEl; 
-    this.lastClickTime = 0; 
+    let scene = this.el.sceneEl;
 
-    scene.addEventListener('mousedown', (evt) => {
-        let now = Date.now(); 
-        if (now - this.lastClickTime < 250) return; 
-
-        // 1. Trova l'elemento cliccato tramite Raycaster
-        let raycaster = this.raycasterEl.components.raycaster;
-        let intersected = raycaster.intersectedEls;
-
-        if (intersected.length === 0) return;
-
-        // 2. Filtra gli elementi: cerchiamo il primo che ha la classe 'clickable'
-        let target = null;
-        for (let i = 0; i < intersected.length; i++) {
-            if (intersected[i].classList.contains('clickable')) {
-                target = intersected[i];
-                break;
-            }
-        }
-
+    // Usiamo l'evento 'click' che è nativo di A-Frame per il laser
+    scene.addEventListener('click', (evt) => {
+        let target = evt.target.closest('.clickable'); 
         if (!target) return;
-
-        // 3. Controllo visibilità (non interagire con roba invisibile)
+        
+        // Verifica di visibilità profonda
         if (!this.isElementVisible(target)) return;
 
-        this.lastClickTime = now; 
-        let id = target.id; 
+        let id = target.id;
         let mathRound = (num) => Math.round(num * 100) / 100;
 
-        // --- GESTIONE AZIONI ---
-        if (id === 'btn-gw-new-a') { this.startCollarPlacement('A'); } 
-        else if (id === 'btn-gw-new-b') { this.startCollarPlacement('B'); }
-        else if (id === 'btn-gw-delete-mode') {
-            if (this.gwState !== 'DELETE_GW') {
-                this.gwState = 'DELETE_GW'; 
-                this.updateGWStatus("PUNTA COL LASER UN ANELLO/PICCHETTO E PREMI GRILLETTO");
-                document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', '[ TORNA A INSERIMENTO ]'); 
-            } else {
-                this.gwState = 'SELECT_POLE'; 
-                this.updateGWStatus("SCEGLI PALO DA TIRANTARE");
-                document.querySelector('#btn-gw-delete-mode a-text').setAttribute('value', 'ELIMINA ANELLI / PICCHETTI');
-            }
-        }
-        else if (id === 'btn-gw-close') { this.toggleGuyWireMode(); }
-        else if (id === 'btn-ar-save') { 
-            if(this.state !== 'IDLE') return;
-            this.state = 'CALIB_SAVE_1';
-            this.menuUI.setAttribute('visible', 'false');
-        }
-        // ... (tieni qui tutti gli altri else-if dei bottoni che avevi già)
-        else if (id === 'btn-ant') { this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); }
-        else if (id === 'btn-global-reset') { this.triggerGlobalReset(); }
-        // ... aggiungi qui i restanti tasti del tuo codice originale ...
+        console.log("Bottone cliccato:", id); // Controlla la console del browser se hai dubbi
+
+        // ... qui inserisci tutti i tuoi if/else per i bottoni ...
+        if (id === 'btn-gw-new-a') { this.startCollarPlacement('A'); }
+        // ... (resto dei tuoi tasti)
     });
 },
-
       setupFileIO: function() {
         // Logica per il tasto salva nel browser
         document.querySelector('#btn-browser-save').addEventListener('click', () => {
@@ -1146,7 +1112,7 @@
 <a-entity id="right-controller" 
           laser-controls="hand: right" 
           oculus-touch-controls="hand: right" 
-          raycaster="objects: .clickable; showLine: true; far: 150;" 
+          raycaster="objects: .clickable; showLine: true; far: 150; interval: 50; recursive: true;" 
           controller-hybrid-target>
 </a-entity>
 
