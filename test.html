@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Test Scansione Mesh AR - Meta Quest</title>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  
+  <script>
+    // Questo componente interroga il visore 90 volte al secondo per estrarre la mappa 3D reale
+    AFRAME.registerComponent('real-world-mesh-tester', {
+      init: function () {
+        this.meshMap = new Map(); // Tiene traccia dei triangoli creati
+        
+        // Creiamo un materiale "a fil di ferro" verde acceso
+        this.material = new THREE.MeshBasicMaterial({
+          color: 0x00FF00,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.8
+        });
+
+        this.statusText = document.querySelector('#status-text');
+      },
+
+      tick: function () {
+        let renderer = this.el.sceneEl.renderer;
+        // Se non siamo in AR, esci
+        if (!renderer || !renderer.xr || !renderer.xr.isPresenting) return;
+
+        let xrSession = renderer.xr.getSession();
+        let xrFrame = this.el.sceneEl.frame;
+        let refSpace = renderer.xr.getReferenceSpace();
+
+        if (!xrSession || !xrFrame || !refSpace) return;
+
+        // CONTROLLO CRITICO: Il browser ci sta passando i dati?
+        if (!xrFrame.detectedMeshes) {
+            if (this.statusText && this.statusText.getAttribute('value') !== 'ERRORE: Dati spaziali bloccati.\nHai abilitato WebXR Incubations\nin chrome://flags?') {
+                this.statusText.setAttribute('value', 'ERRORE: Dati spaziali bloccati.\nHai abilitato WebXR Incubations\nin chrome://flags?');
+                this.statusText.setAttribute('color', '#FF0000');
+            }
+            return; // Interrompe il codice
+        }
+
+        // Se arriva fin qui, il sensore sta funzionando!
+        let meshCount = xrFrame.detectedMeshes.size;
+        if (this.statusText) {
+             this.statusText.setAttribute('value', `SUCCESSO!\nBlocchi di Mesh Rilevati: ${meshCount}\nGuarda in giro per mappare l'area.`);
+             this.statusText.setAttribute('color', '#00FFFF');
+        }
+
+        // Estrae i dati e costruisce i triangoli
+        xrFrame.detectedMeshes.forEach(xrMesh => {
+          // Se è una mesh nuova che non abbiamo ancora disegnato
+          if (!this.meshMap.has(xrMesh)) {
+            let geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(xrMesh.vertices, 3));
+            geometry.setIndex(new THREE.BufferAttribute(xrMesh.indices, 1));
+            
+            let mesh = new THREE.Mesh(geometry, this.material);
+            this.el.object3D.add(mesh);
+            this.meshMap.set(xrMesh, mesh);
+          }
+          
+          // Posiziona i triangoli esattamente sopra l'oggetto reale corrispondente
+          let pose = xrFrame.getPose(xrMesh.meshSpace, refSpace);
+          if (pose) {
+            let mesh = this.meshMap.get(xrMesh);
+            mesh.position.copy(pose.transform.position);
+            mesh.quaternion.copy(pose.transform.orientation);
+          }
+        });
+
+        // Elimina i triangoli che il visore non ritiene più validi
+        for (let [xrMesh, mesh] of this.meshMap) {
+          if (!xrFrame.detectedMeshes.has(xrMesh)) {
+            this.el.object3D.remove(mesh);
+            mesh.geometry.dispose();
+            this.meshMap.delete(xrMesh);
+          }
+        }
+      }
+    });
+
+    // Fai in modo che il testo guardi sempre verso di te
+    AFRAME.registerComponent('look-at-camera', {
+      tick: function () {
+        let cameraEl = document.querySelector('#camera');
+        if (cameraEl && cameraEl.object3D) { this.el.object3D.lookAt(cameraEl.object3D.position); }
+      }
+    });
+  </script>
+</head>
+<body style="background-color: #111; color: white; font-family: sans-serif; text-align: center; padding-top: 50px;">
+  
+  <h2>Test Sensore Spaziale AR</h2>
+  <p>Entra in modalità AR dal tuo visore Meta Quest.</p>
+
+  <a-scene webxr="optionalFeatures: hit-test, local-floor, mesh; requiredFeatures: mesh" vr-mode-ui="enabled: true">
+    
+    <a-camera id="camera" position="0 1.6 0"></a-camera>
+
+    <a-entity position="0 1.5 -1.5" look-at-camera>
+        <a-plane width="1.2" height="0.6" color="#222" material="opacity: 0.8; shader: flat" position="0 0 -0.01"></a-plane>
+        <a-text id="status-text" value="In attesa di entrare in AR..." align="center" color="#FFFFFF" scale="0.4 0.4 0.4"></a-text>
+    </a-entity>
+
+    <a-entity real-world-mesh-tester></a-entity>
+
+  </a-scene>
+</body>
+</html>
