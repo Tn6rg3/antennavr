@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V15 - Native Quest Planes</title>
+  <title>Antenne AR Pro V16 - Topografia Esterna Reale</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -16,69 +16,6 @@
     #ui-2d-container button { width: 100%; padding: 6px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; }
   </style>
   <script>
-    // -------------------------------------------------------------------------
-    // NUOVO COMPONENTE: RICEVITORE SUPERFICI REALI DAL QUEST 3
-    // -------------------------------------------------------------------------
-    AFRAME.registerComponent('quest-surfaces', {
-      init: function () {
-        this.planes = new Map(); // Tiene traccia delle superfici reali
-      },
-      tick: function () {
-        let renderer = this.el.sceneEl.renderer;
-        if (!renderer.xr.isPresenting) return;
-        
-        let frame = this.el.sceneEl.frame;
-        // Se il WebXR rileva i piani fisici della stanza
-        if (!frame || !frame.detectedPlanes) return;
-        
-        let refSpace = renderer.xr.getReferenceSpace();
-
-        frame.detectedPlanes.forEach(plane => {
-          if (!this.planes.has(plane)) {
-            // Crea una mesh 3D per ogni superficie reale
-            // Imposta opacity a 0.0 per renderla invisibile, o 0.1 per debug
-            let material = new THREE.MeshBasicMaterial({ color: 0x00BFFF, wireframe: true, transparent: true, opacity: 0.15 });
-            let geometry = new THREE.BufferGeometry();
-            let mesh = new THREE.Mesh(geometry, material);
-            
-            let entityEl = document.createElement('a-entity');
-            entityEl.classList.add('ar-surface'); // Tag per il raggio laser
-            entityEl.setObject3D('mesh', mesh);
-            this.el.sceneEl.appendChild(entityEl);
-            
-            this.planes.set(plane, entityEl);
-          }
-
-          let entityEl = this.planes.get(plane);
-          let pose = frame.getPose(plane.planeSpace, refSpace);
-          if (pose) {
-            // Allinea la mesh alla stanza reale
-            entityEl.object3D.position.copy(pose.transform.position);
-            entityEl.object3D.quaternion.copy(pose.transform.orientation);
-            
-            // Disegna il poligono esatto scansionato dal Quest
-            let vertices = [];
-            plane.polygon.forEach(point => {
-              vertices.push(point.x, point.y, point.z);
-            });
-            
-            let indices = [];
-            for (let i = 1; i < plane.polygon.length - 1; i++) {
-              indices.push(0, i, i + 1);
-            }
-            
-            let geo = entityEl.getObject3D('mesh').geometry;
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-            geo.setIndex(indices);
-            geo.computeVertexNormals();
-          }
-        });
-      }
-    });
-
-    // -------------------------------------------------------------------------
-    // COMPONENTI ORIGINALI OTTIMIZZATI
-    // -------------------------------------------------------------------------
     AFRAME.registerComponent('look-at-camera', {
       tick: function () {
         let cameraEl = document.querySelector('#camera');
@@ -128,7 +65,9 @@
 
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
-        this.cursorRing = document.querySelector('#cursor-ring');
+        
+        // Reticolo fisico per terreni irregolari
+        this.reticle = document.querySelector('#real-world-reticle');
         
         this.worldPivotEl = document.querySelector('#world-pivot');
         this.worldContentEl = document.querySelector('#world-content');
@@ -182,7 +121,6 @@
           this.gwUI.setAttribute('visible', true);
           this.gwState = 'SELECT_POLE';
           this.updateGWStatus("SCEGLI QUALE PALO TIRANTARE DAL MENU");
-          this.cursorRing.setAttribute('visible', 'false');
           
           this.toggleButton('#btn-gw-new-a', this.pointA.top !== null);
           this.toggleButton('#btn-gw-new-b', this.pointB.top !== null);
@@ -265,28 +203,6 @@
         this.endFed_AC_Len = baseLen / 2; this.endFed_CB_Len = baseLen / 2; this.longwireLen = baseLen;
       },
 
-      tick: function () {
-        // Usa le .ar-surface invece del pavimento finto
-        if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
-          // Creiamo un array fittizio per simulare la classe, A-Frame gestisce '.ar-surface' dal DOM ma raycaster lo supporta se aggiunto
-          let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('.ar-surface'));
-          if(!intersection) {
-             // Fallback temporaneo se il quest non ha caricato la mesh
-             let els = document.querySelectorAll('.ar-surface');
-             for(let i=0; i<els.length; i++){
-                let hit = this.raycasterEl.components.raycaster.getIntersection(els[i]);
-                if(hit) { intersection = hit; break; }
-             }
-          }
-
-          if (intersection) {
-            this.cursorRing.setAttribute('visible', 'true'); this.cursorRing.setAttribute('position', intersection.point);
-          } else { this.cursorRing.setAttribute('visible', 'false'); }
-        } else {
-          this.cursorRing.setAttribute('visible', 'false');
-        }
-      },
-
       onLeftThumbstick: function(evt) {
         if (this.gwState !== 'OFF') return;
         if (Math.abs(evt.detail.x) > 0.3) {
@@ -314,7 +230,7 @@
           else if (this.gwState === 'ADJUST_HEIGHT' && this.activeAnchor && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1;
             let poleData = this.activeAnchor.pole === 'A' ? this.pointA : this.pointB;
-            let maxH = poleData.top.y;
+            let maxH = poleData.top.y - poleData.base.y;
             this.activeAnchor.height = Math.max(0.1, Math.min(maxH, this.activeAnchor.height + step));
             this.updateCollarPreview();
             this.lastThumbTime = thumbTime;
@@ -324,9 +240,9 @@
 
       updateHeightPreview: function() {
         let basePos = this.state.includes('_A') ? this.pointA.base : this.pointB.base;
-        this.verticalCylinder.setAttribute('position', `${basePos.x} ${this.currentHeight / 2} ${basePos.z}`);
+        this.verticalCylinder.setAttribute('position', `${basePos.x} ${basePos.y + (this.currentHeight / 2)} ${basePos.z}`);
         this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${this.currentHeight}`);
-        this.heightText.setAttribute('position', `${basePos.x} ${this.currentHeight + 0.2} ${basePos.z}`);
+        this.heightText.setAttribute('position', `${basePos.x} ${basePos.y + this.currentHeight + 0.2} ${basePos.z}`);
         this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
       },
 
@@ -343,7 +259,7 @@
         let pData = poleId === 'A' ? this.pointA : this.pointB;
         if (!pData || !pData.top) return;
 
-        this.activeAnchor = { pole: poleId, height: pData.top.y / 2, pegs: [] };
+        this.activeAnchor = { pole: poleId, height: (pData.top.y - pData.base.y) / 2, pegs: [] };
         this.previewCollar.setAttribute('visible', 'true');
         this.previewCollarText.setAttribute('visible', 'true');
         this.previewCollar.setAttribute('material', 'color: #FFEB3B');
@@ -353,12 +269,14 @@
         this.updateGWStatus(`USA JOYSTICK SU/GIU,\nPREMI GRILLETTO PER CONFERMARE ALTEZZA`);
       },
 
-      // Funzione helper per ottenere il punto di collisione
-      getHitPoint: function() {
-        let els = document.querySelectorAll('.ar-surface');
-        for(let i=0; i<els.length; i++){
-           let hit = this.raycasterEl.components.raycaster.getIntersection(els[i]);
-           if(hit) return hit;
+      // Nuova funzione per estrarre la collisione reale all'aperto
+      getRealWorldHit: function() {
+        if (!this.reticle) return null;
+        let isVis = this.reticle.getAttribute('visible');
+        if (isVis && isVis !== 'false') {
+          let pos = new THREE.Vector3();
+          this.reticle.object3D.getWorldPosition(pos);
+          return pos;
         }
         return null;
       },
@@ -368,6 +286,7 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
+        // Scudo anti-trapasso menu
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         if (intersects) {
           for (let i = 0; i < intersects.length; i++) {
@@ -377,13 +296,13 @@
           }
         }
 
+        let hitPoint = this.getRealWorldHit();
+
         if (this.state === 'CALIB_SET') {
-            let hitGround = this.getHitPoint();
-            if (hitGround) {
-                let worldPt = hitGround.point.clone();
-                let localPt = this.getLocalPoint(worldPt);
+            if (hitPoint) {
+                let localPt = this.getLocalPoint(hitPoint);
                 this.beaconLocalPos = localPt;
-                this.worldPivotEl.object3D.position.copy(worldPt);
+                this.worldPivotEl.object3D.position.copy(hitPoint);
                 this.worldContentEl.object3D.position.set(-localPt.x, -localPt.y, -localPt.z);
                 this.beaconVisual.setAttribute('visible', 'true');
                 this.beaconVisual.setAttribute('position', `${localPt.x} 0.08 ${localPt.z}`);
@@ -394,10 +313,8 @@
         }
 
         if (this.state === 'CALIB_SNAP') {
-            let hitGround = this.getHitPoint();
-            if (hitGround) {
-                let newWorldPt = hitGround.point.clone();
-                this.worldPivotEl.object3D.position.copy(newWorldPt);
+            if (hitPoint) {
+                this.worldPivotEl.object3D.position.copy(hitPoint);
                 document.querySelector('#info-text').setAttribute('value', 'RIALLINEAMENTO COMPLETATO.\nUsa il Joystick SX per correggere la rotazione. Premi Y per finire.');
             }
             return;
@@ -413,9 +330,8 @@
           }
 
           if (this.gwState === 'PLACE_PEGS') {
-            let hitGround = this.getHitPoint();
-            if (hitGround) {
-              let localHit = this.getLocalPoint(hitGround.point);
+            if (hitPoint) {
+              let localHit = this.getLocalPoint(hitPoint);
               this.activeAnchor.pegs.push(localHit);
               this.drawGuyWires(); 
             }
@@ -427,9 +343,8 @@
         let type = this.antennaTypes[this.antIdx];
 
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
-          let hitGround = this.getHitPoint();
-          if(!hitGround) return;
-          this.pointA.base = this.getLocalPoint(hitGround.point);
+          if(!hitPoint) return;
+          this.pointA.base = this.getLocalPoint(hitPoint);
           this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
           this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1;
           this.setupVerticalPreviewMode(this.pointA.base);
@@ -450,9 +365,8 @@
           }
         } 
         else if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
-          let hitGround = this.getHitPoint();
-          if(!hitGround) return;
-          this.pointB.base = this.getLocalPoint(hitGround.point);
+          if(!hitPoint) return;
+          this.pointB.base = this.getLocalPoint(hitPoint);
           this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B';
           this.currentHeight = 0.1; 
           this.setupVerticalPreviewMode(this.pointB.base);
@@ -465,7 +379,7 @@
       },
 
       setupVerticalPreviewMode: function (basePos) {
-        this.cursorRing.setAttribute('visible', 'false');
+        this.reticle.setAttribute('visible', 'false'); // Nasconde reticolo fisico durante preview altezza
         this.verticalCylinder.setAttribute('visible', 'true'); this.updateHeightPreview();
         this.heightText.setAttribute('visible', 'true');
       },
@@ -878,7 +792,7 @@
         this.beaconLocalPos = null;
         this.beaconVisual.setAttribute('visible', 'false');
 
-        this.cursorRing.setAttribute('visible', 'false'); this.menuUI.setAttribute('visible', false);
+        this.menuUI.setAttribute('visible', false);
       },
 
       refreshAll: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); }
@@ -897,7 +811,7 @@
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
   </div>
 
-  <a-scene webxr="optionalFeatures: hit-test, planes, mesh, local-floor;" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: hit-test, local-floor;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
@@ -906,9 +820,9 @@
         <a-entity id="menu-ui" visible="false" position="0 0.20 -0.4" rotation="-30 0 0">
           <a-plane width="0.5" height="0.65" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO (NATIVE AR)" position="0 0.29 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.29 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
           <a-plane width="0.44" height="0.05" color="#2A2A2A" position="0 0.22 0.01">
-            <a-text id="info-text" value="Punta il Controller sui piani rilevati dal Quest." position="0 0 0.01" align="center" scale="0.075 0.075 0.075" color="#00E676"></a-text>
+            <a-text id="info-text" value="Punta l'anello sul terreno e premi il grilletto." position="0 0 0.01" align="center" scale="0.075 0.075 0.075" color="#00E676"></a-text>
           </a-plane>
 
           <a-text value="PREMI IL TASTO [ X ] SUL CONTROLLER PER GESTIRE I TIRANTI" position="0 0.17 0.01" align="center" scale="0.055 0.055 0.055" color="#FF9800"></a-text>
@@ -979,7 +893,7 @@
           <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.14" height="0.025" color="#1565C0" position="0 -0.15 0.01"><a-text value="EDIT B" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.15 0.01"><a-text value="RESET" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
 
-          <a-text value="SISTEMA DI CALIBRAZIONE (OPZIONALE CON API NATIVE)" position="0 -0.22 0.01" align="center" scale="0.06 0.06 0.06" color="#00E676"></a-text>
+          <a-text value="SISTEMA DI CALIBRAZIONE ANTI-DRIFT" position="0 -0.22 0.01" align="center" scale="0.06 0.06 0.06" color="#00E676"></a-text>
           <a-plane id="btn-cal-set" class="clickable" btn-interaction width="0.22" height="0.03" color="#004D40" position="-0.12 -0.27 0.01">
             <a-text value="1. PIAZZA FARO" align="center" scale="0.065 0.065 0.065"></a-text>
           </a-plane>
@@ -1014,12 +928,17 @@
         </a-entity>
       </a-entity>
       
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .ar-surface; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;"></a-entity>
+      <a-entity id="right-controller" 
+                laser-controls="hand: right" 
+                oculus-touch-controls="hand: right" 
+                raycaster="objects: .clickable; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;"
+                ar-hit-test="target: #real-world-reticle;">
+      </a-entity>
     </a-entity>
 
-    <a-ring id="cursor-ring" color="#FFFFFF" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" visible="false"></a-ring>
-
-    <a-entity quest-surfaces></a-entity>
+    <a-entity id="real-world-reticle" visible="false">
+      <a-ring color="#00FFCC" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0"></a-ring>
+    </a-entity>
 
     <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
         <a-entity id="world-content" position="0 0 0" rotation="0 0 0">
