@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V16 - Topografia Esterna Reale</title>
+  <title>Antenne AR Pro V16 - Topografia Manuale</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container {
@@ -65,9 +65,7 @@
 
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
-        
-        // Reticolo fisico per terreni irregolari
-        this.reticle = document.querySelector('#real-world-reticle');
+        this.cursorRing = document.querySelector('#cursor-ring');
         
         this.worldPivotEl = document.querySelector('#world-pivot');
         this.worldContentEl = document.querySelector('#world-content');
@@ -121,6 +119,7 @@
           this.gwUI.setAttribute('visible', true);
           this.gwState = 'SELECT_POLE';
           this.updateGWStatus("SCEGLI QUALE PALO TIRANTARE DAL MENU");
+          this.cursorRing.setAttribute('visible', 'false');
           
           this.toggleButton('#btn-gw-new-a', this.pointA.top !== null);
           this.toggleButton('#btn-gw-new-b', this.pointB.top !== null);
@@ -203,29 +202,65 @@
         this.endFed_AC_Len = baseLen / 2; this.endFed_CB_Len = baseLen / 2; this.longwireLen = baseLen;
       },
 
+      // IL TICK RIPRISTINATO: Muove l'anello sul pavimento senza far crashare nulla
+      tick: function () {
+        if (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.gwState === 'PLACE_PEGS' || this.state === 'CALIB_SET' || this.state === 'CALIB_SNAP') {
+          let intersection = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
+          if (intersection) {
+            this.cursorRing.setAttribute('visible', 'true'); 
+            this.cursorRing.setAttribute('position', intersection.point);
+          } else { 
+            this.cursorRing.setAttribute('visible', 'false'); 
+          }
+        } else {
+          this.cursorRing.setAttribute('visible', 'false');
+        }
+      },
+
+      // JOYSTICK SINISTRO: Regola il DISLIVELLO (buche e montagne)
       onLeftThumbstick: function(evt) {
         if (this.gwState !== 'OFF') return;
-        if (Math.abs(evt.detail.x) > 0.3) {
-            let delta = evt.detail.x > 0 ? 2.0 : -2.0;
-            if (this.state === 'CALIB_SNAP') {
-                let currentRot = this.worldPivotEl.object3D.rotation.y;
-                this.worldPivotEl.object3D.rotation.set(0, currentRot - (delta * Math.PI / 180), 0);
-            } 
-            else {
-                this.antennaRotationY += delta;
-                this.updateGeometriesAndDrawings();
+
+        let thumbTime = Date.now();
+        if (!this.lastLeftThumbTime || thumbTime - this.lastLeftThumbTime > 100) {
+            
+            // Regolazione Dislivello Terreno
+            if (this.state.includes('HEIGHT_A') || this.state.includes('HEIGHT_B')) {
+                if (Math.abs(evt.detail.y) > 0.4) {
+                    let step = evt.detail.y < 0 ? 0.1 : -0.1;
+                    let pole = this.state.includes('_A') ? this.pointA : this.pointB;
+                    pole.base.y += step; // Alza o abbassa il livello del prato!
+                    this.updateHeightPreview();
+                    this.lastLeftThumbTime = thumbTime;
+                }
+                return; 
+            }
+            
+            // Rotazione standard modelli MMANA
+            if (Math.abs(evt.detail.x) > 0.3) {
+                let delta = evt.detail.x > 0 ? 2.0 : -2.0;
+                if (this.state === 'CALIB_SNAP') {
+                    let currentRot = this.worldPivotEl.object3D.rotation.y;
+                    this.worldPivotEl.object3D.rotation.set(0, currentRot - (delta * Math.PI / 180), 0);
+                } 
+                else {
+                    this.antennaRotationY += delta;
+                    this.updateGeometriesAndDrawings();
+                }
+                this.lastLeftThumbTime = thumbTime;
             }
         }
       },
 
+      // JOYSTICK DESTRO: Regola L'ALTEZZA DEL PALO
       onRightThumbstick: function (evt) {
         let thumbTime = Date.now();
         if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
-          
           if (this.state.includes('HEIGHT') && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1; 
             this.currentHeight = Math.max(0.0, this.currentHeight + step);
-            this.updateHeightPreview(); this.lastThumbTime = thumbTime;
+            this.updateHeightPreview(); 
+            this.lastThumbTime = thumbTime;
           }
           else if (this.gwState === 'ADJUST_HEIGHT' && this.activeAnchor && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1;
@@ -243,7 +278,9 @@
         this.verticalCylinder.setAttribute('position', `${basePos.x} ${basePos.y + (this.currentHeight / 2)} ${basePos.z}`);
         this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${this.currentHeight}`);
         this.heightText.setAttribute('position', `${basePos.x} ${basePos.y + this.currentHeight + 0.2} ${basePos.z}`);
-        this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
+        
+        // Mostra sia l'altezza del palo che il dislivello applicato dal joystick
+        this.heightText.setAttribute('value', `H Palo: ${this.currentHeight.toFixed(1)}m\nDislivello: ${basePos.y.toFixed(2)}m`);
       },
 
       updateCollarPreview: function() {
@@ -269,24 +306,11 @@
         this.updateGWStatus(`USA JOYSTICK SU/GIU,\nPREMI GRILLETTO PER CONFERMARE ALTEZZA`);
       },
 
-      // Nuova funzione per estrarre la collisione reale all'aperto
-      getRealWorldHit: function() {
-        if (!this.reticle) return null;
-        let isVis = this.reticle.getAttribute('visible');
-        if (isVis && isVis !== 'false') {
-          let pos = new THREE.Vector3();
-          this.reticle.object3D.getWorldPosition(pos);
-          return pos;
-        }
-        return null;
-      },
-
       onTriggerDown: function () {
         let now = Date.now();
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        // Scudo anti-trapasso menu
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         if (intersects) {
           for (let i = 0; i < intersects.length; i++) {
@@ -296,7 +320,9 @@
           }
         }
 
-        let hitPoint = this.getRealWorldHit();
+        let hitPoint = null;
+        let hitGround = this.raycasterEl.components.raycaster.getIntersection(document.querySelector('#ar-ground'));
+        if (hitGround) hitPoint = hitGround.point;
 
         if (this.state === 'CALIB_SET') {
             if (hitPoint) {
@@ -379,13 +405,17 @@
       },
 
       setupVerticalPreviewMode: function (basePos) {
-        this.reticle.setAttribute('visible', 'false'); // Nasconde reticolo fisico durante preview altezza
+        this.cursorRing.setAttribute('visible', 'false');
         this.verticalCylinder.setAttribute('visible', 'true'); this.updateHeightPreview();
         this.heightText.setAttribute('visible', 'true');
+        
+        // Mostra messaggio di istruzioni sui Joystick
+        document.querySelector('#info-text').setAttribute('value', 'USA I JOYSTICK:\nSX = Dislivello Terra | DX = Altezza Palo');
       },
 
       resetVerticalPreviewMode: function () {
         this.verticalCylinder.setAttribute('visible', 'false'); this.heightText.setAttribute('visible', 'false');
+        document.querySelector('#info-text').setAttribute('value', 'Scegli i punti a terra col grilletto destro.');
       },
 
       renderPoleAndLabel: function(struct, topPos, labelName) {
@@ -474,7 +504,8 @@
           infoTextStr = `MMANA: ${this.mmanaModels[this.mmanaModelIdx]}\nFili conduttori: ${this.mmanaWires.length}\nRuota l'antenna col joystick sinistro.`; 
           document.querySelector('#txt-mmana-model-val').setAttribute('value', this.mmanaModels[this.mmanaModelIdx].toUpperCase());
         }
-        document.querySelector('#info-text').setAttribute('value', infoTextStr);
+        
+        if(this.state === 'IDLE') document.querySelector('#info-text').setAttribute('value', infoTextStr);
       },
 
       drawGuyWires: function() {
@@ -811,7 +842,7 @@
     <p id="alert-msg" style="color:yellow; margin-top:5px; font-weight:bold;"></p>
   </div>
 
-  <a-scene webxr="optionalFeatures: hit-test, local-floor;" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: local-floor;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
@@ -822,7 +853,7 @@
           
           <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.29 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
           <a-plane width="0.44" height="0.05" color="#2A2A2A" position="0 0.22 0.01">
-            <a-text id="info-text" value="Punta l'anello sul terreno e premi il grilletto." position="0 0 0.01" align="center" scale="0.075 0.075 0.075" color="#00E676"></a-text>
+            <a-text id="info-text" value="Scegli i punti a terra col grilletto destro." position="0 0 0.01" align="center" scale="0.075 0.075 0.075" color="#00E676"></a-text>
           </a-plane>
 
           <a-text value="PREMI IL TASTO [ X ] SUL CONTROLLER PER GESTIRE I TIRANTI" position="0 0.17 0.01" align="center" scale="0.055 0.055 0.055" color="#FF9800"></a-text>
@@ -928,17 +959,13 @@
         </a-entity>
       </a-entity>
       
-      <a-entity id="right-controller" 
-                laser-controls="hand: right" 
-                oculus-touch-controls="hand: right" 
-                raycaster="objects: .clickable; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;"
-                ar-hit-test="target: #real-world-reticle;">
-      </a-entity>
+      <!-- Controller rimesso al 100% stabile -->
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, #ar-ground; far: 400; lineFilled: true; lineColor: #FF0000; lineOpacity: 0.8;"></a-entity>
     </a-entity>
 
-    <a-entity id="real-world-reticle" visible="false">
-      <a-ring color="#00FFCC" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0"></a-ring>
-    </a-entity>
+    <!-- Pavimento infinito e stabile -->
+    <a-plane id="ar-ground" position="0 0 0" rotation="-90 0 0" width="1000" height="1000" material="opacity: 0.0; transparent: true"></a-plane>
+    <a-ring id="cursor-ring" color="#FFFFFF" radius-inner="0.04" radius-outer="0.05" rotation="-90 0 0" visible="false"></a-ring>
 
     <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
         <a-entity id="world-content" position="0 0 0" rotation="0 0 0">
