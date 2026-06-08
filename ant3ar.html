@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V19 - Topografia & Database</title>
+  <title>Antenne AR Pro V20 - Topografia & Bugfix Radiali</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -150,6 +150,8 @@
 
         this.diamondRef1.setAttribute('visible', 'false');
         this.diamondRef2.setAttribute('visible', 'false');
+        this.diamondSys1.setAttribute('visible', 'false');
+        this.diamondSys2.setAttribute('visible', 'false');
 
         this.state = 'AWAITING_CALIB_PT1';
         this.menuUI.setAttribute('visible', true);
@@ -415,9 +417,8 @@
                 this.diamondRef2.setAttribute('visible', 'true');
                 
                 this.state = 'IDLE';
-                this.menuUI.setAttribute('visible', true);
                 this.updateMenuText();
-                alert("Diamanti Impostati! Ora puoi togliere il visore e usare il menu 2D per Salvare nel Database.");
+                // NON blocca più l'app forzando il visible del menu qui
             }
             return;
         }
@@ -603,6 +604,16 @@
             let midPoint = new THREE.Vector3().lerpVectors(anchorPos, pVec, 0.5);
             wire.object3D.position.copy(midPoint); wire.object3D.lookAt(pVec); wire.object3D.rotateX(Math.PI / 2);
             this.gwContainerEl.appendChild(wire);
+
+            // Etichetta con la lunghezza del tirante
+            let textPos = new THREE.Vector3().lerpVectors(pVec, anchorPos, 0.3);
+            let label = document.createElement('a-text');
+            label.setAttribute('value', `${distance.toFixed(2)}m`);
+            label.setAttribute('align', 'center'); label.setAttribute('color', '#FFEB3B');
+            label.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
+            label.setAttribute('position', `${textPos.x} ${textPos.y + 0.1} ${textPos.z}`);
+            label.setAttribute('look-at-camera', '');
+            this.gwContainerEl.appendChild(label);
           });
         });
         this.refreshRaycaster();
@@ -623,11 +634,9 @@
           let h = this.pointA.top.y - this.pointA.base.y;
           this.antennaTube1.setAttribute('visible', 'true');
           this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
-          // Il cilindro deve essere posizionato RELATIVO alla base dell'antenna
           this.antennaTube1.object3D.position.set(this.pointA.base.x, this.pointA.base.y + (h / 2), this.pointA.base.z);
           this.antennaTube1.object3D.rotation.set(0, 0, 0);
 
-          // I radiali partono DALLA BASE DELL'ANTENNA (pointA.base)
           let base = new THREE.Vector3(this.pointA.base.x, this.pointA.base.y + 0.002, this.pointA.base.z);
           let radRot = (this.antennaRotationY * Math.PI / 180);
           
@@ -832,6 +841,7 @@
         this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false');
 
         this.menuUI.setAttribute('visible', false);
+        document.querySelector('#info-text').setAttribute('value', 'Appoggia il controller destro a terra e premi il grilletto.');
       },
 
       refreshAll: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); }
@@ -932,7 +942,7 @@
           <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.07 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
           <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.14" height="0.025" color="#C62828" position="-0.15 -0.11 0.01"><a-text value="EDIT A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.14" height="0.025" color="#1565C0" position="0 -0.11 0.01"><a-text value="EDIT B" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.11 0.01"><a-text value="NUOVA ANTENNA" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.11 0.01"><a-text value="RESET COMPLETO" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
 
           <a-text value="DATABASE E CALIBRAZIONE TOPOGRAFICA" position="0 -0.16 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
           <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.21 0.01">
@@ -969,7 +979,6 @@
               </a-plane>
           </a-entity>
         </a-entity>
-
       </a-entity>
       
       <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 4">
