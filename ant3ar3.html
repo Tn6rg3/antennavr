@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Antenne AR Pro V18 - Tiranti Full Control</title>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <style>
+    #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 290px; }
+  </style>
+  <script>
+    // Componenti base (Look-at e Interazione)
+    AFRAME.registerComponent('look-at-camera', { tick: function () { let cameraEl = document.querySelector('#camera'); if (cameraEl && cameraEl.object3D) { this.el.object3D.lookAt(cameraEl.object3D.position); } } });
+    AFRAME.registerComponent('btn-interaction', {
+      init: function () {
+        let el = this.el;
+        el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.7));
+        el.addEventListener('mouseleave', () => el.setAttribute('material', 'opacity', 1.0));
+      }
+    });
+
+    AFRAME.registerComponent('ar-antenna-system', {
+      init: function () {
+        this.state = 'PLACE_GROUND_A'; 
+        this.pointA = { base: null, top: null }; this.pointB = { base: null, top: null };
+        this.guyWiresData = []; // Array di oggetti { pole: 'A'/'B', height: 0, pegs: [] }
+        this.gwState = 'OFF'; // OFF, MAIN, EDIT
+        this.activeAnchor = null; 
+        
+        // ... (Inizializzazione elementi persistenti, UI, ecc)
+        this.raycasterEl = document.querySelector('#right-controller');
+        this.gwUI = document.querySelector('#guy-wires-ui');
+        this.gwContainerEl = document.querySelector('#guy-wires-container');
+        
+        // Setup listener esistenti...
+      },
+
+      // --- LOGICA TIRANTI AGGIORNATA ---
+      onTriggerDown: function () {
+        let intersects = this.raycasterEl.components.raycaster.intersectedEls;
+        
+        // 1. Sezione Edit Tiranti
+        if (this.gwState === 'EDIT') {
+            let hitGround = this.getHitPoint();
+            if (hitGround) {
+              let localHit = this.getLocalPoint(hitGround.point);
+              this.activeAnchor.pegs.push(localHit);
+              this.drawGuyWires();
+              this.saveToStorage();
+            }
+            return;
+        }
+
+        // 2. Sezione Selezione Collari
+        if (this.gwState === 'MAIN') {
+            let hitCollar = intersects ? intersects.find(el => el.classList.contains('gw-collar')) : null;
+            if (hitCollar) {
+                let idx = parseInt(hitCollar.getAttribute('data-index'));
+                this.activeAnchor = this.guyWiresData[idx];
+                this.gwState = 'EDIT';
+                this.updateGWUI();
+                this.drawGuyWires();
+                return;
+            }
+        }
+        
+        // ... (Logica di piazzamento antenna standard)
+      },
+
+      drawGuyWires: function() {
+        while (this.gwContainerEl.firstChild) { this.gwContainerEl.removeChild(this.gwContainerEl.firstChild); }
+
+        this.guyWiresData.forEach((anchor, idx) => {
+          let pData = anchor.pole === 'A' ? this.pointA : this.pointB;
+          if (!pData || !pData.base || !pData.top) return;
+
+          let maxH = pData.top.y - pData.base.y;
+          let h = Math.min(anchor.height, maxH);
+          let anchorPos = new THREE.Vector3(pData.base.x, pData.base.y + h, pData.base.z);
+
+          // Disegna Collare
+          let collar = document.createElement('a-torus');
+          collar.classList.add('gw-collar', 'clickable');
+          collar.setAttribute('data-index', idx);
+          collar.setAttribute('radius', '0.04');
+          collar.setAttribute('material', (this.activeAnchor === anchor) ? 'color: #00FF00' : 'color: #FF1744');
+          collar.setAttribute('position', `${anchorPos.x} ${anchorPos.y} ${anchorPos.z}`);
+          this.gwContainerEl.appendChild(collar);
+
+          // Disegna Picchetti e Fili
+          anchor.pegs.forEach((pegPos) => {
+            let pVec = new THREE.Vector3(pegPos.x, pegPos.y, pegPos.z);
+            let peg = document.createElement('a-cone');
+            peg.setAttribute('radius-bottom', '0.04'); peg.setAttribute('height', '0.15');
+            peg.setAttribute('position', `${pVec.x} ${pVec.y + 0.075} ${pVec.z}`);
+            this.gwContainerEl.appendChild(peg);
+
+            let wire = document.createElement('a-cylinder');
+            wire.setAttribute('radius', '0.002'); wire.setAttribute('height', anchorPos.distanceTo(pVec));
+            wire.object3D.position.copy(new THREE.Vector3().lerpVectors(anchorPos, pVec, 0.5));
+            wire.object3D.lookAt(pVec); wire.object3D.rotateX(Math.PI / 2);
+            this.gwContainerEl.appendChild(wire);
+          });
+        });
+        this.refreshRaycaster();
+      }
+    });
+  </script>
+</head>
+<body>
+  <!-- Aggiungi nel menu GW -->
+  <a-entity id="gw-page-edit" visible="false">
+      <a-plane id="btn-gw-undo-peg" class="clickable" btn-interaction width="0.38" height="0.035" color="#E65100" position="0 0.02 0.01">
+        <a-text value="[-] RIMUOVI PICCHETTO" align="center" scale="0.06 0.06 0.06"></a-text>
+      </a-plane>
+      <a-plane id="btn-gw-del-collar" class="clickable" btn-interaction width="0.38" height="0.035" color="#B71C1C" position="0 -0.03 0.01">
+        <a-text value="[x] ELIMINA COLLARE" align="center" scale="0.06 0.06 0.06"></a-text>
+      </a-plane>
+      <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 -0.08 0.01">
+        <a-text value="FINITO (INDIETRO)" align="center" scale="0.06 0.06 0.06"></a-text>
+      </a-plane>
+  </a-entity>
+  <!-- ... resto del file ... -->
+</body>
+</html>
