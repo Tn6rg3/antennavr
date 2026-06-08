@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V19 - Database & Selezione Picchetti</title>
+  <title>Antenne AR Pro V19 - Topografia & Database</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -46,7 +46,10 @@
         this.mmanaWires = []; this.importedMmanaWires = []; 
 
         this.guyWiresData = []; this.gwState = 'OFF'; this.activeAnchor = null; 
-        this.lastTriggerTime = 0; this.calibPt1 = null; this.calibPt2 = null;
+        this.lastTriggerTime = 0; 
+        
+        // Punti di calibrazione topografica
+        this.calibLocal1 = null; this.calibLocal2 = null;
 
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
@@ -74,6 +77,7 @@
         // Espone i metodi al menu HTML 2D
         window.saveAntennaToDB = this.saveAntennaToDB.bind(this);
         window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this);
+        window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
         this.refreshDBList();
         
         this.updateMenuText();
@@ -95,6 +99,10 @@
         let name = document.querySelector('#save-name').value.trim();
         if(!name) { alert("Inserisci un nome per l'antenna!"); return; }
         if(!this.pointA.base) { alert("Devi piazzare almeno il Punto A prima di salvare."); return; }
+        if(!this.calibLocal1 || !this.calibLocal2) {
+            alert("ATTENZIONE: Prima di salvare devi impostare i due Diamanti di Calibrazione dall'interno dell'AR (usa il menu e premi 'IMPOSTA DIAMANTI')!");
+            return;
+        }
 
         let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
         db[name] = {
@@ -107,10 +115,11 @@
           numRadials: this.numRadials, radialLen: this.radialLen,
           mmanaModelIdx: this.mmanaModelIdx, antennaRotationY: this.antennaRotationY,
           globalTextScale: this.globalTextScale,
-          guyWiresData: this.guyWiresData
+          guyWiresData: this.guyWiresData,
+          calibLocal1: this.calibLocal1, calibLocal2: this.calibLocal2
         };
         localStorage.setItem('antenneAR_DB', JSON.stringify(db));
-        alert("Antenna '" + name + "' salvata con successo!");
+        alert("Antenna '" + name + "' salvata con successo nel visore!");
         this.refreshDBList();
       },
 
@@ -123,25 +132,42 @@
 
         this.pointA.base = d.pointA.base; this.pointA.top = d.pointA.top;
         this.pointB.base = d.pointB.base; this.pointB.top = d.pointB.top;
-        this.pointC.percent = d.pointCPercent || 0.5;
-        this.antIdx = d.antIdx || 0; this.bandIdx = d.bandIdx || 2;
-        this.endFed_AC_Len = d.endFed_AC_Len || 10.0; this.endFed_CB_Len = d.endFed_CB_Len || 10.0;
-        this.longwireLen = d.longwireLen || 20.0; this.longwireVertex = d.longwireVertex || 'A';
-        this.numRadials = d.numRadials || 4; this.radialLen = d.radialLen || 5.0;
-        this.mmanaModelIdx = d.mmanaModelIdx || 0; this.antennaRotationY = d.antennaRotationY || 0;
-        this.globalTextScale = d.globalTextScale || 0.35;
+        this.pointC.percent = parseFloat(d.pointCPercent) || 0.5;
+        this.antIdx = parseInt(d.antIdx) || 0; this.bandIdx = parseInt(d.bandIdx) || 2;
+        this.endFed_AC_Len = parseFloat(d.endFed_AC_Len) || 10.0; this.endFed_CB_Len = parseFloat(d.endFed_CB_Len) || 10.0;
+        this.longwireLen = parseFloat(d.longwireLen) || 20.0; this.longwireVertex = d.longwireVertex || 'A';
+        this.numRadials = parseInt(d.numRadials) || 4; this.radialLen = parseFloat(d.radialLen) || 5.0;
+        this.mmanaModelIdx = parseInt(d.mmanaModelIdx) || 0; this.antennaRotationY = parseFloat(d.antennaRotationY) || 0;
+        this.globalTextScale = parseFloat(d.globalTextScale) || 0.35;
         this.guyWiresData = d.guyWiresData || [];
+        this.calibLocal1 = d.calibLocal1; this.calibLocal2 = d.calibLocal2;
 
-        // Azzera Pivot (nasconde la visualizzazione finché non ricalibrato)
-        this.worldPivotEl.object3D.position.set(0, -9999, 0); 
+        // Azzera il mondo e NASCONDE l'antenna
+        this.worldPivotEl.object3D.position.set(0, 0, 0); 
+        this.worldPivotEl.object3D.rotation.set(0, 0, 0); 
         this.worldContentEl.object3D.position.set(0, 0, 0);
+        this.worldContentEl.setAttribute('visible', 'false'); // INVISIBILE FINO A CALIBRAZIONE
+
+        this.diamondRef1.setAttribute('visible', 'false');
+        this.diamondRef2.setAttribute('visible', 'false');
 
         this.state = 'AWAITING_CALIB_PT1';
         this.menuUI.setAttribute('visible', true);
         this.updateMenuText();
-        this.updateGeometriesAndDrawings(); // Genera mesh, ma nascoste dal Pivot
+        this.updateGeometriesAndDrawings(); 
         
-        alert("Antenna caricata! Entra in AR: ti verrà chiesto di toccare i Punti A e B originali per riallinearla.");
+        alert("Antenna " + name + " caricata! Indossa il visore e usa il joystick per toccare i due punti di riallineamento.");
+      },
+
+      deleteAntennaFromDB: function() {
+        let name = document.querySelector('#load-list').value;
+        if(!name) return;
+        if(confirm("Vuoi davvero eliminare l'antenna '" + name + "'?")) {
+            let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
+            delete db[name];
+            localStorage.setItem('antenneAR_DB', JSON.stringify(db));
+            this.refreshDBList();
+        }
       },
 
       getLocalPoint: function(worldVec) {
@@ -159,7 +185,7 @@
 
       toggleGuyWireMode: function() {
         if (!this.pointA.top && !this.pointB.top) return; 
-        if (this.state.startsWith('AWAITING') || this.state.startsWith('PLACE_HEIGHT')) return;
+        if (this.state.startsWith('AWAITING') || this.state.startsWith('PLACE_HEIGHT') || this.state.startsWith('SET_CALIB')) return;
         
         if (this.gwState === 'OFF') {
           this.gwState = 'MAIN'; this.menuUI.setAttribute('visible', false); this.gwUI.setAttribute('visible', true);
@@ -179,8 +205,8 @@
         this.toggleButton('#btn-gw-del-collar', isEdit);
         this.toggleButton('#btn-gw-done', isEdit);
 
-        if (isMain) document.querySelector('#txt-gw-status').setAttribute('value', 'SELEZIONA COLLARE CON LASER O CREANE UNO NUOVO');
-        if (isEdit) document.querySelector('#txt-gw-status').setAttribute('value', 'JOYSTICK Y: ALTEZZA | GRILLETTO A TERRA: PICCHETTO\nGRILLETTO SU PICCHETTO ESISTENTE: ELIMINA');
+        if (isMain) document.querySelector('#txt-gw-status').setAttribute('value', 'PUNTA IL LASER SUL COLLARE E CLICCA\nOPPURE CREANE UNO NUOVO');
+        if (isEdit) document.querySelector('#txt-gw-status').setAttribute('value', 'JOYSTICK Y: CAMBIA ALTEZZA | GRILLETTO A TERRA: NUOVO PICCHETTO\nPUNTA LASER SU PICCHETTO+GRILLETTO: ELIMINALO');
         
         this.refreshRaycaster();
       },
@@ -219,6 +245,21 @@
         for(let i=0; i<this.maxRadials; i++) {
           let radCyl = document.createElement('a-cylinder'); radCyl.setAttribute('radius', '0.005'); radCyl.setAttribute('material', 'color: #5D4037; shader: flat'); radCyl.setAttribute('visible', 'false'); this.worldContentEl.appendChild(radCyl); this.radialPool.push(radCyl);
         }
+
+        // Diamanti di calibrazione fisici
+        let makeDiamond = (color) => {
+            let d = document.createElement('a-octahedron'); d.setAttribute('radius', '0.06'); d.setAttribute('material', `color: ${color}; shader: flat; wireframe: true`); d.setAttribute('visible', 'false');
+            let core = document.createElement('a-octahedron'); core.setAttribute('radius', '0.03'); core.setAttribute('material', `color: ${color}; shader: flat; opacity: 0.8`); d.appendChild(core);
+            this.el.sceneEl.appendChild(d); return d;
+        };
+        this.diamondSys1 = makeDiamond('#00BFFF'); this.diamondSys2 = makeDiamond('#FF00FF');
+
+        // Diamanti Locali agganciati all'antenna (per far vedere dove cadono)
+        let makeLocalDiamond = (color) => {
+            let d = document.createElement('a-octahedron'); d.setAttribute('radius', '0.06'); d.setAttribute('material', `color: ${color}; shader: flat; wireframe: true; opacity: 0.5`); d.setAttribute('visible', 'false');
+            this.worldContentEl.appendChild(d); return d;
+        };
+        this.diamondRef1 = makeLocalDiamond('#00BFFF'); this.diamondRef2 = makeLocalDiamond('#FF00FF');
       },
 
       getCalculatedLength: function() {
@@ -237,7 +278,7 @@
       tick: function () {
         let indicator = document.querySelector('#touch-indicator');
         if (indicator) {
-            let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.gwState === 'EDIT';
+            let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT';
             indicator.setAttribute('visible', isPlacingMode);
         }
       },
@@ -292,6 +333,7 @@
 
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         
+        // Anti-trapasso UI 2D
         if (intersects) {
           for (let i = 0; i < intersects.length; i++) {
             let el = intersects[i];
@@ -300,11 +342,13 @@
           }
         }
 
-        // --- CALIBRAZIONE RITARDATA (Dopo Caricamento o Forzata) ---
+        // --- CALIBRAZIONE RITARDATA (Quando si carica dal DB) ---
         if (this.state === 'AWAITING_CALIB_PT1') {
             let hitGround = this.getHitPoint();
             if (hitGround) {
                 this.calibPt1 = hitGround.point.clone();
+                this.diamondSys1.setAttribute('position', this.calibPt1);
+                this.diamondSys1.setAttribute('visible', 'true');
                 this.state = 'AWAITING_CALIB_PT2';
                 this.updateMenuText();
             }
@@ -315,19 +359,30 @@
             let hitGround = this.getHitPoint();
             if (hitGround) {
                 this.calibPt2 = hitGround.point.clone();
+                this.diamondSys2.setAttribute('position', this.calibPt2);
+                this.diamondSys2.setAttribute('visible', 'true');
                 
-                let vA = this.pointA.base;
-                let vB = this.pointB.base ? this.pointB.base : { x: vA.x, y: vA.y, z: vA.z - 1 };
-                
-                let p1 = this.calibPt1; let p2 = this.calibPt2;
-                let anglePhys = Math.atan2(p2.x - p1.x, p2.z - p1.z);
-                let angleVirt = Math.atan2(vB.x - vA.x, vB.z - vA.z);
-                let angleDiff = anglePhys - angleVirt;
+                // Matematica di riallineamento
+                let L1 = new THREE.Vector3(this.calibLocal1.x, this.calibLocal1.y, this.calibLocal1.z);
+                let L2 = new THREE.Vector3(this.calibLocal2.x, this.calibLocal2.y, this.calibLocal2.z);
+                let P1 = this.calibPt1; let P2 = this.calibPt2;
 
-                // Calibrazione Globale
-                this.worldPivotEl.object3D.position.copy(p1);
-                this.worldContentEl.object3D.position.set(-vA.x, -vA.y, -vA.z);
+                let angleL = Math.atan2(L2.x - L1.x, L2.z - L1.z);
+                let angleP = Math.atan2(P2.x - P1.x, P2.z - P1.z);
+                let angleDiff = angleP - angleL;
+
                 this.worldPivotEl.object3D.rotation.set(0, angleDiff, 0);
+
+                let rotatedL1 = L1.clone();
+                rotatedL1.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleDiff);
+                this.worldPivotEl.object3D.position.set(P1.x - rotatedL1.x, P1.y - rotatedL1.y, P1.z - rotatedL1.z);
+
+                this.worldContentEl.object3D.position.set(0, 0, 0);
+                this.worldContentEl.setAttribute('visible', 'true'); // SVELA L'ANTENNA
+
+                // Sincronizza i diamanti locali per farti vedere che combaciano
+                this.diamondRef1.setAttribute('position', L1); this.diamondRef1.setAttribute('visible', 'true');
+                this.diamondRef2.setAttribute('position', L2); this.diamondRef2.setAttribute('visible', 'true');
 
                 this.state = 'IDLE';
                 this.refreshAll();
@@ -335,18 +390,48 @@
             return;
         }
 
+        // --- SALVATAGGIO CAPISALDI (Quando l'utente definisce la calibrazione) ---
+        if (this.state === 'SET_CALIB_PT1') {
+            let hitGround = this.getHitPoint();
+            if (hitGround) {
+                this.calibLocal1 = this.getLocalPoint(hitGround.point);
+                this.diamondSys1.setAttribute('position', hitGround.point);
+                this.diamondSys1.setAttribute('visible', 'true');
+                this.diamondRef1.setAttribute('position', this.calibLocal1);
+                this.diamondRef1.setAttribute('visible', 'true');
+                
+                this.state = 'SET_CALIB_PT2';
+                this.updateMenuText();
+            }
+            return;
+        }
+        if (this.state === 'SET_CALIB_PT2') {
+            let hitGround = this.getHitPoint();
+            if (hitGround) {
+                this.calibLocal2 = this.getLocalPoint(hitGround.point);
+                this.diamondSys2.setAttribute('position', hitGround.point);
+                this.diamondSys2.setAttribute('visible', 'true');
+                this.diamondRef2.setAttribute('position', this.calibLocal2);
+                this.diamondRef2.setAttribute('visible', 'true');
+                
+                this.state = 'IDLE';
+                this.menuUI.setAttribute('visible', true);
+                this.updateMenuText();
+                alert("Diamanti Impostati! Ora puoi togliere il visore e usare il menu 2D per Salvare nel Database.");
+            }
+            return;
+        }
+
         // --- GESTIONE TIRANTI & RIMOZIONE SINGOLO PICCHETTO ---
         if (this.gwState === 'EDIT') {
-            // Controllo se il laser punta a un picchetto specifico da cancellare
             let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
             if (hitPeg) {
                 let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx'));
-                this.activeAnchor.pegs.splice(pIdx, 1); // Rimuove esattamente quel picchetto
+                this.activeAnchor.pegs.splice(pIdx, 1); // Rimuove SOLO questo picchetto
                 this.drawGuyWires();
                 return;
             }
 
-            // Altrimenti, piazza un nuovo picchetto a terra
             let hitGround = this.getHitPoint();
             if (hitGround) {
               let localHit = this.getLocalPoint(hitGround.point);
@@ -449,8 +534,10 @@
         let infoTextStr = "";
         let poleAH = this.pointA.top ? (this.pointA.top.y - this.pointA.base.y) : 0;
 
-        if (this.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE RICHIESTA:\nAppoggia il controller sul VERO PUNTO A originale\ne premi il grilletto."; }
-        else if (this.state === 'AWAITING_CALIB_PT2') { infoTextStr = "CALIBRAZIONE IN CORSO:\nOra appoggia il controller sul VERO PUNTO B (o asse)\ne premi il grilletto."; }
+        if (this.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE RICHIESTA:\nAppoggia la base del controller sul VERO PUNTO 1\ne premi il grilletto."; }
+        else if (this.state === 'AWAITING_CALIB_PT2') { infoTextStr = "CALIBRAZIONE IN CORSO:\nOra appoggia il controller sul VERO PUNTO 2\ne premi il grilletto."; }
+        else if (this.state === 'SET_CALIB_PT1') { infoTextStr = "IMPOSTAZIONE CAPISALDI:\nAppoggia la base del controller sul sasso/segno 1\ne premi il grilletto."; }
+        else if (this.state === 'SET_CALIB_PT2') { infoTextStr = "IMPOSTAZIONE CAPISALDI:\nOra appoggia il controller sul sasso/segno 2\ne premi il grilletto."; }
         else if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA: ${this.getCalculatedLength().toFixed(2)}m`; } 
         else if (type === 'End Fed') {
           infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nAC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`;
@@ -500,7 +587,7 @@
             let distance = anchorPos.distanceTo(pVec);
 
             let peg = document.createElement('a-cone');
-            // Aggiungi logica di cliccabilità al picchetto se questo collare è in edit
+            // I picchetti si possono cancellare (cliccare) solo se il loro collare è selezionato
             if (isSelected && this.gwState === 'EDIT') {
                 peg.classList.add('gw-peg', 'clickable');
                 peg.setAttribute('btn-interaction', '');
@@ -632,21 +719,26 @@
           if (id === 'btn-gw-new-a') {
             let maxH = this.pointA.top.y - this.pointA.base.y; let newAnchor = { pole: 'A', height: maxH / 2, pegs: [] };
             this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT';
-            this.updateGWUI(); this.drawGuyWires(); this.saveToStorage();
+            this.updateGWUI(); this.drawGuyWires();
           }
           else if (id === 'btn-gw-new-b') {
             let maxH = this.pointB.top.y - this.pointB.base.y; let newAnchor = { pole: 'B', height: maxH / 2, pegs: [] };
             this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT';
-            this.updateGWUI(); this.drawGuyWires(); this.saveToStorage();
+            this.updateGWUI(); this.drawGuyWires();
           }
           else if (id === 'btn-gw-del-collar') {
             this.guyWiresData = this.guyWiresData.filter(a => a !== this.activeAnchor);
             this.activeAnchor = null; this.gwState = 'MAIN';
-            this.updateGWUI(); this.drawGuyWires(); this.saveToStorage();
+            this.updateGWUI(); this.drawGuyWires();
           }
           else if (id === 'btn-gw-done') { this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.drawGuyWires(); }
-          else if (id === 'btn-cal-2pt') {
+          else if (id === 'btn-cal-set-pts') {
             if (!this.pointA.base) { document.querySelector('#info-text').setAttribute('value', 'Devi prima piazzare almeno il PUNTO A!'); return; }
+            this.state = 'SET_CALIB_PT1'; this.menuUI.setAttribute('visible', false);
+            this.updateMenuText();
+          }
+          else if (id === 'btn-cal-recover') {
+            if (!this.calibLocal1 || !this.calibLocal2) { document.querySelector('#info-text').setAttribute('value', 'Non ci sono punti di calibrazione salvati!'); return; }
             this.state = 'AWAITING_CALIB_PT1'; this.menuUI.setAttribute('visible', false);
             this.updateMenuText();
           }
@@ -722,6 +814,10 @@
         
         this.worldPivotEl.object3D.position.set(0,0,0); this.worldPivotEl.object3D.rotation.set(0,0,0); this.worldContentEl.object3D.position.set(0,0,0);
         this.guyWiresData = []; this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false);
+        this.calibLocal1 = null; this.calibLocal2 = null;
+        this.diamondSys1.setAttribute('visible', 'false'); this.diamondSys2.setAttribute('visible', 'false');
+        this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false');
+
         this.menuUI.setAttribute('visible', false);
       },
 
@@ -733,13 +829,13 @@
   
   <div id="ui-2d-container">
     <h3>DATABASE ANTENNE</h3>
-    <input type="text" id="save-name" placeholder="Es. Cima Monte Grappa">
-    <button class="action" onclick="window.saveAntennaToDB()">SALVA ANTENNA ATTUALE</button>
+    <input type="text" id="save-name" placeholder="Es. Campo Scout">
+    <button class="action" onclick="window.saveAntennaToDB()">SALVA ANTENNA NEL VISORE</button>
     <hr>
     <p>Carica un'antenna salvata:</p>
     <select id="load-list"></select>
-    <button onclick="window.loadAntennaFromDB()">CARICA SELEZIONATA</button>
-    
+    <button onclick="window.loadAntennaFromDB()">CARICA ANTENNA</button>
+    <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA ANTENNA</button>
     <hr>
     <h3>MMANA-GAL (.maa)</h3>
     <input type="file" id="file-mmana" accept=".maa">
@@ -752,30 +848,30 @@
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
         <a-entity id="menu-ui" visible="false" position="0 0.20 -0.4" rotation="-30 0 0">
-          <a-plane width="0.5" height="0.55" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
+          <a-plane width="0.5" height="0.65" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.24 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
-          <a-plane width="0.48" height="0.06" color="#2A2A2A" position="0 0.17 0.01">
+          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.29 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
+          <a-plane width="0.48" height="0.06" color="#2A2A2A" position="0 0.22 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.055 0.055 0.055" color="#00E676"></a-text>
           </a-plane>
 
-          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.10 0.01">
+          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.15 0.01">
             <a-text value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
             <a-text id="txt-ant-val" value="-" align="center" scale="0.09 0.09 0.09" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.10 0.01">
+          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.15 0.01">
             <a-text value="BANDA RADIO:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#9FA8DA"></a-text>
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-entity id="sub-dipolo" position="0 0.03 0" visible="false">
+          <a-entity id="sub-dipolo" position="0 0.08 0" visible="false">
             <a-text value="SPOSTA ALIMENTAZIONE (PUNTO C)" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.02 0"></a-text>
             <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="-0.09 -0.015 0.01"><a-text value="<- Verso PUNTO A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="0.09 -0.015 0.01"><a-text value="Verso PUNTO B ->" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           </a-entity>
 
-          <a-entity id="sub-endfed" position="0 0.03 0" visible="false">
+          <a-entity id="sub-endfed" position="0 0.08 0" visible="false">
             <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
@@ -788,7 +884,7 @@
             <a-text id="txt-ef-values" value="AC: 10.00m | CB: 10.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-longwire" position="0 0.03 0" visible="false">
+          <a-entity id="sub-longwire" position="0 0.08 0" visible="false">
             <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#F57C00" position="-0.14 -0.01 0.01"><a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.055 0.055 0.055" position="0 0 0.005"></a-text></a-plane>
             <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -798,7 +894,7 @@
             <a-text id="txt-lw-len-val" value="LUNGH: 20.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-verticale" position="0 0.03 0" visible="false">
+          <a-entity id="sub-verticale" position="0 0.08 0" visible="false">
             <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#B71C1C" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#1B5E20" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -810,24 +906,27 @@
             <a-text id="txt-rad-len-val" value="LUNGH R: 5.0m" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="0.12 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-mmana" position="0 0.03 0" visible="false">
+          <a-entity id="sub-mmana" position="0 0.08 0" visible="false">
             <a-text value="MODELLI SELEZIONABILI IN REALTA AUMENTATA" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-mmana-model" class="clickable" btn-interaction width="0.32" height="0.03" color="#006064" position="0 -0.01 0.01">
               <a-text id="txt-mmana-model-val" value="-" align="center" scale="0.065 0.065 0.065"></a-text>
             </a-plane>
           </a-entity>
 
-          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 -0.07 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 -0.07 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 -0.02 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 -0.02 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-          <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.12 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
-          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.14" height="0.025" color="#C62828" position="-0.15 -0.16 0.01"><a-text value="EDIT A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.14" height="0.025" color="#1565C0" position="0 -0.16 0.01"><a-text value="EDIT B" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.16 0.01"><a-text value="RESET" align="center" scale="0.07 0.07 0.07"></a-text></a-plane>
+          <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.07 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
+          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.14" height="0.025" color="#C62828" position="-0.15 -0.11 0.01"><a-text value="EDIT A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.14" height="0.025" color="#1565C0" position="0 -0.11 0.01"><a-text value="EDIT B" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.14" height="0.025" color="#D32F2F" position="0.15 -0.11 0.01"><a-text value="NUOVA ANTENNA" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
 
-          <a-text value="CALIBRAZIONE TOPOGRAFICA (A -> B)" position="0 -0.22 0.01" align="center" scale="0.06 0.06 0.06" color="#00E676"></a-text>
-          <a-plane id="btn-cal-2pt" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.26 0.01">
-            <a-text value="RICALIBRA POSIZIONE (2 PUNTI)" align="center" scale="0.07 0.07 0.07"></a-text>
+          <a-text value="DATABASE E CALIBRAZIONE TOPOGRAFICA" position="0 -0.16 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
+          <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.21 0.01">
+            <a-text value="[1] IMPOSTA DIAMANTI (DA FARE PRIMA DI SALVARE)" align="center" scale="0.06 0.06 0.06"></a-text>
+          </a-plane>
+          <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.26 0.01">
+            <a-text value="[2] FORZA RICALIBRAZIONE (SE L'ANTENNA E' SLITTATA)" align="center" scale="0.06 0.06 0.06"></a-text>
           </a-plane>
         </a-entity>
 
@@ -857,6 +956,7 @@
               </a-plane>
           </a-entity>
         </a-entity>
+
       </a-entity>
       
       <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 4">
