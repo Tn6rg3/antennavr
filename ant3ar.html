@@ -623,20 +623,33 @@
           let h = this.pointA.top.y - this.pointA.base.y;
           this.antennaTube1.setAttribute('visible', 'true');
           this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
-          this.antennaTube1.object3D.position.set(this.pointA.top.x, this.pointA.base.y + (h / 2), this.pointA.top.z);
+          // Il cilindro deve essere posizionato RELATIVO alla base dell'antenna
+          this.antennaTube1.object3D.position.set(this.pointA.base.x, this.pointA.base.y + (h / 2), this.pointA.base.z);
           this.antennaTube1.object3D.rotation.set(0, 0, 0);
 
+          // I radiali partono DALLA BASE DELL'ANTENNA (pointA.base)
           let base = new THREE.Vector3(this.pointA.base.x, this.pointA.base.y + 0.002, this.pointA.base.z);
-          let radRot = this.antennaRotationY * Math.PI / 180;
+          let radRot = (this.antennaRotationY * Math.PI / 180);
+          
           for (let i = 0; i < this.maxRadials; i++) {
             if (i < this.numRadials) {
               this.radialPool[i].setAttribute('visible', 'true');
               this.radialPool[i].setAttribute('geometry', `primitive: cylinder; radius: 0.004; height: ${this.radialLen}`);
+              
               let angle = ((i * 2 * Math.PI) / this.numRadials) + radRot;
-              let targetVec = new THREE.Vector3(base.x + Math.cos(angle) * this.radialLen, base.y, base.z + Math.sin(angle) * this.radialLen);
+              let targetVec = new THREE.Vector3(
+                  base.x + Math.cos(angle) * this.radialLen, 
+                  base.y, 
+                  base.z + Math.sin(angle) * this.radialLen
+              );
+              
               let midPoint = new THREE.Vector3().lerpVectors(base, targetVec, 0.5);
-              this.radialPool[i].object3D.position.copy(midPoint); this.radialPool[i].object3D.lookAt(targetVec); this.radialPool[i].object3D.rotateX(Math.PI / 2);
-            } else { this.radialPool[i].setAttribute('visible', 'false'); }
+              this.radialPool[i].object3D.position.copy(midPoint); 
+              this.radialPool[i].object3D.lookAt(targetVec); 
+              this.radialPool[i].object3D.rotateX(Math.PI / 2);
+            } else { 
+              this.radialPool[i].setAttribute('visible', 'false'); 
+            }
           }
           return;
         }
