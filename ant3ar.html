@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V20 - Topografia & Controllo Totale</title>
+  <title>Antenne AR Pro V21 - Smart Save in AR</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -48,7 +48,6 @@
         this.guyWiresData = []; this.gwState = 'OFF'; this.activeAnchor = null; 
         this.lastTriggerTime = 0; 
         
-        // Punti di calibrazione topografica
         this.calibLocal1 = null; this.calibLocal2 = null;
 
         this.raycasterEl = document.querySelector('#right-controller');
@@ -74,7 +73,6 @@
         this.setupGlobalEventDelegation();
         this.setupMmanaFileLoader();
         
-        // Espone i metodi al menu HTML 2D
         window.saveAntennaToDB = this.saveAntennaToDB.bind(this);
         window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this);
         window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
@@ -83,7 +81,6 @@
         this.loadFromStorage(); 
       },
 
-      // --- SISTEMA DATABASE (LOCAL STORAGE) ---
       refreshDBList: function() {
         let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
         let select = document.querySelector('#load-list');
@@ -95,17 +92,15 @@
         }
       },
 
-      saveAntennaToDB: function() {
-        let name = document.querySelector('#save-name').value.trim();
-        if(!name) { alert("Inserisci un nome per l'antenna!"); return; }
-        if(!this.pointA.base) { alert("Devi piazzare almeno il Punto A prima di salvare."); return; }
+      // Funzione di salvataggio unificata (usata sia dal browser che dal visore AR)
+      executeSave: function(customName) {
+        if(!this.pointA.base) { return "ERRORE: Devi piazzare almeno il Punto A."; }
         if(!this.calibLocal1 || !this.calibLocal2) {
-            alert("ATTENZIONE: Prima di salvare devi impostare i due Diamanti di Calibrazione dall'interno dell'AR (usa il menu e premi 'IMPOSTA DIAMANTI')!");
-            return;
+            return "ERRORE: Devi impostare i 2 Diamanti di Calibrazione prima di salvare.";
         }
 
         let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
-        db[name] = {
+        db[customName] = {
           pointA: { base: this.pointA.base, top: this.pointA.top },
           pointB: { base: this.pointB.base, top: this.pointB.top },
           pointCPercent: this.pointC.percent,
@@ -119,8 +114,15 @@
           calibLocal1: this.calibLocal1, calibLocal2: this.calibLocal2
         };
         localStorage.setItem('antenneAR_DB', JSON.stringify(db));
-        alert("Antenna '" + name + "' salvata con successo nel visore!");
         this.refreshDBList();
+        return `SALVATA CON SUCCESSO:\n${customName}`;
+      },
+
+      saveAntennaToDB: function() {
+        let name = document.querySelector('#save-name').value.trim();
+        if(!name) { alert("Inserisci un nome per l'antenna!"); return; }
+        let msg = this.executeSave(name);
+        alert(msg);
       },
 
       loadAntennaFromDB: function() {
@@ -142,29 +144,25 @@
         this.guyWiresData = d.guyWiresData || [];
         this.calibLocal1 = d.calibLocal1; this.calibLocal2 = d.calibLocal2;
 
-        // Azzera il mondo e NASCONDE l'antenna fino a calibrazione conclusa
         this.worldPivotEl.object3D.position.set(0, 0, 0); 
         this.worldPivotEl.object3D.rotation.set(0, 0, 0); 
         this.worldContentEl.object3D.position.set(0, 0, 0);
         this.worldContentEl.setAttribute('visible', 'false'); 
 
-        this.diamondRef1.setAttribute('visible', 'false');
-        this.diamondRef2.setAttribute('visible', 'false');
-        this.diamondSys1.setAttribute('visible', 'false');
-        this.diamondSys2.setAttribute('visible', 'false');
+        this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false');
+        this.diamondSys1.setAttribute('visible', 'false'); this.diamondSys2.setAttribute('visible', 'false');
 
         this.state = 'AWAITING_CALIB_PT1';
         this.menuUI.setAttribute('visible', true);
         this.updateMenuText();
         this.updateGeometriesAndDrawings(); 
-        
-        alert("Antenna " + name + " caricata! Indossa il visore e usa il joystick per toccare i due punti di riallineamento.");
+        alert("Antenna " + name + " caricata! Indossa il visore per ricalibrare.");
       },
 
       deleteAntennaFromDB: function() {
         let name = document.querySelector('#load-list').value;
         if(!name) return;
-        if(confirm("Vuoi davvero eliminare l'antenna '" + name + "'?")) {
+        if(confirm("Vuoi eliminare l'antenna '" + name + "'?")) {
             let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
             delete db[name];
             localStorage.setItem('antenneAR_DB', JSON.stringify(db));
@@ -172,7 +170,6 @@
         }
       },
 
-      // Memoria temporanea (Sessione Corrente)
       saveToStorage: function() {
         let data = {
           state: this.state,
@@ -202,7 +199,6 @@
             if (d.pointA && d.pointA.top) this.pointA.top = d.pointA.top;
             if (d.pointB && d.pointB.base) this.pointB.base = d.pointB.base;
             if (d.pointB && d.pointB.top) this.pointB.top = d.pointB.top;
-            
             this.pointC.percent = d.pointCPercent !== undefined ? d.pointCPercent : 0.5;
             this.antIdx = d.antIdx || 0; this.bandIdx = d.bandIdx || 2;
             this.endFed_AC_Len = d.endFed_AC_Len || 10.0; this.endFed_CB_Len = d.endFed_CB_Len || 10.0;
@@ -217,16 +213,11 @@
             if (d.contentPos) this.worldContentEl.object3D.position.copy(d.contentPos);
             
             this.state = d.state || 'IDLE';
-            if (this.state.startsWith('PLACE_HEIGHT') || this.state.startsWith('REPOSITION_HEIGHT')) {
-               this.state = 'IDLE';
-            }
-          } catch(e) { console.error("Errore nel caricamento del salvataggio:", e); }
+            if (this.state.startsWith('PLACE_HEIGHT') || this.state.startsWith('REPOSITION_HEIGHT')) this.state = 'IDLE';
+          } catch(e) { console.error(e); }
         }
-        
-        // Reset sicurezza menu
         this.gwState = 'OFF'; this.activeAnchor = null;
         if(this.gwUI) this.gwUI.setAttribute('visible', false);
-
         this.refreshAll();
       },
 
@@ -355,6 +346,7 @@
             let delta = evt.detail.x > 0 ? 2.0 : -2.0;
             this.antennaRotationY += delta;
             this.updateGeometriesAndDrawings();
+            if(Date.now() - this.lastTriggerTime > 1000) { this.saveToStorage(); this.lastTriggerTime = Date.now(); }
         }
       },
 
@@ -371,8 +363,7 @@
             let pData = this.activeAnchor.pole === 'A' ? this.pointA : this.pointB;
             let maxH = pData.top.y - pData.base.y; 
             this.activeAnchor.height = Math.max(0.1, Math.min(maxH, this.activeAnchor.height + step));
-            this.drawGuyWires(); this.lastThumbTime = thumbTime;
-            this.saveToStorage();
+            this.drawGuyWires(); this.lastThumbTime = thumbTime; this.saveToStorage();
           }
         }
       },
@@ -400,6 +391,7 @@
           }
         }
 
+        // --- CALIBRAZIONE RITARDATA ---
         if (this.state === 'AWAITING_CALIB_PT1') {
             let hitGround = this.getHitPoint();
             if (hitGround) {
@@ -434,7 +426,7 @@
                 this.worldPivotEl.object3D.position.set(P1.x - rotatedL1.x, P1.y - rotatedL1.y, P1.z - rotatedL1.z);
 
                 this.worldContentEl.object3D.position.set(0, 0, 0);
-                this.worldContentEl.setAttribute('visible', 'true'); // Svela l'antenna!
+                this.worldContentEl.setAttribute('visible', 'true'); // SVELA L'ANTENNA
 
                 this.diamondRef1.setAttribute('position', L1); this.diamondRef1.setAttribute('visible', 'true');
                 this.diamondRef2.setAttribute('position', L2); this.diamondRef2.setAttribute('visible', 'true');
@@ -445,6 +437,7 @@
             return;
         }
 
+        // --- SALVATAGGIO CAPISALDI ---
         if (this.state === 'SET_CALIB_PT1') {
             let hitGround = this.getHitPoint();
             if (hitGround) {
@@ -453,7 +446,6 @@
                 this.diamondSys1.setAttribute('visible', 'true');
                 this.diamondRef1.setAttribute('position', this.calibLocal1);
                 this.diamondRef1.setAttribute('visible', 'true');
-                
                 this.state = 'SET_CALIB_PT2';
                 this.updateMenuText();
             }
@@ -474,7 +466,7 @@
             return;
         }
 
-        // --- GESTIONE TIRANTI & RIMOZIONE SINGOLO PICCHETTO ---
+        // --- GESTIONE TIRANTI ---
         if (this.gwState === 'EDIT') {
             let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
             if (hitPeg) {
@@ -507,7 +499,7 @@
             return;
         }
 
-        // --- PIAZZAMENTO ANTENNE BASE ---
+        // --- PIAZZAMENTO ANTENNE ---
         let type = this.antennaTypes[this.antIdx];
 
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
@@ -610,6 +602,7 @@
           infoTextStr = `MMANA: ${this.mmanaModels[this.mmanaModelIdx]}\nFili conduttori: ${this.mmanaWires.length}\nRuota l'antenna col joystick sinistro.`; 
           document.querySelector('#txt-mmana-model-val').setAttribute('value', this.mmanaModels[this.mmanaModelIdx].toUpperCase());
         }
+        
         document.querySelector('#info-text').setAttribute('value', infoTextStr);
       },
 
@@ -687,7 +680,7 @@
           let h = this.pointA.top.y - this.pointA.base.y;
           this.antennaTube1.setAttribute('visible', 'true');
           this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
-          this.antennaTube1.object3D.quaternion.identity(); // FIX: Reset rotazione prima di riposizionare
+          this.antennaTube1.object3D.quaternion.identity();
           this.antennaTube1.object3D.position.set(this.pointA.base.x, this.pointA.base.y + (h / 2), this.pointA.base.z);
 
           let base = new THREE.Vector3(this.pointA.base.x, this.pointA.base.y + 0.002, this.pointA.base.z);
@@ -706,7 +699,7 @@
               );
               
               let midPoint = new THREE.Vector3().lerpVectors(base, targetVec, 0.5);
-              this.radialPool[i].object3D.quaternion.identity(); // FIX SPIRAL: Reset rotazione cumulativa
+              this.radialPool[i].object3D.quaternion.identity();
               this.radialPool[i].object3D.position.copy(midPoint); 
               this.radialPool[i].object3D.lookAt(targetVec); 
               this.radialPool[i].object3D.rotateX(Math.PI / 2);
@@ -752,7 +745,7 @@
         if (type === 'Dipolo') {
           this.antennaTube2.setAttribute('visible', 'false'); let antLen = this.getCalculatedLength();
           this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${antLen}`);
-          this.antennaTube1.object3D.quaternion.identity(); // FIX:
+          this.antennaTube1.object3D.quaternion.identity();
           this.antennaTube1.object3D.position.copy(this.pointC.top); this.antennaTube1.object3D.lookAt(vecB); this.antennaTube1.object3D.rotateX(Math.PI / 2);
           let extAntStart = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, -(antLen / 2)); let extAntEnd = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, antLen / 2);
           this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5)); this.labelSegA.setAttribute('value', `A-Ant:\n${vecA.distanceTo(extAntStart).toFixed(2)}m`);
@@ -824,7 +817,21 @@
             this.updateMenuText();
           }
           
-          // NUOVI BOTTONI PER MODIFICA ALTEZZA PALI
+          // SALVA ANTENNA IN AR
+          else if (id === 'btn-ar-save') {
+              if (!this.pointA.base) { document.querySelector('#info-text').setAttribute('value', 'ERRORE: Piazza almeno il PUNTO A!'); return; }
+              if (!this.calibLocal1 || !this.calibLocal2) { document.querySelector('#info-text').setAttribute('value', 'ERRORE: Imposta i diamanti di calibrazione prima!'); return; }
+
+              let type = this.antennaTypes[this.antIdx];
+              let band = this.bands[this.bandIdx];
+              let date = new Date();
+              let timeStr = date.getHours() + "-" + date.getMinutes() + "-" + date.getSeconds();
+              let autoName = type.toUpperCase() + "_" + band + "_" + timeStr;
+
+              let msg = this.executeSave(autoName);
+              document.querySelector('#info-text').setAttribute('value', msg);
+          }
+
           else if (id === 'btn-height-a') { 
               if(!this.pointA.base) return;
               this.state = 'REPOSITION_HEIGHT_A'; 
@@ -876,31 +883,6 @@
         });
       },
 
-      setupMmanaFileLoader: function() {
-        let fileInput = document.querySelector('#file-mmana'); if(!fileInput) return;
-        fileInput.addEventListener('change', (evt) => {
-          let file = evt.target.files[0]; if(!file) return;
-          let reader = new FileReader();
-          reader.onload = (e) => { 
-              let lines = e.target.result.split('\n'); this.importedMmanaWires = []; let insideWiresSection = false;
-              for(let i=0; i<lines.length; i++) {
-                let line = lines[i].trim(); let upperLine = line.toUpperCase();
-                if(insideWiresSection && upperLine.startsWith('***')) insideWiresSection = false;
-                if(upperLine.includes('***') && upperLine.includes('WIRES')) { insideWiresSection = true; continue; }
-                if(insideWiresSection && line !== "") {
-                  let tokens = line.split(/[\s,]+/).filter(t => t !== '');
-                  if(tokens.length >= 7) this.importedMmanaWires.push({ x1: parseFloat(tokens[0]), y1: parseFloat(tokens[1]), z1: parseFloat(tokens[2]), x2: parseFloat(tokens[3]), y2: parseFloat(tokens[4]), z2: parseFloat(tokens[5]), radius: parseFloat(tokens[6]) > 0 ? parseFloat(tokens[6])/1000 : 0.002 });
-                }
-              }
-              if (this.importedMmanaWires.length > 0) {
-                this.mmanaWires = this.importedMmanaWires; this.mmanaModelIdx = this.mmanaModels.indexOf('Modello Importato'); this.antIdx = this.antennaTypes.indexOf('MMANA-GAL'); 
-                this.refreshAll(); alert(`Caricati ${this.mmanaWires.length} fili!`);
-              }
-          };
-          reader.readAsText(file);
-        });
-      },
-
       triggerGlobalReset: function() {
         this.pointA = { base: null, top: null, sphere: this.pointA.sphere, pole: this.pointA.pole, label: this.pointA.label };
         this.pointB = { base: null, top: null, sphere: this.pointB.sphere, pole: this.pointB.pole, label: this.pointB.label };
@@ -920,7 +902,7 @@
         this.worldContentEl.setAttribute('visible', 'true');
         
         this.guyWiresData = []; this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false);
-        this.drawGuyWires(); // Rimuove istantaneamente i vecchi tiranti
+        this.drawGuyWires(); 
 
         this.calibLocal1 = null; this.calibLocal2 = null;
         this.diamondSys1.setAttribute('visible', 'false'); this.diamondSys2.setAttribute('visible', 'false');
@@ -929,7 +911,6 @@
         this.menuUI.setAttribute('visible', false);
         document.querySelector('#info-text').setAttribute('value', 'Appoggia il controller destro a terra e premi il grilletto.');
         
-        // Cancella la sessione di lavoro (ma NON il database delle antenne salvate)
         localStorage.removeItem('antennaArProV20');
       },
 
@@ -960,30 +941,31 @@
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
         <a-entity id="menu-ui" visible="false" position="0 0.20 -0.4" rotation="-30 0 0">
-          <a-plane width="0.5" height="0.70" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
+          <!-- Aumentato height per fare spazio al nuovo bottone AR Save -->
+          <a-plane width="0.5" height="0.75" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.29 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
-          <a-plane width="0.48" height="0.06" color="#2A2A2A" position="0 0.22 0.01">
+          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.32 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
+          <a-plane width="0.48" height="0.06" color="#2A2A2A" position="0 0.25 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.055 0.055 0.055" color="#00E676"></a-text>
           </a-plane>
 
-          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.15 0.01">
+          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.18 0.01">
             <a-text value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
             <a-text id="txt-ant-val" value="-" align="center" scale="0.09 0.09 0.09" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.15 0.01">
+          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.18 0.01">
             <a-text value="BANDA RADIO:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#9FA8DA"></a-text>
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-entity id="sub-dipolo" position="0 0.08 0" visible="false">
+          <a-entity id="sub-dipolo" position="0 0.11 0" visible="false">
             <a-text value="SPOSTA ALIMENTAZIONE (PUNTO C)" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.02 0"></a-text>
             <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="-0.09 -0.015 0.01"><a-text value="<- Verso PUNTO A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="0.09 -0.015 0.01"><a-text value="Verso PUNTO B ->" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           </a-entity>
 
-          <a-entity id="sub-endfed" position="0 0.08 0" visible="false">
+          <a-entity id="sub-endfed" position="0 0.11 0" visible="false">
             <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
@@ -996,7 +978,7 @@
             <a-text id="txt-ef-values" value="AC: 10.00m | CB: 10.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-longwire" position="0 0.08 0" visible="false">
+          <a-entity id="sub-longwire" position="0 0.11 0" visible="false">
             <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#F57C00" position="-0.14 -0.01 0.01"><a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.055 0.055 0.055" position="0 0 0.005"></a-text></a-plane>
             <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -1006,7 +988,7 @@
             <a-text id="txt-lw-len-val" value="LUNGH: 20.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-verticale" position="0 0.08 0" visible="false">
+          <a-entity id="sub-verticale" position="0 0.11 0" visible="false">
             <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#B71C1C" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#1B5E20" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -1018,41 +1000,37 @@
             <a-text id="txt-rad-len-val" value="LUNGH R: 5.0m" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="0.12 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-mmana" position="0 0.08 0" visible="false">
+          <a-entity id="sub-mmana" position="0 0.11 0" visible="false">
             <a-text value="MODELLI SELEZIONABILI IN REALTA AUMENTATA" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-mmana-model" class="clickable" btn-interaction width="0.32" height="0.03" color="#006064" position="0 -0.01 0.01">
               <a-text id="txt-mmana-model-val" value="-" align="center" scale="0.065 0.065 0.065"></a-text>
             </a-plane>
           </a-entity>
 
-          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 -0.02 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 -0.02 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 0.01 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 0.01 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-          <a-text value="RIPOSIZIONAMENTO E MODIFICA ALTEZZE" position="0 -0.07 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
-          
-          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.17 -0.11 0.01">
-            <a-text value="SPOSTA A" align="center" scale="0.055 0.055 0.055"></a-text>
-          </a-plane>
-          <a-plane id="btn-height-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.05 -0.11 0.01">
-            <a-text value="ALTEZZA A" align="center" scale="0.055 0.055 0.055"></a-text>
-          </a-plane>
-          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.05 -0.11 0.01">
-            <a-text value="SPOSTA B" align="center" scale="0.055 0.055 0.055"></a-text>
-          </a-plane>
-          <a-plane id="btn-height-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.17 -0.11 0.01">
-            <a-text value="ALTEZZA B" align="center" scale="0.055 0.055 0.055"></a-text>
-          </a-plane>
+          <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.04 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
+          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.17 -0.08 0.01"><a-text value="SPOSTA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-height-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.05 -0.08 0.01"><a-text value="ALTEZZA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.05 -0.08 0.01"><a-text value="SPOSTA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-height-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.17 -0.08 0.01"><a-text value="ALTEZZA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
 
-          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.45" height="0.025" color="#D32F2F" position="0 -0.15 0.01">
+          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.45" height="0.025" color="#D32F2F" position="0 -0.12 0.01">
             <a-text value="RESET COMPLETO (NUOVA ANTENNA)" align="center" scale="0.065 0.065 0.065"></a-text>
           </a-plane>
 
-          <a-text value="DATABASE E CALIBRAZIONE TOPOGRAFICA" position="0 -0.19 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
-          <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.23 0.01">
+          <a-text value="DATABASE E CALIBRAZIONE TOPOGRAFICA" position="0 -0.16 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
+          <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.21 0.01">
             <a-text value="[1] IMPOSTA DIAMANTI (DA FARE PRIMA DI SALVARE)" align="center" scale="0.06 0.06 0.06"></a-text>
           </a-plane>
-          <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.28 0.01">
+          <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.26 0.01">
             <a-text value="[2] FORZA RICALIBRAZIONE (SE L'ANTENNA E' SLITTATA)" align="center" scale="0.06 0.06 0.06"></a-text>
+          </a-plane>
+
+          <!-- NUOVO BOTTONE: SALVATAGGIO IN AR -->
+          <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.45" height="0.035" color="#FF8F00" position="0 -0.31 0.01">
+            <a-text value="[+] SALVA ANTENNA NEL VISORE (NOME AUTOMATICO)" align="center" scale="0.055 0.055 0.055"></a-text>
           </a-plane>
         </a-entity>
 
