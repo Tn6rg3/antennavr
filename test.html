@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Fusione: RGB + Profondità - Quest 3</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111; color: #fff; font-family: sans-serif; }
+        
+        /* Questo div diventerà l'Overlay galleggiante in Realtà Mista */
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Lascia passare i click al 3D */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 20px;
+        }
+
+        #video-container {
+            border: 4px solid #00ff00;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            text-align: center;
+            pointer-events: auto; /* Rende il contenitore interattivo */
+        }
+
+        video {
+            width: 300px;
+            border-radius: 5px;
+            background-color: #000;
+        }
+
+        #log {
+            margin-top: 10px;
+            background: rgba(0,0,0,0.8);
+            color: #00ffff;
+            padding: 10px;
+            font-family: monospace;
+            border-radius: 5px;
+            max-width: 400px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-overlay">
+        <div id="video-container">
+            <h3>Flusso Telecamera (2D)</h3>
+            <video id="camera-feed" autoplay playsinline></video>
+            <div id="log">Inizializzazione...</div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+        let camera, scene, renderer, reticle;
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
+
+        const videoElement = document.getElementById('camera-feed');
+        const logElement = document.getElementById('log');
+
+        function logMessage(msg) {
+            logElement.innerHTML += `<div>> ${msg}</div>`;
+        }
+
+        // --- FASE 1: FORZIAMO LA WEBCAM ---
+        async function startCamera() {
+            try {
+                logMessage("Richiesta getUserMedia...");
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }
+                });
+                videoElement.srcObject = stream;
+                logMessage("Webcam RGB Attiva!");
+            } catch (err) {
+                logMessage("Errore Webcam: " + err.message);
+            }
+        }
+
+        // --- FASE 2: INIZIALIZZIAMO IL MOTORE 3D (WEBXR) ---
+        function initXR() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+            light.position.set(0.5, 1, 0.25);
+            scene.add(light);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Creiamo il bottone AR richiedendo esplicitamente il DOM OVERLAY
+            const uiOverlay = document.getElementById('ui-overlay');
+            const arButton = ARButton.createButton(renderer, { 
+                requiredFeatures: ['hit-test'],
+                optionalFeatures: ['dom-overlay'],
+                domOverlay: { root: uiOverlay } 
+            });
+            document.body.appendChild(arButton);
+
+            // Mirino per testare il sensore di profondità
+            reticle = new THREE.Mesh(
+                new THREE.RingGeometry(0.015, 0.02, 32).rotateX(- Math.PI / 2),
+                new THREE.MeshBasicMaterial({ color: 0xff00ff }) // Fucsia
+            );
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
+
+            // Eventi di sistema XR
+            renderer.xr.addEventListener('sessionstart', () => {
+                logMessage("Sessione AR 3D Avviata.");
+                logMessage("Controlla se il video si è bloccato!");
+            });
+
+            renderer.setAnimationLoop(render);
+        }
+
+        function render(timestamp, frame) {
+            if (frame) {
+                const session = renderer.xr.getSession();
+                const referenceSpace = renderer.xr.getReferenceSpace();
+
+                // Richiediamo l'Hit Test dal centro del visore (sguardo)
+                if (!hitTestSourceRequested) {
+                    session.requestReferenceSpace('viewer').then(function (viewerSpace) {
+                        session.requestHitTestSource({ space: viewerSpace }).then(function (source) {
+                            hitTestSource = source;
+                        });
+                    });
+                    hitTestSourceRequested = true;
+                }
+
+                if (hitTestSource) {
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        const pose = hit.getPose(referenceSpace);
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(pose.transform.matrix);
+                    } else {
+                        reticle.visible = false;
+                    }
+                }
+            }
+            renderer.render(scene, camera);
+        }
+
+        // Avvio sequenziale: prima la cam, poi prepariamo il 3D
+        startCamera().then(initXR);
+
+    </script>
+</body>
+</html>
