@@ -3,17 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raw Depth SLAM - WebXR</title>
+    <title>Diagnostica SLAM - Quest 3</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
-        #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
+        
+        /* Pannello diagnostico galleggiante in AR */
+        #ui-layer {
+            position: absolute; top: 10px; left: 10px; right: 10px;
+            background: rgba(0,0,0,0.8); border: 2px solid #00ffff;
+            padding: 15px; border-radius: 10px; font-family: monospace;
+            z-index: 100; font-size: 16px; text-align: center;
+            pointer-events: none;
+        }
+        .error { color: #ff4444; font-weight: bold; }
+        .ok { color: #00ff00; font-weight: bold; }
+        .wait { color: #ffff00; }
     </style>
 </head>
 <body>
-    <div id="info">
-        <span style="color: #00ffff;">MOTORE SLAM RAW ATTIVO</span><br>
-        Guarda la stanza: il codice sta ricostruendo la topologia in tempo reale dai dati crudi di profondità.<br>
-        Nessuna cache. Nessun fantasma.
+    <div id="ui-layer">
+        <h3 style="margin:0 0 10px 0; color: #fff;">Diagnostica Sensore di Profondità</h3>
+        <div id="log" class="wait">In attesa che tu prema "Enter AR"...</div>
     </div>
 
     <script type="importmap">
@@ -29,17 +39,25 @@
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-        let camera, scene, renderer;
-        let depthPoints; // L'oggetto Three.js che farà da "pelle" agli oggetti reali
-        
-        // Risoluzione della nostra mappa (Quanti punti estraiamo dal sensore)
-        // Il Quest 3 di solito ha un sensore di profondità interno a risoluzione molto bassa (es. 160x120)
+        let camera, scene, renderer, depthPoints;
+        const logEl = document.getElementById('log');
+        let currentStatus = "";
+
         const DEPTH_WIDTH = 160; 
         const DEPTH_HEIGHT = 120;
         const TOTAL_POINTS = DEPTH_WIDTH * DEPTH_HEIGHT;
 
         init();
         animate();
+
+        // Funzione per aggiornare il testo senza bloccare il browser
+        function updateLog(msg, className) {
+            if (currentStatus !== msg) {
+                logEl.innerText = msg;
+                logEl.className = className;
+                currentStatus = msg;
+            }
+        }
 
         function init() {
             scene = new THREE.Scene();
@@ -51,36 +69,28 @@
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // --- LA MAGIA È QUI: Richiediamo la 'depth-sensing' ---
+            // IMPORTANTE: Abbiamo aggiunto 'float32' e 'dom-overlay'
             document.body.appendChild(ARButton.createButton(renderer, { 
                 requiredFeatures: ['depth-sensing'],
+                optionalFeatures: ['dom-overlay'],
+                domOverlay: { root: document.body },
                 depthSensing: {
                     usagePreference: ['cpu-optimized'],
-                    dataFormatPreference: ['luminance-alpha']
+                    // Aggiunto float32 per compatibilità con le nuove versioni del Quest
+                    dataFormatPreference: ['luminance-alpha', 'float32'] 
                 }
             }));
 
-            // --- CREIAMO LA NUVOLA DI PUNTI (La nostra "Pre-Mesh") ---
             const geometry = new THREE.BufferGeometry();
             const positions = new Float32Array(TOTAL_POINTS * 3);
-            
-            // Inizializziamo i punti lontano dalla vista
             for(let i=0; i<TOTAL_POINTS*3; i++) { positions[i] = 999; }
-            
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
-            // Creiamo quadratini verdi semitrasparenti per formare una superficie compatta
-            const material = new THREE.PointsMaterial({ 
-                color: 0x00ff00, 
-                size: 0.03, // 3 centimetri di grandezza
-                transparent: true,
-                opacity: 0.8
-            });
-
+            // Punti più grandi (5cm) per vederli chiaramente durante il test
+            const material = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.05 });
             depthPoints = new THREE.Points(geometry, material);
             depthPoints.frustumCulled = false;
             
-            // Agganciamo i punti DIRETTAMENTE alla telecamera, così seguono il tuo sguardo
             camera.add(depthPoints); 
             scene.add(camera); 
 
@@ -100,56 +110,55 @@
         function render(timestamp, frame) {
             if (frame) {
                 const session = renderer.xr.getSession();
+
+                // 1. Controllo dei Permessi
+                if (!session.grantedFeatures || !session.grantedFeatures.includes('depth-sensing')) {
+                    updateLog("ERRORE CRITICO: Il browser o il visore ha negato i permessi 'depth-sensing'. Controlla chrome://flags", "error");
+                    renderer.render(scene, camera);
+                    return;
+                }
+
                 const referenceSpace = renderer.xr.getReferenceSpace();
                 const viewerPose = frame.getViewerPose(referenceSpace);
 
                 if (viewerPose) {
-                    const view = viewerPose.views[0]; // Prendiamo l'occhio sinistro come riferimento
+                    const view = viewerPose.views[0];
 
-                    // --- CHIEDIAMO I DATI DI PROFONDITÀ AL SENSORE ---
+                    // 2. Lettura dei Dati Crudi
                     const depthInfo = frame.getDepthInformation(view);
 
-                    if (depthInfo) {
+                    if (!depthInfo) {
+                        updateLog("IN ATTESA... Il sensore non sta inviando dati di profondità.", "wait");
+                    } else {
+                        updateLog(`SUCCESSO! Dati in ricezione: Formato [${depthInfo.width}x${depthInfo.height}]`, "ok");
+
                         const positions = depthPoints.geometry.attributes.position.array;
                         let pointIndex = 0;
 
-                        // Otteniamo la matrice di proiezione per capire come i pixel si spalmano nello spazio
-                        const projectionMatrix = view.projectionMatrix;
                         const invProjection = new THREE.Matrix4().copy(camera.projectionMatrix).invert();
-
-                        // Lo step (salto) ci permette di adattare la griglia alla risoluzione reale del sensore
                         const stepX = depthInfo.width / DEPTH_WIDTH;
                         const stepY = depthInfo.height / DEPTH_HEIGHT;
 
-                        // Analizziamo la matrice dei pixel di profondità
                         for (let y = 0; y < DEPTH_HEIGHT; y++) {
                             for (let x = 0; x < DEPTH_WIDTH; x++) {
                                 
-                                // Otteniamo la distanza in metri in quel preciso pixel
                                 const depthInMeters = depthInfo.getDepthInMeters(
                                     Math.floor(x * stepX), 
                                     Math.floor(y * stepY)
                                 );
 
-                                // Se il sensore rileva qualcosa ed è entro 5 metri...
                                 if (depthInMeters > 0 && depthInMeters < 5.0) {
-                                    
-                                    // 1. Calcoliamo la posizione 2D sullo schermo (da -1 a +1)
                                     const ndcX = (x / DEPTH_WIDTH) * 2 - 1;
-                                    const ndcY = -(y / DEPTH_HEIGHT) * 2 + 1; // La Y va invertita
+                                    const ndcY = -(y / DEPTH_HEIGHT) * 2 + 1; 
                                     
-                                    // 2. Usiamo una formula SLAM base per "S-proiettare" il punto 2D nella 3D
-                                    // sfruttando il valore di profondità (Z)
                                     const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
                                     vector.applyMatrix4(invProjection);
                                     vector.multiplyScalar(depthInMeters / Math.abs(vector.z));
 
-                                    // 3. Aggiorniamo la coordinata nella nostra griglia
                                     positions[pointIndex * 3] = vector.x;
                                     positions[pointIndex * 3 + 1] = vector.y;
-                                    positions[pointIndex * 3 + 2] = -depthInMeters; // Profondità in negativo sull'asse Z
+                                    positions[pointIndex * 3 + 2] = -depthInMeters; 
                                 } else {
-                                    // Nascondi i punti che non intercettano nulla
                                     positions[pointIndex * 3] = 999;
                                     positions[pointIndex * 3 + 1] = 999;
                                     positions[pointIndex * 3 + 2] = 999;
@@ -157,8 +166,6 @@
                                 pointIndex++;
                             }
                         }
-
-                        // Diciamo alla scheda video di aggiornare la scena
                         depthPoints.geometry.attributes.position.needsUpdate = true;
                     }
                 }
