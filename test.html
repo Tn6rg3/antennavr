@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Room Scanner 3D PRO - Fix Sovrapposizione</title>
+    <title>Real-Time Environment Scanner - Hit Test</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
         #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
+        #point-counter { color: #00ffff; font-family: monospace; font-size: 1.2em; }
     </style>
 </head>
 <body>
     <div id="info">
-        <span id="status" style="color: #ffff00;">IN ATTESA</span><br>
-        <b>Pulsante Y (Sinistro)</b>: Avvia scansione / Isola in VR<br>
-        <b>Pulsante X (Sinistro)</b>: Resetta tutto
+        <b>Grilletti (Tieni premuto)</b>: "Dipingi" la stanza in tempo reale<br>
+        <b>Pulsante X (Sinistro)</b>: Resetta la scansione<br>
+        <div id="point-counter">Punti: 0 / 1000000</div>
     </div>
 
     <script type="importmap">
@@ -31,14 +32,16 @@
 
         let camera, scene, renderer;
         
-        let scanState = 0; 
-        let lastButtonPressTime = 0; 
-
-        // Mappa per tenere traccia delle mesh
-        const roomMeshes = new Map();
-        let blackoutSphere;
-
-        const uiStatus = document.getElementById('status');
+        // Impostazioni per scala ambientale (Stanza)
+        const MAX_POINTS = 1000000; // 1 Milione di punti
+        const MIN_DISTANCE = 0.02;  // Scrive un punto ogni 2 centimetri
+        
+        let pointCloud;
+        let positions;
+        let pointCount = 0;
+        
+        let lastButtonPressTime = 0;
+        const uiCounter = document.getElementById('point-counter');
 
         init();
         animate();
@@ -47,8 +50,8 @@
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
 
-            const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
-            light.position.set(0, 2, 0);
+            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+            light.position.set(0.5, 1, 0.25);
             scene.add(light);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -57,96 +60,73 @@
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            document.body.appendChild(ARButton.createButton(renderer, { 
-                requiredFeatures: ['mesh-detection'] 
-            }));
+            // Chiediamo SOLO l'hit-test, bypassando le mesh e i confini salvati!
+            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
 
-            const sphereGeo = new THREE.SphereGeometry(20, 32, 32);
-            const sphereMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
-            blackoutSphere = new THREE.Mesh(sphereGeo, sphereMat);
-            blackoutSphere.visible = false;
-            scene.add(blackoutSphere);
+            // --- GESTIONE CONTROLLER E LASER ---
+            function buildControllerPointer() {
+                const geometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, 0, -1) 
+                ]);
+                const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
+                return new THREE.Line(geometry, material);
+            }
+
+            for (let i = 0; i < 2; i++) {
+                const controller = renderer.xr.getController(i);
+                
+                controller.userData = {
+                    handedness: null,
+                    isScanning: false,
+                    hitTestSource: null,
+                    lastPoint: new THREE.Vector3(999, 999, 999)
+                };
+
+                controller.addEventListener('connected', function (event) {
+                    this.userData.handedness = event.data.handedness;
+                    this.add(buildControllerPointer());
+
+                    renderer.xr.getSession().requestHitTestSource({ space: event.data.targetRaySpace })
+                        .then(source => { this.userData.hitTestSource = source; })
+                        .catch(console.error);
+                });
+
+                controller.addEventListener('selectstart', function () { this.userData.isScanning = true; });
+                controller.addEventListener('selectend', function () { this.userData.isScanning = false; });
+
+                scene.add(controller);
+            }
+
+            // --- NUVOLA DI PUNTI ---
+            const geometry = new THREE.BufferGeometry();
+            positions = new Float32Array(MAX_POINTS * 3);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setDrawRange(0, 0);
+
+            // Punti di 2 centimetri per riempire in fretta i muri
+            const material = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.02 });
+            pointCloud = new THREE.Points(geometry, material);
+            pointCloud.frustumCulled = false; 
+            scene.add(pointCloud);
 
             window.addEventListener('resize', onWindowResize);
         }
 
-        function checkButtons(session) {
-            const now = performance.now();
-            if (now - lastButtonPressTime < 500) return; 
-
-            for (const source of session.inputSources) {
-                if (source.handedness === 'left' && source.gamepad) {
-                    
-                    const gamepad = source.gamepad;
-
-                    // Y BUTTON
-                    if (gamepad.buttons[5] && gamepad.buttons[5].pressed) {
-                        lastButtonPressTime = now;
-                        
-                        if (scanState === 0 || scanState === 2) {
-                            scanState = 1;
-                            uiStatus.textContent = "SCANSIONE IN CORSO...";
-                            uiStatus.style.color = "#00ff00";
-                            removeBlackout();
-                        } else if (scanState === 1) {
-                            scanState = 2;
-                            uiStatus.textContent = "VISUALIZZAZIONE ISOLATA (VR)";
-                            uiStatus.style.color = "#00ffff";
-                            triggerBlackout();
-                        }
-                    }
-
-                    // X BUTTON (RESET)
-                    if (gamepad.buttons[4] && gamepad.buttons[4].pressed) {
-                        lastButtonPressTime = now;
-                        resetScanner();
-                    }
-                }
-            }
-        }
-
-        // --- HARD RESET MIGLIORATO ---
-        function resetScanner() {
-            // Distrugge fisicamente ogni mesh dalla RAM della scheda video
-            roomMeshes.forEach((threeMesh, xrMesh) => {
-                scene.remove(threeMesh);
-                if (threeMesh.geometry) threeMesh.geometry.dispose();
-                if (threeMesh.material) threeMesh.material.dispose();
-            });
+        // --- FUNZIONE DI RESET IMMEDIATO ---
+        function clearPointCloud() {
+            pointCount = 0;
+            pointCloud.geometry.setDrawRange(0, 0);
+            pointCloud.geometry.attributes.position.needsUpdate = true;
+            uiCounter.textContent = `Punti: ${pointCount} / ${MAX_POINTS} (RESET)`;
+            uiCounter.style.color = "#ff0000";
             
-            roomMeshes.clear();
-            scanState = 0;
-            removeBlackout();
-
-            uiStatus.textContent = "MEMORIA PULITA. IN ATTESA.";
-            uiStatus.style.color = "#ff4444"; 
-
-            setTimeout(() => {
-                if (scanState === 0) {
-                    uiStatus.textContent = "IN ATTESA";
-                    uiStatus.style.color = "#ffff00";
-                }
-            }, 2000);
-        }
-
-        function triggerBlackout() {
-            blackoutSphere.visible = true;
-            roomMeshes.forEach(mesh => {
-                mesh.material.wireframe = false;
-                mesh.material.color.setHex(0xaaaaaa);
-                mesh.material.transparent = false;
-                mesh.material.opacity = 1.0;
-            });
-        }
-
-        function removeBlackout() {
-            blackoutSphere.visible = false;
-            roomMeshes.forEach(mesh => {
-                mesh.material.wireframe = true;
-                mesh.material.color.setHex(0x00ff00);
-                mesh.material.transparent = true;
-                mesh.material.opacity = 0.5;
-            });
+            setTimeout(() => { uiCounter.style.color = "#00ffff"; }, 1000);
+            
+            // Resetta le memorie dei controller
+            for (let i = 0; i < 2; i++) {
+                renderer.xr.getController(i).userData.lastPoint.set(999, 999, 999);
+            }
         }
 
         function onWindowResize() {
@@ -163,52 +143,56 @@
             if (frame) {
                 const session = renderer.xr.getSession();
                 const referenceSpace = renderer.xr.getReferenceSpace();
+                const now = performance.now();
 
-                checkButtons(session);
+                // 1. GESTIONE DEL TASTO X PER IL RESET
+                for (const source of session.inputSources) {
+                    if (source.handedness === 'left' && source.gamepad) {
+                        if (source.gamepad.buttons[4] && source.gamepad.buttons[4].pressed) {
+                            if (now - lastButtonPressTime > 500) {
+                                lastButtonPressTime = now;
+                                clearPointCloud();
+                            }
+                        }
+                    }
+                }
 
-                if (scanState === 1 && frame.detectedMeshes) {
+                // 2. GESTIONE HIT TEST E DISEGNO PUNTI
+                const c0 = renderer.xr.getController(0);
+                const c1 = renderer.xr.getController(1);
+                const controllers = [c0, c1];
+
+                let pointsAdded = false;
+
+                controllers.forEach(ctrl => {
+                    if (ctrl.userData.isScanning && ctrl.userData.hitTestSource && pointCount < MAX_POINTS) {
+                        const hits = frame.getHitTestResults(ctrl.userData.hitTestSource);
+                        
+                        if (hits.length > 0) {
+                            const pose = hits[0].getPose(referenceSpace);
+                            const currentPos = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
+
+                            if (currentPos.distanceTo(ctrl.userData.lastPoint) > MIN_DISTANCE) {
+                                positions[pointCount * 3] = currentPos.x;
+                                positions[pointCount * 3 + 1] = currentPos.y;
+                                positions[pointCount * 3 + 2] = currentPos.z;
+
+                                pointCount++;
+                                pointsAdded = true;
+                                ctrl.userData.lastPoint.copy(currentPos);
+                            }
+                        }
+                    }
+                });
+
+                if (pointsAdded) {
+                    pointCloud.geometry.setDrawRange(0, pointCount);
+                    pointCloud.geometry.attributes.position.needsUpdate = true;
                     
-                    frame.detectedMeshes.forEach(xrMesh => {
-                        let threeMesh = roomMeshes.get(xrMesh);
-
-                        if (!threeMesh) {
-                            // 1. Creazione di una NUOVA mesh
-                            const geometry = new THREE.BufferGeometry();
-                            geometry.setAttribute('position', new THREE.BufferAttribute(xrMesh.vertices, 3));
-                            geometry.setIndex(new THREE.BufferAttribute(xrMesh.indices, 1));
-                            geometry.computeVertexNormals();
-
-                            const material = new THREE.MeshPhongMaterial({
-                                color: 0x00ff00,
-                                wireframe: true,
-                                transparent: true,
-                                opacity: 0.5
-                            });
-
-                            threeMesh = new THREE.Mesh(geometry, material);
-                            roomMeshes.set(xrMesh, threeMesh);
-                            scene.add(threeMesh);
-                        } else {
-                            // 2. AGGIORNAMENTO DI UNA MESH ESISTENTE (IL FIX CRITICO)
-                            // Invece di provare a sovrascrivere l'array, buttiamo via la vecchia forma
-                            threeMesh.geometry.dispose(); 
-
-                            // E creiamo una geometria nuova fiammante con le nuove dimensioni
-                            const newGeometry = new THREE.BufferGeometry();
-                            newGeometry.setAttribute('position', new THREE.BufferAttribute(xrMesh.vertices, 3));
-                            newGeometry.setIndex(new THREE.BufferAttribute(xrMesh.indices, 1));
-                            newGeometry.computeVertexNormals();
-                            
-                            threeMesh.geometry = newGeometry;
-                        }
-
-                        // Aggiorniamo la posizione nello spazio
-                        const pose = frame.getPose(xrMesh.meshSpace, referenceSpace);
-                        if (pose) {
-                            threeMesh.matrix.fromArray(pose.transform.matrix);
-                            threeMesh.matrixAutoUpdate = false;
-                        }
-                    });
+                    // Aggiorna l'interfaccia ogni 50 punti per non sovraccaricare la CPU
+                    if (pointCount % 50 === 0 || pointCount === MAX_POINTS) {
+                        uiCounter.textContent = `Punti: ${pointCount} / ${MAX_POINTS}`;
+                    }
                 }
             }
             renderer.render(scene, camera);
