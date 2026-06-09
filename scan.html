@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR Scanner Ottimizzato - Quest 3</title>
+    <title>WebXR Scanner Alta Risoluzione - Quest 3</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
         #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div id="info">Usa il raggio del controller DESTRO. Tieni premuto il grilletto per scansionare.</div>
+    <div id="info">Usa il laser del controller DESTRO. Tieni premuto il grilletto per scansionare ad alta risoluzione (1mm).</div>
 
     <script type="importmap">
         {
@@ -32,10 +32,12 @@
         let rightInputSource = null;
         let hitTestSource = null;
 
-        // Variabili di scansione
+        // --- IMPOSTAZIONI DI SCANSIONE AD ALTA RISOLUZIONE ---
         let isScanning = false;
-        const MAX_POINTS = 100000; 
-        const MIN_DISTANCE = 0.005; // 5 millimetri di distanza minima per evitare sovrapposizioni
+        // Aumentato a 500mila punti per ospitare la scansione densa
+        const MAX_POINTS = 500000; 
+        // Risoluzione di 1 millimetro (distanza minima tra i punti)
+        const MIN_DISTANCE = 0.001; 
         
         let pointCloud;
         let positions;
@@ -62,25 +64,22 @@
             document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
 
             // --- GESTIONE CONTROLLER E RAGGIO LASER ---
-            
-            // Funzione per creare una linea visiva (laser) che esce dal controller
             function buildControllerPointer() {
                 const geometry = new THREE.BufferGeometry().setFromPoints([
                     new THREE.Vector3(0, 0, 0),
-                    new THREE.Vector3(0, 0, -1) // Raggio lungo 1 metro in avanti
+                    new THREE.Vector3(0, 0, -1) // Raggio lungo 1 metro
                 ]);
+                // Laser bianco semi-trasparente
                 const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
                 return new THREE.Line(geometry, material);
             }
 
-            // Inizializziamo entrambi i controller per capire quale è il destro
             for (let i = 0; i < 2; i++) {
                 const controller = renderer.xr.getController(i);
                 
                 controller.addEventListener('connected', function (event) {
                     this.add(buildControllerPointer()); // Aggiunge il laser visivo
 
-                    // Se è il controller DESTRO, lo salviamo e attiviamo l'Hit Test
                     if (event.data.handedness === 'right') {
                         rightController = this;
                         rightInputSource = event.data;
@@ -88,7 +87,6 @@
                     }
                 });
 
-                // Gestione del grilletto: controlliamo esplicitamente che sia il controller destro
                 controller.addEventListener('selectstart', function () {
                     if (this === rightController) isScanning = true;
                 });
@@ -102,33 +100,31 @@
 
             // --- CREAZIONE MIRINO E NUVOLA DI PUNTI ---
 
-            // Mirino
             reticle = new THREE.Mesh(
                 new THREE.RingGeometry(0.015, 0.02, 32).rotateX(- Math.PI / 2),
-                new THREE.MeshBasicMaterial({ color: 0x00ffff }) // Colore Ciano per spiccare
+                new THREE.MeshBasicMaterial({ color: 0x00ffff }) // Ciano
             );
             reticle.matrixAutoUpdate = false;
             reticle.visible = false;
             scene.add(reticle);
 
-            // Nuvola di Punti
             const geometry = new THREE.BufferGeometry();
             positions = new Float32Array(MAX_POINTS * 3);
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             geometry.setDrawRange(0, 0);
 
-            // Punti grandi 5mm e verdi
-            const material = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.005 });
+            // --- OTTIMIZZAZIONE VISIVA PER ALTA RISOLUZIONE ---
+            // Punti verdi più piccoli (2mm) per una visualizzazione più definita a 1mm di risoluzione
+            const material = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.002 });
             pointCloud = new THREE.Points(geometry, material);
             
-            // CRITICO: Impedisce che i punti scompaiano quando muovi la testa (Culling disattivato)
+            // Impedisce che i punti scompaiano quando si muove la testa
             pointCloud.frustumCulled = false; 
             scene.add(pointCloud);
 
             window.addEventListener('resize', onWindowResize);
         }
 
-        // Funzione per richiedere l'analisi delle superfici basata sul raggio del controller
         function requestHitTestSource() {
             const session = renderer.xr.getSession();
             session.requestHitTestSource({ space: rightInputSource.targetRaySpace }).then((source) => {
@@ -155,15 +151,15 @@
                     const referenceSpace = renderer.xr.getReferenceSpace();
                     const pose = hit.getPose(referenceSpace);
 
-                    // Posiziona il mirino sull'oggetto fisico
                     reticle.visible = true;
                     reticle.matrix.fromArray(pose.transform.matrix);
 
-                    // --- LOGICA DI SCANSIONE CONTINUA ---
+                    // --- LOGICA DI SCANSIONE CONTINUA AD ALTA RISOLUZIONE ---
                     if (isScanning && pointCount < MAX_POINTS) {
                         const currentPos = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
 
-                        // Crea un punto solo se ti sei spostato di almeno 5mm dall'ultimo punto
+                        // --- FILTRO SPATIALE MILLIMETRICO ---
+                        // Registra un punto ogni 1mm di movimento
                         if (currentPos.distanceTo(lastPoint) > MIN_DISTANCE) {
                             positions[pointCount * 3] = currentPos.x;
                             positions[pointCount * 3 + 1] = currentPos.y;
@@ -173,12 +169,10 @@
                             pointCloud.geometry.setDrawRange(0, pointCount);
                             pointCloud.geometry.attributes.position.needsUpdate = true;
 
-                            // Salva la posizione per il prossimo calcolo di distanza
                             lastPoint.copy(currentPos);
                         }
                     }
                 } else {
-                    // Nascondi il mirino se stai puntando nel vuoto
                     reticle.visible = false;
                 }
             }
