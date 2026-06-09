@@ -3,16 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ologramma SLAM Debug - Quest 3</title>
+    <title>Scanner Rapido - Rete Esagonale</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
         #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
+        #point-counter { color: #00ffff; font-family: monospace; font-size: 1.2em; }
     </style>
 </head>
 <body>
     <div id="info">
-        Premi "Enter AR".<br>
-        Vedrai un cartello olografico fluttuante davanti a te con il responso del sensore.
+        <b>Grilletti (Tieni premuto)</b>: Dipingi la rete 3D molto velocemente<br>
+        <b>Pulsante X (Sinistro)</b>: Cancella tutto<br>
+        <div id="point-counter">Poligoni Rete: 0 / 100000</div>
     </div>
 
     <script type="importmap">
@@ -30,16 +32,51 @@
 
         let camera, scene, renderer;
         
-        // Variabili per il Cartello Olografico
-        let hudCanvas, hudContext, hudTexture, hudMesh;
-        let lastMessage = "";
+        // IMPOSTAZIONI OTTIMIZZATE PER SCANSIONE RAPIDA
+        const MAX_POINTS = 100000; // Ridotti perché ora sono giganti
+        const MIN_DISTANCE = 0.06; // Rilascia una cella ogni 6 centimetri
+        const POINT_SIZE = 0.12;   // Cella grande 12 centimetri (si sovrappongono creando la rete)
+        
+        let pointCloud;
+        let positions;
+        let pointCount = 0;
+        
+        let lastButtonPressTime = 0;
+        const uiCounter = document.getElementById('point-counter');
 
         init();
         animate();
 
+        // --- GENERATORE DI TEXTURE: Esagono Vuoto (Stile Rete Mesh) ---
+        function createHexagonTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            // Colore e spessore della linea
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 6;
+            ctx.lineJoin = "round";
+            
+            // Disegna un esagono perfetto
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i;
+                const x = 64 + 56 * Math.cos(angle);
+                const y = 64 + 56 * Math.sin(angle);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+            
+            return new THREE.CanvasTexture(canvas);
+        }
+
         function init() {
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -47,58 +84,77 @@
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // Rimosso il dom-overlay che causava il blocco. Chiediamo SOLO i dati di profondità.
-            document.body.appendChild(ARButton.createButton(renderer, { 
-                requiredFeatures: ['depth-sensing'],
-                depthSensing: {
-                    usagePreference: ['cpu-optimized'],
-                    dataFormatPreference: ['luminance-alpha', 'float32']
-                }
-            }));
+            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
 
-            // --- CREAZIONE DELL'OLOGRAMMA DIAGNOSTICO ---
-            // 1. Creiamo una tela invisibile (Canvas) dove scriveremo il testo
-            hudCanvas = document.createElement('canvas');
-            hudCanvas.width = 1024;
-            hudCanvas.height = 256;
-            hudContext = hudCanvas.getContext('2d');
-            
-            // 2. Trasformiamo la tela in una Texture 3D
-            hudTexture = new THREE.CanvasTexture(hudCanvas);
-            
-            // 3. Creiamo un piano 3D (il cartello fisico)
-            const geometry = new THREE.PlaneGeometry(0.8, 0.2); // Largo 80cm, alto 20cm
-            const material = new THREE.MeshBasicMaterial({ map: hudTexture, transparent: true });
-            hudMesh = new THREE.Mesh(geometry, material);
-            
-            // 4. Posizioniamo il cartello a 1 metro davanti agli occhi
-            hudMesh.position.set(0, 0, -1);
-            
-            // 5. Incolliamo il cartello alla telecamera così ti segue sempre
-            camera.add(hudMesh);
-            scene.add(camera);
+            function buildControllerPointer() {
+                const geometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, 0, -1) 
+                ]);
+                const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
+                return new THREE.Line(geometry, material);
+            }
 
-            // Disegna il messaggio iniziale
-            updateHUD("INIZIALIZZAZIONE AR...", "#ffffff", "#0000ff");
+            for (let i = 0; i < 2; i++) {
+                const controller = renderer.xr.getController(i);
+                
+                controller.userData = {
+                    handedness: null,
+                    isScanning: false,
+                    hitTestSource: null,
+                    lastPoint: new THREE.Vector3(999, 999, 999)
+                };
+
+                controller.addEventListener('connected', function (event) {
+                    this.userData.handedness = event.data.handedness;
+                    this.add(buildControllerPointer());
+
+                    renderer.xr.getSession().requestHitTestSource({ space: event.data.targetRaySpace })
+                        .then(source => { this.userData.hitTestSource = source; })
+                        .catch(console.error);
+                });
+
+                controller.addEventListener('selectstart', function () { this.userData.isScanning = true; });
+                controller.addEventListener('selectend', function () { this.userData.isScanning = false; });
+
+                scene.add(controller);
+            }
+
+            // --- MATERIALE DELLA NUVOLA DI PUNTI (La magia visiva) ---
+            const geometry = new THREE.BufferGeometry();
+            positions = new Float32Array(MAX_POINTS * 3);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setDrawRange(0, 0);
+
+            const material = new THREE.PointsMaterial({ 
+                color: 0x00ff00, 
+                size: POINT_SIZE,
+                map: createHexagonTexture(),
+                transparent: true,
+                opacity: 0.9,
+                depthWrite: false, // CRITICO: impedisce ai quadrati invisibili di bloccarsi tra loro
+                alphaTest: 0.1     // Rende l'interno dell'esagono veramente trasparente
+            });
+
+            pointCloud = new THREE.Points(geometry, material);
+            pointCloud.frustumCulled = false; 
+            scene.add(pointCloud);
 
             window.addEventListener('resize', onWindowResize);
         }
 
-        // Funzione per scrivere sul cartello 3D
-        function updateHUD(text, textColor, bgColor) {
-            if (lastMessage === text) return; // Aggiorna solo se il messaggio cambia
+        function clearPointCloud() {
+            pointCount = 0;
+            pointCloud.geometry.setDrawRange(0, 0);
+            pointCloud.geometry.attributes.position.needsUpdate = true;
+            uiCounter.textContent = `Poligoni Rete: ${pointCount} / ${MAX_POINTS} (RESET)`;
+            uiCounter.style.color = "#ff0000";
             
-            hudContext.fillStyle = bgColor;
-            hudContext.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+            setTimeout(() => { uiCounter.style.color = "#00ffff"; }, 1000);
             
-            hudContext.font = "bold 40px sans-serif";
-            hudContext.fillStyle = textColor;
-            hudContext.textAlign = "center";
-            hudContext.textBaseline = "middle";
-            hudContext.fillText(text, hudCanvas.width / 2, hudCanvas.height / 2);
-            
-            hudTexture.needsUpdate = true;
-            lastMessage = text;
+            for (let i = 0; i < 2; i++) {
+                renderer.xr.getController(i).userData.lastPoint.set(999, 999, 999);
+            }
         }
 
         function onWindowResize() {
@@ -114,27 +170,55 @@
         function render(timestamp, frame) {
             if (frame) {
                 const session = renderer.xr.getSession();
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const now = performance.now();
 
-                // 1. Il visore ci ha dato il permesso di usare il sensore?
-                if (!session.grantedFeatures || !session.grantedFeatures.includes('depth-sensing')) {
-                    updateHUD("BLOCCO PERMESSI: Depth-Sensing negato dal Browser", "#ffffff", "#ff0000");
-                    renderer.render(scene, camera);
-                    return;
+                // RESET
+                for (const source of session.inputSources) {
+                    if (source.handedness === 'left' && source.gamepad) {
+                        if (source.gamepad.buttons[4] && source.gamepad.buttons[4].pressed) {
+                            if (now - lastButtonPressTime > 500) {
+                                lastButtonPressTime = now;
+                                clearPointCloud();
+                            }
+                        }
+                    }
                 }
 
-                const referenceSpace = renderer.xr.getReferenceSpace();
-                const viewerPose = frame.getViewerPose(referenceSpace);
+                // SCANSIONE E DISEGNO
+                const c0 = renderer.xr.getController(0);
+                const c1 = renderer.xr.getController(1);
+                const controllers = [c0, c1];
 
-                if (viewerPose) {
-                    const view = viewerPose.views[0];
+                let pointsAdded = false;
 
-                    // 2. Il sensore ci sta effettivamente passando i numeri?
-                    const depthInfo = frame.getDepthInformation(view);
+                controllers.forEach(ctrl => {
+                    if (ctrl.userData.isScanning && ctrl.userData.hitTestSource && pointCount < MAX_POINTS) {
+                        const hits = frame.getHitTestResults(ctrl.userData.hitTestSource);
+                        
+                        if (hits.length > 0) {
+                            const pose = hits[0].getPose(referenceSpace);
+                            const currentPos = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
 
-                    if (!depthInfo) {
-                        updateHUD("PERMESSI OK - In attesa del feed dal sensore...", "#000000", "#ffff00");
-                    } else {
-                        updateHUD(`SUCCESSO! Dati ricevuti: ${depthInfo.width}x${depthInfo.height}`, "#000000", "#00ff00");
+                            if (currentPos.distanceTo(ctrl.userData.lastPoint) > MIN_DISTANCE) {
+                                positions[pointCount * 3] = currentPos.x;
+                                positions[pointCount * 3 + 1] = currentPos.y;
+                                positions[pointCount * 3 + 2] = currentPos.z;
+
+                                pointCount++;
+                                pointsAdded = true;
+                                ctrl.userData.lastPoint.copy(currentPos);
+                            }
+                        }
+                    }
+                });
+
+                if (pointsAdded) {
+                    pointCloud.geometry.setDrawRange(0, pointCount);
+                    pointCloud.geometry.attributes.position.needsUpdate = true;
+                    
+                    if (pointCount % 20 === 0 || pointCount === MAX_POINTS) {
+                        uiCounter.textContent = `Poligoni Rete: ${pointCount} / ${MAX_POINTS}`;
                     }
                 }
             }
