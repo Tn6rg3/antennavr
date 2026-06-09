@@ -3,14 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR Scanner Alta Risoluzione - Quest 3</title>
+    <title>WebXR Scanner Volumetrico - Quest 3</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
-        #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; }
+        #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.5); padding: 10px; }
     </style>
 </head>
 <body>
-    <div id="info">Usa il laser del controller DESTRO. Tieni premuto il grilletto per scansionare ad alta risoluzione (1mm).</div>
+    <div id="info">
+        1. Punta il tavolo.<br>
+        2. Usa il <b>Joystick DESTRO (su/giù)</b> per ridimensionare il cubo sull'oggetto.<br>
+        3. <b>Tieni premuto il grilletto</b> per bloccare il cubo e scansionare girandoci attorno.
+    </div>
 
     <script type="importmap">
         {
@@ -26,18 +30,18 @@
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
         let camera, scene, renderer;
-        let reticle;
-        
         let rightController = null;
         let rightInputSource = null;
         let hitTestSource = null;
 
-        // --- IMPOSTAZIONI DI SCANSIONE AD ALTA RISOLUZIONE ---
+        // Variabili del Bounding Box (Il cubo di scansione)
+        let boxGroup, scanBox;
+        let currentBoxScale = 0.1; // Dimensione iniziale: 10 cm
+
+        // Impostazioni della Nuvola di Punti (Alta Risoluzione)
         let isScanning = false;
-        // Aumentato a 500mila punti per ospitare la scansione densa
         const MAX_POINTS = 500000; 
-        // Risoluzione di 1 millimetro (distanza minima tra i punti)
-        const MIN_DISTANCE = 0.001; 
+        const MIN_DISTANCE = 0.001; // 1 millimetro
         
         let pointCloud;
         let positions;
@@ -63,13 +67,12 @@
 
             document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
 
-            // --- GESTIONE CONTROLLER E RAGGIO LASER ---
+            // --- LASER DEL CONTROLLER ---
             function buildControllerPointer() {
                 const geometry = new THREE.BufferGeometry().setFromPoints([
                     new THREE.Vector3(0, 0, 0),
-                    new THREE.Vector3(0, 0, -1) // Raggio lungo 1 metro
+                    new THREE.Vector3(0, 0, -1) 
                 ]);
-                // Laser bianco semi-trasparente
                 const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
                 return new THREE.Line(geometry, material);
             }
@@ -78,7 +81,7 @@
                 const controller = renderer.xr.getController(i);
                 
                 controller.addEventListener('connected', function (event) {
-                    this.add(buildControllerPointer()); // Aggiunge il laser visivo
+                    this.add(buildControllerPointer());
 
                     if (event.data.handedness === 'right') {
                         rightController = this;
@@ -87,38 +90,47 @@
                     }
                 });
 
+                // Gestione del grilletto per bloccare il cubo e avviare la scansione
                 controller.addEventListener('selectstart', function () {
-                    if (this === rightController) isScanning = true;
+                    if (this === rightController) {
+                        isScanning = true;
+                        scanBox.material.color.setHex(0xff0000); // Il cubo diventa rosso quando acquisisce
+                    }
                 });
 
                 controller.addEventListener('selectend', function () {
-                    if (this === rightController) isScanning = false;
+                    if (this === rightController) {
+                        isScanning = false;
+                        scanBox.material.color.setHex(0xffff00); // Torna giallo quando rilasci
+                    }
                 });
 
                 scene.add(controller);
             }
 
-            // --- CREAZIONE MIRINO E NUVOLA DI PUNTI ---
+            // --- CREAZIONE DEL BOUNDING BOX (CUBO) ---
+            boxGroup = new THREE.Group();
+            boxGroup.matrixAutoUpdate = false;
+            boxGroup.visible = false;
 
-            reticle = new THREE.Mesh(
-                new THREE.RingGeometry(0.015, 0.02, 32).rotateX(- Math.PI / 2),
-                new THREE.MeshBasicMaterial({ color: 0x00ffff }) // Ciano
-            );
-            reticle.matrixAutoUpdate = false;
-            reticle.visible = false;
-            scene.add(reticle);
+            const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+            // Trasliamo la geometria in alto di 0.5 così la base del cubo poggia esattamente sul piano reale
+            boxGeometry.translate(0, 0.5, 0); 
+            const boxMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true, transparent: true, opacity: 0.6 });
+            
+            scanBox = new THREE.Mesh(boxGeometry, boxMaterial);
+            scanBox.scale.set(currentBoxScale, currentBoxScale, currentBoxScale);
+            boxGroup.add(scanBox);
+            scene.add(boxGroup);
 
+            // --- NUVOLA DI PUNTI ---
             const geometry = new THREE.BufferGeometry();
             positions = new Float32Array(MAX_POINTS * 3);
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             geometry.setDrawRange(0, 0);
 
-            // --- OTTIMIZZAZIONE VISIVA PER ALTA RISOLUZIONE ---
-            // Punti verdi più piccoli (2mm) per una visualizzazione più definita a 1mm di risoluzione
             const material = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.002 });
             pointCloud = new THREE.Points(geometry, material);
-            
-            // Impedisce che i punti scompaiano quando si muove la testa
             pointCloud.frustumCulled = false; 
             scene.add(pointCloud);
 
@@ -144,6 +156,23 @@
 
         function render(timestamp, frame) {
             if (frame && hitTestSource) {
+                
+                // --- LETTURA DEL JOYSTICK PER RIDIMENSIONARE IL CUBO ---
+                if (rightInputSource && rightInputSource.gamepad && !isScanning) {
+                    const axes = rightInputSource.gamepad.axes;
+                    // L'asse Y del thumbstick nel Quest è solitamente l'indice 3
+                    const yAxis = axes.length >= 4 ? axes[3] : 0; 
+                    
+                    // Applica una deadzone per evitare drifting involontario
+                    if (Math.abs(yAxis) > 0.1) {
+                        currentBoxScale -= yAxis * 0.005; // Velocità di ridimensionamento
+                        // Limite: da 2 centimetri a 1 metro
+                        currentBoxScale = Math.max(0.02, Math.min(currentBoxScale, 1.0)); 
+                        scanBox.scale.set(currentBoxScale, currentBoxScale, currentBoxScale);
+                    }
+                }
+
+                // --- ESECUZIONE DELL'HIT TEST ---
                 const hitTestResults = frame.getHitTestResults(hitTestSource);
 
                 if (hitTestResults.length > 0) {
@@ -151,29 +180,41 @@
                     const referenceSpace = renderer.xr.getReferenceSpace();
                     const pose = hit.getPose(referenceSpace);
 
-                    reticle.visible = true;
-                    reticle.matrix.fromArray(pose.transform.matrix);
+                    boxGroup.visible = true;
 
-                    // --- LOGICA DI SCANSIONE CONTINUA AD ALTA RISOLUZIONE ---
-                    if (isScanning && pointCount < MAX_POINTS) {
-                        const currentPos = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+                    // Se NON stiamo scansionando, il cubo segue il laser sul tavolo
+                    if (!isScanning) {
+                        boxGroup.matrix.fromArray(pose.transform.matrix);
+                    } 
+                    // Se STIAMO scansionando, il cubo rimane bloccato e filtriamo i punti
+                    else if (isScanning && pointCount < MAX_POINTS) {
+                        
+                        // Creiamo un oggetto logico "Box3" basato sulla posizione bloccata del nostro cubo
+                        const boundingBox = new THREE.Box3().setFromObject(scanBox);
+                        
+                        // Calcoliamo dove sta colpendo il laser
+                        const currentPos = new THREE.Vector3();
+                        currentPos.setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
 
-                        // --- FILTRO SPATIALE MILLIMETRICO ---
-                        // Registra un punto ogni 1mm di movimento
-                        if (currentPos.distanceTo(lastPoint) > MIN_DISTANCE) {
-                            positions[pointCount * 3] = currentPos.x;
-                            positions[pointCount * 3 + 1] = currentPos.y;
-                            positions[pointCount * 3 + 2] = currentPos.z;
+                        // --- LA MAGIA: IL PUNTO È DENTRO IL CUBO? ---
+                        if (boundingBox.containsPoint(currentPos)) {
+                            
+                            // Se sì, e se siamo distanti almeno 1mm dall'ultimo punto, lo salviamo
+                            if (currentPos.distanceTo(lastPoint) > MIN_DISTANCE) {
+                                positions[pointCount * 3] = currentPos.x;
+                                positions[pointCount * 3 + 1] = currentPos.y;
+                                positions[pointCount * 3 + 2] = currentPos.z;
 
-                            pointCount++;
-                            pointCloud.geometry.setDrawRange(0, pointCount);
-                            pointCloud.geometry.attributes.position.needsUpdate = true;
+                                pointCount++;
+                                pointCloud.geometry.setDrawRange(0, pointCount);
+                                pointCloud.geometry.attributes.position.needsUpdate = true;
 
-                            lastPoint.copy(currentPos);
+                                lastPoint.copy(currentPos);
+                            }
                         }
                     }
-                } else {
-                    reticle.visible = false;
+                } else if (!isScanning) {
+                    boxGroup.visible = false;
                 }
             }
             renderer.render(scene, camera);
