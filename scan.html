@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR Scanner Volumetrico - Quest 3</title>
+    <title>WebXR Scanner Volumetrico a Doppia Mano - Quest 3</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
-        #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.5); padding: 10px; }
+        #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
     </style>
 </head>
 <body>
     <div id="info">
-        1. Punta il tavolo.<br>
-        2. Usa il <b>Joystick DESTRO (su/giù)</b> per ridimensionare il cubo sull'oggetto.<br>
-        3. <b>Tieni premuto il grilletto</b> per bloccare il cubo e scansionare girandoci attorno.
+        1. Inquadra con la <b>mano DESTRA</b> e usa il suo joystick per scalare il cubo.<br>
+        2. Tieni premuti <b>ENTRAMBI i grilletti</b> per bloccare il cubo e "spruzzare" punti con due mani!
     </div>
 
     <script type="importmap">
@@ -30,23 +29,19 @@
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
         let camera, scene, renderer;
-        let rightController = null;
-        let rightInputSource = null;
-        let hitTestSource = null;
-
-        // Variabili del Bounding Box (Il cubo di scansione)
+        
+        // Bounding Box
         let boxGroup, scanBox;
-        let currentBoxScale = 0.1; // Dimensione iniziale: 10 cm
+        let currentBoxScale = 0.1;
 
-        // Impostazioni della Nuvola di Punti (Alta Risoluzione)
-        let isScanning = false;
-        const MAX_POINTS = 500000; 
+        // Impostazioni Nuvola di Punti
+        // Ho aumentato a 800.000 per compensare la velocità doppia di acquisizione
+        const MAX_POINTS = 800000; 
         const MIN_DISTANCE = 0.001; // 1 millimetro
         
         let pointCloud;
         let positions;
         let pointCount = 0;
-        let lastPoint = new THREE.Vector3(999, 999, 999);
 
         init();
         animate();
@@ -67,7 +62,6 @@
 
             document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
 
-            // --- LASER DEL CONTROLLER ---
             function buildControllerPointer() {
                 const geometry = new THREE.BufferGeometry().setFromPoints([
                     new THREE.Vector3(0, 0, 0),
@@ -77,31 +71,43 @@
                 return new THREE.Line(geometry, material);
             }
 
+            // --- GESTIONE AVANZATA DI ENTRAMBI I CONTROLLER ---
             for (let i = 0; i < 2; i++) {
                 const controller = renderer.xr.getController(i);
                 
+                // Inizializziamo un "cervello" (userData) separato per ogni controller
+                controller.userData = {
+                    handedness: null,
+                    inputSource: null,
+                    hitTestSource: null,
+                    isScanning: false,
+                    lastPoint: new THREE.Vector3(999, 999, 999) // Memoria indipendente dell'ultimo punto
+                };
+
                 controller.addEventListener('connected', function (event) {
+                    this.userData.handedness = event.data.handedness;
+                    this.userData.inputSource = event.data;
                     this.add(buildControllerPointer());
 
-                    if (event.data.handedness === 'right') {
-                        rightController = this;
-                        rightInputSource = event.data;
-                        requestHitTestSource();
-                    }
+                    // Richiede l'Hit Test spaziale per QUESTA specifica mano
+                    renderer.xr.getSession().requestHitTestSource({ space: event.data.targetRaySpace })
+                        .then(source => { this.userData.hitTestSource = source; })
+                        .catch(console.error);
                 });
 
-                // Gestione del grilletto per bloccare il cubo e avviare la scansione
+                // Gestione indipendente dei grilletti
                 controller.addEventListener('selectstart', function () {
-                    if (this === rightController) {
-                        isScanning = true;
-                        scanBox.material.color.setHex(0xff0000); // Il cubo diventa rosso quando acquisisce
-                    }
+                    this.userData.isScanning = true;
+                    scanBox.material.color.setHex(0xff0000); // Rosso = In Scansione
                 });
 
                 controller.addEventListener('selectend', function () {
-                    if (this === rightController) {
-                        isScanning = false;
-                        scanBox.material.color.setHex(0xffff00); // Torna giallo quando rilasci
+                    this.userData.isScanning = false;
+                    
+                    // Controlla se l'ALTRA mano sta ancora scansionando. Se no, sblocca il cubo (Giallo)
+                    const otherCtrl = this === renderer.xr.getController(0) ? renderer.xr.getController(1) : renderer.xr.getController(0);
+                    if (!otherCtrl.userData.isScanning) {
+                        scanBox.material.color.setHex(0xffff00); // Giallo = Libero
                     }
                 });
 
@@ -114,7 +120,6 @@
             boxGroup.visible = false;
 
             const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
-            // Trasliamo la geometria in alto di 0.5 così la base del cubo poggia esattamente sul piano reale
             boxGeometry.translate(0, 0.5, 0); 
             const boxMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true, transparent: true, opacity: 0.6 });
             
@@ -137,13 +142,6 @@
             window.addEventListener('resize', onWindowResize);
         }
 
-        function requestHitTestSource() {
-            const session = renderer.xr.getSession();
-            session.requestHitTestSource({ space: rightInputSource.targetRaySpace }).then((source) => {
-                hitTestSource = source;
-            }).catch(console.error);
-        }
-
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -155,66 +153,74 @@
         }
 
         function render(timestamp, frame) {
-            if (frame && hitTestSource) {
+            if (frame) {
+                const c0 = renderer.xr.getController(0);
+                const c1 = renderer.xr.getController(1);
+                const controllers = [c0, c1];
                 
-                // --- LETTURA DEL JOYSTICK PER RIDIMENSIONARE IL CUBO ---
-                if (rightInputSource && rightInputSource.gamepad && !isScanning) {
-                    const axes = rightInputSource.gamepad.axes;
-                    // L'asse Y del thumbstick nel Quest è solitamente l'indice 3
-                    const yAxis = axes.length >= 4 ? axes[3] : 0; 
+                // Controlla se ALMENO UNA mano sta scansionando
+                const isAnyScanning = c0.userData.isScanning || c1.userData.isScanning;
+                const referenceSpace = renderer.xr.getReferenceSpace();
+
+                // --- 1. SE NESSUNO STA SCANSIONANDO: MUOVI E RIDIMENSIONA IL CUBO ---
+                if (!isAnyScanning) {
+                    // Trova il controller DESTRO per gestire il cubo
+                    const rightCtrl = controllers.find(c => c.userData.handedness === 'right');
                     
-                    // Applica una deadzone per evitare drifting involontario
-                    if (Math.abs(yAxis) > 0.1) {
-                        currentBoxScale -= yAxis * 0.005; // Velocità di ridimensionamento
-                        // Limite: da 2 centimetri a 1 metro
-                        currentBoxScale = Math.max(0.02, Math.min(currentBoxScale, 1.0)); 
-                        scanBox.scale.set(currentBoxScale, currentBoxScale, currentBoxScale);
-                    }
-                }
+                    if (rightCtrl) {
+                        // Ridimensionamento tramite Joystick Destro
+                        if (rightCtrl.userData.inputSource && rightCtrl.userData.inputSource.gamepad) {
+                            const axes = rightCtrl.userData.inputSource.gamepad.axes;
+                            const yAxis = axes.length >= 4 ? axes[3] : 0; 
+                            if (Math.abs(yAxis) > 0.1) {
+                                currentBoxScale -= yAxis * 0.005;
+                                currentBoxScale = Math.max(0.02, Math.min(currentBoxScale, 1.0)); 
+                                scanBox.scale.set(currentBoxScale, currentBoxScale, currentBoxScale);
+                            }
+                        }
 
-                // --- ESECUZIONE DELL'HIT TEST ---
-                const hitTestResults = frame.getHitTestResults(hitTestSource);
-
-                if (hitTestResults.length > 0) {
-                    const hit = hitTestResults[0];
-                    const referenceSpace = renderer.xr.getReferenceSpace();
-                    const pose = hit.getPose(referenceSpace);
-
-                    boxGroup.visible = true;
-
-                    // Se NON stiamo scansionando, il cubo segue il laser sul tavolo
-                    if (!isScanning) {
-                        boxGroup.matrix.fromArray(pose.transform.matrix);
-                    } 
-                    // Se STIAMO scansionando, il cubo rimane bloccato e filtriamo i punti
-                    else if (isScanning && pointCount < MAX_POINTS) {
-                        
-                        // Creiamo un oggetto logico "Box3" basato sulla posizione bloccata del nostro cubo
-                        const boundingBox = new THREE.Box3().setFromObject(scanBox);
-                        
-                        // Calcoliamo dove sta colpendo il laser
-                        const currentPos = new THREE.Vector3();
-                        currentPos.setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
-
-                        // --- LA MAGIA: IL PUNTO È DENTRO IL CUBO? ---
-                        if (boundingBox.containsPoint(currentPos)) {
-                            
-                            // Se sì, e se siamo distanti almeno 1mm dall'ultimo punto, lo salviamo
-                            if (currentPos.distanceTo(lastPoint) > MIN_DISTANCE) {
-                                positions[pointCount * 3] = currentPos.x;
-                                positions[pointCount * 3 + 1] = currentPos.y;
-                                positions[pointCount * 3 + 2] = currentPos.z;
-
-                                pointCount++;
-                                pointCloud.geometry.setDrawRange(0, pointCount);
-                                pointCloud.geometry.attributes.position.needsUpdate = true;
-
-                                lastPoint.copy(currentPos);
+                        // Riposizionamento spaziale del cubo
+                        if (rightCtrl.userData.hitTestSource) {
+                            const hits = frame.getHitTestResults(rightCtrl.userData.hitTestSource);
+                            if (hits.length > 0) {
+                                boxGroup.visible = true;
+                                boxGroup.matrix.fromArray(hits[0].getPose(referenceSpace).transform.matrix);
+                            } else {
+                                boxGroup.visible = false;
                             }
                         }
                     }
-                } else if (!isScanning) {
-                    boxGroup.visible = false;
+                } 
+                // --- 2. SE STIAMO SCANSIONANDO: ELABORA ENTRAMBI I LASER ---
+                else {
+                    const boundingBox = new THREE.Box3().setFromObject(scanBox);
+                    
+                    // Cicla entrambi i controller per aggiungere punti
+                    controllers.forEach(ctrl => {
+                        if (ctrl.userData.isScanning && ctrl.userData.hitTestSource && pointCount < MAX_POINTS) {
+                            const hits = frame.getHitTestResults(ctrl.userData.hitTestSource);
+                            
+                            if (hits.length > 0) {
+                                const pose = hits[0].getPose(referenceSpace);
+                                const currentPos = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
+
+                                // Verifica se il punto è dentro il cubo rosso e rispetta il filtro millimetrico
+                                if (boundingBox.containsPoint(currentPos) && currentPos.distanceTo(ctrl.userData.lastPoint) > MIN_DISTANCE) {
+                                    
+                                    positions[pointCount * 3] = currentPos.x;
+                                    positions[pointCount * 3 + 1] = currentPos.y;
+                                    positions[pointCount * 3 + 2] = currentPos.z;
+
+                                    pointCount++;
+                                    pointCloud.geometry.setDrawRange(0, pointCount);
+                                    pointCloud.geometry.attributes.position.needsUpdate = true;
+
+                                    // Aggiorna la memoria dell'ultimo punto PER QUESTA SPECIFICA MANO
+                                    ctrl.userData.lastPoint.copy(currentPos);
+                                }
+                            }
+                        }
+                    });
                 }
             }
             renderer.render(scene, camera);
