@@ -366,24 +366,31 @@
                     if (hitTestResults.length > 0) {
                         let pose = hitTestResults[0].getPose(refSpace);
                         if (pose) {
-                            this.reticle.object3D.position.copy(pose.transform.position);
-                            this.reticle.object3D.quaternion.copy(pose.transform.orientation);
-                            // Manteniamo la rotazione base dell'esagono sul piano
-                            this.reticle.object3D.rotateX(-Math.PI / 2);
-                            this.reticle.setAttribute('visible', 'true');
-                            this.reticleValid = true;
+                            // 1. Estrapola la posizione rilevata dall'hit-test
+                            let hitPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                            
+                            // 2. Calcola la posizione reale del tuo controller destro
+                            let controllerPos = new THREE.Vector3();
+                            this.raycasterEl.object3D.getWorldPosition(controllerPos);
+                            
+                            // 3. Mostra l'esagono SOLO se la distanza è maggiore di 40 cm (0.4 metri)
+                            if (controllerPos.distanceTo(hitPos) > 0.4) {
+                                this.reticle.object3D.position.copy(hitPos);
+                                this.reticle.object3D.quaternion.copy(pose.transform.orientation);
+                                this.reticle.object3D.rotateX(-Math.PI / 2);
+                                this.reticle.setAttribute('visible', 'true');
+                                this.reticleValid = true;
+                            } else {
+                                // Se è troppo vicino, nascondi l'esagono
+                                this.reticle.setAttribute('visible', 'false');
+                                this.reticleValid = false;
+                            }
                         }
                     } else {
                         this.reticle.setAttribute('visible', 'false');
                         this.reticleValid = false;
                     }
                 }
-            }
-        } else {
-            if(this.reticle) this.reticle.setAttribute('visible', 'false');
-            this.reticleValid = false;
-        }
-
         // --- ANIMAZIONE LIVE CALIBRAZIONE TOPOGRAFICA ---
         if (this.state === 'AWAITING_CALIB_PT1') {
             let hitGround = this.getHitPoint();
