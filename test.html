@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Environment Scanner - Hit Test</title>
+    <title>Raw Depth SLAM - WebXR</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
         #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
-        #point-counter { color: #00ffff; font-family: monospace; font-size: 1.2em; }
     </style>
 </head>
 <body>
     <div id="info">
-        <b>Grilletti (Tieni premuto)</b>: "Dipingi" la stanza in tempo reale<br>
-        <b>Pulsante X (Sinistro)</b>: Resetta la scansione<br>
-        <div id="point-counter">Punti: 0 / 1000000</div>
+        <span style="color: #00ffff;">MOTORE SLAM RAW ATTIVO</span><br>
+        Guarda la stanza: il codice sta ricostruendo la topologia in tempo reale dai dati crudi di profondità.<br>
+        Nessuna cache. Nessun fantasma.
     </div>
 
     <script type="importmap">
@@ -31,28 +30,20 @@
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
         let camera, scene, renderer;
+        let depthPoints; // L'oggetto Three.js che farà da "pelle" agli oggetti reali
         
-        // Impostazioni per scala ambientale (Stanza)
-        const MAX_POINTS = 1000000; // 1 Milione di punti
-        const MIN_DISTANCE = 0.02;  // Scrive un punto ogni 2 centimetri
-        
-        let pointCloud;
-        let positions;
-        let pointCount = 0;
-        
-        let lastButtonPressTime = 0;
-        const uiCounter = document.getElementById('point-counter');
+        // Risoluzione della nostra mappa (Quanti punti estraiamo dal sensore)
+        // Il Quest 3 di solito ha un sensore di profondità interno a risoluzione molto bassa (es. 160x120)
+        const DEPTH_WIDTH = 160; 
+        const DEPTH_HEIGHT = 120;
+        const TOTAL_POINTS = DEPTH_WIDTH * DEPTH_HEIGHT;
 
         init();
         animate();
 
         function init() {
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
-
-            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-            light.position.set(0.5, 1, 0.25);
-            scene.add(light);
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -60,73 +51,40 @@
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // Chiediamo SOLO l'hit-test, bypassando le mesh e i confini salvati!
-            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+            // --- LA MAGIA È QUI: Richiediamo la 'depth-sensing' ---
+            document.body.appendChild(ARButton.createButton(renderer, { 
+                requiredFeatures: ['depth-sensing'],
+                depthSensing: {
+                    usagePreference: ['cpu-optimized'],
+                    dataFormatPreference: ['luminance-alpha']
+                }
+            }));
 
-            // --- GESTIONE CONTROLLER E LASER ---
-            function buildControllerPointer() {
-                const geometry = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(0, 0, 0),
-                    new THREE.Vector3(0, 0, -1) 
-                ]);
-                const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
-                return new THREE.Line(geometry, material);
-            }
-
-            for (let i = 0; i < 2; i++) {
-                const controller = renderer.xr.getController(i);
-                
-                controller.userData = {
-                    handedness: null,
-                    isScanning: false,
-                    hitTestSource: null,
-                    lastPoint: new THREE.Vector3(999, 999, 999)
-                };
-
-                controller.addEventListener('connected', function (event) {
-                    this.userData.handedness = event.data.handedness;
-                    this.add(buildControllerPointer());
-
-                    renderer.xr.getSession().requestHitTestSource({ space: event.data.targetRaySpace })
-                        .then(source => { this.userData.hitTestSource = source; })
-                        .catch(console.error);
-                });
-
-                controller.addEventListener('selectstart', function () { this.userData.isScanning = true; });
-                controller.addEventListener('selectend', function () { this.userData.isScanning = false; });
-
-                scene.add(controller);
-            }
-
-            // --- NUVOLA DI PUNTI ---
+            // --- CREIAMO LA NUVOLA DI PUNTI (La nostra "Pre-Mesh") ---
             const geometry = new THREE.BufferGeometry();
-            positions = new Float32Array(MAX_POINTS * 3);
+            const positions = new Float32Array(TOTAL_POINTS * 3);
+            
+            // Inizializziamo i punti lontano dalla vista
+            for(let i=0; i<TOTAL_POINTS*3; i++) { positions[i] = 999; }
+            
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setDrawRange(0, 0);
+            
+            // Creiamo quadratini verdi semitrasparenti per formare una superficie compatta
+            const material = new THREE.PointsMaterial({ 
+                color: 0x00ff00, 
+                size: 0.03, // 3 centimetri di grandezza
+                transparent: true,
+                opacity: 0.8
+            });
 
-            // Punti di 2 centimetri per riempire in fretta i muri
-            const material = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.02 });
-            pointCloud = new THREE.Points(geometry, material);
-            pointCloud.frustumCulled = false; 
-            scene.add(pointCloud);
+            depthPoints = new THREE.Points(geometry, material);
+            depthPoints.frustumCulled = false;
+            
+            // Agganciamo i punti DIRETTAMENTE alla telecamera, così seguono il tuo sguardo
+            camera.add(depthPoints); 
+            scene.add(camera); 
 
             window.addEventListener('resize', onWindowResize);
-        }
-
-        // --- FUNZIONE DI RESET IMMEDIATO ---
-        function clearPointCloud() {
-            pointCount = 0;
-            pointCloud.geometry.setDrawRange(0, 0);
-            pointCloud.geometry.attributes.position.needsUpdate = true;
-            uiCounter.textContent = `Punti: ${pointCount} / ${MAX_POINTS} (RESET)`;
-            uiCounter.style.color = "#ff0000";
-            
-            setTimeout(() => { uiCounter.style.color = "#00ffff"; }, 1000);
-            
-            // Resetta le memorie dei controller
-            for (let i = 0; i < 2; i++) {
-                renderer.xr.getController(i).userData.lastPoint.set(999, 999, 999);
-            }
         }
 
         function onWindowResize() {
@@ -143,55 +101,65 @@
             if (frame) {
                 const session = renderer.xr.getSession();
                 const referenceSpace = renderer.xr.getReferenceSpace();
-                const now = performance.now();
+                const viewerPose = frame.getViewerPose(referenceSpace);
 
-                // 1. GESTIONE DEL TASTO X PER IL RESET
-                for (const source of session.inputSources) {
-                    if (source.handedness === 'left' && source.gamepad) {
-                        if (source.gamepad.buttons[4] && source.gamepad.buttons[4].pressed) {
-                            if (now - lastButtonPressTime > 500) {
-                                lastButtonPressTime = now;
-                                clearPointCloud();
+                if (viewerPose) {
+                    const view = viewerPose.views[0]; // Prendiamo l'occhio sinistro come riferimento
+
+                    // --- CHIEDIAMO I DATI DI PROFONDITÀ AL SENSORE ---
+                    const depthInfo = frame.getDepthInformation(view);
+
+                    if (depthInfo) {
+                        const positions = depthPoints.geometry.attributes.position.array;
+                        let pointIndex = 0;
+
+                        // Otteniamo la matrice di proiezione per capire come i pixel si spalmano nello spazio
+                        const projectionMatrix = view.projectionMatrix;
+                        const invProjection = new THREE.Matrix4().copy(camera.projectionMatrix).invert();
+
+                        // Lo step (salto) ci permette di adattare la griglia alla risoluzione reale del sensore
+                        const stepX = depthInfo.width / DEPTH_WIDTH;
+                        const stepY = depthInfo.height / DEPTH_HEIGHT;
+
+                        // Analizziamo la matrice dei pixel di profondità
+                        for (let y = 0; y < DEPTH_HEIGHT; y++) {
+                            for (let x = 0; x < DEPTH_WIDTH; x++) {
+                                
+                                // Otteniamo la distanza in metri in quel preciso pixel
+                                const depthInMeters = depthInfo.getDepthInMeters(
+                                    Math.floor(x * stepX), 
+                                    Math.floor(y * stepY)
+                                );
+
+                                // Se il sensore rileva qualcosa ed è entro 5 metri...
+                                if (depthInMeters > 0 && depthInMeters < 5.0) {
+                                    
+                                    // 1. Calcoliamo la posizione 2D sullo schermo (da -1 a +1)
+                                    const ndcX = (x / DEPTH_WIDTH) * 2 - 1;
+                                    const ndcY = -(y / DEPTH_HEIGHT) * 2 + 1; // La Y va invertita
+                                    
+                                    // 2. Usiamo una formula SLAM base per "S-proiettare" il punto 2D nella 3D
+                                    // sfruttando il valore di profondità (Z)
+                                    const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
+                                    vector.applyMatrix4(invProjection);
+                                    vector.multiplyScalar(depthInMeters / Math.abs(vector.z));
+
+                                    // 3. Aggiorniamo la coordinata nella nostra griglia
+                                    positions[pointIndex * 3] = vector.x;
+                                    positions[pointIndex * 3 + 1] = vector.y;
+                                    positions[pointIndex * 3 + 2] = -depthInMeters; // Profondità in negativo sull'asse Z
+                                } else {
+                                    // Nascondi i punti che non intercettano nulla
+                                    positions[pointIndex * 3] = 999;
+                                    positions[pointIndex * 3 + 1] = 999;
+                                    positions[pointIndex * 3 + 2] = 999;
+                                }
+                                pointIndex++;
                             }
                         }
-                    }
-                }
 
-                // 2. GESTIONE HIT TEST E DISEGNO PUNTI
-                const c0 = renderer.xr.getController(0);
-                const c1 = renderer.xr.getController(1);
-                const controllers = [c0, c1];
-
-                let pointsAdded = false;
-
-                controllers.forEach(ctrl => {
-                    if (ctrl.userData.isScanning && ctrl.userData.hitTestSource && pointCount < MAX_POINTS) {
-                        const hits = frame.getHitTestResults(ctrl.userData.hitTestSource);
-                        
-                        if (hits.length > 0) {
-                            const pose = hits[0].getPose(referenceSpace);
-                            const currentPos = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
-
-                            if (currentPos.distanceTo(ctrl.userData.lastPoint) > MIN_DISTANCE) {
-                                positions[pointCount * 3] = currentPos.x;
-                                positions[pointCount * 3 + 1] = currentPos.y;
-                                positions[pointCount * 3 + 2] = currentPos.z;
-
-                                pointCount++;
-                                pointsAdded = true;
-                                ctrl.userData.lastPoint.copy(currentPos);
-                            }
-                        }
-                    }
-                });
-
-                if (pointsAdded) {
-                    pointCloud.geometry.setDrawRange(0, pointCount);
-                    pointCloud.geometry.attributes.position.needsUpdate = true;
-                    
-                    // Aggiorna l'interfaccia ogni 50 punti per non sovraccaricare la CPU
-                    if (pointCount % 50 === 0 || pointCount === MAX_POINTS) {
-                        uiCounter.textContent = `Punti: ${pointCount} / ${MAX_POINTS}`;
+                        // Diciamo alla scheda video di aggiornare la scena
+                        depthPoints.geometry.attributes.position.needsUpdate = true;
                     }
                 }
             }
