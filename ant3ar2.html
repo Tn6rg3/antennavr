@@ -324,29 +324,54 @@
         this.endFed_AC_Len = baseLen / 2; this.endFed_CB_Len = baseLen / 2; this.longwireLen = baseLen;
       },
 
-      tick: function () {
-        let indicator = document.querySelector('#touch-indicator');
-        if (indicator) {
-            let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT';
-            // Mostriamo la pallina fisica solo se NON siamo in modalità laser
-            indicator.setAttribute('visible', isPlacingMode && !this.isLaserMode);
-        }
+     tick: function () {
+    let indicator = document.querySelector('#touch-indicator');
+    if (indicator) {
+        let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT';
+        indicator.setAttribute('visible', isPlacingMode && !this.isLaserMode);
+    }
 
-        // --- ANIMAZIONE LIVE CALIBRAZIONE TOPOGRAFICA ---
-        if (this.state === 'AWAITING_CALIB_PT1') {
-            let hitGround = this.getHitPoint();
-            if (hitGround && hitGround.point) {
-                this.worldPivotEl.object3D.position.copy(hitGround.point);
-            }
-        } else if (this.state === 'AWAITING_CALIB_PT2') {
-            let hitGround = this.getHitPoint();
-            if (hitGround && hitGround.point && this.calibPt1 && this.calibLocal1 && this.calibLocal2) {
-                let angleLocal = Math.atan2(this.calibLocal2.x - this.calibLocal1.x, this.calibLocal2.z - this.calibLocal1.z);
-                let angleWorld = Math.atan2(hitGround.point.x - this.calibPt1.x, hitGround.point.z - this.calibPt1.z);
-                this.worldPivotEl.object3D.rotation.set(0, angleWorld - angleLocal, 0);
-            }
+    // --- NUOVA LOGICA LASER DINAMICO ---
+    if (this.isLaserMode) {
+        let raycaster = this.raycasterEl.components.raycaster;
+        // Intersezione con il mondo AR (oggetti piazzabili o superfici)
+        let intersections = raycaster.intersections;
+        
+        if (intersections && intersections.length > 0) {
+            let hit = intersections[0]; // Il punto più vicino colpito dal laser
+            
+            this.hexCursor.object3D.position.copy(hit.point);
+            
+            // Facciamo aderire l'esagono alla superficie (Normal)
+            let normal = hit.face.normal.clone();
+            normal.transformDirection(hit.object.matrixWorld);
+            this.hexCursor.object3D.lookAt(new THREE.Vector3().addVectors(hit.point, normal));
+            
+            this.hexCursor.setAttribute('visible', 'true');
+            this.currentRemoteHit = hit.point.clone();
+        } else {
+            this.hexCursor.setAttribute('visible', 'false');
+            this.currentRemoteHit = null;
         }
-      },
+    } else {
+        this.hexCursor.setAttribute('visible', 'false');
+    }
+
+    // --- ANIMAZIONE LIVE CALIBRAZIONE ---
+    if (this.state === 'AWAITING_CALIB_PT1') {
+        let hitGround = this.isLaserMode ? { point: this.currentRemoteHit } : this.getHitPoint();
+        if (hitGround && hitGround.point) {
+            this.worldPivotEl.object3D.position.copy(hitGround.point);
+        }
+    } else if (this.state === 'AWAITING_CALIB_PT2') {
+        let hitGround = this.isLaserMode ? { point: this.currentRemoteHit } : this.getHitPoint();
+        if (hitGround && hitGround.point && this.calibPt1 && this.calibLocal1 && this.calibLocal2) {
+            let angleLocal = Math.atan2(this.calibLocal2.x - this.calibLocal1.x, this.calibLocal2.z - this.calibLocal1.z);
+            let angleWorld = Math.atan2(hitGround.point.x - this.calibPt1.x, hitGround.point.z - this.calibPt1.z);
+            this.worldPivotEl.object3D.rotation.set(0, angleWorld - angleLocal, 0);
+        }
+    }
+},
 
       // MODIFICATA PER GESTIRE LA MODALITA' LASER
       getHitPoint: function() {
