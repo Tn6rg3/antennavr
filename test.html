@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner Superfici 3D - Rete Perfetta</title>
+    <title>Scanner 3D Definitivo + Export</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
         #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
@@ -12,8 +12,9 @@
 </head>
 <body>
     <div id="info">
-        <b>Grilletti (Tieni premuto)</b>: Dipingi la rete (aderente alle superfici)<br>
-        <b>Pulsante X (Sinistro)</b>: Cancella tutto<br>
+        <b>Grilletti (Tieni premuti)</b>: Mappa le superfici reali<br>
+        <b>Pulsante Y (Sinistro)</b>: Salva ed esporta Modello 3D (.PLY)<br>
+        <b>Pulsante X (Sinistro)</b>: Cancella scansione<br>
         <div id="point-counter">Celle Rete: 0 / 50000</div>
     </div>
 
@@ -29,21 +30,24 @@
     <script type="module">
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
+        
+        // Importiamo i moduli per unire la mesh ed esportare il file 3D
+        import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+        import { PLYExporter } from 'three/addons/exporters/PLYExporter.js';
 
         let camera, scene, renderer;
         
-        // IMPOSTAZIONI DELLA RETE
         const MAX_HEXAGONS = 50000; 
-        const HEX_RADIUS = 0.05; // Raggio 5cm (Larghezza totale 10cm)
-        const VOXEL_SIZE = 0.1;  // Dimensione del cubo di controllo anti-doppioni (10cm)
+        const HEX_RADIUS = 0.05; // 5 centimetri
+        const VOXEL_SIZE = 0.1;  // Griglia spaziale di 10 centimetri
         
         let instancedMesh;
-        let voxelGrid = new Set(); // La memoria della nostra scacchiera spaziale
+        let voxelGrid = new Set(); 
         
         let lastButtonPressTime = 0;
+        let isExporting = false;
         const uiCounter = document.getElementById('point-counter');
 
-        // Oggetto temporaneo per calcolare la rotazione degli esagoni
         const dummyMatrix = new THREE.Matrix4();
 
         init();
@@ -53,7 +57,6 @@
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
 
-            // Luce per rendere visibili gli esagoni
             const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
             light.position.set(0, 2, 0);
             scene.add(light);
@@ -66,7 +69,6 @@
 
             document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
 
-            // Controller Laser
             function buildControllerPointer() {
                 const geometry = new THREE.BufferGeometry().setFromPoints([
                     new THREE.Vector3(0, 0, 0),
@@ -79,16 +81,11 @@
             for (let i = 0; i < 2; i++) {
                 const controller = renderer.xr.getController(i);
                 
-                controller.userData = {
-                    handedness: null,
-                    isScanning: false,
-                    hitTestSource: null
-                };
+                controller.userData = { handedness: null, isScanning: false, hitTestSource: null };
 
                 controller.addEventListener('connected', function (event) {
                     this.userData.handedness = event.data.handedness;
                     this.add(buildControllerPointer());
-
                     renderer.xr.getSession().requestHitTestSource({ space: event.data.targetRaySpace })
                         .then(source => { this.userData.hitTestSource = source; })
                         .catch(console.error);
@@ -100,37 +97,82 @@
                 scene.add(controller);
             }
 
-            // --- CREAZIONE DEGLI ESAGONI 3D (InstancedMesh) ---
-            // Usiamo un anello a 6 lati per creare un esagono vuoto perfetto
+            // CREAZIONE RETE (Correzione bug invisibilità)
             const geometry = new THREE.RingGeometry(HEX_RADIUS - 0.005, HEX_RADIUS, 6);
-            
-            // IMPORTANTE: Ruotiamo l'esagono in modo che la sua faccia guardi l'Asse Y.
-            // Il sistema HitTest di WebXR usa l'Asse Y come "normale" della superficie.
             geometry.rotateX(-Math.PI / 2);
-            geometry.rotateY(Math.PI / 6); // Raddrizza le punte dell'esagono per farle incastrare meglio
+            geometry.rotateY(Math.PI / 6);
 
-            const material = new THREE.MeshBasicMaterial({ 
-                color: 0x00ff00, 
-                side: THREE.DoubleSide 
-            });
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
 
-            // L'InstancedMesh ci permette di disegnare 50.000 esagoni con 1 sola chiamata alla scheda video!
             instancedMesh = new THREE.InstancedMesh(geometry, material, MAX_HEXAGONS);
             instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
             instancedMesh.count = 0;
+            
+            // IL FIX FONDAMENTALE CHE MANCAVA:
+            instancedMesh.frustumCulled = false; 
+            
             scene.add(instancedMesh);
-
             window.addEventListener('resize', onWindowResize);
         }
 
         function clearScannedMesh() {
             instancedMesh.count = 0;
             instancedMesh.instanceMatrix.needsUpdate = true;
-            voxelGrid.clear(); // Svuotiamo la memoria anti-doppioni
+            voxelGrid.clear(); 
             
             uiCounter.textContent = `Celle Rete: 0 / ${MAX_HEXAGONS} (RESET)`;
             uiCounter.style.color = "#ff0000";
             setTimeout(() => { uiCounter.style.color = "#00ffff"; }, 1000);
+        }
+
+        // --- SISTEMA DI ESPORTAZIONE 3D (.PLY) ---
+        function exportMeshToPLY() {
+            if (instancedMesh.count === 0 || isExporting) return;
+            isExporting = true;
+
+            uiCounter.textContent = "ESPORTAZIONE IN CORSO... ATTENDI";
+            uiCounter.style.color = "#ffff00";
+
+            // Creiamo un array di geometrie piatte per ogni esagono disegnato
+            const geometries = [];
+            const baseGeo = instancedMesh.geometry.clone();
+
+            for ( let i = 0; i < instancedMesh.count; i ++ ) {
+                const matrix = new THREE.Matrix4();
+                instancedMesh.getMatrixAt( i, matrix );
+                const geo = baseGeo.clone();
+                geo.applyMatrix4( matrix ); // Inclina e posiziona il singolo esagono
+                geometries.push( geo );
+            }
+
+            // Fondiamo i migliaia di esagoni in un unico oggetto solido
+            const mergedGeometry = BufferGeometryUtils.mergeGeometries( geometries );
+            const finalMesh = new THREE.Mesh( mergedGeometry, new THREE.MeshBasicMaterial() );
+
+            // Generiamo il file
+            const exporter = new PLYExporter();
+            exporter.parse( finalMesh, function ( result ) {
+                const blob = new Blob( [ result ], { type: 'text/plain' } );
+                const url = URL.createObjectURL( blob );
+                
+                // Inganniamo il browser simulando un clic su un link per forzare il download
+                const link = document.createElement( 'a' );
+                link.style.display = 'none';
+                link.href = url;
+                link.download = 'Scansione_Stanza.ply';
+                document.body.appendChild( link );
+                link.click();
+                document.body.removeChild( link );
+                
+                uiCounter.textContent = "DOWNLOAD COMPLETATO! FILE SALVATO.";
+                uiCounter.style.color = "#00ff00";
+                
+                setTimeout(() => { 
+                    uiCounter.textContent = `Celle Rete: ${instancedMesh.count} / ${MAX_HEXAGONS}`; 
+                    uiCounter.style.color = "#00ffff";
+                    isExporting = false;
+                }, 3000);
+            });
         }
 
         function onWindowResize() {
@@ -149,19 +191,29 @@
                 const referenceSpace = renderer.xr.getReferenceSpace();
                 const now = performance.now();
 
-                // RESET
+                // GESTIONE PULSANTI
                 for (const source of session.inputSources) {
                     if (source.handedness === 'left' && source.gamepad) {
+                        
+                        // Pulsante X (Indice 4) - Cancella
                         if (source.gamepad.buttons[4] && source.gamepad.buttons[4].pressed) {
                             if (now - lastButtonPressTime > 500) {
                                 lastButtonPressTime = now;
                                 clearScannedMesh();
                             }
                         }
+                        
+                        // Pulsante Y (Indice 5) - Esporta
+                        if (source.gamepad.buttons[5] && source.gamepad.buttons[5].pressed) {
+                            if (now - lastButtonPressTime > 1000) { // Pausa più lunga per evitare doppi download
+                                lastButtonPressTime = now;
+                                exportMeshToPLY();
+                            }
+                        }
                     }
                 }
 
-                // SCANSIONE E ALLINEAMENTO 3D
+                // SCANSIONE CON I GRILLETTI
                 const c0 = renderer.xr.getController(0);
                 const c1 = renderer.xr.getController(1);
                 const controllers = [c0, c1];
@@ -169,27 +221,18 @@
                 let meshAdded = false;
 
                 controllers.forEach(ctrl => {
-                    if (ctrl.userData.isScanning && ctrl.userData.hitTestSource && instancedMesh.count < MAX_HEXAGONS) {
+                    if (ctrl.userData.isScanning && ctrl.userData.hitTestSource && instancedMesh.count < MAX_HEXAGONS && !isExporting) {
                         const hits = frame.getHitTestResults(ctrl.userData.hitTestSource);
                         
                         if (hits.length > 0) {
                             const pose = hits[0].getPose(referenceSpace);
-                            
-                            // 1. Estraiamo la posizione per controllare i doppioni
                             const pos = new THREE.Vector3().setFromMatrixPosition(dummyMatrix.fromArray(pose.transform.matrix));
 
-                            // 2. SISTEMA ANTI-DOPPIONI (VOXEL HASHING)
-                            // Dividiamo lo spazio in cubi da 10cm. Creiamo un "Nome ID" per il cubo (es: "10,24,-5")
                             const voxelKey = `${Math.floor(pos.x / VOXEL_SIZE)},${Math.floor(pos.y / VOXEL_SIZE)},${Math.floor(pos.z / VOXEL_SIZE)}`;
 
-                            // Se il cubo è vuoto, piazziamo l'esagono!
                             if (!voxelGrid.has(voxelKey)) {
-                                voxelGrid.add(voxelKey); // Segniamo il cubo come occupato
-
-                                // 3. ALLINEAMENTO PERFETTO ALLA SUPERFICIE
-                                // pose.transform.matrix contiene già l'inclinazione esatta della superficie!
+                                voxelGrid.add(voxelKey); 
                                 instancedMesh.setMatrixAt(instancedMesh.count, dummyMatrix);
-
                                 instancedMesh.count++;
                                 meshAdded = true;
                             }
@@ -199,7 +242,6 @@
 
                 if (meshAdded) {
                     instancedMesh.instanceMatrix.needsUpdate = true;
-                    
                     if (instancedMesh.count % 10 === 0 || instancedMesh.count === MAX_HEXAGONS) {
                         uiCounter.textContent = `Celle Rete: ${instancedMesh.count} / ${MAX_HEXAGONS}`;
                     }
