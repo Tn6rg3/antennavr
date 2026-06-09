@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Room Scanner 3D - Meta Quest 3</title>
+    <title>Room Scanner 3D PRO - Meta Quest 3</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
         #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
@@ -12,8 +12,8 @@
 <body>
     <div id="info">
         <span id="status" style="color: #ffff00;">IN ATTESA</span><br>
-        Usa il <b>Pulsante Y (Controller Sinistro)</b> per avviare la scansione dell'ambiente.<br>
-        Premi di nuovo Y per fermare e isolare il modello 3D.
+        <b>Pulsante Y (Controller SX)</b>: Avvia scansione / Isola in VR<br>
+        <b>Pulsante X (Controller SX)</b>: Resetta e cancella l'ambiente
     </div>
 
     <script type="importmap">
@@ -31,11 +31,9 @@
 
         let camera, scene, renderer;
         
-        // Stati dell'applicazione
-        let scanState = 0; // 0: Attesa, 1: Scansione (Wireframe), 2: Visualizzazione isolata (VR)
-        let lastYPressTime = 0; // Per evitare doppi click accidentali
+        let scanState = 0; // 0: Attesa, 1: Scansione (Wireframe), 2: Isolata (VR)
+        let lastButtonPressTime = 0; 
 
-        // Gestione delle Mesh (I poligoni della stanza)
         const roomMeshes = new Map();
         let blackoutSphere;
 
@@ -58,14 +56,12 @@
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // IMPORTANTE: Richiediamo la feature 'mesh-detection' al visore
             document.body.appendChild(ARButton.createButton(renderer, { 
                 requiredFeatures: ['mesh-detection'] 
             }));
 
-            // Creiamo la sfera di blackout (invisibile all'inizio)
+            // Sfera di blackout per l'isolamento VR
             const sphereGeo = new THREE.SphereGeometry(20, 32, 32);
-            // BackSide fa in modo che la sfera sia nera guardandola da DENTRO
             const sphereMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
             blackoutSphere = new THREE.Mesh(sphereGeo, sphereMat);
             blackoutSphere.visible = false;
@@ -74,51 +70,72 @@
             window.addEventListener('resize', onWindowResize);
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        // --- GESTIONE DEL PULSANTE Y ---
-        function checkYButton(session) {
+        // --- GESTIONE AVANZATA DEI PULSANTI (X e Y) ---
+        function checkButtons(session) {
             const now = performance.now();
-            // Evita che tenere premuto il tasto attivi tutto all'infinito
-            if (now - lastYPressTime < 500) return; 
+            if (now - lastButtonPressTime < 500) return; // Anti-rimbalzo (mezzo secondo di pausa tra i click)
 
             for (const source of session.inputSources) {
-                // Il tasto Y è il pulsante indice 5 sul gamepad SINISTRO in WebXR
                 if (source.handedness === 'left' && source.gamepad) {
-                    if (source.gamepad.buttons[5] && source.gamepad.buttons[5].pressed) {
+                    
+                    const gamepad = source.gamepad;
+
+                    // PULSANTE Y (Indice 5) - Cambia stato di scansione/isolamento
+                    if (gamepad.buttons[5] && gamepad.buttons[5].pressed) {
+                        lastButtonPressTime = now;
                         
-                        lastYPressTime = now;
-                        scanState++;
-                        
-                        if (scanState === 1) {
+                        if (scanState === 0 || scanState === 2) {
+                            scanState = 1;
                             uiStatus.textContent = "SCANSIONE IN CORSO...";
                             uiStatus.style.color = "#00ff00";
-                        } else if (scanState === 2) {
+                            removeBlackout();
+                        } else if (scanState === 1) {
+                            scanState = 2;
                             uiStatus.textContent = "VISUALIZZAZIONE ISOLATA (VR)";
                             uiStatus.style.color = "#00ffff";
                             triggerBlackout();
-                        } else if (scanState > 2) {
-                            // Reset
-                            scanState = 0;
-                            uiStatus.textContent = "IN ATTESA";
-                            uiStatus.style.color = "#ffff00";
-                            removeBlackout();
                         }
+                    }
+
+                    // PULSANTE X (Indice 4) - Hard Reset
+                    if (gamepad.buttons[4] && gamepad.buttons[4].pressed) {
+                        lastButtonPressTime = now;
+                        resetScanner();
                     }
                 }
             }
         }
 
-        // Funzioni per l'isolamento visivo
-        function triggerBlackout() {
-            // Accendiamo la sfera nera gigante che copre la telecamera del Quest
-            blackoutSphere.visible = true;
+        // --- FUNZIONE DI HARD RESET (Salva la memoria RAM) ---
+        function resetScanner() {
+            // 1. Rimuove le mesh dalla scena e cancella geometria/materiali dalla GPU
+            roomMeshes.forEach((threeMesh, xrMesh) => {
+                scene.remove(threeMesh);
+                threeMesh.geometry.dispose();
+                threeMesh.material.dispose();
+            });
             
-            // Trasformiamo tutte le mesh da "Rete Verde" a "Grigio Solido"
+            // 2. Svuota la mappa logica
+            roomMeshes.clear();
+
+            // 3. Resetta l'interfaccia e l'ambiente
+            scanState = 0;
+            removeBlackout();
+
+            uiStatus.textContent = "RESET ESEGUITO. IN ATTESA.";
+            uiStatus.style.color = "#ff4444"; // Rosso per far capire che è stato cancellato
+
+            // Dopo 2 secondi, torna alla scritta gialla di attesa
+            setTimeout(() => {
+                if (scanState === 0) {
+                    uiStatus.textContent = "IN ATTESA";
+                    uiStatus.style.color = "#ffff00";
+                }
+            }, 2000);
+        }
+
+        function triggerBlackout() {
+            blackoutSphere.visible = true;
             roomMeshes.forEach(mesh => {
                 mesh.material.wireframe = false;
                 mesh.material.color.setHex(0xaaaaaa);
@@ -129,13 +146,18 @@
 
         function removeBlackout() {
             blackoutSphere.visible = false;
-            
             roomMeshes.forEach(mesh => {
                 mesh.material.wireframe = true;
                 mesh.material.color.setHex(0x00ff00);
                 mesh.material.transparent = true;
                 mesh.material.opacity = 0.5;
             });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
         function animate() {
@@ -147,21 +169,18 @@
                 const session = renderer.xr.getSession();
                 const referenceSpace = renderer.xr.getReferenceSpace();
 
-                checkYButton(session);
+                checkButtons(session);
 
-                // --- ESTRAZIONE DELLA MESH DELLA STANZA ---
-                // frame.detectedMeshes è una lista di pezzi di stanza scansionati dal Quest
                 if (scanState === 1 && frame.detectedMeshes) {
                     
                     frame.detectedMeshes.forEach(xrMesh => {
                         let threeMesh = roomMeshes.get(xrMesh);
 
-                        // Se è un pezzo di stanza nuovo, creiamo la geometria
                         if (!threeMesh) {
                             const geometry = new THREE.BufferGeometry();
                             geometry.setAttribute('position', new THREE.BufferAttribute(xrMesh.vertices, 3));
                             geometry.setIndex(new THREE.BufferAttribute(xrMesh.indices, 1));
-                            geometry.computeVertexNormals(); // Calcola le ombre
+                            geometry.computeVertexNormals();
 
                             const material = new THREE.MeshPhongMaterial({
                                 color: 0x00ff00,
@@ -174,7 +193,6 @@
                             roomMeshes.set(xrMesh, threeMesh);
                             scene.add(threeMesh);
                         } else {
-                            // Se il pezzo esiste già, aggiorniamo i suoi vertici in caso il Quest li abbia affinati
                             threeMesh.geometry.setAttribute('position', new THREE.BufferAttribute(xrMesh.vertices, 3));
                             threeMesh.geometry.setIndex(new THREE.BufferAttribute(xrMesh.indices, 1));
                             threeMesh.geometry.computeVertexNormals();
@@ -182,7 +200,6 @@
                             if (threeMesh.geometry.index) threeMesh.geometry.index.needsUpdate = true;
                         }
 
-                        // Aggiorniamo la posizione del pezzo di stanza nello spazio reale
                         const pose = frame.getPose(xrMesh.meshSpace, referenceSpace);
                         if (pose) {
                             threeMesh.matrix.fromArray(pose.transform.matrix);
