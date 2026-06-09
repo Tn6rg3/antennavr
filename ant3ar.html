@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V21 - Smart Save in AR</title>
+  <title>Antenne AR Pro V21 - Calibrazione Topografica Live & Gestione Laser</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -92,7 +92,6 @@
         }
       },
 
-      // Funzione di salvataggio unificata (usata sia dal browser che dal visore AR)
       executeSave: function(customName) {
         if(!this.pointA.base) { return "ERRORE: Devi piazzare almeno il Punto A."; }
         if(!this.calibLocal1 || !this.calibLocal2) {
@@ -144,19 +143,21 @@
         this.guyWiresData = d.guyWiresData || [];
         this.calibLocal1 = d.calibLocal1; this.calibLocal2 = d.calibLocal2;
 
-        this.worldPivotEl.object3D.position.set(0, 0, 0); 
-        this.worldPivotEl.object3D.rotation.set(0, 0, 0); 
-        this.worldContentEl.object3D.position.set(0, 0, 0);
-        this.worldContentEl.setAttribute('visible', 'false'); 
+        // Trasla l'interno del Pivot in modo che il Diamante 1 (calibLocal1) sia esattamente sullo (0,0,0) del Pivot.
+        // Cosi quando muoviamo il Pivot, è come muovere l'antenna prendendola per il Diamante 1.
+        this.worldContentEl.object3D.position.set(-this.calibLocal1.x, -this.calibLocal1.y, -this.calibLocal1.z);
+        this.worldContentEl.setAttribute('visible', 'true'); 
 
-        this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false');
-        this.diamondSys1.setAttribute('visible', 'false'); this.diamondSys2.setAttribute('visible', 'false');
+        this.diamondRef1.setAttribute('position', this.calibLocal1);
+        this.diamondRef2.setAttribute('position', this.calibLocal2);
+        this.diamondRef1.setAttribute('visible', 'true');
+        this.diamondRef2.setAttribute('visible', 'true');
 
         this.state = 'AWAITING_CALIB_PT1';
         this.menuUI.setAttribute('visible', true);
         this.updateMenuText();
         this.updateGeometriesAndDrawings(); 
-        alert("Antenna " + name + " caricata! Indossa il visore per ricalibrare.");
+        alert("Antenna " + name + " caricata! L'antenna è agganciata al tuo controller. Usa il visore per posizionarla.");
       },
 
       deleteAntennaFromDB: function() {
@@ -187,11 +188,11 @@
           contentPos: this.worldContentEl.object3D.position,
           guyWiresData: this.guyWiresData
         };
-        localStorage.setItem('antennaArProV20', JSON.stringify(data));
+        localStorage.setItem('antennaArProV21', JSON.stringify(data));
       },
 
       loadFromStorage: function() {
-        let saved = localStorage.getItem('antennaArProV20');
+        let saved = localStorage.getItem('antennaArProV21');
         if (saved) {
           try {
             let d = JSON.parse(saved);
@@ -213,7 +214,9 @@
             if (d.contentPos) this.worldContentEl.object3D.position.copy(d.contentPos);
             
             this.state = d.state || 'IDLE';
-            if (this.state.startsWith('PLACE_HEIGHT') || this.state.startsWith('REPOSITION_HEIGHT')) this.state = 'IDLE';
+            if (this.state.startsWith('PLACE_HEIGHT') || this.state.startsWith('REPOSITION_HEIGHT') || this.state.startsWith('SET_CALIB') || this.state.startsWith('AWAITING_CALIB')) {
+               this.state = 'IDLE';
+            }
           } catch(e) { console.error(e); }
         }
         this.gwState = 'OFF'; this.activeAnchor = null;
@@ -253,11 +256,10 @@
         document.querySelector('#gw-page-edit').setAttribute('visible', isEdit);
         this.toggleButton('#btn-gw-new-a', isMain && this.pointA.top !== null);
         this.toggleButton('#btn-gw-new-b', isMain && this.pointB.top !== null);
-        this.toggleButton('#btn-gw-del-collar', isEdit);
         this.toggleButton('#btn-gw-done', isEdit);
 
         if (isMain) document.querySelector('#txt-gw-status').setAttribute('value', 'PUNTA IL LASER SUL COLLARE E CLICCA\nOPPURE CREANE UNO NUOVO');
-        if (isEdit) document.querySelector('#txt-gw-status').setAttribute('value', 'JOYSTICK Y: CAMBIA ALTEZZA | GRILLETTO A TERRA: NUOVO PICCHETTO\nPUNTA LASER SU PICCHETTO+GRILLETTO: ELIMINALO');
+        if (isEdit) document.querySelector('#txt-gw-status').setAttribute('value', 'JOYSTICK Y: CAMBIA ALTEZZA | GRILLETTO A TERRA: NUOVO PICCHETTO\nPUNTA LASER SU PICCHETTO O SUL COLLARE VERDE PER ELIMINARLI');
         
         this.refreshRaycaster();
       },
@@ -297,15 +299,9 @@
           let radCyl = document.createElement('a-cylinder'); radCyl.setAttribute('radius', '0.005'); radCyl.setAttribute('material', 'color: #5D4037; shader: flat'); radCyl.setAttribute('visible', 'false'); this.worldContentEl.appendChild(radCyl); this.radialPool.push(radCyl);
         }
 
-        let makeDiamond = (color) => {
-            let d = document.createElement('a-octahedron'); d.setAttribute('radius', '0.06'); d.setAttribute('material', `color: ${color}; shader: flat; wireframe: true`); d.setAttribute('visible', 'false');
-            let core = document.createElement('a-octahedron'); core.setAttribute('radius', '0.03'); core.setAttribute('material', `color: ${color}; shader: flat; opacity: 0.8`); d.appendChild(core);
-            this.el.sceneEl.appendChild(d); return d;
-        };
-        this.diamondSys1 = makeDiamond('#00BFFF'); this.diamondSys2 = makeDiamond('#FF00FF');
-
         let makeLocalDiamond = (color) => {
             let d = document.createElement('a-octahedron'); d.setAttribute('radius', '0.06'); d.setAttribute('material', `color: ${color}; shader: flat; wireframe: true; opacity: 0.5`); d.setAttribute('visible', 'false');
+            let core = document.createElement('a-octahedron'); core.setAttribute('radius', '0.03'); core.setAttribute('material', `color: ${color}; shader: flat; opacity: 0.8`); d.appendChild(core);
             this.worldContentEl.appendChild(d); return d;
         };
         this.diamondRef1 = makeLocalDiamond('#00BFFF'); this.diamondRef2 = makeLocalDiamond('#FF00FF');
@@ -329,6 +325,23 @@
         if (indicator) {
             let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT';
             indicator.setAttribute('visible', isPlacingMode);
+        }
+
+        // --- ANIMAZIONE LIVE CALIBRAZIONE TOPOGRAFICA ---
+        if (this.state === 'AWAITING_CALIB_PT1') {
+            let hitGround = this.getHitPoint();
+            if (hitGround) {
+                // Muove l'intera antenna in modo che il Diamante 1 sia agganciato al controller
+                this.worldPivotEl.object3D.position.copy(hitGround.point);
+            }
+        } else if (this.state === 'AWAITING_CALIB_PT2') {
+            let hitGround = this.getHitPoint();
+            if (hitGround && this.calibPt1 && this.calibLocal1 && this.calibLocal2) {
+                // Il Pivot è fisso sul PT1. Ruotiamo l'antenna perché il Diamante 2 punti al controller
+                let angleLocal = Math.atan2(this.calibLocal2.x - this.calibLocal1.x, this.calibLocal2.z - this.calibLocal1.z);
+                let angleWorld = Math.atan2(hitGround.point.x - this.calibPt1.x, hitGround.point.z - this.calibPt1.z);
+                this.worldPivotEl.object3D.rotation.set(0, angleWorld - angleLocal, 0);
+            }
         }
       },
 
@@ -383,6 +396,7 @@
 
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         
+        // Anti-trapasso UI 2D
         if (intersects) {
           for (let i = 0; i < intersects.length; i++) {
             let el = intersects[i];
@@ -391,13 +405,12 @@
           }
         }
 
-        // --- CALIBRAZIONE RITARDATA ---
+        // --- CALIBRAZIONE RITARDATA (LIVE PIVOT) ---
         if (this.state === 'AWAITING_CALIB_PT1') {
             let hitGround = this.getHitPoint();
             if (hitGround) {
                 this.calibPt1 = hitGround.point.clone();
-                this.diamondSys1.setAttribute('position', this.calibPt1);
-                this.diamondSys1.setAttribute('visible', 'true');
+                this.worldPivotEl.object3D.position.copy(this.calibPt1);
                 this.state = 'AWAITING_CALIB_PT2';
                 this.updateMenuText();
             }
@@ -408,42 +421,20 @@
             let hitGround = this.getHitPoint();
             if (hitGround) {
                 this.calibPt2 = hitGround.point.clone();
-                this.diamondSys2.setAttribute('position', this.calibPt2);
-                this.diamondSys2.setAttribute('visible', 'true');
-                
-                let L1 = new THREE.Vector3(this.calibLocal1.x, this.calibLocal1.y, this.calibLocal1.z);
-                let L2 = new THREE.Vector3(this.calibLocal2.x, this.calibLocal2.y, this.calibLocal2.z);
-                let P1 = this.calibPt1; let P2 = this.calibPt2;
-
-                let angleL = Math.atan2(L2.x - L1.x, L2.z - L1.z);
-                let angleP = Math.atan2(P2.x - P1.x, P2.z - P1.z);
-                let angleDiff = angleP - angleL;
-
-                this.worldPivotEl.object3D.rotation.set(0, angleDiff, 0);
-
-                let rotatedL1 = L1.clone();
-                rotatedL1.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleDiff);
-                this.worldPivotEl.object3D.position.set(P1.x - rotatedL1.x, P1.y - rotatedL1.y, P1.z - rotatedL1.z);
-
-                this.worldContentEl.object3D.position.set(0, 0, 0);
-                this.worldContentEl.setAttribute('visible', 'true'); // SVELA L'ANTENNA
-
-                this.diamondRef1.setAttribute('position', L1); this.diamondRef1.setAttribute('visible', 'true');
-                this.diamondRef2.setAttribute('position', L2); this.diamondRef2.setAttribute('visible', 'true');
-
+                // La rotazione è già calcolata real-time in tick(). Qui consolidiamo.
+                this.diamondRef1.setAttribute('visible', 'false');
+                this.diamondRef2.setAttribute('visible', 'false');
                 this.state = 'IDLE';
                 this.refreshAll();
             }
             return;
         }
 
-        // --- SALVATAGGIO CAPISALDI ---
+        // --- SALVATAGGIO CAPISALDI (SET) ---
         if (this.state === 'SET_CALIB_PT1') {
             let hitGround = this.getHitPoint();
             if (hitGround) {
                 this.calibLocal1 = this.getLocalPoint(hitGround.point);
-                this.diamondSys1.setAttribute('position', hitGround.point);
-                this.diamondSys1.setAttribute('visible', 'true');
                 this.diamondRef1.setAttribute('position', this.calibLocal1);
                 this.diamondRef1.setAttribute('visible', 'true');
                 this.state = 'SET_CALIB_PT2';
@@ -455,19 +446,24 @@
             let hitGround = this.getHitPoint();
             if (hitGround) {
                 this.calibLocal2 = this.getLocalPoint(hitGround.point);
-                this.diamondSys2.setAttribute('position', hitGround.point);
-                this.diamondSys2.setAttribute('visible', 'true');
                 this.diamondRef2.setAttribute('position', this.calibLocal2);
                 this.diamondRef2.setAttribute('visible', 'true');
                 
+                // Nascondi i diamanti dopo un secondo per conferma visiva
+                setTimeout(() => {
+                    this.diamondRef1.setAttribute('visible', 'false');
+                    this.diamondRef2.setAttribute('visible', 'false');
+                }, 1000);
+
                 this.state = 'IDLE';
                 this.updateMenuText();
             }
             return;
         }
 
-        // --- GESTIONE TIRANTI ---
+        // --- GESTIONE TIRANTI & RIMOZIONI LASER ---
         if (this.gwState === 'EDIT') {
+            // 1. Controlla se il laser punta a un picchetto specifico da cancellare
             let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
             if (hitPeg) {
                 let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx'));
@@ -477,6 +473,22 @@
                 return;
             }
 
+            // 2. Controlla se il laser punta al COLLARE VERDE ATTIVO -> Cancella intero tirante
+            let hitCollar = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-collar')) : null;
+            if (hitCollar) {
+                let cIdx = parseInt(hitCollar.getAttribute('data-index'));
+                if (this.guyWiresData[cIdx] === this.activeAnchor) {
+                    this.guyWiresData.splice(cIdx, 1);
+                    this.activeAnchor = null;
+                    this.gwState = 'MAIN';
+                    this.updateGWUI();
+                    this.drawGuyWires();
+                    this.saveToStorage();
+                    return;
+                }
+            }
+
+            // 3. Altrimenti piazza picchetto a terra
             let hitGround = this.getHitPoint();
             if (hitGround) {
               let localHit = this.getLocalPoint(hitGround.point);
@@ -499,7 +511,7 @@
             return;
         }
 
-        // --- PIAZZAMENTO ANTENNE ---
+        // --- PIAZZAMENTO ANTENNE BASE ---
         let type = this.antennaTypes[this.antIdx];
 
         if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
@@ -582,10 +594,10 @@
         let infoTextStr = "";
         let poleAH = this.pointA.top ? (this.pointA.top.y - this.pointA.base.y) : 0;
 
-        if (this.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE RICHIESTA:\nAppoggia la base del controller sul VERO PUNTO 1\ne premi il grilletto."; }
-        else if (this.state === 'AWAITING_CALIB_PT2') { infoTextStr = "CALIBRAZIONE IN CORSO:\nOra appoggia il controller sul VERO PUNTO 2\ne premi il grilletto."; }
-        else if (this.state === 'SET_CALIB_PT1') { infoTextStr = "IMPOSTAZIONE CAPISALDI:\nAppoggia la base del controller sul sasso/segno 1\ne premi il grilletto."; }
-        else if (this.state === 'SET_CALIB_PT2') { infoTextStr = "IMPOSTAZIONE CAPISALDI:\nOra appoggia il controller sul sasso/segno 2\ne premi il grilletto."; }
+        if (this.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE: L'antenna è agganciata al controller.\nPosiziona il Diamante 1 sul VERO PUNTO 1."; }
+        else if (this.state === 'AWAITING_CALIB_PT2') { infoTextStr = "CALIBRAZIONE: Ruota l'antenna fino ad allineare\nil Diamante 2 sul VERO PUNTO 2."; }
+        else if (this.state === 'SET_CALIB_PT1') { infoTextStr = "IMPOSTA CAPISALDI:\nAppoggia il controller sul VERO PUNTO 1 e premi grilletto."; }
+        else if (this.state === 'SET_CALIB_PT2') { infoTextStr = "IMPOSTA CAPISALDI:\nOra sul VERO PUNTO 2. (Scompariranno appena confermati)."; }
         else if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA: ${this.getCalculatedLength().toFixed(2)}m`; } 
         else if (type === 'End Fed') {
           infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nAC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`;
@@ -602,11 +614,11 @@
           infoTextStr = `MMANA: ${this.mmanaModels[this.mmanaModelIdx]}\nFili conduttori: ${this.mmanaWires.length}\nRuota l'antenna col joystick sinistro.`; 
           document.querySelector('#txt-mmana-model-val').setAttribute('value', this.mmanaModels[this.mmanaModelIdx].toUpperCase());
         }
-        
         document.querySelector('#info-text').setAttribute('value', infoTextStr);
       },
 
       drawGuyWires: function() {
+        // Pulisce tutto prima di ridisegnare
         while (this.gwContainerEl.firstChild) { this.gwContainerEl.removeChild(this.gwContainerEl.firstChild); }
 
         this.guyWiresData.forEach((anchor, idx) => {
@@ -620,7 +632,10 @@
 
           let collar = document.createElement('a-torus');
           collar.classList.add('gw-collar');
-          if (this.gwState === 'MAIN') { collar.classList.add('clickable'); collar.setAttribute('btn-interaction', ''); }
+          // Cliccabile se in MAIN (per selezionare) o EDIT (se è lui l'attivo, per cancellarlo)
+          if (this.gwState === 'MAIN' || (this.gwState === 'EDIT' && this.activeAnchor === anchor)) { 
+              collar.classList.add('clickable'); collar.setAttribute('btn-interaction', ''); 
+          }
           collar.setAttribute('data-index', idx);
           collar.setAttribute('radius', '0.04'); collar.setAttribute('radius-tubular', '0.006');
           
@@ -680,7 +695,7 @@
           let h = this.pointA.top.y - this.pointA.base.y;
           this.antennaTube1.setAttribute('visible', 'true');
           this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
-          this.antennaTube1.object3D.quaternion.identity();
+          this.antennaTube1.object3D.quaternion.identity(); 
           this.antennaTube1.object3D.position.set(this.pointA.base.x, this.pointA.base.y + (h / 2), this.pointA.base.z);
 
           let base = new THREE.Vector3(this.pointA.base.x, this.pointA.base.y + 0.002, this.pointA.base.z);
@@ -699,7 +714,7 @@
               );
               
               let midPoint = new THREE.Vector3().lerpVectors(base, targetVec, 0.5);
-              this.radialPool[i].object3D.quaternion.identity();
+              this.radialPool[i].object3D.quaternion.identity(); 
               this.radialPool[i].object3D.position.copy(midPoint); 
               this.radialPool[i].object3D.lookAt(targetVec); 
               this.radialPool[i].object3D.rotateX(Math.PI / 2);
@@ -799,11 +814,6 @@
             this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT';
             this.updateGWUI(); this.drawGuyWires(); this.saveToStorage();
           }
-          else if (id === 'btn-gw-del-collar') {
-            this.guyWiresData = this.guyWiresData.filter(a => a !== this.activeAnchor);
-            this.activeAnchor = null; this.gwState = 'MAIN';
-            this.updateGWUI(); this.drawGuyWires(); this.saveToStorage();
-          }
           else if (id === 'btn-gw-done') { this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.drawGuyWires(); }
           
           else if (id === 'btn-cal-set-pts') {
@@ -817,17 +827,12 @@
             this.updateMenuText();
           }
           
-          // SALVA ANTENNA IN AR
           else if (id === 'btn-ar-save') {
               if (!this.pointA.base) { document.querySelector('#info-text').setAttribute('value', 'ERRORE: Piazza almeno il PUNTO A!'); return; }
               if (!this.calibLocal1 || !this.calibLocal2) { document.querySelector('#info-text').setAttribute('value', 'ERRORE: Imposta i diamanti di calibrazione prima!'); return; }
-
-              let type = this.antennaTypes[this.antIdx];
-              let band = this.bands[this.bandIdx];
-              let date = new Date();
-              let timeStr = date.getHours() + "-" + date.getMinutes() + "-" + date.getSeconds();
+              let type = this.antennaTypes[this.antIdx]; let band = this.bands[this.bandIdx];
+              let date = new Date(); let timeStr = date.getHours() + "-" + date.getMinutes() + "-" + date.getSeconds();
               let autoName = type.toUpperCase() + "_" + band + "_" + timeStr;
-
               let msg = this.executeSave(autoName);
               document.querySelector('#info-text').setAttribute('value', msg);
           }
@@ -883,7 +888,33 @@
         });
       },
 
+      setupMmanaFileLoader: function() {
+        let fileInput = document.querySelector('#file-mmana'); if(!fileInput) return;
+        fileInput.addEventListener('change', (evt) => {
+          let file = evt.target.files[0]; if(!file) return;
+          let reader = new FileReader();
+          reader.onload = (e) => { 
+              let lines = e.target.result.split('\n'); this.importedMmanaWires = []; let insideWiresSection = false;
+              for(let i=0; i<lines.length; i++) {
+                let line = lines[i].trim(); let upperLine = line.toUpperCase();
+                if(insideWiresSection && upperLine.startsWith('***')) insideWiresSection = false;
+                if(upperLine.includes('***') && upperLine.includes('WIRES')) { insideWiresSection = true; continue; }
+                if(insideWiresSection && line !== "") {
+                  let tokens = line.split(/[\s,]+/).filter(t => t !== '');
+                  if(tokens.length >= 7) this.importedMmanaWires.push({ x1: parseFloat(tokens[0]), y1: parseFloat(tokens[1]), z1: parseFloat(tokens[2]), x2: parseFloat(tokens[3]), y2: parseFloat(tokens[4]), z2: parseFloat(tokens[5]), radius: parseFloat(tokens[6]) > 0 ? parseFloat(tokens[6])/1000 : 0.002 });
+                }
+              }
+              if (this.importedMmanaWires.length > 0) {
+                this.mmanaWires = this.importedMmanaWires; this.mmanaModelIdx = this.mmanaModels.indexOf('Modello Importato'); this.antIdx = this.antennaTypes.indexOf('MMANA-GAL'); 
+                this.refreshAll(); alert(`Caricati ${this.mmanaWires.length} fili!`);
+              }
+          };
+          reader.readAsText(file);
+        });
+      },
+
       triggerGlobalReset: function() {
+        // Distruzione immediata geometrie
         this.pointA = { base: null, top: null, sphere: this.pointA.sphere, pole: this.pointA.pole, label: this.pointA.label };
         this.pointB = { base: null, top: null, sphere: this.pointB.sphere, pole: this.pointB.pole, label: this.pointB.label };
         this.pointC.top = null;
@@ -893,25 +924,25 @@
         if(this.antennaTube1) this.antennaTube1.setAttribute('visible', 'false'); 
         if(this.antennaTube2) this.antennaTube2.setAttribute('visible', 'false');
         for(let i=0; i<this.maxRadials; i++) { if(this.radialPool[i]) this.radialPool[i].setAttribute('visible', 'false'); }
+        
         this.mmanaContainerEl.innerHTML = ''; 
-        this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; 
+        this.gwContainerEl.innerHTML = ''; // Elimina visualmente tutti i tiranti
         
         this.worldPivotEl.object3D.position.set(0,0,0); 
         this.worldPivotEl.object3D.rotation.set(0,0,0); 
         this.worldContentEl.object3D.position.set(0,0,0);
         this.worldContentEl.setAttribute('visible', 'true');
         
-        this.guyWiresData = []; this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false);
-        this.drawGuyWires(); 
+        this.guyWiresData = []; this.gwState = 'OFF'; 
+        if(this.gwUI) this.gwUI.setAttribute('visible', false);
 
         this.calibLocal1 = null; this.calibLocal2 = null;
-        this.diamondSys1.setAttribute('visible', 'false'); this.diamondSys2.setAttribute('visible', 'false');
         this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false');
 
         this.menuUI.setAttribute('visible', false);
-        document.querySelector('#info-text').setAttribute('value', 'Appoggia il controller destro a terra e premi il grilletto.');
+        this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; 
         
-        localStorage.removeItem('antennaArProV20');
+        localStorage.removeItem('antennaArProV21');
       },
 
       refreshAll: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); this.saveToStorage(); }
@@ -941,7 +972,6 @@
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
         <a-entity id="menu-ui" visible="false" position="0 0.20 -0.4" rotation="-30 0 0">
-          <!-- Aumentato height per fare spazio al nuovo bottone AR Save -->
           <a-plane width="0.5" height="0.75" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
           <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.32 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
@@ -1010,7 +1040,7 @@
           <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 0.01 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 0.01 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-          <a-text value="RIPOSIZIONAMENTO STRUTTURE BASE" position="0 -0.04 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
+          <a-text value="RIPOSIZIONAMENTO E MODIFICA ALTEZZE" position="0 -0.04 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
           <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.17 -0.08 0.01"><a-text value="SPOSTA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
           <a-plane id="btn-height-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.05 -0.08 0.01"><a-text value="ALTEZZA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
           <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.05 -0.08 0.01"><a-text value="SPOSTA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
@@ -1028,40 +1058,37 @@
             <a-text value="[2] FORZA RICALIBRAZIONE (SE L'ANTENNA E' SLITTATA)" align="center" scale="0.06 0.06 0.06"></a-text>
           </a-plane>
 
-          <!-- NUOVO BOTTONE: SALVATAGGIO IN AR -->
           <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.45" height="0.035" color="#FF8F00" position="0 -0.31 0.01">
             <a-text value="[+] SALVA ANTENNA NEL VISORE (NOME AUTOMATICO)" align="center" scale="0.055 0.055 0.055"></a-text>
           </a-plane>
         </a-entity>
 
         <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
-          <a-plane width="0.45" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
+          <a-plane width="0.48" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
           <a-text value="MODALITA' TIRANTI (TASTO X PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
           
-          <a-plane width="0.42" height="0.05" color="#3E2723" position="0 0.08 0.01">
+          <a-plane width="0.45" height="0.06" color="#3E2723" position="0 0.07 0.01">
             <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text>
           </a-plane>
 
           <a-entity id="gw-page-main" visible="true">
-              <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 0.02 0.01">
+              <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 0.01 0.01">
                 <a-text value="[+] NUOVO COLLARE SU PALO A" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
               </a-plane>
-              <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 -0.03 0.01">
+              <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 -0.04 0.01">
                 <a-text value="[+] NUOVO COLLARE SU PALO B" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
               </a-plane>
           </a-entity>
 
           <a-entity id="gw-page-edit" visible="false">
-              <a-plane id="btn-gw-del-collar" class="clickable" btn-interaction width="0.38" height="0.035" color="#B71C1C" position="0 -0.03 0.01">
-                <a-text value="[x] ELIMINA INTERO COLLARE" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
-              </a-plane>
-              <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 -0.08 0.01">
-                <a-text value="FINITO (INDIETRO)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
+              <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 -0.04 0.01">
+                <a-text value="FINITO (DESELEZIONA E INDIETRO)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
               </a-plane>
           </a-entity>
         </a-entity>
       </a-entity>
       
+      <!-- Controller Destro con interazione laser mirata -->
       <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 4">
         <a-sphere id="touch-indicator" radius="0.015" material="color: #00FF00; shader: flat; transparent: true; opacity: 0.8" position="0 -0.07 0.02" visible="false"></a-sphere>
       </a-entity>
