@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Room Scanner 3D PRO - Meta Quest 3</title>
+    <title>Room Scanner 3D PRO - Fix Sovrapposizione</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
         #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
@@ -12,8 +12,8 @@
 <body>
     <div id="info">
         <span id="status" style="color: #ffff00;">IN ATTESA</span><br>
-        <b>Pulsante Y (Controller SX)</b>: Avvia scansione / Isola in VR<br>
-        <b>Pulsante X (Controller SX)</b>: Resetta e cancella l'ambiente
+        <b>Pulsante Y (Sinistro)</b>: Avvia scansione / Isola in VR<br>
+        <b>Pulsante X (Sinistro)</b>: Resetta tutto
     </div>
 
     <script type="importmap">
@@ -31,9 +31,10 @@
 
         let camera, scene, renderer;
         
-        let scanState = 0; // 0: Attesa, 1: Scansione (Wireframe), 2: Isolata (VR)
+        let scanState = 0; 
         let lastButtonPressTime = 0; 
 
+        // Mappa per tenere traccia delle mesh
         const roomMeshes = new Map();
         let blackoutSphere;
 
@@ -60,7 +61,6 @@
                 requiredFeatures: ['mesh-detection'] 
             }));
 
-            // Sfera di blackout per l'isolamento VR
             const sphereGeo = new THREE.SphereGeometry(20, 32, 32);
             const sphereMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
             blackoutSphere = new THREE.Mesh(sphereGeo, sphereMat);
@@ -70,17 +70,16 @@
             window.addEventListener('resize', onWindowResize);
         }
 
-        // --- GESTIONE AVANZATA DEI PULSANTI (X e Y) ---
         function checkButtons(session) {
             const now = performance.now();
-            if (now - lastButtonPressTime < 500) return; // Anti-rimbalzo (mezzo secondo di pausa tra i click)
+            if (now - lastButtonPressTime < 500) return; 
 
             for (const source of session.inputSources) {
                 if (source.handedness === 'left' && source.gamepad) {
                     
                     const gamepad = source.gamepad;
 
-                    // PULSANTE Y (Indice 5) - Cambia stato di scansione/isolamento
+                    // Y BUTTON
                     if (gamepad.buttons[5] && gamepad.buttons[5].pressed) {
                         lastButtonPressTime = now;
                         
@@ -97,7 +96,7 @@
                         }
                     }
 
-                    // PULSANTE X (Indice 4) - Hard Reset
+                    // X BUTTON (RESET)
                     if (gamepad.buttons[4] && gamepad.buttons[4].pressed) {
                         lastButtonPressTime = now;
                         resetScanner();
@@ -106,26 +105,22 @@
             }
         }
 
-        // --- FUNZIONE DI HARD RESET (Salva la memoria RAM) ---
+        // --- HARD RESET MIGLIORATO ---
         function resetScanner() {
-            // 1. Rimuove le mesh dalla scena e cancella geometria/materiali dalla GPU
+            // Distrugge fisicamente ogni mesh dalla RAM della scheda video
             roomMeshes.forEach((threeMesh, xrMesh) => {
                 scene.remove(threeMesh);
-                threeMesh.geometry.dispose();
-                threeMesh.material.dispose();
+                if (threeMesh.geometry) threeMesh.geometry.dispose();
+                if (threeMesh.material) threeMesh.material.dispose();
             });
             
-            // 2. Svuota la mappa logica
             roomMeshes.clear();
-
-            // 3. Resetta l'interfaccia e l'ambiente
             scanState = 0;
             removeBlackout();
 
-            uiStatus.textContent = "RESET ESEGUITO. IN ATTESA.";
-            uiStatus.style.color = "#ff4444"; // Rosso per far capire che è stato cancellato
+            uiStatus.textContent = "MEMORIA PULITA. IN ATTESA.";
+            uiStatus.style.color = "#ff4444"; 
 
-            // Dopo 2 secondi, torna alla scritta gialla di attesa
             setTimeout(() => {
                 if (scanState === 0) {
                     uiStatus.textContent = "IN ATTESA";
@@ -177,6 +172,7 @@
                         let threeMesh = roomMeshes.get(xrMesh);
 
                         if (!threeMesh) {
+                            // 1. Creazione di una NUOVA mesh
                             const geometry = new THREE.BufferGeometry();
                             geometry.setAttribute('position', new THREE.BufferAttribute(xrMesh.vertices, 3));
                             geometry.setIndex(new THREE.BufferAttribute(xrMesh.indices, 1));
@@ -193,13 +189,20 @@
                             roomMeshes.set(xrMesh, threeMesh);
                             scene.add(threeMesh);
                         } else {
-                            threeMesh.geometry.setAttribute('position', new THREE.BufferAttribute(xrMesh.vertices, 3));
-                            threeMesh.geometry.setIndex(new THREE.BufferAttribute(xrMesh.indices, 1));
-                            threeMesh.geometry.computeVertexNormals();
-                            threeMesh.geometry.attributes.position.needsUpdate = true;
-                            if (threeMesh.geometry.index) threeMesh.geometry.index.needsUpdate = true;
+                            // 2. AGGIORNAMENTO DI UNA MESH ESISTENTE (IL FIX CRITICO)
+                            // Invece di provare a sovrascrivere l'array, buttiamo via la vecchia forma
+                            threeMesh.geometry.dispose(); 
+
+                            // E creiamo una geometria nuova fiammante con le nuove dimensioni
+                            const newGeometry = new THREE.BufferGeometry();
+                            newGeometry.setAttribute('position', new THREE.BufferAttribute(xrMesh.vertices, 3));
+                            newGeometry.setIndex(new THREE.BufferAttribute(xrMesh.indices, 1));
+                            newGeometry.computeVertexNormals();
+                            
+                            threeMesh.geometry = newGeometry;
                         }
 
+                        // Aggiorniamo la posizione nello spazio
                         const pose = frame.getPose(xrMesh.meshSpace, referenceSpace);
                         if (pose) {
                             threeMesh.matrix.fromArray(pose.transform.matrix);
