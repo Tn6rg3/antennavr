@@ -3,27 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Diagnostica SLAM - Quest 3</title>
+    <title>Ologramma SLAM Debug - Quest 3</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
-        
-        /* Pannello diagnostico galleggiante in AR */
-        #ui-layer {
-            position: absolute; top: 10px; left: 10px; right: 10px;
-            background: rgba(0,0,0,0.8); border: 2px solid #00ffff;
-            padding: 15px; border-radius: 10px; font-family: monospace;
-            z-index: 100; font-size: 16px; text-align: center;
-            pointer-events: none;
-        }
-        .error { color: #ff4444; font-weight: bold; }
-        .ok { color: #00ff00; font-weight: bold; }
-        .wait { color: #ffff00; }
+        #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
     </style>
 </head>
 <body>
-    <div id="ui-layer">
-        <h3 style="margin:0 0 10px 0; color: #fff;">Diagnostica Sensore di Profondità</h3>
-        <div id="log" class="wait">In attesa che tu prema "Enter AR"...</div>
+    <div id="info">
+        Premi "Enter AR".<br>
+        Vedrai un cartello olografico fluttuante davanti a te con il responso del sensore.
     </div>
 
     <script type="importmap">
@@ -39,25 +28,14 @@
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-        let camera, scene, renderer, depthPoints;
-        const logEl = document.getElementById('log');
-        let currentStatus = "";
-
-        const DEPTH_WIDTH = 160; 
-        const DEPTH_HEIGHT = 120;
-        const TOTAL_POINTS = DEPTH_WIDTH * DEPTH_HEIGHT;
+        let camera, scene, renderer;
+        
+        // Variabili per il Cartello Olografico
+        let hudCanvas, hudContext, hudTexture, hudMesh;
+        let lastMessage = "";
 
         init();
         animate();
-
-        // Funzione per aggiornare il testo senza bloccare il browser
-        function updateLog(msg, className) {
-            if (currentStatus !== msg) {
-                logEl.innerText = msg;
-                logEl.className = className;
-                currentStatus = msg;
-            }
-        }
 
         function init() {
             scene = new THREE.Scene();
@@ -69,32 +47,58 @@
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // IMPORTANTE: Abbiamo aggiunto 'float32' e 'dom-overlay'
+            // Rimosso il dom-overlay che causava il blocco. Chiediamo SOLO i dati di profondità.
             document.body.appendChild(ARButton.createButton(renderer, { 
                 requiredFeatures: ['depth-sensing'],
-                optionalFeatures: ['dom-overlay'],
-                domOverlay: { root: document.body },
                 depthSensing: {
                     usagePreference: ['cpu-optimized'],
-                    // Aggiunto float32 per compatibilità con le nuove versioni del Quest
-                    dataFormatPreference: ['luminance-alpha', 'float32'] 
+                    dataFormatPreference: ['luminance-alpha', 'float32']
                 }
             }));
 
-            const geometry = new THREE.BufferGeometry();
-            const positions = new Float32Array(TOTAL_POINTS * 3);
-            for(let i=0; i<TOTAL_POINTS*3; i++) { positions[i] = 999; }
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            // --- CREAZIONE DELL'OLOGRAMMA DIAGNOSTICO ---
+            // 1. Creiamo una tela invisibile (Canvas) dove scriveremo il testo
+            hudCanvas = document.createElement('canvas');
+            hudCanvas.width = 1024;
+            hudCanvas.height = 256;
+            hudContext = hudCanvas.getContext('2d');
             
-            // Punti più grandi (5cm) per vederli chiaramente durante il test
-            const material = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.05 });
-            depthPoints = new THREE.Points(geometry, material);
-            depthPoints.frustumCulled = false;
+            // 2. Trasformiamo la tela in una Texture 3D
+            hudTexture = new THREE.CanvasTexture(hudCanvas);
             
-            camera.add(depthPoints); 
-            scene.add(camera); 
+            // 3. Creiamo un piano 3D (il cartello fisico)
+            const geometry = new THREE.PlaneGeometry(0.8, 0.2); // Largo 80cm, alto 20cm
+            const material = new THREE.MeshBasicMaterial({ map: hudTexture, transparent: true });
+            hudMesh = new THREE.Mesh(geometry, material);
+            
+            // 4. Posizioniamo il cartello a 1 metro davanti agli occhi
+            hudMesh.position.set(0, 0, -1);
+            
+            // 5. Incolliamo il cartello alla telecamera così ti segue sempre
+            camera.add(hudMesh);
+            scene.add(camera);
+
+            // Disegna il messaggio iniziale
+            updateHUD("INIZIALIZZAZIONE AR...", "#ffffff", "#0000ff");
 
             window.addEventListener('resize', onWindowResize);
+        }
+
+        // Funzione per scrivere sul cartello 3D
+        function updateHUD(text, textColor, bgColor) {
+            if (lastMessage === text) return; // Aggiorna solo se il messaggio cambia
+            
+            hudContext.fillStyle = bgColor;
+            hudContext.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+            
+            hudContext.font = "bold 40px sans-serif";
+            hudContext.fillStyle = textColor;
+            hudContext.textAlign = "center";
+            hudContext.textBaseline = "middle";
+            hudContext.fillText(text, hudCanvas.width / 2, hudCanvas.height / 2);
+            
+            hudTexture.needsUpdate = true;
+            lastMessage = text;
         }
 
         function onWindowResize() {
@@ -111,9 +115,9 @@
             if (frame) {
                 const session = renderer.xr.getSession();
 
-                // 1. Controllo dei Permessi
+                // 1. Il visore ci ha dato il permesso di usare il sensore?
                 if (!session.grantedFeatures || !session.grantedFeatures.includes('depth-sensing')) {
-                    updateLog("ERRORE CRITICO: Il browser o il visore ha negato i permessi 'depth-sensing'. Controlla chrome://flags", "error");
+                    updateHUD("BLOCCO PERMESSI: Depth-Sensing negato dal Browser", "#ffffff", "#ff0000");
                     renderer.render(scene, camera);
                     return;
                 }
@@ -124,49 +128,13 @@
                 if (viewerPose) {
                     const view = viewerPose.views[0];
 
-                    // 2. Lettura dei Dati Crudi
+                    // 2. Il sensore ci sta effettivamente passando i numeri?
                     const depthInfo = frame.getDepthInformation(view);
 
                     if (!depthInfo) {
-                        updateLog("IN ATTESA... Il sensore non sta inviando dati di profondità.", "wait");
+                        updateHUD("PERMESSI OK - In attesa del feed dal sensore...", "#000000", "#ffff00");
                     } else {
-                        updateLog(`SUCCESSO! Dati in ricezione: Formato [${depthInfo.width}x${depthInfo.height}]`, "ok");
-
-                        const positions = depthPoints.geometry.attributes.position.array;
-                        let pointIndex = 0;
-
-                        const invProjection = new THREE.Matrix4().copy(camera.projectionMatrix).invert();
-                        const stepX = depthInfo.width / DEPTH_WIDTH;
-                        const stepY = depthInfo.height / DEPTH_HEIGHT;
-
-                        for (let y = 0; y < DEPTH_HEIGHT; y++) {
-                            for (let x = 0; x < DEPTH_WIDTH; x++) {
-                                
-                                const depthInMeters = depthInfo.getDepthInMeters(
-                                    Math.floor(x * stepX), 
-                                    Math.floor(y * stepY)
-                                );
-
-                                if (depthInMeters > 0 && depthInMeters < 5.0) {
-                                    const ndcX = (x / DEPTH_WIDTH) * 2 - 1;
-                                    const ndcY = -(y / DEPTH_HEIGHT) * 2 + 1; 
-                                    
-                                    const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
-                                    vector.applyMatrix4(invProjection);
-                                    vector.multiplyScalar(depthInMeters / Math.abs(vector.z));
-
-                                    positions[pointIndex * 3] = vector.x;
-                                    positions[pointIndex * 3 + 1] = vector.y;
-                                    positions[pointIndex * 3 + 2] = -depthInMeters; 
-                                } else {
-                                    positions[pointIndex * 3] = 999;
-                                    positions[pointIndex * 3 + 1] = 999;
-                                    positions[pointIndex * 3 + 2] = 999;
-                                }
-                                pointIndex++;
-                            }
-                        }
-                        depthPoints.geometry.attributes.position.needsUpdate = true;
+                        updateHUD(`SUCCESSO! Dati ricevuti: ${depthInfo.width}x${depthInfo.height}`, "#000000", "#00ff00");
                     }
                 }
             }
