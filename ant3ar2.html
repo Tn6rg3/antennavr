@@ -325,53 +325,60 @@
       },
 
      tick: function () {
-    let indicator = document.querySelector('#touch-indicator');
-    if (indicator) {
-        let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT';
-        indicator.setAttribute('visible', isPlacingMode && !this.isLaserMode);
-    }
+        // GESTIONE CURSORE ESAGONALE (MODALITA' A DISTANZA CON HIT TEST)
+        if (this.isRemoteMode) {
+            let frame = this.el.sceneEl.frame;
+            let refSpace = this.el.sceneEl.renderer.xr.getReferenceSpace();
+            // Prendi la hitTestSource assegnata dal listener in onTriggerDown/connected
+            let hitSource = this.raycasterEl.userData ? this.raycasterEl.userData.hitTestSource : null;
 
-    // --- NUOVA LOGICA LASER DINAMICO ---
-    if (this.isLaserMode) {
-        let raycaster = this.raycasterEl.components.raycaster;
-        // Intersezione con il mondo AR (oggetti piazzabili o superfici)
-        let intersections = raycaster.intersections;
-        
-        if (intersections && intersections.length > 0) {
-            let hit = intersections[0]; // Il punto più vicino colpito dal laser
-            
-            this.hexCursor.object3D.position.copy(hit.point);
-            
-            // Facciamo aderire l'esagono alla superficie (Normal)
-            let normal = hit.face.normal.clone();
-            normal.transformDirection(hit.object.matrixWorld);
-            this.hexCursor.object3D.lookAt(new THREE.Vector3().addVectors(hit.point, normal));
-            
-            this.hexCursor.setAttribute('visible', 'true');
-            this.currentRemoteHit = hit.point.clone();
+            if (frame && refSpace && hitSource) {
+                let hits = frame.getHitTestResults(hitSource);
+                if (hits.length > 0) {
+                    let pose = hits[0].getPose(refSpace);
+                    let matrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
+                    
+                    this.hexCursor.object3D.position.setFromMatrixPosition(matrix);
+                    this.hexCursor.object3D.quaternion.setFromRotationMatrix(matrix);
+                    
+                    // L'esagono di default è piatto, lo ruotiamo per aderire alla normale calcolata dall'Hit Test (asse Y)
+                    this.hexCursor.object3D.rotateX(-Math.PI / 2);
+                    this.hexCursor.object3D.rotateY(Math.PI / 6); // Estetica
+
+                    this.hexCursor.setAttribute('visible', 'true');
+                    this.currentRemoteHit = this.hexCursor.object3D.position.clone();
+                } else {
+                    this.hexCursor.setAttribute('visible', 'false');
+                    this.currentRemoteHit = null;
+                }
+            }
         } else {
             this.hexCursor.setAttribute('visible', 'false');
             this.currentRemoteHit = null;
         }
-    } else {
-        this.hexCursor.setAttribute('visible', 'false');
-    }
 
-    // --- ANIMAZIONE LIVE CALIBRAZIONE ---
-    if (this.state === 'AWAITING_CALIB_PT1') {
-        let hitGround = this.isLaserMode ? { point: this.currentRemoteHit } : this.getHitPoint();
-        if (hitGround && hitGround.point) {
-            this.worldPivotEl.object3D.position.copy(hitGround.point);
+        // INDICATORE TRADIZIONALE
+        let indicator = document.querySelector('#touch-indicator');
+        if (indicator) {
+            let isPlacingMode = !this.isRemoteMode && (this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT');
+            indicator.setAttribute('visible', isPlacingMode);
         }
-    } else if (this.state === 'AWAITING_CALIB_PT2') {
-        let hitGround = this.isLaserMode ? { point: this.currentRemoteHit } : this.getHitPoint();
-        if (hitGround && hitGround.point && this.calibPt1 && this.calibLocal1 && this.calibLocal2) {
-            let angleLocal = Math.atan2(this.calibLocal2.x - this.calibLocal1.x, this.calibLocal2.z - this.calibLocal1.z);
-            let angleWorld = Math.atan2(hitGround.point.x - this.calibPt1.x, hitGround.point.z - this.calibPt1.z);
-            this.worldPivotEl.object3D.rotation.set(0, angleWorld - angleLocal, 0);
+
+        // --- ANIMAZIONE LIVE CALIBRAZIONE TOPOGRAFICA ---
+        if (this.state === 'AWAITING_CALIB_PT1') {
+            let hitGround = this.isRemoteMode ? { point: this.currentRemoteHit } : this.getHitPoint();
+            if (hitGround && hitGround.point) {
+                this.worldPivotEl.object3D.position.copy(hitGround.point);
+            }
+        } else if (this.state === 'AWAITING_CALIB_PT2') {
+            let hitGround = this.isRemoteMode ? { point: this.currentRemoteHit } : this.getHitPoint();
+            if (hitGround && hitGround.point && this.calibPt1 && this.calibLocal1 && this.calibLocal2) {
+                let angleLocal = Math.atan2(this.calibLocal2.x - this.calibLocal1.x, this.calibLocal2.z - this.calibLocal1.z);
+                let angleWorld = Math.atan2(hitGround.point.x - this.calibPt1.x, hitGround.point.z - this.calibPt1.z);
+                this.worldPivotEl.object3D.rotation.set(0, angleWorld - angleLocal, 0);
+            }
         }
-    }
-},
+      },
 
       // MODIFICATA PER GESTIRE LA MODALITA' LASER
       getHitPoint: function() {
