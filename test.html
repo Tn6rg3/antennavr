@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner Rapido - Rete Esagonale</title>
+    <title>Scanner Superfici 3D - Rete Perfetta</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
         #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
@@ -12,9 +12,9 @@
 </head>
 <body>
     <div id="info">
-        <b>Grilletti (Tieni premuto)</b>: Dipingi la rete 3D molto velocemente<br>
+        <b>Grilletti (Tieni premuto)</b>: Dipingi la rete (aderente alle superfici)<br>
         <b>Pulsante X (Sinistro)</b>: Cancella tutto<br>
-        <div id="point-counter">Poligoni Rete: 0 / 100000</div>
+        <div id="point-counter">Celle Rete: 0 / 50000</div>
     </div>
 
     <script type="importmap">
@@ -32,51 +32,31 @@
 
         let camera, scene, renderer;
         
-        // IMPOSTAZIONI OTTIMIZZATE PER SCANSIONE RAPIDA
-        const MAX_POINTS = 100000; // Ridotti perché ora sono giganti
-        const MIN_DISTANCE = 0.06; // Rilascia una cella ogni 6 centimetri
-        const POINT_SIZE = 0.12;   // Cella grande 12 centimetri (si sovrappongono creando la rete)
+        // IMPOSTAZIONI DELLA RETE
+        const MAX_HEXAGONS = 50000; 
+        const HEX_RADIUS = 0.05; // Raggio 5cm (Larghezza totale 10cm)
+        const VOXEL_SIZE = 0.1;  // Dimensione del cubo di controllo anti-doppioni (10cm)
         
-        let pointCloud;
-        let positions;
-        let pointCount = 0;
+        let instancedMesh;
+        let voxelGrid = new Set(); // La memoria della nostra scacchiera spaziale
         
         let lastButtonPressTime = 0;
         const uiCounter = document.getElementById('point-counter');
 
+        // Oggetto temporaneo per calcolare la rotazione degli esagoni
+        const dummyMatrix = new THREE.Matrix4();
+
         init();
         animate();
-
-        // --- GENERATORE DI TEXTURE: Esagono Vuoto (Stile Rete Mesh) ---
-        function createHexagonTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 128;
-            canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            
-            // Colore e spessore della linea
-            ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 6;
-            ctx.lineJoin = "round";
-            
-            // Disegna un esagono perfetto
-            ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-                const angle = (Math.PI / 3) * i;
-                const x = 64 + 56 * Math.cos(angle);
-                const y = 64 + 56 * Math.sin(angle);
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            }
-            ctx.closePath();
-            ctx.stroke();
-            
-            return new THREE.CanvasTexture(canvas);
-        }
 
         function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
+
+            // Luce per rendere visibili gli esagoni
+            const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
+            light.position.set(0, 2, 0);
+            scene.add(light);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -86,6 +66,7 @@
 
             document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
 
+            // Controller Laser
             function buildControllerPointer() {
                 const geometry = new THREE.BufferGeometry().setFromPoints([
                     new THREE.Vector3(0, 0, 0),
@@ -101,8 +82,7 @@
                 controller.userData = {
                     handedness: null,
                     isScanning: false,
-                    hitTestSource: null,
-                    lastPoint: new THREE.Vector3(999, 999, 999)
+                    hitTestSource: null
                 };
 
                 controller.addEventListener('connected', function (event) {
@@ -120,41 +100,37 @@
                 scene.add(controller);
             }
 
-            // --- MATERIALE DELLA NUVOLA DI PUNTI (La magia visiva) ---
-            const geometry = new THREE.BufferGeometry();
-            positions = new Float32Array(MAX_POINTS * 3);
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setDrawRange(0, 0);
+            // --- CREAZIONE DEGLI ESAGONI 3D (InstancedMesh) ---
+            // Usiamo un anello a 6 lati per creare un esagono vuoto perfetto
+            const geometry = new THREE.RingGeometry(HEX_RADIUS - 0.005, HEX_RADIUS, 6);
+            
+            // IMPORTANTE: Ruotiamo l'esagono in modo che la sua faccia guardi l'Asse Y.
+            // Il sistema HitTest di WebXR usa l'Asse Y come "normale" della superficie.
+            geometry.rotateX(-Math.PI / 2);
+            geometry.rotateY(Math.PI / 6); // Raddrizza le punte dell'esagono per farle incastrare meglio
 
-            const material = new THREE.PointsMaterial({ 
+            const material = new THREE.MeshBasicMaterial({ 
                 color: 0x00ff00, 
-                size: POINT_SIZE,
-                map: createHexagonTexture(),
-                transparent: true,
-                opacity: 0.9,
-                depthWrite: false, // CRITICO: impedisce ai quadrati invisibili di bloccarsi tra loro
-                alphaTest: 0.1     // Rende l'interno dell'esagono veramente trasparente
+                side: THREE.DoubleSide 
             });
 
-            pointCloud = new THREE.Points(geometry, material);
-            pointCloud.frustumCulled = false; 
-            scene.add(pointCloud);
+            // L'InstancedMesh ci permette di disegnare 50.000 esagoni con 1 sola chiamata alla scheda video!
+            instancedMesh = new THREE.InstancedMesh(geometry, material, MAX_HEXAGONS);
+            instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            instancedMesh.count = 0;
+            scene.add(instancedMesh);
 
             window.addEventListener('resize', onWindowResize);
         }
 
-        function clearPointCloud() {
-            pointCount = 0;
-            pointCloud.geometry.setDrawRange(0, 0);
-            pointCloud.geometry.attributes.position.needsUpdate = true;
-            uiCounter.textContent = `Poligoni Rete: ${pointCount} / ${MAX_POINTS} (RESET)`;
+        function clearScannedMesh() {
+            instancedMesh.count = 0;
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            voxelGrid.clear(); // Svuotiamo la memoria anti-doppioni
+            
+            uiCounter.textContent = `Celle Rete: 0 / ${MAX_HEXAGONS} (RESET)`;
             uiCounter.style.color = "#ff0000";
-            
             setTimeout(() => { uiCounter.style.color = "#00ffff"; }, 1000);
-            
-            for (let i = 0; i < 2; i++) {
-                renderer.xr.getController(i).userData.lastPoint.set(999, 999, 999);
-            }
         }
 
         function onWindowResize() {
@@ -179,46 +155,53 @@
                         if (source.gamepad.buttons[4] && source.gamepad.buttons[4].pressed) {
                             if (now - lastButtonPressTime > 500) {
                                 lastButtonPressTime = now;
-                                clearPointCloud();
+                                clearScannedMesh();
                             }
                         }
                     }
                 }
 
-                // SCANSIONE E DISEGNO
+                // SCANSIONE E ALLINEAMENTO 3D
                 const c0 = renderer.xr.getController(0);
                 const c1 = renderer.xr.getController(1);
                 const controllers = [c0, c1];
 
-                let pointsAdded = false;
+                let meshAdded = false;
 
                 controllers.forEach(ctrl => {
-                    if (ctrl.userData.isScanning && ctrl.userData.hitTestSource && pointCount < MAX_POINTS) {
+                    if (ctrl.userData.isScanning && ctrl.userData.hitTestSource && instancedMesh.count < MAX_HEXAGONS) {
                         const hits = frame.getHitTestResults(ctrl.userData.hitTestSource);
                         
                         if (hits.length > 0) {
                             const pose = hits[0].getPose(referenceSpace);
-                            const currentPos = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
+                            
+                            // 1. Estraiamo la posizione per controllare i doppioni
+                            const pos = new THREE.Vector3().setFromMatrixPosition(dummyMatrix.fromArray(pose.transform.matrix));
 
-                            if (currentPos.distanceTo(ctrl.userData.lastPoint) > MIN_DISTANCE) {
-                                positions[pointCount * 3] = currentPos.x;
-                                positions[pointCount * 3 + 1] = currentPos.y;
-                                positions[pointCount * 3 + 2] = currentPos.z;
+                            // 2. SISTEMA ANTI-DOPPIONI (VOXEL HASHING)
+                            // Dividiamo lo spazio in cubi da 10cm. Creiamo un "Nome ID" per il cubo (es: "10,24,-5")
+                            const voxelKey = `${Math.floor(pos.x / VOXEL_SIZE)},${Math.floor(pos.y / VOXEL_SIZE)},${Math.floor(pos.z / VOXEL_SIZE)}`;
 
-                                pointCount++;
-                                pointsAdded = true;
-                                ctrl.userData.lastPoint.copy(currentPos);
+                            // Se il cubo è vuoto, piazziamo l'esagono!
+                            if (!voxelGrid.has(voxelKey)) {
+                                voxelGrid.add(voxelKey); // Segniamo il cubo come occupato
+
+                                // 3. ALLINEAMENTO PERFETTO ALLA SUPERFICIE
+                                // pose.transform.matrix contiene già l'inclinazione esatta della superficie!
+                                instancedMesh.setMatrixAt(instancedMesh.count, dummyMatrix);
+
+                                instancedMesh.count++;
+                                meshAdded = true;
                             }
                         }
                     }
                 });
 
-                if (pointsAdded) {
-                    pointCloud.geometry.setDrawRange(0, pointCount);
-                    pointCloud.geometry.attributes.position.needsUpdate = true;
+                if (meshAdded) {
+                    instancedMesh.instanceMatrix.needsUpdate = true;
                     
-                    if (pointCount % 20 === 0 || pointCount === MAX_POINTS) {
-                        uiCounter.textContent = `Poligoni Rete: ${pointCount} / ${MAX_POINTS}`;
+                    if (instancedMesh.count % 10 === 0 || instancedMesh.count === MAX_HEXAGONS) {
+                        uiCounter.textContent = `Celle Rete: ${instancedMesh.count} / ${MAX_HEXAGONS}`;
                     }
                 }
             }
