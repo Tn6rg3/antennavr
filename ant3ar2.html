@@ -361,6 +361,7 @@
                     });
                 }
 
+                // BLOCCO MODIFICATO CON DISTANZA DI SICUREZZA
                 if (this.hitTestSource) {
                     let hitTestResults = frame.getHitTestResults(this.hitTestSource);
                     if (hitTestResults.length > 0) {
@@ -369,9 +370,11 @@
                             // 1. Estrapola la posizione rilevata dall'hit-test
                             let hitPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
                             
-                            // 2. Calcola la posizione reale del tuo controller destro
+                            // 2. Calcola la posizione reale del tuo controller destro (con check di sicurezza per evitare blocchi)
                             let controllerPos = new THREE.Vector3();
-                            this.raycasterEl.object3D.getWorldPosition(controllerPos);
+                            if (this.raycasterEl && this.raycasterEl.object3D) {
+                                this.raycasterEl.object3D.getWorldPosition(controllerPos);
+                            }
                             
                             // 3. Mostra l'esagono SOLO se la distanza è maggiore di 40 cm (0.4 metri)
                             if (controllerPos.distanceTo(hitPos) > 0.4) {
@@ -391,6 +394,12 @@
                         this.reticleValid = false;
                     }
                 }
+            }
+        } else {
+            if(this.reticle) this.reticle.setAttribute('visible', 'false');
+            this.reticleValid = false;
+        }
+
         // --- ANIMAZIONE LIVE CALIBRAZIONE TOPOGRAFICA ---
         if (this.state === 'AWAITING_CALIB_PT1') {
             let hitGround = this.getHitPoint();
