@@ -3,239 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner Ibrido: Sguardo + Mani - Quest 3</title>
+    <title>Test Accesso Fotocamera Raw - Quest 3</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
-        #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px black; font-weight: bold; background: rgba(0,0,0,0.6); padding: 10px; }
+        body { 
+            margin: 0; 
+            padding: 20px; 
+            background-color: #111; 
+            color: #fff; 
+            font-family: sans-serif; 
+            text-align: center; 
+        }
+        #video-container {
+            margin-top: 20px;
+            padding: 10px;
+            background: #222;
+            border-radius: 10px;
+            display: inline-block;
+        }
+        video {
+            width: 100%;
+            max-width: 600px;
+            border: 3px solid #ff0044;
+            background-color: #000;
+            border-radius: 5px;
+        }
+        #log {
+            margin-top: 20px;
+            padding: 15px;
+            background: #000;
+            color: #00ff00;
+            font-family: monospace;
+            text-align: left;
+            border: 1px solid #333;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            overflow-wrap: break-word;
+        }
+        .error { color: #ff4444 !important; }
     </style>
 </head>
 <body>
-    <div id="info">
-        1. <b>Guarda l'oggetto</b> col visore per posizionare il cubo.<br>
-        2. Usa il joystick destro per ridimensionarlo.<br>
-        3. <b>Tieni premuti i grilletti</b> per bloccare il cubo e "spruzzare" i punti con le mani.
+    <h2>Tentativo di Accesso Diretto (getUserMedia)</h2>
+    <p>Questo script tenta di bypassare WebXR e chiede al browser l'accesso diretto ai pixel della fotocamera posteriore (environment).</p>
+
+    <div id="video-container">
+        <video id="camera-feed" autoplay playsinline></video>
     </div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
+    <div id="log">In attesa di richiedere la fotocamera...</div>
+
+    <script>
+        const videoElement = document.getElementById('camera-feed');
+        const logElement = document.getElementById('log');
+
+        function logMessage(message, isError = false) {
+            const span = document.createElement('div');
+            span.textContent = '> ' + message;
+            if (isError) span.className = 'error';
+            logElement.appendChild(span);
         }
-    </script>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { ARButton } from 'three/addons/webxr/ARButton.js';
-
-        let camera, scene, renderer;
-        
-        // Bounding Box
-        let boxGroup, scanBox;
-        let currentBoxScale = 0.1;
-
-        // Sensori di profondità
-        let viewerHitTestSource = null;
-        let viewerHitTestSourceRequested = false;
-
-        // Impostazioni Nuvola di Punti (Alta risoluzione)
-        const MAX_POINTS = 800000; 
-        const MIN_DISTANCE = 0.001; 
-        
-        let pointCloud;
-        let positions;
-        let pointCount = 0;
-
-        init();
-        animate();
-
-        function init() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
-            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-            light.position.set(0.5, 1, 0.25);
-            scene.add(light);
-
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.xr.enabled = true;
-            document.body.appendChild(renderer.domElement);
-
-            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
-
-            function buildControllerPointer() {
-                const geometry = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(0, 0, 0),
-                    new THREE.Vector3(0, 0, -1) 
-                ]);
-                const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
-                return new THREE.Line(geometry, material);
-            }
-
-            // Inizializzazione Controller per la fase di Scansione
-            for (let i = 0; i < 2; i++) {
-                const controller = renderer.xr.getController(i);
-                
-                controller.userData = {
-                    handedness: null,
-                    inputSource: null,
-                    hitTestSource: null,
-                    isScanning: false,
-                    lastPoint: new THREE.Vector3(999, 999, 999)
-                };
-
-                controller.addEventListener('connected', function (event) {
-                    this.userData.handedness = event.data.handedness;
-                    this.userData.inputSource = event.data;
-                    this.add(buildControllerPointer());
-
-                    // Laser per dipingere con le mani
-                    renderer.xr.getSession().requestHitTestSource({ space: event.data.targetRaySpace })
-                        .then(source => { this.userData.hitTestSource = source; })
-                        .catch(console.error);
-                });
-
-                controller.addEventListener('selectstart', function () {
-                    this.userData.isScanning = true;
-                    scanBox.material.color.setHex(0xff0000); 
-                });
-
-                controller.addEventListener('selectend', function () {
-                    this.userData.isScanning = false;
-                    const otherCtrl = this === renderer.xr.getController(0) ? renderer.xr.getController(1) : renderer.xr.getController(0);
-                    if (!otherCtrl.userData.isScanning) {
-                        scanBox.material.color.setHex(0xffff00); 
-                    }
-                });
-
-                scene.add(controller);
-            }
-
-            // Creazione Cubo Bounding Box
-            boxGroup = new THREE.Group();
-            boxGroup.matrixAutoUpdate = false;
-            boxGroup.visible = false;
-
-            const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
-            boxGeometry.translate(0, 0.5, 0); 
-            const boxMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true, transparent: true, opacity: 0.6 });
+        async function initCamera() {
+            logMessage("Verifica supporto mediaDevices...");
             
-            scanBox = new THREE.Mesh(boxGeometry, boxMaterial);
-            scanBox.scale.set(currentBoxScale, currentBoxScale, currentBoxScale);
-            boxGroup.add(scanBox);
-            scene.add(boxGroup);
-
-            // Nuvola di Punti
-            const geometry = new THREE.BufferGeometry();
-            positions = new Float32Array(MAX_POINTS * 3);
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setDrawRange(0, 0);
-
-            const material = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.002 });
-            pointCloud = new THREE.Points(geometry, material);
-            pointCloud.frustumCulled = false; 
-            scene.add(pointCloud);
-
-            window.addEventListener('resize', onWindowResize);
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        function animate() {
-            renderer.setAnimationLoop(render);
-        }
-
-        function render(timestamp, frame) {
-            if (frame) {
-                const session = renderer.xr.getSession();
-                const referenceSpace = renderer.xr.getReferenceSpace();
-
-                // --- 1. RICHIEDI IL TRACCIAMENTO DELLO SGUARDO (VISORE) ---
-                if (!viewerHitTestSourceRequested) {
-                    session.requestReferenceSpace('viewer').then(function (viewerSpace) {
-                        session.requestHitTestSource({ space: viewerSpace }).then(function (source) {
-                            viewerHitTestSource = source;
-                        });
-                    });
-                    
-                    session.addEventListener('end', function () {
-                        viewerHitTestSourceRequested = false;
-                        viewerHitTestSource = null;
-                    });
-                    
-                    viewerHitTestSourceRequested = true;
-                }
-
-                const c0 = renderer.xr.getController(0);
-                const c1 = renderer.xr.getController(1);
-                const controllers = [c0, c1];
-                const isAnyScanning = c0.userData.isScanning || c1.userData.isScanning;
-
-                // --- 2. SE NESSUNO STA SCANSIONANDO: MUOVI IL CUBO CON LO SGUARDO ---
-                if (!isAnyScanning) {
-                    
-                    // Gestione del Joystick destro per ridimensionare il cubo
-                    const rightCtrl = controllers.find(c => c.userData.handedness === 'right');
-                    if (rightCtrl && rightCtrl.userData.inputSource && rightCtrl.userData.inputSource.gamepad) {
-                        const axes = rightCtrl.userData.inputSource.gamepad.axes;
-                        const yAxis = axes.length >= 4 ? axes[3] : 0; 
-                        if (Math.abs(yAxis) > 0.1) {
-                            currentBoxScale -= yAxis * 0.005;
-                            currentBoxScale = Math.max(0.02, Math.min(currentBoxScale, 1.0)); 
-                            scanBox.scale.set(currentBoxScale, currentBoxScale, currentBoxScale);
-                        }
-                    }
-
-                    // Il cubo segue esattamente il centro della tua visuale (visore)
-                    if (viewerHitTestSource) {
-                        const hits = frame.getHitTestResults(viewerHitTestSource);
-                        if (hits.length > 0) {
-                            boxGroup.visible = true;
-                            boxGroup.matrix.fromArray(hits[0].getPose(referenceSpace).transform.matrix);
-                        } else {
-                            boxGroup.visible = false;
-                        }
-                    }
-                } 
-                // --- 3. SE STIAMO SCANSIONANDO: BLOCCA IL CUBO ED ELABORA I LASER DELLE MANI ---
-                else {
-                    const boundingBox = new THREE.Box3().setFromObject(scanBox);
-                    
-                    controllers.forEach(ctrl => {
-                        if (ctrl.userData.isScanning && ctrl.userData.hitTestSource && pointCount < MAX_POINTS) {
-                            const hits = frame.getHitTestResults(ctrl.userData.hitTestSource);
-                            
-                            if (hits.length > 0) {
-                                const pose = hits[0].getPose(referenceSpace);
-                                const currentPos = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
-
-                                // Verifica: È dentro il cubo rosso? Distanza > 1mm dall'ultimo punto della mano?
-                                if (boundingBox.containsPoint(currentPos) && currentPos.distanceTo(ctrl.userData.lastPoint) > MIN_DISTANCE) {
-                                    
-                                    positions[pointCount * 3] = currentPos.x;
-                                    positions[pointCount * 3 + 1] = currentPos.y;
-                                    positions[pointCount * 3 + 2] = currentPos.z;
-
-                                    pointCount++;
-                                    pointCloud.geometry.setDrawRange(0, pointCount);
-                                    pointCloud.geometry.attributes.position.needsUpdate = true;
-
-                                    ctrl.userData.lastPoint.copy(currentPos);
-                                }
-                            }
-                        }
-                    });
-                }
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                logMessage("ERRORE CRITICO: Il browser non supporta getUserMedia.", true);
+                return;
             }
-            renderer.render(scene, camera);
+
+            logMessage("Richiesta permessi video (facingMode: environment)...");
+
+            try {
+                // Chiediamo esplicitamente la fotocamera "posteriore/ambientale" a massima risoluzione
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "environment",
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
+                    audio: false
+                });
+
+                logMessage("Permesso accordato! Flusso video ricevuto.");
+                
+                // Analizziamo cosa ci ha effettivamente restituito il sistema
+                const videoTrack = stream.getVideoTracks()[0];
+                logMessage("Nome della traccia hardware fornita: " + videoTrack.label);
+
+                // Mandiamo il video a schermo
+                videoElement.srcObject = stream;
+
+            } catch (err) {
+                logMessage("ACCESSO NEGATO DAL SISTEMA: " + err.name + " - " + err.message, true);
+                logMessage("Meta Horizon OS ha bloccato la richiesta di accesso al feed raw.", true);
+            }
         }
+
+        // Avviamo la richiesta appena la pagina è caricata
+        window.addEventListener('load', initCamera);
     </script>
 </body>
 </html>
