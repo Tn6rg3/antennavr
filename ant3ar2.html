@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V21 - Puntamento Visivo</title>
+  <title>Antenne AR Pro V21 - Puntamento Ibrido (Visore + Joystick)</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -57,7 +57,7 @@
         this.reticleValid = false;
         this.targetReticlePos = new THREE.Vector3();
         this.targetReticleQuat = new THREE.Quaternion();
-        this.lastFloorY = 0; // Memorizza la quota terreno per lunghe distanze
+        this.lastFloorY = 0; 
 
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
@@ -351,16 +351,14 @@
             cameraDir.applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion()));
         }
 
-        // --- MOTORE HIT-TEST WEBXR (Esagono Visivo) ---
+        // --- MOTORE HIT-TEST WEBXR (Esagono guidato dallo sguardo) ---
+        // Il fascio laser del joystick NON viene più disattivato qui!
         if (this.laserMode && isPlacingMode && frame && sceneEl.is('ar-mode')) {
-            // Nasconde la linea nativa inutile
-            if (this.raycasterEl) this.raycasterEl.setAttribute('raycaster', 'showLine', false);
             
             let session = sceneEl.renderer.xr.getSession();
             let refSpace = sceneEl.renderer.xr.getReferenceSpace();
             let hitFound = false;
 
-            // Usa lo spazio del Visore (viewer) invece del controller destro
             if (!this.hitTestSource && !this.requestingHitTest) {
                 this.requestingHitTest = true;
                 session.requestReferenceSpace('viewer').then((viewerSpace) => {
@@ -385,8 +383,7 @@
                 }
             }
 
-            // FALLBACK MATEMATICO LUNGHE DISTANZE (> 5 metri)
-            // Se il visore non trova terreno ma guardi in giù, estrapola il pavimento all'infinito
+            // FALLBACK MATEMATICO LUNGHE DISTANZE
             if (!hitFound && cameraDir.y < -0.02) {
                 let distanceToFloor = (this.lastFloorY - cameraPos.y) / cameraDir.y;
                 if (distanceToFloor > 0 && distanceToFloor < 100) {
@@ -396,10 +393,10 @@
                 }
             }
 
-            // AGGIORNAMENTO FLUIDO (LERP) DELL'ESAGONO
+            // AGGIORNAMENTO FLUIDO DELL'ESAGONO
             if (hitFound) {
-                this.reticle.object3D.position.lerp(this.targetReticlePos, 0.25); // Movimento morbidissimo
-                this.reticle.object3D.rotation.set(-Math.PI / 2, 0, 0); // Sempre piatto
+                this.reticle.object3D.position.lerp(this.targetReticlePos, 0.25); 
+                this.reticle.object3D.rotation.set(-Math.PI / 2, 0, 0); 
                 this.reticle.setAttribute('visible', 'true');
                 this.reticleValid = true;
             } else {
@@ -410,9 +407,6 @@
         } else {
             if(this.reticle) this.reticle.setAttribute('visible', 'false');
             this.reticleValid = false;
-            if (!this.laserMode && this.raycasterEl) {
-                this.raycasterEl.setAttribute('raycaster', 'showLine', true); 
-            }
         }
 
         // --- ANIMAZIONE LIVE CALIBRAZIONE TOPOGRAFICA ---
@@ -432,14 +426,14 @@
       },
 
       getHitPoint: function() {
-        // Se in modalità sguardo e l'esagono è valido, restituisce l'esagono
+        // Se in modalità sguardo ed esagono valido, usa l'esagono per piazzare
         if (this.laserMode && this.reticleValid) {
             let pos = new THREE.Vector3();
             this.reticle.object3D.getWorldPosition(pos);
             return { point: pos };
         }
 
-        // Altrimenti fallback al controller fisico
+        // Altrimenti usa il controller fisico (tocco)
         let pos = new THREE.Vector3();
         let indicator = document.querySelector('#touch-indicator');
         if (indicator && indicator.getAttribute('visible') === true) {
@@ -491,9 +485,10 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
+        // La logica di interazione da priorità assoluta al Joystick per i click UI e Picchetti
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         
-        // Anti-trapasso UI 2D
+        // Anti-trapasso UI 2D e click sui bottoni del pannello
         if (intersects) {
           for (let i = 0; i < intersects.length; i++) {
             let el = intersects[i];
@@ -558,6 +553,7 @@
 
         // --- GESTIONE TIRANTI & RIMOZIONI ---
         if (this.gwState === 'EDIT') {
+            // Controlla prima se il joystick sta puntando a un picchetto/collare
             let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
             if (hitPeg) {
                 let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx'));
@@ -581,6 +577,7 @@
                 }
             }
 
+            // Se il joystick ha mancato, allora piazza il picchetto dove si trova l'esagono
             let hitGround = this.getHitPoint();
             if (hitGround) {
               let localHit = this.getLocalPoint(hitGround.point);
@@ -900,10 +897,10 @@
               let txt = document.querySelector('#txt-laser-toggle');
               let btn = document.querySelector('#btn-laser-toggle');
               if (this.laserMode) {
-                  txt.setAttribute('value', "PUNTAMENTO: VISORE (SGUARDO)");
+                  txt.setAttribute('value', "PUNTAMENTO: MISTO (VISORE + JOYSTICK)");
                   btn.setAttribute('color', '#D81B60'); 
               } else {
-                  txt.setAttribute('value', "PUNTAMENTO: TOCCO FISICO");
+                  txt.setAttribute('value', "PUNTAMENTO: TOCCO (LASER OFF)");
                   btn.setAttribute('color', '#5E35B1'); 
                   this.hitTestSource = null; 
               }
@@ -1087,7 +1084,7 @@
           </a-plane>
 
           <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#5E35B1" position="0 0.22 0.01">
-            <a-text id="txt-laser-toggle" value="PUNTAMENTO: TOCCO FISICO" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
+            <a-text id="txt-laser-toggle" value="PUNTAMENTO: TOCCO (LASER OFF)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
           </a-plane>
 
           <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.17 0.01">
@@ -1199,7 +1196,7 @@
         </a-entity>
       </a-entity>
       
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 4">
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 10">
         <a-sphere id="touch-indicator" radius="0.015" material="color: #00FF00; shader: flat; transparent: true; opacity: 0.8" position="0 -0.07 0.02" visible="false"></a-sphere>
       </a-entity>
     </a-entity>
