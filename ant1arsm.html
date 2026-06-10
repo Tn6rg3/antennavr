@@ -43,10 +43,11 @@
       init: function () {
         let el = this.el;
         let originalColor = el.getAttribute('material') ? el.getAttribute('material').color : '#FFFFFF';
-        el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
+        // Feedback visivo quando il mirino passa sul bottone
+        el.addEventListener('mouseenter', () => { el.setAttribute('material', 'opacity', 0.8); el.setAttribute('scale', '1.05 1.05 1.05'); });
         el.addEventListener('mouseleave', () => { el.setAttribute('material', 'opacity', 1.0); el.setAttribute('scale', '1 1 1'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
         el.addEventListener('mousedown', () => { el.setAttribute('scale', '0.95 0.95 0.8'); el.setAttribute('material', 'color', '#00FFCC'); });
-        el.addEventListener('mouseup', () => { el.setAttribute('scale', '1 1 1'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
+        el.addEventListener('mouseup', () => { el.setAttribute('scale', '1.05 1.05 1.05'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
       }
     });
 
@@ -296,14 +297,20 @@
         let isMenuOpen = this.menuUI.getAttribute('visible') === true || this.menuUI.getAttribute('visible') === 'true';
         let isGwOpen = this.gwUI.getAttribute('visible') === true || this.gwUI.getAttribute('visible') === 'true';
 
-        // GESTIONE VISIBILITA' DEI BOTTONI IN BASSO
+        // GESTIONE VISIBILITA' DEI BOTTONI IN BASSO (DOM)
         let confirmBtn = document.querySelector('#btn-mobile-confirm');
         let heightControls = document.querySelector('#mobile-height-controls');
         let utilityBtns = document.querySelector('#mobile-utility-btns');
+        let overlayPointerMsg = document.querySelector('#overlay-pointer-msg');
         
-        // I TASTI UTILITY DEI MENU DEVONO ESSERE VISIBILI QUASI SEMPRE TRANNE IN REGOLAZIONE ALTEZZA
+        // I TASTI UTILITY SONO VISIBILI TRANNE IN REGOLAZIONE ALTEZZA O QUANDO I MENU SONO GIA APERTI
         if (utilityBtns) {
             utilityBtns.style.display = (isHeightMode || isMenuOpen || isGwOpen) ? 'none' : 'flex';
+        }
+        
+        // MESSAGGIO "PUNTA IL MIRINO"
+        if (overlayPointerMsg) {
+            overlayPointerMsg.style.display = (isMenuOpen || isGwOpen) ? 'block' : 'none';
         }
 
         if (confirmBtn) {
@@ -334,7 +341,6 @@
         if (isPlacingMode) {
             let hitFound = false;
             
-            // Tenta il WebXR Hit Test se disponibile
             if (frame && sceneEl.is('ar-mode')) {
                 let session = sceneEl.renderer.xr.getSession(); let refSpace = sceneEl.renderer.xr.getReferenceSpace();
                 if (!this.hitTestSource && !this.requestingHitTest) {
@@ -355,7 +361,7 @@
                 }
             }
             
-            // PARACADUTE: Se l'hit test fallisce, usa la matematica calcolata a 2 metri o verso il pavimento noto
+            // PARACADUTE MATEMATICO
             if (!hitFound) {
                 let t = (this.lastFloorY - cameraPos.y) / cameraDir.y;
                 if (t > 0 && t < 100) {
@@ -578,9 +584,17 @@
 
       setupGlobalEventDelegation: function() {
         let scene = this.el.sceneEl; this.lastClickTime = 0; 
-        scene.addEventListener('mousedown', (evt) => {
+        
+        // ASCOLTIAMO GLI EVENTI 'CLICK' PROVENIENTI DAL NUOVO MIRINO CENTRALE
+        scene.addEventListener('click', (evt) => {
           let now = Date.now(); if (now - this.lastClickTime < 250) return; 
-          let target = evt.target.closest('.clickable'); if(!target) return;
+          
+          let target = evt.target;
+          if (target && !target.classList.contains('clickable')) {
+              target = target.closest('.clickable');
+          }
+          if(!target) return;
+          
           let isVis = target.getAttribute('visible'); if (isVis === false || isVis === 'false') return;
           let parent = target.parentElement; if (parent && (parent.getAttribute('visible') === false || parent.getAttribute('visible') === 'false')) return;
 
@@ -640,10 +654,8 @@
 </head>
 <body>
   
-  <!-- OVERLAY CON TUTTA L'UI SOVRAPPOSTA -->
   <div id="dom-overlay" style="pointer-events: none; position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 9999;">
     
-    <!-- Menu DB 2D in avvio -->
     <div id="ui-2d-container">
       <h3>DATABASE ANTENNE</h3>
       <input type="text" id="save-name" placeholder="Es. Campo Scout">
@@ -655,10 +667,12 @@
       <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA ANTENNA</button>
     </div>
 
-    <!-- Controlli inferiori (Compaiono automaticamente premendo il pulsante AR) -->
+    <div id="overlay-pointer-msg" style="display: none; position: absolute; top: 15%; width: 100%; text-align: center; color: #00E676; font-family: monospace; font-weight: bold; font-size: 16px; text-shadow: 2px 2px 4px #000;">
+        PUNTA IL MIRINO AL CENTRO<br>E TOCCA LO SCHERMO
+    </div>
+
     <div id="ar-overlay-controls" style="display: none; position: absolute; bottom: 30px; left: 0; right: 0; flex-direction: column; align-items: center; justify-content: flex-end; gap: 15px; pointer-events: none;">
         
-        <!-- Pannello Altezza -->
         <div id="mobile-height-controls" style="pointer-events: auto; display: none; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border: 2px solid #FFEB3B; text-align: center;">
             <div style="color: #FFEB3B; margin-bottom: 10px; font-weight: bold; font-family: monospace;">REGOLA ALTEZZA</div>
             <button onclick="window.arHeightAdd(event, -0.1)" style="padding: 10px 20px; font-size: 18px; margin-right: 10px; background: #FF1744; color: white; border:none; border-radius: 5px; font-weight: bold;">- 10 cm</button>
@@ -667,14 +681,11 @@
             <button onclick="window.arHeightConfirm(event)" style="padding: 10px 30px; font-size: 16px; background: #2979FF; color: white; border:none; border-radius: 50px; font-weight: bold;">CONFERMA ALTEZZA</button>
         </div>
 
-        <!-- Grande Tasto CONFERMA PUNTO (Ora con evento globale inline) -->
         <button id="btn-mobile-confirm" onclick="window.arConfirmPoint(event)" style="pointer-events: auto; display: none; background: #FF1744; color: white; padding: 15px 30px; font-size: 18px; border-radius: 50px; border: 3px solid white; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
             CERCO PAVIMENTO...
         </button>
         
-        <!-- Tasti per far apparire le impostazioni 3D -->
         <div id="mobile-utility-btns" style="display: flex; gap: 10px; pointer-events: none;">
-            <!-- Usa onclick per certezza d'interazione mobile -->
             <button onclick="window.arToggleMenu(event)" class="mobile-btn">MENU IMPOSTAZIONI</button>
             <button onclick="window.arToggleGw(event)" class="mobile-btn">MENU TIRANTI</button>
         </div>
@@ -683,14 +694,19 @@
 
   <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: dom-overlay; overlayElement: #dom-overlay" vr-mode-ui="enabled: true">
     
-    <!-- Raycaster per cliccare i bottoni 3D dallo schermo -->
-    <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 20"></a-entity>
-
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0">
           
-        <!-- MENU IMPOSTAZIONI 3D -->
-        <a-entity id="menu-ui" visible="false" position="0 0.05 -0.55" scale="0.5 0.5 0.5">
+        <a-entity id="ar-cursor"
+                  cursor="fuse: false"
+                  raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 20"
+                  position="0 0 -0.05"
+                  geometry="primitive: ring; radiusInner: 0.001; radiusOuter: 0.002"
+                  material="color: #00FF00; shader: flat; opacity: 0.8"
+                  animation__click="property: scale; startEvents: click; easing: easeInCubic; dur: 150; from: 0.1 0.1 0.1; to: 1 1 1">
+        </a-entity>
+
+        <a-entity id="menu-ui" visible="false" position="0 0.05 -0.55" scale="0.45 0.45 0.45">
           <a-plane width="0.5" height="0.85" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
           <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.40 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
@@ -755,14 +771,12 @@
           <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.22 0.01"><a-text value="[2] RICALIBRAZIONE (SE SLITTATA)" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
           <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.45" height="0.035" color="#FF8F00" position="0 -0.27 0.01"><a-text value="[+] SALVA ANTENNA NEL VISORE" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
           
-          <!-- CHIUSURA MENU -->
           <a-plane id="btn-menu-esci" class="clickable" btn-interaction width="0.45" height="0.045" color="#B71C1C" position="0 -0.35 0.01">
             <a-text value="[ X ] CHIUDI MENU" align="center" scale="0.08 0.08 0.08"></a-text>
           </a-plane>
         </a-entity>
 
-        <!-- MENU TIRANTI 3D -->
-        <a-entity id="guy-wires-ui" visible="false" position="0 0.05 -0.55" scale="0.5 0.5 0.5">
+        <a-entity id="guy-wires-ui" visible="false" position="0 0.05 -0.55" scale="0.45 0.45 0.45">
           <a-plane width="0.48" height="0.40" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
           <a-text value="MODALITA' TIRANTI" position="0 0.16 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
           <a-plane width="0.45" height="0.06" color="#3E2723" position="0 0.09 0.01"><a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text></a-plane>
@@ -776,7 +790,6 @@
               <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 -0.02 0.01"><a-text value="FINITO (INDIETRO)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text></a-plane>
           </a-entity>
 
-          <!-- CHIUSURA MENU TIRANTI -->
           <a-plane id="btn-gw-esci" class="clickable" btn-interaction width="0.38" height="0.045" color="#B71C1C" position="0 -0.12 0.01">
             <a-text value="[ X ] CHIUDI MENU" align="center" scale="0.08 0.08 0.08"></a-text>
           </a-plane>
@@ -785,7 +798,6 @@
       </a-camera>
     </a-entity>
 
-    <!-- PIVOT GLOBALE DELLA SCENA -->
     <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
         <a-entity id="world-content" position="0 0 0" rotation="0 0 0">
             <a-entity id="mmana-wires-container"></a-entity>
