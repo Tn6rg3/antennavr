@@ -56,6 +56,31 @@
         this.requestingHitTest = false;
         this.reticleValid = false;
 
+
+// --- INIZIALIZZA ESAGONO RETICOLO (Hit-Test) ---
+        this.reticle = document.createElement('a-entity');
+        this.reticle.setAttribute('geometry', 'primitive: ring; radiusInner: 0.08; radiusOuter: 0.1; segmentsTheta: 6');
+        this.reticle.setAttribute('material', 'color: #00FF00; shader: flat; transparent: true; opacity: 0.9');
+        this.reticle.setAttribute('rotation', '-90 0 0');
+        this.reticle.setAttribute('visible', 'false');
+        this.el.sceneEl.appendChild(this.reticle); 
+
+        // VARIABILI PER SMOOTHING E DISTANZE ELEVATE
+        this.targetReticlePos = new THREE.Vector3();
+        this.targetReticleQuat = new THREE.Quaternion();
+        this.lastFloorY = 0; // Memorizza l'altezza del pavimento per le lunghe distanze
+
+        // RAGGIO LASER CUSTOM (Visivo)
+        this.customLaser = document.createElement('a-cylinder');
+        this.customLaser.setAttribute('radius', '0.0015');
+        this.customLaser.setAttribute('material', 'color: #00FF00; shader: flat; transparent: true; opacity: 0.6');
+        this.customLaser.setAttribute('visible', 'false');
+        this.el.sceneEl.appendChild(this.customLaser);
+
+
+
+
+        
         this.raycasterEl = document.querySelector('#right-controller');
         this.leftControllerEl = document.querySelector('#left-controller');
         this.worldPivotEl = document.querySelector('#world-pivot');
@@ -329,28 +354,38 @@
         this.endFed_AC_Len = baseLen / 2; this.endFed_CB_Len = baseLen / 2; this.longwireLen = baseLen;
       },
 
-      tick: function (time, frameDelta) {
+     tick: function (time, frameDelta) {
         let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT';
 
-        // --- GESTIONE INDICATORE TOCCO FISICO ---
         let indicator = document.querySelector('#touch-indicator');
         if (indicator) {
-            // Mostra pallino fisico solo se non siamo in modalità laser
             indicator.setAttribute('visible', isPlacingMode && !this.laserMode);
         }
 
-        // --- MOTORE HIT-TEST WEBXR (Esagono Laser) ---
         let sceneEl = this.el.sceneEl;
         let frame = sceneEl.frame;
+        
+        // Posizione e direzione del controller
+        let controllerPos = new THREE.Vector3();
+        let controllerDir = new THREE.Vector3(0, 0, -1);
+        if (this.raycasterEl && this.raycasterEl.object3D) {
+            this.raycasterEl.object3D.getWorldPosition(controllerPos);
+            controllerDir.applyQuaternion(this.raycasterEl.object3D.getWorldQuaternion(new THREE.Quaternion()));
+        }
+
         if (this.laserMode && isPlacingMode && frame && sceneEl.is('ar-mode')) {
+            // Disattiva il raggio infinito di A-Frame
+            this.raycasterEl.setAttribute('raycaster', 'showLine', false);
+            
             let session = sceneEl.renderer.xr.getSession();
             let refSpace = sceneEl.renderer.xr.getReferenceSpace();
-
-            // Cerca il controller destro
             let rightSource = null;
+            
             for (let source of session.inputSources) {
                 if (source.handedness === 'right') { rightSource = source; break; }
             }
+
+            let hitFound = false;
 
             if (rightSource && rightSource.targetRaySpace) {
                 if (!this.hitTestSource && !this.requestingHitTest) {
@@ -361,43 +396,71 @@
                     });
                 }
 
-                // BLOCCO MODIFICATO CON DISTANZA DI SICUREZZA
                 if (this.hitTestSource) {
                     let hitTestResults = frame.getHitTestResults(this.hitTestSource);
                     if (hitTestResults.length > 0) {
                         let pose = hitTestResults[0].getPose(refSpace);
                         if (pose) {
-                            // 1. Estrapola la posizione rilevata dall'hit-test
                             let hitPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
                             
-                            // 2. Calcola la posizione reale del tuo controller destro (con check di sicurezza per evitare blocchi)
-                            let controllerPos = new THREE.Vector3();
-                            if (this.raycasterEl && this.raycasterEl.object3D) {
-                                this.raycasterEl.object3D.getWorldPosition(controllerPos);
-                            }
-                            
-                            // 3. Mostra l'esagono SOLO se la distanza è maggiore di 40 cm (0.4 metri)
+                            // Sicurezza per non farsi targettare addosso (es. mano)
                             if (controllerPos.distanceTo(hitPos) > 0.4) {
-                                this.reticle.object3D.position.copy(hitPos);
-                                this.reticle.object3D.quaternion.copy(pose.transform.orientation);
-                                this.reticle.object3D.rotateX(-Math.PI / 2);
-                                this.reticle.setAttribute('visible', 'true');
-                                this.reticleValid = true;
-                            } else {
-                                // Se è troppo vicino, nascondi l'esagono
-                                this.reticle.setAttribute('visible', 'false');
-                                this.reticleValid = false;
+                                this.targetReticlePos.copy(hitPos);
+                                this.targetReticleQuat.copy(pose.transform.orientation);
+                                this.lastFloorY = hitPos.y; // Salva la vera quota del terreno
+                                hitFound = true;
                             }
                         }
-                    } else {
-                        this.reticle.setAttribute('visible', 'false');
-                        this.reticleValid = false;
                     }
                 }
             }
+
+            // FALLBACK MATEMATICO PER LUNGHE DISTANZE (Oltre i limiti hardware dell'AR)
+            // Se non trova il vero pavimento ma stiamo puntando verso il basso
+            if (!hitFound && controllerDir.y < -0.02) {
+                // Calcola l'intersezione matematica con l'ultimo piano Y conosciuto
+                let distanceToFloor = (this.lastFloorY - controllerPos.y) / controllerDir.y;
+                if (distanceToFloor > 0 && distanceToFloor < 100) { // Limite massimo visivo 100 metri
+                    this.targetReticlePos.copy(controllerPos).addScaledVector(controllerDir, distanceToFloor);
+                    // Forza la rotazione del reticolo per essere piatto a terra
+                    this.targetReticleQuat.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+                    hitFound = true;
+                }
+            }
+
+            if (hitFound) {
+                // 1. SMOOTHING (LERP) - Elimina il tremolio saltellante
+                this.reticle.object3D.position.lerp(this.targetReticlePos, 0.25); // 0.25 = morbido ma reattivo
+                // Mantieni sempre l'esagono piatto
+                this.reticle.object3D.rotation.set(-Math.PI / 2, 0, 0); 
+                
+                this.reticle.setAttribute('visible', 'true');
+                this.reticleValid = true;
+
+                // 2. AGGIORNA IL RAGGIO LASER CUSTOM (Da controller a esagono)
+                let dist = controllerPos.distanceTo(this.reticle.object3D.position);
+                let midPoint = new THREE.Vector3().lerpVectors(controllerPos, this.reticle.object3D.position, 0.5);
+                
+                this.customLaser.object3D.position.copy(midPoint);
+                this.customLaser.object3D.lookAt(this.reticle.object3D.position);
+                this.customLaser.object3D.rotateX(Math.PI / 2);
+                this.customLaser.setAttribute('geometry', `primitive: cylinder; radius: 0.0015; height: ${dist}`);
+                this.customLaser.setAttribute('visible', 'true');
+
+            } else {
+                this.reticle.setAttribute('visible', 'false');
+                this.customLaser.setAttribute('visible', 'false');
+                this.reticleValid = false;
+            }
+
         } else {
+            // Se usciamo dalla modalità Laser, ripristiniamo le cose normali
             if(this.reticle) this.reticle.setAttribute('visible', 'false');
+            if(this.customLaser) this.customLaser.setAttribute('visible', 'false');
             this.reticleValid = false;
+            if (!this.laserMode && this.raycasterEl) {
+                this.raycasterEl.setAttribute('raycaster', 'showLine', true); // Riattiva raggio nativo per la UI
+            }
         }
 
         // --- ANIMAZIONE LIVE CALIBRAZIONE TOPOGRAFICA ---
