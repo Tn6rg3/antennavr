@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Antenne AR Pro V21 - Puntamento Mobile Avanzato</title>
+  <title>Antenne AR Pro V21 - Puntamento Mobile Definitivo</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     /* Sposta i pulsanti VR/AR nativi per evitare i menu del browser in basso */
@@ -30,6 +30,7 @@
       font-weight: bold;
       font-size: 12px;
       cursor: pointer;
+      pointer-events: auto;
       backdrop-filter: blur(4px);
       box-shadow: 0 4px 6px rgba(0,0,0,0.5);
     }
@@ -48,6 +49,35 @@
         el.addEventListener('mouseup', () => { el.setAttribute('scale', '1 1 1'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
       }
     });
+
+    // --- FUNZIONI GLOBALI PER I TASTI 2D ---
+    window.arConfirmPoint = function(e) {
+        if(e) { e.preventDefault(); e.stopPropagation(); }
+        let sys = document.querySelector('[ar-antenna-system]').components['ar-antenna-system'];
+        if (sys && sys.reticleValid) {
+            let pos = new THREE.Vector3();
+            sys.reticle.object3D.getWorldPosition(pos);
+            sys.doPlacement(pos);
+        }
+    };
+    window.arToggleMenu = function(e) {
+        if(e) { e.preventDefault(); e.stopPropagation(); }
+        document.querySelector('[ar-antenna-system]').components['ar-antenna-system'].toggleMenu();
+    };
+    window.arToggleGw = function(e) {
+        if(e) { e.preventDefault(); e.stopPropagation(); }
+        document.querySelector('[ar-antenna-system]').components['ar-antenna-system'].toggleGuyWireMode();
+    };
+    window.arHeightAdd = function(e, amount) {
+        if(e) { e.preventDefault(); e.stopPropagation(); }
+        let sys = document.querySelector('[ar-antenna-system]').components['ar-antenna-system'];
+        sys.currentHeight = Math.max(0.0, sys.currentHeight + amount);
+        sys.updateHeightPreview();
+    };
+    window.arHeightConfirm = function(e) {
+        if(e) { e.preventDefault(); e.stopPropagation(); }
+        document.querySelector('[ar-antenna-system]').components['ar-antenna-system'].confirmHeight();
+    };
 
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
@@ -71,7 +101,6 @@
         this.lastTriggerTime = 0; 
         this.calibLocal1 = null; this.calibLocal2 = null;
 
-        this.laserMode = true; 
         this.hitTestSource = null;
         this.requestingHitTest = false;
         this.reticleValid = false;
@@ -79,7 +108,6 @@
         this.targetReticleQuat = new THREE.Quaternion();
         this.lastFloorY = 0; 
 
-        this.raycasterEl = document.querySelector('#right-controller');
         this.worldPivotEl = document.querySelector('#world-pivot');
         this.worldContentEl = document.querySelector('#world-content');
         this.verticalCylinder = document.querySelector('#vertical-cylinder');
@@ -89,12 +117,10 @@
         this.mmanaContainerEl = document.querySelector('#mmana-wires-container');
         this.gwContainerEl = document.querySelector('#guy-wires-container');
 
-        // GESTIONE TRANSIZIONE AR / BROWSER
+        // GESTIONE TRANSIZIONE INTERFACCIA
         this.el.sceneEl.addEventListener('enter-vr', () => {
-            if (this.el.sceneEl.is('ar-mode')) {
-                document.querySelector('#ui-2d-container').style.display = 'none';
-                document.querySelector('#ar-overlay-controls').style.display = 'flex';
-            }
+            document.querySelector('#ui-2d-container').style.display = 'none';
+            document.querySelector('#ar-overlay-controls').style.display = 'flex';
         });
 
         this.el.sceneEl.addEventListener('exit-vr', () => {
@@ -104,42 +130,15 @@
             this.requestingHitTest = false;
         });
 
-        // ==========================================
-        // GESTIONE BOTTONI DOM (TOUCH OTTIMIZZATO)
-        // ==========================================
-        const addTouchHandler = (selector, callback) => {
-            let el = document.querySelector(selector);
-            if (!el) return;
-            const handler = (e) => { e.preventDefault(); e.stopPropagation(); callback(); };
-            el.addEventListener('touchstart', handler, {passive: false});
-            el.addEventListener('mousedown', handler);
-        };
-
-        addTouchHandler('#btn-mobile-menu', () => this.toggleMenu());
-        addTouchHandler('#btn-mobile-gw', () => this.toggleGuyWireMode());
-        addTouchHandler('#btn-h-minus', () => { this.currentHeight = Math.max(0.0, this.currentHeight - 0.1); this.updateHeightPreview(); });
-        addTouchHandler('#btn-h-plus', () => { this.currentHeight += 0.1; this.updateHeightPreview(); });
-        addTouchHandler('#btn-h-confirm', () => this.confirmHeight());
-        
-        addTouchHandler('#btn-mobile-confirm', () => {
-            if (this.reticleValid && this.reticle.getAttribute('visible') === 'true') {
-                let pos = new THREE.Vector3();
-                this.reticle.object3D.getWorldPosition(pos);
-                this.doPlacement(pos);
-            }
-        });
-
         this.initPersistentElements();
         this.loadPreloadedMmanaModel();
         this.resetAntennaLengths();
         this.setupGlobalEventDelegation();
-        this.setupMmanaFileLoader();
         
         window.saveAntennaToDB = this.saveAntennaToDB.bind(this);
         window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this);
         window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
         this.refreshDBList();
-        
         this.loadFromStorage(); 
       },
 
@@ -235,7 +234,7 @@
       },
 
       toggleGuyWireMode: function() {
-        if (!this.pointA.top && !this.pointB.top) return;
+        if (!this.pointA.top && !this.pointB.top) { alert("Piazza prima l'antenna!"); return; }
         if (this.state.startsWith('AWAITING') || this.state.startsWith('PLACE_HEIGHT') || this.state.startsWith('SET_CALIB')) return;
         
         if (this.gwState === 'OFF') {
@@ -302,17 +301,24 @@
         let heightControls = document.querySelector('#mobile-height-controls');
         let utilityBtns = document.querySelector('#mobile-utility-btns');
         
+        // I TASTI UTILITY DEI MENU DEVONO ESSERE VISIBILI QUASI SEMPRE TRANNE IN REGOLAZIONE ALTEZZA
+        if (utilityBtns) {
+            utilityBtns.style.display = (isHeightMode || isMenuOpen || isGwOpen) ? 'none' : 'flex';
+        }
+
         if (confirmBtn) {
             if (isPlacingMode && !isMenuOpen && !isGwOpen) {
-                confirmBtn.style.display = 'block'; utilityBtns.style.display = 'none';
-                if (this.reticleValid) { confirmBtn.style.background = '#00E676'; confirmBtn.style.color = '#000'; confirmBtn.innerText = "CONFERMA PUNTO A TERRA"; confirmBtn.disabled = false; }
-                else { confirmBtn.style.background = '#666'; confirmBtn.style.color = '#ccc'; confirmBtn.innerText = "CERCO PAVIMENTO..."; confirmBtn.disabled = true; }
+                confirmBtn.style.display = 'inline-block';
+                if (this.reticleValid) { 
+                    confirmBtn.style.background = '#00E676'; confirmBtn.style.color = '#000'; confirmBtn.innerText = "CONFERMA PUNTO A TERRA"; confirmBtn.disabled = false; 
+                } else { 
+                    confirmBtn.style.background = '#666'; confirmBtn.style.color = '#ccc'; confirmBtn.innerText = "CERCO PAVIMENTO..."; confirmBtn.disabled = true; 
+                }
             } else { 
                 confirmBtn.style.display = 'none'; 
-                if (!isHeightMode && !isMenuOpen && !isGwOpen) utilityBtns.style.display = 'flex'; 
-                else utilityBtns.style.display = 'none';
             }
         }
+        
         if (heightControls) { heightControls.style.display = (isHeightMode && !isMenuOpen && !isGwOpen) ? 'block' : 'none'; }
 
         let sceneEl = this.el.sceneEl; let frame = sceneEl.frame;
@@ -324,32 +330,41 @@
             cameraDir.negate();
         }
         
-        if (isPlacingMode && frame && sceneEl.is('ar-mode')) {
-            let session = sceneEl.renderer.xr.getSession(); let refSpace = sceneEl.renderer.xr.getReferenceSpace(); let hitFound = false;
-            if (!this.hitTestSource && !this.requestingHitTest) {
-                this.requestingHitTest = true;
-                session.requestReferenceSpace('viewer').then((viewerSpace) => {
-                    session.requestHitTestSource({ space: viewerSpace }).then((source) => { this.hitTestSource = source; this.requestingHitTest = false; }).catch(() => { this.requestingHitTest = false; });
-                });
-            }
-            if (this.hitTestSource) {
-                let hitTestResults = frame.getHitTestResults(this.hitTestSource);
-                if (hitTestResults.length > 0) {
-                    let pose = hitTestResults[0].getPose(refSpace);
-                    if (pose) {
-                        let hitPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
-                        this.targetReticlePos.copy(hitPos); this.targetReticleQuat.copy(pose.transform.orientation); this.lastFloorY = hitPos.y; hitFound = true;
+        // IL RETICOLO DEVE FUNZIONARE SEMPRE (SIA IN AR NATIVO CHE CON FALLBACK)
+        if (isPlacingMode) {
+            let hitFound = false;
+            
+            // Tenta il WebXR Hit Test se disponibile
+            if (frame && sceneEl.is('ar-mode')) {
+                let session = sceneEl.renderer.xr.getSession(); let refSpace = sceneEl.renderer.xr.getReferenceSpace();
+                if (!this.hitTestSource && !this.requestingHitTest) {
+                    this.requestingHitTest = true;
+                    session.requestReferenceSpace('viewer').then((viewerSpace) => {
+                        session.requestHitTestSource({ space: viewerSpace }).then((source) => { this.hitTestSource = source; this.requestingHitTest = false; }).catch(() => { this.requestingHitTest = false; });
+                    });
+                }
+                if (this.hitTestSource) {
+                    let hitTestResults = frame.getHitTestResults(this.hitTestSource);
+                    if (hitTestResults.length > 0) {
+                        let pose = hitTestResults[0].getPose(refSpace);
+                        if (pose) {
+                            let hitPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                            this.targetReticlePos.copy(hitPos); this.targetReticleQuat.copy(pose.transform.orientation); this.lastFloorY = hitPos.y; hitFound = true;
+                        }
                     }
                 }
             }
             
+            // PARACADUTE: Se l'hit test fallisce, usa la matematica calcolata a 2 metri o verso il pavimento noto
             if (!hitFound) {
                 let t = (this.lastFloorY - cameraPos.y) / cameraDir.y;
                 if (t > 0 && t < 100) {
                     this.targetReticlePos.copy(cameraPos).addScaledVector(cameraDir, t);
                 } else {
                     this.targetReticlePos.copy(cameraPos); this.targetReticlePos.y = this.lastFloorY;
-                    this.targetReticlePos.addScaledVector(new THREE.Vector3(cameraDir.x, 0, cameraDir.z).normalize(), 2.0);
+                    let flatDir = new THREE.Vector3(cameraDir.x, 0, cameraDir.z);
+                    if(flatDir.lengthSq() < 0.001) flatDir.set(0,0,-1);
+                    this.targetReticlePos.addScaledVector(flatDir.normalize(), 2.0);
                 }
                 this.targetReticleQuat.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)); hitFound = true;
             }
@@ -358,6 +373,7 @@
                 this.reticle.object3D.position.lerp(this.targetReticlePos, 0.25); this.reticle.object3D.rotation.set(-Math.PI / 2, 0, 0); 
                 this.reticle.setAttribute('visible', 'true'); this.reticleValid = true;
             } else { this.reticle.setAttribute('visible', 'false'); this.reticleValid = false; }
+            
         } else { if(this.reticle) this.reticle.setAttribute('visible', 'false'); this.reticleValid = false; }
 
         if (this.state === 'AWAITING_CALIB_PT1' && this.reticleValid) { this.worldPivotEl.object3D.position.copy(this.targetReticlePos); } 
@@ -606,7 +622,7 @@
         });
       },
 
-      setupMmanaFileLoader: function() { /* File upload setup */ },
+      setupMmanaFileLoader: function() { /* Invariato */ },
       triggerGlobalReset: function() {
         this.pointA = { base: null, top: null, sphere: this.pointA.sphere, pole: this.pointA.pole, label: this.pointA.label }; this.pointB = { base: null, top: null, sphere: this.pointB.sphere, pole: this.pointB.pole, label: this.pointB.label }; this.pointC.top = null;
         this.hideStructure(this.pointA); this.hideStructure(this.pointB); this.hideStructure(this.pointC); this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false');
@@ -624,9 +640,10 @@
 </head>
 <body>
   
-  <!-- DOM OVERLAY -->
-  <div id="dom-overlay" style="pointer-events: none; position: absolute; width: 100%; height: 100%; z-index: 9999;">
+  <!-- OVERLAY CON TUTTA L'UI SOVRAPPOSTA -->
+  <div id="dom-overlay" style="pointer-events: none; position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 9999;">
     
+    <!-- Menu DB 2D in avvio -->
     <div id="ui-2d-container">
       <h3>DATABASE ANTENNE</h3>
       <input type="text" id="save-name" placeholder="Es. Campo Scout">
@@ -638,44 +655,45 @@
       <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA ANTENNA</button>
     </div>
 
-    <!-- Controlli in basso in modalità AR -->
-    <div id="ar-overlay-controls" style="display: none; position: absolute; bottom: 20px; width: 100%; text-align: center; flex-direction: column; align-items: center; gap: 15px; pointer-events: none;">
+    <!-- Controlli inferiori (Compaiono automaticamente premendo il pulsante AR) -->
+    <div id="ar-overlay-controls" style="display: none; position: absolute; bottom: 30px; left: 0; right: 0; flex-direction: column; align-items: center; justify-content: flex-end; gap: 15px; pointer-events: none;">
         
         <!-- Pannello Altezza -->
-        <div id="mobile-height-controls" style="pointer-events: auto; display: none; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border: 2px solid #FFEB3B;">
+        <div id="mobile-height-controls" style="pointer-events: auto; display: none; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border: 2px solid #FFEB3B; text-align: center;">
             <div style="color: #FFEB3B; margin-bottom: 10px; font-weight: bold; font-family: monospace;">REGOLA ALTEZZA</div>
-            <button id="btn-h-minus" style="padding: 10px 20px; font-size: 18px; margin-right: 10px; background: #FF1744; color: white; border:none; border-radius: 5px; font-weight: bold;">- 10 cm</button>
-            <button id="btn-h-plus" style="padding: 10px 20px; font-size: 18px; margin-left: 10px; background: #00E676; color: black; border:none; border-radius: 5px; font-weight: bold;">+ 10 cm</button>
+            <button onclick="window.arHeightAdd(event, -0.1)" style="padding: 10px 20px; font-size: 18px; margin-right: 10px; background: #FF1744; color: white; border:none; border-radius: 5px; font-weight: bold;">- 10 cm</button>
+            <button onclick="window.arHeightAdd(event, 0.1)" style="padding: 10px 20px; font-size: 18px; margin-left: 10px; background: #00E676; color: black; border:none; border-radius: 5px; font-weight: bold;">+ 10 cm</button>
             <br><br>
-            <button id="btn-h-confirm" style="padding: 10px 30px; font-size: 16px; background: #2979FF; color: white; border:none; border-radius: 50px; font-weight: bold;">CONFERMA ALTEZZA</button>
+            <button onclick="window.arHeightConfirm(event)" style="padding: 10px 30px; font-size: 16px; background: #2979FF; color: white; border:none; border-radius: 50px; font-weight: bold;">CONFERMA ALTEZZA</button>
         </div>
 
-        <!-- Tasto CONFERMA -->
-        <button id="btn-mobile-confirm" style="pointer-events: auto; display: none; background: #FF1744; color: white; padding: 15px 30px; font-size: 18px; border-radius: 50px; border: 3px solid white; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+        <!-- Grande Tasto CONFERMA PUNTO (Ora con evento globale inline) -->
+        <button id="btn-mobile-confirm" onclick="window.arConfirmPoint(event)" style="pointer-events: auto; display: none; background: #FF1744; color: white; padding: 15px 30px; font-size: 18px; border-radius: 50px; border: 3px solid white; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
             CERCO PAVIMENTO...
         </button>
         
-        <!-- Tasti dei Menu -->
-        <div id="mobile-utility-btns" style="display: flex; gap: 10px; pointer-events: auto;">
-            <button id="btn-mobile-menu" class="mobile-btn">MENU IMPOSTAZIONI</button>
-            <button id="btn-mobile-gw" class="mobile-btn">MENU TIRANTI</button>
+        <!-- Tasti per far apparire le impostazioni 3D -->
+        <div id="mobile-utility-btns" style="display: flex; gap: 10px; pointer-events: none;">
+            <!-- Usa onclick per certezza d'interazione mobile -->
+            <button onclick="window.arToggleMenu(event)" class="mobile-btn">MENU IMPOSTAZIONI</button>
+            <button onclick="window.arToggleGw(event)" class="mobile-btn">MENU TIRANTI</button>
         </div>
     </div>
   </div>
 
   <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: dom-overlay; overlayElement: #dom-overlay" vr-mode-ui="enabled: true">
     
+    <!-- Raycaster per cliccare i bottoni 3D dallo schermo -->
     <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 20"></a-entity>
 
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0">
           
-        <!-- MENU IMPOSTAZIONI (HUD) -->
+        <!-- MENU IMPOSTAZIONI 3D -->
         <a-entity id="menu-ui" visible="false" position="0 0.05 -0.55" scale="0.5 0.5 0.5">
           <a-plane width="0.5" height="0.85" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
           <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.40 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
-          
           <a-plane width="0.48" height="0.06" color="#2A2A2A" position="0 0.32 0.01">
             <a-text id="info-text" value="Info pannello" position="0 0 0.01" align="center" scale="0.055 0.055 0.055" color="#00E676"></a-text>
           </a-plane>
@@ -690,7 +708,6 @@
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <!-- Moduli dinamici in base all'antenna selezionata -->
           <a-entity id="sub-dipolo" position="0 0.15 0" visible="false">
             <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="-0.09 -0.015 0.01"><a-text value="<- Verso A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="0.09 -0.015 0.01"><a-text value="Verso B ->" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -731,22 +748,20 @@
           <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.05 -0.04 0.01"><a-text value="SPOSTA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
           <a-plane id="btn-height-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.17 -0.04 0.01"><a-text value="ALTEZZA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
 
-          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.45" height="0.025" color="#D32F2F" position="0 -0.08 0.01">
-            <a-text value="RESET COMPLETO (NUOVA ANTENNA)" align="center" scale="0.065 0.065 0.065"></a-text>
-          </a-plane>
+          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.45" height="0.025" color="#D32F2F" position="0 -0.08 0.01"><a-text value="RESET COMPLETO (NUOVA ANTENNA)" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
           <a-text value="CALIBRAZIONE TOPOGRAFICA" position="0 -0.12 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
           <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.17 0.01"><a-text value="[1] IMPOSTA DIAMANTI" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
           <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.22 0.01"><a-text value="[2] RICALIBRAZIONE (SE SLITTATA)" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
           <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.45" height="0.035" color="#FF8F00" position="0 -0.27 0.01"><a-text value="[+] SALVA ANTENNA NEL VISORE" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
           
-          <!-- NUOVO PULSANTE ESCI MENU -->
+          <!-- CHIUSURA MENU -->
           <a-plane id="btn-menu-esci" class="clickable" btn-interaction width="0.45" height="0.045" color="#B71C1C" position="0 -0.35 0.01">
             <a-text value="[ X ] CHIUDI MENU" align="center" scale="0.08 0.08 0.08"></a-text>
           </a-plane>
         </a-entity>
 
-        <!-- MENU TIRANTI (HUD) -->
+        <!-- MENU TIRANTI 3D -->
         <a-entity id="guy-wires-ui" visible="false" position="0 0.05 -0.55" scale="0.5 0.5 0.5">
           <a-plane width="0.48" height="0.40" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
           <a-text value="MODALITA' TIRANTI" position="0 0.16 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
@@ -761,7 +776,7 @@
               <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 -0.02 0.01"><a-text value="FINITO (INDIETRO)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text></a-plane>
           </a-entity>
 
-          <!-- NUOVO PULSANTE ESCI MENU TIRANTI -->
+          <!-- CHIUSURA MENU TIRANTI -->
           <a-plane id="btn-gw-esci" class="clickable" btn-interaction width="0.38" height="0.045" color="#B71C1C" position="0 -0.12 0.01">
             <a-text value="[ X ] CHIUDI MENU" align="center" scale="0.08 0.08 0.08"></a-text>
           </a-plane>
@@ -770,6 +785,7 @@
       </a-camera>
     </a-entity>
 
+    <!-- PIVOT GLOBALE DELLA SCENA -->
     <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
         <a-entity id="world-content" position="0 0 0" rotation="0 0 0">
             <a-entity id="mmana-wires-container"></a-entity>
