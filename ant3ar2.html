@@ -253,15 +253,20 @@
       },
 
       updateGWUI: function() {
-        let isMain = (this.gwState === 'MAIN'); let isEdit = (this.gwState === 'EDIT');
+        let isMain = (this.gwState === 'MAIN'); 
+        let isEditCollar = (this.gwState === 'EDIT_COLLAR');
+        let isEditPegs = (this.gwState === 'EDIT_PEGS');
+        let isAnyEdit = isEditCollar || isEditPegs;
+
         document.querySelector('#gw-page-main').setAttribute('visible', isMain);
-        document.querySelector('#gw-page-edit').setAttribute('visible', isEdit);
+        document.querySelector('#gw-page-edit').setAttribute('visible', isAnyEdit);
         this.toggleButton('#btn-gw-new-a', isMain && this.pointA.top !== null);
         this.toggleButton('#btn-gw-new-b', isMain && this.pointB.top !== null);
-        this.toggleButton('#btn-gw-done', isEdit);
+        this.toggleButton('#btn-gw-done', isAnyEdit);
 
         if (isMain) document.querySelector('#txt-gw-status').setAttribute('value', 'PUNTA SUL COLLARE E CLICCA\nOPPURE CREANE UNO NUOVO');
-        if (isEdit) document.querySelector('#txt-gw-status').setAttribute('value', 'JOYSTICK Y: CAMBIA ALTEZZA | GRILLETTO A TERRA: NUOVO PICCHETTO\nPUNTA IL PICCHETTO O IL COLLARE VERDE PER ELIMINARLI');
+        if (isEditCollar) document.querySelector('#txt-gw-status').setAttribute('value', 'JOYSTICK Y: CAMBIA ALTEZZA COLLARE\nGRILLETTO: CONFERMA ALTEZZA');
+        if (isEditPegs) document.querySelector('#txt-gw-status').setAttribute('value', 'JOYSTICK Y: ALTEZZA | GRILLETTO A TERRA: PICCHETTO\nPUNTA PICCHETTO O COLLARE PER ELIMINARE');
         
         this.refreshRaycaster();
       },
@@ -322,7 +327,7 @@
         let type = this.antennaTypes[this.antIdx];
         if (type === 'Dipolo' || type === 'Verticale') return bandMeters / 4; 
         if (type === 'End Fed') return bandMeters * 0.45; 
-        return bandMeters;                                
+        return bandMeters;                                 
       },
 
       resetAntennaLengths: function() {
@@ -331,18 +336,16 @@
       },
 
       tick: function (time, frameDelta) {
-        let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT';
+        let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT_PEGS';
 
         let indicator = document.querySelector('#touch-indicator');
         if (indicator) {
-            // Mostra pallino fisico solo se non siamo in modalità visore
             indicator.setAttribute('visible', isPlacingMode && !this.laserMode);
         }
 
         let sceneEl = this.el.sceneEl;
         let frame = sceneEl.frame;
         
-        // Estrapola posizione e direzione della Telecamera (Visore)
         let cameraPos = new THREE.Vector3();
         let cameraDir = new THREE.Vector3(0, 0, -1);
         let cameraEl = document.querySelector('#camera');
@@ -351,8 +354,6 @@
             cameraDir.applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion()));
         }
 
-        // --- MOTORE HIT-TEST WEBXR (Esagono guidato dallo sguardo) ---
-        // Il fascio laser del joystick NON viene più disattivato qui!
         if (this.laserMode && isPlacingMode && frame && sceneEl.is('ar-mode')) {
             
             let session = sceneEl.renderer.xr.getSession();
@@ -383,7 +384,6 @@
                 }
             }
 
-            // FALLBACK MATEMATICO LUNGHE DISTANZE
             if (!hitFound && cameraDir.y < -0.02) {
                 let distanceToFloor = (this.lastFloorY - cameraPos.y) / cameraDir.y;
                 if (distanceToFloor > 0 && distanceToFloor < 100) {
@@ -393,7 +393,6 @@
                 }
             }
 
-            // AGGIORNAMENTO FLUIDO DELL'ESAGONO
             if (hitFound) {
                 this.reticle.object3D.position.lerp(this.targetReticlePos, 0.25); 
                 this.reticle.object3D.rotation.set(-Math.PI / 2, 0, 0); 
@@ -409,7 +408,6 @@
             this.reticleValid = false;
         }
 
-        // --- ANIMAZIONE LIVE CALIBRAZIONE TOPOGRAFICA ---
         if (this.state === 'AWAITING_CALIB_PT1') {
             let hitGround = this.getHitPoint();
             if (hitGround) {
@@ -426,14 +424,12 @@
       },
 
       getHitPoint: function() {
-        // Se in modalità sguardo ed esagono valido, usa l'esagono per piazzare
         if (this.laserMode && this.reticleValid) {
             let pos = new THREE.Vector3();
             this.reticle.object3D.getWorldPosition(pos);
             return { point: pos };
         }
 
-        // Altrimenti usa il controller fisico (tocco)
         let pos = new THREE.Vector3();
         let indicator = document.querySelector('#touch-indicator');
         if (indicator && indicator.getAttribute('visible') === true) {
@@ -462,7 +458,7 @@
             this.currentHeight = Math.max(0.0, this.currentHeight + step);
             this.updateHeightPreview(); this.lastThumbTime = thumbTime;
           }
-          else if (this.gwState === 'EDIT' && this.activeAnchor && Math.abs(evt.detail.y) > 0.4) {
+          else if ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_PEGS') && this.activeAnchor && Math.abs(evt.detail.y) > 0.4) {
             let step = evt.detail.y < 0 ? 0.1 : -0.1;
             let pData = this.activeAnchor.pole === 'A' ? this.pointA : this.pointB;
             let maxH = pData.top.y - pData.base.y; 
@@ -485,10 +481,8 @@
         if (now - this.lastTriggerTime < 300) return;
         this.lastTriggerTime = now;
 
-        // La logica di interazione da priorità assoluta al Joystick per i click UI e Picchetti
         let intersects = this.raycasterEl.components.raycaster.intersectedEls;
         
-        // Anti-trapasso UI 2D e click sui bottoni del pannello
         if (intersects) {
           for (let i = 0; i < intersects.length; i++) {
             let el = intersects[i];
@@ -521,7 +515,6 @@
             return;
         }
 
-        // --- SALVATAGGIO CAPISALDI (SET) ---
         if (this.state === 'SET_CALIB_PT1') {
             let hitGround = this.getHitPoint();
             if (hitGround) {
@@ -552,8 +545,15 @@
         }
 
         // --- GESTIONE TIRANTI & RIMOZIONI ---
-        if (this.gwState === 'EDIT') {
-            // Controlla prima se il joystick sta puntando a un picchetto/collare
+        
+        // Se siamo nella fase di conferma collare, il trigger serve a confermare l'altezza
+        if (this.gwState === 'EDIT_COLLAR') {
+            this.gwState = 'EDIT_PEGS';
+            this.updateGWUI();
+            return;
+        }
+
+        if (this.gwState === 'EDIT_PEGS') {
             let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
             if (hitPeg) {
                 let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx'));
@@ -577,7 +577,6 @@
                 }
             }
 
-            // Se il joystick ha mancato, allora piazza il picchetto dove si trova l'esagono
             let hitGround = this.getHitPoint();
             if (hitGround) {
               let localHit = this.getLocalPoint(hitGround.point);
@@ -593,7 +592,7 @@
             if (hitCollar) {
                 let idx = parseInt(hitCollar.getAttribute('data-index'));
                 this.activeAnchor = this.guyWiresData[idx];
-                this.gwState = 'EDIT';
+                this.gwState = 'EDIT_PEGS'; // Si passa direttamente ai picchetti
                 this.updateGWUI();
                 this.drawGuyWires();
             }
@@ -647,7 +646,7 @@
         struct.pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${actualHeight}`);
         struct.label.setAttribute('position', `${topPos.x} ${baseH + actualHeight / 2} ${topPos.z}`);
         struct.label.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
-        struct.label.setAttribute('value', `${labelName}\nH: ${actualHeight.toFixed(1)}m`);
+        struct.label.setAttribute('value', `${labelName}\nALTEZZA PALO: ${actualHeight.toFixed(2)}m`);
       },
 
       hideStructure: function(struct) { struct.sphere.setAttribute('visible', 'false'); struct.pole.setAttribute('visible', 'false'); struct.label.setAttribute('visible', 'false'); },
@@ -720,7 +719,7 @@
 
           let collar = document.createElement('a-torus');
           collar.classList.add('gw-collar');
-          if (this.gwState === 'MAIN' || (this.gwState === 'EDIT' && this.activeAnchor === anchor)) { 
+          if (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_PEGS') && this.activeAnchor === anchor)) { 
               collar.classList.add('clickable'); collar.setAttribute('btn-interaction', ''); 
           }
           collar.setAttribute('data-index', idx);
@@ -733,12 +732,25 @@
           collar.setAttribute('rotation', '90 0 0'); collar.setAttribute('position', `${anchorPos.x} ${anchorPos.y} ${anchorPos.z}`);
           this.gwContainerEl.appendChild(collar);
 
+          // Etichetta Collare da Terreno
+          let collarLabel = document.createElement('a-text');
+          collarLabel.setAttribute('value', `COLLARE: ${h.toFixed(2)}m`);
+          collarLabel.setAttribute('align', 'center'); collarLabel.setAttribute('color', '#00E676');
+          collarLabel.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
+          collarLabel.setAttribute('position', `${anchorPos.x} ${anchorPos.y + 0.08} ${anchorPos.z}`);
+          collarLabel.setAttribute('look-at-camera', '');
+          this.gwContainerEl.appendChild(collarLabel);
+
           anchor.pegs.forEach((pegPos, pegIdx) => {
             let pVec = new THREE.Vector3(pegPos.x, pegPos.y, pegPos.z);
-            let distance = anchorPos.distanceTo(pVec);
+            let wireLength = anchorPos.distanceTo(pVec);
+
+            let groundPolePos = new THREE.Vector3(pData.base.x, pData.base.y, pData.base.z);
+            let groundPegPos = new THREE.Vector3(pVec.x, pData.base.y, pVec.z);
+            let groundDist = groundPolePos.distanceTo(groundPegPos);
 
             let peg = document.createElement('a-cone');
-            if (isSelected && this.gwState === 'EDIT') {
+            if (isSelected && this.gwState === 'EDIT_PEGS') {
                 peg.classList.add('gw-peg', 'clickable');
                 peg.setAttribute('btn-interaction', '');
             }
@@ -749,17 +761,17 @@
             this.gwContainerEl.appendChild(peg);
 
             let wire = document.createElement('a-cylinder');
-            wire.setAttribute('radius', '0.002'); wire.setAttribute('height', distance); wire.setAttribute('material', 'color: #B0BEC5; shader: flat');
+            wire.setAttribute('radius', '0.002'); wire.setAttribute('height', wireLength); wire.setAttribute('material', 'color: #B0BEC5; shader: flat');
             let midPoint = new THREE.Vector3().lerpVectors(anchorPos, pVec, 0.5);
             wire.object3D.position.copy(midPoint); wire.object3D.lookAt(pVec); wire.object3D.rotateX(Math.PI / 2);
             this.gwContainerEl.appendChild(wire);
 
             let textPos = new THREE.Vector3().lerpVectors(pVec, anchorPos, 0.3);
             let label = document.createElement('a-text');
-            label.setAttribute('value', `${distance.toFixed(2)}m`);
+            label.setAttribute('value', `DIST. TERRA: ${groundDist.toFixed(2)}m\nLUNGH. FILO: ${wireLength.toFixed(2)}m`);
             label.setAttribute('align', 'center'); label.setAttribute('color', '#FFEB3B');
-            label.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
-            label.setAttribute('position', `${textPos.x} ${textPos.y + 0.1} ${textPos.z}`);
+            label.setAttribute('scale', `${this.globalTextScale * 0.75} ${this.globalTextScale * 0.75} ${this.globalTextScale * 0.75}`);
+            label.setAttribute('position', `${textPos.x} ${textPos.y + 0.15} ${textPos.z}`);
             label.setAttribute('look-at-camera', '');
             this.gwContainerEl.appendChild(label);
           });
@@ -850,8 +862,8 @@
           this.antennaTube1.object3D.quaternion.identity();
           this.antennaTube1.object3D.position.copy(this.pointC.top); this.antennaTube1.object3D.lookAt(vecB); this.antennaTube1.object3D.rotateX(Math.PI / 2);
           let extAntStart = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, -(antLen / 2)); let extAntEnd = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, antLen / 2);
-          this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5)); this.labelSegA.setAttribute('value', `A-Ant:\n${vecA.distanceTo(extAntStart).toFixed(2)}m`);
-          this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extAntEnd, vecB, 0.5)); this.labelSegB.setAttribute('value', `Ant-B:\n${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
+          this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5)); this.labelSegA.setAttribute('value', `BRACCIO 1:\n${vecA.distanceTo(extAntStart).toFixed(2)}m`);
+          this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extAntEnd, vecB, 0.5)); this.labelSegB.setAttribute('value', `BRACCIO 2:\n${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
         } else if (type === 'End Fed') {
           this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.endFed_AC_Len}`);
           let posTube1 = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len / 2);
@@ -862,8 +874,8 @@
           this.antennaTube2.object3D.quaternion.identity();
           this.antennaTube2.object3D.position.copy(posTube2); this.antennaTube2.object3D.lookAt(vecB); this.antennaTube2.object3D.rotateX(Math.PI / 2);
           let extAC = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len); let extCB = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len);
-          this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAC, 0.5)); this.labelSegA.setAttribute('value', `Vuoto AC:\n${vecA.distanceTo(extAC).toFixed(2)}m`);
-          this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extCB, vecB, 0.5)); this.labelSegB.setAttribute('value', `Vuoto CB:\n${extCB.distanceTo(vecB).toFixed(2)}m`);
+          this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAC, 0.5)); this.labelSegA.setAttribute('value', `FILO AC:\n${vecA.distanceTo(extAC).toFixed(2)}m`);
+          this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extCB, vecB, 0.5)); this.labelSegB.setAttribute('value', `FILO CB:\n${extCB.distanceTo(vecB).toFixed(2)}m`);
         } else if (type === 'Longwire') {
           this.hideStructure(this.pointC); this.antennaTube2.setAttribute('visible', 'false');
           let startVec = this.longwireVertex === 'A' ? vecA : vecB; let targetVec = this.longwireVertex === 'A' ? vecB : vecA;
@@ -874,7 +886,7 @@
           this.antennaTube1.object3D.position.copy(posTubeLW); this.antennaTube1.object3D.lookAt(targetVec); this.antennaTube1.object3D.rotateX(Math.PI / 2);
           let extLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen);
           this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5));
-          this.labelSegB.setAttribute('value', `Restante:\n${extLW.distanceTo(targetVec).toFixed(2)}m`);
+          this.labelSegB.setAttribute('value', `LUNGH. BRACCIO:\n${extLW.distanceTo(targetVec).toFixed(2)}m`);
         }
         
         this.labelSegA.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
@@ -910,12 +922,12 @@
 
           else if (id === 'btn-gw-new-a') {
             let maxH = this.pointA.top.y - this.pointA.base.y; let newAnchor = { pole: 'A', height: maxH / 2, pegs: [] };
-            this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT';
+            this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR';
             this.updateGWUI(); this.drawGuyWires(); this.saveToStorage();
           }
           else if (id === 'btn-gw-new-b') {
             let maxH = this.pointB.top.y - this.pointB.base.y; let newAnchor = { pole: 'B', height: maxH / 2, pegs: [] };
-            this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT';
+            this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR';
             this.updateGWUI(); this.drawGuyWires(); this.saveToStorage();
           }
           else if (id === 'btn-gw-done') { this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.drawGuyWires(); }
