@@ -861,32 +861,56 @@
           this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${antLen}`);
           this.antennaTube1.object3D.quaternion.identity();
           this.antennaTube1.object3D.position.copy(this.pointC.top); this.antennaTube1.object3D.lookAt(vecB); this.antennaTube1.object3D.rotateX(Math.PI / 2);
-          let extAntStart = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, -(antLen / 2)); let extAntEnd = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, antLen / 2);
-          this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5)); this.labelSegA.setAttribute('value', `BRACCIO 1:\n${vecA.distanceTo(extAntStart).toFixed(2)}m`);
-          this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extAntEnd, vecB, 0.5)); this.labelSegB.setAttribute('value', `BRACCIO 2:\n${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
+          
+          let extAntStart = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, -(antLen / 2)); 
+          let extAntEnd = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, antLen / 2);
+          
+          this.labelSegA.setAttribute('visible', 'true'); 
+          this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5)); 
+          this.labelSegA.setAttribute('value', `BRACCIO 1: ${(antLen / 2).toFixed(2)}m\nDIST. PALO A: ${vecA.distanceTo(extAntStart).toFixed(2)}m`);
+          
+          this.labelSegB.setAttribute('visible', 'true'); 
+          this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extAntEnd, vecB, 0.5)); 
+          this.labelSegB.setAttribute('value', `BRACCIO 2: ${(antLen / 2).toFixed(2)}m\nDIST. PALO B: ${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
+          
         } else if (type === 'End Fed') {
           this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.endFed_AC_Len}`);
           let posTube1 = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len / 2);
           this.antennaTube1.object3D.quaternion.identity();
           this.antennaTube1.object3D.position.copy(posTube1); this.antennaTube1.object3D.lookAt(vecA); this.antennaTube1.object3D.rotateX(Math.PI / 2);
+          
           this.antennaTube2.setAttribute('visible', 'true'); this.antennaTube2.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.endFed_CB_Len}`);
           let posTube2 = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len / 2);
           this.antennaTube2.object3D.quaternion.identity();
           this.antennaTube2.object3D.position.copy(posTube2); this.antennaTube2.object3D.lookAt(vecB); this.antennaTube2.object3D.rotateX(Math.PI / 2);
-          let extAC = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len); let extCB = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len);
-          this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAC, 0.5)); this.labelSegA.setAttribute('value', `FILO AC:\n${vecA.distanceTo(extAC).toFixed(2)}m`);
-          this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extCB, vecB, 0.5)); this.labelSegB.setAttribute('value', `FILO CB:\n${extCB.distanceTo(vecB).toFixed(2)}m`);
+          
+          let extAC = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len); 
+          let extCB = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len);
+          
+          this.labelSegA.setAttribute('visible', 'true'); 
+          this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAC, 0.5)); 
+          this.labelSegA.setAttribute('value', `FILO AC: ${this.endFed_AC_Len.toFixed(2)}m\nDIST. PALO A: ${vecA.distanceTo(extAC).toFixed(2)}m`);
+          
+          this.labelSegB.setAttribute('visible', 'true'); 
+          this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extCB, vecB, 0.5)); 
+          this.labelSegB.setAttribute('value', `FILO CB: ${this.endFed_CB_Len.toFixed(2)}m\nDIST. PALO B: ${extCB.distanceTo(vecB).toFixed(2)}m`);
+          
         } else if (type === 'Longwire') {
           this.hideStructure(this.pointC); this.antennaTube2.setAttribute('visible', 'false');
           let startVec = this.longwireVertex === 'A' ? vecA : vecB; let targetVec = this.longwireVertex === 'A' ? vecB : vecA;
           let dirLW = new THREE.Vector3().subVectors(targetVec, startVec).normalize();
+          
           this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.longwireLen}`);
           let posTubeLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen / 2);
           this.antennaTube1.object3D.quaternion.identity();
           this.antennaTube1.object3D.position.copy(posTubeLW); this.antennaTube1.object3D.lookAt(targetVec); this.antennaTube1.object3D.rotateX(Math.PI / 2);
+          
           let extLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen);
-          this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5));
-          this.labelSegB.setAttribute('value', `LUNGH. BRACCIO:\n${extLW.distanceTo(targetVec).toFixed(2)}m`);
+          
+          this.labelSegA.setAttribute('visible', 'false'); 
+          this.labelSegB.setAttribute('visible', 'true'); 
+          this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5));
+          this.labelSegB.setAttribute('value', `LUNGH. BRACCIO: ${this.longwireLen.toFixed(2)}m\nDIST. PALO: ${extLW.distanceTo(targetVec).toFixed(2)}m`);
         }
         
         this.labelSegA.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
