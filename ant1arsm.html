@@ -2,39 +2,16 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Antenne AR Pro V21 - Puntamento Mobile Definitivo</title>
+  <title>Antenne AR Pro V22 - Scanner Lidar & Puntamento Ibrido</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
-    /* Sposta i pulsanti VR/AR nativi per evitare i menu del browser in basso */
-    .a-enter-vr, .a-enter-ar {
-      bottom: 120px !important;
-      right: 20px !important;
-    }
-
-    #ui-2d-container { background: rgba(17, 17, 17, 0.9); color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 50vh; overflow-y: auto; pointer-events: auto; margin: 10px; }
+    #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
     #ui-2d-container h3 { margin: 0 0 5px 0; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px;}
     #ui-2d-container p { margin: 5px 0; font-size: 11px; color: #fff; line-height: 1.3; }
     #ui-2d-container input, #ui-2d-container textarea, #ui-2d-container select { width: 93%; padding: 6px; background: #222; color: #fff; border: 1px solid #00E676; margin-bottom: 10px; font-family: monospace; }
     #ui-2d-container button { width: 100%; padding: 8px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; }
     #ui-2d-container button.action { background: #FFEB3B; }
     hr { border-color: #333; margin: 15px 0; }
-    
-    .mobile-btn {
-      padding: 12px 16px;
-      background: rgba(17, 17, 17, 0.9);
-      color: #00E676;
-      border: 2px solid #FFEB3B;
-      border-radius: 8px;
-      font-family: monospace;
-      font-weight: bold;
-      font-size: 12px;
-      cursor: pointer;
-      pointer-events: auto;
-      backdrop-filter: blur(4px);
-      box-shadow: 0 4px 6px rgba(0,0,0,0.5);
-    }
-    .mobile-btn:active { background: rgba(255, 235, 59, 0.9); color: #000; }
   </style>
   <script>
     AFRAME.registerComponent('look-at-camera', { tick: function () { let cameraEl = document.querySelector('#camera'); if (cameraEl && cameraEl.object3D) { this.el.object3D.lookAt(cameraEl.object3D.position); } } });
@@ -43,42 +20,12 @@
       init: function () {
         let el = this.el;
         let originalColor = el.getAttribute('material') ? el.getAttribute('material').color : '#FFFFFF';
-        // Feedback visivo quando il mirino passa sul bottone
-        el.addEventListener('mouseenter', () => { el.setAttribute('material', 'opacity', 0.8); el.setAttribute('scale', '1.05 1.05 1.05'); });
+        el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
         el.addEventListener('mouseleave', () => { el.setAttribute('material', 'opacity', 1.0); el.setAttribute('scale', '1 1 1'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
         el.addEventListener('mousedown', () => { el.setAttribute('scale', '0.95 0.95 0.8'); el.setAttribute('material', 'color', '#00FFCC'); });
-        el.addEventListener('mouseup', () => { el.setAttribute('scale', '1.05 1.05 1.05'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
+        el.addEventListener('mouseup', () => { el.setAttribute('scale', '1 1 1'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
       }
     });
-
-    // --- FUNZIONI GLOBALI PER I TASTI 2D ---
-    window.arConfirmPoint = function(e) {
-        if(e) { e.preventDefault(); e.stopPropagation(); }
-        let sys = document.querySelector('[ar-antenna-system]').components['ar-antenna-system'];
-        if (sys && sys.reticleValid) {
-            let pos = new THREE.Vector3();
-            sys.reticle.object3D.getWorldPosition(pos);
-            sys.doPlacement(pos);
-        }
-    };
-    window.arToggleMenu = function(e) {
-        if(e) { e.preventDefault(); e.stopPropagation(); }
-        document.querySelector('[ar-antenna-system]').components['ar-antenna-system'].toggleMenu();
-    };
-    window.arToggleGw = function(e) {
-        if(e) { e.preventDefault(); e.stopPropagation(); }
-        document.querySelector('[ar-antenna-system]').components['ar-antenna-system'].toggleGuyWireMode();
-    };
-    window.arHeightAdd = function(e, amount) {
-        if(e) { e.preventDefault(); e.stopPropagation(); }
-        let sys = document.querySelector('[ar-antenna-system]').components['ar-antenna-system'];
-        sys.currentHeight = Math.max(0.0, sys.currentHeight + amount);
-        sys.updateHeightPreview();
-    };
-    window.arHeightConfirm = function(e) {
-        if(e) { e.preventDefault(); e.stopPropagation(); }
-        document.querySelector('[ar-antenna-system]').components['ar-antenna-system'].confirmHeight();
-    };
 
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
@@ -100,8 +47,11 @@
 
         this.guyWiresData = []; this.gwState = 'OFF'; this.activeAnchor = null; 
         this.lastTriggerTime = 0; 
+        
         this.calibLocal1 = null; this.calibLocal2 = null;
 
+        // --- VARIABILI MODALITA' SGUARDO (Hit-Test WebXR) ---
+        this.laserMode = false;
         this.hitTestSource = null;
         this.requestingHitTest = false;
         this.reticleValid = false;
@@ -109,6 +59,16 @@
         this.targetReticleQuat = new THREE.Quaternion();
         this.lastFloorY = 0; 
 
+        // --- VARIABILI SCANNER STANZA (LIDAR) ---
+        this.scanMode = false;
+        this.scannedPoints = [];
+        this.pointCloudGeom = new THREE.BufferGeometry();
+        this.pointCloudMat = new THREE.PointsMaterial({ color: 0x00FFFF, size: 0.03, sizeAttenuation: true });
+        this.pointCloud = new THREE.Points(this.pointCloudGeom, this.pointCloudMat);
+        this.el.sceneEl.object3D.add(this.pointCloud);
+
+        this.raycasterEl = document.querySelector('#right-controller');
+        this.leftControllerEl = document.querySelector('#left-controller');
         this.worldPivotEl = document.querySelector('#world-pivot');
         this.worldContentEl = document.querySelector('#world-content');
         this.verticalCylinder = document.querySelector('#vertical-cylinder');
@@ -118,15 +78,13 @@
         this.mmanaContainerEl = document.querySelector('#mmana-wires-container');
         this.gwContainerEl = document.querySelector('#guy-wires-container');
 
-        // GESTIONE TRANSIZIONE INTERFACCIA
-        this.el.sceneEl.addEventListener('enter-vr', () => {
-            document.querySelector('#ui-2d-container').style.display = 'none';
-            document.querySelector('#ar-overlay-controls').style.display = 'flex';
-        });
+        this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this));
+        this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this));
+        this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this));
+        this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this));
+        this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this));
 
         this.el.sceneEl.addEventListener('exit-vr', () => {
-            document.querySelector('#ui-2d-container').style.display = 'block';
-            document.querySelector('#ar-overlay-controls').style.display = 'none';
             this.hitTestSource = null;
             this.requestingHitTest = false;
         });
@@ -135,11 +93,13 @@
         this.loadPreloadedMmanaModel();
         this.resetAntennaLengths();
         this.setupGlobalEventDelegation();
+        this.setupMmanaFileLoader();
         
         window.saveAntennaToDB = this.saveAntennaToDB.bind(this);
         window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this);
         window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
         this.refreshDBList();
+        
         this.loadFromStorage(); 
       },
 
@@ -148,57 +108,95 @@
         let select = document.querySelector('#load-list');
         select.innerHTML = '';
         for (let name in db) {
-            let opt = document.createElement('option'); opt.value = name; opt.innerText = name;
+            let opt = document.createElement('option');
+            opt.value = name; opt.innerText = name;
             select.appendChild(opt);
         }
       },
 
       executeSave: function(customName) {
-        if(!this.pointA.base) return "ERRORE: Devi piazzare almeno il Punto A.";
-        if(!this.calibLocal1 || !this.calibLocal2) return "ERRORE: Devi impostare i 2 Diamanti prima.";
+        if(!this.pointA.base) { return "ERRORE: Devi piazzare almeno il Punto A."; }
+        if(!this.calibLocal1 || !this.calibLocal2) {
+            return "ERRORE: Devi impostare i 2 Diamanti prima.";
+        }
         let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
         db[customName] = {
-          pointA: { base: this.pointA.base, top: this.pointA.top }, pointB: { base: this.pointB.base, top: this.pointB.top }, pointCPercent: this.pointC.percent,
-          antIdx: this.antIdx, bandIdx: this.bandIdx, endFed_AC_Len: this.endFed_AC_Len, endFed_CB_Len: this.endFed_CB_Len, longwireLen: this.longwireLen, longwireVertex: this.longwireVertex,
-          numRadials: this.numRadials, radialLen: this.radialLen, mmanaModelIdx: this.mmanaModelIdx, antennaRotationY: this.antennaRotationY, globalTextScale: this.globalTextScale,
-          guyWiresData: this.guyWiresData, calibLocal1: this.calibLocal1, calibLocal2: this.calibLocal2
+          pointA: { base: this.pointA.base, top: this.pointA.top },
+          pointB: { base: this.pointB.base, top: this.pointB.top },
+          pointCPercent: this.pointC.percent, antIdx: this.antIdx, bandIdx: this.bandIdx,
+          endFed_AC_Len: this.endFed_AC_Len, endFed_CB_Len: this.endFed_CB_Len,
+          longwireLen: this.longwireLen, longwireVertex: this.longwireVertex,
+          numRadials: this.numRadials, radialLen: this.radialLen,
+          mmanaModelIdx: this.mmanaModelIdx, antennaRotationY: this.antennaRotationY,
+          globalTextScale: this.globalTextScale, guyWiresData: this.guyWiresData,
+          calibLocal1: this.calibLocal1, calibLocal2: this.calibLocal2
         };
-        localStorage.setItem('antenneAR_DB', JSON.stringify(db)); this.refreshDBList();
+        localStorage.setItem('antenneAR_DB', JSON.stringify(db));
+        this.refreshDBList();
         return `SALVATA CON SUCCESSO:\n${customName}`;
       },
 
-      saveAntennaToDB: function() { let name = document.querySelector('#save-name').value.trim(); if(!name) { alert("Inserisci un nome per l'antenna!"); return; } alert(this.executeSave(name)); },
-      
+      saveAntennaToDB: function() {
+        let name = document.querySelector('#save-name').value.trim();
+        if(!name) { alert("Inserisci un nome per l'antenna!"); return; }
+        let msg = this.executeSave(name);
+        alert(msg);
+      },
+
       loadAntennaFromDB: function() {
-        let name = document.querySelector('#load-list').value; if(!name) return;
-        let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}'); let d = db[name]; if(!d) return;
-        this.pointA.base = d.pointA.base; this.pointA.top = d.pointA.top; this.pointB.base = d.pointB.base; this.pointB.top = d.pointB.top;
-        this.pointC.percent = parseFloat(d.pointCPercent) || 0.5; this.antIdx = parseInt(d.antIdx) || 0; this.bandIdx = parseInt(d.bandIdx) || 2;
+        let name = document.querySelector('#load-list').value;
+        if(!name) return;
+        let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
+        let d = db[name];
+        if(!d) return;
+
+        this.pointA.base = d.pointA.base; this.pointA.top = d.pointA.top;
+        this.pointB.base = d.pointB.base; this.pointB.top = d.pointB.top;
+        this.pointC.percent = parseFloat(d.pointCPercent) || 0.5;
+        this.antIdx = parseInt(d.antIdx) || 0; this.bandIdx = parseInt(d.bandIdx) || 2;
         this.endFed_AC_Len = parseFloat(d.endFed_AC_Len) || 10.0; this.endFed_CB_Len = parseFloat(d.endFed_CB_Len) || 10.0;
         this.longwireLen = parseFloat(d.longwireLen) || 20.0; this.longwireVertex = d.longwireVertex || 'A';
         this.numRadials = parseInt(d.numRadials) || 4; this.radialLen = parseFloat(d.radialLen) || 5.0;
         this.mmanaModelIdx = parseInt(d.mmanaModelIdx) || 0; this.antennaRotationY = parseFloat(d.antennaRotationY) || 0;
-        this.globalTextScale = parseFloat(d.globalTextScale) || 0.35; this.guyWiresData = d.guyWiresData || [];
+        this.globalTextScale = parseFloat(d.globalTextScale) || 0.35;
+        this.guyWiresData = d.guyWiresData || [];
         this.calibLocal1 = d.calibLocal1; this.calibLocal2 = d.calibLocal2;
 
         this.worldContentEl.object3D.position.set(-this.calibLocal1.x, -this.calibLocal1.y, -this.calibLocal1.z);
         this.worldContentEl.setAttribute('visible', 'true'); 
-        this.diamondRef1.setAttribute('position', this.calibLocal1); this.diamondRef2.setAttribute('position', this.calibLocal2);
-        this.diamondRef1.setAttribute('visible', 'true'); this.diamondRef2.setAttribute('visible', 'true');
 
-        this.state = 'AWAITING_CALIB_PT1'; this.menuUI.setAttribute('visible', true);
-        this.updateMenuText(); this.updateGeometriesAndDrawings(); 
-        alert("Antenna caricata! Entra in AR e posiziona il Diamante 1.");
+        this.diamondRef1.setAttribute('position', this.calibLocal1);
+        this.diamondRef2.setAttribute('position', this.calibLocal2);
+        this.diamondRef1.setAttribute('visible', 'true');
+        this.diamondRef2.setAttribute('visible', 'true');
+
+        this.state = 'AWAITING_CALIB_PT1';
+        this.menuUI.setAttribute('visible', true);
+        this.updateMenuText();
+        this.updateGeometriesAndDrawings(); 
+        alert("Antenna " + name + " caricata! Agganciata al controller.");
       },
 
-      deleteAntennaFromDB: function() { let name = document.querySelector('#load-list').value; if(!name) return; if(confirm("Eliminare '" + name + "'?")) { let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}'); delete db[name]; localStorage.setItem('antenneAR_DB', JSON.stringify(db)); this.refreshDBList(); } },
-      
+      deleteAntennaFromDB: function() {
+        let name = document.querySelector('#load-list').value;
+        if(!name) return;
+        if(confirm("Vuoi eliminare l'antenna '" + name + "'?")) {
+            let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
+            delete db[name];
+            localStorage.setItem('antenneAR_DB', JSON.stringify(db));
+            this.refreshDBList();
+        }
+      },
+
       saveToStorage: function() {
         let data = {
-          state: this.state, pointA: { base: this.pointA.base, top: this.pointA.top }, pointB: { base: this.pointB.base, top: this.pointB.top }, pointCPercent: this.pointC.percent,
-          antIdx: this.antIdx, bandIdx: this.bandIdx, endFed_AC_Len: this.endFed_AC_Len, endFed_CB_Len: this.endFed_CB_Len, longwireLen: this.longwireLen, longwireVertex: this.longwireVertex, numRadials: this.numRadials, radialLen: this.radialLen,
+          state: this.state, pointA: { base: this.pointA.base, top: this.pointA.top },
+          pointB: { base: this.pointB.base, top: this.pointB.top }, pointCPercent: this.pointC.percent,
+          antIdx: this.antIdx, bandIdx: this.bandIdx, endFed_AC_Len: this.endFed_AC_Len, endFed_CB_Len: this.endFed_CB_Len,
+          longwireLen: this.longwireLen, longwireVertex: this.longwireVertex, numRadials: this.numRadials, radialLen: this.radialLen,
           mmanaModelIdx: this.mmanaModelIdx, antennaRotationY: this.antennaRotationY, globalTextScale: this.globalTextScale,
-          pivotPos: this.worldPivotEl.object3D.position, pivotRot: this.worldPivotEl.object3D.rotation, contentPos: this.worldContentEl.object3D.position, guyWiresData: this.guyWiresData
+          pivotPos: this.worldPivotEl.object3D.position, pivotRot: this.worldPivotEl.object3D.rotation,
+          contentPos: this.worldContentEl.object3D.position, guyWiresData: this.guyWiresData
         };
         localStorage.setItem('antennaArProV21', JSON.stringify(data));
       },
@@ -208,18 +206,32 @@
         if (saved) {
           try {
             let d = JSON.parse(saved);
-            if (d.pointA && d.pointA.base) this.pointA.base = d.pointA.base; if (d.pointA && d.pointA.top) this.pointA.top = d.pointA.top;
-            if (d.pointB && d.pointB.base) this.pointB.base = d.pointB.base; if (d.pointB && d.pointB.top) this.pointB.top = d.pointB.top;
-            this.pointC.percent = d.pointCPercent !== undefined ? d.pointCPercent : 0.5; this.antIdx = d.antIdx || 0; this.bandIdx = d.bandIdx || 2;
-            this.endFed_AC_Len = d.endFed_AC_Len || 10.0; this.endFed_CB_Len = d.endFed_CB_Len || 10.0; this.longwireLen = d.longwireLen || 20.0; this.longwireVertex = d.longwireVertex || 'A';
-            this.numRadials = d.numRadials || 4; this.radialLen = d.radialLen || 5.0; this.mmanaModelIdx = d.mmanaModelIdx || 0; this.antennaRotationY = d.antennaRotationY || 0;
-            this.globalTextScale = d.globalTextScale || 0.35; this.guyWiresData = d.guyWiresData || [];
-            if (d.pivotPos) this.worldPivotEl.object3D.position.copy(d.pivotPos); if (d.pivotRot) this.worldPivotEl.object3D.rotation.copy(d.pivotRot); if (d.contentPos) this.worldContentEl.object3D.position.copy(d.contentPos);
+            if (d.pointA && d.pointA.base) this.pointA.base = d.pointA.base;
+            if (d.pointA && d.pointA.top) this.pointA.top = d.pointA.top;
+            if (d.pointB && d.pointB.base) this.pointB.base = d.pointB.base;
+            if (d.pointB && d.pointB.top) this.pointB.top = d.pointB.top;
+            this.pointC.percent = d.pointCPercent !== undefined ? d.pointCPercent : 0.5;
+            this.antIdx = d.antIdx || 0; this.bandIdx = d.bandIdx || 2;
+            this.endFed_AC_Len = d.endFed_AC_Len || 10.0; this.endFed_CB_Len = d.endFed_CB_Len || 10.0;
+            this.longwireLen = d.longwireLen || 20.0; this.longwireVertex = d.longwireVertex || 'A';
+            this.numRadials = d.numRadials || 4; this.radialLen = d.radialLen || 5.0;
+            this.mmanaModelIdx = d.mmanaModelIdx || 0; this.antennaRotationY = d.antennaRotationY || 0;
+            this.globalTextScale = d.globalTextScale || 0.35;
+            this.guyWiresData = d.guyWiresData || [];
+            
+            if (d.pivotPos) this.worldPivotEl.object3D.position.copy(d.pivotPos);
+            if (d.pivotRot) this.worldPivotEl.object3D.rotation.copy(d.pivotRot);
+            if (d.contentPos) this.worldContentEl.object3D.position.copy(d.contentPos);
+            
             this.state = d.state || 'IDLE';
-            if (this.state.startsWith('PLACE_HEIGHT') || this.state.startsWith('REPOSITION_HEIGHT') || this.state.startsWith('SET_CALIB') || this.state.startsWith('AWAITING_CALIB')) { this.state = 'IDLE'; }
+            if (this.state.startsWith('PLACE_HEIGHT') || this.state.startsWith('REPOSITION_HEIGHT') || this.state.startsWith('SET_CALIB') || this.state.startsWith('AWAITING_CALIB')) {
+               this.state = 'IDLE';
+            }
           } catch(e) { console.error(e); }
         }
-        this.gwState = 'OFF'; this.activeAnchor = null; if(this.gwUI) this.gwUI.setAttribute('visible', false); this.refreshAll();
+        this.gwState = 'OFF'; this.activeAnchor = null;
+        if(this.gwUI) this.gwUI.setAttribute('visible', false);
+        this.refreshAll();
       },
 
       getLocalPoint: function(worldVec) {
@@ -229,33 +241,55 @@
       },
 
       toggleMenu: function() {
-        if(this.gwState !== 'OFF') { this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false); }
+        if(this.gwState !== 'OFF') return; 
+        if(!this.menuUI) return;
         let isVisible = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
         this.menuUI.setAttribute('visible', !isVisible);
       },
 
       toggleGuyWireMode: function() {
-        if (!this.pointA.top && !this.pointB.top) { alert("Piazza prima l'antenna!"); return; }
+        if (!this.pointA.top && !this.pointB.top) return; 
         if (this.state.startsWith('AWAITING') || this.state.startsWith('PLACE_HEIGHT') || this.state.startsWith('SET_CALIB')) return;
         
         if (this.gwState === 'OFF') {
           this.gwState = 'MAIN'; this.menuUI.setAttribute('visible', false); this.gwUI.setAttribute('visible', true);
           this.activeAnchor = null; this.updateGWUI(); this.drawGuyWires();
         } else {
-          this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false);
+          this.gwState = 'OFF'; this.gwUI.setAttribute('visible', false); this.menuUI.setAttribute('visible', true);
           this.activeAnchor = null; this.drawGuyWires();
         }
       },
 
       updateGWUI: function() {
-        let isMain = (this.gwState === 'MAIN'); let isEdit = (this.gwState === 'EDIT');
-        document.querySelector('#gw-page-main').setAttribute('visible', isMain); document.querySelector('#gw-page-edit').setAttribute('visible', isEdit);
-        this.toggleButton('#btn-gw-new-a', isMain && this.pointA.top !== null); this.toggleButton('#btn-gw-new-b', isMain && this.pointB.top !== null); this.toggleButton('#btn-gw-done', isEdit);
-        if (isMain) document.querySelector('#txt-gw-status').setAttribute('value', 'TOCCA UN COLLARE O CREANE UNO');
-        if (isEdit) document.querySelector('#txt-gw-status').setAttribute('value', 'TOCCA PICCHETTO PER ELIMINARLO');
+        let isMain = (this.gwState === 'MAIN'); 
+        let isEditCollar = (this.gwState === 'EDIT_COLLAR');
+        let isEditPegs = (this.gwState === 'EDIT_PEGS');
+        let isAnyEdit = isEditCollar || isEditPegs;
+
+        document.querySelector('#gw-page-main').setAttribute('visible', isMain);
+        document.querySelector('#gw-page-edit').setAttribute('visible', isAnyEdit);
+        this.toggleButton('#btn-gw-new-a', isMain && this.pointA.top !== null);
+        this.toggleButton('#btn-gw-new-b', isMain && this.pointB.top !== null);
+        this.toggleButton('#btn-gw-done', isAnyEdit);
+
+        if (isMain) document.querySelector('#txt-gw-status').setAttribute('value', 'PUNTA SUL COLLARE E CLICCA\nOPPURE CREANE UNO NUOVO');
+        if (isEditCollar) document.querySelector('#txt-gw-status').setAttribute('value', 'JOYSTICK Y: CAMBIA ALTEZZA COLLARE\nGRILLETTO: CONFERMA ALTEZZA');
+        if (isEditPegs) document.querySelector('#txt-gw-status').setAttribute('value', 'JOYSTICK Y: ALTEZZA | GRILLETTO A TERRA: PICCHETTO\nPUNTA PICCHETTO O COLLARE PER ELIMINARE');
+        
+        this.refreshRaycaster();
       },
 
-      toggleButton: function(id, isVisible) { let btn = document.querySelector(id); if(btn) { btn.setAttribute('visible', isVisible); if(isVisible) btn.classList.add('clickable'); else btn.classList.remove('clickable'); } },
+      toggleButton: function(id, isVisible) {
+        let btn = document.querySelector(id);
+        if(!btn) return;
+        btn.setAttribute('visible', isVisible);
+        if(isVisible) btn.classList.add('clickable');
+        else btn.classList.remove('clickable');
+      },
+
+      refreshRaycaster: function() {
+        setTimeout(() => { if (this.raycasterEl && this.raycasterEl.components.raycaster) this.raycasterEl.components.raycaster.refreshObjects(); }, 50);
+      },
 
       initPersistentElements: function() {
         let createPointStructure = (color) => {
@@ -266,12 +300,19 @@
           return struct;
         };
 
-        this.pointA = Object.assign(this.pointA, createPointStructure('#FF1744')); this.pointB = Object.assign(this.pointB, createPointStructure('#2979FF')); this.pointC = Object.assign(this.pointC, createPointStructure('#00E676'));
+        this.pointA = Object.assign(this.pointA, createPointStructure('#FF1744'));
+        this.pointB = Object.assign(this.pointB, createPointStructure('#2979FF'));
+        this.pointC = Object.assign(this.pointC, createPointStructure('#00E676'));
+
         this.antennaTube1 = document.createElement('a-cylinder'); this.antennaTube1.setAttribute('radius', '0.015'); this.antennaTube1.setAttribute('material', 'color: #FF5722; shader: flat'); this.antennaTube1.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.antennaTube1);
         this.antennaTube2 = document.createElement('a-cylinder'); this.antennaTube2.setAttribute('radius', '0.015'); this.antennaTube2.setAttribute('material', 'color: #FF5722; shader: flat'); this.antennaTube2.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.antennaTube2);
+
         this.labelSegA = document.createElement('a-text'); this.labelSegA.setAttribute('align', 'center'); this.labelSegA.setAttribute('color', 'yellow'); this.labelSegA.setAttribute('look-at-camera', ''); this.labelSegA.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.labelSegA);
         this.labelSegB = document.createElement('a-text'); this.labelSegB.setAttribute('align', 'center'); this.labelSegB.setAttribute('color', 'yellow'); this.labelSegB.setAttribute('look-at-camera', ''); this.labelSegB.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.labelSegB);
-        for(let i=0; i<this.maxRadials; i++) { let radCyl = document.createElement('a-cylinder'); radCyl.setAttribute('radius', '0.005'); radCyl.setAttribute('material', 'color: #5D4037; shader: flat'); radCyl.setAttribute('visible', 'false'); this.worldContentEl.appendChild(radCyl); this.radialPool.push(radCyl); }
+
+        for(let i=0; i<this.maxRadials; i++) {
+          let radCyl = document.createElement('a-cylinder'); radCyl.setAttribute('radius', '0.005'); radCyl.setAttribute('material', 'color: #5D4037; shader: flat'); radCyl.setAttribute('visible', 'false'); this.worldContentEl.appendChild(radCyl); this.radialPool.push(radCyl);
+        }
 
         let makeLocalDiamond = (color) => {
             let d = document.createElement('a-octahedron'); d.setAttribute('radius', '0.06'); d.setAttribute('material', `color: ${color}; shader: flat; wireframe: true; opacity: 0.5`); d.setAttribute('visible', 'false');
@@ -280,6 +321,7 @@
         };
         this.diamondRef1 = makeLocalDiamond('#00BFFF'); this.diamondRef2 = makeLocalDiamond('#FF00FF');
 
+        // --- INIZIALIZZA ESAGONO RETICOLO (Hit-Test) ---
         this.reticle = document.createElement('a-entity');
         this.reticle.setAttribute('geometry', 'primitive: ring; radiusInner: 0.08; radiusOuter: 0.1; segmentsTheta: 6');
         this.reticle.setAttribute('material', 'color: #00FF00; shader: flat; transparent: true; opacity: 0.9');
@@ -288,146 +330,172 @@
         this.el.sceneEl.appendChild(this.reticle); 
       },
 
-      getCalculatedLength: function() { let b = parseInt(this.bands[this.bandIdx]); let t = this.antennaTypes[this.antIdx]; if (t === 'Dipolo' || t === 'Verticale') return b / 4; if (t === 'End Fed') return b * 0.45; return b; },
-      resetAntennaLengths: function() { let b = this.getCalculatedLength(); this.endFed_AC_Len = b / 2; this.endFed_CB_Len = b / 2; this.longwireLen = b; },
+      getCalculatedLength: function() {
+        let bandMeters = parseInt(this.bands[this.bandIdx]);
+        let type = this.antennaTypes[this.antIdx];
+        if (type === 'Dipolo' || type === 'Verticale') return bandMeters / 4; 
+        if (type === 'End Fed') return bandMeters * 0.45; 
+        return bandMeters;                                 
+      },
+
+      resetAntennaLengths: function() {
+        let baseLen = this.getCalculatedLength();
+        this.endFed_AC_Len = baseLen / 2; this.endFed_CB_Len = baseLen / 2; this.longwireLen = baseLen;
+      },
 
       tick: function (time, frameDelta) {
-        let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT';
-        let isHeightMode = this.state.includes('HEIGHT');
-        let isMenuOpen = this.menuUI.getAttribute('visible') === true || this.menuUI.getAttribute('visible') === 'true';
-        let isGwOpen = this.gwUI.getAttribute('visible') === true || this.gwUI.getAttribute('visible') === 'true';
+        let isPlacingMode = this.state.startsWith('PLACE_GROUND') || this.state.startsWith('REPOSITION_GROUND') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SET_CALIB') || this.gwState === 'EDIT_PEGS';
 
-        // GESTIONE VISIBILITA' DEI BOTTONI IN BASSO (DOM)
-        let confirmBtn = document.querySelector('#btn-mobile-confirm');
-        let heightControls = document.querySelector('#mobile-height-controls');
-        let utilityBtns = document.querySelector('#mobile-utility-btns');
-        let overlayPointerMsg = document.querySelector('#overlay-pointer-msg');
-        
-        // I TASTI UTILITY SONO VISIBILI TRANNE IN REGOLAZIONE ALTEZZA O QUANDO I MENU SONO GIA APERTI
-        if (utilityBtns) {
-            utilityBtns.style.display = (isHeightMode || isMenuOpen || isGwOpen) ? 'none' : 'flex';
-        }
-        
-        // MESSAGGIO "PUNTA IL MIRINO"
-        if (overlayPointerMsg) {
-            overlayPointerMsg.style.display = (isMenuOpen || isGwOpen) ? 'block' : 'none';
+        let indicator = document.querySelector('#touch-indicator');
+        if (indicator) {
+            indicator.setAttribute('visible', isPlacingMode && !this.laserMode);
         }
 
-        if (confirmBtn) {
-            if (isPlacingMode && !isMenuOpen && !isGwOpen) {
-                confirmBtn.style.display = 'inline-block';
-                if (this.reticleValid) { 
-                    confirmBtn.style.background = '#00E676'; confirmBtn.style.color = '#000'; confirmBtn.innerText = "CONFERMA PUNTO A TERRA"; confirmBtn.disabled = false; 
-                } else { 
-                    confirmBtn.style.background = '#666'; confirmBtn.style.color = '#ccc'; confirmBtn.innerText = "CERCO PAVIMENTO..."; confirmBtn.disabled = true; 
-                }
-            } else { 
-                confirmBtn.style.display = 'none'; 
-            }
-        }
+        let sceneEl = this.el.sceneEl;
+        let frame = sceneEl.frame;
         
-        if (heightControls) { heightControls.style.display = (isHeightMode && !isMenuOpen && !isGwOpen) ? 'block' : 'none'; }
-
-        let sceneEl = this.el.sceneEl; let frame = sceneEl.frame;
-        let cameraPos = new THREE.Vector3(); let cameraDir = new THREE.Vector3();
+        let cameraPos = new THREE.Vector3();
+        let cameraDir = new THREE.Vector3(0, 0, -1);
         let cameraEl = document.querySelector('#camera');
         if (cameraEl && cameraEl.object3D) {
             cameraEl.object3D.getWorldPosition(cameraPos);
-            cameraEl.object3D.getWorldDirection(cameraDir);
-            cameraDir.negate();
+            cameraDir.applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion()));
         }
-        
-        // IL RETICOLO DEVE FUNZIONARE SEMPRE (SIA IN AR NATIVO CHE CON FALLBACK)
-        if (isPlacingMode) {
-            let hitFound = false;
+
+        if (this.laserMode && isPlacingMode && frame && sceneEl.is('ar-mode')) {
             
-            if (frame && sceneEl.is('ar-mode')) {
-                let session = sceneEl.renderer.xr.getSession(); let refSpace = sceneEl.renderer.xr.getReferenceSpace();
-                if (!this.hitTestSource && !this.requestingHitTest) {
-                    this.requestingHitTest = true;
-                    session.requestReferenceSpace('viewer').then((viewerSpace) => {
-                        session.requestHitTestSource({ space: viewerSpace }).then((source) => { this.hitTestSource = source; this.requestingHitTest = false; }).catch(() => { this.requestingHitTest = false; });
-                    });
-                }
-                if (this.hitTestSource) {
-                    let hitTestResults = frame.getHitTestResults(this.hitTestSource);
-                    if (hitTestResults.length > 0) {
-                        let pose = hitTestResults[0].getPose(refSpace);
-                        if (pose) {
-                            let hitPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
-                            this.targetReticlePos.copy(hitPos); this.targetReticleQuat.copy(pose.transform.orientation); this.lastFloorY = hitPos.y; hitFound = true;
+            let session = sceneEl.renderer.xr.getSession();
+            let refSpace = sceneEl.renderer.xr.getReferenceSpace();
+            let hitFound = false;
+
+            if (!this.hitTestSource && !this.requestingHitTest) {
+                this.requestingHitTest = true;
+                session.requestReferenceSpace('viewer').then((viewerSpace) => {
+                    session.requestHitTestSource({ space: viewerSpace }).then((source) => {
+                        this.hitTestSource = source;
+                        this.requestingHitTest = false;
+                    }).catch(() => { this.requestingHitTest = false; });
+                });
+            }
+
+            if (this.hitTestSource) {
+                let hitTestResults = frame.getHitTestResults(this.hitTestSource);
+                if (hitTestResults.length > 0) {
+                    let pose = hitTestResults[0].getPose(refSpace);
+                    if (pose) {
+                        let hitPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                        this.targetReticlePos.copy(hitPos);
+                        this.targetReticleQuat.copy(pose.transform.orientation);
+                        this.lastFloorY = hitPos.y;
+                        hitFound = true;
+                        
+                        // --- LOGICA SCANNER LIDAR ---
+                        if (this.scanMode) {
+                            let isNewPoint = true;
+                            for (let i = 0; i < this.scannedPoints.length; i++) {
+                                if (hitPos.distanceTo(this.scannedPoints[i]) < 0.15) {
+                                    isNewPoint = false;
+                                    break;
+                                }
+                            }
+                            
+                            if (isNewPoint) {
+                                this.scannedPoints.push(hitPos.clone());
+                                let positions = new Float32Array(this.scannedPoints.length * 3);
+                                for (let i = 0; i < this.scannedPoints.length; i++) {
+                                    positions[i * 3] = this.scannedPoints[i].x;
+                                    positions[i * 3 + 1] = this.scannedPoints[i].y;
+                                    positions[i * 3 + 2] = this.scannedPoints[i].z;
+                                }
+                                this.pointCloudGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                                this.pointCloudGeom.attributes.position.needsUpdate = true;
+                            }
                         }
                     }
                 }
             }
-            
-            // PARACADUTE MATEMATICO
-            if (!hitFound) {
-                let t = (this.lastFloorY - cameraPos.y) / cameraDir.y;
-                if (t > 0 && t < 100) {
-                    this.targetReticlePos.copy(cameraPos).addScaledVector(cameraDir, t);
-                } else {
-                    this.targetReticlePos.copy(cameraPos); this.targetReticlePos.y = this.lastFloorY;
-                    let flatDir = new THREE.Vector3(cameraDir.x, 0, cameraDir.z);
-                    if(flatDir.lengthSq() < 0.001) flatDir.set(0,0,-1);
-                    this.targetReticlePos.addScaledVector(flatDir.normalize(), 2.0);
+
+            if (!hitFound && cameraDir.y < -0.02) {
+                let distanceToFloor = (this.lastFloorY - cameraPos.y) / cameraDir.y;
+                if (distanceToFloor > 0 && distanceToFloor < 100) {
+                    this.targetReticlePos.copy(cameraPos).addScaledVector(cameraDir, distanceToFloor);
+                    this.targetReticleQuat.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+                    hitFound = true;
                 }
-                this.targetReticleQuat.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)); hitFound = true;
             }
 
             if (hitFound) {
-                this.reticle.object3D.position.lerp(this.targetReticlePos, 0.25); this.reticle.object3D.rotation.set(-Math.PI / 2, 0, 0); 
-                this.reticle.setAttribute('visible', 'true'); this.reticleValid = true;
-            } else { this.reticle.setAttribute('visible', 'false'); this.reticleValid = false; }
-            
-        } else { if(this.reticle) this.reticle.setAttribute('visible', 'false'); this.reticleValid = false; }
+                this.reticle.object3D.position.lerp(this.targetReticlePos, 0.25); 
+                this.reticle.object3D.rotation.set(-Math.PI / 2, 0, 0); 
+                this.reticle.setAttribute('visible', 'true');
+                this.reticleValid = true;
+            } else {
+                this.reticle.setAttribute('visible', 'false');
+                this.reticleValid = false;
+            }
 
-        if (this.state === 'AWAITING_CALIB_PT1' && this.reticleValid) { this.worldPivotEl.object3D.position.copy(this.targetReticlePos); } 
-        else if (this.state === 'AWAITING_CALIB_PT2' && this.calibPt1 && this.calibLocal1 && this.calibLocal2 && this.reticleValid) {
-            let angleLocal = Math.atan2(this.calibLocal2.x - this.calibLocal1.x, this.calibLocal2.z - this.calibLocal1.z);
-            let angleWorld = Math.atan2(this.targetReticlePos.x - this.calibPt1.x, this.targetReticlePos.z - this.calibPt1.z);
-            this.worldPivotEl.object3D.rotation.set(0, angleWorld - angleLocal, 0);
+        } else {
+            if(this.reticle) this.reticle.setAttribute('visible', 'false');
+            this.reticleValid = false;
+        }
+
+        if (this.state === 'AWAITING_CALIB_PT1') {
+            let hitGround = this.getHitPoint();
+            if (hitGround) {
+                this.worldPivotEl.object3D.position.copy(hitGround.point);
+            }
+        } else if (this.state === 'AWAITING_CALIB_PT2') {
+            let hitGround = this.getHitPoint();
+            if (hitGround && this.calibPt1 && this.calibLocal1 && this.calibLocal2) {
+                let angleLocal = Math.atan2(this.calibLocal2.x - this.calibLocal1.x, this.calibLocal2.z - this.calibLocal1.z);
+                let angleWorld = Math.atan2(hitGround.point.x - this.calibPt1.x, hitGround.point.z - this.calibPt1.z);
+                this.worldPivotEl.object3D.rotation.set(0, angleWorld - angleLocal, 0);
+            }
         }
       },
 
-      doPlacement: function(hitPos) {
-        if (!hitPos) return;
+      getHitPoint: function() {
+        if (this.laserMode && this.reticleValid) {
+            let pos = new THREE.Vector3();
+            this.reticle.object3D.getWorldPosition(pos);
+            return { point: pos };
+        }
 
-        if (this.state === 'AWAITING_CALIB_PT1') { this.calibPt1 = hitPos.clone(); this.worldPivotEl.object3D.position.copy(this.calibPt1); this.state = 'AWAITING_CALIB_PT2'; this.updateMenuText(); return; }
-        if (this.state === 'AWAITING_CALIB_PT2') { this.calibPt2 = hitPos.clone(); this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false'); this.state = 'IDLE'; this.refreshAll(); return; }
-        if (this.state === 'SET_CALIB_PT1') { this.calibLocal1 = this.getLocalPoint(hitPos); this.diamondRef1.setAttribute('position', this.calibLocal1); this.diamondRef1.setAttribute('visible', 'true'); this.state = 'SET_CALIB_PT2'; this.updateMenuText(); return; }
-        if (this.state === 'SET_CALIB_PT2') { this.calibLocal2 = this.getLocalPoint(hitPos); this.diamondRef2.setAttribute('position', this.calibLocal2); this.diamondRef2.setAttribute('visible', 'true'); setTimeout(() => { this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false'); }, 1000); this.state = 'IDLE'; this.updateMenuText(); return; }
+        let pos = new THREE.Vector3();
+        let indicator = document.querySelector('#touch-indicator');
+        if (indicator && indicator.getAttribute('visible') === true) {
+             indicator.object3D.getWorldPosition(pos);
+        } else {
+             this.raycasterEl.object3D.getWorldPosition(pos);
+        }
+        return { point: pos };
+      },
 
-        if (this.gwState === 'EDIT') { let localHit = this.getLocalPoint(hitPos); this.activeAnchor.pegs.push(localHit); this.drawGuyWires(); this.saveToStorage(); return; }
-
-        let type = this.antennaTypes[this.antIdx];
-        if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
-          this.pointA.base = this.getLocalPoint(hitPos);
-          this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
-          this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1;
-          this.setupVerticalPreviewMode(this.pointA.base);
-        } 
-        else if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
-          this.pointB.base = this.getLocalPoint(hitPos);
-          this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B';
-          this.currentHeight = 0.1; this.setupVerticalPreviewMode(this.pointB.base);
+      onLeftThumbstick: function(evt) {
+        if (this.gwState !== 'OFF') return;
+        if (Math.abs(evt.detail.x) > 0.3) {
+            let delta = evt.detail.x > 0 ? 2.0 : -2.0;
+            this.antennaRotationY += delta;
+            this.updateGeometriesAndDrawings();
+            if(Date.now() - this.lastTriggerTime > 1000) { this.saveToStorage(); this.lastTriggerTime = Date.now(); }
         }
       },
 
-      confirmHeight: function() {
-        let type = this.antennaTypes[this.antIdx];
-        if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
-          this.pointA.top = { x: this.pointA.base.x, y: this.pointA.base.y + this.currentHeight, z: this.pointA.base.z };
-          this.resetVerticalPreviewMode();
-          this.renderPoleAndLabel(this.pointA, this.pointA.top, type === 'Verticale' ? 'STILO VERTICALE' : (type === 'MMANA-GAL' ? 'PILONE MMANA' : 'PUNTO A'));
-
-          if(this.state === 'REPOSITION_HEIGHT_A' || type === 'Verticale' || type === 'MMANA-GAL') { this.state = 'IDLE'; this.refreshAll(); } 
-          else { this.state = 'PLACE_GROUND_B'; }
-        } 
-        else if (this.state === 'PLACE_HEIGHT_B' || this.state === 'REPOSITION_HEIGHT_B') {
-          this.pointB.top = { x: this.pointB.base.x, y: this.pointB.base.y + this.currentHeight, z: this.pointB.base.z };
-          this.resetVerticalPreviewMode();
-          this.state = 'IDLE'; this.refreshAll(); 
+      onRightThumbstick: function (evt) {
+        let thumbTime = Date.now();
+        if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
+          if (this.state.includes('HEIGHT') && Math.abs(evt.detail.y) > 0.4) {
+            let step = evt.detail.y < 0 ? 0.1 : -0.1; 
+            this.currentHeight = Math.max(0.0, this.currentHeight + step);
+            this.updateHeightPreview(); this.lastThumbTime = thumbTime;
+          }
+          else if ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_PEGS') && this.activeAnchor && Math.abs(evt.detail.y) > 0.4) {
+            let step = evt.detail.y < 0 ? 0.1 : -0.1;
+            let pData = this.activeAnchor.pole === 'A' ? this.pointA : this.pointB;
+            let maxH = pData.top.y - pData.base.y; 
+            this.activeAnchor.height = Math.max(0.1, Math.min(maxH, this.activeAnchor.height + step));
+            this.drawGuyWires(); this.lastThumbTime = thumbTime; this.saveToStorage();
+          }
         }
       },
 
@@ -439,18 +507,180 @@
         this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
       },
 
+      onTriggerDown: function () {
+        let now = Date.now();
+        if (now - this.lastTriggerTime < 300) return;
+        this.lastTriggerTime = now;
+
+        let intersects = this.raycasterEl.components.raycaster.intersectedEls;
+        
+        if (intersects) {
+          for (let i = 0; i < intersects.length; i++) {
+            let el = intersects[i];
+            if (el.classList && el.classList.contains('clickable') && !el.classList.contains('gw-collar') && !el.classList.contains('gw-peg')) return;
+            if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) return;
+          }
+        }
+
+        // --- CALIBRAZIONE RITARDATA (LIVE PIVOT) ---
+        if (this.state === 'AWAITING_CALIB_PT1') {
+            let hitGround = this.getHitPoint();
+            if (hitGround) {
+                this.calibPt1 = hitGround.point.clone();
+                this.worldPivotEl.object3D.position.copy(this.calibPt1);
+                this.state = 'AWAITING_CALIB_PT2';
+                this.updateMenuText();
+            }
+            return;
+        }
+
+        if (this.state === 'AWAITING_CALIB_PT2') {
+            let hitGround = this.getHitPoint();
+            if (hitGround) {
+                this.calibPt2 = hitGround.point.clone();
+                this.diamondRef1.setAttribute('visible', 'false');
+                this.diamondRef2.setAttribute('visible', 'false');
+                this.state = 'IDLE';
+                this.refreshAll();
+            }
+            return;
+        }
+
+        if (this.state === 'SET_CALIB_PT1') {
+            let hitGround = this.getHitPoint();
+            if (hitGround) {
+                this.calibLocal1 = this.getLocalPoint(hitGround.point);
+                this.diamondRef1.setAttribute('position', this.calibLocal1);
+                this.diamondRef1.setAttribute('visible', 'true');
+                this.state = 'SET_CALIB_PT2';
+                this.updateMenuText();
+            }
+            return;
+        }
+        if (this.state === 'SET_CALIB_PT2') {
+            let hitGround = this.getHitPoint();
+            if (hitGround) {
+                this.calibLocal2 = this.getLocalPoint(hitGround.point);
+                this.diamondRef2.setAttribute('position', this.calibLocal2);
+                this.diamondRef2.setAttribute('visible', 'true');
+                
+                setTimeout(() => {
+                    this.diamondRef1.setAttribute('visible', 'false');
+                    this.diamondRef2.setAttribute('visible', 'false');
+                }, 1000);
+
+                this.state = 'IDLE';
+                this.updateMenuText();
+            }
+            return;
+        }
+
+        // --- GESTIONE TIRANTI & RIMOZIONI ---
+        
+        // Se siamo nella fase di conferma collare, il trigger serve a confermare l'altezza
+        if (this.gwState === 'EDIT_COLLAR') {
+            this.gwState = 'EDIT_PEGS';
+            this.updateGWUI();
+            return;
+        }
+
+        if (this.gwState === 'EDIT_PEGS') {
+            let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
+            if (hitPeg) {
+                let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx'));
+                this.activeAnchor.pegs.splice(pIdx, 1); 
+                this.drawGuyWires();
+                this.saveToStorage();
+                return;
+            }
+
+            let hitCollar = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-collar')) : null;
+            if (hitCollar) {
+                let cIdx = parseInt(hitCollar.getAttribute('data-index'));
+                if (this.guyWiresData[cIdx] === this.activeAnchor) {
+                    this.guyWiresData.splice(cIdx, 1);
+                    this.activeAnchor = null;
+                    this.gwState = 'MAIN';
+                    this.updateGWUI();
+                    this.drawGuyWires();
+                    this.saveToStorage();
+                    return;
+                }
+            }
+
+            let hitGround = this.getHitPoint();
+            if (hitGround) {
+              let localHit = this.getLocalPoint(hitGround.point);
+              this.activeAnchor.pegs.push(localHit);
+              this.drawGuyWires();
+              this.saveToStorage();
+            }
+            return;
+        }
+
+        if (this.gwState === 'MAIN') {
+            let hitCollar = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-collar')) : null;
+            if (hitCollar) {
+                let idx = parseInt(hitCollar.getAttribute('data-index'));
+                this.activeAnchor = this.guyWiresData[idx];
+                this.gwState = 'EDIT_PEGS'; 
+                this.updateGWUI();
+                this.drawGuyWires();
+            }
+            return;
+        }
+
+        // --- PIAZZAMENTO ANTENNE BASE ---
+        let type = this.antennaTypes[this.antIdx];
+
+        if (this.state === 'PLACE_GROUND_A' || this.state === 'REPOSITION_GROUND_A') {
+          let hitGround = this.getHitPoint();
+          if(!hitGround) return;
+          this.pointA.base = this.getLocalPoint(hitGround.point);
+          this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A';
+          this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1;
+          this.setupVerticalPreviewMode(this.pointA.base);
+        } 
+        else if (this.state === 'PLACE_HEIGHT_A' || this.state === 'REPOSITION_HEIGHT_A') {
+          this.pointA.top = { x: this.pointA.base.x, y: this.pointA.base.y + this.currentHeight, z: this.pointA.base.z };
+          this.resetVerticalPreviewMode();
+          this.renderPoleAndLabel(this.pointA, this.pointA.top, type === 'Verticale' ? 'STILO VERTICALE' : (type === 'MMANA-GAL' ? 'PILONE MMANA' : 'PUNTO A'));
+
+          if(this.state === 'REPOSITION_HEIGHT_A' || type === 'Verticale' || type === 'MMANA-GAL') {
+            this.state = 'IDLE'; this.menuUI.setAttribute('visible', true); this.refreshAll(); 
+          } else { this.state = 'PLACE_GROUND_B'; }
+        } 
+        else if (this.state === 'PLACE_GROUND_B' || this.state === 'REPOSITION_GROUND_B') {
+          let hitGround = this.getHitPoint();
+          if(!hitGround) return;
+          this.pointB.base = this.getLocalPoint(hitGround.point);
+          this.state = this.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B';
+          this.currentHeight = 0.1; this.setupVerticalPreviewMode(this.pointB.base);
+        } 
+        else if (this.state === 'PLACE_HEIGHT_B' || this.state === 'REPOSITION_HEIGHT_B') {
+          this.pointB.top = { x: this.pointB.base.x, y: this.pointB.base.y + this.currentHeight, z: this.pointB.base.z };
+          this.resetVerticalPreviewMode();
+          this.state = 'IDLE'; this.menuUI.setAttribute('visible', true); this.refreshAll(); 
+        }
+      },
+
+      setupVerticalPreviewMode: function (basePos) { this.verticalCylinder.setAttribute('visible', 'true'); this.updateHeightPreview(); this.heightText.setAttribute('visible', 'true'); },
+      resetVerticalPreviewMode: function () { this.verticalCylinder.setAttribute('visible', 'false'); this.heightText.setAttribute('visible', 'false'); },
+
       renderPoleAndLabel: function(struct, topPos, labelName) {
-        if (!topPos) return; struct.sphere.setAttribute('visible', 'true'); struct.pole.setAttribute('visible', 'true'); struct.label.setAttribute('visible', 'true'); struct.sphere.setAttribute('position', topPos);
+        if (!topPos) return;
+        struct.sphere.setAttribute('visible', 'true'); struct.pole.setAttribute('visible', 'true'); struct.label.setAttribute('visible', 'true');
+        struct.sphere.setAttribute('position', topPos);
         let baseH = struct === this.pointA ? (this.pointA.base ? this.pointA.base.y : 0) : (this.pointB.base ? this.pointB.base.y : 0);
         let actualHeight = topPos.y - baseH;
-        struct.pole.setAttribute('position', `${topPos.x} ${baseH + actualHeight / 2} ${topPos.z}`); struct.pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${actualHeight}`);
-        struct.label.setAttribute('position', `${topPos.x} ${baseH + actualHeight / 2} ${topPos.z}`); struct.label.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
-        struct.label.setAttribute('value', `${labelName}\nH: ${actualHeight.toFixed(1)}m`);
+        struct.pole.setAttribute('position', `${topPos.x} ${baseH + actualHeight / 2} ${topPos.z}`);
+        struct.pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${actualHeight}`);
+        struct.label.setAttribute('position', `${topPos.x} ${baseH + actualHeight / 2} ${topPos.z}`);
+        struct.label.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
+        struct.label.setAttribute('value', `${labelName}\nALTEZZA PALO: ${actualHeight.toFixed(2)}m`);
       },
 
       hideStructure: function(struct) { struct.sphere.setAttribute('visible', 'false'); struct.pole.setAttribute('visible', 'false'); struct.label.setAttribute('visible', 'false'); },
-      setupVerticalPreviewMode: function (basePos) { this.verticalCylinder.setAttribute('visible', 'true'); this.updateHeightPreview(); this.heightText.setAttribute('visible', 'true'); },
-      resetVerticalPreviewMode: function () { this.verticalCylinder.setAttribute('visible', 'false'); this.heightText.setAttribute('visible', 'false'); },
 
       loadPreloadedMmanaModel: function() {
         let mName = this.mmanaModels[this.mmanaModelIdx];
@@ -462,91 +692,188 @@
 
       updateMenuText: function() {
         let type = this.antennaTypes[this.antIdx]; let band = this.bands[this.bandIdx];
-        document.querySelector('#txt-ant-val').setAttribute('value', type.toUpperCase()); document.querySelector('#txt-band-val').setAttribute('value', band);
+        document.querySelector('#txt-ant-val').setAttribute('value', type.toUpperCase());
+        document.querySelector('#txt-band-val').setAttribute('value', band);
+
         let toggleSubMenu = (id, isVisible) => {
           let el = document.querySelector(id); el.setAttribute('visible', isVisible);
-          let btns = el.querySelectorAll('[btn-interaction]'); btns.forEach(btn => { if (isVisible) btn.classList.add('clickable'); else btn.classList.remove('clickable'); });
+          let btns = el.querySelectorAll('[btn-interaction]');
+          btns.forEach(btn => { if (isVisible) btn.classList.add('clickable'); else btn.classList.remove('clickable'); });
         };
-        toggleSubMenu('#sub-dipolo', type === 'Dipolo'); toggleSubMenu('#sub-endfed', type === 'End Fed'); toggleSubMenu('#sub-longwire', type === 'Longwire'); toggleSubMenu('#sub-verticale', type === 'Verticale'); toggleSubMenu('#sub-mmana', type === 'MMANA-GAL');
-        document.querySelector('#btn-repo-b').setAttribute('visible', type !== 'Verticale' && type !== 'MMANA-GAL'); document.querySelector('#btn-height-b').setAttribute('visible', type !== 'Verticale' && type !== 'MMANA-GAL');
 
-        let infoTextStr = ""; let poleAH = this.pointA.top ? (this.pointA.top.y - this.pointA.base.y) : 0;
-        if (this.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE:\nPosiziona il Diamante 1 sul VERO PUNTO 1."; }
-        else if (this.state === 'AWAITING_CALIB_PT2') { infoTextStr = "CALIBRAZIONE: Allinea\nil Diamante 2 sul VERO PUNTO 2."; }
-        else if (this.state === 'SET_CALIB_PT1') { infoTextStr = "IMPOSTA CAPISALDI:\nAppoggia sul VERO PUNTO 1 e CONFERMA."; }
-        else if (this.state === 'SET_CALIB_PT2') { infoTextStr = "IMPOSTA CAPISALDI:\nOra sul VERO PUNTO 2 e CONFERMA."; }
-        else if (type === 'Dipolo') { infoTextStr = `DIPOLO | BANDA: ${band}\nLUNGH: ${this.getCalculatedLength().toFixed(2)}m`; } 
-        else if (type === 'End Fed') { infoTextStr = `END FED | BANDA: ${band}\nAC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`; document.querySelector('#txt-ef-values').setAttribute('value', `AC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`); } 
-        else if (type === 'Longwire') { infoTextStr = `LONGWIRE | BANDA: ${band}\nVERTICE: DA ${this.longwireVertex} | LUNGH: ${this.longwireLen.toFixed(2)}m`; document.querySelector('#txt-lw-vertex-val').setAttribute('value', `VERTICE: DA ${this.longwireVertex}`); document.querySelector('#txt-lw-len-val').setAttribute('value', `LUNGH: ${this.longwireLen.toFixed(2)}m`); } 
-        else if (type === 'Verticale') { infoTextStr = `VERTICALE | BANDA: ${band}\nSTILO: ${poleAH.toFixed(2)}m | RADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`; document.querySelector('#txt-rad-num-val').setAttribute('value', `RADIALI: ${this.numRadials}`); document.querySelector('#txt-rad-len-val').setAttribute('value', `LUNGH R: ${this.radialLen.toFixed(1)}m`); } 
-        else if (type === 'MMANA-GAL') { infoTextStr = `MMANA: ${this.mmanaModels[this.mmanaModelIdx]}\nFili: ${this.mmanaWires.length}`; document.querySelector('#txt-mmana-model-val').setAttribute('value', this.mmanaModels[this.mmanaModelIdx].toUpperCase()); }
+        toggleSubMenu('#sub-dipolo', type === 'Dipolo'); toggleSubMenu('#sub-endfed', type === 'End Fed');
+        toggleSubMenu('#sub-longwire', type === 'Longwire'); toggleSubMenu('#sub-verticale', type === 'Verticale');
+        toggleSubMenu('#sub-mmana', type === 'MMANA-GAL');
+        
+        document.querySelector('#btn-repo-b').setAttribute('visible', type !== 'Verticale' && type !== 'MMANA-GAL');
+        document.querySelector('#btn-height-b').setAttribute('visible', type !== 'Verticale' && type !== 'MMANA-GAL');
+
+        this.refreshRaycaster();
+
+        let infoTextStr = "";
+        let poleAH = this.pointA.top ? (this.pointA.top.y - this.pointA.base.y) : 0;
+
+        if (this.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE: L'antenna è agganciata al controller.\nPosiziona il Diamante 1 sul VERO PUNTO 1."; }
+        else if (this.state === 'AWAITING_CALIB_PT2') { infoTextStr = "CALIBRAZIONE: Ruota l'antenna fino ad allineare\nil Diamante 2 sul VERO PUNTO 2."; }
+        else if (this.state === 'SET_CALIB_PT1') { infoTextStr = "IMPOSTA CAPISALDI:\nAppoggia il controller sul VERO PUNTO 1 e premi grilletto."; }
+        else if (this.state === 'SET_CALIB_PT2') { infoTextStr = "IMPOSTA CAPISALDI:\nOra sul VERO PUNTO 2. (Scompariranno appena confermati)."; }
+        else if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA: ${this.getCalculatedLength().toFixed(2)}m`; } 
+        else if (type === 'End Fed') {
+          infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nAC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`;
+          document.querySelector('#txt-ef-values').setAttribute('value', `AC: ${this.endFed_AC_Len.toFixed(2)}m | CB: ${this.endFed_CB_Len.toFixed(2)}m`);
+        } else if (type === 'Longwire') {
+          infoTextStr = `ANTENNA: LONGWIRE | BANDA: ${band}\nVERTICE: DA ${this.longwireVertex} | LUNGH: ${this.longwireLen.toFixed(2)}m`;
+          document.querySelector('#txt-lw-vertex-val').setAttribute('value', `VERTICE: DA ${this.longwireVertex}`);
+          document.querySelector('#txt-lw-len-val').setAttribute('value', `LUNGH: ${this.longwireLen.toFixed(2)}m`);
+        } else if (type === 'Verticale') {
+          infoTextStr = `ANTENNA: VERTICALE | BANDA: ${band}\nSTILO: ${poleAH.toFixed(2)}m | RADIALI: ${this.numRadials} da ${this.radialLen.toFixed(1)}m`;
+          document.querySelector('#txt-rad-num-val').setAttribute('value', `RADIALI: ${this.numRadials}`);
+          document.querySelector('#txt-rad-len-val').setAttribute('value', `LUNGH R: ${this.radialLen.toFixed(1)}m`);
+        } else if (type === 'MMANA-GAL') { 
+          infoTextStr = `MMANA: ${this.mmanaModels[this.mmanaModelIdx]}\nFili conduttori: ${this.mmanaWires.length}\nRuota l'antenna col joystick sinistro.`; 
+          document.querySelector('#txt-mmana-model-val').setAttribute('value', this.mmanaModels[this.mmanaModelIdx].toUpperCase());
+        }
         document.querySelector('#info-text').setAttribute('value', infoTextStr);
       },
 
       drawGuyWires: function() {
         while (this.gwContainerEl.firstChild) { this.gwContainerEl.removeChild(this.gwContainerEl.firstChild); }
+
         this.guyWiresData.forEach((anchor, idx) => {
           let pData = anchor.pole === 'A' ? this.pointA : this.pointB;
           if (!pData || !pData.base || !pData.top) return;
-          let maxH = pData.top.y - pData.base.y; let h = Math.min(anchor.height, maxH); anchor.height = h; 
+
+          let maxH = pData.top.y - pData.base.y;
+          let h = Math.min(anchor.height, maxH);
+          anchor.height = h; 
           let anchorPos = new THREE.Vector3(pData.base.x, pData.base.y + h, pData.base.z);
 
-          let collar = document.createElement('a-torus'); collar.classList.add('gw-collar');
-          if (this.gwState === 'MAIN' || (this.gwState === 'EDIT' && this.activeAnchor === anchor)) { collar.classList.add('clickable'); collar.setAttribute('btn-interaction', ''); }
-          collar.setAttribute('data-index', idx); collar.setAttribute('radius', '0.04'); collar.setAttribute('radius-tubular', '0.006');
-          let isSelected = (this.activeAnchor === anchor); collar.setAttribute('material', isSelected ? 'color: #00FF00; shader: flat' : 'color: #FF1744; shader: flat');
+          let collar = document.createElement('a-torus');
+          collar.classList.add('gw-collar');
+          if (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_PEGS') && this.activeAnchor === anchor)) { 
+              collar.classList.add('clickable'); collar.setAttribute('btn-interaction', ''); 
+          }
+          collar.setAttribute('data-index', idx);
+          collar.setAttribute('radius', '0.04'); collar.setAttribute('radius-tubular', '0.006');
+          
+          let isSelected = (this.activeAnchor === anchor);
+          collar.setAttribute('material', isSelected ? 'color: #00FF00; shader: flat' : 'color: #FF1744; shader: flat');
           if (isSelected) collar.setAttribute('scale', '1.3 1.3 1.3');
+
           collar.setAttribute('rotation', '90 0 0'); collar.setAttribute('position', `${anchorPos.x} ${anchorPos.y} ${anchorPos.z}`);
           this.gwContainerEl.appendChild(collar);
 
+          // Etichetta Collare da Terreno
+          let collarLabel = document.createElement('a-text');
+          collarLabel.setAttribute('value', `COLLARE: ${h.toFixed(2)}m`);
+          collarLabel.setAttribute('align', 'center'); collarLabel.setAttribute('color', '#00E676');
+          collarLabel.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
+          collarLabel.setAttribute('position', `${anchorPos.x} ${anchorPos.y + 0.08} ${anchorPos.z}`);
+          collarLabel.setAttribute('look-at-camera', '');
+          this.gwContainerEl.appendChild(collarLabel);
+
           anchor.pegs.forEach((pegPos, pegIdx) => {
-            let pVec = new THREE.Vector3(pegPos.x, pegPos.y, pegPos.z); let distance = anchorPos.distanceTo(pVec);
+            let pVec = new THREE.Vector3(pegPos.x, pegPos.y, pegPos.z);
+            let wireLength = anchorPos.distanceTo(pVec);
+
+            let groundPolePos = new THREE.Vector3(pData.base.x, pData.base.y, pData.base.z);
+            let groundPegPos = new THREE.Vector3(pVec.x, pData.base.y, pVec.z);
+            let groundDist = groundPolePos.distanceTo(groundPegPos);
+
             let peg = document.createElement('a-cone');
-            if (isSelected && this.gwState === 'EDIT') { peg.classList.add('gw-peg', 'clickable'); peg.setAttribute('btn-interaction', ''); }
-            peg.setAttribute('data-peg-idx', pegIdx); peg.setAttribute('radius-bottom', '0.04'); peg.setAttribute('radius-top', '0.005'); peg.setAttribute('height', '0.15');
-            peg.setAttribute('material', 'color: #FF9800; shader: flat'); peg.setAttribute('position', `${pVec.x} ${pVec.y + 0.075} ${pVec.z}`);
+            if (isSelected && this.gwState === 'EDIT_PEGS') {
+                peg.classList.add('gw-peg', 'clickable');
+                peg.setAttribute('btn-interaction', '');
+            }
+            peg.setAttribute('data-peg-idx', pegIdx);
+            peg.setAttribute('radius-bottom', '0.04'); peg.setAttribute('radius-top', '0.005'); peg.setAttribute('height', '0.15');
+            peg.setAttribute('material', 'color: #FF9800; shader: flat');
+            peg.setAttribute('position', `${pVec.x} ${pVec.y + 0.075} ${pVec.z}`);
             this.gwContainerEl.appendChild(peg);
 
-            let wire = document.createElement('a-cylinder'); wire.setAttribute('radius', '0.002'); wire.setAttribute('height', distance); wire.setAttribute('material', 'color: #B0BEC5; shader: flat');
-            let midPoint = new THREE.Vector3().lerpVectors(anchorPos, pVec, 0.5); wire.object3D.position.copy(midPoint); wire.object3D.lookAt(pVec); wire.object3D.rotateX(Math.PI / 2);
+            let wire = document.createElement('a-cylinder');
+            wire.setAttribute('radius', '0.002'); wire.setAttribute('height', wireLength); wire.setAttribute('material', 'color: #B0BEC5; shader: flat');
+            let midPoint = new THREE.Vector3().lerpVectors(anchorPos, pVec, 0.5);
+            wire.object3D.position.copy(midPoint); wire.object3D.lookAt(pVec); wire.object3D.rotateX(Math.PI / 2);
             this.gwContainerEl.appendChild(wire);
-            let textPos = new THREE.Vector3().lerpVectors(pVec, anchorPos, 0.3); let label = document.createElement('a-text');
-            label.setAttribute('value', `${distance.toFixed(2)}m`); label.setAttribute('align', 'center'); label.setAttribute('color', '#FFEB3B');
-            label.setAttribute('scale', `${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8} ${this.globalTextScale * 0.8}`);
-            label.setAttribute('position', `${textPos.x} ${textPos.y + 0.1} ${textPos.z}`); label.setAttribute('look-at-camera', ''); this.gwContainerEl.appendChild(label);
+
+            let textPos = new THREE.Vector3().lerpVectors(pVec, anchorPos, 0.3);
+            let label = document.createElement('a-text');
+            label.setAttribute('value', `DIST. TERRA: ${groundDist.toFixed(2)}m\nLUNGH. FILO: ${wireLength.toFixed(2)}m`);
+            label.setAttribute('align', 'center'); label.setAttribute('color', '#FFEB3B');
+            label.setAttribute('scale', `${this.globalTextScale * 0.75} ${this.globalTextScale * 0.75} ${this.globalTextScale * 0.75}`);
+            label.setAttribute('position', `${textPos.x} ${textPos.y + 0.15} ${textPos.z}`);
+            label.setAttribute('look-at-camera', '');
+            this.gwContainerEl.appendChild(label);
           });
         });
+        this.refreshRaycaster();
       },
 
       updateGeometriesAndDrawings: function() {
-        this.mmanaContainerEl.innerHTML = ''; this.drawGuyWires();
-        if (!this.pointA.top) return; let type = this.antennaTypes[this.antIdx];
+        this.mmanaContainerEl.innerHTML = ''; 
+        this.drawGuyWires();
+
+        if (!this.pointA.top) return;
+        let type = this.antennaTypes[this.antIdx];
 
         if (type === 'Verticale') {
-          this.hideStructure(this.pointB); this.hideStructure(this.pointC); this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false'); this.antennaTube2.setAttribute('visible', 'false');
+          this.hideStructure(this.pointB); this.hideStructure(this.pointC);
+          this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false'); this.antennaTube2.setAttribute('visible', 'false');
           this.renderPoleAndLabel(this.pointA, this.pointA.top, 'STILO VERTICALE');
-          let h = this.pointA.top.y - this.pointA.base.y; this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
-          this.antennaTube1.object3D.quaternion.identity(); this.antennaTube1.object3D.position.set(this.pointA.base.x, this.pointA.base.y + (h / 2), this.pointA.base.z);
-          let base = new THREE.Vector3(this.pointA.base.x, this.pointA.base.y + 0.002, this.pointA.base.z); let radRot = (this.antennaRotationY * Math.PI / 180);
+
+          let h = this.pointA.top.y - this.pointA.base.y;
+          this.antennaTube1.setAttribute('visible', 'true');
+          this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
+          this.antennaTube1.object3D.quaternion.identity(); 
+          this.antennaTube1.object3D.position.set(this.pointA.base.x, this.pointA.base.y + (h / 2), this.pointA.base.z);
+
+          let base = new THREE.Vector3(this.pointA.base.x, this.pointA.base.y + 0.002, this.pointA.base.z);
+          let radRot = (this.antennaRotationY * Math.PI / 180);
+          
           for (let i = 0; i < this.maxRadials; i++) {
             if (i < this.numRadials) {
-              this.radialPool[i].setAttribute('visible', 'true'); this.radialPool[i].setAttribute('geometry', `primitive: cylinder; radius: 0.004; height: ${this.radialLen}`);
-              let angle = ((i * 2 * Math.PI) / this.numRadials) + radRot; let targetVec = new THREE.Vector3(base.x + Math.cos(angle) * this.radialLen, base.y, base.z + Math.sin(angle) * this.radialLen);
-              let midPoint = new THREE.Vector3().lerpVectors(base, targetVec, 0.5); this.radialPool[i].object3D.quaternion.identity(); this.radialPool[i].object3D.position.copy(midPoint); this.radialPool[i].object3D.lookAt(targetVec); this.radialPool[i].object3D.rotateX(Math.PI / 2);
-            } else { this.radialPool[i].setAttribute('visible', 'false'); }
+              this.radialPool[i].setAttribute('visible', 'true');
+              this.radialPool[i].setAttribute('geometry', `primitive: cylinder; radius: 0.004; height: ${this.radialLen}`);
+              
+              let angle = ((i * 2 * Math.PI) / this.numRadials) + radRot;
+              let targetVec = new THREE.Vector3(
+                  base.x + Math.cos(angle) * this.radialLen, 
+                  base.y, 
+                  base.z + Math.sin(angle) * this.radialLen
+              );
+              
+              let midPoint = new THREE.Vector3().lerpVectors(base, targetVec, 0.5);
+              this.radialPool[i].object3D.quaternion.identity(); 
+              this.radialPool[i].object3D.position.copy(midPoint); 
+              this.radialPool[i].object3D.lookAt(targetVec); 
+              this.radialPool[i].object3D.rotateX(Math.PI / 2);
+            } else { 
+              this.radialPool[i].setAttribute('visible', 'false'); 
+            }
           }
           return;
         }
 
         if (type === 'MMANA-GAL') {
-          this.antennaTube1.setAttribute('visible', 'false'); this.antennaTube2.setAttribute('visible', 'false'); for(let i=0; i<this.maxRadials; i++) this.radialPool[i].setAttribute('visible', 'false');
-          this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false'); this.hideStructure(this.pointB); this.hideStructure(this.pointC);
-          if (this.mmanaWires.length === 0) return; this.renderPoleAndLabel(this.pointA, this.pointA.top, 'PILONE MMANA');
-          let vecA = new THREE.Vector3(this.pointA.top.x, this.pointA.top.y, this.pointA.top.z); this.mmanaContainerEl.object3D.position.copy(vecA); this.mmanaContainerEl.object3D.rotation.set(0, this.antennaRotationY * Math.PI / 180, 0);
+          this.antennaTube1.setAttribute('visible', 'false'); this.antennaTube2.setAttribute('visible', 'false');
+          for(let i=0; i<this.maxRadials; i++) this.radialPool[i].setAttribute('visible', 'false');
+          this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false');
+          this.hideStructure(this.pointB); this.hideStructure(this.pointC);
+          if (this.mmanaWires.length === 0) return;
+          this.renderPoleAndLabel(this.pointA, this.pointA.top, 'PILONE MMANA');
+          let vecA = new THREE.Vector3(this.pointA.top.x, this.pointA.top.y, this.pointA.top.z);
+          this.mmanaContainerEl.object3D.position.copy(vecA);
+          this.mmanaContainerEl.object3D.rotation.set(0, this.antennaRotationY * Math.PI / 180, 0);
           this.mmanaWires.forEach((w) => {
-            let cyl = document.createElement('a-cylinder'); let p1 = new THREE.Vector3(w.x1, w.z1, w.y1); let p2 = new THREE.Vector3(w.x2, w.z2, w.y2); let d = p1.distanceTo(p2); if(d < 0.01) return;
-            cyl.setAttribute('geometry', `primitive: cylinder; radius: ${Math.max(0.005, w.radius * 2.8)}; height: ${d}`); cyl.setAttribute('material', 'color: #00E676; shader: flat');
-            let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5); cyl.object3D.position.copy(mid); cyl.object3D.lookAt(p2); cyl.object3D.rotateX(Math.PI / 2); this.mmanaContainerEl.appendChild(cyl);
+            let cyl = document.createElement('a-cylinder');
+            let p1 = new THREE.Vector3(w.x1, w.z1, w.y1); let p2 = new THREE.Vector3(w.x2, w.z2, w.y2); let d = p1.distanceTo(p2);
+            if(d < 0.01) return;
+            cyl.setAttribute('geometry', `primitive: cylinder; radius: ${Math.max(0.005, w.radius * 2.8)}; height: ${d}`);
+            cyl.setAttribute('material', 'color: #00E676; shader: flat');
+            let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+            cyl.object3D.position.copy(mid); cyl.object3D.lookAt(p2); cyl.object3D.rotateX(Math.PI / 2);
+            this.mmanaContainerEl.appendChild(cyl);
           });
           return;
         }
@@ -557,65 +884,163 @@
         this.renderPoleAndLabel(this.pointA, this.pointA.top, 'PUNTO A'); this.renderPoleAndLabel(this.pointB, this.pointB.top, 'PUNTO B');
         let vecA = new THREE.Vector3(this.pointA.top.x, this.pointA.top.y, this.pointA.top.z); let vecB = new THREE.Vector3(this.pointB.top.x, this.pointB.top.y, this.pointB.top.z);
         let dirAB = new THREE.Vector3().subVectors(vecB, vecA).normalize(); let dirBA = new THREE.Vector3().subVectors(vecA, vecB).normalize();
-        let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent); this.pointC.top = vecC; this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
+        let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
+        this.pointC.top = vecC; this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
 
         if (type === 'Dipolo') {
-          this.antennaTube2.setAttribute('visible', 'false'); let antLen = this.getCalculatedLength(); this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${antLen}`);
-          this.antennaTube1.object3D.quaternion.identity(); this.antennaTube1.object3D.position.copy(this.pointC.top); this.antennaTube1.object3D.lookAt(vecB); this.antennaTube1.object3D.rotateX(Math.PI / 2);
-          let extAntStart = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, -(antLen / 2)); let extAntEnd = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, antLen / 2);
-          this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5)); this.labelSegA.setAttribute('value', `A-Ant:\n${vecA.distanceTo(extAntStart).toFixed(2)}m`);
-          this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extAntEnd, vecB, 0.5)); this.labelSegB.setAttribute('value', `Ant-B:\n${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
+          this.antennaTube2.setAttribute('visible', 'false'); let antLen = this.getCalculatedLength();
+          this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${antLen}`);
+          this.antennaTube1.object3D.quaternion.identity();
+          this.antennaTube1.object3D.position.copy(this.pointC.top); this.antennaTube1.object3D.lookAt(vecB); this.antennaTube1.object3D.rotateX(Math.PI / 2);
+          
+          let extAntStart = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, -(antLen / 2)); 
+          let extAntEnd = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, antLen / 2);
+          
+          this.labelSegA.setAttribute('visible', 'true'); 
+          this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAntStart, 0.5)); 
+          this.labelSegA.setAttribute('value', `BRACCIO 1: ${(antLen / 2).toFixed(2)}m\nDIST. PALO A: ${vecA.distanceTo(extAntStart).toFixed(2)}m`);
+          
+          this.labelSegB.setAttribute('visible', 'true'); 
+          this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extAntEnd, vecB, 0.5)); 
+          this.labelSegB.setAttribute('value', `BRACCIO 2: ${(antLen / 2).toFixed(2)}m\nDIST. PALO B: ${extAntEnd.distanceTo(vecB).toFixed(2)}m`);
+          
         } else if (type === 'End Fed') {
           this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.endFed_AC_Len}`);
-          let posTube1 = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len / 2); this.antennaTube1.object3D.quaternion.identity(); this.antennaTube1.object3D.position.copy(posTube1); this.antennaTube1.object3D.lookAt(vecA); this.antennaTube1.object3D.rotateX(Math.PI / 2);
+          let posTube1 = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len / 2);
+          this.antennaTube1.object3D.quaternion.identity();
+          this.antennaTube1.object3D.position.copy(posTube1); this.antennaTube1.object3D.lookAt(vecA); this.antennaTube1.object3D.rotateX(Math.PI / 2);
+          
           this.antennaTube2.setAttribute('visible', 'true'); this.antennaTube2.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.endFed_CB_Len}`);
-          let posTube2 = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len / 2); this.antennaTube2.object3D.quaternion.identity(); this.antennaTube2.object3D.position.copy(posTube2); this.antennaTube2.object3D.lookAt(vecB); this.antennaTube2.object3D.rotateX(Math.PI / 2);
-          let extAC = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len); let extCB = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len);
-          this.labelSegA.setAttribute('visible', 'true'); this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAC, 0.5)); this.labelSegA.setAttribute('value', `Vuoto AC:\n${vecA.distanceTo(extAC).toFixed(2)}m`);
-          this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extCB, vecB, 0.5)); this.labelSegB.setAttribute('value', `Vuoto CB:\n${extCB.distanceTo(vecB).toFixed(2)}m`);
+          let posTube2 = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len / 2);
+          this.antennaTube2.object3D.quaternion.identity();
+          this.antennaTube2.object3D.position.copy(posTube2); this.antennaTube2.object3D.lookAt(vecB); this.antennaTube2.object3D.rotateX(Math.PI / 2);
+          
+          let extAC = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirBA, this.endFed_AC_Len); 
+          let extCB = new THREE.Vector3().copy(this.pointC.top).addScaledVector(dirAB, this.endFed_CB_Len);
+          
+          this.labelSegA.setAttribute('visible', 'true'); 
+          this.labelSegA.setAttribute('position', new THREE.Vector3().lerpVectors(vecA, extAC, 0.5)); 
+          this.labelSegA.setAttribute('value', `FILO AC: ${this.endFed_AC_Len.toFixed(2)}m\nDIST. PALO A: ${vecA.distanceTo(extAC).toFixed(2)}m`);
+          
+          this.labelSegB.setAttribute('visible', 'true'); 
+          this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extCB, vecB, 0.5)); 
+          this.labelSegB.setAttribute('value', `FILO CB: ${this.endFed_CB_Len.toFixed(2)}m\nDIST. PALO B: ${extCB.distanceTo(vecB).toFixed(2)}m`);
+          
         } else if (type === 'Longwire') {
-          this.hideStructure(this.pointC); this.antennaTube2.setAttribute('visible', 'false'); let startVec = this.longwireVertex === 'A' ? vecA : vecB; let targetVec = this.longwireVertex === 'A' ? vecB : vecA;
-          let dirLW = new THREE.Vector3().subVectors(targetVec, startVec).normalize(); this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.longwireLen}`);
-          let posTubeLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen / 2); this.antennaTube1.object3D.quaternion.identity(); this.antennaTube1.object3D.position.copy(posTubeLW); this.antennaTube1.object3D.lookAt(targetVec); this.antennaTube1.object3D.rotateX(Math.PI / 2);
-          let extLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen); this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'true'); this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5)); this.labelSegB.setAttribute('value', `Restante:\n${extLW.distanceTo(targetVec).toFixed(2)}m`);
+          this.hideStructure(this.pointC); this.antennaTube2.setAttribute('visible', 'false');
+          let startVec = this.longwireVertex === 'A' ? vecA : vecB; let targetVec = this.longwireVertex === 'A' ? vecB : vecA;
+          let dirLW = new THREE.Vector3().subVectors(targetVec, startVec).normalize();
+          
+          this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${this.longwireLen}`);
+          let posTubeLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen / 2);
+          this.antennaTube1.object3D.quaternion.identity();
+          this.antennaTube1.object3D.position.copy(posTubeLW); this.antennaTube1.object3D.lookAt(targetVec); this.antennaTube1.object3D.rotateX(Math.PI / 2);
+          
+          let extLW = new THREE.Vector3().copy(startVec).addScaledVector(dirLW, this.longwireLen);
+          
+          this.labelSegA.setAttribute('visible', 'false'); 
+          this.labelSegB.setAttribute('visible', 'true'); 
+          this.labelSegB.setAttribute('position', new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5));
+          this.labelSegB.setAttribute('value', `LUNGH. BRACCIO: ${this.longwireLen.toFixed(2)}m\nDIST. PALO: ${extLW.distanceTo(targetVec).toFixed(2)}m`);
         }
-        this.labelSegA.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`); this.labelSegB.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
+        
+        this.labelSegA.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
+        this.labelSegB.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
       },
 
       setupGlobalEventDelegation: function() {
         let scene = this.el.sceneEl; this.lastClickTime = 0; 
-        
-        // ASCOLTIAMO GLI EVENTI 'CLICK' PROVENIENTI DAL NUOVO MIRINO CENTRALE
-        scene.addEventListener('click', (evt) => {
+        scene.addEventListener('mousedown', (evt) => {
           let now = Date.now(); if (now - this.lastClickTime < 250) return; 
-          
-          let target = evt.target;
-          if (target && !target.classList.contains('clickable')) {
-              target = target.closest('.clickable');
-          }
-          if(!target) return;
-          
+          let target = evt.target.closest('.clickable'); if(!target) return;
           let isVis = target.getAttribute('visible'); if (isVis === false || isVis === 'false') return;
           let parent = target.parentElement; if (parent && (parent.getAttribute('visible') === false || parent.getAttribute('visible') === 'false')) return;
 
           this.lastClickTime = now; let id = target.id; let mathRound = (num) => Math.round(num * 100) / 100;
 
-          if (id === 'btn-menu-esci') { this.toggleMenu(); }
-          else if (id === 'btn-gw-esci') { this.toggleGuyWireMode(); }
-          else if (id === 'btn-gw-new-a') { let maxH = this.pointA.top.y - this.pointA.base.y; let newAnchor = { pole: 'A', height: maxH / 2, pegs: [] }; this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT'; this.updateGWUI(); this.drawGuyWires(); this.saveToStorage(); }
-          else if (id === 'btn-gw-new-b') { let maxH = this.pointB.top.y - this.pointB.base.y; let newAnchor = { pole: 'B', height: maxH / 2, pegs: [] }; this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT'; this.updateGWUI(); this.drawGuyWires(); this.saveToStorage(); }
-          else if (id === 'btn-gw-done') { this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.drawGuyWires(); }
-          else if (id === 'btn-cal-set-pts') { if (!this.pointA.base) return; this.state = 'SET_CALIB_PT1'; this.menuUI.setAttribute('visible', false); this.updateMenuText(); }
-          else if (id === 'btn-cal-recover') { if (!this.calibLocal1 || !this.calibLocal2) return; this.state = 'AWAITING_CALIB_PT1'; this.menuUI.setAttribute('visible', false); this.updateMenuText(); }
-          else if (id === 'btn-ar-save') {
-              if (!this.pointA.base) return; if (!this.calibLocal1 || !this.calibLocal2) return;
-              let type = this.antennaTypes[this.antIdx]; let band = this.bands[this.bandIdx]; let date = new Date(); let timeStr = date.getHours() + "-" + date.getMinutes();
-              let autoName = type.toUpperCase() + "_" + band + "_" + timeStr; document.querySelector('#info-text').setAttribute('value', this.executeSave(autoName));
+          // --- EVENTO TOGGLE VISORE / TOCCO ---
+          if (id === 'btn-laser-toggle') {
+              this.laserMode = !this.laserMode;
+              let txt = document.querySelector('#txt-laser-toggle');
+              let btn = document.querySelector('#btn-laser-toggle');
+              if (this.laserMode) {
+                  txt.setAttribute('value', "PUNTAMENTO: MISTO (VISORE + JOYSTICK)");
+                  btn.setAttribute('color', '#D81B60'); 
+              } else {
+                  txt.setAttribute('value', "PUNTAMENTO: TOCCO (LASER OFF)");
+                  btn.setAttribute('color', '#5E35B1'); 
+                  this.hitTestSource = null; 
+              }
+              this.refreshAll();
           }
-          else if (id === 'btn-height-a') { if(!this.pointA.base) return; this.state = 'REPOSITION_HEIGHT_A'; this.currentHeight = this.pointA.top.y - this.pointA.base.y; this.setupVerticalPreviewMode(this.pointA.base); this.menuUI.setAttribute('visible', false); }
-          else if (id === 'btn-height-b') { if(!this.pointB.base) return; this.state = 'REPOSITION_HEIGHT_B'; this.currentHeight = this.pointB.top.y - this.pointB.base.y; this.setupVerticalPreviewMode(this.pointB.base); this.menuUI.setAttribute('visible', false); }
+          // --- EVENTO TOGGLE SCANNER STANZA ---
+          else if (id === 'btn-scanner') {
+              this.scanMode = !this.scanMode;
+              let txt = target.querySelector('a-text');
+              if (this.scanMode) {
+                  target.setAttribute('color', '#D50000');
+                  txt.setAttribute('value', "SCANNER: ACCESO (MUOVI LA TESTA)");
+              } else {
+                  target.setAttribute('color', '#009688');
+                  txt.setAttribute('value', "[+] ATTIVA SCANNER STANZA");
+              }
+          }
+          // --------------------------
+
+          else if (id === 'btn-gw-new-a') {
+            let maxH = this.pointA.top.y - this.pointA.base.y; let newAnchor = { pole: 'A', height: maxH / 2, pegs: [] };
+            this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR';
+            this.updateGWUI(); this.drawGuyWires(); this.saveToStorage();
+          }
+          else if (id === 'btn-gw-new-b') {
+            let maxH = this.pointB.top.y - this.pointB.base.y; let newAnchor = { pole: 'B', height: maxH / 2, pegs: [] };
+            this.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR';
+            this.updateGWUI(); this.drawGuyWires(); this.saveToStorage();
+          }
+          else if (id === 'btn-gw-done') { this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.drawGuyWires(); }
+          
+          else if (id === 'btn-cal-set-pts') {
+            if (!this.pointA.base) { document.querySelector('#info-text').setAttribute('value', 'Devi prima piazzare almeno il PUNTO A!'); return; }
+            this.state = 'SET_CALIB_PT1'; this.menuUI.setAttribute('visible', false);
+            this.updateMenuText();
+          }
+          else if (id === 'btn-cal-recover') {
+            if (!this.calibLocal1 || !this.calibLocal2) { document.querySelector('#info-text').setAttribute('value', 'Non ci sono punti di calibrazione salvati!'); return; }
+            this.state = 'AWAITING_CALIB_PT1'; this.menuUI.setAttribute('visible', false);
+            this.updateMenuText();
+          }
+          
+          else if (id === 'btn-ar-save') {
+              if (!this.pointA.base) { document.querySelector('#info-text').setAttribute('value', 'ERRORE: Piazza almeno il PUNTO A!'); return; }
+              if (!this.calibLocal1 || !this.calibLocal2) { document.querySelector('#info-text').setAttribute('value', 'ERRORE: Imposta i diamanti di calibrazione prima!'); return; }
+              let type = this.antennaTypes[this.antIdx]; let band = this.bands[this.bandIdx];
+              let date = new Date(); let timeStr = date.getHours() + "-" + date.getMinutes() + "-" + date.getSeconds();
+              let autoName = type.toUpperCase() + "_" + band + "_" + timeStr;
+              let msg = this.executeSave(autoName);
+              document.querySelector('#info-text').setAttribute('value', msg);
+          }
+
+          else if (id === 'btn-height-a') { 
+              if(!this.pointA.base) return;
+              this.state = 'REPOSITION_HEIGHT_A'; 
+              this.currentHeight = this.pointA.top.y - this.pointA.base.y;
+              this.setupVerticalPreviewMode(this.pointA.base);
+              this.menuUI.setAttribute('visible', false); 
+          }
+          else if (id === 'btn-height-b') { 
+              if(!this.pointB.base) return;
+              this.state = 'REPOSITION_HEIGHT_B'; 
+              this.currentHeight = this.pointB.top.y - this.pointB.base.y;
+              this.setupVerticalPreviewMode(this.pointB.base);
+              this.menuUI.setAttribute('visible', false); 
+          }
+
           else if (id === 'btn-ant') { this.antIdx = (this.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); } 
-          else if (id === 'btn-band') { this.bandIdx = (this.bandIdx + 1) % this.bands.length; this.resetAntennaLengths(); if (this.antennaTypes[this.antIdx] === 'Verticale' && this.pointA.top) { this.pointA.top.y = this.pointA.base.y + this.getCalculatedLength(); } this.refreshAll(); } 
+          else if (id === 'btn-band') {
+            this.bandIdx = (this.bandIdx + 1) % this.bands.length; this.resetAntennaLengths();
+            if (this.antennaTypes[this.antIdx] === 'Verticale' && this.pointA.top) { this.pointA.top.y = this.pointA.base.y + this.getCalculatedLength(); }
+            this.refreshAll();
+          } 
           else if (id === 'btn-c-left') { this.pointC.percent = Math.max(0.02, mathRound(this.pointC.percent - 0.05)); this.refreshAll(); } 
           else if (id === 'btn-c-right') { this.pointC.percent = Math.min(0.98, mathRound(this.pointC.percent + 0.05)); this.refreshAll(); } 
           else if (id === 'btn-lw-vertex') { this.longwireVertex = this.longwireVertex === 'A' ? 'B' : 'A'; this.refreshAll(); } 
@@ -623,179 +1048,251 @@
           else if (id === 'btn-txt-minus') { this.globalTextScale = Math.max(0.15, mathRound(this.globalTextScale - 0.05)); this.refreshAll(); } 
           else if (id === 'btn-txt-plus') { this.globalTextScale = Math.min(1.2, mathRound(this.globalTextScale + 0.05)); this.refreshAll(); } 
           else if (id === 'btn-ac-m1')   { this.endFed_AC_Len = Math.max(0.1, mathRound(this.endFed_AC_Len - 1.0)); this.refreshAll(); }
+          else if (id === 'btn-ac-m01')  { this.endFed_AC_Len = Math.max(0.01, mathRound(this.endFed_AC_Len - 0.01)); this.refreshAll(); }
+          else if (id === 'btn-ac-p01')  { this.endFed_AC_Len = mathRound(this.endFed_AC_Len + 0.01); this.refreshAll(); }
           else if (id === 'btn-ac-p1')   { this.endFed_AC_Len = mathRound(this.endFed_AC_Len + 1.0); this.refreshAll(); }
           else if (id === 'btn-cb-m1')   { this.endFed_CB_Len = Math.max(0.1, mathRound(this.endFed_CB_Len - 1.0)); this.refreshAll(); }
+          else if (id === 'btn-cb-m01')  { this.endFed_CB_Len = Math.max(0.01, mathRound(this.endFed_CB_Len - 0.01)); this.refreshAll(); }
+          else if (id === 'btn-cb-p01')  { this.endFed_CB_Len = mathRound(this.endFed_CB_Len + 0.01); this.refreshAll(); }
           else if (id === 'btn-cb-p1')   { this.endFed_CB_Len = mathRound(this.endFed_CB_Len + 1.0); this.refreshAll(); }
           else if (id === 'btn-lw-m1')   { this.longwireLen = Math.max(0.1, mathRound(this.longwireLen - 1.0)); this.refreshAll(); }
+          else if (id === 'btn-lw-m01')  { this.longwireLen = Math.max(0.01, mathRound(this.longwireLen - 0.01)); this.refreshAll(); }
+          else if (id === 'btn-lw-p01')  { this.longwireLen = mathRound(this.longwireLen + 0.01); this.refreshAll(); }
           else if (id === 'btn-lw-p1')   { this.longwireLen = mathRound(this.longwireLen + 1.0); this.refreshAll(); }
           else if (id === 'btn-rad-num-minus') { this.numRadials = Math.max(1, this.numRadials - 1); this.refreshAll(); }
           else if (id === 'btn-rad-num-plus')  { this.numRadials = Math.min(this.maxRadials, this.numRadials + 1); this.refreshAll(); }
+          else if (id === 'btn-rad-m1')   { this.radialLen = Math.max(0.1, mathRound(this.radialLen - 1.0)); this.refreshAll(); }
+          else if (id === 'btn-rad-m01')  { this.radialLen = Math.max(0.1, mathRound(this.radialLen - 0.1)); this.refreshAll(); }
+          else if (id === 'btn-rad-p01')  { this.radialLen = mathRound(this.radialLen + 0.1); this.refreshAll(); }
+          else if (id === 'btn-rad-p1')   { this.radialLen = mathRound(this.radialLen + 1.0); this.refreshAll(); }
           else if (id === 'btn-repo-a') { this.state = 'REPOSITION_GROUND_A'; this.menuUI.setAttribute('visible', false); } 
           else if (id === 'btn-repo-b') { this.state = 'REPOSITION_GROUND_B'; this.menuUI.setAttribute('visible', false); }
           else if (id === 'btn-global-reset') { this.triggerGlobalReset(); }
         });
       },
 
-      setupMmanaFileLoader: function() { /* Invariato */ },
-      triggerGlobalReset: function() {
-        this.pointA = { base: null, top: null, sphere: this.pointA.sphere, pole: this.pointA.pole, label: this.pointA.label }; this.pointB = { base: null, top: null, sphere: this.pointB.sphere, pole: this.pointB.pole, label: this.pointB.label }; this.pointC.top = null;
-        this.hideStructure(this.pointA); this.hideStructure(this.pointB); this.hideStructure(this.pointC); this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false');
-        if(this.antennaTube1) this.antennaTube1.setAttribute('visible', 'false'); if(this.antennaTube2) this.antennaTube2.setAttribute('visible', 'false');
-        for(let i=0; i<this.maxRadials; i++) { if(this.radialPool[i]) this.radialPool[i].setAttribute('visible', 'false'); }
-        this.mmanaContainerEl.innerHTML = ''; this.gwContainerEl.innerHTML = ''; 
-        this.worldPivotEl.object3D.position.set(0,0,0); this.worldPivotEl.object3D.rotation.set(0,0,0); this.worldContentEl.object3D.position.set(0,0,0); this.worldContentEl.setAttribute('visible', 'true');
-        this.guyWiresData = []; this.gwState = 'OFF'; if(this.gwUI) this.gwUI.setAttribute('visible', false);
-        this.calibLocal1 = null; this.calibLocal2 = null; this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false');
-        this.menuUI.setAttribute('visible', false); this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; localStorage.removeItem('antennaArProV21');
+      setupMmanaFileLoader: function() {
+        let fileInput = document.querySelector('#file-mmana'); if(!fileInput) return;
+        fileInput.addEventListener('change', (evt) => {
+          let file = evt.target.files[0]; if(!file) return;
+          let reader = new FileReader();
+          reader.onload = (e) => { 
+              let lines = e.target.result.split('\n'); this.importedMmanaWires = []; let insideWiresSection = false;
+              for(let i=0; i<lines.length; i++) {
+                let line = lines[i].trim(); let upperLine = line.toUpperCase();
+                if(insideWiresSection && upperLine.startsWith('***')) insideWiresSection = false;
+                if(upperLine.includes('***') && upperLine.includes('WIRES')) { insideWiresSection = true; continue; }
+                if(insideWiresSection && line !== "") {
+                  let tokens = line.split(/[\s,]+/).filter(t => t !== '');
+                  if(tokens.length >= 7) this.importedMmanaWires.push({ x1: parseFloat(tokens[0]), y1: parseFloat(tokens[1]), z1: parseFloat(tokens[2]), x2: parseFloat(tokens[3]), y2: parseFloat(tokens[4]), z2: parseFloat(tokens[5]), radius: parseFloat(tokens[6]) > 0 ? parseFloat(tokens[6])/1000 : 0.002 });
+                }
+              }
+              if (this.importedMmanaWires.length > 0) {
+                this.mmanaWires = this.importedMmanaWires; this.mmanaModelIdx = this.mmanaModels.indexOf('Modello Importato'); this.antIdx = this.antennaTypes.indexOf('MMANA-GAL'); 
+                this.refreshAll(); alert(`Caricati ${this.mmanaWires.length} fili!`);
+              }
+          };
+          reader.readAsText(file);
+        });
       },
+
+      triggerGlobalReset: function() {
+        this.pointA = { base: null, top: null, sphere: this.pointA.sphere, pole: this.pointA.pole, label: this.pointA.label };
+        this.pointB = { base: null, top: null, sphere: this.pointB.sphere, pole: this.pointB.pole, label: this.pointB.label };
+        this.pointC.top = null;
+        
+        this.hideStructure(this.pointA); this.hideStructure(this.pointB); this.hideStructure(this.pointC);
+        this.labelSegA.setAttribute('visible', 'false'); this.labelSegB.setAttribute('visible', 'false');
+        if(this.antennaTube1) this.antennaTube1.setAttribute('visible', 'false'); 
+        if(this.antennaTube2) this.antennaTube2.setAttribute('visible', 'false');
+        for(let i=0; i<this.maxRadials; i++) { if(this.radialPool[i]) this.radialPool[i].setAttribute('visible', 'false'); }
+        
+        this.mmanaContainerEl.innerHTML = ''; 
+        this.gwContainerEl.innerHTML = ''; 
+        
+        // Reset Scanner Stanza
+        this.scannedPoints = [];
+        this.pointCloudGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+        this.pointCloudGeom.attributes.position.needsUpdate = true;
+        this.scanMode = false;
+        let scanBtn = document.querySelector('#btn-scanner');
+        if(scanBtn) {
+            scanBtn.setAttribute('color', '#009688');
+            scanBtn.querySelector('a-text').setAttribute('value', "[+] ATTIVA SCANNER STANZA");
+        }
+
+        this.worldPivotEl.object3D.position.set(0,0,0); 
+        this.worldPivotEl.object3D.rotation.set(0,0,0); 
+        this.worldContentEl.object3D.position.set(0,0,0);
+        this.worldContentEl.setAttribute('visible', 'true');
+        
+        this.guyWiresData = []; this.gwState = 'OFF'; 
+        if(this.gwUI) this.gwUI.setAttribute('visible', false);
+
+        this.calibLocal1 = null; this.calibLocal2 = null;
+        this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false');
+
+        this.menuUI.setAttribute('visible', false);
+        this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; 
+        
+        localStorage.removeItem('antennaArProV21');
+      },
+
       refreshAll: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); this.saveToStorage(); }
     });
   </script>
 </head>
 <body>
   
-  <div id="dom-overlay" style="pointer-events: none; position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 9999;">
-    
-    <div id="ui-2d-container">
-      <h3>DATABASE ANTENNE</h3>
-      <input type="text" id="save-name" placeholder="Es. Campo Scout">
-      <button class="action" onclick="window.saveAntennaToDB()">SALVA ANTENNA NEL VISORE</button>
-      <hr>
-      <p>Carica un'antenna salvata:</p>
-      <select id="load-list"></select>
-      <button onclick="window.loadAntennaFromDB()">CARICA ANTENNA</button>
-      <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA ANTENNA</button>
-    </div>
-
-    <div id="overlay-pointer-msg" style="display: none; position: absolute; top: 15%; width: 100%; text-align: center; color: #00E676; font-family: monospace; font-weight: bold; font-size: 16px; text-shadow: 2px 2px 4px #000;">
-        PUNTA IL MIRINO AL CENTRO<br>E TOCCA LO SCHERMO
-    </div>
-
-    <div id="ar-overlay-controls" style="display: none; position: absolute; bottom: 30px; left: 0; right: 0; flex-direction: column; align-items: center; justify-content: flex-end; gap: 15px; pointer-events: none;">
-        
-        <div id="mobile-height-controls" style="pointer-events: auto; display: none; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border: 2px solid #FFEB3B; text-align: center;">
-            <div style="color: #FFEB3B; margin-bottom: 10px; font-weight: bold; font-family: monospace;">REGOLA ALTEZZA</div>
-            <button onclick="window.arHeightAdd(event, -0.1)" style="padding: 10px 20px; font-size: 18px; margin-right: 10px; background: #FF1744; color: white; border:none; border-radius: 5px; font-weight: bold;">- 10 cm</button>
-            <button onclick="window.arHeightAdd(event, 0.1)" style="padding: 10px 20px; font-size: 18px; margin-left: 10px; background: #00E676; color: black; border:none; border-radius: 5px; font-weight: bold;">+ 10 cm</button>
-            <br><br>
-            <button onclick="window.arHeightConfirm(event)" style="padding: 10px 30px; font-size: 16px; background: #2979FF; color: white; border:none; border-radius: 50px; font-weight: bold;">CONFERMA ALTEZZA</button>
-        </div>
-
-        <button id="btn-mobile-confirm" onclick="window.arConfirmPoint(event)" style="pointer-events: auto; display: none; background: #FF1744; color: white; padding: 15px 30px; font-size: 18px; border-radius: 50px; border: 3px solid white; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-            CERCO PAVIMENTO...
-        </button>
-        
-        <div id="mobile-utility-btns" style="display: flex; gap: 10px; pointer-events: none;">
-            <button onclick="window.arToggleMenu(event)" class="mobile-btn">MENU IMPOSTAZIONI</button>
-            <button onclick="window.arToggleGw(event)" class="mobile-btn">MENU TIRANTI</button>
-        </div>
-    </div>
+  <div id="ui-2d-container">
+    <h3>DATABASE ANTENNE</h3>
+    <input type="text" id="save-name" placeholder="Es. Campo Scout">
+    <button class="action" onclick="window.saveAntennaToDB()">SALVA ANTENNA NEL VISORE</button>
+    <hr>
+    <p>Carica un'antenna salvata:</p>
+    <select id="load-list"></select>
+    <button onclick="window.loadAntennaFromDB()">CARICA ANTENNA</button>
+    <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA ANTENNA</button>
+    <hr>
+    <h3>MMANA-GAL (.maa)</h3>
+    <input type="file" id="file-mmana" accept=".maa">
   </div>
 
-  <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: dom-overlay; overlayElement: #dom-overlay" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: local-floor, hit-test;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
-      <a-camera id="camera" position="0 1.6 0">
+      <a-camera id="camera" position="0 1.6 0"></a-camera>
+      
+      <a-entity id="left-controller" oculus-touch-controls="hand: left">
+        <a-entity id="menu-ui" visible="false" position="0 0.20 -0.4" rotation="-30 0 0">
+          <a-plane width="0.5" height="0.80" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-        <a-entity id="ar-cursor"
-                  cursor="fuse: false"
-                  raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 20"
-                  position="0 0 -0.05"
-                  geometry="primitive: ring; radiusInner: 0.001; radiusOuter: 0.002"
-                  material="color: #00FF00; shader: flat; opacity: 0.8"
-                  animation__click="property: scale; startEvents: click; easing: easeInCubic; dur: 150; from: 0.1 0.1 0.1; to: 1 1 1">
-        </a-entity>
-
-        <a-entity id="menu-ui" visible="false" position="0 0.05 -0.55" scale="0.45 0.45 0.45">
-          <a-plane width="0.5" height="0.85" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
+          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.35 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.40 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
-          <a-plane width="0.48" height="0.06" color="#2A2A2A" position="0 0.32 0.01">
-            <a-text id="info-text" value="Info pannello" position="0 0 0.01" align="center" scale="0.055 0.055 0.055" color="#00E676"></a-text>
+          <a-plane width="0.48" height="0.06" color="#2A2A2A" position="0 0.28 0.01">
+            <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.055 0.055 0.055" color="#00E676"></a-text>
           </a-plane>
 
-          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.23 0.01">
+          <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#5E35B1" position="0 0.22 0.01">
+            <a-text id="txt-laser-toggle" value="PUNTAMENTO: TOCCO (LASER OFF)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
+          </a-plane>
+
+          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.17 0.01">
             <a-text value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
             <a-text id="txt-ant-val" value="-" align="center" scale="0.09 0.09 0.09" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.23 0.01">
+          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.17 0.01">
             <a-text value="BANDA RADIO:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#9FA8DA"></a-text>
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-entity id="sub-dipolo" position="0 0.15 0" visible="false">
-            <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="-0.09 -0.015 0.01"><a-text value="<- Verso A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-            <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="0.09 -0.015 0.01"><a-text value="Verso B ->" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-entity id="sub-dipolo" position="0 0.10 0" visible="false">
+            <a-text value="SPOSTA ALIMENTAZIONE (PUNTO C)" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.02 0"></a-text>
+            <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="-0.09 -0.015 0.01"><a-text value="<- Verso PUNTO A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="0.09 -0.015 0.01"><a-text value="Verso PUNTO B ->" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           </a-entity>
 
-          <a-entity id="sub-endfed" position="0 0.15 0" visible="false">
-            <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.06" height="0.025" color="#B71C1C" position="-0.15 -0.01 0.01"><a-text value="AC -1m" align="center" scale="0.05 0.05 0.05"></a-text></a-plane>
-            <a-plane id="btn-ac-p1" class="clickable" btn-interaction width="0.06" height="0.025" color="#1B5E20" position="-0.05 -0.01 0.01"><a-text value="AC +1m" align="center" scale="0.05 0.05 0.05"></a-text></a-plane>
-            <a-plane id="btn-cb-m1" class="clickable" btn-interaction width="0.06" height="0.025" color="#B71C1C" position="0.05 -0.01 0.01"><a-text value="CB -1m" align="center" scale="0.05 0.05 0.05"></a-text></a-plane>
-            <a-plane id="btn-cb-p1" class="clickable" btn-interaction width="0.06" height="0.025" color="#1B5E20" position="0.15 -0.01 0.01"><a-text value="CB +1m" align="center" scale="0.05 0.05 0.05"></a-text></a-plane>
-            <a-text id="txt-ef-values" value="AC: 10m | CB: 10m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
+          <a-entity id="sub-endfed" position="0 0.10 0" visible="false">
+            <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
+            <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-ac-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#43A047" position="-0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-ac-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#1B5E20" position="-0.06 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-cb-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.06 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-cb-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="0.11 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-cb-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#43A047" position="0.16 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-cb-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#1B5E20" position="0.21 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-text id="txt-ef-values" value="AC: 10.00m | CB: 10.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-longwire" position="0 0.15 0" visible="false">
-            <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#F57C00" position="-0.14 -0.01 0.01"><a-text id="txt-lw-vertex-val" value="VERTICE: A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.06" height="0.025" color="#B71C1C" position="0.05 -0.01 0.01"><a-text value="L -1m" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-            <a-plane id="btn-lw-p1" class="clickable" btn-interaction width="0.06" height="0.025" color="#1B5E20" position="0.15 -0.01 0.01"><a-text value="L +1m" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-            <a-text id="txt-lw-len-val" value="LUNGH: 20m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
+          <a-entity id="sub-longwire" position="0 0.10 0" visible="false">
+            <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
+            <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#F57C00" position="-0.14 -0.01 0.01"><a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.055 0.055 0.055" position="0 0 0.005"></a-text></a-plane>
+            <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-lw-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="0.06 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-lw-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#43A047" position="0.11 -0.01 0.01"><a-text value="+1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-lw-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#1B5E20" position="0.16 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-text id="txt-lw-len-val" value="LUNGH: 20.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-verticale" position="0 0.15 0" visible="false">
+          <a-entity id="sub-verticale" position="0 0.10 0" visible="false">
+            <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#B71C1C" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#1B5E20" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-rad-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+            <a-plane id="btn-rad-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="0.06 -0.01 0.01"><a-text value="-10c" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-rad-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#43A047" position="0.11 -0.01 0.01"><a-text value="+10c" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+            <a-plane id="btn-rad-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#1B5E20" position="0.16 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-text id="txt-rad-num-val" value="RADIALI: 4" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="-0.13 -0.05 0"></a-text>
             <a-text id="txt-rad-len-val" value="LUNGH R: 5.0m" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="0.12 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-mmana" position="0 0.15 0" visible="false">
-            <a-plane id="btn-mmana-model" class="clickable" btn-interaction width="0.32" height="0.03" color="#006064" position="0 -0.01 0.01"><a-text id="txt-mmana-model-val" value="-" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-entity id="sub-mmana" position="0 0.10 0" visible="false">
+            <a-text value="MODELLI SELEZIONABILI IN REALTA AUMENTATA" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
+            <a-plane id="btn-mmana-model" class="clickable" btn-interaction width="0.32" height="0.03" color="#006064" position="0 -0.01 0.01">
+              <a-text id="txt-mmana-model-val" value="-" align="center" scale="0.065 0.065 0.065"></a-text>
+            </a-plane>
           </a-entity>
 
-          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 0.05 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 0.05 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 0.01 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 0.01 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-          <a-text value="RIPOSIZIONAMENTO" position="0 0 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
-          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.17 -0.04 0.01"><a-text value="SPOSTA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          <a-plane id="btn-height-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.05 -0.04 0.01"><a-text value="ALTEZZA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.05 -0.04 0.01"><a-text value="SPOSTA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          <a-plane id="btn-height-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.17 -0.04 0.01"><a-text value="ALTEZZA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-text value="RIPOSIZIONAMENTO E MODIFICA ALTEZZE" position="0 -0.04 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
+          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.17 -0.08 0.01"><a-text value="SPOSTA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-height-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.05 -0.08 0.01"><a-text value="ALTEZZA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.05 -0.08 0.01"><a-text value="SPOSTA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-height-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.17 -0.08 0.01"><a-text value="ALTEZZA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
 
-          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.45" height="0.025" color="#D32F2F" position="0 -0.08 0.01"><a-text value="RESET COMPLETO (NUOVA ANTENNA)" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.45" height="0.025" color="#D32F2F" position="0 -0.12 0.01">
+            <a-text value="RESET COMPLETO (NUOVA ANTENNA)" align="center" scale="0.065 0.065 0.065"></a-text>
+          </a-plane>
 
-          <a-text value="CALIBRAZIONE TOPOGRAFICA" position="0 -0.12 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
-          <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.17 0.01"><a-text value="[1] IMPOSTA DIAMANTI" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-          <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.22 0.01"><a-text value="[2] RICALIBRAZIONE (SE SLITTATA)" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-          <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.45" height="0.035" color="#FF8F00" position="0 -0.27 0.01"><a-text value="[+] SALVA ANTENNA NEL VISORE" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          
-          <a-plane id="btn-menu-esci" class="clickable" btn-interaction width="0.45" height="0.045" color="#B71C1C" position="0 -0.35 0.01">
-            <a-text value="[ X ] CHIUDI MENU" align="center" scale="0.08 0.08 0.08"></a-text>
+          <a-text value="DATABASE E CALIBRAZIONE TOPOGRAFICA" position="0 -0.16 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
+          <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.21 0.01">
+            <a-text value="[1] IMPOSTA DIAMANTI (DA FARE PRIMA DI SALVARE)" align="center" scale="0.06 0.06 0.06"></a-text>
+          </a-plane>
+          <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.26 0.01">
+            <a-text value="[2] FORZA RICALIBRAZIONE (SE L'ANTENNA E' SLITTATA)" align="center" scale="0.06 0.06 0.06"></a-text>
+          </a-plane>
+
+          <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.45" height="0.035" color="#FF8F00" position="0 -0.31 0.01">
+            <a-text value="[+] SALVA ANTENNA NEL VISORE (NOME AUTOMATICO)" align="center" scale="0.055 0.055 0.055"></a-text>
+          </a-plane>
+
+          <a-plane id="btn-scanner" class="clickable" btn-interaction width="0.45" height="0.035" color="#009688" position="0 -0.36 0.01">
+            <a-text value="[+] ATTIVA SCANNER STANZA" align="center" scale="0.055 0.055 0.055"></a-text>
           </a-plane>
         </a-entity>
 
-        <a-entity id="guy-wires-ui" visible="false" position="0 0.05 -0.55" scale="0.45 0.45 0.45">
-          <a-plane width="0.48" height="0.40" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
-          <a-text value="MODALITA' TIRANTI" position="0 0.16 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
-          <a-plane width="0.45" height="0.06" color="#3E2723" position="0 0.09 0.01"><a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text></a-plane>
+        <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
+          <a-plane width="0.48" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
+          <a-text value="MODALITA' TIRANTI (TASTO X PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
+          
+          <a-plane width="0.45" height="0.06" color="#3E2723" position="0 0.07 0.01">
+            <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text>
+          </a-plane>
 
           <a-entity id="gw-page-main" visible="true">
-              <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 0.03 0.01"><a-text value="[+] NUOVO COLLARE SU A" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text></a-plane>
-              <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 -0.02 0.01"><a-text value="[+] NUOVO COLLARE SU B" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text></a-plane>
+              <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 0.01 0.01">
+                <a-text value="[+] NUOVO COLLARE SU PALO A" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
+              </a-plane>
+              <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 -0.04 0.01">
+                <a-text value="[+] NUOVO COLLARE SU PALO B" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
+              </a-plane>
           </a-entity>
 
           <a-entity id="gw-page-edit" visible="false">
-              <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 -0.02 0.01"><a-text value="FINITO (INDIETRO)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text></a-plane>
+              <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 -0.04 0.01">
+                <a-text value="FINITO (DESELEZIONA E INDIETRO)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
+              </a-plane>
           </a-entity>
-
-          <a-plane id="btn-gw-esci" class="clickable" btn-interaction width="0.38" height="0.045" color="#B71C1C" position="0 -0.12 0.01">
-            <a-text value="[ X ] CHIUDI MENU" align="center" scale="0.08 0.08 0.08"></a-text>
-          </a-plane>
         </a-entity>
-
-      </a-camera>
+      </a-entity>
+      
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 10">
+        <a-sphere id="touch-indicator" radius="0.015" material="color: #00FF00; shader: flat; transparent: true; opacity: 0.8" position="0 -0.07 0.02" visible="false"></a-sphere>
+      </a-entity>
     </a-entity>
 
     <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
