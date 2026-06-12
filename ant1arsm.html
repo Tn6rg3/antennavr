@@ -1237,4 +1237,70 @@
           <a-text value="RIPOSIZIONAMENTO E MODIFICA ALTEZZE" position="0 -0.04 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
           <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.17 -0.08 0.01"><a-text value="SPOSTA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
           <a-plane id="btn-height-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.05 -0.08 0.01"><a-text value="ALTEZZA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          <a-plane id="btn-repo-b" class="clickable" btn-interaction
+          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.05 -0.08 0.01"><a-text value="SPOSTA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-height-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.17 -0.08 0.01"><a-text value="ALTEZZA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+
+          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.45" height="0.025" color="#D32F2F" position="0 -0.12 0.01">
+            <a-text value="RESET COMPLETO (NUOVA ANTENNA)" align="center" scale="0.065 0.065 0.065"></a-text>
+          </a-plane>
+
+          <a-text value="DATABASE E CALIBRAZIONE TOPOGRAFICA" position="0 -0.16 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
+          <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.21 0.01">
+            <a-text value="[1] IMPOSTA DIAMANTI (DA FARE PRIMA DI SALVARE)" align="center" scale="0.06 0.06 0.06"></a-text>
+          </a-plane>
+          <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.26 0.01">
+            <a-text value="[2] FORZA RICALIBRAZIONE (SE L'ANTENNA E' SLITTATA)" align="center" scale="0.06 0.06 0.06"></a-text>
+          </a-plane>
+
+          <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.45" height="0.035" color="#FF8F00" position="0 -0.31 0.01">
+            <a-text value="[+] SALVA ANTENNA NEL VISORE (NOME AUTOMATICO)" align="center" scale="0.055 0.055 0.055"></a-text>
+          </a-plane>
+
+          <a-plane id="btn-scanner" class="clickable" btn-interaction width="0.45" height="0.035" color="#009688" position="0 -0.36 0.01">
+            <a-text value="[+] ATTIVA SCANNER STANZA" align="center" scale="0.055 0.055 0.055"></a-text>
+          </a-plane>
+        </a-entity>
+
+        <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
+          <a-plane width="0.48" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
+          <a-text value="MODALITA' TIRANTI (TASTO X PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
+          
+          <a-plane width="0.45" height="0.06" color="#3E2723" position="0 0.07 0.01">
+            <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text>
+          </a-plane>
+
+          <a-entity id="gw-page-main" visible="true">
+              <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 0.01 0.01">
+                <a-text value="[+] NUOVO COLLARE SU PALO A" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
+              </a-plane>
+              <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 -0.04 0.01">
+                <a-text value="[+] NUOVO COLLARE SU PALO B" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
+              </a-plane>
+          </a-entity>
+
+          <a-entity id="gw-page-edit" visible="false">
+              <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 -0.04 0.01">
+                <a-text value="FINITO (DESELEZIONA E INDIETRO)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
+              </a-plane>
+          </a-entity>
+        </a-entity>
+      </a-entity>
+      
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 10">
+        <a-sphere id="touch-indicator" radius="0.015" material="color: #00FF00; shader: flat; transparent: true; opacity: 0.8" position="0 -0.07 0.02" visible="false"></a-sphere>
+      </a-entity>
+    </a-entity>
+
+    <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
+        <a-entity id="world-content" position="0 0 0" rotation="0 0 0">
+            <a-entity id="mmana-wires-container"></a-entity>
+            <a-entity id="guy-wires-container"></a-entity>
+            <a-entity id="vertical-cylinder" geometry="primitive: cylinder" material="color: #FFEB3B; shader: flat" visible="false"></a-entity>
+            <a-text id="height-text" value="" align="center" color="#00FF00" scale="0.35 0.35 0.35" visible="false" look-at-camera></a-text>
+        </a-entity>
+    </a-entity>
+
+    <a-entity ar-antenna-system></a-entity>
+  </a-scene>
+</body>
+</html>
