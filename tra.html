@@ -2,118 +2,170 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Test Visivo Traliccio Procedurale</title>
+  <title>Test Traliccio e Tiranti Condivisi</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <style>
+    #ui-container { position: absolute; top: 10px; left: 10px; z-index: 999; background: rgba(0,0,0,0.8); color: #00E676; padding: 15px; font-family: monospace; border: 1px solid #00E676; border-radius: 8px; }
+    button { display: block; width: 100%; margin-bottom: 8px; padding: 10px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; }
+    button:hover { background: #FFEB3B; }
+  </style>
   <script>
-    AFRAME.registerComponent('generatore-traliccio', {
+    AFRAME.registerComponent('sistema-traliccio-test', {
       schema: {
-        baseSize: { type: 'number', default: 0.5 }, // Lato del quadrato in metri (es. 50cm)
-        height: { type: 'number', default: 6.0 },   // Altezza totale in metri
-        poleRadius: { type: 'number', default: 0.015 }, // Spessore tubi principali
-        braceRadius: { type: 'number', default: 0.008 } // Spessore tubi di rinforzo
+        shape: { type: 'string', default: 'square' }, // 'square' o 'triangle'
+        radius: { type: 'number', default: 0.3 },     // Distanza dal centro allo spigolo
+        height: { type: 'number', default: 6.0 },
+        rotationY: { type: 'number', default: 0 },    // Rotazione in gradi
+        collarHeights: { type: 'array', default: [] } // Altezze degli ordini di tiranti
       },
 
       update: function () {
-        // Pulisce il traliccio precedente se si aggiornano i valori
-        this.el.innerHTML = '';
-
+        this.el.innerHTML = ''; // Pulisce
         let data = this.data;
-        let w = data.baseSize / 2;
-        let h = data.height;
-
-        // Colori per distinguere tubi primari e secondari
+        
+        let isSquare = data.shape === 'square';
+        let numSides = isSquare ? 4 : 3;
         let matPoles = 'color: #90A4AE; roughness: 0.4; metalness: 0.6; shader: flat';
         let matBraces = 'color: #CFD8DC; roughness: 0.5; metalness: 0.3; shader: flat';
+        let matWire = 'color: #B0BEC5; shader: flat';
+        let matFrame = 'color: #FF1744; shader: flat'; // Colore della cornice dei tiranti
+        
+        // 1. CALCOLO VERTICI (Spigoli del traliccio)
+        let corners = [];
+        let rotRad = data.rotationY * (Math.PI / 180);
+        
+        for (let i = 0; i < numSides; i++) {
+          // Angoli sfalsati (per il quadrato partiamo da 45° per avere i lati dritti, per il triangolo da 90°)
+          let baseAngle = isSquare ? (Math.PI / 4) : (Math.PI / 2);
+          let angle = baseAngle + (i * (2 * Math.PI) / numSides) + rotRad;
+          corners.push(new THREE.Vector3(
+            Math.cos(angle) * data.radius,
+            0,
+            Math.sin(angle) * data.radius
+          ));
+        }
 
-        // 1. CREA I 4 MONTANTI VERTICALI
-        let corners = [
-          { x: -w, z: -w },
-          { x: w, z: -w },
-          { x: w, z: w },
-          { x: -w, z: w }
-        ];
+        // Funzione helper per tubi
+        let createTube = (p1, p2, rad, mat) => {
+          let t = document.createElement('a-cylinder');
+          t.setAttribute('radius', rad); t.setAttribute('height', p1.distanceTo(p2));
+          t.setAttribute('material', mat);
+          let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+          t.object3D.position.copy(mid); t.object3D.lookAt(p2); t.object3D.rotateX(Math.PI / 2);
+          this.el.appendChild(t);
+        };
 
+        // 2. DISEGNA MONTANTI
         corners.forEach(pos => {
           let pole = document.createElement('a-cylinder');
-          pole.setAttribute('radius', data.poleRadius);
-          pole.setAttribute('height', h);
+          pole.setAttribute('radius', '0.015'); pole.setAttribute('height', data.height);
           pole.setAttribute('material', matPoles);
-          pole.setAttribute('position', `${pos.x} ${h / 2} ${pos.z}`);
+          pole.setAttribute('position', `${pos.x} ${data.height/2} ${pos.z}`);
           this.el.appendChild(pole);
         });
 
-        // 2. CREA LE SEZIONI DI RINFORZO (LATTICE)
-        // Calcoliamo quante "X" ci stanno. Facciamo che ogni X è alta 1.2 volte la larghezza
-        let sectionHeight = data.baseSize * 1.2;
-        let numSections = Math.floor(h / sectionHeight);
-        let actualSectionHeight = h / numSections; // Aggiusta per arrivare esattamente in cima
+        // 3. DISEGNA LATTICE (X e Traverse)
+        let sectionHeight = data.radius * 2.5; // Proporzione visiva delle sezioni
+        let numSections = Math.floor(data.height / sectionHeight);
+        let actualSecH = data.height / numSections;
 
-        // Funzione helper per creare un tubo tra due punti 3D (simile al tuo codice MMANA/Tiranti)
-        let createTube = (p1, p2, radius, material) => {
-          let tube = document.createElement('a-cylinder');
-          let distance = p1.distanceTo(p2);
-          tube.setAttribute('radius', radius);
-          tube.setAttribute('height', distance);
-          tube.setAttribute('material', material);
-          
-          let midPoint = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
-          tube.object3D.position.copy(midPoint);
-          tube.object3D.lookAt(p2);
-          tube.object3D.rotateX(Math.PI / 2);
-          
-          this.el.appendChild(tube);
-        };
-
-        // Costruisci le X e i traversini orizzontali per ogni faccia e per ogni sezione
         for (let i = 0; i < numSections; i++) {
-          let yBottom = i * actualSectionHeight;
-          let yTop = (i + 1) * actualSectionHeight;
-
-          // Definisci i vertici della sezione corrente per le 4 gambe
-          let v = [
-            new THREE.Vector3(-w, yBottom, -w), new THREE.Vector3(w, yBottom, -w),
-            new THREE.Vector3(w, yBottom, w), new THREE.Vector3(-w, yBottom, w),
-            new THREE.Vector3(-w, yTop, -w), new THREE.Vector3(w, yTop, -w),
-            new THREE.Vector3(w, yTop, w), new THREE.Vector3(-w, yTop, w)
-          ];
-
-          // Array delle 4 facce: ogni faccia è definita dagli indici [bottomLeft, bottomRight, topLeft, topRight]
-          let faces = [
-            [0, 1, 4, 5], // Dietro
-            [1, 2, 5, 6], // Destra
-            [2, 3, 6, 7], // Davanti
-            [3, 0, 7, 4]  // Sinistra
-          ];
-
-          faces.forEach(f => {
-            // Traversino orizzontale in basso (per chiudere il quadrato)
-            createTube(v[f[0]], v[f[1]], data.braceRadius, matBraces);
+          let yB = i * actualSecH; let yT = (i + 1) * actualSecH;
+          for (let c = 0; c < numSides; c++) {
+            let nextC = (c + 1) % numSides;
+            let vBL = new THREE.Vector3(corners[c].x, yB, corners[c].z);
+            let vBR = new THREE.Vector3(corners[nextC].x, yB, corners[nextC].z);
+            let vTL = new THREE.Vector3(corners[c].x, yT, corners[c].z);
+            let vTR = new THREE.Vector3(corners[nextC].x, yT, corners[nextC].z);
             
-            // Traversino orizzontale in alto per l'ultima sezione
-            if (i === numSections - 1) {
-                createTube(v[f[2]], v[f[3]], data.braceRadius, matBraces);
-            }
-
-            // Diagonale 1 (X)
-            createTube(v[f[0]], v[f[3]], data.braceRadius, matBraces);
-            // Diagonale 2 (X)
-            createTube(v[f[1]], v[f[2]], data.braceRadius, matBraces);
-          });
+            createTube(vBL, vBR, 0.008, matBraces); // Base orizzontale
+            if (i === numSections - 1) createTube(vTL, vTR, 0.008, matBraces); // Chiusura top
+            createTube(vBL, vTR, 0.006, matBraces); // Diagonale X
+            createTube(vBR, vTL, 0.006, matBraces); // Diagonale X
+          }
         }
+
+        // 4. DISEGNA TIRANTI E PICCHETTI CONDIVISI
+        // Simuliamo dei picchetti piazzati dall'utente a 4 metri di distanza, allineati agli spigoli
+        let pegDistance = 4.0; 
+        let pegs = [];
+        corners.forEach(c => {
+          let dir = new THREE.Vector3(c.x, 0, c.z).normalize();
+          let pegPos = new THREE.Vector3(dir.x * pegDistance, 0, dir.z * pegDistance);
+          pegs.push(pegPos);
+
+          // Disegna il picchetto a terra
+          let pegEl = document.createElement('a-cone');
+          pegEl.setAttribute('radius-bottom', '0.04'); pegEl.setAttribute('radius-top', '0.005');
+          pegEl.setAttribute('height', '0.15'); pegEl.setAttribute('material', 'color: #FF9800; shader: flat');
+          pegEl.setAttribute('position', `${pegPos.x} 0.075 ${pegPos.z}`);
+          this.el.appendChild(pegEl);
+        });
+
+        // Disegna le cornici e i cavi per ogni altezza salvata
+        data.collarHeights.forEach(h => {
+          for (let c = 0; c < numSides; c++) {
+            let nextC = (c + 1) % numSides;
+            let p1 = new THREE.Vector3(corners[c].x, h, corners[c].z);
+            let p2 = new THREE.Vector3(corners[nextC].x, h, corners[nextC].z);
+            
+            // Cornice (Tubo rosso)
+            createTube(p1, p2, 0.02, matFrame);
+
+            // Cavo dal Corner al Picchetto condiviso
+            createTube(p1, pegs[c], 0.003, matWire);
+          }
+        });
       }
     });
+
+    // Logica dei bottoni UI
+    window.onload = () => {
+      let traliccioEl = document.querySelector('#traliccio-obj');
+      let currentShape = 'square';
+      let currentRot = 0;
+      let collars = [];
+
+      document.querySelector('#btn-shape').onclick = () => {
+        currentShape = currentShape === 'square' ? 'triangle' : 'square';
+        traliccioEl.setAttribute('sistema-traliccio-test', 'shape', currentShape);
+      };
+      document.querySelector('#btn-rot-plus').onclick = () => {
+        currentRot += 15;
+        traliccioEl.setAttribute('sistema-traliccio-test', 'rotationY', currentRot);
+      };
+      document.querySelector('#btn-rot-minus').onclick = () => {
+        currentRot -= 15;
+        traliccioEl.setAttribute('sistema-traliccio-test', 'rotationY', currentRot);
+      };
+      document.querySelector('#btn-add-collar').onclick = () => {
+        if (collars.length === 0) collars.push(3.0);
+        else if (collars.length === 1) collars.push(6.0);
+        else collars.push(9.0); // Massimo 3 ordini per il test
+        traliccioEl.setAttribute('sistema-traliccio-test', 'collarHeights', collars.join(','));
+      };
+      document.querySelector('#btn-reset-collar').onclick = () => {
+        collars = [];
+        traliccioEl.setAttribute('sistema-traliccio-test', 'collarHeights', []);
+      };
+    };
   </script>
 </head>
-<body style="background-color: #333;">
+<body>
+  <div id="ui-container">
+    <h3>TEST TRALICCIO</h3>
+    <button id="btn-shape">CAMBIA FORMA (Quad/Trian)</button>
+    <button id="btn-rot-plus">RUOTA DESTRA (+15°)</button>
+    <button id="btn-rot-minus">RUOTA SINISTRA (-15°)</button>
+    <hr>
+    <button id="btn-add-collar" style="background: #FF8F00;">AGGIUNGI ORDINE TIRANTI</button>
+    <button id="btn-reset-collar" style="background: #D32F2F; color: white;">RESET TIRANTI</button>
+  </div>
+
   <a-scene background="color: #222">
-    <a-light type="ambient" color="#888"></a-light>
-    <a-light type="directional" position="-2 4 2" intensity="0.6"></a-light>
-
-    <a-entity generatore-traliccio="baseSize: 0.45; height: 8.0" position="0 0 -5"></a-entity>
-
-    <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false" wasd-controls="fly: true"></a-camera>
-    
-    <a-plane position="0 0 -5" rotation="-90 0 0" width="10" height="10" color="#111"></a-plane>
+    <a-entity id="traliccio-obj" sistema-traliccio-test="shape: square; height: 10.0; radius: 0.3; rotationY: 0"></a-entity>
+    <a-camera position="0 1.6 5" look-controls="pointerLockEnabled: false" wasd-controls="fly: true"></a-camera>
+    <a-plane position="0 0 0" rotation="-90 0 0" width="20" height="20" color="#111"></a-plane>
   </a-scene>
 </body>
 </html>
