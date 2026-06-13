@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V28 - Selettori Smart & Visuale Pulita</title>
+  <title>Antenne AR Pro V27 - Multi-Scena Data-Driven & Laser Select</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -176,7 +176,6 @@
         if(!this.menuUI) return;
         let isVisible = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
         this.menuUI.setAttribute('visible', !isVisible);
-        this.refreshAll(); // Aggiorna per far sparire/apparire i selettori
       },
 
       toggleGuyWireMode: function() {
@@ -355,7 +354,7 @@
             let intersects = null; if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) intersects = this.raycasterEl.components.raycaster.intersectedEls;
             
             if (intersects) {
-              // SELEZIONE LASER ANTENNA (Piccoli diamanti)
+              // SELEZIONE LASER ANTENNA
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
               if (hitSelector) {
                   let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx'));
@@ -670,27 +669,20 @@
       },
 
       renderSelectorBox: function(ant, container, isCurrent, idx) {
-          if (isCurrent) return; // Non serve per l'antenna attualmente in uso
-          
-          // MOSTRA I SELETTORI SOLO QUANDO IL MENU E' APERTO
-          let isMenuOpen = this.menuUI && (this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true);
-          if (!isMenuOpen) return; // Scompare se non fai nulla (menu chiuso per vedere la scena pulita)
-
+          if (isCurrent) return; // Disegna box solo per le antenne inattive
           let basePos = ant.traliccio.active ? ant.traliccio.center : ant.pointA.base;
           if (!basePos) return;
 
-          // Piccolo diamante fluttuante invece del cilindro gigante
-          let hitBox = document.createElement('a-octahedron');
-          hitBox.setAttribute('position', `${basePos.x} ${basePos.y + 0.4} ${basePos.z}`);
-          hitBox.setAttribute('geometry', `primitive: octahedron; radius: 0.08`);
-          hitBox.setAttribute('material', 'color: #FFEB3B; opacity: 0.9; shader: flat');
-          hitBox.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
+          let hitBox = document.createElement('a-cylinder');
+          hitBox.setAttribute('position', `${basePos.x} ${basePos.y + 1.25} ${basePos.z}`);
+          hitBox.setAttribute('geometry', `primitive: cylinder; radius: 0.6; height: 2.5`);
+          hitBox.setAttribute('material', 'color: #FFEB3B; opacity: 0.15; transparent: true; shader: flat');
           hitBox.classList.add('clickable', 'antenna-selector');
           hitBox.setAttribute('data-ant-idx', idx);
           hitBox.setAttribute('btn-interaction', '');
           container.appendChild(hitBox);
 
-          this.createLabel(`SELEZIONA\nANTENNA ${idx + 1}`, {x: basePos.x, y: basePos.y + 0.6, z: basePos.z}, '#FFEB3B', this.globalTextScale * 0.7, container);
+          this.createLabel(`ANTENNA ${idx + 1}\nSPARA QUI PER MODIFICARE`, {x: basePos.x, y: basePos.y + 2.6, z: basePos.z}, '#FFEB3B', this.globalTextScale * 1.5, container);
       },
 
       renderAntenna: function(ant, container, isCurrent, idx) {
@@ -775,7 +767,7 @@
         let containerEls = this.worldContentEl.querySelectorAll('.antenna-group');
         containerEls.forEach(el => el.parentNode.removeChild(el));
 
-        // RIGENERA DA ZERO OGNI ANTENNA NELLA MEMORIA
+        // RIGENERA DA ZERO OGNI ANTENNA NELLA MEMORIA, INTATTA E CORRETTA
         this.antennas.forEach((ant, idx) => {
             let isCurrent = (idx === this.activeAntIdx);
             let container = document.createElement('a-entity');
