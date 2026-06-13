@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V28 - Data-Driven & Rotazioni Matematiche Perfette</title>
+  <title>Antenne AR Pro V29 - Data-Driven & Punto C Corretto</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -14,7 +14,6 @@
     hr { border-color: #333; margin: 15px 0; }
   </style>
   <script>
-    // Componente look-at-camera ricalcolato per resistere alle rotazioni globali
     AFRAME.registerComponent('look-at-camera', { 
       tick: function () { 
         let cameraEl = document.querySelector('#camera'); 
@@ -44,7 +43,6 @@
             this.mmanaModels = ['Yagi 3 Elementi', 'Delta Loop', 'Dipolo MMANA', 'Modello Importato'];
             this.maxRadials = 16; 
             
-            // Variabili Globali di Scena
             this.globalTextScale = 0.35; 
             this.currentHeight = 0.1; 
             this.gwState = 'OFF'; 
@@ -55,10 +53,9 @@
             this.laserMode = false; this.hitTestSource = null; this.requestingHitTest = false; this.reticleValid = false;
             this.targetReticlePos = new THREE.Vector3(); this.targetReticleQuat = new THREE.Quaternion(); this.lastFloorY = 0; 
 
-            // GESTIONE MULTI-ANTENNA DATA-DRIVEN
             this.antennas = [this.createEmptyAntenna()]; 
             this.activeAntIdx = 0;
-            this.current = this.antennas[0]; // Riferimento veloce all'antenna attiva
+            this.current = this.antennas[0];
 
             this.raycasterEl = document.querySelector('#right-controller'); this.leftControllerEl = document.querySelector('#left-controller');
             this.worldPivotEl = document.querySelector('#world-pivot'); this.worldContentEl = document.querySelector('#world-content');
@@ -186,7 +183,7 @@
         if(!this.menuUI) return;
         let isVisible = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
         this.menuUI.setAttribute('visible', !isVisible);
-        this.refreshAll(); // Aggiorna per far sparire/apparire i selettori
+        this.refreshAll(); 
       },
 
       toggleGuyWireMode: function() {
@@ -365,7 +362,7 @@
             let intersects = null; if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) intersects = this.raycasterEl.components.raycaster.intersectedEls;
             
             if (intersects) {
-              // SELEZIONE LASER ANTENNA (Piccoli diamanti)
+              // SELEZIONE LASER ANTENNA 
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
               if (hitSelector) {
                   let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx'));
@@ -754,10 +751,19 @@
               let vecA = new THREE.Vector3(ant.pointA.top.x, ant.pointA.top.y, ant.pointA.top.z);
               let vecB = new THREE.Vector3(ant.pointB.top.x, ant.pointB.top.y, ant.pointB.top.z);
               let dirAB = new THREE.Vector3().subVectors(vecB, vecA).normalize(); let dirBA = new THREE.Vector3().subVectors(vecA, vecB).normalize();
-              let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
-              this.pointC.top = vecC; this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
+              let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, ant.pointC.percent);
+              ant.pointC.top = vecC;
 
-              if (type !== 'Longwire') this.createPoleAndLabel(ant.pointC.top, null, 'CENTRO C', '#00E676', container);
+              // FIX Punto C Base - Sicurezza
+              let baseC = null;
+              if (ant.pointA.base && ant.pointB.base) {
+                  let bA = new THREE.Vector3(ant.pointA.base.x, ant.pointA.base.y, ant.pointA.base.z);
+                  let bB = new THREE.Vector3(ant.pointB.base.x, ant.pointB.base.y, ant.pointB.base.z);
+                  baseC = new THREE.Vector3().lerpVectors(bA, bB, ant.pointC.percent);
+              }
+
+              if (type !== 'Longwire') this.createPoleAndLabel(ant.pointC.top, baseC, 'CENTRO C', '#00E676', container);
+
               if (type === 'Dipolo') {
                   let antLen = this.getCalculatedLength(); 
                   let extAntStart = new THREE.Vector3().copy(ant.pointC.top).addScaledVector(dirAB, -(antLen / 2)); let extAntEnd = new THREE.Vector3().copy(ant.pointC.top).addScaledVector(dirAB, antLen / 2);
