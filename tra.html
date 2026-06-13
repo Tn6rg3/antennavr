@@ -755,7 +755,7 @@
               let vecB = new THREE.Vector3(ant.pointB.top.x, ant.pointB.top.y, ant.pointB.top.z);
               let dirAB = new THREE.Vector3().subVectors(vecB, vecA).normalize(); let dirBA = new THREE.Vector3().subVectors(vecA, vecB).normalize();
               let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, this.pointC.percent);
-        this.pointC.top = vecC; this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
+              this.pointC.top = vecC; this.renderPoleAndLabel(this.pointC, this.pointC.top, 'CENTRO C');
 
               if (type !== 'Longwire') this.createPoleAndLabel(ant.pointC.top, null, 'CENTRO C', '#00E676', container);
               if (type === 'Dipolo') {
