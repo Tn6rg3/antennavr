@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V25 - Multi-Scena Corretta & Radiali Smart</title>
+  <title>Antenne AR Pro V26 - Multi-Scena Definitiva</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -103,14 +103,31 @@
         this.gwState = 'OFF'; this.activeAnchor = null;
       },
 
-      // Funzione vitale: Sincronizza le trasformazioni 3D (object3D) con gli attributi HTML prima di clonare
       createCloneFromActive: function() {
+        // Forza A-Frame a sincronizzare tutti gli attributi interni all'HTML
+        if (this.activeAntennaContainerEl.flushToDOM) {
+            this.activeAntennaContainerEl.flushToDOM(true);
+        }
+
+        // Estrazione matematica esatta delle coordinate per prevenire l'invisibilità
         let syncToDOM = (el) => {
-            if (!el || !el.object3D) return;
-            let p = el.object3D.position; el.setAttribute('position', `${p.x} ${p.y} ${p.z}`);
-            let r = el.object3D.rotation; el.setAttribute('rotation', `${r.x * 180 / Math.PI} ${r.y * 180 / Math.PI} ${r.z * 180 / Math.PI}`);
-            let s = el.object3D.scale; el.setAttribute('scale', `${s.x} ${s.y} ${s.z}`);
-            for (let i = 0; i < el.children.length; i++) syncToDOM(el.children[i]);
+            if (el && el.object3D) {
+                let p = el.object3D.position;
+                el.setAttribute('position', `${p.x} ${p.y} ${p.z}`);
+                
+                // Conversione sicura da Quaternione ad Angoli di Eulero compatibili con l'attributo HTML
+                let euler = new THREE.Euler().setFromQuaternion(el.object3D.quaternion, 'YXZ');
+                let rx = euler.x * 180 / Math.PI;
+                let ry = euler.y * 180 / Math.PI;
+                let rz = euler.z * 180 / Math.PI;
+                el.setAttribute('rotation', `${rx} ${ry} ${rz}`);
+                
+                let s = el.object3D.scale;
+                el.setAttribute('scale', `${s.x} ${s.y} ${s.z}`);
+            }
+            if (el && el.children) {
+                for (let i = 0; i < el.children.length; i++) syncToDOM(el.children[i]);
+            }
         };
         
         syncToDOM(this.activeAntennaContainerEl);
@@ -120,7 +137,7 @@
         clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
         clone.querySelectorAll('.clickable').forEach(el => { el.classList.remove('clickable'); el.removeAttribute('btn-interaction'); });
         
-        // Rimuove la UI di costruzione (cilindro giallo) dal clone
+        // Rimuove il cilindro giallo di misurazione dal clone
         let vCyl = clone.querySelector('[geometry="primitive: cylinder"][material*="#FFEB3B"]'); if(vCyl) vCyl.setAttribute('visible', 'false');
         
         return clone;
@@ -130,7 +147,7 @@
         let slot = this.sceneAntennas[this.currentSlot];
         if (slot.clone && slot.clone.parentNode) slot.clone.parentNode.removeChild(slot.clone);
         
-        this.resetVerticalPreviewMode();
+        this.resetVerticalPreviewMode(); 
         slot.state = this.packState();
         slot.clone = this.createCloneFromActive();
         
@@ -139,7 +156,7 @@
 
       loadActiveFromSlot: function() {
         let slot = this.sceneAntennas[this.currentSlot];
-        if (slot.clone && slot.clone.parentNode) slot.clone.parentNode.removeChild(slot.clone); // Rimuovi il clone statico perché ora è attivo
+        if (slot.clone && slot.clone.parentNode) slot.clone.parentNode.removeChild(slot.clone);
         this.unpackState(slot.state);
         this.refreshAll();
       },
@@ -454,7 +471,6 @@
                this.currentHeight = 0.1; this.state = 'PLACE_HEIGHT_A'; this.setupVerticalPreviewMode(this.pointA.base); this.updateMenuText(); this.updateGeometriesAndDrawings(); return;
             }
 
-            // GESTIONE TIRANTI TRALICCIO
             if (this.gwState === 'EDIT_TRALICCIO_PEGS') {
                 let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
                 if (hitPeg) {
@@ -751,7 +767,7 @@
           
           let base = new THREE.Vector3(this.pointA.base.x, this.pointA.base.y + 0.002, this.pointA.base.z); let radRot = (this.antennaRotationY * Math.PI / 180);
           
-          // NUOVA LOGICA: Se c'è un traliccio, i radiali a terra vengono nascosti automaticamente
+          // REGOLE RADIALI: Nascosti se c'è un traliccio, visibili se a terra.
           let showRadials = !this.traliccio.active;
 
           for (let i = 0; i < this.maxRadials; i++) {
