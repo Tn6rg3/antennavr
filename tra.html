@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Test Visivo Traliccio Procedurale</title>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script>
+    AFRAME.registerComponent('generatore-traliccio', {
+      schema: {
+        baseSize: { type: 'number', default: 0.5 }, // Lato del quadrato in metri (es. 50cm)
+        height: { type: 'number', default: 6.0 },   // Altezza totale in metri
+        poleRadius: { type: 'number', default: 0.015 }, // Spessore tubi principali
+        braceRadius: { type: 'number', default: 0.008 } // Spessore tubi di rinforzo
+      },
+
+      update: function () {
+        // Pulisce il traliccio precedente se si aggiornano i valori
+        this.el.innerHTML = '';
+
+        let data = this.data;
+        let w = data.baseSize / 2;
+        let h = data.height;
+
+        // Colori per distinguere tubi primari e secondari
+        let matPoles = 'color: #90A4AE; roughness: 0.4; metalness: 0.6; shader: flat';
+        let matBraces = 'color: #CFD8DC; roughness: 0.5; metalness: 0.3; shader: flat';
+
+        // 1. CREA I 4 MONTANTI VERTICALI
+        let corners = [
+          { x: -w, z: -w },
+          { x: w, z: -w },
+          { x: w, z: w },
+          { x: -w, z: w }
+        ];
+
+        corners.forEach(pos => {
+          let pole = document.createElement('a-cylinder');
+          pole.setAttribute('radius', data.poleRadius);
+          pole.setAttribute('height', h);
+          pole.setAttribute('material', matPoles);
+          pole.setAttribute('position', `${pos.x} ${h / 2} ${pos.z}`);
+          this.el.appendChild(pole);
+        });
+
+        // 2. CREA LE SEZIONI DI RINFORZO (LATTICE)
+        // Calcoliamo quante "X" ci stanno. Facciamo che ogni X è alta 1.2 volte la larghezza
+        let sectionHeight = data.baseSize * 1.2;
+        let numSections = Math.floor(h / sectionHeight);
+        let actualSectionHeight = h / numSections; // Aggiusta per arrivare esattamente in cima
+
+        // Funzione helper per creare un tubo tra due punti 3D (simile al tuo codice MMANA/Tiranti)
+        let createTube = (p1, p2, radius, material) => {
+          let tube = document.createElement('a-cylinder');
+          let distance = p1.distanceTo(p2);
+          tube.setAttribute('radius', radius);
+          tube.setAttribute('height', distance);
+          tube.setAttribute('material', material);
+          
+          let midPoint = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+          tube.object3D.position.copy(midPoint);
+          tube.object3D.lookAt(p2);
+          tube.object3D.rotateX(Math.PI / 2);
+          
+          this.el.appendChild(tube);
+        };
+
+        // Costruisci le X e i traversini orizzontali per ogni faccia e per ogni sezione
+        for (let i = 0; i < numSections; i++) {
+          let yBottom = i * actualSectionHeight;
+          let yTop = (i + 1) * actualSectionHeight;
+
+          // Definisci i vertici della sezione corrente per le 4 gambe
+          let v = [
+            new THREE.Vector3(-w, yBottom, -w), new THREE.Vector3(w, yBottom, -w),
+            new THREE.Vector3(w, yBottom, w), new THREE.Vector3(-w, yBottom, w),
+            new THREE.Vector3(-w, yTop, -w), new THREE.Vector3(w, yTop, -w),
+            new THREE.Vector3(w, yTop, w), new THREE.Vector3(-w, yTop, w)
+          ];
+
+          // Array delle 4 facce: ogni faccia è definita dagli indici [bottomLeft, bottomRight, topLeft, topRight]
+          let faces = [
+            [0, 1, 4, 5], // Dietro
+            [1, 2, 5, 6], // Destra
+            [2, 3, 6, 7], // Davanti
+            [3, 0, 7, 4]  // Sinistra
+          ];
+
+          faces.forEach(f => {
+            // Traversino orizzontale in basso (per chiudere il quadrato)
+            createTube(v[f[0]], v[f[1]], data.braceRadius, matBraces);
+            
+            // Traversino orizzontale in alto per l'ultima sezione
+            if (i === numSections - 1) {
+                createTube(v[f[2]], v[f[3]], data.braceRadius, matBraces);
+            }
+
+            // Diagonale 1 (X)
+            createTube(v[f[0]], v[f[3]], data.braceRadius, matBraces);
+            // Diagonale 2 (X)
+            createTube(v[f[1]], v[f[2]], data.braceRadius, matBraces);
+          });
+        }
+      }
+    });
+  </script>
+</head>
+<body style="background-color: #333;">
+  <a-scene background="color: #222">
+    <a-light type="ambient" color="#888"></a-light>
+    <a-light type="directional" position="-2 4 2" intensity="0.6"></a-light>
+
+    <a-entity generatore-traliccio="baseSize: 0.45; height: 8.0" position="0 0 -5"></a-entity>
+
+    <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false" wasd-controls="fly: true"></a-camera>
+    
+    <a-plane position="0 0 -5" rotation="-90 0 0" width="10" height="10" color="#111"></a-plane>
+  </a-scene>
+</body>
+</html>
