@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V27 - Multi-Scena Data-Driven & Laser Select</title>
+  <title>Antenne AR Pro V28 - Data-Driven & Rotazioni Matematiche Perfette</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -14,7 +14,17 @@
     hr { border-color: #333; margin: 15px 0; }
   </style>
   <script>
-    AFRAME.registerComponent('look-at-camera', { tick: function () { let cameraEl = document.querySelector('#camera'); if (cameraEl && cameraEl.object3D) { this.el.object3D.lookAt(cameraEl.object3D.position); } } });
+    // Componente look-at-camera ricalcolato per resistere alle rotazioni globali
+    AFRAME.registerComponent('look-at-camera', { 
+      tick: function () { 
+        let cameraEl = document.querySelector('#camera'); 
+        if (cameraEl && cameraEl.object3D) { 
+          let target = new THREE.Vector3();
+          cameraEl.object3D.getWorldPosition(target);
+          this.el.object3D.lookAt(target); 
+        } 
+      } 
+    });
     
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
@@ -176,6 +186,7 @@
         if(!this.menuUI) return;
         let isVisible = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
         this.menuUI.setAttribute('visible', !isVisible);
+        this.refreshAll(); // Aggiorna per far sparire/apparire i selettori
       },
 
       toggleGuyWireMode: function() {
@@ -354,7 +365,7 @@
             let intersects = null; if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) intersects = this.raycasterEl.components.raycaster.intersectedEls;
             
             if (intersects) {
-              // SELEZIONE LASER ANTENNA
+              // SELEZIONE LASER ANTENNA (Piccoli diamanti)
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
               if (hitSelector) {
                   let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx'));
@@ -534,10 +545,9 @@
           let midY = baseH + (actualHeight / 2);
           
           let pole = document.createElement('a-cylinder');
-          pole.setAttribute('radius', '0.008');
+          pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${actualHeight}`);
           pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat');
           pole.setAttribute('position', `${topPos.x} ${midY} ${topPos.z}`);
-          pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${actualHeight}`);
           container.appendChild(pole);
 
           this.createLabel(`${labelName}\nALTEZZA PALO: ${actualHeight.toFixed(2)}m`, {x: topPos.x, y: midY, z: topPos.z}, '#00FF00', this.globalTextScale, container);
@@ -548,12 +558,19 @@
           let dist = p1.distanceTo(p2);
           tube.setAttribute('geometry', `primitive: cylinder; radius: ${radius}; height: ${dist}`);
           tube.setAttribute('material', materialStr);
+          
           let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
           tube.setAttribute('position', `${mid.x} ${mid.y} ${mid.z}`);
+          
+          // NUOVO CALCOLO DELLA ROTAZIONE: Usa coordinate puramente locali
+          if (dist > 0.001) {
+              let dir = new THREE.Vector3().subVectors(p2, p1).normalize();
+              let quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+              let euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
+              tube.setAttribute('rotation', `${euler.x * 180 / Math.PI} ${euler.y * 180 / Math.PI} ${euler.z * 180 / Math.PI}`);
+          }
+          
           container.appendChild(tube);
-          tube.object3D.position.copy(mid);
-          tube.object3D.lookAt(p2);
-          tube.object3D.rotateX(Math.PI/2);
           return tube;
       },
 
@@ -669,30 +686,24 @@
       },
 
       renderSelectorBox: function(ant, container, isCurrent, idx) {
-          if (isCurrent) return; // Non serve per l'antenna attualmente in uso
+          if (isCurrent) return; 
           
-          // 1. LOGICA DI SCOMPARSA: Mostra i selettori SOLO quando il menu è aperto
           let isMenuOpen = this.menuUI && (this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true);
-          if (!isMenuOpen) return; // Se il menu è chiuso, non disegna nulla (visuale pulita)
+          if (!isMenuOpen) return;
 
           let basePos = ant.traliccio.active ? ant.traliccio.center : ant.pointA.base;
           if (!basePos) return;
 
-          // 2. FORMA PICCOLA E NON INVADENTE: Usa un piccolo ottaedro (diamante) invece del cilindro
           let hitBox = document.createElement('a-octahedron');
           hitBox.setAttribute('position', `${basePos.x} ${basePos.y + 0.4} ${basePos.z}`);
-          hitBox.setAttribute('geometry', `primitive: octahedron; radius: 0.08`); // Raggio piccolissimo (8 cm)
+          hitBox.setAttribute('geometry', `primitive: octahedron; radius: 0.08`);
           hitBox.setAttribute('material', 'color: #FFEB3B; opacity: 0.9; shader: flat');
-          
-          // (Opzionale) lo fa ruotare su se stesso per renderlo visibile
           hitBox.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
-          
           hitBox.classList.add('clickable', 'antenna-selector');
           hitBox.setAttribute('data-ant-idx', idx);
           hitBox.setAttribute('btn-interaction', '');
           container.appendChild(hitBox);
 
-          // Testo rimpicciolito e abbassato
           this.createLabel(`SELEZIONA\nANTENNA ${idx + 1}`, {x: basePos.x, y: basePos.y + 0.6, z: basePos.z}, '#FFEB3B', this.globalTextScale * 0.7, container);
       },
 
@@ -774,11 +785,9 @@
       },
 
       updateGeometriesAndDrawings: function() {
-        // RIMUOVE TUTTI I GRUPPI DI ANTENNE PRECEDENTEMENTE GENERATI
         let containerEls = this.worldContentEl.querySelectorAll('.antenna-group');
         containerEls.forEach(el => el.parentNode.removeChild(el));
 
-        // RIGENERA DA ZERO OGNI ANTENNA NELLA MEMORIA, INTATTA E CORRETTA
         this.antennas.forEach((ant, idx) => {
             let isCurrent = (idx === this.activeAntIdx);
             let container = document.createElement('a-entity');
