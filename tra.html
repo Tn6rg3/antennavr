@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V23 - Traliccio Dinamico Definitivo</title>
+  <title>Antenne AR Pro V24 - Multi-Scena & Traliccio Dinamico</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -53,13 +53,21 @@
             this.laserMode = false; this.hitTestSource = null; this.requestingHitTest = false; this.reticleValid = false;
             this.targetReticlePos = new THREE.Vector3(); this.targetReticleQuat = new THREE.Quaternion(); this.lastFloorY = 0; 
 
+            // MULTI-ANTENNA SCENE MANAGEMENT
+            this.sceneAntennas = []; 
+            this.currentSlot = 0;
+            this.sceneAntennas.push({ state: null, clone: null });
+
             this.raycasterEl = document.querySelector('#right-controller'); this.leftControllerEl = document.querySelector('#left-controller');
             this.worldPivotEl = document.querySelector('#world-pivot'); this.worldContentEl = document.querySelector('#world-content');
+            
+            this.activeAntennaContainerEl = document.querySelector('#active-antenna-container');
+            this.staticContainerEl = document.querySelector('#static-antennas-container');
             this.verticalCylinder = document.querySelector('#vertical-cylinder'); this.heightText = document.querySelector('#height-text');
             this.menuUI = document.querySelector('#menu-ui'); this.gwUI = document.querySelector('#guy-wires-ui');
             
             this.mmanaContainerEl = document.querySelector('#mmana-wires-container'); this.gwContainerEl = document.querySelector('#guy-wires-container');
-            this.traliccioContainerEl = document.createElement('a-entity'); this.worldContentEl.appendChild(this.traliccioContainerEl);
+            this.traliccioContainerEl = document.createElement('a-entity'); this.activeAntennaContainerEl.appendChild(this.traliccioContainerEl);
 
             if (this.raycasterEl) { this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this)); this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this)); }
             if (this.leftControllerEl) { this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this)); this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this)); this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this)); }
@@ -72,59 +80,114 @@
         } catch (error) { console.error("Errore inizializzazione:", error); }
       },
 
+      packState: function() {
+        return {
+            state: this.state, pointA: { base: this.pointA.base, top: this.pointA.top }, pointB: { base: this.pointB.base, top: this.pointB.top },
+            pointCPercent: this.pointC.percent, traliccio: JSON.parse(JSON.stringify(this.traliccio)), antIdx: this.antIdx, bandIdx: this.bandIdx,
+            endFed_AC_Len: this.endFed_AC_Len, endFed_CB_Len: this.endFed_CB_Len, longwireLen: this.longwireLen, longwireVertex: this.longwireVertex,
+            numRadials: this.numRadials, radialLen: this.radialLen, mmanaModelIdx: this.mmanaModelIdx, antennaRotationY: this.antennaRotationY,
+            guyWiresData: JSON.parse(JSON.stringify(this.guyWiresData)), currentHeight: this.currentHeight
+        };
+      },
+
+      unpackState: function(d) {
+        if(!d) { this.resetCurrentAntenna(); return; }
+        this.state = d.state || 'IDLE';
+        if (d.pointA && d.pointA.base) this.pointA.base = d.pointA.base; if (d.pointA && d.pointA.top) this.pointA.top = d.pointA.top;
+        if (d.pointB && d.pointB.base) this.pointB.base = d.pointB.base; if (d.pointB && d.pointB.top) this.pointB.top = d.pointB.top;
+        this.traliccio = Object.assign({ active: false, center: null, shape: 'square', radius: 0.3, rotationY: 0, height: 6.0, corners: [], pegs: [] }, d.traliccio);
+        this.pointC.percent = d.pointCPercent !== undefined ? d.pointCPercent : 0.5; this.antIdx = d.antIdx || 0; this.bandIdx = d.bandIdx || 2;
+        this.endFed_AC_Len = d.endFed_AC_Len || 10.0; this.endFed_CB_Len = d.endFed_CB_Len || 10.0; this.longwireLen = d.longwireLen || 20.0; this.longwireVertex = d.longwireVertex || 'A';
+        this.numRadials = d.numRadials || 4; this.radialLen = d.radialLen || 5.0; this.mmanaModelIdx = d.mmanaModelIdx || 0; this.antennaRotationY = d.antennaRotationY || 0;
+        this.guyWiresData = d.guyWiresData || []; this.currentHeight = d.currentHeight || 0.1;
+        this.gwState = 'OFF'; this.activeAnchor = null;
+      },
+
+      saveActiveToSlot: function() {
+        let slot = this.sceneAntennas[this.currentSlot];
+        if (slot.clone && slot.clone.parentNode) slot.clone.parentNode.removeChild(slot.clone);
+        
+        this.resetVerticalPreviewMode(); // Non salvare il cilindro giallo di costruzione nel clone
+        slot.state = this.packState();
+        
+        let clone = this.activeAntennaContainerEl.cloneNode(true);
+        clone.removeAttribute('id');
+        clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+        clone.querySelectorAll('.clickable').forEach(el => { el.classList.remove('clickable'); el.removeAttribute('btn-interaction'); });
+        
+        let vCyl = clone.querySelector('[geometry="primitive: cylinder"][material*="#FFEB3B"]'); if(vCyl) vCyl.setAttribute('visible', 'false');
+        let hTxt = clone.querySelector('[look-at-camera]'); if(hTxt && hTxt.getAttribute('color') === '#00FF00') hTxt.setAttribute('visible', 'false');
+        
+        slot.clone = clone;
+        this.staticContainerEl.appendChild(clone);
+      },
+
+      loadActiveFromSlot: function() {
+        let slot = this.sceneAntennas[this.currentSlot];
+        if (slot.clone && slot.clone.parentNode) slot.clone.parentNode.removeChild(slot.clone); // Rimuovi il clone statico perché ora è attivo
+        this.unpackState(slot.state);
+        this.refreshAll();
+      },
+
       refreshDBList: function() {
         let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}'); let select = document.querySelector('#load-list'); if(!select) return; select.innerHTML = '';
         for (let name in db) { let opt = document.createElement('option'); opt.value = name; opt.innerText = name; select.appendChild(opt); }
       },
 
       executeSave: function(customName) {
-        if(!this.pointA.base) return "ERRORE: Devi piazzare almeno il Punto A."; if(!this.calibLocal1 || !this.calibLocal2) return "ERRORE: Devi impostare i 2 Diamanti prima.";
+        if(!this.pointA.base && this.sceneAntennas.length <= 1) return "ERRORE: Devi piazzare almeno il Punto A."; 
+        if(!this.calibLocal1 || !this.calibLocal2) return "ERRORE: Devi impostare i 2 Diamanti prima.";
+        
+        this.sceneAntennas[this.currentSlot].state = this.packState();
+        let arr = this.sceneAntennas.map(s => s.state);
+        
         let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
-        db[customName] = {
-          pointA: { base: this.pointA.base, top: this.pointA.top }, pointB: { base: this.pointB.base, top: this.pointB.top },
-          traliccio: this.traliccio, pointCPercent: this.pointC.percent, antIdx: this.antIdx, bandIdx: this.bandIdx,
-          endFed_AC_Len: this.endFed_AC_Len, endFed_CB_Len: this.endFed_CB_Len, longwireLen: this.longwireLen, longwireVertex: this.longwireVertex,
-          numRadials: this.numRadials, radialLen: this.radialLen, mmanaModelIdx: this.mmanaModelIdx, antennaRotationY: this.antennaRotationY,
-          globalTextScale: this.globalTextScale, guyWiresData: this.guyWiresData, calibLocal1: this.calibLocal1, calibLocal2: this.calibLocal2
-        };
-        localStorage.setItem('antenneAR_DB', JSON.stringify(db)); this.refreshDBList(); return `SALVATA CON SUCCESSO:\n${customName}`;
+        db[customName] = { slots: arr, currentSlot: this.currentSlot, globalTextScale: this.globalTextScale, calibLocal1: this.calibLocal1, calibLocal2: this.calibLocal2 };
+        localStorage.setItem('antenneAR_DB', JSON.stringify(db)); this.refreshDBList(); return `SCENA SALVATA:\n${customName}`;
       },
 
       saveAntennaToDB: function() { let name = document.querySelector('#save-name').value.trim(); if(!name) { alert("Inserisci un nome!"); return; } alert(this.executeSave(name)); },
+      
       loadAntennaFromDB: function() {
         let select = document.querySelector('#load-list'); if(!select) return; let name = select.value;
         let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}'); let d = db[name]; if(!d) return;
 
-        this.pointA.base = d.pointA.base; this.pointA.top = d.pointA.top; this.pointB.base = d.pointB.base; this.pointB.top = d.pointB.top;
-        if(d.traliccio) this.traliccio = Object.assign({ active: false, center: null, shape: 'square', radius: 0.3, rotationY: 0, height: 6.0, corners: [], pegs: [] }, d.traliccio);
-        else this.traliccio = { active: false, center: null, shape: 'square', radius: 0.3, rotationY: 0, height: 6.0, corners: [], pegs: [] };
-        
-        this.pointC.percent = parseFloat(d.pointCPercent) || 0.5; this.antIdx = parseInt(d.antIdx) || 0; this.bandIdx = parseInt(d.bandIdx) || 2;
-        this.endFed_AC_Len = parseFloat(d.endFed_AC_Len) || 10.0; this.endFed_CB_Len = parseFloat(d.endFed_CB_Len) || 10.0;
-        this.longwireLen = parseFloat(d.longwireLen) || 20.0; this.longwireVertex = d.longwireVertex || 'A';
-        this.numRadials = parseInt(d.numRadials) || 4; this.radialLen = parseFloat(d.radialLen) || 5.0;
-        this.mmanaModelIdx = parseInt(d.mmanaModelIdx) || 0; this.antennaRotationY = parseFloat(d.antennaRotationY) || 0;
-        this.globalTextScale = parseFloat(d.globalTextScale) || 0.35; this.guyWiresData = d.guyWiresData || [];
         this.calibLocal1 = d.calibLocal1; this.calibLocal2 = d.calibLocal2;
-
         this.worldContentEl.object3D.position.set(-this.calibLocal1.x, -this.calibLocal1.y, -this.calibLocal1.z); this.worldContentEl.setAttribute('visible', 'true'); 
         this.diamondRef1.setAttribute('position', this.calibLocal1); this.diamondRef2.setAttribute('position', this.calibLocal2);
         this.diamondRef1.setAttribute('visible', 'true'); this.diamondRef2.setAttribute('visible', 'true');
 
+        if(d.slots && d.slots.length > 0) {
+            this.staticContainerEl.innerHTML = '';
+            this.sceneAntennas = [];
+            d.slots.forEach(s => this.sceneAntennas.push({ state: s, clone: null }));
+            this.currentSlot = d.currentSlot || 0;
+            if(this.currentSlot >= this.sceneAntennas.length) this.currentSlot = 0;
+            
+            this.sceneAntennas.forEach((slot, idx) => {
+                if(idx !== this.currentSlot && slot.state && slot.state.pointA && slot.state.pointA.base) {
+                    this.unpackState(slot.state);
+                    this.updateGeometriesAndDrawings();
+                    slot.clone = this.activeAntennaContainerEl.cloneNode(true);
+                    slot.clone.removeAttribute('id'); slot.clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+                    slot.clone.querySelectorAll('.clickable').forEach(el => { el.classList.remove('clickable'); el.removeAttribute('btn-interaction'); });
+                    this.staticContainerEl.appendChild(slot.clone);
+                }
+            });
+            this.unpackState(this.sceneAntennas[this.currentSlot].state);
+        }
+
+        this.globalTextScale = parseFloat(d.globalTextScale) || 0.35;
         this.state = 'AWAITING_CALIB_PT1'; if(this.menuUI) this.menuUI.setAttribute('visible', true);
-        this.updateMenuText(); this.updateGeometriesAndDrawings(); alert("Antenna " + name + " caricata! Agganciata al controller.");
+        this.refreshAll(); alert("Scena " + name + " caricata! Allinea il visore agganciato ai diamanti.");
       },
+      
       deleteAntennaFromDB: function() { let select = document.querySelector('#load-list'); if(!select) return; let name = select.value; if(name && confirm("Eliminare l'antenna '" + name + "'?")) { let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}'); delete db[name]; localStorage.setItem('antenneAR_DB', JSON.stringify(db)); this.refreshDBList(); } },
 
       saveToStorage: function() {
-        let data = {
-          state: this.state, pointA: { base: this.pointA.base, top: this.pointA.top }, pointB: { base: this.pointB.base, top: this.pointB.top },
-          pointCPercent: this.pointC.percent, traliccio: this.traliccio, antIdx: this.antIdx, bandIdx: this.bandIdx,
-          endFed_AC_Len: this.endFed_AC_Len, endFed_CB_Len: this.endFed_CB_Len, longwireLen: this.longwireLen, longwireVertex: this.longwireVertex,
-          numRadials: this.numRadials, radialLen: this.radialLen, mmanaModelIdx: this.mmanaModelIdx, antennaRotationY: this.antennaRotationY,
-          globalTextScale: this.globalTextScale, pivotPos: this.worldPivotEl.object3D.position, pivotRot: this.worldPivotEl.object3D.rotation,
-          contentPos: this.worldContentEl.object3D.position, guyWiresData: this.guyWiresData
-        };
+        this.sceneAntennas[this.currentSlot].state = this.packState();
+        let arr = this.sceneAntennas.map(s => s.state);
+        let data = { slots: arr, currentSlot: this.currentSlot, globalTextScale: this.globalTextScale, pivotPos: this.worldPivotEl.object3D.position, pivotRot: this.worldPivotEl.object3D.rotation, contentPos: this.worldContentEl.object3D.position };
         localStorage.setItem('antennaArProV21', JSON.stringify(data));
       },
 
@@ -133,18 +196,28 @@
         if (saved) {
           try {
             let d = JSON.parse(saved);
-            if (d.pointA && d.pointA.base) this.pointA.base = d.pointA.base; if (d.pointA && d.pointA.top) this.pointA.top = d.pointA.top;
-            if (d.pointB && d.pointB.base) this.pointB.base = d.pointB.base; if (d.pointB && d.pointB.top) this.pointB.top = d.pointB.top;
-            if (d.traliccio) this.traliccio = Object.assign({ active: false, center: null, shape: 'square', radius: 0.3, rotationY: 0, height: 6.0, corners: [], pegs: [] }, d.traliccio);
-            
-            this.pointC.percent = d.pointCPercent !== undefined ? d.pointCPercent : 0.5; this.antIdx = d.antIdx || 0; this.bandIdx = d.bandIdx || 2;
-            this.endFed_AC_Len = d.endFed_AC_Len || 10.0; this.endFed_CB_Len = d.endFed_CB_Len || 10.0; this.longwireLen = d.longwireLen || 20.0; this.longwireVertex = d.longwireVertex || 'A';
-            this.numRadials = d.numRadials || 4; this.radialLen = d.radialLen || 5.0; this.mmanaModelIdx = d.mmanaModelIdx || 0; this.antennaRotationY = d.antennaRotationY || 0;
-            this.globalTextScale = d.globalTextScale || 0.35; this.guyWiresData = d.guyWiresData || [];
-            
+            if(d.slots && d.slots.length > 0) {
+                this.staticContainerEl.innerHTML = '';
+                this.sceneAntennas = [];
+                for(let i=0; i<d.slots.length; i++) this.sceneAntennas.push({ state: d.slots[i], clone: null });
+                this.currentSlot = d.currentSlot || 0;
+                if(this.currentSlot >= this.sceneAntennas.length) this.currentSlot = 0;
+
+                this.sceneAntennas.forEach((slot, idx) => {
+                    if(idx !== this.currentSlot && slot.state && slot.state.pointA && slot.state.pointA.base) {
+                        this.unpackState(slot.state);
+                        this.updateGeometriesAndDrawings();
+                        slot.clone = this.activeAntennaContainerEl.cloneNode(true);
+                        slot.clone.removeAttribute('id'); slot.clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+                        slot.clone.querySelectorAll('.clickable').forEach(el => { el.classList.remove('clickable'); el.removeAttribute('btn-interaction'); });
+                        this.staticContainerEl.appendChild(slot.clone);
+                    }
+                });
+                this.unpackState(this.sceneAntennas[this.currentSlot].state);
+            }
+            if (d.globalTextScale) this.globalTextScale = d.globalTextScale;
             if (d.pivotPos) this.worldPivotEl.object3D.position.copy(d.pivotPos); if (d.pivotRot) this.worldPivotEl.object3D.rotation.copy(d.pivotRot); if (d.contentPos) this.worldContentEl.object3D.position.copy(d.contentPos);
             
-            this.state = d.state || 'IDLE';
             if (this.state.startsWith('PLACE_HEIGHT') || this.state.startsWith('REPOSITION_HEIGHT') || this.state.startsWith('SET_CALIB') || this.state.startsWith('AWAITING_CALIB') || this.state.startsWith('SIZE_ROTATE')) this.state = 'IDLE';
           } catch(e) { console.error(e); }
         }
@@ -204,24 +277,24 @@
       initPersistentElements: function() {
         let createPointStructure = (color) => {
           let struct = {};
-          struct.sphere = document.createElement('a-sphere'); struct.sphere.setAttribute('radius', '0.05'); struct.sphere.setAttribute('material', `color: ${color}; roughness: 0.3`); struct.sphere.setAttribute('visible', 'false'); this.worldContentEl.appendChild(struct.sphere);
-          struct.pole = document.createElement('a-cylinder'); struct.pole.setAttribute('radius', '0.008'); struct.pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat'); struct.pole.setAttribute('visible', 'false'); this.worldContentEl.appendChild(struct.pole);
-          struct.label = document.createElement('a-text'); struct.label.setAttribute('align', 'center'); struct.label.setAttribute('color', '#00FF00'); struct.label.setAttribute('look-at-camera', ''); struct.label.setAttribute('visible', 'false'); this.worldContentEl.appendChild(struct.label);
+          struct.sphere = document.createElement('a-sphere'); struct.sphere.setAttribute('radius', '0.05'); struct.sphere.setAttribute('material', `color: ${color}; roughness: 0.3`); struct.sphere.setAttribute('visible', 'false'); this.activeAntennaContainerEl.appendChild(struct.sphere);
+          struct.pole = document.createElement('a-cylinder'); struct.pole.setAttribute('radius', '0.008'); struct.pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat'); struct.pole.setAttribute('visible', 'false'); this.activeAntennaContainerEl.appendChild(struct.pole);
+          struct.label = document.createElement('a-text'); struct.label.setAttribute('align', 'center'); struct.label.setAttribute('color', '#00FF00'); struct.label.setAttribute('look-at-camera', ''); struct.label.setAttribute('visible', 'false'); this.activeAntennaContainerEl.appendChild(struct.label);
           return struct;
         };
 
         this.pointA = Object.assign(this.pointA, createPointStructure('#FF1744')); this.pointB = Object.assign(this.pointB, createPointStructure('#2979FF')); this.pointC = Object.assign(this.pointC, createPointStructure('#00E676'));
-        this.antennaTube1 = document.createElement('a-cylinder'); this.antennaTube1.setAttribute('radius', '0.015'); this.antennaTube1.setAttribute('material', 'color: #FF5722; shader: flat'); this.antennaTube1.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.antennaTube1);
-        this.antennaTube2 = document.createElement('a-cylinder'); this.antennaTube2.setAttribute('radius', '0.015'); this.antennaTube2.setAttribute('material', 'color: #FF5722; shader: flat'); this.antennaTube2.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.antennaTube2);
-        this.labelSegA = document.createElement('a-text'); this.labelSegA.setAttribute('align', 'center'); this.labelSegA.setAttribute('color', 'yellow'); this.labelSegA.setAttribute('look-at-camera', ''); this.labelSegA.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.labelSegA);
-        this.labelSegB = document.createElement('a-text'); this.labelSegB.setAttribute('align', 'center'); this.labelSegB.setAttribute('color', 'yellow'); this.labelSegB.setAttribute('look-at-camera', ''); this.labelSegB.setAttribute('visible', 'false'); this.worldContentEl.appendChild(this.labelSegB);
+        this.antennaTube1 = document.createElement('a-cylinder'); this.antennaTube1.setAttribute('radius', '0.015'); this.antennaTube1.setAttribute('material', 'color: #FF5722; shader: flat'); this.antennaTube1.setAttribute('visible', 'false'); this.activeAntennaContainerEl.appendChild(this.antennaTube1);
+        this.antennaTube2 = document.createElement('a-cylinder'); this.antennaTube2.setAttribute('radius', '0.015'); this.antennaTube2.setAttribute('material', 'color: #FF5722; shader: flat'); this.antennaTube2.setAttribute('visible', 'false'); this.activeAntennaContainerEl.appendChild(this.antennaTube2);
+        this.labelSegA = document.createElement('a-text'); this.labelSegA.setAttribute('align', 'center'); this.labelSegA.setAttribute('color', 'yellow'); this.labelSegA.setAttribute('look-at-camera', ''); this.labelSegA.setAttribute('visible', 'false'); this.activeAntennaContainerEl.appendChild(this.labelSegA);
+        this.labelSegB = document.createElement('a-text'); this.labelSegB.setAttribute('align', 'center'); this.labelSegB.setAttribute('color', 'yellow'); this.labelSegB.setAttribute('look-at-camera', ''); this.labelSegB.setAttribute('visible', 'false'); this.activeAntennaContainerEl.appendChild(this.labelSegB);
 
-        for(let i=0; i<this.maxRadials; i++) { let radCyl = document.createElement('a-cylinder'); radCyl.setAttribute('radius', '0.005'); radCyl.setAttribute('material', 'color: #5D4037; shader: flat'); radCyl.setAttribute('visible', 'false'); this.worldContentEl.appendChild(radCyl); this.radialPool.push(radCyl); }
+        for(let i=0; i<this.maxRadials; i++) { let radCyl = document.createElement('a-cylinder'); radCyl.setAttribute('radius', '0.005'); radCyl.setAttribute('material', 'color: #5D4037; shader: flat'); radCyl.setAttribute('visible', 'false'); this.activeAntennaContainerEl.appendChild(radCyl); this.radialPool.push(radCyl); }
 
         let makeLocalDiamond = (color) => {
             let d = document.createElement('a-octahedron'); d.setAttribute('radius', '0.06'); d.setAttribute('material', `color: ${color}; shader: flat; wireframe: true; opacity: 0.5`); d.setAttribute('visible', 'false');
             let core = document.createElement('a-octahedron'); core.setAttribute('radius', '0.03'); core.setAttribute('material', `color: ${color}; shader: flat; opacity: 0.8`); d.appendChild(core);
-            this.worldContentEl.appendChild(d); return d;
+            this.worldContentEl.appendChild(d); return d; // I diamanti restano legati al mondo intero
         };
         this.diamondRef1 = makeLocalDiamond('#00BFFF'); this.diamondRef2 = makeLocalDiamond('#FF00FF');
         this.reticle = document.createElement('a-entity'); this.reticle.setAttribute('geometry', 'primitive: ring; radiusInner: 0.08; radiusOuter: 0.1; segmentsTheta: 6'); this.reticle.setAttribute('material', 'color: #00FF00; shader: flat; transparent: true; opacity: 0.9'); this.reticle.setAttribute('rotation', '-90 0 0'); this.reticle.setAttribute('visible', 'false'); this.el.sceneEl.appendChild(this.reticle); 
@@ -337,6 +410,7 @@
         this.verticalCylinder.setAttribute('position', `${basePos.x} ${basePos.y + (this.currentHeight / 2)} ${basePos.z}`);
         this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${this.currentHeight}`);
         this.heightText.setAttribute('position', `${basePos.x} ${basePos.y + this.currentHeight + 0.2} ${basePos.z}`);
+        this.heightText.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
         this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
       },
 
@@ -478,6 +552,8 @@
         let type = this.antennaTypes[this.antIdx]; let band = this.bands[this.bandIdx];
         let txtAntVal = document.querySelector('#txt-ant-val'); if (txtAntVal) txtAntVal.setAttribute('value', type.toUpperCase());
         let txtBandVal = document.querySelector('#txt-band-val'); if (txtBandVal) txtBandVal.setAttribute('value', band);
+        
+        let txtSceneInfo = document.querySelector('#txt-scene-info'); if (txtSceneInfo) txtSceneInfo.setAttribute('value', `ANTENNA ${this.currentSlot + 1} DI ${this.sceneAntennas.length}`);
 
         let toggleSubMenu = (id, isVisible) => { let el = document.querySelector(id); if(!el) return; el.setAttribute('visible', isVisible); let btns = el.querySelectorAll('[btn-interaction]'); btns.forEach(btn => { if (isVisible) btn.classList.add('clickable'); else btn.classList.remove('clickable'); }); };
 
@@ -558,7 +634,6 @@
                 this.gwContainerEl.appendChild(peg);
             });
 
-            // Evidenziatore Spigolo per Piazzamento Picchetti Condivisi
             if (this.gwState === 'EDIT_TRALICCIO_PEGS' && this.traliccio.corners.length > 0) {
                 let req = this.traliccio.shape === 'square' ? 4 : 3;
                 let cIdx = this.traliccio.pegs.length;
@@ -719,6 +794,23 @@
         this.labelSegA.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`); this.labelSegB.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
       },
 
+      resetCurrentAntenna: function() {
+        this.pointA = { base: null, top: null, sphere: this.pointA.sphere, pole: this.pointA.pole, label: this.pointA.label };
+        this.pointB = { base: null, top: null, sphere: this.pointB.sphere, pole: this.pointB.pole, label: this.pointB.label };
+        this.pointC.top = null; this.traliccio = { active: false, center: null, shape: 'square', radius: 0.3, height: 6.0, rotationY: 0, corners: [], pegs: [] };
+
+        this.hideStructure(this.pointA); this.hideStructure(this.pointB); this.hideStructure(this.pointC);
+        if(this.labelSegA) this.labelSegA.setAttribute('visible', 'false'); if(this.labelSegB) this.labelSegB.setAttribute('visible', 'false');
+        if(this.antennaTube1) this.antennaTube1.setAttribute('visible', 'false'); if(this.antennaTube2) this.antennaTube2.setAttribute('visible', 'false');
+        for(let i=0; i<this.maxRadials; i++) { if(this.radialPool[i]) this.radialPool[i].setAttribute('visible', 'false'); }
+        
+        if(this.mmanaContainerEl) this.mmanaContainerEl.innerHTML = ''; if(this.gwContainerEl) this.gwContainerEl.innerHTML = ''; if(this.traliccioContainerEl) this.traliccioContainerEl.innerHTML = '';
+
+        this.guyWiresData = []; this.gwState = 'OFF'; if(this.gwUI) this.gwUI.setAttribute('visible', false);
+        this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0;
+        this.antIdx = 0; this.bandIdx = 2; this.resetAntennaLengths();
+      },
+
       setupGlobalEventDelegation: function() {
         let scene = this.el.sceneEl; this.lastClickTime = 0; 
         scene.addEventListener('mousedown', (evt) => {
@@ -735,8 +827,27 @@
               else { txt.setAttribute('value', "PUNTAMENTO: TOCCO (LASER OFF)"); btn.setAttribute('color', '#5E35B1'); this.hitTestSource = null; } this.refreshAll();
           }
           else if (id === 'btn-start-traliccio') {
-              this.triggerGlobalReset(); this.traliccio.active = true; this.state = 'PLACE_TRALICCIO_CENTER';
+              this.resetCurrentAntenna(); this.traliccio.active = true; this.state = 'PLACE_TRALICCIO_CENTER';
               if(this.menuUI) this.menuUI.setAttribute('visible', false); this.updateMenuText();
+          }
+          else if (id === 'btn-scene-new') {
+              this.saveActiveToSlot();
+              this.resetCurrentAntenna();
+              this.currentSlot = this.sceneAntennas.length;
+              this.sceneAntennas.push({ state: null, clone: null });
+              this.refreshAll();
+          }
+          else if (id === 'btn-scene-prev') {
+              if (this.sceneAntennas.length <= 1) return;
+              this.saveActiveToSlot();
+              this.currentSlot = (this.currentSlot - 1 + this.sceneAntennas.length) % this.sceneAntennas.length;
+              this.loadActiveFromSlot();
+          }
+          else if (id === 'btn-scene-next') {
+              if (this.sceneAntennas.length <= 1) return;
+              this.saveActiveToSlot();
+              this.currentSlot = (this.currentSlot + 1) % this.sceneAntennas.length;
+              this.loadActiveFromSlot();
           }
           else if (id === 'btn-tral-shape') {
               this.traliccio.shape = this.traliccio.shape === 'square' ? 'triangle' : 'square';
@@ -756,8 +867,8 @@
           else if (id === 'btn-cal-set-pts') { if (!this.pointA.base) return; this.state = 'SET_CALIB_PT1'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.updateMenuText(); }
           else if (id === 'btn-cal-recover') { if (!this.calibLocal1 || !this.calibLocal2) return; this.state = 'AWAITING_CALIB_PT1'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.updateMenuText(); }
           else if (id === 'btn-ar-save') {
-              if (!this.pointA.base || !this.calibLocal1 || !this.calibLocal2) return;
-              let timeStr = new Date().getHours() + "-" + new Date().getMinutes() + "-" + new Date().getSeconds(); document.querySelector('#info-text').setAttribute('value', this.executeSave(this.antennaTypes[this.antIdx].toUpperCase() + "_" + this.bands[this.bandIdx] + "_" + timeStr));
+              if (!this.calibLocal1 || !this.calibLocal2) return;
+              let timeStr = new Date().getHours() + "-" + new Date().getMinutes() + "-" + new Date().getSeconds(); document.querySelector('#info-text').setAttribute('value', this.executeSave("SCENA_" + timeStr));
           }
           else if (id === 'btn-height-a') { if(!this.pointA.base) return; this.state = 'REPOSITION_HEIGHT_A'; this.currentHeight = this.pointA.top.y - this.pointA.base.y; this.setupVerticalPreviewMode(this.pointA.base); if(this.menuUI) this.menuUI.setAttribute('visible', false); }
           else if (id === 'btn-height-b') { if(!this.pointB.base) return; this.state = 'REPOSITION_HEIGHT_B'; this.currentHeight = this.pointB.top.y - this.pointB.base.y; this.setupVerticalPreviewMode(this.pointB.base); if(this.menuUI) this.menuUI.setAttribute('visible', false); }
@@ -767,8 +878,8 @@
           else if (id === 'btn-c-right') { this.pointC.percent = Math.min(0.98, mathRound(this.pointC.percent + 0.05)); this.refreshAll(); } 
           else if (id === 'btn-lw-vertex') { this.longwireVertex = this.longwireVertex === 'A' ? 'B' : 'A'; this.refreshAll(); } 
           else if (id === 'btn-mmana-model') { this.mmanaModelIdx = (this.mmanaModelIdx + 1) % this.mmanaModels.length; this.loadPreloadedMmanaModel(); this.refreshAll(); } 
-          else if (id === 'btn-txt-minus') { this.globalTextScale = Math.max(0.15, mathRound(this.globalTextScale - 0.05)); this.refreshAll(); } 
-          else if (id === 'btn-txt-plus') { this.globalTextScale = Math.min(1.2, mathRound(this.globalTextScale + 0.05)); this.refreshAll(); } 
+          else if (id === 'btn-txt-minus') { this.globalTextScale = Math.max(0.15, mathRound(this.globalTextScale - 0.05)); this.refreshAll(); this.updateHeightPreview(); } 
+          else if (id === 'btn-txt-plus') { this.globalTextScale = Math.min(1.2, mathRound(this.globalTextScale + 0.05)); this.refreshAll(); this.updateHeightPreview(); } 
           else if (id.startsWith('btn-ac') || id.startsWith('btn-cb') || id.startsWith('btn-lw') || id.startsWith('btn-rad')) {
              if(id==='btn-ac-m1') this.endFed_AC_Len = Math.max(0.1, mathRound(this.endFed_AC_Len - 1.0)); else if(id==='btn-ac-m01') this.endFed_AC_Len = Math.max(0.01, mathRound(this.endFed_AC_Len - 0.01)); else if(id==='btn-ac-p01') this.endFed_AC_Len = mathRound(this.endFed_AC_Len + 0.01); else if(id==='btn-ac-p1') this.endFed_AC_Len = mathRound(this.endFed_AC_Len + 1.0);
              else if(id==='btn-cb-m1') this.endFed_CB_Len = Math.max(0.1, mathRound(this.endFed_CB_Len - 1.0)); else if(id==='btn-cb-m01') this.endFed_CB_Len = Math.max(0.01, mathRound(this.endFed_CB_Len - 0.01)); else if(id==='btn-cb-p01') this.endFed_CB_Len = mathRound(this.endFed_CB_Len + 0.01); else if(id==='btn-cb-p1') this.endFed_CB_Len = mathRound(this.endFed_CB_Len + 1.0);
@@ -779,7 +890,18 @@
           }
           else if (id === 'btn-repo-a') { this.state = 'REPOSITION_GROUND_A'; if(this.menuUI) this.menuUI.setAttribute('visible', false); } 
           else if (id === 'btn-repo-b') { this.state = 'REPOSITION_GROUND_B'; if(this.menuUI) this.menuUI.setAttribute('visible', false); }
-          else if (id === 'btn-global-reset') { this.triggerGlobalReset(); }
+          else if (id === 'btn-global-reset') {
+             if(this.staticContainerEl) this.staticContainerEl.innerHTML = '';
+             this.sceneAntennas = [{ state: null, clone: null }];
+             this.currentSlot = 0;
+             this.resetCurrentAntenna();
+             if(this.worldPivotEl) { this.worldPivotEl.object3D.position.set(0,0,0); this.worldPivotEl.object3D.rotation.set(0,0,0); }
+             if(this.worldContentEl) { this.worldContentEl.object3D.position.set(0,0,0); this.worldContentEl.setAttribute('visible', 'true'); }
+             this.calibLocal1 = null; this.calibLocal2 = null;
+             if(this.diamondRef1) this.diamondRef1.setAttribute('visible', 'false'); if(this.diamondRef2) this.diamondRef2.setAttribute('visible', 'false');
+             localStorage.removeItem('antennaArProV21');
+             this.refreshAll();
+          }
         });
       },
 
@@ -801,29 +923,6 @@
         });
       },
 
-      triggerGlobalReset: function() {
-        this.pointA = { base: null, top: null, sphere: this.pointA.sphere, pole: this.pointA.pole, label: this.pointA.label };
-        this.pointB = { base: null, top: null, sphere: this.pointB.sphere, pole: this.pointB.pole, label: this.pointB.label };
-        this.pointC.top = null; this.traliccio = { active: false, center: null, shape: 'square', radius: 0.3, height: 6.0, rotationY: 0, corners: [], pegs: [] };
-
-        this.hideStructure(this.pointA); this.hideStructure(this.pointB); this.hideStructure(this.pointC);
-        if(this.labelSegA) this.labelSegA.setAttribute('visible', 'false'); if(this.labelSegB) this.labelSegB.setAttribute('visible', 'false');
-        if(this.antennaTube1) this.antennaTube1.setAttribute('visible', 'false'); if(this.antennaTube2) this.antennaTube2.setAttribute('visible', 'false');
-        for(let i=0; i<this.maxRadials; i++) { if(this.radialPool[i]) this.radialPool[i].setAttribute('visible', 'false'); }
-        
-        if(this.mmanaContainerEl) this.mmanaContainerEl.innerHTML = ''; if(this.gwContainerEl) this.gwContainerEl.innerHTML = ''; if(this.traliccioContainerEl) this.traliccioContainerEl.innerHTML = '';
-
-        if(this.worldPivotEl) { this.worldPivotEl.object3D.position.set(0,0,0); this.worldPivotEl.object3D.rotation.set(0,0,0); }
-        if(this.worldContentEl) { this.worldContentEl.object3D.position.set(0,0,0); this.worldContentEl.setAttribute('visible', 'true'); }
-        
-        this.guyWiresData = []; this.gwState = 'OFF'; if(this.gwUI) this.gwUI.setAttribute('visible', false);
-        this.calibLocal1 = null; this.calibLocal2 = null;
-        if(this.diamondRef1) this.diamondRef1.setAttribute('visible', 'false'); if(this.diamondRef2) this.diamondRef2.setAttribute('visible', 'false');
-
-        if(this.menuUI) this.menuUI.setAttribute('visible', false);
-        this.state = 'PLACE_GROUND_A'; this.antennaRotationY = 0; localStorage.removeItem('antennaArProV21');
-      },
-
       refreshAll: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); this.saveToStorage(); }
     });
   </script>
@@ -831,14 +930,14 @@
 <body>
   
   <div id="ui-2d-container">
-    <h3>DATABASE ANTENNE</h3>
+    <h3>DATABASE SCENE MULTIPLE</h3>
     <input type="text" id="save-name" placeholder="Es. Campo Scout">
-    <button class="action" onclick="window.saveAntennaToDB()">SALVA ANTENNA NEL VISORE</button>
+    <button class="action" onclick="window.saveAntennaToDB()">SALVA SCENA NEL VISORE</button>
     <hr>
-    <p>Carica un'antenna salvata:</p>
+    <p>Carica una scena salvata:</p>
     <select id="load-list"></select>
-    <button onclick="window.loadAntennaFromDB()">CARICA ANTENNA</button>
-    <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA ANTENNA</button>
+    <button onclick="window.loadAntennaFromDB()">CARICA SCENA</button>
+    <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA SCENA</button>
     <hr>
     <h3>MMANA-GAL (.maa)</h3>
     <input type="file" id="file-mmana" accept=".maa">
@@ -850,35 +949,42 @@
       <a-camera id="camera" position="0 1.6 0"></a-camera>
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
-        <a-entity id="menu-ui" visible="false" position="0 0.20 -0.4" rotation="-30 0 0">
-          <a-plane width="0.5" height="0.75" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
-          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.35 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
+        <a-entity id="menu-ui" visible="false" position="0 0.15 -0.45" rotation="-30 0 0">
+          <a-plane width="0.55" height="0.90" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-plane width="0.48" height="0.06" color="#2A2A2A" position="0 0.28 0.01">
+          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.42 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
+          
+          <a-plane width="0.52" height="0.06" color="#2A2A2A" position="0 0.35 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
           </a-plane>
 
-          <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#5E35B1" position="0 0.22 0.01">
+          <a-text value="GESTIONE SCENA (MULTI-ANTENNA)" position="0 0.29 0.01" align="center" scale="0.065 0.065 0.065" color="#00BFFF"></a-text>
+          <a-plane id="btn-scene-prev" class="clickable" btn-interaction width="0.12" height="0.03" color="#00838F" position="-0.18 0.25 0.01"><a-text value="< PREV" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
+          <a-plane id="btn-scene-new" class="clickable" btn-interaction width="0.22" height="0.03" color="#00C853" position="0 0.25 0.01"><a-text value="+ NUOVA ANTENNA" align="center" scale="0.06 0.06 0.06" color="#000"></a-text></a-plane>
+          <a-plane id="btn-scene-next" class="clickable" btn-interaction width="0.12" height="0.03" color="#00838F" position="0.18 0.25 0.01"><a-text value="NEXT >" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
+          <a-text id="txt-scene-info" value="ANTENNA 1 DI 1" position="0 0.21 0.01" align="center" scale="0.065 0.065 0.065" color="#FFF"></a-text>
+          
+          <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#5E35B1" position="0 0.16 0.01">
             <a-text id="txt-laser-toggle" value="PUNTAMENTO: TOCCO (LASER OFF)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.17 0.01">
+          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.11 0.01">
             <a-text value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
             <a-text id="txt-ant-val" value="-" align="center" scale="0.09 0.09 0.09" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.17 0.01">
+          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.11 0.01">
             <a-text value="BANDA RADIO:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#9FA8DA"></a-text>
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-entity id="sub-dipolo" position="0 0.10 0" visible="false">
+          <a-entity id="sub-dipolo" position="0 0.04 0" visible="false">
             <a-text value="SPOSTA ALIMENTAZIONE (PUNTO C)" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.02 0"></a-text>
             <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="-0.09 -0.015 0.01"><a-text value="<- Verso PUNTO A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="0.09 -0.015 0.01"><a-text value="Verso PUNTO B ->" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           </a-entity>
 
-          <a-entity id="sub-endfed" position="0 0.10 0" visible="false">
+          <a-entity id="sub-endfed" position="0 0.04 0" visible="false">
             <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
@@ -891,7 +997,7 @@
             <a-text id="txt-ef-values" value="AC: 10.00m | CB: 10.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-longwire" position="0 0.10 0" visible="false">
+          <a-entity id="sub-longwire" position="0 0.04 0" visible="false">
             <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#F57C00" position="-0.14 -0.01 0.01"><a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.055 0.055 0.055" position="0 0 0.005"></a-text></a-plane>
             <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -901,105 +1007,6 @@
             <a-text id="txt-lw-len-val" value="LUNGH: 20.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-verticale" position="0 0.10 0" visible="false">
+          <a-entity id="sub-verticale" position="0 0.04 0" visible="false">
             <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
-            <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#B71C1C" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-            <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#1B5E20" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-            <a-plane id="btn-rad-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-            <a-plane id="btn-rad-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="0.06 -0.01 0.01"><a-text value="-10c" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-rad-p01" class="clickable" btn-interaction width="0.04" height="0.025" color="#43A047" position="0.11 -0.01 0.01"><a-text value="+10c" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-            <a-plane id="btn-rad-p1" class="clickable" btn-interaction width="0.04" height="0.025" color="#1B5E20" position="0.16 -0.01 0.01"><a-text value="+1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-            <a-text id="txt-rad-num-val" value="RADIALI: 4" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="-0.13 -0.05 0"></a-text>
-            <a-text id="txt-rad-len-val" value="LUNGH R: 5.0m" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="0.12 -0.05 0"></a-text>
-          </a-entity>
-
-          <a-entity id="sub-mmana" position="0 0.10 0" visible="false">
-            <a-text value="MODELLI SELEZIONABILI IN REALTA AUMENTATA" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
-            <a-plane id="btn-mmana-model" class="clickable" btn-interaction width="0.32" height="0.03" color="#006064" position="0 -0.01 0.01">
-              <a-text id="txt-mmana-model-val" value="-" align="center" scale="0.065 0.065 0.065"></a-text>
-            </a-plane>
-          </a-entity>
-
-          <a-entity id="sub-traliccio-setup" position="0 0.10 0" visible="false">
-            <a-text value="CONFIGURAZIONE FORMA TRALICCIO" align="center" scale="0.075 0.075 0.075" color="#FF8F00" position="0 0.03 0"></a-text>
-            <a-plane id="btn-tral-shape" class="clickable" btn-interaction width="0.32" height="0.035" color="#004D40" position="0 -0.01 0.01">
-              <a-text id="txt-tral-shape" value="FORMA: QUADRATA" align="center" scale="0.065 0.065 0.065"></a-text>
-            </a-plane>
-          </a-entity>
-
-          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 0.01 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 0.01 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-
-          <a-text value="RIPOSIZIONAMENTO E MODIFICA ALTEZZE" position="0 -0.04 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
-          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.17 -0.08 0.01"><a-text value="SPOSTA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          <a-plane id="btn-height-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.05 -0.08 0.01"><a-text value="ALTEZZA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.05 -0.08 0.01"><a-text value="SPOSTA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          <a-plane id="btn-height-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.17 -0.08 0.01"><a-text value="ALTEZZA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-
-          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.45" height="0.025" color="#D32F2F" position="0 -0.12 0.01">
-            <a-text value="RESET COMPLETO (PALO BASE NORMALE)" align="center" scale="0.065 0.065 0.065"></a-text>
-          </a-plane>
-
-          <a-plane id="btn-start-traliccio" class="clickable" btn-interaction width="0.45" height="0.025" color="#FF8F00" position="0 -0.155 0.01">
-            <a-text value="[T] INIZIA CON TRALICCIO A" align="center" scale="0.065 0.065 0.065" color="#000000"></a-text>
-          </a-plane>
-
-          <a-text value="DATABASE E CALIBRAZIONE TOPOGRAFICA" position="0 -0.19 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
-          <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.23 0.01">
-            <a-text value="[1] IMPOSTA DIAMANTI (DA FARE PRIMA DI SALVARE)" align="center" scale="0.06 0.06 0.06"></a-text>
-          </a-plane>
-          <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.28 0.01">
-            <a-text value="[2] FORZA RICALIBRAZIONE (SE L'ANTENNA E' SLITTATA)" align="center" scale="0.06 0.06 0.06"></a-text>
-          </a-plane>
-
-          <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.45" height="0.035" color="#01579B" position="0 -0.33 0.01">
-            <a-text value="[+] SALVA ANTENNA NEL VISORE (NOME AUTOMATICO)" align="center" scale="0.055 0.055 0.055"></a-text>
-          </a-plane>
-        </a-entity>
-
-        <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
-          <a-plane width="0.48" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
-          <a-text value="MODALITA' TIRANTI (TASTO X PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
-          
-          <a-plane width="0.45" height="0.06" color="#3E2723" position="0 0.07 0.01">
-            <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text>
-          </a-plane>
-
-          <a-entity id="gw-page-main" visible="true">
-              <a-plane id="btn-gw-new-tral" class="clickable" btn-interaction width="0.38" height="0.035" color="#FF8F00" position="0 0.01 0.01">
-                <a-text value="[+] NUOVI TIRANTI TRALICCIO" align="center" scale="0.065 0.065 0.065" color="#000000"></a-text>
-              </a-plane>
-              <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 -0.04 0.01">
-                <a-text value="[+] NUOVO COLLARE SU PALO A" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
-              </a-plane>
-              <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 -0.09 0.01">
-                <a-text value="[+] NUOVO COLLARE SU PALO B" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
-              </a-plane>
-          </a-entity>
-
-          <a-entity id="gw-page-edit" visible="false">
-              <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 -0.04 0.01">
-                <a-text value="FINITO (DESELEZIONA E INDIETRO)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
-              </a-plane>
-          </a-entity>
-        </a-entity>
-      </a-entity>
-      
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg; far: 10">
-        <a-sphere id="touch-indicator" radius="0.015" material="color: #00FF00; shader: flat; transparent: true; opacity: 0.8" position="0 -0.07 0.02" visible="false"></a-sphere>
-      </a-entity>
-    </a-entity>
-
-    <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
-        <a-entity id="world-content" position="0 0 0" rotation="0 0 0">
-            <a-entity id="mmana-wires-container"></a-entity>
-            <a-entity id="guy-wires-container"></a-entity>
-            <a-entity id="vertical-cylinder" geometry="primitive: cylinder" material="color: #FFEB3B; shader: flat" visible="false"></a-entity>
-            <a-text id="height-text" value="" align="center" color="#00FF00" scale="0.35 0.35 0.35" visible="false" look-at-camera></a-text>
-        </a-entity>
-    </a-entity>
-
-    <a-entity ar-antenna-system></a-entity>
-  </a-scene>
-</body>
-</html>
+            <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#B71C1C" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065
