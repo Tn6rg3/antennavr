@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V24 - Multi-Scena & Traliccio Dinamico</title>
+  <title>Antenne AR Pro V25 - Multi-Scena Corretta & Radiali Smart</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -103,23 +103,38 @@
         this.gwState = 'OFF'; this.activeAnchor = null;
       },
 
-      saveActiveToSlot: function() {
-        let slot = this.sceneAntennas[this.currentSlot];
-        if (slot.clone && slot.clone.parentNode) slot.clone.parentNode.removeChild(slot.clone);
+      // Funzione vitale: Sincronizza le trasformazioni 3D (object3D) con gli attributi HTML prima di clonare
+      createCloneFromActive: function() {
+        let syncToDOM = (el) => {
+            if (!el || !el.object3D) return;
+            let p = el.object3D.position; el.setAttribute('position', `${p.x} ${p.y} ${p.z}`);
+            let r = el.object3D.rotation; el.setAttribute('rotation', `${r.x * 180 / Math.PI} ${r.y * 180 / Math.PI} ${r.z * 180 / Math.PI}`);
+            let s = el.object3D.scale; el.setAttribute('scale', `${s.x} ${s.y} ${s.z}`);
+            for (let i = 0; i < el.children.length; i++) syncToDOM(el.children[i]);
+        };
         
-        this.resetVerticalPreviewMode(); // Non salvare il cilindro giallo di costruzione nel clone
-        slot.state = this.packState();
-        
+        syncToDOM(this.activeAntennaContainerEl);
+
         let clone = this.activeAntennaContainerEl.cloneNode(true);
         clone.removeAttribute('id');
         clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
         clone.querySelectorAll('.clickable').forEach(el => { el.classList.remove('clickable'); el.removeAttribute('btn-interaction'); });
         
+        // Rimuove la UI di costruzione (cilindro giallo) dal clone
         let vCyl = clone.querySelector('[geometry="primitive: cylinder"][material*="#FFEB3B"]'); if(vCyl) vCyl.setAttribute('visible', 'false');
-        let hTxt = clone.querySelector('[look-at-camera]'); if(hTxt && hTxt.getAttribute('color') === '#00FF00') hTxt.setAttribute('visible', 'false');
         
-        slot.clone = clone;
-        this.staticContainerEl.appendChild(clone);
+        return clone;
+      },
+
+      saveActiveToSlot: function() {
+        let slot = this.sceneAntennas[this.currentSlot];
+        if (slot.clone && slot.clone.parentNode) slot.clone.parentNode.removeChild(slot.clone);
+        
+        this.resetVerticalPreviewMode();
+        slot.state = this.packState();
+        slot.clone = this.createCloneFromActive();
+        
+        this.staticContainerEl.appendChild(slot.clone);
       },
 
       loadActiveFromSlot: function() {
@@ -168,9 +183,7 @@
                 if(idx !== this.currentSlot && slot.state && slot.state.pointA && slot.state.pointA.base) {
                     this.unpackState(slot.state);
                     this.updateGeometriesAndDrawings();
-                    slot.clone = this.activeAntennaContainerEl.cloneNode(true);
-                    slot.clone.removeAttribute('id'); slot.clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-                    slot.clone.querySelectorAll('.clickable').forEach(el => { el.classList.remove('clickable'); el.removeAttribute('btn-interaction'); });
+                    slot.clone = this.createCloneFromActive();
                     this.staticContainerEl.appendChild(slot.clone);
                 }
             });
@@ -207,9 +220,7 @@
                     if(idx !== this.currentSlot && slot.state && slot.state.pointA && slot.state.pointA.base) {
                         this.unpackState(slot.state);
                         this.updateGeometriesAndDrawings();
-                        slot.clone = this.activeAntennaContainerEl.cloneNode(true);
-                        slot.clone.removeAttribute('id'); slot.clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-                        slot.clone.querySelectorAll('.clickable').forEach(el => { el.classList.remove('clickable'); el.removeAttribute('btn-interaction'); });
+                        slot.clone = this.createCloneFromActive();
                         this.staticContainerEl.appendChild(slot.clone);
                     }
                 });
@@ -294,7 +305,7 @@
         let makeLocalDiamond = (color) => {
             let d = document.createElement('a-octahedron'); d.setAttribute('radius', '0.06'); d.setAttribute('material', `color: ${color}; shader: flat; wireframe: true; opacity: 0.5`); d.setAttribute('visible', 'false');
             let core = document.createElement('a-octahedron'); core.setAttribute('radius', '0.03'); core.setAttribute('material', `color: ${color}; shader: flat; opacity: 0.8`); d.appendChild(core);
-            this.worldContentEl.appendChild(d); return d; // I diamanti restano legati al mondo intero
+            this.worldContentEl.appendChild(d); return d; 
         };
         this.diamondRef1 = makeLocalDiamond('#00BFFF'); this.diamondRef2 = makeLocalDiamond('#FF00FF');
         this.reticle = document.createElement('a-entity'); this.reticle.setAttribute('geometry', 'primitive: ring; radiusInner: 0.08; radiusOuter: 0.1; segmentsTheta: 6'); this.reticle.setAttribute('material', 'color: #00FF00; shader: flat; transparent: true; opacity: 0.9'); this.reticle.setAttribute('rotation', '-90 0 0'); this.reticle.setAttribute('visible', 'false'); this.el.sceneEl.appendChild(this.reticle); 
@@ -737,9 +748,14 @@
           this.renderPoleAndLabel(this.pointA, this.pointA.top, 'STILO VERTICALE');
           let h = this.pointA.top.y - this.pointA.base.y; this.antennaTube1.setAttribute('visible', 'true'); this.antennaTube1.setAttribute('geometry', `primitive: cylinder; radius: 0.018; height: ${h}`);
           this.antennaTube1.object3D.quaternion.identity(); this.antennaTube1.object3D.position.set(this.pointA.base.x, this.pointA.base.y + (h / 2), this.pointA.base.z);
+          
           let base = new THREE.Vector3(this.pointA.base.x, this.pointA.base.y + 0.002, this.pointA.base.z); let radRot = (this.antennaRotationY * Math.PI / 180);
+          
+          // NUOVA LOGICA: Se c'è un traliccio, i radiali a terra vengono nascosti automaticamente
+          let showRadials = !this.traliccio.active;
+
           for (let i = 0; i < this.maxRadials; i++) {
-            if (i < this.numRadials) {
+            if (i < this.numRadials && showRadials) {
               this.radialPool[i].setAttribute('visible', 'true'); this.radialPool[i].setAttribute('geometry', `primitive: cylinder; radius: 0.004; height: ${this.radialLen}`);
               let angle = ((i * 2 * Math.PI) / this.numRadials) + radRot; let targetVec = new THREE.Vector3( base.x + Math.cos(angle) * this.radialLen, base.y, base.z + Math.sin(angle) * this.radialLen );
               let midPoint = new THREE.Vector3().lerpVectors(base, targetVec, 0.5); this.radialPool[i].object3D.quaternion.identity(); this.radialPool[i].object3D.position.copy(midPoint); this.radialPool[i].object3D.lookAt(targetVec); this.radialPool[i].object3D.rotateX(Math.PI / 2);
@@ -963,7 +979,6 @@
           <a-plane id="btn-scene-new" class="clickable" btn-interaction width="0.22" height="0.03" color="#00C853" position="0 0.25 0.01"><a-text value="+ NUOVA ANTENNA" align="center" scale="0.06 0.06 0.06" color="#000"></a-text></a-plane>
           <a-plane id="btn-scene-next" class="clickable" btn-interaction width="0.12" height="0.03" color="#00838F" position="0.18 0.25 0.01"><a-text value="NEXT >" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
           <a-text id="txt-scene-info" value="ANTENNA 1 DI 1" position="0 0.21 0.01" align="center" scale="0.065 0.065 0.065" color="#FFF"></a-text>
-          
           <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#5E35B1" position="0 0.16 0.01">
             <a-text id="txt-laser-toggle" value="PUNTAMENTO: TOCCO (LASER OFF)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
           </a-plane>
