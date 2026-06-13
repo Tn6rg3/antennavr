@@ -669,20 +669,31 @@
       },
 
       renderSelectorBox: function(ant, container, isCurrent, idx) {
-          if (isCurrent) return; // Disegna box solo per le antenne inattive
+          if (isCurrent) return; // Non serve per l'antenna attualmente in uso
+          
+          // 1. LOGICA DI SCOMPARSA: Mostra i selettori SOLO quando il menu è aperto
+          let isMenuOpen = this.menuUI && (this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true);
+          if (!isMenuOpen) return; // Se il menu è chiuso, non disegna nulla (visuale pulita)
+
           let basePos = ant.traliccio.active ? ant.traliccio.center : ant.pointA.base;
           if (!basePos) return;
 
-          let hitBox = document.createElement('a-cylinder');
-          hitBox.setAttribute('position', `${basePos.x} ${basePos.y + 1.25} ${basePos.z}`);
-          hitBox.setAttribute('geometry', `primitive: cylinder; radius: 0.6; height: 2.5`);
-          hitBox.setAttribute('material', 'color: #FFEB3B; opacity: 0.15; transparent: true; shader: flat');
+          // 2. FORMA PICCOLA E NON INVADENTE: Usa un piccolo ottaedro (diamante) invece del cilindro
+          let hitBox = document.createElement('a-octahedron');
+          hitBox.setAttribute('position', `${basePos.x} ${basePos.y + 0.4} ${basePos.z}`);
+          hitBox.setAttribute('geometry', `primitive: octahedron; radius: 0.08`); // Raggio piccolissimo (8 cm)
+          hitBox.setAttribute('material', 'color: #FFEB3B; opacity: 0.9; shader: flat');
+          
+          // (Opzionale) lo fa ruotare su se stesso per renderlo visibile
+          hitBox.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
+          
           hitBox.classList.add('clickable', 'antenna-selector');
           hitBox.setAttribute('data-ant-idx', idx);
           hitBox.setAttribute('btn-interaction', '');
           container.appendChild(hitBox);
 
-          this.createLabel(`ANTENNA ${idx + 1}\nSPARA QUI PER MODIFICARE`, {x: basePos.x, y: basePos.y + 2.6, z: basePos.z}, '#FFEB3B', this.globalTextScale * 1.5, container);
+          // Testo rimpicciolito e abbassato
+          this.createLabel(`SELEZIONA\nANTENNA ${idx + 1}`, {x: basePos.x, y: basePos.y + 0.6, z: basePos.z}, '#FFEB3B', this.globalTextScale * 0.7, container);
       },
 
       renderAntenna: function(ant, container, isCurrent, idx) {
