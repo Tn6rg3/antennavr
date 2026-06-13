@@ -754,10 +754,18 @@
               let vecA = new THREE.Vector3(ant.pointA.top.x, ant.pointA.top.y, ant.pointA.top.z);
               let vecB = new THREE.Vector3(ant.pointB.top.x, ant.pointB.top.y, ant.pointB.top.z);
               let dirAB = new THREE.Vector3().subVectors(vecB, vecA).normalize(); let dirBA = new THREE.Vector3().subVectors(vecA, vecB).normalize();
+              
+              // Calcolo esatto del Punto C (Cima)
               let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, ant.pointC.percent);
               ant.pointC.top = vecC;
+              
+              // NUOVO: Calcolo esatto del Punto C (Base a terra) interpolando le basi A e B
+              let baseA = new THREE.Vector3(ant.pointA.base.x, ant.pointA.base.y, ant.pointA.base.z);
+              let baseB = new THREE.Vector3(ant.pointB.base.x, ant.pointB.base.y, ant.pointB.base.z);
+              let baseC = new THREE.Vector3().lerpVectors(baseA, baseB, ant.pointC.percent);
 
-              if (type !== 'Longwire') this.createPoleAndLabel(ant.pointC.top, null, 'CENTRO C', '#00E676', container);
+              // Passiamo 'baseC' invece di 'null'
+              if (type !== 'Longwire') this.createPoleAndLabel(ant.pointC.top, baseC, 'CENTRO C', '#00E676', container);wire') this.createPoleAndLabel(ant.pointC.top, null, 'CENTRO C', '#00E676', container);
 
               if (type === 'Dipolo') {
                   let antLen = this.getCalculatedLength(); 
