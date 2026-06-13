@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V29 - Data-Driven & Punto C Corretto</title>
+  <title>Antenne AR Pro V30 - Rimozione & Drag Tralicci</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -462,7 +462,26 @@
 
             if (this.current.state === 'PLACE_GROUND_A' || this.current.state === 'REPOSITION_GROUND_A') {
               let hitGround = this.getHitPoint(); if(!hitGround) return;
-              this.current.pointA.base = this.getLocalPoint(hitGround.point); this.current.state = this.current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A'; this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1; this.setupVerticalPreviewMode(this.current.pointA.base);
+              let newPoint = this.getLocalPoint(hitGround.point);
+              
+              // TRASCINAMENTO TRALICCIO INTELLIGENTE
+              if (this.current.state === 'REPOSITION_GROUND_A' && this.current.traliccio && this.current.traliccio.active) {
+                  let oldCenter = this.current.traliccio.center;
+                  let offset = { x: newPoint.x - oldCenter.x, y: newPoint.y - oldCenter.y, z: newPoint.z - oldCenter.z };
+                  
+                  this.current.traliccio.center = newPoint;
+                  this.current.pointA.base = { x: newPoint.x, y: newPoint.y + this.current.traliccio.height, z: newPoint.z };
+                  
+                  if(this.current.traliccio.pegs) {
+                      this.current.traliccio.pegs.forEach(p => { p.x += offset.x; p.y += offset.y; p.z += offset.z; });
+                  }
+              } else {
+                  this.current.pointA.base = newPoint;
+              }
+              
+              this.current.state = this.current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A'; 
+              this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1; 
+              this.setupVerticalPreviewMode(this.current.pointA.base);
             } 
             else if (this.current.state === 'PLACE_HEIGHT_A' || this.current.state === 'REPOSITION_HEIGHT_A') {
               this.current.pointA.top = { x: this.current.pointA.base.x, y: this.current.pointA.base.y + this.currentHeight, z: this.current.pointA.base.z }; this.resetVerticalPreviewMode();
@@ -559,7 +578,6 @@
           let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
           tube.setAttribute('position', `${mid.x} ${mid.y} ${mid.z}`);
           
-          // NUOVO CALCOLO DELLA ROTAZIONE: Usa coordinate puramente locali
           if (dist > 0.001) {
               let dir = new THREE.Vector3().subVectors(p2, p1).normalize();
               let quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
@@ -754,7 +772,6 @@
               let vecC = new THREE.Vector3().lerpVectors(vecA, vecB, ant.pointC.percent);
               ant.pointC.top = vecC;
 
-              // FIX Punto C Base - Sicurezza
               let baseC = null;
               if (ant.pointA.base && ant.pointB.base) {
                   let bA = new THREE.Vector3(ant.pointA.base.x, ant.pointA.base.y, ant.pointA.base.z);
@@ -838,6 +855,18 @@
           else if (id === 'btn-scene-next') {
               if (this.antennas.length <= 1) return;
               this.switchAntenna((this.activeAntIdx + 1) % this.antennas.length);
+          }
+          else if (id === 'btn-delete-antenna') {
+              if (this.antennas.length > 1) {
+                  this.antennas.splice(this.activeAntIdx, 1);
+                  this.activeAntIdx = Math.max(0, this.activeAntIdx - 1);
+                  this.current = this.antennas[this.activeAntIdx];
+              } else {
+                  this.antennas = [this.createEmptyAntenna()];
+                  this.activeAntIdx = 0;
+                  this.current = this.antennas[0];
+              }
+              this.refreshAll();
           }
           else if (id === 'btn-tral-shape') {
               this.current.traliccio.shape = this.current.traliccio.shape === 'square' ? 'triangle' : 'square';
@@ -953,28 +982,33 @@
           <a-plane id="btn-scene-prev" class="clickable" btn-interaction width="0.12" height="0.03" color="#00838F" position="-0.18 0.25 0.01"><a-text value="< PREV" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
           <a-plane id="btn-scene-new" class="clickable" btn-interaction width="0.22" height="0.03" color="#00C853" position="0 0.25 0.01"><a-text value="+ NUOVA ANTENNA" align="center" scale="0.06 0.06 0.06" color="#000"></a-text></a-plane>
           <a-plane id="btn-scene-next" class="clickable" btn-interaction width="0.12" height="0.03" color="#00838F" position="0.18 0.25 0.01"><a-text value="NEXT >" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-          <a-text id="txt-scene-info" value="ANTENNA 1 DI 1" position="0 0.21 0.01" align="center" scale="0.065 0.065 0.065" color="#FFF"></a-text>
-          <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#5E35B1" position="0 0.16 0.01">
+          
+          <a-plane id="btn-delete-antenna" class="clickable" btn-interaction width="0.25" height="0.025" color="#D32F2F" position="0 0.215 0.01">
+            <a-text value="[X] ELIMINA ANTENNA ATTIVA" align="center" scale="0.05 0.05 0.05" color="#FFFFFF"></a-text>
+          </a-plane>
+
+          <a-text id="txt-scene-info" value="ANTENNA 1 DI 1" position="0 0.18 0.01" align="center" scale="0.055 0.055 0.055" color="#FFF"></a-text>
+          <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#5E35B1" position="0 0.14 0.01">
             <a-text id="txt-laser-toggle" value="PUNTAMENTO: TOCCO (LASER OFF)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.11 0.01">
+          <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.09 0.01">
             <a-text value="TIPO ANTENNA:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#B0BEC5"></a-text>
             <a-text id="txt-ant-val" value="-" align="center" scale="0.09 0.09 0.09" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.11 0.01">
+          <a-plane id="btn-band" class="clickable" btn-interaction width="0.2" height="0.04" color="#1A237E" position="0.11 0.09 0.01">
             <a-text value="BANDA RADIO:" align="center" scale="0.065 0.065 0.065" position="0 0.008 0.005" color="#9FA8DA"></a-text>
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <a-entity id="sub-dipolo" position="0 0.04 0" visible="false">
+          <a-entity id="sub-dipolo" position="0 0.02 0" visible="false">
             <a-text value="SPOSTA ALIMENTAZIONE (PUNTO C)" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.02 0"></a-text>
             <a-plane id="btn-c-left" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="-0.09 -0.015 0.01"><a-text value="<- Verso PUNTO A" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-c-right" class="clickable" btn-interaction width="0.16" height="0.03" color="#004D40" position="0.09 -0.015 0.01"><a-text value="Verso PUNTO B ->" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
           </a-entity>
 
-          <a-entity id="sub-endfed" position="0 0.04 0" visible="false">
+          <a-entity id="sub-endfed" position="0 0.02 0" visible="false">
             <a-text value="REGOLAZIONE BRACCI INDIPENDENTI" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-ac-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="-0.21 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-ac-m01" class="clickable" btn-interaction width="0.04" height="0.025" color="#E53935" position="-0.16 -0.01 0.01"><a-text value="-1cm" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
@@ -987,7 +1021,7 @@
             <a-text id="txt-ef-values" value="AC: 10.00m | CB: 10.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-longwire" position="0 0.04 0" visible="false">
+          <a-entity id="sub-longwire" position="0 0.02 0" visible="false">
             <a-text value="MONOFILO LONGWIRE CONFIGURABILE" align="center" scale="0.07 0.07 0.07" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-lw-vertex" class="clickable" btn-interaction width="0.14" height="0.025" color="#F57C00" position="-0.14 -0.01 0.01"><a-text id="txt-lw-vertex-val" value="VERTICE: DA A" align="center" scale="0.055 0.055 0.055" position="0 0 0.005"></a-text></a-plane>
             <a-plane id="btn-lw-m1" class="clickable" btn-interaction width="0.04" height="0.025" color="#B71C1C" position="0.01 -0.01 0.01"><a-text value="-1m" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -997,7 +1031,7 @@
             <a-text id="txt-lw-len-val" value="LUNGH: 20.00m" align="center" scale="0.08 0.08 0.08" color="#FFEB3B" position="0 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-verticale" position="0 0.04 0" visible="false">
+          <a-entity id="sub-verticale" position="0 0.02 0" visible="false">
             <a-text value="SISTEMA DI RADIALI TERRESTRI (PASSO 10cm)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-rad-num-minus" class="clickable" btn-interaction width="0.05" height="0.025" color="#B71C1C" position="-0.16 -0.01 0.01"><a-text value="N -" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
             <a-plane id="btn-rad-num-plus" class="clickable" btn-interaction width="0.05" height="0.025" color="#1B5E20" position="-0.10 -0.01 0.01"><a-text value="N +" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
@@ -1009,46 +1043,46 @@
             <a-text id="txt-rad-len-val" value="LUNGH R: 5.0m" align="center" scale="0.075 0.075 0.075" color="#FFEB3B" position="0.12 -0.05 0"></a-text>
           </a-entity>
 
-          <a-entity id="sub-mmana" position="0 0.04 0" visible="false">
+          <a-entity id="sub-mmana" position="0 0.02 0" visible="false">
             <a-text value="MODELLI SELEZIONABILI IN REALTA AUMENTATA" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-mmana-model" class="clickable" btn-interaction width="0.32" height="0.03" color="#006064" position="0 -0.01 0.01">
               <a-text id="txt-mmana-model-val" value="-" align="center" scale="0.065 0.065 0.065"></a-text>
             </a-plane>
           </a-entity>
 
-          <a-entity id="sub-traliccio-setup" position="0 0.04 0" visible="false">
+          <a-entity id="sub-traliccio-setup" position="0 0.02 0" visible="false">
             <a-text value="CONFIGURAZIONE FORMA TRALICCIO" align="center" scale="0.075 0.075 0.075" color="#FF8F00" position="0 0.03 0"></a-text>
             <a-plane id="btn-tral-shape" class="clickable" btn-interaction width="0.32" height="0.035" color="#004D40" position="0 -0.01 0.01">
               <a-text id="txt-tral-shape" value="FORMA: QUADRATA" align="center" scale="0.065 0.065 0.065"></a-text>
             </a-plane>
           </a-entity>
 
-          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 -0.04 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
-          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 -0.04 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-txt-minus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="-0.06 -0.06 0.01"><a-text value="TESTO [-]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
+          <a-plane id="btn-txt-plus" class="clickable" btn-interaction width="0.1" height="0.022" color="#424242" position="0.06 -0.06 0.01"><a-text value="TESTO [+]" align="center" scale="0.065 0.065 0.065"></a-text></a-plane>
 
-          <a-text value="RIPOSIZIONAMENTO E MODIFICA ALTEZZE" position="0 -0.08 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
-          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.17 -0.12 0.01"><a-text value="SPOSTA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          <a-plane id="btn-height-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.05 -0.12 0.01"><a-text value="ALTEZZA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.05 -0.12 0.01"><a-text value="SPOSTA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
-          <a-plane id="btn-height-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.17 -0.12 0.01"><a-text value="ALTEZZA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-text value="RIPOSIZIONAMENTO E MODIFICA ALTEZZE" position="0 -0.10 0.01" align="center" scale="0.065 0.065 0.065" color="#FF1744"></a-text>
+          <a-plane id="btn-repo-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.17 -0.14 0.01"><a-text value="SPOSTA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-height-a" class="clickable" btn-interaction width="0.11" height="0.025" color="#C62828" position="-0.05 -0.14 0.01"><a-text value="ALTEZZA A" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-repo-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.05 -0.14 0.01"><a-text value="SPOSTA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
+          <a-plane id="btn-height-b" class="clickable" btn-interaction width="0.11" height="0.025" color="#1565C0" position="0.17 -0.14 0.01"><a-text value="ALTEZZA B" align="center" scale="0.055 0.055 0.055"></a-text></a-plane>
 
-          <a-plane id="btn-start-traliccio" class="clickable" btn-interaction width="0.45" height="0.025" color="#FF8F00" position="0 -0.16 0.01">
+          <a-plane id="btn-start-traliccio" class="clickable" btn-interaction width="0.45" height="0.025" color="#FF8F00" position="0 -0.18 0.01">
             <a-text value="[T] INIZIA CON TRALICCIO A" align="center" scale="0.065 0.065 0.065" color="#000000"></a-text>
           </a-plane>
 
-          <a-text value="DATABASE E CALIBRAZIONE TOPOGRAFICA" position="0 -0.21 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
-          <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.25 0.01">
+          <a-text value="DATABASE E CALIBRAZIONE TOPOGRAFICA" position="0 -0.23 0.01" align="center" scale="0.065 0.065 0.065" color="#00E676"></a-text>
+          <a-plane id="btn-cal-set-pts" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.27 0.01">
             <a-text value="[1] IMPOSTA DIAMANTI (DA FARE PRIMA DI SALVARE)" align="center" scale="0.06 0.06 0.06"></a-text>
           </a-plane>
-          <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.30 0.01">
+          <a-plane id="btn-cal-recover" class="clickable" btn-interaction width="0.45" height="0.035" color="#004D40" position="0 -0.32 0.01">
             <a-text value="[2] FORZA RICALIBRAZIONE (SE L'ANTENNA E' SLITTATA)" align="center" scale="0.06 0.06 0.06"></a-text>
           </a-plane>
 
-          <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.45" height="0.035" color="#01579B" position="0 -0.35 0.01">
+          <a-plane id="btn-ar-save" class="clickable" btn-interaction width="0.45" height="0.035" color="#01579B" position="0 -0.37 0.01">
             <a-text value="[+] SALVA SCENA NEL VISORE (NOME AUTOMATICO)" align="center" scale="0.055 0.055 0.055"></a-text>
           </a-plane>
 
-          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.45" height="0.025" color="#D32F2F" position="0 -0.40 0.01">
+          <a-plane id="btn-global-reset" class="clickable" btn-interaction width="0.45" height="0.025" color="#D32F2F" position="0 -0.42 0.01">
             <a-text value="RESET COMPLETO DI TUTTA LA SCENA" align="center" scale="0.065 0.065 0.065"></a-text>
           </a-plane>
         </a-entity>
