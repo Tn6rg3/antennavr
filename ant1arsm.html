@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V32 - Interpolazione Pendenze & Verticalità</title>
+  <title>Antenne AR Pro V33 - Quota Punto C Dinamica e Rilevabile</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -25,13 +25,30 @@
       } 
     });
     
+    // COMPONENTE CORRETTO: Ora rispetta l'opacità originale dell'oggetto
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
-        let el = this.el; let originalColor = el.getAttribute('material') ? el.getAttribute('material').color : '#FFFFFF';
-        el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
-        el.addEventListener('mouseleave', () => { el.setAttribute('material', 'opacity', 1.0); el.setAttribute('scale', '1 1 1'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
-        el.addEventListener('mousedown', () => { el.setAttribute('scale', '0.95 0.95 0.8'); el.setAttribute('material', 'color', '#00FFCC'); });
-        el.addEventListener('mouseup', () => { el.setAttribute('scale', '1 1 1'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
+        let el = this.el; 
+        let mat = el.getAttribute('material');
+        let originalColor = mat ? mat.color : '#FFFFFF';
+        let originalOpacity = mat && mat.opacity !== undefined ? mat.opacity : 1.0;
+        
+        el.addEventListener('mouseenter', () => { if(el.getAttribute('material')) el.setAttribute('material', 'opacity', 0.8); });
+        el.addEventListener('mouseleave', () => { 
+            if(el.getAttribute('material')) {
+                el.setAttribute('material', 'opacity', originalOpacity); 
+                el.setAttribute('material', 'color', originalColor);
+            }
+            el.setAttribute('scale', '1 1 1'); 
+        });
+        el.addEventListener('mousedown', () => { 
+            el.setAttribute('scale', '0.95 0.95 0.8'); 
+            if(el.getAttribute('material')) el.setAttribute('material', 'color', '#00FFCC'); 
+        });
+        el.addEventListener('mouseup', () => { 
+            el.setAttribute('scale', '1 1 1'); 
+            if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); 
+        });
       }
     });
 
@@ -77,7 +94,8 @@
       createEmptyAntenna: function() {
           return {
               state: 'PLACE_GROUND_A',
-              pointA: { base: null, top: null }, pointB: { base: null, top: null }, pointC: { percent: 0.5, top: null },
+              pointA: { base: null, top: null }, pointB: { base: null, top: null }, 
+              pointC: { percent: 0.5, top: null, base: null }, // Aggiunto contenitore base custom per Punto C
               traliccio: { active: false, center: null, shape: 'square', radius: 0.3, rotationY: 0, height: 6.0, corners: [], pegs: [] },
               antIdx: 0, bandIdx: 2,
               endFed_AC_Len: 10.0, endFed_CB_Len: 10.0, longwireLen: 20.0, longwireVertex: 'A',
@@ -235,12 +253,11 @@
         };
         this.diamondRef1 = makeLocalDiamond('#00BFFF'); this.diamondRef2 = makeLocalDiamond('#FF00FF');
         
-        // Reticolo Riscritto: il wrapper prende orientamento, il ring rimane piatto al suolo inclinato
         this.reticleWrapper = document.createElement('a-entity');
         this.reticle = document.createElement('a-entity'); 
         this.reticle.setAttribute('geometry', 'primitive: ring; radiusInner: 0.08; radiusOuter: 0.1; segmentsTheta: 6'); 
         this.reticle.setAttribute('material', 'color: #00FF00; shader: flat; transparent: true; opacity: 0.9'); 
-        this.reticle.setAttribute('rotation', '-90 0 0'); // Impone che l'anello si appiattisca sulla normale letta dall'hit-test
+        this.reticle.setAttribute('rotation', '-90 0 0'); 
         this.reticleWrapper.appendChild(this.reticle);
         this.el.sceneEl.appendChild(this.reticleWrapper);
         this.reticleWrapper.setAttribute('visible', 'false');
@@ -283,7 +300,7 @@
                     if (pose) {
                         let hitPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
                         this.targetReticlePos.copy(hitPos); 
-                        this.targetReticleQuat.copy(pose.transform.orientation); // Salva la normale del piano inclinato
+                        this.targetReticleQuat.copy(pose.transform.orientation); 
                         this.lastFloorY = hitPos.y; 
                         hitFound = true;
                     }
@@ -295,7 +312,7 @@
             }
             if (hitFound && this.reticleWrapper) { 
                 this.reticleWrapper.object3D.position.lerp(this.targetReticlePos, 0.25); 
-                this.reticleWrapper.object3D.quaternion.slerp(this.targetReticleQuat, 0.25); // Il cursore si adagia al piano inclinato!
+                this.reticleWrapper.object3D.quaternion.slerp(this.targetReticleQuat, 0.25); 
                 this.reticleWrapper.setAttribute('visible', 'true'); 
                 this.reticleValid = true; 
             } 
@@ -378,12 +395,35 @@
             let now = Date.now(); if (now - this.lastTriggerTime < 300) return; this.lastTriggerTime = now;
             let intersects = null; if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) intersects = this.raycasterEl.components.raycaster.intersectedEls;
             
+            // FASE DI RILETTURA TERRENO DEL PUNTO C
+            if (this.current.state === 'REPOSITION_GROUND_C') {
+                let hitGround = this.getHitPoint();
+                if(hitGround) {
+                    let localHit = this.getLocalPoint(hitGround.point);
+                    if (!this.current.pointC.base) this.current.pointC.base = {};
+                    this.current.pointC.base.y = localHit.y; // Salva la VERA quota misurata
+                    this.current.state = 'IDLE';
+                    if(this.menuUI) this.menuUI.setAttribute('visible', true);
+                    this.refreshAll();
+                }
+                return;
+            }
+
             if (intersects) {
-              // SELEZIONE LASER ANTENNA 
+              // SELEZIONE LASER ALTRO PALO (Cambio Antenna)
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
               if (hitSelector) {
                   let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx'));
                   this.switchAntenna(targetIdx);
+                  return;
+              }
+
+              // SELEZIONE PALO C (Per Modifica Quota)
+              let hitPoleC = intersects.find(el => el.id === 'point-c-hitbox');
+              if (hitPoleC) {
+                  this.current.state = 'REPOSITION_GROUND_C';
+                  if(this.menuUI) this.menuUI.setAttribute('visible', false);
+                  this.refreshAll();
                   return;
               }
 
@@ -410,7 +450,6 @@
                this.currentHeight = 0.1; this.current.state = 'PLACE_HEIGHT_A'; this.setupVerticalPreviewMode(this.current.pointA.base); this.refreshAll(); return;
             }
 
-            // GESTIONE TIRANTI TRALICCIO
             if (this.gwState === 'EDIT_TRALICCIO_PEGS') {
                 let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
                 if (hitPeg) {
@@ -484,13 +523,9 @@
               if (this.current.state === 'REPOSITION_GROUND_A' && this.current.traliccio && this.current.traliccio.active) {
                   let oldCenter = this.current.traliccio.center;
                   let offset = { x: newPoint.x - oldCenter.x, y: newPoint.y - oldCenter.y, z: newPoint.z - oldCenter.z };
-                  
                   this.current.traliccio.center = newPoint;
                   this.current.pointA.base = { x: newPoint.x, y: newPoint.y + this.current.traliccio.height, z: newPoint.z };
-                  
-                  if(this.current.traliccio.pegs) {
-                      this.current.traliccio.pegs.forEach(p => { p.x += offset.x; p.y += offset.y; p.z += offset.z; });
-                  }
+                  if(this.current.traliccio.pegs) { this.current.traliccio.pegs.forEach(p => { p.x += offset.x; p.y += offset.y; p.z += offset.z; }); }
               } else {
                   this.current.pointA.base = newPoint;
               }
@@ -535,7 +570,9 @@
 
         let infoTextStr = ""; let poleAH = (this.current.pointA && this.current.pointA.top && this.current.pointA.base) ? (this.current.pointA.top.y - this.current.pointA.base.y) : 0;
 
-        if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = "Punta a terra e premi grilletto per\nil CENTRO del Traliccio."; }
+        // Testo istruzioni per il Rilevamento Punto C
+        if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = "Punta il laser a terra sotto al Centro C\ne premi il grilletto per fissare la quota."; }
+        else if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = "Punta a terra e premi grilletto per\nil CENTRO del Traliccio."; }
         else if (isTraliccioSetup) { infoTextStr = "JOYSTICK SX: Ruota | JOYSTICK DX: Misure\nGRILLETTO: Conferma forma e dimensioni"; let txtTralShape = document.querySelector('#txt-tral-shape'); if(txtTralShape && this.current.traliccio) txtTralShape.setAttribute('value', `FORMA: ${this.current.traliccio.shape === 'square' ? 'QUADRATA' : 'TRIANGOLARE'}`); }
         else if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') { infoTextStr = "JOYSTICK DX: Alza o abbassa il traliccio\nGRILLETTO: Conferma altezza traliccio."; }
         else if (this.current.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE: L'antenna è agganciata al controller.\nPosiziona il Diamante 1 sul VERO PUNTO 1."; }
@@ -551,7 +588,6 @@
         let infoEl = document.querySelector('#info-text'); if(infoEl) infoEl.setAttribute('value', infoTextStr);
       },
 
-      // PURE RENDER ENGINE HELPERS
       createLabel: function(text, pos, color, scale, container) {
           let label = document.createElement('a-text');
           label.setAttribute('value', text);
@@ -718,7 +754,6 @@
 
       renderSelectorBox: function(ant, container, isCurrent, idx) {
           if (isCurrent) return; 
-          
           let isMenuOpen = this.menuUI && (this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true);
           if (!isMenuOpen) return;
 
@@ -790,17 +825,44 @@
 
               let baseC = null;
               if (ant.pointA.base && ant.pointB.base) {
-                  // FIX Punto C Base - Usa L'INTERPOLAZIONE GEOMETRICA PERFETTA DELLA PENDENZA
+                  // DEFAULT: Altezza Minima tra i due punti
                   let bA_Y = (ant.traliccio && ant.traliccio.active && ant.traliccio.center) ? ant.traliccio.center.y : ant.pointA.base.y;
                   let bB_Y = ant.pointB.base.y;
+                  let calcY = Math.min(bA_Y, bB_Y);
+                  
+                  // CUSTOM Y: Se l'utente l'ha fissata col laser, usa quella
+                  if (ant.pointC.base && ant.pointC.base.y !== undefined) {
+                      calcY = ant.pointC.base.y;
+                  }
+
                   let bA = new THREE.Vector3(ant.pointA.base.x, bA_Y, ant.pointA.base.z);
                   let bB = new THREE.Vector3(ant.pointB.base.x, bB_Y, ant.pointB.base.z);
                   
-                  // Calcola il punto baseC usando un puro lerp. Seguirà perfettamente il pendio/dislivello tra A e B.
                   baseC = new THREE.Vector3().lerpVectors(bA, bB, ant.pointC.percent);
+                  baseC.y = calcY;
               }
 
-              if (type !== 'Longwire') this.createPoleAndLabel(ant.pointC.top, baseC, 'CENTRO C', '#00E676', container);
+              if (type !== 'Longwire') {
+                  this.createPoleAndLabel(ant.pointC.top, baseC, 'CENTRO C', '#00E676', container);
+
+                  // CILINDRO INTERATTIVO PER IL PUNTO C
+                  if (ant.pointC.top && baseC) {
+                      let h = ant.pointC.top.y - baseC.y;
+                      let midY = baseC.y + (h / 2);
+                      let isMenuOpen = this.menuUI && (this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true);
+                      
+                      if (isMenuOpen && isCurrent && ant.state === 'IDLE') {
+                          let hitBox = document.createElement('a-cylinder');
+                          hitBox.setAttribute('geometry', `primitive: cylinder; radius: 0.2; height: ${Math.max(0.1, h)}`);
+                          hitBox.setAttribute('material', 'color: #00E676; transparent: true; opacity: 0.15; shader: flat');
+                          hitBox.setAttribute('position', `${ant.pointC.top.x} ${midY} ${ant.pointC.top.z}`);
+                          hitBox.setAttribute('id', 'point-c-hitbox');
+                          hitBox.classList.add('clickable');
+                          hitBox.setAttribute('btn-interaction', '');
+                          container.appendChild(hitBox);
+                      }
+                  }
+              }
 
               if (type === 'Dipolo') {
                   let antLen = this.getCalculatedLength(); 
@@ -857,6 +919,12 @@
               this.laserMode = !this.laserMode; let txt = document.querySelector('#txt-laser-toggle'); let btn = document.querySelector('#btn-laser-toggle');
               if (this.laserMode) { txt.setAttribute('value', "PUNTAMENTO: MISTO (VISORE + JOYSTICK)"); btn.setAttribute('color', '#D81B60'); } 
               else { txt.setAttribute('value', "PUNTAMENTO: TOCCO (LASER OFF)"); btn.setAttribute('color', '#5E35B1'); this.hitTestSource = null; } this.refreshAll();
+          }
+          // CLICK SUL CILINDRO DEL PUNTO C
+          else if (id === 'point-c-hitbox') {
+              this.current.state = 'REPOSITION_GROUND_C';
+              if(this.menuUI) this.menuUI.setAttribute('visible', false);
+              this.refreshAll();
           }
           else if (id === 'btn-start-traliccio') {
               this.current = this.createEmptyAntenna(); this.antennas[this.activeAntIdx] = this.current;
@@ -1136,7 +1204,7 @@
         </a-entity>
       </a-entity>
       
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector; far: 10">
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector, #point-c-hitbox; far: 10">
         <a-sphere id="touch-indicator" radius="0.015" material="color: #00FF00; shader: flat; transparent: true; opacity: 0.8" position="0 -0.07 0.02" visible="false"></a-sphere>
       </a-entity>
     </a-entity>
