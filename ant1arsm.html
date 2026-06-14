@@ -441,26 +441,41 @@
             }
 
             if (intersects) {
-              let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
-              if (hitSelector) {
-                  let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx'));
-                  this.switchAntenna(targetIdx);
-                  return;
-              }
+                // Filtriamo via tutti gli elementi invisibili o contenuti in menu invisibili
+                let visibleIntersects = intersects.filter(el => {
+                    let isHidden = false;
+                    let current = el;
+                    while (current) {
+                        if (current.getAttribute && (current.getAttribute('visible') === false || current.getAttribute('visible') === 'false')) {
+                            isHidden = true; break;
+                        }
+                        current = current.parentElement;
+                    }
+                    return !isHidden;
+                });
 
-              let hitPoleC = intersects.find(el => el.id === 'point-c-hitbox');
-              if (hitPoleC) {
-                  this.current.state = 'REPOSITION_GROUND_C';
-                  if(this.menuUI) this.menuUI.setAttribute('visible', false);
-                  this.refreshAll();
-                  return;
-              }
+                if (visibleIntersects.length > 0) {
+                    let hitSelector = visibleIntersects.find(el => el.classList && el.classList.contains('antenna-selector'));
+                    if (hitSelector) {
+                        let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx'));
+                        this.switchAntenna(targetIdx);
+                        return;
+                    }
 
-              for (let i = 0; i < intersects.length; i++) {
-                let el = intersects[i];
-                if (el.classList && el.classList.contains('clickable') && !el.classList.contains('gw-collar') && !el.classList.contains('gw-peg')) return;
-                if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) return;
-              }
+                    let hitPoleC = visibleIntersects.find(el => el.id === 'point-c-hitbox');
+                    if (hitPoleC) {
+                        this.current.state = 'REPOSITION_GROUND_C';
+                        if(this.menuUI) this.menuUI.setAttribute('visible', false);
+                        this.refreshAll();
+                        return;
+                    }
+
+                    for (let i = 0; i < visibleIntersects.length; i++) {
+                        let el = visibleIntersects[i];
+                        if (el.classList && el.classList.contains('clickable') && !el.classList.contains('gw-collar') && !el.classList.contains('gw-peg')) return;
+                        if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) return;
+                    }
+                }
             }
 
             if (this.current.state === 'PLACE_TRALICCIO_CENTER') {
