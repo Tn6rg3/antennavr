@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V33 - Quota Punto C Dinamica e Rilevabile</title>
+  <title>Antenne AR Pro V35 - Disegno Real-Time & C-Point Smart</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -25,7 +25,6 @@
       } 
     });
     
-    // COMPONENTE CORRETTO: Ora rispetta l'opacità originale dell'oggetto
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el; 
@@ -94,8 +93,7 @@
       createEmptyAntenna: function() {
           return {
               state: 'PLACE_GROUND_A',
-              pointA: { base: null, top: null }, pointB: { base: null, top: null }, 
-              pointC: { percent: 0.5, top: null, base: null }, // Aggiunto contenitore base custom per Punto C
+              pointA: { base: null, top: null }, pointB: { base: null, top: null }, pointC: { percent: 0.5, top: null, base: null },
               traliccio: { active: false, center: null, shape: 'square', radius: 0.3, rotationY: 0, height: 6.0, corners: [], pegs: [] },
               antIdx: 0, bandIdx: 2,
               endFed_AC_Len: 10.0, endFed_CB_Len: 10.0, longwireLen: 20.0, longwireVertex: 'A',
@@ -228,17 +226,49 @@
         this.toggleButton('#btn-gw-new-a', isMain && this.current.pointA.top !== null);
         this.toggleButton('#btn-gw-new-b', isMain && this.current.pointB.top !== null);
         this.toggleButton('#btn-gw-done', isAnyEdit);
+        this.toggleButton('#btn-gw-delete-collar', isAnyEdit);
 
         let txtEl = document.querySelector('#txt-gw-status');
         if (txtEl) {
-            if (isMain) txtEl.setAttribute('value', 'PUNTA IL LASER SU CORNICE/COLLARE O CREA NUOVO');
-            if (isEditCollar) txtEl.setAttribute('value', 'JOYSTICK Y: CAMBIA ALTEZZA CORNICE\nGRILLETTO: CONFERMA');
-            if (this.gwState === 'EDIT_PEGS') txtEl.setAttribute('value', 'JOYSTICK Y: ALTEZZA | GRILLETTO A TERRA: PICCHETTO\nLASER SU PICCHETTO O COLLARE PER ELIMINARE');
+            if (isMain) txtEl.setAttribute('value', 'SELEZIONA DALLA LISTA QUI SOTTO O CREA NUOVO');
+            if (isEditCollar) txtEl.setAttribute('value', 'JOYSTICK Y: CAMBIA ALTEZZA CORNICE\nGRILLETTO: CONFERMA ALTEZZA');
+            if (this.gwState === 'EDIT_PEGS') txtEl.setAttribute('value', 'JOYSTICK Y: ALTEZZA | GRILLETTO A TERRA: PICCHETTO\nLASER SU PICCHETTO PER ELIMINARE');
             if (this.gwState === 'EDIT_TRALICCIO_PEGS') {
                 let req = this.current.traliccio.shape === 'square' ? 4 : 3; let c = this.current.traliccio.pegs ? this.current.traliccio.pegs.length : 0;
-                txtEl.setAttribute('value', `PIAZZAMENTO PICCHETTI CONDIVISI\nTERRA: ${c} su ${req} | GRILLETTO A TERRA: PIAZZA\nLASER SU PICCHETTO O CORNICE: ELIMINA`);
+                if (c < req) {
+                    txtEl.setAttribute('value', `PIAZZAMENTO PICCHETTI\nTERRA: ${c} su ${req} | GRILLETTO A TERRA: PIAZZA\nLASER SU PICCHETTO PER ELIMINARE`);
+                } else {
+                    txtEl.setAttribute('value', `PICCHETTI COMPLETATI (${req}/${req})\nLASER SU PICCHETTO PER ELIMINARLO\nPREMI FINITO PER TORNARE AL MENU`);
+                }
             }
         }
+
+        let listContainer = document.querySelector('#gw-list-container');
+        if (listContainer) {
+            listContainer.innerHTML = '';
+            if (isMain && this.current && this.current.guyWiresData) {
+                this.current.guyWiresData.forEach((anchor, idx) => {
+                    let btn = document.createElement('a-plane');
+                    btn.setAttribute('width', '0.40');
+                    btn.setAttribute('height', '0.035');
+                    btn.setAttribute('color', '#455A64');
+                    btn.setAttribute('position', `0 ${-idx * 0.045} 0`);
+                    btn.classList.add('clickable', 'gw-list-btn');
+                    btn.setAttribute('btn-interaction', '');
+                    btn.setAttribute('data-idx', idx);
+                    
+                    let lbl = document.createElement('a-text');
+                    let typeStr = anchor.type === 'traliccio' ? 'TRALICCIO' : `PALO ${anchor.pole}`;
+                    lbl.setAttribute('value', `${idx+1}. MODIFICA COLLARE ${typeStr}`);
+                    lbl.setAttribute('align', 'center');
+                    lbl.setAttribute('scale', '0.06 0.06 0.06');
+                    btn.appendChild(lbl);
+                    
+                    listContainer.appendChild(btn);
+                });
+            }
+        }
+
         this.refreshRaycaster();
       },
 
@@ -383,9 +413,10 @@
         if (!this.current.pointA.base && !this.current.pointB.base) return;
         let basePos = this.current.state.includes('_A') ? this.current.pointA.base : this.current.pointB.base;
         if (!basePos) return;
-        this.verticalCylinder.setAttribute('position', `${basePos.x} ${basePos.y + (this.currentHeight / 2)} ${basePos.z}`);
-        this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${this.currentHeight}`);
-        this.heightText.setAttribute('position', `${basePos.x} ${basePos.y + this.currentHeight + 0.2} ${basePos.z}`);
+        let safeHeight = Math.max(0.01, this.currentHeight);
+        this.verticalCylinder.setAttribute('position', `${basePos.x} ${basePos.y + (safeHeight / 2)} ${basePos.z}`);
+        this.verticalCylinder.setAttribute('geometry', `primitive: cylinder; radius: 0.01; height: ${safeHeight}`);
+        this.heightText.setAttribute('position', `${basePos.x} ${basePos.y + safeHeight + 0.2} ${basePos.z}`);
         this.heightText.setAttribute('scale', `${this.globalTextScale} ${this.globalTextScale} ${this.globalTextScale}`);
         this.heightText.setAttribute('value', `${this.currentHeight.toFixed(1)}m`);
       },
@@ -395,13 +426,12 @@
             let now = Date.now(); if (now - this.lastTriggerTime < 300) return; this.lastTriggerTime = now;
             let intersects = null; if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) intersects = this.raycasterEl.components.raycaster.intersectedEls;
             
-            // FASE DI RILETTURA TERRENO DEL PUNTO C
             if (this.current.state === 'REPOSITION_GROUND_C') {
                 let hitGround = this.getHitPoint();
                 if(hitGround) {
                     let localHit = this.getLocalPoint(hitGround.point);
                     if (!this.current.pointC.base) this.current.pointC.base = {};
-                    this.current.pointC.base.y = localHit.y; // Salva la VERA quota misurata
+                    this.current.pointC.base.y = localHit.y; 
                     this.current.state = 'IDLE';
                     if(this.menuUI) this.menuUI.setAttribute('visible', true);
                     this.refreshAll();
@@ -410,7 +440,6 @@
             }
 
             if (intersects) {
-              // SELEZIONE LASER ALTRO PALO (Cambio Antenna)
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
               if (hitSelector) {
                   let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx'));
@@ -418,7 +447,6 @@
                   return;
               }
 
-              // SELEZIONE PALO C (Per Modifica Quota)
               let hitPoleC = intersects.find(el => el.id === 'point-c-hitbox');
               if (hitPoleC) {
                   this.current.state = 'REPOSITION_GROUND_C';
@@ -533,17 +561,36 @@
               this.current.state = this.current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A'; 
               this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1; 
               this.setupVerticalPreviewMode(this.current.pointA.base);
+              this.refreshAll();
+              return;
             } 
             else if (this.current.state === 'PLACE_HEIGHT_A' || this.current.state === 'REPOSITION_HEIGHT_A') {
               this.current.pointA.top = { x: this.current.pointA.base.x, y: this.current.pointA.base.y + this.currentHeight, z: this.current.pointA.base.z }; this.resetVerticalPreviewMode();
-              if(this.current.state === 'REPOSITION_HEIGHT_A' || type === 'Verticale' || type === 'MMANA-GAL') { this.current.state = 'IDLE'; if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll(); } else { this.current.state = 'PLACE_GROUND_B'; }
+              if(this.current.state === 'REPOSITION_HEIGHT_A' || type === 'Verticale' || type === 'MMANA-GAL') { 
+                  this.current.state = 'IDLE'; 
+                  if(this.menuUI) this.menuUI.setAttribute('visible', true); 
+              } else { 
+                  this.current.state = 'PLACE_GROUND_B'; 
+              }
+              this.refreshAll();
+              return;
             } 
             else if (this.current.state === 'PLACE_GROUND_B' || this.current.state === 'REPOSITION_GROUND_B') {
               let hitGround = this.getHitPoint(); if(!hitGround) return;
-              this.current.pointB.base = this.getLocalPoint(hitGround.point); this.current.state = this.current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B'; this.currentHeight = 0.1; this.setupVerticalPreviewMode(this.current.pointB.base);
+              this.current.pointB.base = this.getLocalPoint(hitGround.point); 
+              this.current.state = this.current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B'; 
+              this.currentHeight = 0.1; 
+              this.setupVerticalPreviewMode(this.current.pointB.base);
+              this.refreshAll();
+              return;
             } 
             else if (this.current.state === 'PLACE_HEIGHT_B' || this.current.state === 'REPOSITION_HEIGHT_B') {
-              this.current.pointB.top = { x: this.current.pointB.base.x, y: this.current.pointB.base.y + this.currentHeight, z: this.current.pointB.base.z }; this.resetVerticalPreviewMode(); this.current.state = 'IDLE'; if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll(); 
+              this.current.pointB.top = { x: this.current.pointB.base.x, y: this.current.pointB.base.y + this.currentHeight, z: this.current.pointB.base.z }; 
+              this.resetVerticalPreviewMode(); 
+              this.current.state = 'IDLE'; 
+              if(this.menuUI) this.menuUI.setAttribute('visible', true); 
+              this.refreshAll(); 
+              return;
             }
         } catch(e) { console.error("Errore onTriggerDown:", e); }
       },
@@ -570,7 +617,6 @@
 
         let infoTextStr = ""; let poleAH = (this.current.pointA && this.current.pointA.top && this.current.pointA.base) ? (this.current.pointA.top.y - this.current.pointA.base.y) : 0;
 
-        // Testo istruzioni per il Rilevamento Punto C
         if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = "Punta il laser a terra sotto al Centro C\ne premi il grilletto per fissare la quota."; }
         else if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = "Punta a terra e premi grilletto per\nil CENTRO del Traliccio."; }
         else if (isTraliccioSetup) { infoTextStr = "JOYSTICK SX: Ruota | JOYSTICK DX: Misure\nGRILLETTO: Conferma forma e dimensioni"; let txtTralShape = document.querySelector('#txt-tral-shape'); if(txtTralShape && this.current.traliccio) txtTralShape.setAttribute('value', `FORMA: ${this.current.traliccio.shape === 'square' ? 'QUADRATA' : 'TRIANGOLARE'}`); }
@@ -613,7 +659,7 @@
           let midY = baseH + (actualHeight / 2);
           
           let pole = document.createElement('a-cylinder');
-          pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${actualHeight}`);
+          pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${Math.max(0.01, actualHeight)}`);
           pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat');
           pole.setAttribute('position', `${topPos.x} ${midY} ${topPos.z}`);
           container.appendChild(pole);
@@ -624,7 +670,7 @@
       createLineTube: function(p1, p2, radius, materialStr, container) {
           let tube = document.createElement('a-cylinder');
           let dist = p1.distanceTo(p2);
-          tube.setAttribute('geometry', `primitive: cylinder; radius: ${radius}; height: ${dist}`);
+          tube.setAttribute('geometry', `primitive: cylinder; radius: ${radius}; height: ${Math.max(0.001, dist)}`);
           tube.setAttribute('material', materialStr);
           
           let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
@@ -784,8 +830,14 @@
 
           let type = this.antennaTypes[ant.antIdx];
 
+          // 1. SEMPRE DISEGNAMO IL PALO A (Se esiste in memoria)
+          let lblA = type === 'Verticale' ? 'STILO VERTICALE' : (type === 'MMANA-GAL' ? 'PILONE MMANA' : 'PUNTO A');
+          this.createPoleAndLabel(ant.pointA.top, ant.pointA.base, lblA, '#FF1744', container);
+          
+          this.renderSelectorBox(ant, container, isCurrent, idx);
+
+          // 2. DISEGNO SPECIFICO IN BASE AL TIPO
           if (type === 'Verticale') {
-              this.createPoleAndLabel(ant.pointA.top, ant.pointA.base, 'STILO VERTICALE', '#FF1744', container);
               let h = ant.pointA.top.y - ant.pointA.base.y;
               let base = new THREE.Vector3(ant.pointA.base.x, ant.pointA.base.y + 0.002, ant.pointA.base.z);
               let top = new THREE.Vector3(ant.pointA.base.x, ant.pointA.base.y + h, ant.pointA.base.z);
@@ -801,7 +853,6 @@
               }
           }
           else if (type === 'MMANA-GAL') {
-              this.createPoleAndLabel(ant.pointA.top, ant.pointA.base, 'PILONE MMANA', '#FF1744', container);
               if (ant.mmanaWires && ant.mmanaWires.length > 0) {
                   let mmanaGroup = document.createElement('a-entity');
                   mmanaGroup.setAttribute('position', `${ant.pointA.top.x} ${ant.pointA.top.y} ${ant.pointA.top.z}`);
@@ -814,7 +865,6 @@
               }
           }
           else if (ant.pointB.top) {
-              this.createPoleAndLabel(ant.pointA.top, ant.pointA.base, 'PUNTO A', '#FF1744', container);
               this.createPoleAndLabel(ant.pointB.top, ant.pointB.base, 'PUNTO B', '#2979FF', container);
               
               let vecA = new THREE.Vector3(ant.pointA.top.x, ant.pointA.top.y, ant.pointA.top.z);
@@ -825,14 +875,12 @@
 
               let baseC = null;
               if (ant.pointA.base && ant.pointB.base) {
-                  // DEFAULT: Altezza Minima tra i due punti
                   let bA_Y = (ant.traliccio && ant.traliccio.active && ant.traliccio.center) ? ant.traliccio.center.y : ant.pointA.base.y;
                   let bB_Y = ant.pointB.base.y;
-                  let calcY = Math.min(bA_Y, bB_Y);
+                  let calcY = Math.min(bA_Y, bB_Y); // Quota di default
                   
-                  // CUSTOM Y: Se l'utente l'ha fissata col laser, usa quella
                   if (ant.pointC.base && ant.pointC.base.y !== undefined) {
-                      calcY = ant.pointC.base.y;
+                      calcY = ant.pointC.base.y; // Quota reale
                   }
 
                   let bA = new THREE.Vector3(ant.pointA.base.x, bA_Y, ant.pointA.base.z);
@@ -845,7 +893,6 @@
               if (type !== 'Longwire') {
                   this.createPoleAndLabel(ant.pointC.top, baseC, 'CENTRO C', '#00E676', container);
 
-                  // CILINDRO INTERATTIVO PER IL PUNTO C
                   if (ant.pointC.top && baseC) {
                       let h = ant.pointC.top.y - baseC.y;
                       let midY = baseC.y + (h / 2);
@@ -853,7 +900,7 @@
                       
                       if (isMenuOpen && isCurrent && ant.state === 'IDLE') {
                           let hitBox = document.createElement('a-cylinder');
-                          hitBox.setAttribute('geometry', `primitive: cylinder; radius: 0.2; height: ${Math.max(0.1, h)}`);
+                          hitBox.setAttribute('geometry', `primitive: cylinder; radius: 0.2; height: ${Math.max(0.01, h)}`);
                           hitBox.setAttribute('material', 'color: #00E676; transparent: true; opacity: 0.15; shader: flat');
                           hitBox.setAttribute('position', `${ant.pointC.top.x} ${midY} ${ant.pointC.top.z}`);
                           hitBox.setAttribute('id', 'point-c-hitbox');
@@ -885,8 +932,6 @@
                   this.createLabel(`LUNGH. BRACCIO: ${ant.longwireLen.toFixed(2)}m\nDIST. PALO: ${extLW.distanceTo(targetVec).toFixed(2)}m`, new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5), 'yellow', this.globalTextScale, container);
               }
           }
-
-          this.renderSelectorBox(ant, container, isCurrent, idx);
       },
 
       updateGeometriesAndDrawings: function() {
@@ -919,12 +964,6 @@
               this.laserMode = !this.laserMode; let txt = document.querySelector('#txt-laser-toggle'); let btn = document.querySelector('#btn-laser-toggle');
               if (this.laserMode) { txt.setAttribute('value', "PUNTAMENTO: MISTO (VISORE + JOYSTICK)"); btn.setAttribute('color', '#D81B60'); } 
               else { txt.setAttribute('value', "PUNTAMENTO: TOCCO (LASER OFF)"); btn.setAttribute('color', '#5E35B1'); this.hitTestSource = null; } this.refreshAll();
-          }
-          // CLICK SUL CILINDRO DEL PUNTO C
-          else if (id === 'point-c-hitbox') {
-              this.current.state = 'REPOSITION_GROUND_C';
-              if(this.menuUI) this.menuUI.setAttribute('visible', false);
-              this.refreshAll();
           }
           else if (id === 'btn-start-traliccio') {
               this.current = this.createEmptyAntenna(); this.antennas[this.activeAntIdx] = this.current;
@@ -960,6 +999,28 @@
           else if (id === 'btn-tral-shape') {
               this.current.traliccio.shape = this.current.traliccio.shape === 'square' ? 'triangle' : 'square';
               this.refreshAll();
+          }
+          else if (target.classList.contains('gw-list-btn')) {
+              let idx = parseInt(target.getAttribute('data-idx'));
+              this.activeAnchor = this.current.guyWiresData[idx];
+              this.gwState = 'EDIT_COLLAR';
+              this.updateGWUI();
+              this.refreshAll();
+              return;
+          }
+          else if (id === 'btn-gw-delete-collar') {
+              if (this.activeAnchor) {
+                  let idx = this.current.guyWiresData.indexOf(this.activeAnchor);
+                  if (idx > -1) {
+                      this.current.guyWiresData.splice(idx, 1);
+                  }
+                  this.activeAnchor = null;
+                  this.gwState = 'MAIN';
+                  this.updateGWUI();
+                  this.refreshAll();
+                  this.saveToStorage();
+              }
+              return;
           }
           else if (id === 'btn-gw-new-tral') {
             let newAnchor = { type: 'traliccio', height: 3.0 }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR';
@@ -1177,28 +1238,34 @@
         </a-entity>
 
         <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
-          <a-plane width="0.48" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
-          <a-text value="MODALITA' TIRANTI (TASTO X PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
+          <a-plane width="0.48" height="0.65" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
+          <a-text value="MODALITA' TIRANTI (TASTO X PER USCIRE)" position="0 0.28 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
           
-          <a-plane width="0.45" height="0.06" color="#3E2723" position="0 0.07 0.01">
+          <a-plane width="0.45" height="0.08" color="#3E2723" position="0 0.20 0.01">
             <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text>
           </a-plane>
 
           <a-entity id="gw-page-main" visible="true">
-              <a-plane id="btn-gw-new-tral" class="clickable" btn-interaction width="0.38" height="0.035" color="#FF8F00" position="0 0.01 0.01">
+              <a-plane id="btn-gw-new-tral" class="clickable" btn-interaction width="0.38" height="0.035" color="#FF8F00" position="0 0.12 0.01">
                 <a-text value="[+] NUOVI TIRANTI TRALICCIO" align="center" scale="0.065 0.065 0.065" color="#000000"></a-text>
               </a-plane>
-              <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 -0.04 0.01">
+              <a-plane id="btn-gw-new-a" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 0.07 0.01">
                 <a-text value="[+] NUOVO COLLARE SU PALO A" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
               </a-plane>
-              <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 -0.09 0.01">
+              <a-plane id="btn-gw-new-b" class="clickable" btn-interaction width="0.38" height="0.035" color="#006064" position="0 0.02 0.01">
                 <a-text value="[+] NUOVO COLLARE SU PALO B" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
               </a-plane>
+              
+              <a-text value="--- ELENCO COLLARI ESISTENTI ---" position="0 -0.03 0.01" align="center" scale="0.05 0.05 0.05" color="#B0BEC5"></a-text>
+              <a-entity id="gw-list-container" position="0 -0.07 0.01"></a-entity>
           </a-entity>
 
           <a-entity id="gw-page-edit" visible="false">
-              <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 -0.04 0.01">
+              <a-plane id="btn-gw-done" class="clickable" btn-interaction width="0.38" height="0.035" color="#1B5E20" position="0 0.12 0.01">
                 <a-text value="FINITO (DESELEZIONA E INDIETRO)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
+              </a-plane>
+              <a-plane id="btn-gw-delete-collar" class="clickable" btn-interaction width="0.38" height="0.035" color="#D32F2F" position="0 0.07 0.01">
+                <a-text value="[X] ELIMINA QUESTO COLLARE" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
               </a-plane>
           </a-entity>
         </a-entity>
