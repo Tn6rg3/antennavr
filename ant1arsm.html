@@ -484,10 +484,10 @@
 
             if (this.gwState === 'EDIT_COLLAR') {
                if (this.activeAnchor && this.activeAnchor.type === 'traliccio') {
-                   let req = this.current.traliccio.shape === 'square' ? 4 : 3;
                    if (!this.current.traliccio.pegs) this.current.traliccio.pegs = [];
-                   if (this.current.traliccio.pegs.length < req) { this.gwState = 'EDIT_TRALICCIO_PEGS'; }
-                   else { this.gwState = 'MAIN'; this.activeAnchor = null; }
+                   // FIX: Passiamo sempre in EDIT_TRALICCIO_PEGS per permetterti di cancellare collare/picchetti,
+                   // indipendentemente da quanti picchetti ci sono.
+                   this.gwState = 'EDIT_TRALICCIO_PEGS'; 
                } else { this.gwState = 'EDIT_PEGS'; }
                this.updateGWUI(); this.refreshAll(); return;
             }
