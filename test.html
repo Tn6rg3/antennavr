@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisi Corsa AR - Meta Quest 3</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .main-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .video-wrapper {
+            flex: 1;
+            position: relative;
+            background-color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video {
+            display: none; /* Nascondiamo il video grezzo, mostriamo solo il canvas */
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .dashboard {
+            width: 350px;
+            background-color: #2c2c2c;
+            padding: 20px;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #4CAF50;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+
+        .data-box {
+            background: #3d3d3d;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .data-label {
+            font-size: 0.9em;
+            color: #bbb;
+            text-transform: uppercase;
+        }
+
+        .data-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-top: 5px;
+            color: #fff;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 10px;
+            background-color: #666;
+        }
+
+        .status-good { background-color: #4CAF50; }
+        .status-warn { background-color: #FF9800; }
+        .status-bad { background-color: #F44336; }
+
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <div class="video-wrapper">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="output_canvas"></canvas>
+        </div>
+
+        <div class="dashboard">
+            <h2>Analisi Biomeccanica</h2>
+            
+            <div class="data-box">
+                <div class="data-label">Vista Rilevata</div>
+                <div class="data-value" id="view-mode">Ricerca...</div>
+            </div>
+
+            <div id="lateral-data" style="display: none;">
+                <div class="data-box">
+                    <div class="data-label">Angolo Ginocchio (Media)</div>
+                    <div class="data-value"><span id="knee-angle">0</span>°</div>
+                </div>
+                <div class="data-box">
+                    <div class="data-label">Valutazione Appoggio</div>
+                    <div class="status-badge" id="strike-eval">In analisi...</div>
+                </div>
+            </div>
+
+            <div id="posterior-data" style="display: none;">
+                <div class="data-box">
+                    <div class="data-label">Oscillazione Bacino</div>
+                    <div class="data-value"><span id="oscillation">0</span>%</div>
+                </div>
+                <div class="data-box">
+                    <div class="data-label">Valutazione Caviglie</div>
+                    <div class="status-badge" id="pronation-eval">In analisi...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        // Variabili per medie mobili
+        let kneeAngles = [];
+        let hipPositionsX = [];
+        const maxSamples = 30; // Circa 1 secondo a 30fps
+
+        // Funzione per calcolare l'angolo tra 3 punti
+        function calculateAngle(a, b, c) {
+            let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+            let angle = Math.abs(radians * 180.0 / Math.PI);
+            if (angle > 180.0) angle = 360 - angle;
+            return angle;
+        }
+
+        // Calcola la media di un array
+        function getAverage(arr) {
+            if(arr.length === 0) return 0;
+            return arr.reduce((a, b) => a + b) / arr.length;
+        }
+
+        function onResults(results) {
+            // Setup del canvas
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            // Disegna il frame video
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.poseLandmarks) {
+                const landmarks = results.poseLandmarks;
+
+                // 1. Determina l'orientamento (Laterale vs Posteriore/Frontale)
+                // Usiamo la distanza orizzontale tra le spalle
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                const shoulderDist = Math.abs(leftShoulder.x - rightShoulder.x);
+                
+                const isPosterior = shoulderDist > 0.15; // Soglia empirica (15% della larghezza schermo)
+                
+                document.getElementById('view-mode').innerText = isPosterior ? "Posteriore / Frontale" : "Laterale";
+                document.getElementById('lateral-data').style.display = isPosterior ? "none" : "block";
+                document.getElementById('posterior-data').style.display = isPosterior ? "block" : "none";
+
+                // 2. Disegna lo scheletro in base alla vista
+                if (!isPosterior) {
+                    // VISTA LATERALE: Mostra solo il lato più visibile (destro o sinistro)
+                    const isRightSide = landmarks[26].visibility > landmarks[25].visibility; // Ginocchio dx vs sx
+                    const sideColor = isRightSide ? '#00FFFF' : '#FF00FF'; // Ciano per Dx, Magenta per Sx
+                    
+                    // Disegna punti specifici manualmente (Anca, Ginocchio, Caviglia, Piede)
+                    const hip = isRightSide ? landmarks[24] : landmarks[23];
+                    const knee = isRightSide ? landmarks[26] : landmarks[25];
+                    const ankle = isRightSide ? landmarks[28] : landmarks[27];
+                    const footIndex = isRightSide ? landmarks[32] : landmarks[31];
+
+                    if (hip.visibility > 0.5 && knee.visibility > 0.5 && ankle.visibility > 0.5) {
+                        // Linee
+                        canvasCtx.beginPath();
+                        canvasCtx.moveTo(hip.x * canvasElement.width, hip.y * canvasElement.height);
+                        canvasCtx.lineTo(knee.x * canvasElement.width, knee.y * canvasElement.height);
+                        canvasCtx.lineTo(ankle.x * canvasElement.width, ankle.y * canvasElement.height);
+                        canvasCtx.lineTo(footIndex.x * canvasElement.width, footIndex.y * canvasElement.height);
+                        canvasCtx.strokeStyle = sideColor;
+                        canvasCtx.lineWidth = 5;
+                        canvasCtx.stroke();
+
+                        // Calcolo Angolo
+                        const angle = calculateAngle(hip, knee, ankle);
+                        kneeAngles.push(angle);
+                        if(kneeAngles.length > maxSamples) kneeAngles.shift();
+                        
+                        const avgKneeAngle = getAverage(kneeAngles);
+                        document.getElementById('knee-angle').innerText = avgKneeAngle.toFixed(1);
+
+                        // Valutazione Corsa Laterale
+                        const strikeBadge = document.getElementById('strike-eval');
+                        if (avgKneeAngle > 165) {
+                            strikeBadge.innerText = "Heel Strike (Tallone)";
+                            strikeBadge.className = "status-badge status-bad";
+                        } else if (avgKneeAngle > 140) {
+                            strikeBadge.innerText = "Midfoot (Mesopiede)";
+                            strikeBadge.className = "status-badge status-good";
+                        } else {
+                            strikeBadge.innerText = "Ginocchio troppo flesso";
+                            strikeBadge.className = "status-badge status-warn";
+                        }
+                    }
+
+                } else {
+                    // VISTA POSTERIORE: Disegna scheletro completo
+                    drawConnectors(canvasCtx, landmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+                    drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2, radius: 3});
+
+                    // Calcolo Oscillazione Laterale (Centro Bacino)
+                    const midHipX = (landmarks[23].x + landmarks[24].x) / 2;
+                    hipPositionsX.push(midHipX);
+                    if(hipPositionsX.length > maxSamples * 2) hipPositionsX.shift();
+
+                    const minX = Math.min(...hipPositionsX);
+                    const maxX = Math.max(...hipPositionsX);
+                    const oscillation = (maxX - minX) * 100; // In percentuale rispetto allo schermo
+
+                    document.getElementById('oscillation').innerText = oscillation.toFixed(1);
+
+                    // Valutazione Caviglie (Pronazione - Logica semplificata)
+                    const leftAnkle = landmarks[27];
+                    const rightAnkle = landmarks[28];
+                    const pronationBadge = document.getElementById('pronation-eval');
+
+                    if (oscillation > 10) {
+                        pronationBadge.innerText = "Eccessiva oscillazione";
+                        pronationBadge.className = "status-badge status-bad";
+                    } else {
+                        pronationBadge.innerText = "Stabile / Neutra";
+                        pronationBadge.className = "status-badge status-good";
+                    }
+                }
+            }
+            canvasCtx.restore();
+        }
+
+        // Inizializzazione MediaPipe Pose
+        const pose = new Pose({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        }});
+
+        pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        pose.onResults(onResults);
+
+        // Inizializzazione Fotocamera
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await pose.send({image: videoElement});
+            },
+            width: 1280,
+            height: 720
+        });
+        
+        camera.start();
+    </script>
+</body>
+</html>
