@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V35 - Puntamento Topografico a Triangolazione</title>
+  <title>Antenne AR Pro V36 - Triangolazione di Precisione con Annullamento</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -315,11 +315,12 @@
         return { point: midpoint, error: error, dist1: t1, dist2: t2 };
       },
 
-      updateBeam: function(el, origin, dir, color) {
+      // Aggiornata per accettare la lunghezza desiderata (evita raggi infiniti incrociati)
+      updateBeam: function(el, origin, dir, color, length = 150) {
           el.setAttribute('visible', 'true');
-          el.setAttribute('material', `color: ${color}; shader: flat; transparent: true; opacity: 0.5`);
-          el.setAttribute('geometry', 'primitive: cylinder; radius: 0.005; height: 150');
-          let mid = new THREE.Vector3().copy(origin).addScaledVector(dir, 75);
+          el.setAttribute('material', `color: ${color}; shader: flat; transparent: true; opacity: 0.6`);
+          el.setAttribute('geometry', `primitive: cylinder; radius: 0.005; height: ${length}`);
+          let mid = new THREE.Vector3().copy(origin).addScaledVector(dir, length / 2);
           el.setAttribute('position', `${mid.x} ${mid.y} ${mid.z}`);
           let quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
           let euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
@@ -352,28 +353,34 @@
             this.triangUI.setAttribute('visible', 'true');
             
             if (this.triangState === 0) {
-                this.updateBeam(this.beam1El, ctrlPos, ctrlDir, '#00BFFF'); // Raggio 1 (Azzurro live)
+                this.updateBeam(this.beam1El, ctrlPos, ctrlDir, '#00BFFF', 150); // Raggio 1 (Azzurro live infinito)
                 this.beam2El.setAttribute('visible', 'false'); this.triangMarkerEl.setAttribute('visible', 'false');
             } 
             else if (this.triangState === 1) {
-                this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF'); // Fisso
-                this.updateBeam(this.beam2El, ctrlPos, ctrlDir, '#FF1744'); // Raggio 2 (Rosso live)
-                
                 this.triangResult = this.calculateIntersection(this.triangRay1, {origin: ctrlPos, dir: ctrlDir});
+                
                 if (this.triangResult) {
+                    // Tagliamo i raggi visivamente esattamente al punto di intersezione calcolato
+                    this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', this.triangResult.dist1); 
+                    this.updateBeam(this.beam2El, ctrlPos, ctrlDir, '#FF1744', this.triangResult.dist2); 
+                    
                     this.triangMarkerEl.setAttribute('position', `${this.triangResult.point.x} ${this.triangResult.point.y} ${this.triangResult.point.z}`);
                     let color = this.triangResult.error < 0.3 ? '#00E676' : (this.triangResult.error < 1.0 ? '#FFEB3B' : '#D50000');
                     this.triangMarkerEl.setAttribute('material', `color: ${color}; shader: flat; transparent: true; opacity: 0.85`);
                     this.triangMarkerEl.setAttribute('visible', 'true');
-                    this.triangTextEl.setAttribute('value', `INTERSEZIONE!\nERRORE: ${this.triangResult.error.toFixed(2)}m\nDISTANZA R2: ${this.triangResult.dist2.toFixed(1)}m`);
+                    this.triangTextEl.setAttribute('value', `INTERSEZIONE!\nERRORE: ${this.triangResult.error.toFixed(2)}m\nDISTANZA: ${this.triangResult.dist2.toFixed(1)}m`);
                 } else {
+                    // Se non c'è incrocio visibile, lasciali lunghi per mirare
+                    this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', 150);
+                    this.updateBeam(this.beam2El, ctrlPos, ctrlDir, '#FF1744', 150);
                     this.triangMarkerEl.setAttribute('visible', 'false');
                 }
             } 
             else if (this.triangState === 2) {
-                this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF'); // Fisso
-                this.updateBeam(this.beam2El, this.triangRay2.origin, this.triangRay2.dir, '#FF1744'); // Fisso
                 if (this.triangResult) {
+                    // Manteniamo i raggi "tagliati a V" fissi per la conferma finale
+                    this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', this.triangResult.dist1);
+                    this.updateBeam(this.beam2El, this.triangRay2.origin, this.triangRay2.dir, '#FF1744', this.triangResult.dist2);
                     this.triangMarkerEl.setAttribute('position', `${this.triangResult.point.x} ${this.triangResult.point.y} ${this.triangResult.point.z}`);
                     this.triangTextEl.setAttribute('value', `PUNTO PRONTO!\n[GRILLETTO] CONFERMA`);
                 }
@@ -446,10 +453,16 @@
         let thumbTime = Date.now();
         if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
           
-          // Annulla/Modifica Triangolazione
+          // --- NUOVI CONTROLLI ANNULLAMENTO TRIANGOLAZIONE ---
           if (this.pointerMode === 'TRIANG' && this.triangState > 0) {
               if (evt.detail.x > 0.4) {
+                  // Destra = Torna indietro di un passo (annulla Raggio 2, o Raggio 1)
                   this.triangState = Math.max(0, this.triangState - 1);
+                  this.refreshAll(); this.lastThumbTime = thumbTime; return;
+              }
+              if (evt.detail.x < -0.4) {
+                  // Sinistra = Reset totale della triangolazione in corso
+                  this.triangState = 0;
                   this.refreshAll(); this.lastThumbTime = thumbTime; return;
               }
           }
@@ -531,7 +544,7 @@
                     return;
                 }
                 if (this.triangState === 2) {
-                    // Cadiamo nel blocco successivo, getHitPoint restituirà triangResult.point
+                    // Conferma finale: prosegue piazzando il punto reale nel blocco sottostante
                 }
             }
 
@@ -673,8 +686,8 @@
         // Testo Istruzioni In base alla modalità e stato
         if (this.pointerMode === 'TRIANG' && this.current.state.includes('GROUND')) {
             if (this.triangState === 0) infoTextStr = "TRIANGOLAZIONE: RAGGIO 1\nPunta al bersaglio e premi il Grilletto.";
-            else if (this.triangState === 1) infoTextStr = "TRIANGOLAZIONE: RAGGIO 2\nSpostati di lato, punta all'incrocio e premi.";
-            else if (this.triangState === 2) infoTextStr = "TRIANGOLAZIONE: PUNTO ACQUISITO\nPremi Grilletto per piazzare. Joystick DX = Annulla";
+            else if (this.triangState === 1) infoTextStr = "TRIANGOLAZIONE: RAGGIO 2\nSpostati, punta all'incrocio e premi. (Joy DX: Annulla)";
+            else if (this.triangState === 2) infoTextStr = "TRIANGOLAZIONE: PUNTO ACQUISITO\n[GRILLETTO] Piazza | Joy DX: Rifai R2 | Joy SX: Reset";
         }
         else if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = "Punta il laser a terra sotto al Centro C\ne premi il grilletto per fissare la quota."; }
         else if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = "Punta a terra e premi grilletto per\nil CENTRO del Traliccio."; }
@@ -1047,7 +1060,7 @@
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.45" rotation="-30 0 0">
           <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO V35" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V36" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
           <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
