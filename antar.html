@@ -3,54 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <title>Antenne AR Pro V38 - Three.js Nativo (Fix AR)</title>
+  <title>Antenne AR Pro V38 - Three.js Nativo e Mobile</title>
   
   <style>
+    /* CSS STRUTTURALE (Esattamente come il tuo codice funzionante) */
     body { margin: 0; overflow: hidden; background-color: #000; font-family: monospace; color: white; touch-action: none; }
     
-    /* ESATTAMENTE COME NEL TUO CODICE FUNZIONANTE */
     #ui-container { 
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 100; pointer-events: none; box-sizing: border-box;
-        /* Parte nascosto per non bloccare l'ARButton! */
-        display: none; 
+        display: none; /* Parte nascosto per non rompere l'ARButton! */
     }
     
     #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
     .pointer-auto { pointer-events: auto !important; }
     
-    /* STILI BOTTONI E MENU */
-    .ui-btn { padding: 10px; border: 1px solid #777; border-radius: 6px; background: rgba(50,50,50,0.9); color: white; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 11px; font-family: monospace; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+    /* STILI PANNELLI E BOTTONI */
+    .ui-btn { padding: 10px; border: 1px solid #777; border-radius: 6px; background: rgba(50,50,50,0.9); color: white; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 11px; font-family: monospace; touch-action: manipulation; user-select: none; }
     .ui-btn:active { transform: scale(0.95); background: #00E676; color: black; }
 
     #btn-toggle-db { position: absolute; top: 15px; right: 15px; background: rgba(33, 150, 243, 0.9); border-color: #00BFFF; }
     
-    /* PANNELLO DATABASE */
-    #db-panel { display: none; position: absolute; top: 60px; right: 15px; background: rgba(20,20,20,0.95); padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; width: 230px; box-shadow: 0 4px 10px rgba(0,0,0,0.8); }
+    #db-panel { display: none; position: absolute; top: 60px; right: 15px; background: rgba(20,20,20,0.95); padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; width: 230px; box-shadow: 0 4px 10px rgba(0,0,0,0.8); pointer-events: auto;}
     #db-panel h3 { margin: 0 0 8px 0; font-size: 13px; color: #00E676; text-align: center; border-bottom: 1px solid #444; padding-bottom: 5px; }
     #db-panel input, #db-panel select { width: 90%; padding: 6px; background: #333; color: white; border: 1px solid #00E676; margin-bottom: 8px; border-radius: 4px; font-family: monospace;}
     
-    /* PANNELLO MENU PRINCIPALE */
-    #main-menu-panel { display: none; position: absolute; top: 15px; left: 15px; background: rgba(20,20,20,0.95); padding: 10px; border: 2px solid #00BFFF; border-radius: 8px; width: 280px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.8); }
+    #main-menu-panel { display: none; position: absolute; top: 15px; left: 15px; background: rgba(20,20,20,0.95); padding: 10px; border: 2px solid #00BFFF; border-radius: 8px; width: 280px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.8); pointer-events: auto;}
     #main-menu-panel h3 { margin: 0 0 5px 0; font-size: 14px; color: #FFEB3B; text-align: center; }
     .menu-section { margin-bottom: 10px; padding: 5px; background: rgba(255,255,255,0.05); border-radius: 6px; }
     
-    /* PANNELLO TIRANTI */
-    #gw-menu-panel { display: none; position: absolute; top: 15px; left: 15px; background: rgba(78,52,46,0.95); padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; width: 250px; box-shadow: 0 4px 10px rgba(0,0,0,0.8); }
+    #gw-menu-panel { display: none; position: absolute; top: 15px; left: 15px; background: rgba(78,52,46,0.95); padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; width: 250px; box-shadow: 0 4px 10px rgba(0,0,0,0.8); pointer-events: auto;}
     #gw-menu-panel h3 { margin: 0 0 5px 0; font-size: 14px; color: #FFEB3B; text-align: center; }
 
     /* CONTROLLI MOBILE IN BASSO */
-    #mobile-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; width: 96%; max-width: 450px; }
-    .mob-btn { flex: 1 1 45%; padding: 12px; font-size: 13px; border: 2px solid #00E676; background: rgba(30,30,30,0.9); }
+    #mobile-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; width: 96%; max-width: 450px; pointer-events: auto;}
+    .mob-btn { flex: 1 1 45%; padding: 12px; font-size: 13px; border: 2px solid #00E676; background: rgba(30,30,30,0.9); touch-action: none; }
     .btn-main-act { background: rgba(0, 150, 136, 0.9); border-color: #00BFFF; }
     .btn-gw-act { background: rgba(211, 47, 47, 0.9); border-color: #FF1744; }
-    #info-text { flex: 1 1 100%; background: rgba(0,0,0,0.7); border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; text-align: center; border-radius: 6px; }
+    #info-text { flex: 1 1 100%; background: rgba(0,0,0,0.7); border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; text-align: center; border-radius: 6px; pointer-events: none;}
 
-    /* LOADER SCHERMO NERO PREVENZIONE */
     #browserWarning { display: none; position: absolute; top: 0; left: 0; width: 100%; background: #ff4757; color: white; padding: 10px; text-align: center; font-size: 13px; z-index: 1000; }
   </style>
 
-  <!-- Import Maps per Three.js Nativo -->
   <script type="importmap">
     {
         "imports": {
@@ -62,22 +56,18 @@
 </head>
 <body>
 
-  <div id="browserWarning">⚠️ Attenzione: Assicurati di usare HTTPS e Google Chrome per il corretto funzionamento della fotocamera AR.</div>
+  <div id="browserWarning">⚠️ Attenzione: Usa HTTPS su Google Chrome/Safari per far funzionare la fotocamera AR.</div>
 
-  <!-- INTERFACCIA HTML OVERLAY DOM: Inizia nascosta! -->
+  <!-- INTERFACCIA HTML OVERLAY DOM: Parte Nascosta per l'ARButton -->
   <div id="ui-container">
-      
-      <!-- Area Touch per intercettare i tocchi validi per l'AR -->
       <div id="touchArea"></div>
 
-      <!-- Pulsante DB -->
       <button id="btn-toggle-db" class="ui-btn pointer-auto">💾 MENU DB</button>
 
-      <!-- Pannello Database -->
-      <div id="db-panel" class="pointer-auto">
+      <div id="db-panel">
           <h3>DATABASE SCENE</h3>
           <input type="text" id="save-name" placeholder="Es. Campo Scout">
-          <button id="btn-save-db" class="ui-btn" style="width:100%; background:#FFEB3B; color:black; margin-bottom: 10px;">SALVA SCENA VISORE</button>
+          <button id="btn-save-db" class="ui-btn" style="width:100%; background:#FFEB3B; color:black; margin-bottom: 10px;">SALVA SCENA</button>
           <hr>
           <select id="load-list"></select>
           <button id="btn-load-db" class="ui-btn" style="width:100%; background:#00E676; color:black; margin-bottom: 5px;">CARICA SCENA</button>
@@ -87,10 +77,8 @@
           <input type="file" id="file-mmana" accept=".maa" style="font-size:10px;">
       </div>
 
-      <!-- Pannello Menu Principale -->
-      <div id="main-menu-panel" class="pointer-auto">
+      <div id="main-menu-panel">
           <h3>CONFIGURATORE V38</h3>
-          
           <div style="display: flex; gap: 5px; margin-bottom: 5px;">
               <button id="btn-scene-prev" class="ui-btn" style="flex:1;"><</button>
               <button id="btn-scene-new" class="ui-btn" style="flex:2; background:#00C853; color:black;">+ NUOVA</button>
@@ -114,7 +102,6 @@
               </div>
           </div>
 
-          <!-- Sotto-menu DINAMICI -->
           <div id="sub-dipolo" class="menu-section" style="display:none; text-align:center;">
               <label style="font-size:10px; color:#B0BEC5;">SPOSTA CENTRO (PUNTO C)</label>
               <div style="display:flex; gap:5px; margin-top:5px;">
@@ -162,7 +149,6 @@
               <button id="btn-tral-shape" class="ui-btn" style="width:100%; background:#004D40;">FORMA: QUADRATA</button>
           </div>
 
-          <!-- Modifiche Comuni -->
           <div style="display:flex; gap:5px; margin-bottom:5px;">
               <button id="btn-txt-m" class="ui-btn" style="flex:1;">TESTO -</button>
               <button id="btn-txt-p" class="ui-btn" style="flex:1;">TESTO +</button>
@@ -176,18 +162,14 @@
           </div>
 
           <button id="btn-start-tral" class="ui-btn" style="width:100%; background:#FF8F00; color:black; margin-bottom:10px;">[T] INIZIA CON TRALICCIO A</button>
-          
-          <button id="btn-cal-set" class="ui-btn" style="width:100%; background:#455A64; margin-bottom:5px;">[1] IMPOSTA DIAMANTI (CAPISALDI)</button>
+          <button id="btn-cal-set" class="ui-btn" style="width:100%; background:#455A64; margin-bottom:5px;">[1] IMPOSTA DIAMANTI</button>
           <button id="btn-cal-rec" class="ui-btn" style="width:100%; background:#455A64; margin-bottom:10px;">[2] RECUPERA ALLINEAMENTO</button>
-
           <button id="btn-reset-all" class="ui-btn" style="width:100%; background:#B71C1C;">RESET COMPLETO SCENA</button>
       </div>
 
-      <!-- Pannello Modalità Tiranti -->
-      <div id="gw-menu-panel" class="pointer-auto">
+      <div id="gw-menu-panel">
           <h3>MODALITÀ TIRANTI</h3>
           <div id="txt-gw-status" style="font-size:11px; color:#00E676; text-align:center; margin-bottom:10px;">SELEZIONA O CREA</div>
-          
           <div id="gw-main">
               <button id="btn-gw-new-tral" class="ui-btn" style="width:100%; background:#FF8F00; color:black; margin-bottom:5px;">+ TIRANTI TRALICCIO</button>
               <button id="btn-gw-new-a" class="ui-btn" style="width:100%; background:#00838F; margin-bottom:5px;">+ COLLARE PALO A</button>
@@ -198,24 +180,21 @@
           </div>
       </div>
 
-      <!-- CONTROLLI MOBILE IN BASSO (Joystick e Toggle) -->
-      <div id="mobile-controls" class="pointer-auto">
+      <div id="mobile-controls">
           <button id="btn-mob-y" class="ui-btn mob-btn btn-main-act">MENU (Y)</button>
           <button id="btn-mob-x" class="ui-btn mob-btn btn-gw-act">TIRANTI (X)</button>
           <button id="btn-mob-rot-sx" class="ui-btn mob-btn">⟲ Ruota SX</button>
           <button id="btn-mob-rot-dx" class="ui-btn mob-btn">Ruota DX ⟳</button>
           <button id="btn-mob-up" class="ui-btn mob-btn">▲ Alza / Ing</button>
           <button id="btn-mob-down" class="ui-btn mob-btn">▼ Abb / Rid</button>
-          <div id="info-text">[ TOCCA IN UN PUNTO VUOTO PER INIZIARE ]</div>
+          <div id="info-text">[ TOCCA UNO STRUMENTO O PIAZZA ANTENNA ]</div>
       </div>
   </div>
 
-  <!-- SCRIPT LOGICA AR E APP IN PURO THREE.JS -->
   <script type="module">
     import * as THREE from 'three';
     import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-    // === VARIABILI GLOBALI E STATO APP ===
     let container, camera, scene, renderer, controller;
     let hitTestSource = null, hitTestSourceRequested = false;
     let reticle, reticleValid = false;
@@ -223,15 +202,13 @@
 
     let worldPivot = new THREE.Group();
     let worldContent = new THREE.Group();
-    let appMeshes = []; // Array per pulire la scena
-    let clickableObjects = []; // Array per il raycaster manuale
+    let appMeshes = []; 
+    let clickableObjects = []; 
 
-    // Strumenti di sistema
     let verticalCylinder, heightTextSprite;
     let beam1, beam2, triangMarker, triangTextSprite;
     let diamondRef1, diamondRef2;
 
-    // Variabili di logica Antenne
     const antennaTypes = ['Dipolo', 'End Fed', 'Longwire', 'Verticale', 'MMANA-GAL'];
     const bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
     const mmanaModels = ['Yagi 3 Elementi', 'Delta Loop', 'Dipolo MMANA', 'Modello Importato'];
@@ -248,12 +225,11 @@
     let currentHeight = 1.0;
     let gwState = 'OFF';
     let activeAnchor = null;
-    let lastTriggerTime = 0, lastTapTime = 0;
     let calibPt1 = null, calibPt2 = null, calibLocal1 = null, calibLocal2 = null;
     let actionInterval = null;
     let importedMmanaWires = [];
+    let justClicked3DObject = false;
 
-    // === INIZIALIZZAZIONE ===
     init();
     animate();
 
@@ -271,13 +247,13 @@
         renderer.xr.enabled = true;
         container.appendChild(renderer.domElement);
 
-        // INTEGRAZIONE WEBXR AR CON OVERLAY ESATTAMENTE COME IL TUO CODICE FUNZIONANTE
+        // IL SEGRETO E' QUI: domOverlay che garantisce il tap nativo e i bottoni funzionanti
         document.body.appendChild(ARButton.createButton(renderer, { 
             requiredFeatures: ['hit-test', 'dom-overlay'],
             domOverlay: { root: document.getElementById('ui-container') }
         }));
 
-        // GESTIONE TAP AR NATIVA
+        // GESTIONE TAP AR NATIVA: Usiamo l'evento standard 'select'
         controller = renderer.xr.getController(0);
         controller.addEventListener('select', onTriggerDown);
         scene.add(controller);
@@ -308,17 +284,13 @@
             document.getElementById('ui-container').style.display = 'none';
         });
 
-        // FONDAMENTALE: IMPEDISCE I CONFLITTI TRA UI E AR
+        // EVITA CONFLITTI: Impedisce ad ARButton di sparare 'select' se l'utente clicca un bottone!
         document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
             if (ev.target.id !== 'touchArea') ev.preventDefault();
         });
 
-        // GESTIONE DEL TAP SU OGGETTI 3D
+        // GESTIONE DEL CLICK SU OGGETTI 3D
         document.getElementById('touchArea').addEventListener('pointerdown', (e) => {
-            let now = Date.now();
-            if (now - lastTapTime < 300) return;
-            lastTapTime = now;
-
             let mouse = new THREE.Vector2();
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -327,7 +299,9 @@
             let intersects = raycaster.intersectObjects(clickableObjects, false);
             
             if (intersects.length > 0) {
+                justClicked3DObject = true; // Impedisce a onTriggerDown di piazzare un'antenna
                 handle3DClick(intersects[0].object);
+                setTimeout(() => justClicked3DObject = false, 300);
             }
         });
     }
@@ -382,7 +356,6 @@
         return sprite;
     }
 
-    // === LOGICA BOTTONI HTML ===
     function setupMobileUI() {
         const attachClick = (id, cb) => { let b = document.getElementById(id); if(b) b.addEventListener('click', (e)=>{e.preventDefault(); cb();}); };
         
@@ -392,9 +365,9 @@
         
         const attachHold = (id, action) => {
             let b = document.getElementById(id); if(!b) return;
-            let start = (e) => { e.preventDefault(); startAction(action); };
-            let stop = (e) => { e.preventDefault(); stopAction(); };
-            b.addEventListener('pointerdown', start); b.addEventListener('pointerup', stop); b.addEventListener('pointerleave', stop);
+            b.addEventListener('pointerdown', (e) => { e.preventDefault(); startAction(action); });
+            b.addEventListener('pointerup', (e) => { e.preventDefault(); stopAction(); });
+            b.addEventListener('pointerleave', (e) => { e.preventDefault(); stopAction(); });
         };
         attachHold('btn-mob-rot-sx', 'rot-sx'); attachHold('btn-mob-rot-dx', 'rot-dx');
         attachHold('btn-mob-up', 'up'); attachHold('btn-mob-down', 'down');
@@ -415,7 +388,6 @@
         attachClick('btn-ant-type', () => { current.antIdx = (current.antIdx + 1) % antennaTypes.length; resetAntennaLengths(); refreshAll(); });
         attachClick('btn-band', () => { current.bandIdx = (current.bandIdx + 1) % bands.length; resetAntennaLengths(); refreshAll(); });
 
-        // Sottomenu funzioni
         let mr = (n) => Math.round(n*100)/100;
         attachClick('btn-c-left', () => { current.pointC.percent = Math.max(0.02, mr(current.pointC.percent - 0.05)); refreshAll(); });
         attachClick('btn-c-right', () => { current.pointC.percent = Math.min(0.98, mr(current.pointC.percent + 0.05)); refreshAll(); });
@@ -460,32 +432,31 @@
         attachClick('btn-gw-new-b', () => { let maxH = current.pointB.top.y - current.pointB.base.y; let n={pole:'B', height:maxH/2, pegs:[]}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
         attachClick('btn-gw-done', () => { activeAnchor=null; gwState='MAIN'; updateGWUI(); refreshAll(); });
 
-        // Esponi per l'HTML Inline (DB Pannello)
-        window.appContext = {
-            saveAntennaToDB: () => {
-                let name = document.getElementById('save-name').value.trim(); if(!name) return alert("Inserisci un nome!");
-                if(!current.pointA.base) return alert("Piazza almeno un'antenna.");
-                if(!calibLocal1) return alert("Imposta i diamanti di calibrazione (Menu > [1] IMPOSTA DIAMANTI).");
-                let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}');
-                db[name] = { antennas: JSON.parse(JSON.stringify(antennas)), activeAntIdx, globalTextScale, calibLocal1, calibLocal2 };
-                localStorage.setItem('antenneAR_DB', JSON.stringify(db)); refreshDBList(); alert(`Salvato: ${name}`);
-            },
-            loadAntennaFromDB: () => {
-                let name = document.getElementById('load-list').value;
-                let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); let d = db[name]; if(!d) return;
-                calibLocal1 = d.calibLocal1; calibLocal2 = d.calibLocal2;
-                worldContent.position.set(-calibLocal1.x, -calibLocal1.y, -calibLocal1.z);
-                diamondRef1.position.copy(calibLocal1); diamondRef2.position.copy(calibLocal2);
-                diamondRef1.visible=true; diamondRef2.visible=true;
-                if(d.antennas) { antennas = d.antennas; activeAntIdx = d.activeAntIdx||0; current = antennas[activeAntIdx]; }
-                globalTextScale = d.globalTextScale || 0.35;
-                current.state = 'AWAITING_CALIB_PT1'; document.getElementById('db-panel').style.display='none'; refreshAll();
-            },
-            deleteAntennaFromDB: () => {
-                let name = document.getElementById('load-list').value;
-                if(name && confirm("Eliminare "+name+"?")){ let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); delete db[name]; localStorage.setItem('antenneAR_DB', JSON.stringify(db)); refreshDBList(); }
-            }
-        };
+        attachClick('btn-save-db', () => {
+            let name = document.getElementById('save-name').value.trim(); if(!name) return alert("Inserisci un nome!");
+            if(!current.pointA.base) return alert("Piazza almeno un'antenna.");
+            if(!calibLocal1) return alert("Imposta i diamanti di calibrazione (Menu > [1] IMPOSTA DIAMANTI).");
+            let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}');
+            db[name] = { antennas: JSON.parse(JSON.stringify(antennas)), activeAntIdx, globalTextScale, calibLocal1, calibLocal2 };
+            localStorage.setItem('antenneAR_DB', JSON.stringify(db)); refreshDBList(); alert(`Salvato: ${name}`);
+        });
+
+        attachClick('btn-load-db', () => {
+            let name = document.getElementById('load-list').value;
+            let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); let d = db[name]; if(!d) return;
+            calibLocal1 = d.calibLocal1; calibLocal2 = d.calibLocal2;
+            worldContent.position.set(-calibLocal1.x, -calibLocal1.y, -calibLocal1.z);
+            diamondRef1.position.copy(calibLocal1); diamondRef2.position.copy(calibLocal2);
+            diamondRef1.visible=true; diamondRef2.visible=true;
+            if(d.antennas) { antennas = d.antennas; activeAntIdx = d.activeAntIdx||0; current = antennas[activeAntIdx]; }
+            globalTextScale = d.globalTextScale || 0.35;
+            current.state = 'AWAITING_CALIB_PT1'; document.getElementById('db-panel').style.display='none'; refreshAll();
+        });
+
+        attachClick('btn-delete-db', () => {
+            let name = document.getElementById('load-list').value;
+            if(name && confirm("Eliminare "+name+"?")){ let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); delete db[name]; localStorage.setItem('antenneAR_DB', JSON.stringify(db)); refreshDBList(); }
+        });
     }
 
     function startAction(action) {
@@ -631,7 +602,8 @@
     }
 
     function onTriggerDown() {
-        let now = Date.now(); if(now - lastTriggerTime < 300) return; lastTriggerTime = now;
+        if (justClicked3DObject) return; // Ha appena cliccato un oggetto, non piazzare punti
+
         let isP = current.state.startsWith('PLACE_GROUND') || current.state.startsWith('REPOSITION_GROUND') || current.state.startsWith('AWAITING_CALIB') || current.state.startsWith('SET_CALIB') || current.state.startsWith('PLACE_TRALICCIO_CENTER') || (gwState && gwState.includes('PEGS'));
         if(!isP) triangState = 0;
 
