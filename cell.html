@@ -7,9 +7,12 @@
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; }
-    /* Contenitore principale per l'overlay su schermo in Realtà Aumentata */
+    
+    /* Contenitore principale Overlay: copre tutto lo schermo ma lascia passare i click dove non serve */
     #overlay-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
-    .pointer-auto { pointer-events: auto; }
+    
+    /* La classe pointer-auto fa in modo che gli elementi UI ricevano effettivamente il tocco */
+    .pointer-auto { pointer-events: auto !important; }
     
     #ui-2d-container { display: none; position: absolute; top: 60px; right: 15px; background: rgba(17,17,17,0.95); color: #00E676; padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; width: 250px; max-height: 50vh; overflow-y: auto; box-shadow: 0px 4px 10px rgba(0,0,0,0.8); }
     #ui-2d-container h3 { margin: 0 0 5px 0; font-size: 13px; border-bottom: 1px solid #333; padding-bottom: 5px;}
@@ -47,7 +50,6 @@
         justify-content: center;
         width: 95%;
         max-width: 450px;
-        pointer-events: auto; /* FONDAMENTALE PER FAR FUNZIONARE I PULSANTI */
     }
     .mob-btn {
         background: rgba(30, 30, 30, 0.9);
@@ -69,7 +71,7 @@
     .mob-btn:active { background: #00E676; color: #000; transform: scale(0.95); }
     .mob-btn.btn-menu { background: rgba(0, 150, 136, 0.9); border-color: #00BFFF; flex: 1 1 45%; }
     .mob-btn.btn-tiranti { background: rgba(211, 47, 47, 0.9); border-color: #FF1744; flex: 1 1 45%; }
-    #btn-mob-confirm-hint { flex: 1 1 100%; background: transparent; border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; pointer-events: none; }
+    #btn-mob-confirm-hint { flex: 1 1 100%; background: transparent; border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; pointer-events: none; text-align: center; }
   </style>
   <script>
     AFRAME.registerComponent('look-at-camera', { 
@@ -122,6 +124,7 @@
             this.gwState = 'OFF'; 
             this.activeAnchor = null; 
             this.lastTriggerTime = 0; 
+            this.lastTapTime = 0;
             this.calibLocal1 = null; 
             this.calibLocal2 = null;
             
@@ -150,41 +153,31 @@
             this.menuUI = document.querySelector('#menu-ui'); 
             this.gwUI = document.querySelector('#guy-wires-ui');
 
-            // CONTROLLER EVENT BINDINGS
+            // CONTROLLER EVENT BINDINGS (Per VR nativa Oculus/Quest)
             if (this.raycasterEl) { this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this)); this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this)); }
             if (this.leftControllerEl) { this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this)); this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this)); this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this)); }
 
-            // MOBILE ON-SCREEN BUTTONS E OVERLAY BINDING
+            // MOBILE ON-SCREEN BUTTONS E TOUCH
             this.setupMobileUI();
 
-            // WEBXR SELECT EVENT (SCREEN TAP IN AR)
-            this.el.sceneEl.addEventListener('enter-vr', () => { 
-                this.hitTestSource = null; this.requestingHitTest = false; 
-                let session = this.el.sceneEl.renderer.xr?.getSession();
-                if (session) {
-                    session.addEventListener('select', () => this.onTriggerDown());
-                }
-            });
             this.el.sceneEl.addEventListener('exit-vr', () => { this.hitTestSource = null; this.requestingHitTest = false; });
             
-            // Fallback screen tap for non-immersive mode
-            let overlay = document.getElementById('overlay-container');
-            if(overlay) {
-                overlay.addEventListener('click', (e) => {
-                    // Evita di scattare se il tocco è su un pulsante
-                    if (e.target.closest('.pointer-auto') || e.target.closest('.mob-btn')) return;
-                    if (e.target === overlay && !this.el.sceneEl.is('ar-mode')) {
-                         this.onTriggerDown();
-                    }
-                });
-
-                // PREVIENE CHE IL TOCCO SUI PULSANTI PIAZZI UN ANTENNA IN AR
-                overlay.addEventListener('beforexrselect', (e) => {
-                    if (e.target.closest('.mob-btn') || e.target.closest('#ui-2d-container') || e.target.closest('#btn-toggle-db')) {
-                        e.preventDefault(); 
-                    }
-                });
-            }
+            // TAP GLOBALE SULLO SCHERMO PER CONFERMARE/PIAZZARE
+            let tapHandler = (e) => {
+                // Se hai toccato un bottone della UI, ignora!
+                if (e.target.closest('.pointer-auto') || e.target.closest('.mob-btn') || e.target.closest('#btn-toggle-db')) {
+                    return;
+                }
+                let now = Date.now();
+                if (now - this.lastTapTime < 300) return; // Anti-doppio click
+                this.lastTapTime = now;
+                
+                this.onTriggerDown();
+            };
+            
+            // Agganciamo i listener a tutto il documento
+            window.addEventListener('touchstart', tapHandler, {passive: true});
+            window.addEventListener('mousedown', tapHandler);
 
             this.initPersistentElements(); this.setupGlobalEventDelegation(); this.setupMmanaFileLoader();
             window.saveAntennaToDB = this.saveAntennaToDB.bind(this); window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this); window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
@@ -194,6 +187,13 @@
       },
 
       setupMobileUI: function() {
+          // Prevenzione bolle per non far triggerare tapHandler
+          let stopProp = (e) => e.stopPropagation();
+          document.querySelectorAll('.pointer-auto, .mob-btn, #btn-toggle-db').forEach(el => {
+              el.addEventListener('touchstart', stopProp, {passive: true});
+              el.addEventListener('mousedown', stopProp);
+          });
+
           let btnMenu = document.querySelector('#btn-mob-y');
           let btnTiranti = document.querySelector('#btn-mob-x');
           let btnToggleDb = document.querySelector('#btn-toggle-db');
@@ -238,13 +238,23 @@
 
           let bindRepeat = (id, action) => {
               let interval;
-              let start = (e) => { e.preventDefault(); action(); interval = setInterval(action, 150); };
-              let stop = (e) => { e.preventDefault(); clearInterval(interval); };
               let btn = document.querySelector(id);
-              if(btn) {
-                  btn.addEventListener('mousedown', start); btn.addEventListener('mouseup', stop); btn.addEventListener('mouseleave', stop);
-                  btn.addEventListener('touchstart', start, {passive: false}); btn.addEventListener('touchend', stop, {passive: false}); btn.addEventListener('touchcancel', stop, {passive: false});
-              }
+              if(!btn) return;
+              
+              let start = (e) => { 
+                  e.stopPropagation(); 
+                  if (e.type === 'touchstart') btn.dataset.touch = 'true';
+                  if (e.type === 'mousedown' && btn.dataset.touch === 'true') return; // Previeni doppio fire
+                  clearInterval(interval); action(); interval = setInterval(action, 150); 
+              };
+              let stop = (e) => { e.stopPropagation(); clearInterval(interval); };
+              
+              btn.addEventListener('mousedown', start);
+              btn.addEventListener('mouseup', stop);
+              btn.addEventListener('mouseleave', stop);
+              btn.addEventListener('touchstart', start, {passive: true});
+              btn.addEventListener('touchend', stop, {passive: true});
+              btn.addEventListener('touchcancel', stop, {passive: true});
           };
 
           bindRepeat('#btn-mob-rot-sx', () => simulateLeftThumb(-2.0));
@@ -630,8 +640,6 @@
 
       onTriggerDown: function () {
         try {
-            let now = Date.now(); if (now - this.lastTriggerTime < 300) return; this.lastTriggerTime = now;
-            
             // Gestione mista Controller fisico / Touch screen (mouse cursor)
             let intersects = [];
             if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) {
@@ -1201,7 +1209,7 @@
   <div id="overlay-container">
       
       <!-- BOTTONE PER APRIRE/CHIUDERE IL MENU SALVATAGGI -->
-      <button id="btn-toggle-db">💾 MENU DB</button>
+      <button id="btn-toggle-db" class="pointer-auto">💾 MENU DB</button>
 
       <div id="ui-2d-container" class="pointer-auto">
         <h3>DATABASE SCENE MULTIPLE</h3>
@@ -1218,7 +1226,7 @@
       </div>
 
       <!-- CONTROLLI MOBILE SU SCHERMO -->
-      <div id="mobile-controls">
+      <div id="mobile-controls" class="pointer-auto">
           <button id="btn-mob-y" class="mob-btn btn-menu">MENU (Y)</button>
           <button id="btn-mob-x" class="mob-btn btn-tiranti">TIRANTI (X)</button>
           <button id="btn-mob-rot-sx" class="mob-btn">⟲ Ruota SX</button>
@@ -1229,7 +1237,7 @@
       </div>
   </div>
 
-  <a-scene background="color: transparent;" webxr="optionalFeatures: hit-test, local-floor, dom-overlay; overlayElement: #overlay-container;" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: hit-test, dom-overlay; overlayElement: #overlay-container;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0">
