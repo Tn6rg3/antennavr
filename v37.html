@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V30 - Rimozione & Drag Tralicci</title>
+  <title>Antenne AR Pro V37 - Triangolazione Visiva (Gaze) con Scala Dinamica</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -27,11 +27,27 @@
     
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
-        let el = this.el; let originalColor = el.getAttribute('material') ? el.getAttribute('material').color : '#FFFFFF';
-        el.addEventListener('mouseenter', () => el.setAttribute('material', 'opacity', 0.8));
-        el.addEventListener('mouseleave', () => { el.setAttribute('material', 'opacity', 1.0); el.setAttribute('scale', '1 1 1'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
-        el.addEventListener('mousedown', () => { el.setAttribute('scale', '0.95 0.95 0.8'); el.setAttribute('material', 'color', '#00FFCC'); });
-        el.addEventListener('mouseup', () => { el.setAttribute('scale', '1 1 1'); if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); });
+        let el = this.el; 
+        let mat = el.getAttribute('material');
+        let originalColor = mat ? mat.color : '#FFFFFF';
+        let originalOpacity = mat && mat.opacity !== undefined ? mat.opacity : 1.0;
+        
+        el.addEventListener('mouseenter', () => { if(el.getAttribute('material')) el.setAttribute('material', 'opacity', 0.8); });
+        el.addEventListener('mouseleave', () => { 
+            if(el.getAttribute('material')) {
+                el.setAttribute('material', 'opacity', originalOpacity); 
+                el.setAttribute('material', 'color', originalColor);
+            }
+            el.setAttribute('scale', '1 1 1'); 
+        });
+        el.addEventListener('mousedown', () => { 
+            el.setAttribute('scale', '0.95 0.95 0.8'); 
+            if(el.getAttribute('material')) el.setAttribute('material', 'color', '#00FFCC'); 
+        });
+        el.addEventListener('mouseup', () => { 
+            el.setAttribute('scale', '1 1 1'); 
+            if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); 
+        });
       }
     });
 
@@ -44,14 +60,23 @@
             this.maxRadials = 16; 
             
             this.globalTextScale = 0.35; 
-            this.currentHeight = 0.1; 
+            this.currentHeight = 1.0; 
             this.gwState = 'OFF'; 
             this.activeAnchor = null; 
             this.lastTriggerTime = 0; 
             this.calibLocal1 = null; 
             this.calibLocal2 = null;
-            this.laserMode = false; this.hitTestSource = null; this.requestingHitTest = false; this.reticleValid = false;
+            
+            // Pointer Modes: 'TOUCH', 'LIDAR', 'TRIANG'
+            this.pointerMode = 'TOUCH';
+            this.hitTestSource = null; this.requestingHitTest = false; this.reticleValid = false;
             this.targetReticlePos = new THREE.Vector3(); this.targetReticleQuat = new THREE.Quaternion(); this.lastFloorY = 0; 
+
+            // Triangulation Logic
+            this.triangState = 0; // 0=Aiming Ray1, 1=Aiming Ray2, 2=Confirm
+            this.triangRay1 = null;
+            this.triangRay2 = null;
+            this.triangResult = null;
 
             this.antennas = [this.createEmptyAntenna()]; 
             this.activeAntIdx = 0;
@@ -60,6 +85,7 @@
             this.raycasterEl = document.querySelector('#right-controller'); this.leftControllerEl = document.querySelector('#left-controller');
             this.worldPivotEl = document.querySelector('#world-pivot'); this.worldContentEl = document.querySelector('#world-content');
             
+            this.crosshairEl = document.querySelector('#triang-crosshair');
             this.verticalCylinder = document.querySelector('#vertical-cylinder'); this.heightText = document.querySelector('#height-text');
             this.menuUI = document.querySelector('#menu-ui'); this.gwUI = document.querySelector('#guy-wires-ui');
 
@@ -77,9 +103,10 @@
       createEmptyAntenna: function() {
           return {
               state: 'PLACE_GROUND_A',
-              pointA: { base: null, top: null }, pointB: { base: null, top: null }, pointC: { percent: 0.5, top: null },
-              traliccio: { active: false, center: null, shape: 'square', radius: 0.3, rotationY: 0, height: 6.0, corners: [], pegs: [] },
-              antIdx: 0, bandIdx: 2,
+              pointA: { base: null, top: null }, pointB: { base: null, top: null }, 
+              pointC: { percent: 0.5, top: null, base: null }, 
+              traliccio: { active: false, center: null, shape: 'square', radius: 0.3, rotationY: 0, height: 1.0, corners: [], pegs: [] }, 
+              antIdx: 3, bandIdx: 2, 
               endFed_AC_Len: 10.0, endFed_CB_Len: 10.0, longwireLen: 20.0, longwireVertex: 'A',
               numRadials: 4, radialLen: 5.0, mmanaModelIdx: 0, antennaRotationY: 0,
               mmanaWires: [], guyWiresData: []
@@ -98,6 +125,7 @@
           this.gwState = 'OFF'; this.activeAnchor = null;
           this.activeAntIdx = idx;
           this.current = this.antennas[idx];
+          this.triangState = 0;
           
           if (this.current.pointA.top && (this.current.state.startsWith('PLACE_') || this.current.state.startsWith('AWAITING_'))) {
               this.current.state = 'IDLE';
@@ -114,15 +142,8 @@
       executeSave: function(customName) {
         if(!this.current.pointA.base && this.antennas.length <= 1) return "ERRORE: Devi piazzare almeno un'antenna."; 
         if(!this.calibLocal1 || !this.calibLocal2) return "ERRORE: Devi impostare i 2 Diamanti prima.";
-        
         let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
-        db[customName] = { 
-            antennas: JSON.parse(JSON.stringify(this.antennas)), 
-            activeAntIdx: this.activeAntIdx, 
-            globalTextScale: this.globalTextScale, 
-            calibLocal1: this.calibLocal1, 
-            calibLocal2: this.calibLocal2 
-        };
+        db[customName] = { antennas: JSON.parse(JSON.stringify(this.antennas)), activeAntIdx: this.activeAntIdx, globalTextScale: this.globalTextScale, calibLocal1: this.calibLocal1, calibLocal2: this.calibLocal2 };
         localStorage.setItem('antenneAR_DB', JSON.stringify(db)); this.refreshDBList(); return `SCENA SALVATA:\n${customName}`;
       },
 
@@ -137,13 +158,7 @@
         this.diamondRef1.setAttribute('position', this.calibLocal1); this.diamondRef2.setAttribute('position', this.calibLocal2);
         this.diamondRef1.setAttribute('visible', 'true'); this.diamondRef2.setAttribute('visible', 'true');
 
-        if(d.antennas && d.antennas.length > 0) {
-            this.antennas = d.antennas;
-            this.activeAntIdx = d.activeAntIdx || 0;
-            if(this.activeAntIdx >= this.antennas.length) this.activeAntIdx = 0;
-            this.current = this.antennas[this.activeAntIdx];
-        }
-
+        if(d.antennas && d.antennas.length > 0) { this.antennas = d.antennas; this.activeAntIdx = d.activeAntIdx || 0; if(this.activeAntIdx >= this.antennas.length) this.activeAntIdx = 0; this.current = this.antennas[this.activeAntIdx]; }
         this.globalTextScale = parseFloat(d.globalTextScale) || 0.35;
         this.current.state = 'AWAITING_CALIB_PT1'; if(this.menuUI) this.menuUI.setAttribute('visible', true);
         this.refreshAll(); alert("Scena " + name + " caricata! Allinea il visore agganciato ai diamanti.");
@@ -161,15 +176,9 @@
         if (saved) {
           try {
             let d = JSON.parse(saved);
-            if(d.antennas && d.antennas.length > 0) {
-                this.antennas = d.antennas;
-                this.activeAntIdx = d.activeAntIdx || 0;
-                if(this.activeAntIdx >= this.antennas.length) this.activeAntIdx = 0;
-                this.current = this.antennas[this.activeAntIdx];
-            }
+            if(d.antennas && d.antennas.length > 0) { this.antennas = d.antennas; this.activeAntIdx = d.activeAntIdx || 0; if(this.activeAntIdx >= this.antennas.length) this.activeAntIdx = 0; this.current = this.antennas[this.activeAntIdx]; }
             if (d.globalTextScale) this.globalTextScale = d.globalTextScale;
             if (d.pivotPos) this.worldPivotEl.object3D.position.copy(d.pivotPos); if (d.pivotRot) this.worldPivotEl.object3D.rotation.copy(d.pivotRot); if (d.contentPos) this.worldContentEl.object3D.position.copy(d.contentPos);
-            
             if (this.current.state.startsWith('PLACE_HEIGHT') || this.current.state.startsWith('REPOSITION_HEIGHT') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SIZE_ROTATE')) this.current.state = 'IDLE';
           } catch(e) { console.error(e); }
         }
@@ -234,7 +243,39 @@
             this.worldContentEl.appendChild(d); return d; 
         };
         this.diamondRef1 = makeLocalDiamond('#00BFFF'); this.diamondRef2 = makeLocalDiamond('#FF00FF');
-        this.reticle = document.createElement('a-entity'); this.reticle.setAttribute('geometry', 'primitive: ring; radiusInner: 0.08; radiusOuter: 0.1; segmentsTheta: 6'); this.reticle.setAttribute('material', 'color: #00FF00; shader: flat; transparent: true; opacity: 0.9'); this.reticle.setAttribute('rotation', '-90 0 0'); this.reticle.setAttribute('visible', 'false'); this.el.sceneEl.appendChild(this.reticle); 
+        
+        this.reticleWrapper = document.createElement('a-entity');
+        this.reticle = document.createElement('a-entity'); 
+        this.reticle.setAttribute('geometry', 'primitive: ring; radiusInner: 0.08; radiusOuter: 0.1; segmentsTheta: 6'); 
+        this.reticle.setAttribute('material', 'color: #00FF00; shader: flat; transparent: true; opacity: 0.9'); 
+        this.reticle.setAttribute('rotation', '-90 0 0'); 
+        this.reticleWrapper.appendChild(this.reticle);
+        this.el.sceneEl.appendChild(this.reticleWrapper);
+        this.reticleWrapper.setAttribute('visible', 'false');
+
+        // Geometrie per Triangolazione
+        this.triangUI = document.createElement('a-entity');
+        this.el.sceneEl.appendChild(this.triangUI);
+        
+        this.beam1El = document.createElement('a-cylinder');
+        this.triangUI.appendChild(this.beam1El);
+        this.beam2El = document.createElement('a-cylinder');
+        this.triangUI.appendChild(this.beam2El);
+        
+        this.triangMarkerEl = document.createElement('a-sphere');
+        this.triangMarkerEl.setAttribute('radius', '0.08');
+        this.triangMarkerEl.setAttribute('material', 'color: #00E676; shader: flat; transparent: true; opacity: 0.8');
+        this.triangUI.appendChild(this.triangMarkerEl);
+        
+        this.triangTextEl = document.createElement('a-text');
+        this.triangTextEl.setAttribute('align', 'center');
+        this.triangTextEl.setAttribute('color', '#FFFFFF');
+        this.triangTextEl.setAttribute('scale', '0.6 0.6 0.6');
+        this.triangTextEl.setAttribute('position', '0 0.3 0');
+        this.triangTextEl.setAttribute('look-at-camera', '');
+        this.triangMarkerEl.appendChild(this.triangTextEl);
+
+        this.triangUI.setAttribute('visible', 'false');
       },
 
       getCalculatedLength: function() {
@@ -251,46 +292,157 @@
           this.current.longwireLen = baseLen; 
       },
 
+      calculateIntersection: function(r1, r2) {
+        let p1 = r1.origin; let d1 = r1.dir.clone().normalize();
+        let p2 = r2.origin; let d2 = r2.dir.clone().normalize();
+        let w0 = new THREE.Vector3().subVectors(p1, p2);
+        let a = d1.dot(d1); let b = d1.dot(d2); let c = d2.dot(d2);
+        let d = d1.dot(w0); let e = d2.dot(w0);
+        let denom = a*c - b*b;
+
+        if (denom < 1e-5) return null; // Paralleli
+
+        let t1 = (b*e - c*d) / denom;
+        let t2 = (a*e - b*d) / denom;
+
+        if (t1 < 0 || t2 < 0) return null; // Dietro l'utente
+
+        let pt1 = new THREE.Vector3().copy(p1).addScaledVector(d1, t1);
+        let pt2 = new THREE.Vector3().copy(p2).addScaledVector(d2, t2);
+
+        let error = pt1.distanceTo(pt2);
+        let midpoint = new THREE.Vector3().lerpVectors(pt1, pt2, 0.5);
+
+        return { point: midpoint, error: error, dist1: t1, dist2: t2 };
+      },
+
+      // Aggiornata per non far partire il raggio direttamente negli occhi e tagliarlo alla lunghezza desiderata
+      updateBeam: function(el, origin, dir, color, length = 150) {
+          el.setAttribute('visible', 'true');
+          el.setAttribute('material', `color: ${color}; shader: flat; transparent: true; opacity: 0.6`);
+          
+          let startOffset = 0.2; // Sposta visivamente la partenza del raggio 20cm in avanti per non bucare la vista
+          let actualLength = Math.max(0.1, length - startOffset);
+          
+          el.setAttribute('geometry', `primitive: cylinder; radius: 0.003; height: ${actualLength}`);
+          
+          // Posizionamento al centro del nuovo cilindro accorciato
+          let mid = new THREE.Vector3().copy(origin).addScaledVector(dir, startOffset + (actualLength / 2));
+          el.setAttribute('position', `${mid.x} ${mid.y} ${mid.z}`);
+          
+          let quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+          let euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
+          el.setAttribute('rotation', `${euler.x * 180 / Math.PI} ${euler.y * 180 / Math.PI} ${euler.z * 180 / Math.PI}`);
+      },
+
       tick: function (time, frameDelta) {
         if(!this.current.state) return;
         let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
-        let indicator = document.querySelector('#touch-indicator'); if (indicator) indicator.setAttribute('visible', isPlacingMode && !this.laserMode);
+        
+        if (!isPlacingMode) this.triangState = 0; // Reset se usciamo dalla mod posizionamento
+
+        let indicator = document.querySelector('#touch-indicator'); 
+        if (indicator) indicator.setAttribute('visible', isPlacingMode && this.pointerMode === 'TOUCH');
 
         let sceneEl = this.el.sceneEl; let frame = sceneEl.frame;
         let cameraPos = new THREE.Vector3(); let cameraDir = new THREE.Vector3(0, 0, -1);
         let cameraEl = document.querySelector('#camera');
         if (cameraEl && cameraEl.object3D) { cameraEl.object3D.getWorldPosition(cameraPos); cameraDir.applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion())); }
 
-        if (this.laserMode && isPlacingMode && frame && sceneEl.is('ar-mode')) {
-            let session = sceneEl.renderer.xr.getSession(); let refSpace = sceneEl.renderer.xr.getReferenceSpace(); let hitFound = false;
-            if (!this.hitTestSource && !this.requestingHitTest) {
-                this.requestingHitTest = true;
-                session.requestReferenceSpace('viewer').then((viewerSpace) => { session.requestHitTestSource({ space: viewerSpace }).then((source) => { this.hitTestSource = source; this.requestingHitTest = false; }).catch(() => { this.requestingHitTest = false; }); });
-            }
-            if (this.hitTestSource) {
-                let hitTestResults = frame.getHitTestResults(this.hitTestSource);
-                if (hitTestResults.length > 0) {
-                    let pose = hitTestResults[0].getPose(refSpace);
-                    if (pose) {
-                        let hitPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
-                        this.targetReticlePos.copy(hitPos); this.targetReticleQuat.copy(pose.transform.orientation); this.lastFloorY = hitPos.y; hitFound = true;
-                    }
+        // --- GESTIONE MODALITÀ TRIANGOLAZIONE (TRAMITE VISORE/GAZE) ---
+        if (this.pointerMode === 'TRIANG' && isPlacingMode) {
+            this.reticleValid = false; if (this.reticleWrapper) this.reticleWrapper.setAttribute('visible', 'false');
+            this.triangUI.setAttribute('visible', 'true');
+            
+            // Usiamo il visore (cameraPos/cameraDir) invece del controller per mirare
+            let aimOrigin = cameraPos.clone();
+            let aimDir = cameraDir.clone();
+            
+            if (this.triangState === 0) {
+                this.updateBeam(this.beam1El, aimOrigin, aimDir, '#00BFFF', 150); // Raggio 1 (Azzurro live infinito dal visore)
+                this.beam2El.setAttribute('visible', 'false'); this.triangMarkerEl.setAttribute('visible', 'false');
+            } 
+            else if (this.triangState === 1) {
+                this.triangResult = this.calculateIntersection(this.triangRay1, {origin: aimOrigin, dir: aimDir});
+                
+                if (this.triangResult) {
+                    // Tagliamo i raggi visivamente esattamente al punto di intersezione calcolato
+                    this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', this.triangResult.dist1); 
+                    this.updateBeam(this.beam2El, aimOrigin, aimDir, '#FF1744', this.triangResult.dist2); 
+                    
+                    this.triangMarkerEl.setAttribute('position', `${this.triangResult.point.x} ${this.triangResult.point.y} ${this.triangResult.point.z}`);
+                    let color = this.triangResult.error < 0.3 ? '#00E676' : (this.triangResult.error < 1.0 ? '#FFEB3B' : '#D50000');
+                    this.triangMarkerEl.setAttribute('material', `color: ${color}; shader: flat; transparent: true; opacity: 0.85`);
+                    this.triangMarkerEl.setAttribute('visible', 'true');
+                    
+                    // Scala Costante: Aumenta la dimensione all'aumentare della distanza
+                    let s = Math.max(1, this.triangResult.dist2 / 4.0); // a 4m scala 1, a 40m scala 10
+                    this.triangMarkerEl.setAttribute('scale', `${s} ${s} ${s}`);
+
+                    this.triangTextEl.setAttribute('value', `INTERSEZIONE!\nERRORE: ${this.triangResult.error.toFixed(2)}m\nDISTANZA: ${this.triangResult.dist2.toFixed(1)}m`);
+                } else {
+                    // Se non c'è incrocio visibile, lasciali lunghi per mirare
+                    this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', 150);
+                    this.updateBeam(this.beam2El, aimOrigin, aimDir, '#FF1744', 150);
+                    this.triangMarkerEl.setAttribute('visible', 'false');
+                }
+            } 
+            else if (this.triangState === 2) {
+                if (this.triangResult) {
+                    // Manteniamo i raggi "tagliati a V" fissi per la conferma finale
+                    this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', this.triangResult.dist1);
+                    this.updateBeam(this.beam2El, this.triangRay2.origin, this.triangRay2.dir, '#FF1744', this.triangResult.dist2);
+                    this.triangMarkerEl.setAttribute('position', `${this.triangResult.point.x} ${this.triangResult.point.y} ${this.triangResult.point.z}`);
+                    
+                    let s = Math.max(1, this.triangResult.dist2 / 4.0);
+                    this.triangMarkerEl.setAttribute('scale', `${s} ${s} ${s}`);
+                    this.triangTextEl.setAttribute('value', `PUNTO PRONTO!\n[GRILLETTO] CONFERMA`);
                 }
             }
-            if (!hitFound && cameraDir.y < -0.02) {
-                let distanceToFloor = (this.lastFloorY - cameraPos.y) / cameraDir.y;
-                if (distanceToFloor > 0 && distanceToFloor < 100) { this.targetReticlePos.copy(cameraPos).addScaledVector(cameraDir, distanceToFloor); this.targetReticleQuat.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)); hitFound = true; }
-            }
-            if (hitFound && this.reticle) { this.reticle.object3D.position.lerp(this.targetReticlePos, 0.25); this.reticle.object3D.rotation.set(-Math.PI / 2, 0, 0); this.reticle.setAttribute('visible', 'true'); this.reticleValid = true; } 
-            else if (this.reticle) { this.reticle.setAttribute('visible', 'false'); this.reticleValid = false; }
-        } else { if(this.reticle) this.reticle.setAttribute('visible', 'false'); this.reticleValid = false; }
+        } 
+        else {
+            this.triangUI.setAttribute('visible', 'false');
+            
+            // --- GESTIONE MODALITÀ LIDAR ---
+            if (this.pointerMode === 'LIDAR' && isPlacingMode && frame && sceneEl.is('ar-mode')) {
+                let session = sceneEl.renderer.xr.getSession(); let refSpace = sceneEl.renderer.xr.getReferenceSpace(); let hitFound = false;
+                if (!this.hitTestSource && !this.requestingHitTest) {
+                    this.requestingHitTest = true;
+                    session.requestReferenceSpace('viewer').then((viewerSpace) => { session.requestHitTestSource({ space: viewerSpace }).then((source) => { this.hitTestSource = source; this.requestingHitTest = false; }).catch(() => { this.requestingHitTest = false; }); });
+                }
+                if (this.hitTestSource) {
+                    let hitTestResults = frame.getHitTestResults(this.hitTestSource);
+                    if (hitTestResults.length > 0) {
+                        let pose = hitTestResults[0].getPose(refSpace);
+                        if (pose) {
+                            let hitPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                            this.targetReticlePos.copy(hitPos); this.targetReticleQuat.copy(pose.transform.orientation); this.lastFloorY = hitPos.y; hitFound = true;
+                        }
+                    }
+                }
+                if (!hitFound && cameraDir.y < -0.02) {
+                    let distanceToFloor = (this.lastFloorY - cameraPos.y) / cameraDir.y;
+                    if (distanceToFloor > 0 && distanceToFloor < 100) { this.targetReticlePos.copy(cameraPos).addScaledVector(cameraDir, distanceToFloor); this.targetReticleQuat.setFromEuler(new THREE.Euler(0, 0, 0)); hitFound = true; }
+                }
+                if (hitFound && this.reticleWrapper) { 
+                    this.reticleWrapper.object3D.position.lerp(this.targetReticlePos, 0.25); 
+                    this.reticleWrapper.object3D.quaternion.slerp(this.targetReticleQuat, 0.25); 
+                    this.reticleWrapper.setAttribute('visible', 'true'); this.reticleValid = true; 
+                } else if (this.reticleWrapper) { this.reticleWrapper.setAttribute('visible', 'false'); this.reticleValid = false; }
+            } else { if(this.reticleWrapper) this.reticleWrapper.setAttribute('visible', 'false'); this.reticleValid = false; }
+        }
 
         if (this.current.state === 'AWAITING_CALIB_PT1') { let hitGround = this.getHitPoint(); if (hitGround) this.worldPivotEl.object3D.position.copy(hitGround.point); } 
         else if (this.current.state === 'AWAITING_CALIB_PT2') { let hitGround = this.getHitPoint(); if (hitGround && this.calibPt1 && this.calibLocal1 && this.calibLocal2) { let angleLocal = Math.atan2(this.calibLocal2.x - this.calibLocal1.x, this.calibLocal2.z - this.calibLocal1.z); let angleWorld = Math.atan2(hitGround.point.x - this.calibPt1.x, hitGround.point.z - this.calibPt1.z); this.worldPivotEl.object3D.rotation.set(0, angleWorld - angleLocal, 0); } }
       },
 
       getHitPoint: function() {
-        if (this.laserMode && this.reticleValid) { let pos = new THREE.Vector3(); this.reticle.object3D.getWorldPosition(pos); return { point: pos }; }
+        if (this.pointerMode === 'TRIANG') {
+            if (this.triangState === 2 && this.triangResult) { return { point: this.triangResult.point.clone() }; }
+            return null; // Nessun hit point finché la triangolazione non è completa
+        }
+        if (this.pointerMode === 'LIDAR' && this.reticleValid) { let pos = new THREE.Vector3(); this.reticleWrapper.object3D.getWorldPosition(pos); return { point: pos }; }
+        
         let pos = new THREE.Vector3(); let indicator = document.querySelector('#touch-indicator');
         if (indicator && (indicator.getAttribute('visible') === true || indicator.getAttribute('visible') === 'true')) { indicator.object3D.getWorldPosition(pos); } 
         else if (this.raycasterEl) { this.raycasterEl.object3D.getWorldPosition(pos); }
@@ -303,11 +455,9 @@
             if (this.gwState !== 'OFF') return;
             
             if (this.current.state === 'SIZE_ROTATE_TRALICCIO') {
-               this.current.traliccio.rotationY += delta;
-               this.refreshAll();
+               this.current.traliccio.rotationY += delta; this.refreshAll();
             } else {
-               this.current.antennaRotationY += delta;
-               this.refreshAll();
+               this.current.antennaRotationY += delta; this.refreshAll();
                if(Date.now() - this.lastTriggerTime > 1000) { this.saveToStorage(); this.lastTriggerTime = Date.now(); }
             }
         }
@@ -317,6 +467,20 @@
         let thumbTime = Date.now();
         if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
           
+          // --- CONTROLLI ANNULLAMENTO TRIANGOLAZIONE ---
+          if (this.pointerMode === 'TRIANG' && this.triangState > 0) {
+              if (evt.detail.x > 0.4) {
+                  // Destra = Torna indietro di un passo (annulla Raggio 2, o Raggio 1)
+                  this.triangState = Math.max(0, this.triangState - 1);
+                  this.refreshAll(); this.lastThumbTime = thumbTime; return;
+              }
+              if (evt.detail.x < -0.4) {
+                  // Sinistra = Reset totale della triangolazione in corso
+                  this.triangState = 0;
+                  this.refreshAll(); this.lastThumbTime = thumbTime; return;
+              }
+          }
+
           if (this.current.state === 'SIZE_ROTATE_TRALICCIO') {
              if (Math.abs(evt.detail.y) > 0.3) {
                  let step = evt.detail.y < 0 ? 0.05 : -0.05; 
@@ -361,15 +525,17 @@
             let now = Date.now(); if (now - this.lastTriggerTime < 300) return; this.lastTriggerTime = now;
             let intersects = null; if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) intersects = this.raycasterEl.components.raycaster.intersectedEls;
             
-            if (intersects) {
-              // SELEZIONE LASER ANTENNA 
+            let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
+            
+            // Per il controller UI interazioni normali
+            if (intersects && this.pointerMode !== 'TRIANG') {
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
-              if (hitSelector) {
-                  let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx'));
-                  this.switchAntenna(targetIdx);
-                  return;
-              }
+              if (hitSelector) { let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx')); this.switchAntenna(targetIdx); return; }
 
+              let hitPoleC = intersects.find(el => el.id === 'point-c-hitbox');
+              if (hitPoleC) { this.current.state = 'REPOSITION_GROUND_C'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.refreshAll(); return; }
+
+              // Interazioni UI normali (menu, tiranti, ecc) se interseca annulla il puntamento a terra
               for (let i = 0; i < intersects.length; i++) {
                 let el = intersects[i];
                 if (el.classList && el.classList.contains('clickable') && !el.classList.contains('gw-collar') && !el.classList.contains('gw-peg')) return;
@@ -377,62 +543,88 @@
               }
             }
 
+            // GESTIONE TRIGGER IN MODALITA' TRIANGOLAZIONE (VISORE)
+            if (isPlacingMode && this.pointerMode === 'TRIANG') {
+                let cameraEl = document.querySelector('#camera');
+                let aimOrigin = new THREE.Vector3(); let aimDir = new THREE.Vector3(0, 0, -1);
+                if (cameraEl && cameraEl.object3D) { 
+                    cameraEl.object3D.getWorldPosition(aimOrigin); 
+                    aimDir.applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion())); 
+                }
+
+                if (this.triangState === 0) {
+                    this.triangRay1 = { origin: aimOrigin, dir: aimDir };
+                    this.triangState = 1; this.refreshAll(); return;
+                }
+                if (this.triangState === 1) {
+                    if (this.triangResult) {
+                        this.triangRay2 = { origin: aimOrigin, dir: aimDir };
+                        this.triangState = 2; this.refreshAll(); 
+                    }
+                    return;
+                }
+                if (this.triangState === 2) {
+                    // Conferma finale: prosegue piazzando il punto reale nel blocco sottostante
+                }
+            }
+
+            if (this.current.state === 'REPOSITION_GROUND_C') {
+                let hitGround = this.getHitPoint();
+                if(hitGround) {
+                    let localHit = this.getLocalPoint(hitGround.point);
+                    if (!this.current.pointC.base) this.current.pointC.base = {};
+                    this.current.pointC.base.y = localHit.y; this.current.state = 'IDLE';
+                    if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll();
+                }
+                if (this.triangState === 2) this.triangState = 0;
+                return;
+            }
+
             if (this.current.state === 'PLACE_TRALICCIO_CENTER') {
                let hitGround = this.getHitPoint();
                if(hitGround) {
                    this.current.traliccio.center = this.getLocalPoint(hitGround.point);
                    this.current.state = 'SIZE_ROTATE_TRALICCIO';
-                   if(this.menuUI) this.menuUI.setAttribute('visible', true); 
-                   this.refreshAll();
+                   if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll();
                }
+               if (this.triangState === 2) this.triangState = 0;
                return;
             }
             if (this.current.state === 'SIZE_ROTATE_TRALICCIO') { this.current.state = 'PLACE_HEIGHT_TRALICCIO'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.refreshAll(); return; }
             if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') {
                this.current.pointA.base = { x: this.current.traliccio.center.x, y: this.current.traliccio.center.y + this.current.traliccio.height, z: this.current.traliccio.center.z };
-               this.currentHeight = 0.1; this.current.state = 'PLACE_HEIGHT_A'; this.setupVerticalPreviewMode(this.current.pointA.base); this.refreshAll(); return;
+               this.currentHeight = 1.0; this.current.state = 'PLACE_HEIGHT_A'; this.setupVerticalPreviewMode(this.current.pointA.base); this.refreshAll(); return;
             }
 
-            // GESTIONE TIRANTI TRALICCIO
             if (this.gwState === 'EDIT_TRALICCIO_PEGS') {
                 let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
-                if (hitPeg) {
-                    let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx'));
-                    if(this.current.traliccio.pegs) this.current.traliccio.pegs.splice(pIdx, 1);
-                    this.updateGWUI(); this.refreshAll(); return;
-                }
+                if (hitPeg) { let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx')); if(this.current.traliccio.pegs) this.current.traliccio.pegs.splice(pIdx, 1); this.updateGWUI(); this.refreshAll(); return; }
                 let hitCollar = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-collar')) : null;
-                if (hitCollar) {
-                    let cIdx = parseInt(hitCollar.getAttribute('data-index'));
-                    if (this.current.guyWiresData[cIdx] === this.activeAnchor) {
-                        this.current.guyWiresData.splice(cIdx, 1); this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.refreshAll(); return;
-                    }
-                }
+                if (hitCollar) { let cIdx = parseInt(hitCollar.getAttribute('data-index')); if (this.current.guyWiresData[cIdx] === this.activeAnchor) { this.current.guyWiresData.splice(cIdx, 1); this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.refreshAll(); return; } }
+                
                 let req = this.current.traliccio.shape === 'square' ? 4 : 3;
                 if (!this.current.traliccio.pegs) this.current.traliccio.pegs = [];
                 if (this.current.traliccio.pegs.length < req) {
                     let hitGround = this.getHitPoint();
                     if (hitGround) {
                         this.current.traliccio.pegs.push(this.getLocalPoint(hitGround.point));
-                        if (this.current.traliccio.pegs.length >= req) { this.gwState = 'MAIN'; this.activeAnchor = null; this.updateGWUI(); } 
-                        else { this.updateGWUI(); }
+                        if (this.current.traliccio.pegs.length >= req) { this.gwState = 'MAIN'; this.activeAnchor = null; this.updateGWUI(); } else { this.updateGWUI(); }
                         this.refreshAll();
                     }
                 }
+                if (this.triangState === 2) this.triangState = 0;
                 return;
             }
 
-            if (this.current.state === 'AWAITING_CALIB_PT1') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibPt1 = hitGround.point.clone(); this.worldPivotEl.object3D.position.copy(this.calibPt1); this.current.state = 'AWAITING_CALIB_PT2'; this.updateMenuText(); } return; }
-            if (this.current.state === 'AWAITING_CALIB_PT2') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibPt2 = hitGround.point.clone(); this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false'); this.current.state = 'IDLE'; this.refreshAll(); } return; }
-            if (this.current.state === 'SET_CALIB_PT1') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibLocal1 = this.getLocalPoint(hitGround.point); this.diamondRef1.setAttribute('position', this.calibLocal1); this.diamondRef1.setAttribute('visible', 'true'); this.current.state = 'SET_CALIB_PT2'; this.updateMenuText(); } return; }
-            if (this.current.state === 'SET_CALIB_PT2') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibLocal2 = this.getLocalPoint(hitGround.point); this.diamondRef2.setAttribute('position', this.calibLocal2); this.diamondRef2.setAttribute('visible', 'true'); setTimeout(() => { this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false'); }, 1000); this.current.state = 'IDLE'; this.updateMenuText(); } return; }
+            if (this.current.state === 'AWAITING_CALIB_PT1') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibPt1 = hitGround.point.clone(); this.worldPivotEl.object3D.position.copy(this.calibPt1); this.current.state = 'AWAITING_CALIB_PT2'; this.updateMenuText(); } if (this.triangState === 2) this.triangState = 0; return; }
+            if (this.current.state === 'AWAITING_CALIB_PT2') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibPt2 = hitGround.point.clone(); this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false'); this.current.state = 'IDLE'; this.refreshAll(); } if (this.triangState === 2) this.triangState = 0; return; }
+            if (this.current.state === 'SET_CALIB_PT1') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibLocal1 = this.getLocalPoint(hitGround.point); this.diamondRef1.setAttribute('position', this.calibLocal1); this.diamondRef1.setAttribute('visible', 'true'); this.current.state = 'SET_CALIB_PT2'; this.updateMenuText(); } if (this.triangState === 2) this.triangState = 0; return; }
+            if (this.current.state === 'SET_CALIB_PT2') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibLocal2 = this.getLocalPoint(hitGround.point); this.diamondRef2.setAttribute('position', this.calibLocal2); this.diamondRef2.setAttribute('visible', 'true'); setTimeout(() => { this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false'); }, 1000); this.current.state = 'IDLE'; this.updateMenuText(); } if (this.triangState === 2) this.triangState = 0; return; }
 
             if (this.gwState === 'EDIT_COLLAR') {
                if (this.activeAnchor && this.activeAnchor.type === 'traliccio') {
-                   let req = this.current.traliccio.shape === 'square' ? 4 : 3;
                    if (!this.current.traliccio.pegs) this.current.traliccio.pegs = [];
-                   if (this.current.traliccio.pegs.length < req) { this.gwState = 'EDIT_TRALICCIO_PEGS'; }
-                   else { this.gwState = 'MAIN'; this.activeAnchor = null; }
+                   this.gwState = 'EDIT_TRALICCIO_PEGS'; 
                } else { this.gwState = 'EDIT_PEGS'; }
                this.updateGWUI(); this.refreshAll(); return;
             }
@@ -444,17 +636,13 @@
                 if (hitCollar) { let cIdx = parseInt(hitCollar.getAttribute('data-index')); if (this.current.guyWiresData[cIdx] === this.activeAnchor) { this.current.guyWiresData.splice(cIdx, 1); this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.refreshAll(); return; } }
                 let hitGround = this.getHitPoint();
                 if (hitGround) { let localHit = this.getLocalPoint(hitGround.point); if(!this.activeAnchor.pegs) this.activeAnchor.pegs=[]; this.activeAnchor.pegs.push(localHit); this.refreshAll(); }
+                if (this.triangState === 2) this.triangState = 0;
                 return;
             }
 
             if (this.gwState === 'MAIN') {
                 let hitCollar = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-collar')) : null;
-                if (hitCollar) {
-                    let idx = parseInt(hitCollar.getAttribute('data-index'));
-                    this.activeAnchor = this.current.guyWiresData[idx];
-                    this.gwState = 'EDIT_COLLAR'; 
-                    this.updateGWUI(); this.refreshAll();
-                }
+                if (hitCollar) { let idx = parseInt(hitCollar.getAttribute('data-index')); this.activeAnchor = this.current.guyWiresData[idx]; this.gwState = 'EDIT_COLLAR';  this.updateGWUI(); this.refreshAll(); }
                 return;
             }
 
@@ -464,23 +652,16 @@
               let hitGround = this.getHitPoint(); if(!hitGround) return;
               let newPoint = this.getLocalPoint(hitGround.point);
               
-              // TRASCINAMENTO TRALICCIO INTELLIGENTE
               if (this.current.state === 'REPOSITION_GROUND_A' && this.current.traliccio && this.current.traliccio.active) {
                   let oldCenter = this.current.traliccio.center;
                   let offset = { x: newPoint.x - oldCenter.x, y: newPoint.y - oldCenter.y, z: newPoint.z - oldCenter.z };
-                  
                   this.current.traliccio.center = newPoint;
                   this.current.pointA.base = { x: newPoint.x, y: newPoint.y + this.current.traliccio.height, z: newPoint.z };
-                  
-                  if(this.current.traliccio.pegs) {
-                      this.current.traliccio.pegs.forEach(p => { p.x += offset.x; p.y += offset.y; p.z += offset.z; });
-                  }
-              } else {
-                  this.current.pointA.base = newPoint;
-              }
+                  if(this.current.traliccio.pegs) { this.current.traliccio.pegs.forEach(p => { p.x += offset.x; p.y += offset.y; p.z += offset.z; }); }
+              } else { this.current.pointA.base = newPoint; }
               
               this.current.state = this.current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A'; 
-              this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 0.1; 
+              this.currentHeight = type === 'Verticale' ? this.getCalculatedLength() : 1.0; 
               this.setupVerticalPreviewMode(this.current.pointA.base);
             } 
             else if (this.current.state === 'PLACE_HEIGHT_A' || this.current.state === 'REPOSITION_HEIGHT_A') {
@@ -489,11 +670,14 @@
             } 
             else if (this.current.state === 'PLACE_GROUND_B' || this.current.state === 'REPOSITION_GROUND_B') {
               let hitGround = this.getHitPoint(); if(!hitGround) return;
-              this.current.pointB.base = this.getLocalPoint(hitGround.point); this.current.state = this.current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B'; this.currentHeight = 0.1; this.setupVerticalPreviewMode(this.current.pointB.base);
+              this.current.pointB.base = this.getLocalPoint(hitGround.point); this.current.state = this.current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B'; this.currentHeight = 1.0; this.setupVerticalPreviewMode(this.current.pointB.base);
             } 
             else if (this.current.state === 'PLACE_HEIGHT_B' || this.current.state === 'REPOSITION_HEIGHT_B') {
               this.current.pointB.top = { x: this.current.pointB.base.x, y: this.current.pointB.base.y + this.currentHeight, z: this.current.pointB.base.z }; this.resetVerticalPreviewMode(); this.current.state = 'IDLE'; if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll(); 
             }
+
+            if (this.triangState === 2) this.triangState = 0; // Reset fine interazione
+
         } catch(e) { console.error("Errore onTriggerDown:", e); }
       },
 
@@ -519,7 +703,14 @@
 
         let infoTextStr = ""; let poleAH = (this.current.pointA && this.current.pointA.top && this.current.pointA.base) ? (this.current.pointA.top.y - this.current.pointA.base.y) : 0;
 
-        if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = "Punta a terra e premi grilletto per\nil CENTRO del Traliccio."; }
+        // Testo Istruzioni In base alla modalità e stato
+        if (this.pointerMode === 'TRIANG' && this.current.state.includes('GROUND')) {
+            if (this.triangState === 0) infoTextStr = "TRIANGOLAZIONE: RAGGIO 1\nUsa il VISORE per mirare al bersaglio e premi Grilletto.";
+            else if (this.triangState === 1) infoTextStr = "TRIANGOLAZIONE: RAGGIO 2\nSpostati, mira all'incrocio col VISORE. (Joy DX: Annulla)";
+            else if (this.triangState === 2) infoTextStr = "TRIANGOLAZIONE: PUNTO ACQUISITO\n[GRILLETTO] Piazza | Joy DX: Rifai R2 | Joy SX: Reset";
+        }
+        else if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = "Punta a terra sotto al Centro C e premi il grilletto\nper fissare la quota."; }
+        else if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = "Punta a terra e premi grilletto per\nil CENTRO del Traliccio."; }
         else if (isTraliccioSetup) { infoTextStr = "JOYSTICK SX: Ruota | JOYSTICK DX: Misure\nGRILLETTO: Conferma forma e dimensioni"; let txtTralShape = document.querySelector('#txt-tral-shape'); if(txtTralShape && this.current.traliccio) txtTralShape.setAttribute('value', `FORMA: ${this.current.traliccio.shape === 'square' ? 'QUADRATA' : 'TRIANGOLARE'}`); }
         else if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') { infoTextStr = "JOYSTICK DX: Alza o abbassa il traliccio\nGRILLETTO: Conferma altezza traliccio."; }
         else if (this.current.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE: L'antenna è agganciata al controller.\nPosiziona il Diamante 1 sul VERO PUNTO 1."; }
@@ -535,74 +726,38 @@
         let infoEl = document.querySelector('#info-text'); if(infoEl) infoEl.setAttribute('value', infoTextStr);
       },
 
-      // PURE RENDER ENGINE HELPERS
       createLabel: function(text, pos, color, scale, container) {
           let label = document.createElement('a-text');
-          label.setAttribute('value', text);
-          label.setAttribute('align', 'center');
-          label.setAttribute('color', color);
-          label.setAttribute('scale', `${scale} ${scale} ${scale}`);
-          label.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
-          label.setAttribute('look-at-camera', '');
-          container.appendChild(label);
+          label.setAttribute('value', text); label.setAttribute('align', 'center'); label.setAttribute('color', color); label.setAttribute('scale', `${scale} ${scale} ${scale}`); label.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`); label.setAttribute('look-at-camera', ''); container.appendChild(label);
           return label;
       },
 
       createPoleAndLabel: function(topPos, basePos, labelName, color, container) {
           if (!topPos) return;
-          let sphere = document.createElement('a-sphere');
-          sphere.setAttribute('radius', '0.05');
-          sphere.setAttribute('material', `color: ${color}; roughness: 0.3`);
-          sphere.setAttribute('position', `${topPos.x} ${topPos.y} ${topPos.z}`);
-          container.appendChild(sphere);
+          let sphere = document.createElement('a-sphere'); sphere.setAttribute('radius', '0.05'); sphere.setAttribute('material', `color: ${color}; roughness: 0.3`); sphere.setAttribute('position', `${topPos.x} ${topPos.y} ${topPos.z}`); container.appendChild(sphere);
 
-          let baseH = basePos ? basePos.y : 0;
-          let actualHeight = topPos.y - baseH;
-          let midY = baseH + (actualHeight / 2);
+          let baseH = basePos ? basePos.y : 0; let actualHeight = topPos.y - baseH; let midY = baseH + (actualHeight / 2);
           
-          let pole = document.createElement('a-cylinder');
-          pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${actualHeight}`);
-          pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat');
-          pole.setAttribute('position', `${topPos.x} ${midY} ${topPos.z}`);
-          container.appendChild(pole);
-
+          let pole = document.createElement('a-cylinder'); pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${actualHeight}`); pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat'); pole.setAttribute('position', `${topPos.x} ${midY} ${topPos.z}`); container.appendChild(pole);
           this.createLabel(`${labelName}\nALTEZZA PALO: ${actualHeight.toFixed(2)}m`, {x: topPos.x, y: midY, z: topPos.z}, '#00FF00', this.globalTextScale, container);
       },
 
       createLineTube: function(p1, p2, radius, materialStr, container) {
-          let tube = document.createElement('a-cylinder');
-          let dist = p1.distanceTo(p2);
-          tube.setAttribute('geometry', `primitive: cylinder; radius: ${radius}; height: ${dist}`);
-          tube.setAttribute('material', materialStr);
-          
-          let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
-          tube.setAttribute('position', `${mid.x} ${mid.y} ${mid.z}`);
-          
-          if (dist > 0.001) {
-              let dir = new THREE.Vector3().subVectors(p2, p1).normalize();
-              let quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-              let euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
-              tube.setAttribute('rotation', `${euler.x * 180 / Math.PI} ${euler.y * 180 / Math.PI} ${euler.z * 180 / Math.PI}`);
-          }
-          
-          container.appendChild(tube);
-          return tube;
+          let tube = document.createElement('a-cylinder'); let dist = p1.distanceTo(p2);
+          tube.setAttribute('geometry', `primitive: cylinder; radius: ${radius}; height: ${dist}`); tube.setAttribute('material', materialStr);
+          let mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5); tube.setAttribute('position', `${mid.x} ${mid.y} ${mid.z}`);
+          if (dist > 0.001) { let dir = new THREE.Vector3().subVectors(p2, p1).normalize(); let quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); let euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ'); tube.setAttribute('rotation', `${euler.x * 180 / Math.PI} ${euler.y * 180 / Math.PI} ${euler.z * 180 / Math.PI}`); }
+          container.appendChild(tube); return tube;
       },
 
       drawTraliccio: function(ant, container, isCurrent) {
         if (!ant.traliccio || !ant.traliccio.active || !ant.traliccio.center) return;
-
         let t = ant.traliccio; let isSq = t.shape === 'square'; let numS = isSq ? 4 : 3;
         t.corners = []; let rotRad = (t.rotationY || 0) * (Math.PI / 180); let baseAng = isSq ? Math.PI/4 : Math.PI/2;
-
         for (let i = 0; i < numS; i++) { let ang = baseAng + (i * 2 * Math.PI / numS) + rotRad; t.corners.push(new THREE.Vector3( t.center.x + Math.cos(ang) * (t.radius||0.3), t.center.y, t.center.z + Math.sin(ang) * (t.radius||0.3) )); }
-
         let matPoles = 'color: #90A4AE; roughness: 0.4; metalness: 0.6; shader: flat'; let matBraces = 'color: #CFD8DC; roughness: 0.5; metalness: 0.3; shader: flat';
-
         let h = t.height || 6.0; if (isCurrent && ant.state === 'SIZE_ROTATE_TRALICCIO') h = Math.max(1.0, (t.radius||0.3) * 3); 
-
         t.corners.forEach(pos => { let p = document.createElement('a-cylinder'); p.setAttribute('geometry', `primitive: cylinder; radius: 0.015; height: ${h}`); p.setAttribute('material', matPoles); p.setAttribute('position', `${pos.x} ${t.center.y + h/2} ${pos.z}`); container.appendChild(p); });
-
         let secH = Math.max(0.3, (t.radius||0.3) * 2.5); let numSec = Math.max(1, Math.floor(h / secH)); let aSecH = h / numSec;
         for (let i = 0; i < numSec; i++) {
             let yB = t.center.y + (i * aSecH); let yT = t.center.y + ((i + 1) * aSecH);
@@ -611,7 +766,6 @@
                 this.createLineTube(vBL, vBR, 0.008, matBraces, container); if (i === numSec - 1) this.createLineTube(vTL, vTR, 0.008, matBraces, container); this.createLineTube(vBL, vTR, 0.006, matBraces, container); this.createLineTube(vBR, vTL, 0.006, matBraces, container);
             }
         }
-
         let lato = t.corners[0].distanceTo(t.corners[1]);
         let tVal = `TRALICCIO ${isSq?'QUAD':'TRIA'}\nH: ${h.toFixed(2)}m | L: ${lato.toFixed(2)}m`;
         if (isCurrent && ant.state === 'SIZE_ROTATE_TRALICCIO') tVal = `MODIFICA LATO: ${lato.toFixed(2)}m\nROTAZIONE: ${t.rotationY}°`;
@@ -626,41 +780,31 @@
                 let peg = document.createElement('a-cone');
                 if (isCurrent && this.gwState === 'EDIT_TRALICCIO_PEGS') { peg.classList.add('gw-peg', 'clickable'); peg.setAttribute('btn-interaction', ''); }
                 peg.setAttribute('data-peg-idx', pIdx); peg.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.04; radiusTop: 0.005; height: 0.15');
-                peg.setAttribute('material', 'color: #FF9800; shader: flat'); peg.setAttribute('position', `${pegPos.x} ${pegPos.y + 0.075} ${pegPos.z}`);
-                container.appendChild(peg);
+                peg.setAttribute('material', 'color: #FF9800; shader: flat'); peg.setAttribute('position', `${pegPos.x} ${pegPos.y + 0.075} ${pegPos.z}`); container.appendChild(peg);
             });
-
             if (isCurrent && this.gwState === 'EDIT_TRALICCIO_PEGS' && ant.traliccio.corners.length > 0) {
-                let req = ant.traliccio.shape === 'square' ? 4 : 3;
-                let cIdx = ant.traliccio.pegs.length;
+                let req = ant.traliccio.shape === 'square' ? 4 : 3; let cIdx = ant.traliccio.pegs.length;
                 if (cIdx < req && ant.traliccio.corners[cIdx]) {
                     let nextC = ant.traliccio.corners[cIdx];
                     let glow = document.createElement('a-cylinder'); glow.setAttribute('geometry', `primitive: cylinder; radius: 0.04; height: ${ant.traliccio.height}`);
-                    glow.setAttribute('material', 'color: #00E676; opacity: 0.6; shader: flat; transparent: true'); glow.setAttribute('position', `${nextC.x} ${ant.traliccio.center.y + ant.traliccio.height/2} ${nextC.z}`);
-                    container.appendChild(glow);
+                    glow.setAttribute('material', 'color: #00E676; opacity: 0.6; shader: flat; transparent: true'); glow.setAttribute('position', `${nextC.x} ${ant.traliccio.center.y + ant.traliccio.height/2} ${nextC.z}`); container.appendChild(glow);
                     this.createLabel(`<- PIAZZA PICCHETTO\nSPIGOLO ${cIdx + 1}`, {x: nextC.x, y: ant.traliccio.center.y + 1.5, z: nextC.z}, '#00E676', this.globalTextScale, container);
                 }
             }
         }
-
         if(!ant.guyWiresData) return;
         ant.guyWiresData.forEach((anchor, idx) => {
           let isSelected = isCurrent && (this.activeAnchor === anchor);
-
           if (anchor.type === 'traliccio' && ant.traliccio && ant.traliccio.active) {
               let tCenter = ant.traliccio.center; let corners = ant.traliccio.corners; 
               if(!tCenter || !corners || corners.length === 0) return;
               let hY = tCenter.y + anchor.height; let frameColor = isSelected ? '#00FF00' : '#FF1744';
-
               for(let c=0; c<corners.length; c++) {
-                  let nextC = (c+1)%corners.length;
-                  let p1 = new THREE.Vector3(corners[c].x, hY, corners[c].z); let p2 = new THREE.Vector3(corners[nextC].x, hY, corners[nextC].z);
-
+                  let nextC = (c+1)%corners.length; let p1 = new THREE.Vector3(corners[c].x, hY, corners[c].z); let p2 = new THREE.Vector3(corners[nextC].x, hY, corners[nextC].z);
                   let tube = this.createLineTube(p1, p2, isSelected ? 0.03 : 0.02, `color: ${frameColor}; shader: flat`, container);
                   tube.classList.add('gw-collar'); 
                   if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_TRALICCIO_PEGS') && isSelected))) { tube.classList.add('clickable'); tube.setAttribute('btn-interaction', ''); }
                   tube.setAttribute('data-index', idx);
-
                   if (ant.traliccio.pegs && ant.traliccio.pegs[c]) {
                      let pegRaw = ant.traliccio.pegs[c]; let pegPos = new THREE.Vector3(pegRaw.x, pegRaw.y, pegRaw.z); let wLen = p1.distanceTo(pegPos);
                      this.createLineTube(p1, pegPos, 0.003, 'color: #B0BEC5; shader: flat', container);
@@ -674,24 +818,19 @@
           else if (anchor.type !== 'traliccio') {
             let pData = anchor.pole === 'A' ? ant.pointA : ant.pointB; if (!pData || !pData.base || !pData.top) return;
             let maxH = pData.top.y - pData.base.y; let h = Math.min(anchor.height, maxH); anchor.height = h; let anchorPos = new THREE.Vector3(pData.base.x, pData.base.y + h, pData.base.z);
-
             let collar = document.createElement('a-torus'); collar.classList.add('gw-collar');
             if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_PEGS') && isSelected))) { collar.classList.add('clickable'); collar.setAttribute('btn-interaction', ''); }
             collar.setAttribute('data-index', idx); collar.setAttribute('geometry', `primitive: torus; radius: 0.04; radiusTubular: 0.006`);
             collar.setAttribute('material', isSelected ? 'color: #00FF00; shader: flat' : 'color: #FF1744; shader: flat'); if (isSelected) collar.setAttribute('scale', '1.3 1.3 1.3');
             collar.setAttribute('rotation', '90 0 0'); collar.setAttribute('position', `${anchorPos.x} ${anchorPos.y} ${anchorPos.z}`); container.appendChild(collar);
-
             this.createLabel(`COLLARE: ${h.toFixed(2)}m`, {x: anchorPos.x, y: anchorPos.y + 0.08, z: anchorPos.z}, '#00E676', this.globalTextScale * 0.8, container);
-
             if(anchor.pegs) anchor.pegs.forEach((pegPos, pegIdx) => {
               let pVec = new THREE.Vector3(pegPos.x, pegPos.y, pegPos.z); let wireLength = anchorPos.distanceTo(pVec);
               let groundDist = new THREE.Vector3(pData.base.x, pData.base.y, pData.base.z).distanceTo(new THREE.Vector3(pVec.x, pData.base.y, pVec.z));
-
               let peg = document.createElement('a-cone');
               if (isCurrent && isSelected && this.gwState === 'EDIT_PEGS') { peg.classList.add('gw-peg', 'clickable'); peg.setAttribute('btn-interaction', ''); }
               peg.setAttribute('data-peg-idx', pegIdx); peg.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.04; radiusTop: 0.005; height: 0.15');
               peg.setAttribute('material', 'color: #FF9800; shader: flat'); peg.setAttribute('position', `${pVec.x} ${pVec.y + 0.075} ${pVec.z}`); container.appendChild(peg);
-
               this.createLineTube(anchorPos, pVec, 0.002, 'color: #B0BEC5; shader: flat', container);
               let textPos = new THREE.Vector3().lerpVectors(pVec, anchorPos, 0.3);
               this.createLabel(`DIST. TERRA: ${groundDist.toFixed(2)}m\nLUNGH. FILO: ${wireLength.toFixed(2)}m`, {x: textPos.x, y: textPos.y + 0.15, z: textPos.z}, '#FFEB3B', this.globalTextScale * 0.75, container);
@@ -702,37 +841,25 @@
 
       renderSelectorBox: function(ant, container, isCurrent, idx) {
           if (isCurrent) return; 
-          
           let isMenuOpen = this.menuUI && (this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true);
           if (!isMenuOpen) return;
-
           let basePos = ant.traliccio.active ? ant.traliccio.center : ant.pointA.base;
           if (!basePos) return;
-
           let hitBox = document.createElement('a-octahedron');
           hitBox.setAttribute('position', `${basePos.x} ${basePos.y + 0.4} ${basePos.z}`);
           hitBox.setAttribute('geometry', `primitive: octahedron; radius: 0.08`);
           hitBox.setAttribute('material', 'color: #FFEB3B; opacity: 0.9; shader: flat');
           hitBox.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
-          hitBox.classList.add('clickable', 'antenna-selector');
-          hitBox.setAttribute('data-ant-idx', idx);
-          hitBox.setAttribute('btn-interaction', '');
-          container.appendChild(hitBox);
-
+          hitBox.classList.add('clickable', 'antenna-selector'); hitBox.setAttribute('data-ant-idx', idx); hitBox.setAttribute('btn-interaction', ''); container.appendChild(hitBox);
           this.createLabel(`SELEZIONA\nANTENNA ${idx + 1}`, {x: basePos.x, y: basePos.y + 0.6, z: basePos.z}, '#FFEB3B', this.globalTextScale * 0.7, container);
       },
 
       renderAntenna: function(ant, container, isCurrent, idx) {
-          let tContainer = document.createElement('a-entity'); container.appendChild(tContainer);
-          this.drawTraliccio(ant, tContainer, isCurrent);
-
-          let gwContainer = document.createElement('a-entity'); container.appendChild(gwContainer);
-          this.drawGuyWires(ant, gwContainer, isCurrent);
-
+          let tContainer = document.createElement('a-entity'); container.appendChild(tContainer); this.drawTraliccio(ant, tContainer, isCurrent);
+          let gwContainer = document.createElement('a-entity'); container.appendChild(gwContainer); this.drawGuyWires(ant, gwContainer, isCurrent);
           if (!ant.pointA.top) { this.renderSelectorBox(ant, container, isCurrent, idx); return; }
 
           let type = this.antennaTypes[ant.antIdx];
-
           if (type === 'Verticale') {
               this.createPoleAndLabel(ant.pointA.top, ant.pointA.base, 'STILO VERTICALE', '#FF1744', container);
               let h = ant.pointA.top.y - ant.pointA.base.y;
@@ -754,8 +881,7 @@
               if (ant.mmanaWires && ant.mmanaWires.length > 0) {
                   let mmanaGroup = document.createElement('a-entity');
                   mmanaGroup.setAttribute('position', `${ant.pointA.top.x} ${ant.pointA.top.y} ${ant.pointA.top.z}`);
-                  mmanaGroup.setAttribute('rotation', `0 ${ant.antennaRotationY} 0`);
-                  container.appendChild(mmanaGroup);
+                  mmanaGroup.setAttribute('rotation', `0 ${ant.antennaRotationY} 0`); container.appendChild(mmanaGroup);
                   ant.mmanaWires.forEach((w) => {
                       let p1 = new THREE.Vector3(w.x1, w.z1, w.y1); let p2 = new THREE.Vector3(w.x2, w.z2, w.y2); if(p1.distanceTo(p2) < 0.01) return;
                       this.createLineTube(p1, p2, Math.max(0.005, w.radius * 2.8), 'color: #00E676; shader: flat', mmanaGroup);
@@ -774,12 +900,29 @@
 
               let baseC = null;
               if (ant.pointA.base && ant.pointB.base) {
-                  let bA = new THREE.Vector3(ant.pointA.base.x, ant.pointA.base.y, ant.pointA.base.z);
-                  let bB = new THREE.Vector3(ant.pointB.base.x, ant.pointB.base.y, ant.pointB.base.z);
-                  baseC = new THREE.Vector3().lerpVectors(bA, bB, ant.pointC.percent);
+                  let bA_Y = (ant.traliccio && ant.traliccio.active && ant.traliccio.center) ? ant.traliccio.center.y : ant.pointA.base.y;
+                  let bB_Y = ant.pointB.base.y; let calcY = Math.min(bA_Y, bB_Y);
+                  if (ant.pointC.base && ant.pointC.base.y !== undefined) { calcY = ant.pointC.base.y; }
+                  let bA = new THREE.Vector3(ant.pointA.base.x, bA_Y, ant.pointA.base.z);
+                  let bB = new THREE.Vector3(ant.pointB.base.x, bB_Y, ant.pointB.base.z);
+                  baseC = new THREE.Vector3().lerpVectors(bA, bB, ant.pointC.percent); baseC.y = calcY;
               }
 
-              if (type !== 'Longwire') this.createPoleAndLabel(ant.pointC.top, baseC, 'CENTRO C', '#00E676', container);
+              if (type !== 'Longwire') {
+                  this.createPoleAndLabel(ant.pointC.top, baseC, 'CENTRO C', '#00E676', container);
+                  if (ant.pointC.top && baseC) {
+                      let h = ant.pointC.top.y - baseC.y; let midY = baseC.y + (h / 2);
+                      let isMenuOpen = this.menuUI && (this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true);
+                      if (isMenuOpen && isCurrent && ant.state === 'IDLE') {
+                          let hitBox = document.createElement('a-cylinder');
+                          hitBox.setAttribute('geometry', `primitive: cylinder; radius: 0.2; height: ${Math.max(0.1, h)}`);
+                          hitBox.setAttribute('material', 'color: #00E676; transparent: true; opacity: 0.15; shader: flat');
+                          hitBox.setAttribute('position', `${ant.pointC.top.x} ${midY} ${ant.pointC.top.z}`);
+                          hitBox.setAttribute('id', 'point-c-hitbox'); hitBox.classList.add('clickable'); hitBox.setAttribute('btn-interaction', '');
+                          container.appendChild(hitBox);
+                      }
+                  }
+              }
 
               if (type === 'Dipolo') {
                   let antLen = this.getCalculatedLength(); 
@@ -790,10 +933,9 @@
               } 
               else if (type === 'End Fed') {
                   let endA = new THREE.Vector3().copy(ant.pointC.top).addScaledVector(dirBA, ant.endFed_AC_Len); let endB = new THREE.Vector3().copy(ant.pointC.top).addScaledVector(dirAB, ant.endFed_CB_Len);
-                  this.createLineTube(ant.pointC.top, endA, 0.015, 'color: #FF5722; shader: flat', container);
-                  this.createLineTube(ant.pointC.top, endB, 0.015, 'color: #FF5722; shader: flat', container);
+                  this.createLineTube(ant.pointC.top, endA, 0.015, 'color: #FF5722; shader: flat', container); this.createLineTube(ant.pointC.top, endB, 0.015, 'color: #FF5722; shader: flat', container);
                   this.createLabel(`FILO AC: ${ant.endFed_AC_Len.toFixed(2)}m\nDIST. PALO A: ${vecA.distanceTo(endA).toFixed(2)}m`, new THREE.Vector3().lerpVectors(vecA, endA, 0.5), 'yellow', this.globalTextScale, container);
-                  this.createLabel(`FILO CB: ${ant.endFed_CB_Len.toFixed(2)}m\nDIST. PALO B: ${extCB.distanceTo(vecB).toFixed(2)}m`, new THREE.Vector3().lerpVectors(endB, vecB, 0.5), 'yellow', this.globalTextScale, container);
+                  this.createLabel(`FILO CB: ${ant.endFed_CB_Len.toFixed(2)}m\nDIST. PALO B: ${endB.distanceTo(vecB).toFixed(2)}m`, new THREE.Vector3().lerpVectors(endB, vecB, 0.5), 'yellow', this.globalTextScale, container);
               } 
               else if (type === 'Longwire') {
                   let startVec = ant.longwireVertex === 'A' ? vecA : vecB; let targetVec = ant.longwireVertex === 'A' ? vecB : vecA; let dirLW = new THREE.Vector3().subVectors(targetVec, startVec).normalize();
@@ -802,23 +944,17 @@
                   this.createLabel(`LUNGH. BRACCIO: ${ant.longwireLen.toFixed(2)}m\nDIST. PALO: ${extLW.distanceTo(targetVec).toFixed(2)}m`, new THREE.Vector3().lerpVectors(extLW, targetVec, 0.5), 'yellow', this.globalTextScale, container);
               }
           }
-
           this.renderSelectorBox(ant, container, isCurrent, idx);
       },
 
       updateGeometriesAndDrawings: function() {
         let containerEls = this.worldContentEl.querySelectorAll('.antenna-group');
         containerEls.forEach(el => el.parentNode.removeChild(el));
-
         this.antennas.forEach((ant, idx) => {
             let isCurrent = (idx === this.activeAntIdx);
-            let container = document.createElement('a-entity');
-            container.classList.add('antenna-group');
-            this.worldContentEl.appendChild(container);
-            
-            this.renderAntenna(ant, container, isCurrent, idx);
+            let container = document.createElement('a-entity'); container.classList.add('antenna-group');
+            this.worldContentEl.appendChild(container); this.renderAntenna(ant, container, isCurrent, idx);
         });
-        
         this.refreshRaycaster();
       },
 
@@ -833,62 +969,42 @@
           this.lastClickTime = now; let id = target.id; let mathRound = (num) => Math.round(num * 100) / 100;
 
           if (id === 'btn-laser-toggle') {
-              this.laserMode = !this.laserMode; let txt = document.querySelector('#txt-laser-toggle'); let btn = document.querySelector('#btn-laser-toggle');
-              if (this.laserMode) { txt.setAttribute('value', "PUNTAMENTO: MISTO (VISORE + JOYSTICK)"); btn.setAttribute('color', '#D81B60'); } 
-              else { txt.setAttribute('value', "PUNTAMENTO: TOCCO (LASER OFF)"); btn.setAttribute('color', '#5E35B1'); this.hitTestSource = null; } this.refreshAll();
-          }
-          else if (id === 'btn-start-traliccio') {
-              this.current = this.createEmptyAntenna(); this.antennas[this.activeAntIdx] = this.current;
-              this.current.traliccio.active = true; this.current.state = 'PLACE_TRALICCIO_CENTER';
-              if(this.menuUI) this.menuUI.setAttribute('visible', false); this.refreshAll();
-          }
-          else if (id === 'btn-scene-new') {
-              this.antennas.push(this.createEmptyAntenna());
-              this.activeAntIdx = this.antennas.length - 1;
-              this.current = this.antennas[this.activeAntIdx];
-              this.refreshAll();
-          }
-          else if (id === 'btn-scene-prev') {
-              if (this.antennas.length <= 1) return;
-              this.switchAntenna((this.activeAntIdx - 1 + this.antennas.length) % this.antennas.length);
-          }
-          else if (id === 'btn-scene-next') {
-              if (this.antennas.length <= 1) return;
-              this.switchAntenna((this.activeAntIdx + 1) % this.antennas.length);
-          }
-          else if (id === 'btn-delete-antenna') {
-              if (this.antennas.length > 1) {
-                  this.antennas.splice(this.activeAntIdx, 1);
-                  this.activeAntIdx = Math.max(0, this.activeAntIdx - 1);
-                  this.current = this.antennas[this.activeAntIdx];
+              let txt = document.querySelector('#txt-laser-toggle'); let btn = document.querySelector('#btn-laser-toggle');
+              if (this.pointerMode === 'TOUCH') {
+                  this.pointerMode = 'LIDAR';
+                  txt.setAttribute('value', "PUNTAMENTO: LIDAR + TOCCO"); btn.setAttribute('color', '#D81B60');
+                  if(this.raycasterEl) this.raycasterEl.setAttribute('raycaster', 'showLine', true);
+                  if(this.crosshairEl) this.crosshairEl.setAttribute('visible', false);
+              } else if (this.pointerMode === 'LIDAR') {
+                  this.pointerMode = 'TRIANG'; this.hitTestSource = null;
+                  txt.setAttribute('value', "PUNTAMENTO: TRIANGOLAZIONE (VISORE)"); btn.setAttribute('color', '#FF1744');
+                  if(this.raycasterEl) this.raycasterEl.setAttribute('raycaster', 'showLine', false); // Disabilita laser bianco A-Frame
+                  if(this.crosshairEl) this.crosshairEl.setAttribute('visible', true); // Attiva mirino Gaze
               } else {
-                  this.antennas = [this.createEmptyAntenna()];
-                  this.activeAntIdx = 0;
-                  this.current = this.antennas[0];
+                  this.pointerMode = 'TOUCH'; this.hitTestSource = null; this.triangState = 0;
+                  txt.setAttribute('value', "PUNTAMENTO: SOLO TOCCO"); btn.setAttribute('color', '#5E35B1');
+                  if(this.raycasterEl) this.raycasterEl.setAttribute('raycaster', 'showLine', true);
+                  if(this.crosshairEl) this.crosshairEl.setAttribute('visible', false);
               }
               this.refreshAll();
           }
-          else if (id === 'btn-tral-shape') {
-              this.current.traliccio.shape = this.current.traliccio.shape === 'square' ? 'triangle' : 'square';
+          else if (id === 'point-c-hitbox') { this.current.state = 'REPOSITION_GROUND_C'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.refreshAll(); }
+          else if (id === 'btn-start-traliccio') { this.current = this.createEmptyAntenna(); this.antennas[this.activeAntIdx] = this.current; this.current.traliccio.active = true; this.current.state = 'PLACE_TRALICCIO_CENTER'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.refreshAll(); }
+          else if (id === 'btn-scene-new') { this.antennas.push(this.createEmptyAntenna()); this.activeAntIdx = this.antennas.length - 1; this.current = this.antennas[this.activeAntIdx]; this.refreshAll(); }
+          else if (id === 'btn-scene-prev') { if (this.antennas.length <= 1) return; this.switchAntenna((this.activeAntIdx - 1 + this.antennas.length) % this.antennas.length); }
+          else if (id === 'btn-scene-next') { if (this.antennas.length <= 1) return; this.switchAntenna((this.activeAntIdx + 1) % this.antennas.length); }
+          else if (id === 'btn-delete-antenna') {
+              if (this.antennas.length > 1) { this.antennas.splice(this.activeAntIdx, 1); this.activeAntIdx = Math.max(0, this.activeAntIdx - 1); this.current = this.antennas[this.activeAntIdx]; } else { this.antennas = [this.createEmptyAntenna()]; this.activeAntIdx = 0; this.current = this.antennas[0]; }
               this.refreshAll();
           }
-          else if (id === 'btn-gw-new-tral') {
-            let newAnchor = { type: 'traliccio', height: 3.0 }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR';
-            this.updateGWUI(); this.refreshAll(); this.saveToStorage();
-          }
-          else if (id === 'btn-gw-new-a') {
-            let maxH = this.current.pointA.top.y - this.current.pointA.base.y; let newAnchor = { pole: 'A', height: maxH / 2, pegs: [] }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage();
-          }
-          else if (id === 'btn-gw-new-b') {
-            let maxH = this.current.pointB.top.y - this.current.pointB.base.y; let newAnchor = { pole: 'B', height: maxH / 2, pegs: [] }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage();
-          }
+          else if (id === 'btn-tral-shape') { this.current.traliccio.shape = this.current.traliccio.shape === 'square' ? 'triangle' : 'square'; this.refreshAll(); }
+          else if (id === 'btn-gw-new-tral') { let newAnchor = { type: 'traliccio', height: 3.0 }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage(); }
+          else if (id === 'btn-gw-new-a') { let maxH = this.current.pointA.top.y - this.current.pointA.base.y; let newAnchor = { pole: 'A', height: maxH / 2, pegs: [] }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage(); }
+          else if (id === 'btn-gw-new-b') { let maxH = this.current.pointB.top.y - this.current.pointB.base.y; let newAnchor = { pole: 'B', height: maxH / 2, pegs: [] }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage(); }
           else if (id === 'btn-gw-done') { this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.refreshAll(); }
           else if (id === 'btn-cal-set-pts') { if (!this.current.pointA.base) return; this.current.state = 'SET_CALIB_PT1'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.updateMenuText(); }
           else if (id === 'btn-cal-recover') { if (!this.calibLocal1 || !this.calibLocal2) return; this.current.state = 'AWAITING_CALIB_PT1'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.updateMenuText(); }
-          else if (id === 'btn-ar-save') {
-              if (!this.calibLocal1 || !this.calibLocal2) return;
-              let timeStr = new Date().getHours() + "-" + new Date().getMinutes() + "-" + new Date().getSeconds(); document.querySelector('#info-text').setAttribute('value', this.executeSave("SCENA_" + timeStr));
-          }
+          else if (id === 'btn-ar-save') { if (!this.calibLocal1 || !this.calibLocal2) return; let timeStr = new Date().getHours() + "-" + new Date().getMinutes() + "-" + new Date().getSeconds(); document.querySelector('#info-text').setAttribute('value', this.executeSave("SCENA_" + timeStr)); }
           else if (id === 'btn-height-a') { if(!this.current.pointA.base) return; this.current.state = 'REPOSITION_HEIGHT_A'; this.currentHeight = this.current.pointA.top.y - this.current.pointA.base.y; this.setupVerticalPreviewMode(this.current.pointA.base); if(this.menuUI) this.menuUI.setAttribute('visible', false); }
           else if (id === 'btn-height-b') { if(!this.current.pointB.base) return; this.current.state = 'REPOSITION_HEIGHT_B'; this.currentHeight = this.current.pointB.top.y - this.current.pointB.base.y; this.setupVerticalPreviewMode(this.current.pointB.base); if(this.menuUI) this.menuUI.setAttribute('visible', false); }
           else if (id === 'btn-ant') { this.current.antIdx = (this.current.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); } 
@@ -902,8 +1018,9 @@
           else if (id.startsWith('btn-ac') || id.startsWith('btn-cb') || id.startsWith('btn-lw') || id.startsWith('btn-rad')) {
              if(id==='btn-ac-m1') this.current.endFed_AC_Len = Math.max(0.1, mathRound(this.current.endFed_AC_Len - 1.0)); else if(id==='btn-ac-m01') this.current.endFed_AC_Len = Math.max(0.01, mathRound(this.current.endFed_AC_Len - 0.01)); else if(id==='btn-ac-p01') this.current.endFed_AC_Len = mathRound(this.current.endFed_AC_Len + 0.01); else if(id==='btn-ac-p1') this.current.endFed_AC_Len = mathRound(this.current.endFed_AC_Len + 1.0);
              else if(id==='btn-cb-m1') this.current.endFed_CB_Len = Math.max(0.1, mathRound(this.current.endFed_CB_Len - 1.0)); else if(id==='btn-cb-m01') this.current.endFed_CB_Len = Math.max(0.01, mathRound(this.current.endFed_CB_Len - 0.01)); else if(id==='btn-cb-p01') this.current.endFed_CB_Len = mathRound(this.current.endFed_CB_Len + 0.01); else if(id==='btn-cb-p1') this.current.endFed_CB_Len = mathRound(this.current.endFed_CB_Len + 1.0);
-             else if(id==='btn-lw-m1') this.current.longwireLen = Math.max(0.1, mathRound(this.current.longwireLen - 1.0)); else if(id==='btn-lw-m01') this.current.longwireLen = Math.max(0.01, mathRound(this.current.longwireLen - 0.01)); else if(id==='btn-lw-p01') this.current.longwireLen = mathRound(this.current.longwireLen + 0.01); else if(id==='btn-lw-p1') this.current.longwireLen = mathRound(this.current.longwireLen + 1.0);
-             else if(id==='btn-rad-num-minus') this.current.numRadials = Math.max(1, this.current.numRadials - 1); else if(id==='btn-rad-num-plus') this.current.numRadials = Math.min(this.maxRadials, this.current.numRadials + 1);
+             else if(id==='btn-lw-m1') this.current.longwireLen = Math.max(0.1, mathRound(this.current.longwireLen - 1.0)); else if(id==='btn-lw-m01') this.current.longwireLen = Math.max(0.01, mathRound(this.current.longwireLen - 0.01)); else if(id==='btn-lw-p01') this.current.longwireLen = mathRound(this.current.longwireLen + 0.01); else if(id==='btn-lw-p1') this.current.longwireLen = Math.round(this.current.longwireLen + 1.0);
+             else if(id==='btn-rad-num-minus') this.current.numRadials = Math.max(0, this.current.numRadials - 1); 
+             else if(id==='btn-rad-num-plus') this.current.numRadials = Math.min(this.maxRadials, this.current.numRadials + 1);
              else if(id==='btn-rad-m1') this.current.radialLen = Math.max(0.1, mathRound(this.current.radialLen - 1.0)); else if(id==='btn-rad-m01') this.current.radialLen = Math.max(0.1, mathRound(this.current.radialLen - 0.1)); else if(id==='btn-rad-p01') this.current.radialLen = mathRound(this.current.radialLen + 0.1); else if(id==='btn-rad-p1') this.current.radialLen = mathRound(this.current.radialLen + 1.0);
              this.refreshAll();
           }
@@ -912,15 +1029,12 @@
           else if (id === 'btn-global-reset') {
              let containerEls = this.worldContentEl.querySelectorAll('.antenna-group');
              containerEls.forEach(el => el.parentNode.removeChild(el));
-             this.antennas = [this.createEmptyAntenna()];
-             this.activeAntIdx = 0;
-             this.current = this.antennas[0];
+             this.antennas = [this.createEmptyAntenna()]; this.activeAntIdx = 0; this.current = this.antennas[0];
              if(this.worldPivotEl) { this.worldPivotEl.object3D.position.set(0,0,0); this.worldPivotEl.object3D.rotation.set(0,0,0); }
              if(this.worldContentEl) { this.worldContentEl.object3D.position.set(0,0,0); this.worldContentEl.setAttribute('visible', 'true'); }
              this.calibLocal1 = null; this.calibLocal2 = null;
              if(this.diamondRef1) this.diamondRef1.setAttribute('visible', 'false'); if(this.diamondRef2) this.diamondRef2.setAttribute('visible', 'false');
-             localStorage.removeItem('antennaArProV21');
-             this.refreshAll();
+             localStorage.removeItem('antennaArProV21'); this.refreshAll();
           }
         });
       },
@@ -966,30 +1080,32 @@
   <a-scene webxr="optionalFeatures: local-floor, hit-test;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
-      <a-camera id="camera" position="0 1.6 0"></a-camera>
+      <a-camera id="camera" position="0 1.6 0">
+          <a-entity id="triang-crosshair" visible="false" geometry="primitive: ring; radiusInner: 0.0015; radiusOuter: 0.003" material="color: #FFEB3B; shader: flat" position="0 0 -0.5"></a-entity>
+      </a-camera>
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.45" rotation="-30 0 0">
-          <a-plane width="0.55" height="0.90" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
+          <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO" position="0 0.42 0.01" align="center" scale="0.12 0.12 0.12" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V37" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
-          <a-plane width="0.52" height="0.06" color="#2A2A2A" position="0 0.35 0.01">
+          <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
           </a-plane>
 
-          <a-text value="GESTIONE SCENA (MULTI-ANTENNA)" position="0 0.29 0.01" align="center" scale="0.065 0.065 0.065" color="#00BFFF"></a-text>
-          <a-plane id="btn-scene-prev" class="clickable" btn-interaction width="0.12" height="0.03" color="#00838F" position="-0.18 0.25 0.01"><a-text value="< PREV" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
-          <a-plane id="btn-scene-new" class="clickable" btn-interaction width="0.22" height="0.03" color="#00C853" position="0 0.25 0.01"><a-text value="+ NUOVA ANTENNA" align="center" scale="0.06 0.06 0.06" color="#000"></a-text></a-plane>
-          <a-plane id="btn-scene-next" class="clickable" btn-interaction width="0.12" height="0.03" color="#00838F" position="0.18 0.25 0.01"><a-text value="NEXT >" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
+          <a-text value="GESTIONE SCENA E SISTEMA PUNTAMENTO" position="0 0.31 0.01" align="center" scale="0.065 0.065 0.065" color="#00BFFF"></a-text>
+          <a-plane id="btn-scene-prev" class="clickable" btn-interaction width="0.12" height="0.03" color="#00838F" position="-0.18 0.27 0.01"><a-text value="< PREV" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
+          <a-plane id="btn-scene-new" class="clickable" btn-interaction width="0.22" height="0.03" color="#00C853" position="0 0.27 0.01"><a-text value="+ NUOVA ANTENNA" align="center" scale="0.06 0.06 0.06" color="#000"></a-text></a-plane>
+          <a-plane id="btn-scene-next" class="clickable" btn-interaction width="0.12" height="0.03" color="#00838F" position="0.18 0.27 0.01"><a-text value="NEXT >" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
           
-          <a-plane id="btn-delete-antenna" class="clickable" btn-interaction width="0.25" height="0.025" color="#D32F2F" position="0 0.215 0.01">
+          <a-plane id="btn-delete-antenna" class="clickable" btn-interaction width="0.25" height="0.025" color="#D32F2F" position="0 0.235 0.01">
             <a-text value="[X] ELIMINA ANTENNA ATTIVA" align="center" scale="0.05 0.05 0.05" color="#FFFFFF"></a-text>
           </a-plane>
-
-          <a-text id="txt-scene-info" value="ANTENNA 1 DI 1" position="0 0.18 0.01" align="center" scale="0.055 0.055 0.055" color="#FFF"></a-text>
-          <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#5E35B1" position="0 0.14 0.01">
-            <a-text id="txt-laser-toggle" value="PUNTAMENTO: TOCCO (LASER OFF)" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
+          <a-text id="txt-scene-info" value="ANTENNA 1 DI 1" position="0 0.20 0.01" align="center" scale="0.055 0.055 0.055" color="#FFF"></a-text>
+          
+          <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#5E35B1" position="0 0.16 0.01">
+            <a-text id="txt-laser-toggle" value="PUNTAMENTO: SOLO TOCCO" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
           </a-plane>
 
           <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.09 0.01">
@@ -1115,7 +1231,7 @@
         </a-entity>
       </a-entity>
       
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector; far: 10">
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector, #point-c-hitbox; far: 10">
         <a-sphere id="touch-indicator" radius="0.015" material="color: #00FF00; shader: flat; transparent: true; opacity: 0.8" position="0 -0.07 0.02" visible="false"></a-sphere>
       </a-entity>
     </a-entity>
