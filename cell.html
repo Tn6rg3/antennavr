@@ -6,7 +6,8 @@
   <title>Antenne AR Pro V38 - Mobile + VR</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
-    body { margin: 0; overflow: hidden; background-color: #000; }
+    /* Rimosso background-color: #000 per RISOLVERE lo schermo nero in Realtà Aumentata */
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: transparent; }
     
     /* Overlay UI AR: Deve essere "invisibile" ai tocchi tranne per i suoi figli interattivi */
     #overlay-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
@@ -16,7 +17,7 @@
     #ui-2d-container h3 { margin: 0 0 5px 0; font-size: 13px; border-bottom: 1px solid #333; padding-bottom: 5px;}
     #ui-2d-container p { margin: 5px 0; font-size: 11px; color: #fff; line-height: 1.3; }
     #ui-2d-container input, #ui-2d-container select { width: 90%; padding: 6px; background: #222; color: #fff; border: 1px solid #00E676; margin-bottom: 5px; font-family: monospace; border-radius: 4px;}
-    #ui-2d-container button { width: 100%; padding: 8px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; border-radius: 4px; }
+    #ui-2d-container button { width: 100%; padding: 8px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; border-radius: 4px; touch-action: manipulation; }
     #ui-2d-container button.action { background: #FFEB3B; }
     hr { border-color: #333; margin: 8px 0; }
 
@@ -33,6 +34,7 @@
         font-family: monospace;
         cursor: pointer;
         box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        touch-action: manipulation;
     }
     #btn-toggle-db:active { transform: scale(0.95); }
 
@@ -62,7 +64,7 @@
         cursor: pointer;
         flex: 1 1 45%;
         text-align: center;
-        /* FONDAMENTALE SU MOBILE: previene che il browser interpreti la pressione come scrolling cancellando l'evento */
+        /* Previene scroll/zoom indesiderati su mobile */
         touch-action: none;
         -webkit-user-select: none;
         user-select: none;
@@ -73,13 +75,6 @@
     #btn-mob-confirm-hint { flex: 1 1 100%; background: rgba(0,0,0,0.6); border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; pointer-events: none; text-align: center; border-radius: 6px; font-weight: bold;}
   </style>
   <script>
-    // Controllo sicurezza HTTPS
-    window.addEventListener('DOMContentLoaded', () => {
-        if (!window.isSecureContext && location.hostname !== 'localhost') {
-            alert("ATTENZIONE!\nIl sito non è in HTTPS.\nPer far funzionare l'AR (fotocamera) senza schermo nero, assicurati di usare un indirizzo sicuro (https://).");
-        }
-    });
-
     AFRAME.registerComponent('look-at-camera', { 
       tick: function () { 
         let cameraEl = document.querySelector('#camera'); 
@@ -196,9 +191,9 @@
             // INTEGRAZIONE DOM OVERLAY PER WEBXR AR
             let overlay = document.getElementById('overlay-container');
             if (overlay) {
-                // Impesdisce ad A-Frame di fare "select" (piazzare punto) se tocchiamo l'UI
+                // Impesdisce ad A-Frame di fare "select" (piazzare punto) se tocchiamo un pulsante
                 overlay.addEventListener('beforexrselect', (e) => {
-                    if (e.target.closest('.pointer-auto')) {
+                    if (e.target !== overlay) {
                         e.preventDefault();
                     }
                 });
@@ -214,66 +209,91 @@
                 }
             });
 
-            // GESTIONE TAP IN NON-AR (Browser Normale)
-            window.addEventListener('pointerdown', (e) => {
-                if (!this.el.sceneEl.is('ar-mode')) {
-                    if (!e.target.closest('.pointer-auto')) {
-                        let now = Date.now();
-                        if (now - this.lastTapTime > 300) {
-                            this.lastTapTime = now;
-                            this.onTriggerDown();
-                        }
-                    }
-                }
-            });
-
+            // Avvio tutti i sistemi 2D/Mobile
             this.setupMobileUI();
-            this.initPersistentElements(); this.setupGlobalEventDelegation(); this.setupMmanaFileLoader();
-            window.saveAntennaToDB = this.saveAntennaToDB.bind(this); window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this); window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
-            this.refreshDBList(); this.loadFromStorage(); 
+            this.initPersistentElements(); 
+            this.setupGlobalEventDelegation(); 
+            this.setupMmanaFileLoader();
+            this.refreshDBList(); 
+            this.loadFromStorage(); 
             this.updateLaserVisibility();
         } catch (error) { console.error("Errore inizializzazione:", error); }
       },
 
       setupMobileUI: function() {
-          let btnMenu = document.querySelector('#btn-mob-y');
-          let btnTiranti = document.querySelector('#btn-mob-x');
-          let btnToggleDb = document.querySelector('#btn-toggle-db');
-          let ui2d = document.querySelector('#ui-2d-container');
-
-          if (btnMenu) btnMenu.addEventListener('click', (e) => { e.preventDefault(); this.toggleMenu(); });
-          if (btnTiranti) btnTiranti.addEventListener('click', (e) => { e.preventDefault(); this.toggleGuyWireMode(); });
-          
-          if (btnToggleDb && ui2d) {
-              btnToggleDb.addEventListener('click', (e) => {
-                  e.preventDefault();
-                  ui2d.style.display = (ui2d.style.display === 'none' || ui2d.style.display === '') ? 'block' : 'none';
-              });
-          }
-
-          let bindAction = (id, actionStr) => {
-              let btn = document.querySelector(id);
+          // FUNZIONE DI SUPPORTO PER RIMUOVERE CONFLITTI SUI PULSANTI E GARANTIRNE IL FUNZIONAMENTO
+          const attachClick = (selector, callback) => {
+              const btn = document.querySelector(selector);
               if(!btn) return;
+              // Sostituiamo il bottone per cancellare eventuali vecchi eventi
+              const newBtn = btn.cloneNode(true);
+              btn.parentNode.replaceChild(newBtn, btn);
               
-              let start = (e) => { 
+              const handler = (e) => {
                   e.preventDefault(); e.stopPropagation();
-                  this.startAction(actionStr); 
+                  callback(e);
               };
-              let stop = (e) => { 
-                  e.preventDefault(); e.stopPropagation();
-                  this.stopAction(); 
-              };
-              
-              btn.addEventListener('pointerdown', start);
-              btn.addEventListener('pointerup', stop);
-              btn.addEventListener('pointerleave', stop);
-              btn.addEventListener('pointercancel', stop);
+              newBtn.addEventListener('touchstart', handler, {passive: false});
+              newBtn.addEventListener('mousedown', handler);
           };
 
-          bindAction('#btn-mob-rot-sx', 'rot-sx');
-          bindAction('#btn-mob-rot-dx', 'rot-dx');
-          bindAction('#btn-mob-up', 'up');
-          bindAction('#btn-mob-down', 'down');
+          const attachHold = (selector, startCb, stopCb) => {
+              const btn = document.querySelector(selector);
+              if(!btn) return;
+              const newBtn = btn.cloneNode(true);
+              btn.parentNode.replaceChild(newBtn, btn);
+              
+              const startHandler = (e) => { e.preventDefault(); e.stopPropagation(); startCb(e); };
+              const stopHandler = (e) => { e.preventDefault(); e.stopPropagation(); stopCb(e); };
+              
+              newBtn.addEventListener('touchstart', startHandler, {passive: false});
+              newBtn.addEventListener('mousedown', startHandler);
+              
+              newBtn.addEventListener('touchend', stopHandler, {passive: false});
+              newBtn.addEventListener('mouseup', stopHandler);
+              newBtn.addEventListener('mouseleave', stopHandler);
+              newBtn.addEventListener('touchcancel', stopHandler, {passive: false});
+          };
+
+          // Bottoni Menu e Tiranti
+          attachClick('#btn-mob-y', () => this.toggleMenu());
+          attachClick('#btn-mob-x', () => this.toggleGuyWireMode());
+          
+          // Bottone per aprire/chiudere la tendina Database
+          attachClick('#btn-toggle-db', () => {
+              let ui = document.querySelector('#ui-2d-container');
+              if (ui) ui.style.display = (ui.style.display === 'none' || ui.style.display === '') ? 'block' : 'none';
+          });
+
+          // Bottoni Database (rimuovo gli onclick inline e uso Javascript)
+          attachClick('#btn-save-db', () => this.saveAntennaToDB());
+          attachClick('#btn-load-db', () => this.loadAntennaFromDB());
+          attachClick('#btn-delete-db', () => this.deleteAntennaFromDB());
+
+          // Pulsanti continui per rotazioni e altezze
+          attachHold('#btn-mob-rot-sx', () => this.startAction('rot-sx'), () => this.stopAction());
+          attachHold('#btn-mob-rot-dx', () => this.startAction('rot-dx'), () => this.stopAction());
+          attachHold('#btn-mob-up', () => this.startAction('up'), () => this.stopAction());
+          attachHold('#btn-mob-down', () => this.startAction('down'), () => this.stopAction());
+
+          // TAP SULLO SCHERMO PER PIAZZARE ANTENNE (solo se non clicchi bottoni)
+          const overlay = document.querySelector('#overlay-container');
+          if (overlay) {
+              const tapHandler = (e) => {
+                  if (e.target === overlay) { // Solo se clicchi il background invisibile
+                      e.preventDefault();
+                      let now = Date.now();
+                      if (now - this.lastTapTime > 300) {
+                          this.lastTapTime = now;
+                          if (!this.el.sceneEl.is('ar-mode')) {
+                              this.onTriggerDown(); // in AR ci pensa 'select'
+                          }
+                      }
+                  }
+              };
+              overlay.addEventListener('touchstart', tapHandler, {passive: false});
+              overlay.addEventListener('mousedown', tapHandler);
+          }
       },
 
       createEmptyAntenna: function() {
@@ -1224,17 +1244,17 @@
   <div id="overlay-container">
       
       <!-- BOTTONE PER APRIRE/CHIUDERE IL MENU SALVATAGGI -->
-      <button id="btn-toggle-db" class="pointer-auto" onclick="document.getElementById('ui-2d-container').style.display = document.getElementById('ui-2d-container').style.display === 'block' ? 'none' : 'block';">💾 MENU DB</button>
+      <button id="btn-toggle-db" class="pointer-auto">💾 MENU DB</button>
 
       <div id="ui-2d-container" class="pointer-auto">
         <h3>DATABASE SCENE MULTIPLE</h3>
         <input type="text" id="save-name" placeholder="Es. Campo Scout">
-        <button class="action" onclick="window.appContext.saveAntennaToDB()">SALVA SCENA NEL VISORE</button>
+        <button id="btn-save-db" class="action">SALVA SCENA NEL VISORE</button>
         <hr>
         <p>Carica una scena salvata:</p>
         <select id="load-list"></select>
-        <button onclick="window.appContext.loadAntennaFromDB()">CARICA SCENA</button>
-        <button style="background: #D32F2F; color:white;" onclick="window.appContext.deleteAntennaFromDB()">ELIMINA SCENA</button>
+        <button id="btn-load-db">CARICA SCENA</button>
+        <button id="btn-delete-db" style="background: #D32F2F; color:white;">ELIMINA SCENA</button>
         <hr>
         <h3>MMANA-GAL (.maa)</h3>
         <input type="file" id="file-mmana" accept=".maa">
