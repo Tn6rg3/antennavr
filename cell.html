@@ -2,17 +2,14 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Antenne AR Pro V38 - Versione Mobile + VR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Antenne AR Pro V38 - Mobile + VR</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; }
-    html { background-color: transparent; }
     
-    /* Contenitore principale Overlay: copre tutto lo schermo ma lascia passare i click dove non serve */
+    /* Overlay UI AR: Deve essere "invisibile" ai tocchi tranne per i suoi figli interattivi */
     #overlay-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
-    
-    /* La classe pointer-auto fa in modo che gli elementi UI ricevano effettivamente il tocco */
     .pointer-auto { pointer-events: auto !important; }
     
     #ui-2d-container { display: none; position: absolute; top: 60px; right: 15px; background: rgba(17,17,17,0.95); color: #00E676; padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; width: 250px; max-height: 50vh; overflow-y: auto; box-shadow: 0px 4px 10px rgba(0,0,0,0.8); }
@@ -65,20 +62,21 @@
         cursor: pointer;
         flex: 1 1 45%;
         text-align: center;
-        touch-action: manipulation;
+        /* FONDAMENTALE SU MOBILE: previene che il browser interpreti la pressione come scrolling cancellando l'evento */
+        touch-action: none;
         -webkit-user-select: none;
         user-select: none;
     }
     .mob-btn:active { background: #00E676; color: #000; transform: scale(0.95); }
     .mob-btn.btn-menu { background: rgba(0, 150, 136, 0.9); border-color: #00BFFF; flex: 1 1 45%; }
     .mob-btn.btn-tiranti { background: rgba(211, 47, 47, 0.9); border-color: #FF1744; flex: 1 1 45%; }
-    #btn-mob-confirm-hint { flex: 1 1 100%; background: rgba(0,0,0,0.5); border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; pointer-events: none; text-align: center; border-radius: 6px; font-weight: bold;}
+    #btn-mob-confirm-hint { flex: 1 1 100%; background: rgba(0,0,0,0.6); border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; pointer-events: none; text-align: center; border-radius: 6px; font-weight: bold;}
   </style>
   <script>
     // Controllo sicurezza HTTPS
     window.addEventListener('DOMContentLoaded', () => {
         if (!window.isSecureContext && location.hostname !== 'localhost') {
-            alert("ATTENZIONE!\nStai visualizzando il sito senza HTTPS.\nPer far funzionare la fotocamera in Realtà Aumentata (AR) senza avere lo schermo nero, devi caricare questo file su un server sicuro HTTPS (es. GitHub Pages, Vercel, o server certificato).");
+            alert("ATTENZIONE!\nIl sito non è in HTTPS.\nPer far funzionare l'AR (fotocamera) senza schermo nero, assicurati di usare un indirizzo sicuro (https://).");
         }
     });
 
@@ -122,9 +120,6 @@
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         try {
-            // ESPORTAZIONE GLOBALE PER I BOTTONI 2D
-            window.appContext = this;
-
             this.antennaTypes = ['Dipolo', 'End Fed', 'Longwire', 'Verticale', 'MMANA-GAL'];
             this.bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
             this.mmanaModels = ['Yagi 3 Elementi', 'Delta Loop', 'Dipolo MMANA', 'Modello Importato'];
@@ -191,38 +186,94 @@
                     }
                     this.refreshAll();
                 };
-                step(); // Execute once immediately
+                step(); // Execute once
                 this.actionInterval = setInterval(step, 150);
             };
             this.stopAction = function() { clearInterval(this.actionInterval); this.saveToStorage(); };
 
             this.el.sceneEl.addEventListener('exit-vr', () => { this.hitTestSource = null; this.requestingHitTest = false; });
             
-            // BLOCCO CLIC SU UI 2D PER NON PIAZZARE ANTENNE SOTTO AI BOTTONI
+            // INTEGRAZIONE DOM OVERLAY PER WEBXR AR
             let overlay = document.getElementById('overlay-container');
             if (overlay) {
+                // Impesdisce ad A-Frame di fare "select" (piazzare punto) se tocchiamo l'UI
                 overlay.addEventListener('beforexrselect', (e) => {
-                    // Se stiamo toccando l'UI HTML, cancella l'azione in AR 3D
                     if (e.target.closest('.pointer-auto')) {
                         e.preventDefault();
                     }
                 });
             }
 
-            // GESTIONE DEL TAP GLOBALE (SIA IN AR CHE 2D)
-            window.addEventListener('pointerdown', (e) => {
-                if (e.target.closest('.pointer-auto')) return; // Ignora se ha cliccato l'UI HTML
-                let now = Date.now();
-                if (now - this.lastTapTime < 300) return; 
-                this.lastTapTime = now;
-                this.onTriggerDown(); // Piazza punto/conferma
+            // GESTIONE TAP IN AR (WEBXR)
+            this.el.sceneEl.addEventListener('enter-vr', () => {
+                let session = this.el.sceneEl.renderer.xr.getSession();
+                if (session) {
+                    session.addEventListener('select', (e) => {
+                        this.onTriggerDown(); // Il sistema AR capisce che hai tappato nel vuoto
+                    });
+                }
             });
 
+            // GESTIONE TAP IN NON-AR (Browser Normale)
+            window.addEventListener('pointerdown', (e) => {
+                if (!this.el.sceneEl.is('ar-mode')) {
+                    if (!e.target.closest('.pointer-auto')) {
+                        let now = Date.now();
+                        if (now - this.lastTapTime > 300) {
+                            this.lastTapTime = now;
+                            this.onTriggerDown();
+                        }
+                    }
+                }
+            });
+
+            this.setupMobileUI();
             this.initPersistentElements(); this.setupGlobalEventDelegation(); this.setupMmanaFileLoader();
             window.saveAntennaToDB = this.saveAntennaToDB.bind(this); window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this); window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
             this.refreshDBList(); this.loadFromStorage(); 
             this.updateLaserVisibility();
         } catch (error) { console.error("Errore inizializzazione:", error); }
+      },
+
+      setupMobileUI: function() {
+          let btnMenu = document.querySelector('#btn-mob-y');
+          let btnTiranti = document.querySelector('#btn-mob-x');
+          let btnToggleDb = document.querySelector('#btn-toggle-db');
+          let ui2d = document.querySelector('#ui-2d-container');
+
+          if (btnMenu) btnMenu.addEventListener('click', (e) => { e.preventDefault(); this.toggleMenu(); });
+          if (btnTiranti) btnTiranti.addEventListener('click', (e) => { e.preventDefault(); this.toggleGuyWireMode(); });
+          
+          if (btnToggleDb && ui2d) {
+              btnToggleDb.addEventListener('click', (e) => {
+                  e.preventDefault();
+                  ui2d.style.display = (ui2d.style.display === 'none' || ui2d.style.display === '') ? 'block' : 'none';
+              });
+          }
+
+          let bindAction = (id, actionStr) => {
+              let btn = document.querySelector(id);
+              if(!btn) return;
+              
+              let start = (e) => { 
+                  e.preventDefault(); e.stopPropagation();
+                  this.startAction(actionStr); 
+              };
+              let stop = (e) => { 
+                  e.preventDefault(); e.stopPropagation();
+                  this.stopAction(); 
+              };
+              
+              btn.addEventListener('pointerdown', start);
+              btn.addEventListener('pointerup', stop);
+              btn.addEventListener('pointerleave', stop);
+              btn.addEventListener('pointercancel', stop);
+          };
+
+          bindAction('#btn-mob-rot-sx', 'rot-sx');
+          bindAction('#btn-mob-rot-dx', 'rot-dx');
+          bindAction('#btn-mob-up', 'up');
+          bindAction('#btn-mob-down', 'down');
       },
 
       createEmptyAntenna: function() {
@@ -1178,12 +1229,12 @@
       <div id="ui-2d-container" class="pointer-auto">
         <h3>DATABASE SCENE MULTIPLE</h3>
         <input type="text" id="save-name" placeholder="Es. Campo Scout">
-        <button class="action" onclick="window.saveAntennaToDB()">SALVA SCENA NEL VISORE</button>
+        <button class="action" onclick="window.appContext.saveAntennaToDB()">SALVA SCENA NEL VISORE</button>
         <hr>
         <p>Carica una scena salvata:</p>
         <select id="load-list"></select>
-        <button onclick="window.loadAntennaFromDB()">CARICA SCENA</button>
-        <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA SCENA</button>
+        <button onclick="window.appContext.loadAntennaFromDB()">CARICA SCENA</button>
+        <button style="background: #D32F2F; color:white;" onclick="window.appContext.deleteAntennaFromDB()">ELIMINA SCENA</button>
         <hr>
         <h3>MMANA-GAL (.maa)</h3>
         <input type="file" id="file-mmana" accept=".maa">
@@ -1191,18 +1242,17 @@
 
       <!-- CONTROLLI MOBILE SU SCHERMO -->
       <div id="mobile-controls" class="pointer-auto">
-          <button class="mob-btn btn-menu pointer-auto" onclick="window.appContext.toggleMenu();">MENU (Y)</button>
-          <button class="mob-btn btn-tiranti pointer-auto" onclick="window.appContext.toggleGuyWireMode();">TIRANTI (X)</button>
-          <button class="mob-btn pointer-auto" onpointerdown="window.appContext.startAction('rot-sx');" onpointerup="window.appContext.stopAction();" onpointerleave="window.appContext.stopAction();">⟲ Ruota SX</button>
-          <button class="mob-btn pointer-auto" onpointerdown="window.appContext.startAction('rot-dx');" onpointerup="window.appContext.stopAction();" onpointerleave="window.appContext.stopAction();">Ruota DX ⟳</button>
-          <button class="mob-btn pointer-auto" onpointerdown="window.appContext.startAction('up');" onpointerup="window.appContext.stopAction();" onpointerleave="window.appContext.stopAction();">▲ Alza / Ing</button>
-          <button class="mob-btn pointer-auto" onpointerdown="window.appContext.startAction('down');" onpointerup="window.appContext.stopAction();" onpointerleave="window.appContext.stopAction();">▼ Abb / Rid</button>
+          <button id="btn-mob-y" class="mob-btn btn-menu pointer-auto">MENU (Y)</button>
+          <button id="btn-mob-x" class="mob-btn btn-tiranti pointer-auto">TIRANTI (X)</button>
+          <button id="btn-mob-rot-sx" class="mob-btn pointer-auto">⟲ Ruota SX</button>
+          <button id="btn-mob-rot-dx" class="mob-btn pointer-auto">Ruota DX ⟳</button>
+          <button id="btn-mob-up" class="mob-btn pointer-auto">▲ Alza / Ing</button>
+          <button id="btn-mob-down" class="mob-btn pointer-auto">▼ Abb / Rid</button>
           <div id="btn-mob-confirm-hint">[ TAP IN UN PUNTO VUOTO PER CONFERMARE/PIAZZARE ]</div>
       </div>
   </div>
 
-  <!-- A-Scene adesso ha transparent="true" background="transparent" per sbloccare la camera AR! -->
-  <a-scene transparent="true" background="transparent" webxr="optionalFeatures: hit-test, dom-overlay; overlayElement: #overlay-container;" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: hit-test, dom-overlay; overlayElement: #overlay-container;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0">
