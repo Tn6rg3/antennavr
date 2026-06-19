@@ -11,13 +11,29 @@
     #overlay-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
     .pointer-auto { pointer-events: auto; }
     
-    #ui-2d-container { position: absolute; top: 15px; left: 15px; background: rgba(17,17,17,0.85); color: #00E676; padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 300px; max-height: 40vh; overflow-y: auto; }
+    #ui-2d-container { display: none; position: absolute; top: 60px; right: 15px; background: rgba(17,17,17,0.95); color: #00E676; padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; width: 250px; max-height: 50vh; overflow-y: auto; box-shadow: 0px 4px 10px rgba(0,0,0,0.8); }
     #ui-2d-container h3 { margin: 0 0 5px 0; font-size: 13px; border-bottom: 1px solid #333; padding-bottom: 5px;}
     #ui-2d-container p { margin: 5px 0; font-size: 11px; color: #fff; line-height: 1.3; }
-    #ui-2d-container input, #ui-2d-container select { width: 93%; padding: 4px; background: #222; color: #fff; border: 1px solid #00E676; margin-bottom: 5px; font-family: monospace; }
-    #ui-2d-container button { width: 100%; padding: 6px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; border-radius: 4px; }
+    #ui-2d-container input, #ui-2d-container select { width: 90%; padding: 6px; background: #222; color: #fff; border: 1px solid #00E676; margin-bottom: 5px; font-family: monospace; border-radius: 4px;}
+    #ui-2d-container button { width: 100%; padding: 8px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; border-radius: 4px; }
     #ui-2d-container button.action { background: #FFEB3B; }
     hr { border-color: #333; margin: 8px 0; }
+
+    #btn-toggle-db {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: #2196F3;
+        color: #FFF;
+        border: 2px solid #00BFFF;
+        padding: 10px;
+        border-radius: 8px;
+        font-weight: bold;
+        font-family: monospace;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+    }
+    #btn-toggle-db:active { transform: scale(0.95); }
 
     /* CONTROLLI MOBILE SU SCHERMO */
     #mobile-controls {
@@ -31,6 +47,7 @@
         justify-content: center;
         width: 95%;
         max-width: 450px;
+        pointer-events: auto; /* FONDAMENTALE PER FAR FUNZIONARE I PULSANTI */
     }
     .mob-btn {
         background: rgba(30, 30, 30, 0.9);
@@ -46,6 +63,8 @@
         flex: 1 1 45%;
         text-align: center;
         touch-action: manipulation;
+        -webkit-user-select: none;
+        user-select: none;
     }
     .mob-btn:active { background: #00E676; color: #000; transform: scale(0.95); }
     .mob-btn.btn-menu { background: rgba(0, 150, 136, 0.9); border-color: #00BFFF; flex: 1 1 45%; }
@@ -135,7 +154,7 @@
             if (this.raycasterEl) { this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this)); this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this)); }
             if (this.leftControllerEl) { this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this)); this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this)); this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this)); }
 
-            // MOBILE ON-SCREEN BUTTONS BINDING
+            // MOBILE ON-SCREEN BUTTONS E OVERLAY BINDING
             this.setupMobileUI();
 
             // WEBXR SELECT EVENT (SCREEN TAP IN AR)
@@ -152,9 +171,17 @@
             let overlay = document.getElementById('overlay-container');
             if(overlay) {
                 overlay.addEventListener('click', (e) => {
-                    // Solo se tocchi lo sfondo vuoto e non un pannello
+                    // Evita di scattare se il tocco è su un pulsante
+                    if (e.target.closest('.pointer-auto') || e.target.closest('.mob-btn')) return;
                     if (e.target === overlay && !this.el.sceneEl.is('ar-mode')) {
                          this.onTriggerDown();
+                    }
+                });
+
+                // PREVIENE CHE IL TOCCO SUI PULSANTI PIAZZI UN ANTENNA IN AR
+                overlay.addEventListener('beforexrselect', (e) => {
+                    if (e.target.closest('.mob-btn') || e.target.closest('#ui-2d-container') || e.target.closest('#btn-toggle-db')) {
+                        e.preventDefault(); 
                     }
                 });
             }
@@ -169,8 +196,18 @@
       setupMobileUI: function() {
           let btnMenu = document.querySelector('#btn-mob-y');
           let btnTiranti = document.querySelector('#btn-mob-x');
+          let btnToggleDb = document.querySelector('#btn-toggle-db');
+          let ui2d = document.querySelector('#ui-2d-container');
+
           if (btnMenu) btnMenu.addEventListener('click', (e) => { e.preventDefault(); this.toggleMenu(); });
           if (btnTiranti) btnTiranti.addEventListener('click', (e) => { e.preventDefault(); this.toggleGuyWireMode(); });
+          
+          if (btnToggleDb && ui2d) {
+              btnToggleDb.addEventListener('click', (e) => {
+                  e.preventDefault();
+                  ui2d.style.display = (ui2d.style.display === 'none' || ui2d.style.display === '') ? 'block' : 'none';
+              });
+          }
 
           let simulateLeftThumb = (val) => {
               let thumbTime = Date.now();
@@ -1162,6 +1199,10 @@
 
   <!-- Overlay che raggruppa tutti i bottoni 2D per compatibilita WebXR -->
   <div id="overlay-container">
+      
+      <!-- BOTTONE PER APRIRE/CHIUDERE IL MENU SALVATAGGI -->
+      <button id="btn-toggle-db">💾 MENU DB</button>
+
       <div id="ui-2d-container" class="pointer-auto">
         <h3>DATABASE SCENE MULTIPLE</h3>
         <input type="text" id="save-name" placeholder="Es. Campo Scout">
@@ -1176,7 +1217,7 @@
         <input type="file" id="file-mmana" accept=".maa">
       </div>
 
-      <!-- NUOVI CONTROLLI MOBILE SU SCHERMO -->
+      <!-- CONTROLLI MOBILE SU SCHERMO -->
       <div id="mobile-controls">
           <button id="btn-mob-y" class="mob-btn btn-menu">MENU (Y)</button>
           <button id="btn-mob-x" class="mob-btn btn-tiranti">TIRANTI (X)</button>
@@ -1188,12 +1229,10 @@
       </div>
   </div>
 
-  <a-scene webxr="optionalFeatures: hit-test, local-floor, dom-overlay; overlayElement: #overlay-container;" vr-mode-ui="enabled: true">
+  <a-scene background="color: transparent;" webxr="optionalFeatures: hit-test, local-floor, dom-overlay; overlayElement: #overlay-container;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0">
-          <!-- Questo raycaster associato al cursore mouse fa in modo che tappando lo schermo
-               si riescano a premere menu o selezionare collari 3D anche su cellulare. -->
           <a-entity id="mouse-cursor" cursor="rayOrigin: mouse" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector, #point-c-hitbox"></a-entity>
       </a-camera>
       
