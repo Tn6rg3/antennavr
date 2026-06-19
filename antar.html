@@ -3,13 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <title>Antenne AR Pro V38 - Three.js Nativo</title>
+  <title>Antenne AR Pro V38 - Three.js Nativo (Fix AR)</title>
   
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: monospace; color: white; touch-action: none; }
     
-    /* Contenitore principale Overlay AR */
-    #overlay-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
+    /* ESATTAMENTE COME NEL TUO CODICE FUNZIONANTE */
+    #ui-container { 
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 100; pointer-events: none; box-sizing: border-box;
+        /* Parte nascosto per non bloccare l'ARButton! */
+        display: none; 
+    }
+    
+    #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
     .pointer-auto { pointer-events: auto !important; }
     
     /* STILI BOTTONI E MENU */
@@ -57,9 +64,12 @@
 
   <div id="browserWarning">⚠️ Attenzione: Assicurati di usare HTTPS e Google Chrome per il corretto funzionamento della fotocamera AR.</div>
 
-  <!-- INTERFACCIA HTML OVERLAY DOM -->
-  <div id="overlay-container">
+  <!-- INTERFACCIA HTML OVERLAY DOM: Inizia nascosta! -->
+  <div id="ui-container">
       
+      <!-- Area Touch per intercettare i tocchi validi per l'AR -->
+      <div id="touchArea"></div>
+
       <!-- Pulsante DB -->
       <button id="btn-toggle-db" class="ui-btn pointer-auto">💾 MENU DB</button>
 
@@ -206,7 +216,7 @@
     import { ARButton } from 'three/addons/webxr/ARButton.js';
 
     // === VARIABILI GLOBALI E STATO APP ===
-    let container, camera, scene, renderer;
+    let container, camera, scene, renderer, controller;
     let hitTestSource = null, hitTestSourceRequested = false;
     let reticle, reticleValid = false;
     let lastFloorY = 0;
@@ -261,11 +271,16 @@
         renderer.xr.enabled = true;
         container.appendChild(renderer.domElement);
 
-        // INTEGRAZIONE WEBXR AR CON OVERLAY
+        // INTEGRAZIONE WEBXR AR CON OVERLAY ESATTAMENTE COME IL TUO CODICE FUNZIONANTE
         document.body.appendChild(ARButton.createButton(renderer, { 
             requiredFeatures: ['hit-test', 'dom-overlay'],
-            domOverlay: { root: document.getElementById('overlay-container') }
+            domOverlay: { root: document.getElementById('ui-container') }
         }));
+
+        // GESTIONE TAP AR NATIVA
+        controller = renderer.xr.getController(0);
+        controller.addEventListener('select', onTriggerDown);
+        scene.add(controller);
 
         worldPivot.add(worldContent);
         scene.add(worldPivot);
@@ -283,24 +298,27 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // GESTIONE TAP AR NATIVA
+        // QUANDO PARTE L'AR, MOSTRA L'UI!
         renderer.xr.addEventListener('sessionstart', () => {
-            let session = renderer.xr.getSession();
-            if (session) {
-                session.addEventListener('select', onTriggerDown);
-            }
+            document.getElementById('ui-container').style.display = 'block';
         });
-        renderer.xr.addEventListener('sessionend', () => { hitTestSource = null; hitTestSourceRequested = false; });
+        
+        renderer.xr.addEventListener('sessionend', () => { 
+            hitTestSource = null; hitTestSourceRequested = false; 
+            document.getElementById('ui-container').style.display = 'none';
+        });
 
-        // GESTIONE TAP BROWSER E OGGETTI 3D
-        window.addEventListener('pointerdown', (e) => {
-            if (e.target.closest('.pointer-auto')) return; // Ha cliccato l'UI HTML
-            
+        // FONDAMENTALE: IMPEDISCE I CONFLITTI TRA UI E AR
+        document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
+            if (ev.target.id !== 'touchArea') ev.preventDefault();
+        });
+
+        // GESTIONE DEL TAP SU OGGETTI 3D
+        document.getElementById('touchArea').addEventListener('pointerdown', (e) => {
             let now = Date.now();
             if (now - lastTapTime < 300) return;
             lastTapTime = now;
 
-            // Rilevamento click su oggetti 3D (Collari, Picchetti, Selettori)
             let mouse = new THREE.Vector2();
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -310,21 +328,8 @@
             
             if (intersects.length > 0) {
                 handle3DClick(intersects[0].object);
-                return; // Non piazzare punti se ha cliccato un oggetto!
-            }
-
-            if (!renderer.xr.isPresenting) {
-                onTriggerDown(); // Fallback per PC / Modalità non-AR
             }
         });
-
-        // Prevenzione click accidentali in AR attraverso i menu HTML
-        let overlay = document.getElementById('overlay-container');
-        if (overlay) {
-            overlay.addEventListener('beforexrselect', (e) => {
-                if (e.target.closest('.pointer-auto')) e.preventDefault();
-            });
-        }
     }
 
     function createEmptyAntenna() {
@@ -661,7 +666,7 @@
         } else if (current.state === 'PLACE_GROUND_B' || current.state === 'REPOSITION_GROUND_B') {
             let h=getHitPoint(); if(!h) return; current.pointB.base=getLocalPoint(h); current.state = current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B'; currentHeight=1.0; setupHeightMode(current.pointB.base);
         } else if (current.state === 'PLACE_HEIGHT_B' || current.state === 'REPOSITION_HEIGHT_B') {
-            current.pointB.top = {x:current.pointB.base.x, y:current.pointB.base.y+currentHeight, z:current.pointB.base.z}; resetHeightMode(); current.state='IDLE'; document.getElementById('main-menu-panel').style.display='block'; refreshAll();
+            current.pointB.top = {x:current.pointB.base.x, y:current.pointB.base.y+currentHeight, z:current.pointB.base.z}; resetHeightMode(); current.state='IDLE'; document.getElementById('main-menu-panel').style.display='block'; refreshAll(); 
         }
         triangState=0;
     }
