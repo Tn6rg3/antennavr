@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V37 - Triangolazione Visiva (Gaze) con Scala Dinamica</title>
+  <title>Antenne AR Pro V38 - Hitbox Ingrandite e Laser Intelligente</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -85,7 +85,6 @@
             this.raycasterEl = document.querySelector('#right-controller'); this.leftControllerEl = document.querySelector('#left-controller');
             this.worldPivotEl = document.querySelector('#world-pivot'); this.worldContentEl = document.querySelector('#world-content');
             
-            this.crosshairEl = document.querySelector('#triang-crosshair');
             this.verticalCylinder = document.querySelector('#vertical-cylinder'); this.heightText = document.querySelector('#height-text');
             this.menuUI = document.querySelector('#menu-ui'); this.gwUI = document.querySelector('#guy-wires-ui');
 
@@ -97,6 +96,7 @@
             this.initPersistentElements(); this.setupGlobalEventDelegation(); this.setupMmanaFileLoader();
             window.saveAntennaToDB = this.saveAntennaToDB.bind(this); window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this); window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
             this.refreshDBList(); this.loadFromStorage(); 
+            this.updateLaserVisibility();
         } catch (error) { console.error("Errore inizializzazione:", error); }
       },
 
@@ -186,6 +186,16 @@
       },
 
       getLocalPoint: function(worldVec) { let local = new THREE.Vector3(); this.worldContentEl.object3D.worldToLocal(local.copy(worldVec)); return { x: local.x, y: local.y, z: local.z }; },
+
+      updateLaserVisibility: function() {
+        let isMenuOpen = this.menuUI && (this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true);
+        let isGWMenuOpen = this.gwUI && (this.gwUI.getAttribute('visible') === 'true' || this.gwUI.getAttribute('visible') === true);
+        // Il laser bianco deve essere SEMPRE visibile se un menu è aperto, o se non siamo in triangolazione.
+        let show = (this.pointerMode !== 'TRIANG') || isMenuOpen || isGWMenuOpen;
+        if (this.raycasterEl) {
+            this.raycasterEl.setAttribute('raycaster', 'showLine', show);
+        }
+      },
 
       toggleMenu: function() {
         if(this.gwState !== 'OFF') return; 
@@ -316,17 +326,15 @@
         return { point: midpoint, error: error, dist1: t1, dist2: t2 };
       },
 
-      // Aggiornata per non far partire il raggio direttamente negli occhi e tagliarlo alla lunghezza desiderata
       updateBeam: function(el, origin, dir, color, length = 150) {
           el.setAttribute('visible', 'true');
           el.setAttribute('material', `color: ${color}; shader: flat; transparent: true; opacity: 0.6`);
           
-          let startOffset = 0.2; // Sposta visivamente la partenza del raggio 20cm in avanti per non bucare la vista
+          let startOffset = 0.2; // Evita di bucare gli occhi partendo 20cm in avanti
           let actualLength = Math.max(0.1, length - startOffset);
           
           el.setAttribute('geometry', `primitive: cylinder; radius: 0.003; height: ${actualLength}`);
           
-          // Posizionamento al centro del nuovo cilindro accorciato
           let mid = new THREE.Vector3().copy(origin).addScaledVector(dir, startOffset + (actualLength / 2));
           el.setAttribute('position', `${mid.x} ${mid.y} ${mid.z}`);
           
@@ -339,7 +347,7 @@
         if(!this.current.state) return;
         let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
         
-        if (!isPlacingMode) this.triangState = 0; // Reset se usciamo dalla mod posizionamento
+        if (!isPlacingMode) this.triangState = 0;
 
         let indicator = document.querySelector('#touch-indicator'); 
         if (indicator) indicator.setAttribute('visible', isPlacingMode && this.pointerMode === 'TOUCH');
@@ -349,24 +357,29 @@
         let cameraEl = document.querySelector('#camera');
         if (cameraEl && cameraEl.object3D) { cameraEl.object3D.getWorldPosition(cameraPos); cameraDir.applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion())); }
 
-        // --- GESTIONE MODALITÀ TRIANGOLAZIONE (TRAMITE VISORE/GAZE) ---
+        let ctrlPos = new THREE.Vector3(); let ctrlDir = new THREE.Vector3(0, 0, -1);
+        if (this.raycasterEl && this.raycasterEl.object3D) {
+            this.raycasterEl.object3D.getWorldPosition(ctrlPos);
+            ctrlDir.applyQuaternion(this.raycasterEl.object3D.getWorldQuaternion(new THREE.Quaternion()));
+        }
+
+        // --- GESTIONE MODALITÀ TRIANGOLAZIONE (TRAMITE CONTROLLER) ---
         if (this.pointerMode === 'TRIANG' && isPlacingMode) {
             this.reticleValid = false; if (this.reticleWrapper) this.reticleWrapper.setAttribute('visible', 'false');
             this.triangUI.setAttribute('visible', 'true');
             
-            // Usiamo il visore (cameraPos/cameraDir) invece del controller per mirare
-            let aimOrigin = cameraPos.clone();
-            let aimDir = cameraDir.clone();
+            // Usiamo di nuovo il controller per mirare
+            let aimOrigin = ctrlPos.clone();
+            let aimDir = ctrlDir.clone();
             
             if (this.triangState === 0) {
-                this.updateBeam(this.beam1El, aimOrigin, aimDir, '#00BFFF', 150); // Raggio 1 (Azzurro live infinito dal visore)
+                this.updateBeam(this.beam1El, aimOrigin, aimDir, '#00BFFF', 150);
                 this.beam2El.setAttribute('visible', 'false'); this.triangMarkerEl.setAttribute('visible', 'false');
             } 
             else if (this.triangState === 1) {
                 this.triangResult = this.calculateIntersection(this.triangRay1, {origin: aimOrigin, dir: aimDir});
                 
                 if (this.triangResult) {
-                    // Tagliamo i raggi visivamente esattamente al punto di intersezione calcolato
                     this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', this.triangResult.dist1); 
                     this.updateBeam(this.beam2El, aimOrigin, aimDir, '#FF1744', this.triangResult.dist2); 
                     
@@ -375,13 +388,12 @@
                     this.triangMarkerEl.setAttribute('material', `color: ${color}; shader: flat; transparent: true; opacity: 0.85`);
                     this.triangMarkerEl.setAttribute('visible', 'true');
                     
-                    // Scala Costante: Aumenta la dimensione all'aumentare della distanza
-                    let s = Math.max(1, this.triangResult.dist2 / 4.0); // a 4m scala 1, a 40m scala 10
+                    // Scala Costante
+                    let s = Math.max(1, this.triangResult.dist2 / 4.0);
                     this.triangMarkerEl.setAttribute('scale', `${s} ${s} ${s}`);
 
                     this.triangTextEl.setAttribute('value', `INTERSEZIONE!\nERRORE: ${this.triangResult.error.toFixed(2)}m\nDISTANZA: ${this.triangResult.dist2.toFixed(1)}m`);
                 } else {
-                    // Se non c'è incrocio visibile, lasciali lunghi per mirare
                     this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', 150);
                     this.updateBeam(this.beam2El, aimOrigin, aimDir, '#FF1744', 150);
                     this.triangMarkerEl.setAttribute('visible', 'false');
@@ -389,7 +401,6 @@
             } 
             else if (this.triangState === 2) {
                 if (this.triangResult) {
-                    // Manteniamo i raggi "tagliati a V" fissi per la conferma finale
                     this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', this.triangResult.dist1);
                     this.updateBeam(this.beam2El, this.triangRay2.origin, this.triangRay2.dir, '#FF1744', this.triangResult.dist2);
                     this.triangMarkerEl.setAttribute('position', `${this.triangResult.point.x} ${this.triangResult.point.y} ${this.triangResult.point.z}`);
@@ -439,7 +450,7 @@
       getHitPoint: function() {
         if (this.pointerMode === 'TRIANG') {
             if (this.triangState === 2 && this.triangResult) { return { point: this.triangResult.point.clone() }; }
-            return null; // Nessun hit point finché la triangolazione non è completa
+            return null;
         }
         if (this.pointerMode === 'LIDAR' && this.reticleValid) { let pos = new THREE.Vector3(); this.reticleWrapper.object3D.getWorldPosition(pos); return { point: pos }; }
         
@@ -467,15 +478,12 @@
         let thumbTime = Date.now();
         if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
           
-          // --- CONTROLLI ANNULLAMENTO TRIANGOLAZIONE ---
           if (this.pointerMode === 'TRIANG' && this.triangState > 0) {
               if (evt.detail.x > 0.4) {
-                  // Destra = Torna indietro di un passo (annulla Raggio 2, o Raggio 1)
                   this.triangState = Math.max(0, this.triangState - 1);
                   this.refreshAll(); this.lastThumbTime = thumbTime; return;
               }
               if (evt.detail.x < -0.4) {
-                  // Sinistra = Reset totale della triangolazione in corso
                   this.triangState = 0;
                   this.refreshAll(); this.lastThumbTime = thumbTime; return;
               }
@@ -527,38 +535,39 @@
             
             let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
             
-            // Per il controller UI interazioni normali
-            if (intersects && this.pointerMode !== 'TRIANG') {
+            // 1. Controllo Intercettazione UI e Menu
+            let hitUI = false;
+            if (intersects) {
+              for (let i = 0; i < intersects.length; i++) {
+                let el = intersects[i];
+                if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) { hitUI = true; break; }
+              }
+            }
+            if (hitUI) return; // Se clicchi il menu, non piazzare punti o triangolare!
+
+            if (intersects) {
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
               if (hitSelector) { let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx')); this.switchAntenna(targetIdx); return; }
 
               let hitPoleC = intersects.find(el => el.id === 'point-c-hitbox');
               if (hitPoleC) { this.current.state = 'REPOSITION_GROUND_C'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.refreshAll(); return; }
-
-              // Interazioni UI normali (menu, tiranti, ecc) se interseca annulla il puntamento a terra
-              for (let i = 0; i < intersects.length; i++) {
-                let el = intersects[i];
-                if (el.classList && el.classList.contains('clickable') && !el.classList.contains('gw-collar') && !el.classList.contains('gw-peg')) return;
-                if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) return;
-              }
             }
 
-            // GESTIONE TRIGGER IN MODALITA' TRIANGOLAZIONE (VISORE)
+            // 2. GESTIONE TRIGGER IN MODALITA' TRIANGOLAZIONE (CONTROLLER)
             if (isPlacingMode && this.pointerMode === 'TRIANG') {
-                let cameraEl = document.querySelector('#camera');
-                let aimOrigin = new THREE.Vector3(); let aimDir = new THREE.Vector3(0, 0, -1);
-                if (cameraEl && cameraEl.object3D) { 
-                    cameraEl.object3D.getWorldPosition(aimOrigin); 
-                    aimDir.applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion())); 
+                let ctrlPos = new THREE.Vector3(); let ctrlDir = new THREE.Vector3(0, 0, -1);
+                if (this.raycasterEl && this.raycasterEl.object3D) { 
+                    this.raycasterEl.object3D.getWorldPosition(ctrlPos); 
+                    ctrlDir.applyQuaternion(this.raycasterEl.object3D.getWorldQuaternion(new THREE.Quaternion())); 
                 }
 
                 if (this.triangState === 0) {
-                    this.triangRay1 = { origin: aimOrigin, dir: aimDir };
+                    this.triangRay1 = { origin: ctrlPos, dir: ctrlDir };
                     this.triangState = 1; this.refreshAll(); return;
                 }
                 if (this.triangState === 1) {
                     if (this.triangResult) {
-                        this.triangRay2 = { origin: aimOrigin, dir: aimDir };
+                        this.triangRay2 = { origin: ctrlPos, dir: ctrlDir };
                         this.triangState = 2; this.refreshAll(); 
                     }
                     return;
@@ -599,6 +608,7 @@
             if (this.gwState === 'EDIT_TRALICCIO_PEGS') {
                 let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
                 if (hitPeg) { let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx')); if(this.current.traliccio.pegs) this.current.traliccio.pegs.splice(pIdx, 1); this.updateGWUI(); this.refreshAll(); return; }
+                
                 let hitCollar = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-collar')) : null;
                 if (hitCollar) { let cIdx = parseInt(hitCollar.getAttribute('data-index')); if (this.current.guyWiresData[cIdx] === this.activeAnchor) { this.current.guyWiresData.splice(cIdx, 1); this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.refreshAll(); return; } }
                 
@@ -632,8 +642,10 @@
             if (this.gwState === 'EDIT_PEGS') {
                 let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
                 if (hitPeg) { let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx')); if(this.activeAnchor.pegs) this.activeAnchor.pegs.splice(pIdx, 1); this.refreshAll(); return; }
+                
                 let hitCollar = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-collar')) : null;
                 if (hitCollar) { let cIdx = parseInt(hitCollar.getAttribute('data-index')); if (this.current.guyWiresData[cIdx] === this.activeAnchor) { this.current.guyWiresData.splice(cIdx, 1); this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.refreshAll(); return; } }
+                
                 let hitGround = this.getHitPoint();
                 if (hitGround) { let localHit = this.getLocalPoint(hitGround.point); if(!this.activeAnchor.pegs) this.activeAnchor.pegs=[]; this.activeAnchor.pegs.push(localHit); this.refreshAll(); }
                 if (this.triangState === 2) this.triangState = 0;
@@ -676,7 +688,7 @@
               this.current.pointB.top = { x: this.current.pointB.base.x, y: this.current.pointB.base.y + this.currentHeight, z: this.current.pointB.base.z }; this.resetVerticalPreviewMode(); this.current.state = 'IDLE'; if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll(); 
             }
 
-            if (this.triangState === 2) this.triangState = 0; // Reset fine interazione
+            if (this.triangState === 2) this.triangState = 0;
 
         } catch(e) { console.error("Errore onTriggerDown:", e); }
       },
@@ -705,8 +717,8 @@
 
         // Testo Istruzioni In base alla modalità e stato
         if (this.pointerMode === 'TRIANG' && this.current.state.includes('GROUND')) {
-            if (this.triangState === 0) infoTextStr = "TRIANGOLAZIONE: RAGGIO 1\nUsa il VISORE per mirare al bersaglio e premi Grilletto.";
-            else if (this.triangState === 1) infoTextStr = "TRIANGOLAZIONE: RAGGIO 2\nSpostati, mira all'incrocio col VISORE. (Joy DX: Annulla)";
+            if (this.triangState === 0) infoTextStr = "TRIANGOLAZIONE: RAGGIO 1\nUsa il CONTROLLER per mirare al bersaglio e premi Grilletto.";
+            else if (this.triangState === 1) infoTextStr = "TRIANGOLAZIONE: RAGGIO 2\nSpostati, mira all'incrocio col CONTROLLER. (Joy DX: Annulla)";
             else if (this.triangState === 2) infoTextStr = "TRIANGOLAZIONE: PUNTO ACQUISITO\n[GRILLETTO] Piazza | Joy DX: Rifai R2 | Joy SX: Reset";
         }
         else if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = "Punta a terra sotto al Centro C e premi il grilletto\nper fissare la quota."; }
@@ -778,9 +790,18 @@
             ant.traliccio.pegs.forEach((pegPosRaw, pIdx) => {
                 let pegPos = new THREE.Vector3(pegPosRaw.x, pegPosRaw.y, pegPosRaw.z); 
                 let peg = document.createElement('a-cone');
-                if (isCurrent && this.gwState === 'EDIT_TRALICCIO_PEGS') { peg.classList.add('gw-peg', 'clickable'); peg.setAttribute('btn-interaction', ''); }
-                peg.setAttribute('data-peg-idx', pIdx); peg.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.04; radiusTop: 0.005; height: 0.15');
-                peg.setAttribute('material', 'color: #FF9800; shader: flat'); peg.setAttribute('position', `${pegPos.x} ${pegPos.y + 0.075} ${pegPos.z}`); container.appendChild(peg);
+                peg.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.04; radiusTop: 0.005; height: 0.15');
+                peg.setAttribute('material', 'color: #FF9800; shader: flat'); peg.setAttribute('position', `${pegPos.x} ${pegPos.y + 0.075} ${pegPos.z}`); 
+                container.appendChild(peg);
+
+                // HITBOX ALLARGATA PER PICCHETTI TRALICCIO (Raggio 15cm)
+                let hitPeg = document.createElement('a-cylinder');
+                hitPeg.setAttribute('geometry', 'primitive: cylinder; radius: 0.15; height: 0.4');
+                hitPeg.setAttribute('material', 'opacity: 0; transparent: true; depthWrite: false');
+                hitPeg.setAttribute('position', `${pegPos.x} ${pegPos.y + 0.2} ${pegPos.z}`);
+                hitPeg.setAttribute('data-peg-idx', pIdx);
+                if (isCurrent && this.gwState === 'EDIT_TRALICCIO_PEGS') { hitPeg.classList.add('gw-peg', 'clickable'); }
+                container.appendChild(hitPeg);
             });
             if (isCurrent && this.gwState === 'EDIT_TRALICCIO_PEGS' && ant.traliccio.corners.length > 0) {
                 let req = ant.traliccio.shape === 'square' ? 4 : 3; let cIdx = ant.traliccio.pegs.length;
@@ -801,10 +822,19 @@
               let hY = tCenter.y + anchor.height; let frameColor = isSelected ? '#00FF00' : '#FF1744';
               for(let c=0; c<corners.length; c++) {
                   let nextC = (c+1)%corners.length; let p1 = new THREE.Vector3(corners[c].x, hY, corners[c].z); let p2 = new THREE.Vector3(corners[nextC].x, hY, corners[nextC].z);
-                  let tube = this.createLineTube(p1, p2, isSelected ? 0.03 : 0.02, `color: ${frameColor}; shader: flat`, container);
-                  tube.classList.add('gw-collar'); 
-                  if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_TRALICCIO_PEGS') && isSelected))) { tube.classList.add('clickable'); tube.setAttribute('btn-interaction', ''); }
-                  tube.setAttribute('data-index', idx);
+                  
+                  // Visual tube (Non più clickable)
+                  this.createLineTube(p1, p2, isSelected ? 0.03 : 0.02, `color: ${frameColor}; shader: flat`, container);
+                  
+                  // HITBOX ALLARGATA PER COLLARE TRALICCIO (Raggio 10cm invisibile)
+                  let hitTube = this.createLineTube(p1, p2, 0.1, 'opacity: 0; transparent: true; depthWrite: false', container);
+                  hitTube.setAttribute('data-index', idx);
+                  if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_TRALICCIO_PEGS') && isSelected))) { 
+                      hitTube.classList.add('gw-collar', 'clickable'); 
+                  } else {
+                      hitTube.classList.add('gw-collar');
+                  }
+                  
                   if (ant.traliccio.pegs && ant.traliccio.pegs[c]) {
                      let pegRaw = ant.traliccio.pegs[c]; let pegPos = new THREE.Vector3(pegRaw.x, pegRaw.y, pegRaw.z); let wLen = p1.distanceTo(pegPos);
                      this.createLineTube(p1, pegPos, 0.003, 'color: #B0BEC5; shader: flat', container);
@@ -818,19 +848,47 @@
           else if (anchor.type !== 'traliccio') {
             let pData = anchor.pole === 'A' ? ant.pointA : ant.pointB; if (!pData || !pData.base || !pData.top) return;
             let maxH = pData.top.y - pData.base.y; let h = Math.min(anchor.height, maxH); anchor.height = h; let anchorPos = new THREE.Vector3(pData.base.x, pData.base.y + h, pData.base.z);
-            let collar = document.createElement('a-torus'); collar.classList.add('gw-collar');
-            if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_PEGS') && isSelected))) { collar.classList.add('clickable'); collar.setAttribute('btn-interaction', ''); }
-            collar.setAttribute('data-index', idx); collar.setAttribute('geometry', `primitive: torus; radius: 0.04; radiusTubular: 0.006`);
+            
+            // Visual Collar (Non più clickable)
+            let collar = document.createElement('a-torus');
+            collar.setAttribute('geometry', `primitive: torus; radius: 0.04; radiusTubular: 0.006`);
             collar.setAttribute('material', isSelected ? 'color: #00FF00; shader: flat' : 'color: #FF1744; shader: flat'); if (isSelected) collar.setAttribute('scale', '1.3 1.3 1.3');
             collar.setAttribute('rotation', '90 0 0'); collar.setAttribute('position', `${anchorPos.x} ${anchorPos.y} ${anchorPos.z}`); container.appendChild(collar);
+            
+            // HITBOX ALLARGATA PER COLLARE PALO NORMALE
+            let hitCollar = document.createElement('a-torus');
+            hitCollar.setAttribute('geometry', `primitive: torus; radius: 0.04; radiusTubular: 0.08`);
+            hitCollar.setAttribute('material', 'opacity: 0; transparent: true; depthWrite: false');
+            hitCollar.setAttribute('rotation', '90 0 0');
+            hitCollar.setAttribute('position', `${anchorPos.x} ${anchorPos.y} ${anchorPos.z}`);
+            hitCollar.setAttribute('data-index', idx);
+            if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_PEGS') && isSelected))) { 
+                hitCollar.classList.add('gw-collar', 'clickable'); 
+            } else {
+                hitCollar.classList.add('gw-collar');
+            }
+            container.appendChild(hitCollar);
+            
             this.createLabel(`COLLARE: ${h.toFixed(2)}m`, {x: anchorPos.x, y: anchorPos.y + 0.08, z: anchorPos.z}, '#00E676', this.globalTextScale * 0.8, container);
+            
             if(anchor.pegs) anchor.pegs.forEach((pegPos, pegIdx) => {
               let pVec = new THREE.Vector3(pegPos.x, pegPos.y, pegPos.z); let wireLength = anchorPos.distanceTo(pVec);
               let groundDist = new THREE.Vector3(pData.base.x, pData.base.y, pData.base.z).distanceTo(new THREE.Vector3(pVec.x, pData.base.y, pVec.z));
+              
+              // Visual Peg
               let peg = document.createElement('a-cone');
-              if (isCurrent && isSelected && this.gwState === 'EDIT_PEGS') { peg.classList.add('gw-peg', 'clickable'); peg.setAttribute('btn-interaction', ''); }
-              peg.setAttribute('data-peg-idx', pegIdx); peg.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.04; radiusTop: 0.005; height: 0.15');
+              peg.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.04; radiusTop: 0.005; height: 0.15');
               peg.setAttribute('material', 'color: #FF9800; shader: flat'); peg.setAttribute('position', `${pVec.x} ${pVec.y + 0.075} ${pVec.z}`); container.appendChild(peg);
+              
+              // HITBOX ALLARGATA PER PICCHETTO PALO NORMALE
+              let hitPegN = document.createElement('a-cylinder');
+              hitPegN.setAttribute('geometry', 'primitive: cylinder; radius: 0.15; height: 0.4');
+              hitPegN.setAttribute('material', 'opacity: 0; transparent: true; depthWrite: false');
+              hitPegN.setAttribute('position', `${pVec.x} ${pVec.y + 0.2} ${pVec.z}`);
+              hitPegN.setAttribute('data-peg-idx', pegIdx);
+              if (isCurrent && isSelected && this.gwState === 'EDIT_PEGS') { hitPegN.classList.add('gw-peg', 'clickable'); }
+              container.appendChild(hitPegN);
+
               this.createLineTube(anchorPos, pVec, 0.002, 'color: #B0BEC5; shader: flat', container);
               let textPos = new THREE.Vector3().lerpVectors(pVec, anchorPos, 0.3);
               this.createLabel(`DIST. TERRA: ${groundDist.toFixed(2)}m\nLUNGH. FILO: ${wireLength.toFixed(2)}m`, {x: textPos.x, y: textPos.y + 0.15, z: textPos.z}, '#FFEB3B', this.globalTextScale * 0.75, container);
@@ -973,18 +1031,12 @@
               if (this.pointerMode === 'TOUCH') {
                   this.pointerMode = 'LIDAR';
                   txt.setAttribute('value', "PUNTAMENTO: LIDAR + TOCCO"); btn.setAttribute('color', '#D81B60');
-                  if(this.raycasterEl) this.raycasterEl.setAttribute('raycaster', 'showLine', true);
-                  if(this.crosshairEl) this.crosshairEl.setAttribute('visible', false);
               } else if (this.pointerMode === 'LIDAR') {
                   this.pointerMode = 'TRIANG'; this.hitTestSource = null;
-                  txt.setAttribute('value', "PUNTAMENTO: TRIANGOLAZIONE (VISORE)"); btn.setAttribute('color', '#FF1744');
-                  if(this.raycasterEl) this.raycasterEl.setAttribute('raycaster', 'showLine', false); // Disabilita laser bianco A-Frame
-                  if(this.crosshairEl) this.crosshairEl.setAttribute('visible', true); // Attiva mirino Gaze
+                  txt.setAttribute('value', "PUNTAMENTO: TRIANGOLAZIONE (CONTROLLER)"); btn.setAttribute('color', '#FF1744');
               } else {
                   this.pointerMode = 'TOUCH'; this.hitTestSource = null; this.triangState = 0;
                   txt.setAttribute('value', "PUNTAMENTO: SOLO TOCCO"); btn.setAttribute('color', '#5E35B1');
-                  if(this.raycasterEl) this.raycasterEl.setAttribute('raycaster', 'showLine', true);
-                  if(this.crosshairEl) this.crosshairEl.setAttribute('visible', false);
               }
               this.refreshAll();
           }
@@ -1057,7 +1109,12 @@
         });
       },
 
-      refreshAll: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); this.saveToStorage(); }
+      refreshAll: function() { 
+          this.updateMenuText(); 
+          this.updateGeometriesAndDrawings(); 
+          this.updateLaserVisibility();
+          this.saveToStorage(); 
+      }
     });
   </script>
 </head>
@@ -1080,15 +1137,13 @@
   <a-scene webxr="optionalFeatures: local-floor, hit-test;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
-      <a-camera id="camera" position="0 1.6 0">
-          <a-entity id="triang-crosshair" visible="false" geometry="primitive: ring; radiusInner: 0.0015; radiusOuter: 0.003" material="color: #FFEB3B; shader: flat" position="0 0 -0.5"></a-entity>
-      </a-camera>
+      <a-camera id="camera" position="0 1.6 0"></a-camera>
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.45" rotation="-30 0 0">
           <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO V37" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V38" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
           <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
