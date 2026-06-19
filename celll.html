@@ -2,16 +2,55 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V36 - Triangolazione di Precisione con Annullamento</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Antenne AR Pro V38 - Versione Mobile + VR</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
-    #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
-    #ui-2d-container h3 { margin: 0 0 5px 0; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px;}
+    body { margin: 0; overflow: hidden; background-color: #000; }
+    /* Contenitore principale per l'overlay su schermo in Realtà Aumentata */
+    #overlay-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
+    .pointer-auto { pointer-events: auto; }
+    
+    #ui-2d-container { position: absolute; top: 15px; left: 15px; background: rgba(17,17,17,0.85); color: #00E676; padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 300px; max-height: 40vh; overflow-y: auto; }
+    #ui-2d-container h3 { margin: 0 0 5px 0; font-size: 13px; border-bottom: 1px solid #333; padding-bottom: 5px;}
     #ui-2d-container p { margin: 5px 0; font-size: 11px; color: #fff; line-height: 1.3; }
-    #ui-2d-container input, #ui-2d-container select { width: 93%; padding: 6px; background: #222; color: #fff; border: 1px solid #00E676; margin-bottom: 10px; font-family: monospace; }
-    #ui-2d-container button { width: 100%; padding: 8px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; }
+    #ui-2d-container input, #ui-2d-container select { width: 93%; padding: 4px; background: #222; color: #fff; border: 1px solid #00E676; margin-bottom: 5px; font-family: monospace; }
+    #ui-2d-container button { width: 100%; padding: 6px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; border-radius: 4px; }
     #ui-2d-container button.action { background: #FFEB3B; }
-    hr { border-color: #333; margin: 15px 0; }
+    hr { border-color: #333; margin: 8px 0; }
+
+    /* CONTROLLI MOBILE SU SCHERMO */
+    #mobile-controls {
+        position: absolute;
+        bottom: 25px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        width: 95%;
+        max-width: 450px;
+    }
+    .mob-btn {
+        background: rgba(30, 30, 30, 0.9);
+        color: #FFF;
+        border: 2px solid #00E676;
+        padding: 12px 10px;
+        border-radius: 8px;
+        font-weight: bold;
+        font-family: monospace;
+        font-size: 13px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        cursor: pointer;
+        flex: 1 1 45%;
+        text-align: center;
+        touch-action: manipulation;
+    }
+    .mob-btn:active { background: #00E676; color: #000; transform: scale(0.95); }
+    .mob-btn.btn-menu { background: rgba(0, 150, 136, 0.9); border-color: #00BFFF; flex: 1 1 45%; }
+    .mob-btn.btn-tiranti { background: rgba(211, 47, 47, 0.9); border-color: #FF1744; flex: 1 1 45%; }
+    #btn-mob-confirm-hint { flex: 1 1 100%; background: transparent; border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; pointer-events: none; }
   </style>
   <script>
     AFRAME.registerComponent('look-at-camera', { 
@@ -68,12 +107,12 @@
             this.calibLocal2 = null;
             
             // Pointer Modes: 'TOUCH', 'LIDAR', 'TRIANG'
-            this.pointerMode = 'TOUCH';
+            this.pointerMode = AFRAME.utils.device.isMobile() ? 'LIDAR' : 'TOUCH';
             this.hitTestSource = null; this.requestingHitTest = false; this.reticleValid = false;
             this.targetReticlePos = new THREE.Vector3(); this.targetReticleQuat = new THREE.Quaternion(); this.lastFloorY = 0; 
 
             // Triangulation Logic
-            this.triangState = 0; // 0=Aiming Ray1, 1=Aiming Ray2, 2=Confirm
+            this.triangState = 0; 
             this.triangRay1 = null;
             this.triangRay2 = null;
             this.triangResult = null;
@@ -82,21 +121,99 @@
             this.activeAntIdx = 0;
             this.current = this.antennas[0];
 
-            this.raycasterEl = document.querySelector('#right-controller'); this.leftControllerEl = document.querySelector('#left-controller');
-            this.worldPivotEl = document.querySelector('#world-pivot'); this.worldContentEl = document.querySelector('#world-content');
+            this.raycasterEl = document.querySelector('#right-controller'); 
+            this.leftControllerEl = document.querySelector('#left-controller');
+            this.worldPivotEl = document.querySelector('#world-pivot'); 
+            this.worldContentEl = document.querySelector('#world-content');
             
-            this.verticalCylinder = document.querySelector('#vertical-cylinder'); this.heightText = document.querySelector('#height-text');
-            this.menuUI = document.querySelector('#menu-ui'); this.gwUI = document.querySelector('#guy-wires-ui');
+            this.verticalCylinder = document.querySelector('#vertical-cylinder'); 
+            this.heightText = document.querySelector('#height-text');
+            this.menuUI = document.querySelector('#menu-ui'); 
+            this.gwUI = document.querySelector('#guy-wires-ui');
 
+            // CONTROLLER EVENT BINDINGS
             if (this.raycasterEl) { this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this)); this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this)); }
             if (this.leftControllerEl) { this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this)); this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this)); this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this)); }
 
+            // MOBILE ON-SCREEN BUTTONS BINDING
+            this.setupMobileUI();
+
+            // WEBXR SELECT EVENT (SCREEN TAP IN AR)
+            this.el.sceneEl.addEventListener('enter-vr', () => { 
+                this.hitTestSource = null; this.requestingHitTest = false; 
+                let session = this.el.sceneEl.renderer.xr?.getSession();
+                if (session) {
+                    session.addEventListener('select', () => this.onTriggerDown());
+                }
+            });
             this.el.sceneEl.addEventListener('exit-vr', () => { this.hitTestSource = null; this.requestingHitTest = false; });
+            
+            // Fallback screen tap for non-immersive mode
+            let overlay = document.getElementById('overlay-container');
+            if(overlay) {
+                overlay.addEventListener('click', (e) => {
+                    // Solo se tocchi lo sfondo vuoto e non un pannello
+                    if (e.target === overlay && !this.el.sceneEl.is('ar-mode')) {
+                         this.onTriggerDown();
+                    }
+                });
+            }
 
             this.initPersistentElements(); this.setupGlobalEventDelegation(); this.setupMmanaFileLoader();
             window.saveAntennaToDB = this.saveAntennaToDB.bind(this); window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this); window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
             this.refreshDBList(); this.loadFromStorage(); 
+            this.updateLaserVisibility();
         } catch (error) { console.error("Errore inizializzazione:", error); }
+      },
+
+      setupMobileUI: function() {
+          let btnMenu = document.querySelector('#btn-mob-y');
+          let btnTiranti = document.querySelector('#btn-mob-x');
+          if (btnMenu) btnMenu.addEventListener('click', (e) => { e.preventDefault(); this.toggleMenu(); });
+          if (btnTiranti) btnTiranti.addEventListener('click', (e) => { e.preventDefault(); this.toggleGuyWireMode(); });
+
+          let simulateLeftThumb = (val) => {
+              let thumbTime = Date.now();
+              if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
+                  if (this.current.state === 'SIZE_ROTATE_TRALICCIO') { this.current.traliccio.rotationY += val; } 
+                  else { this.current.antennaRotationY += val; }
+                  this.refreshAll(); this.lastThumbTime = thumbTime; this.saveToStorage();
+              }
+          };
+
+          let simulateRightThumb = (val) => {
+              let thumbTime = Date.now();
+              if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
+                  if (this.current.state === 'SIZE_ROTATE_TRALICCIO') {
+                      this.current.traliccio.radius = Math.max(0.15, this.current.traliccio.radius + (val < 0 ? -0.05 : 0.05));
+                  } else if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') {
+                      this.current.traliccio.height = Math.max(1.0, this.current.traliccio.height + (val < 0 ? -0.2 : 0.2));
+                  } else if (this.current.state.includes('HEIGHT') && this.current.state !== 'PLACE_HEIGHT_TRALICCIO') {
+                      this.currentHeight = Math.max(0.0, this.currentHeight + (val < 0 ? -0.1 : 0.1));
+                      this.updateHeightPreview();
+                  } else if (this.gwState === 'EDIT_COLLAR' && this.activeAnchor) {
+                      let maxH = this.activeAnchor.type === 'traliccio' ? this.current.traliccio.height : (this.activeAnchor.pole === 'A' ? (this.current.pointA.top.y - this.current.pointA.base.y) : (this.current.pointB.top.y - this.current.pointB.base.y));
+                      this.activeAnchor.height = Math.max(0.1, Math.min(maxH, this.activeAnchor.height + (val < 0 ? -0.1 : 0.1)));
+                  }
+                  this.refreshAll(); this.lastThumbTime = thumbTime; this.saveToStorage();
+              }
+          };
+
+          let bindRepeat = (id, action) => {
+              let interval;
+              let start = (e) => { e.preventDefault(); action(); interval = setInterval(action, 150); };
+              let stop = (e) => { e.preventDefault(); clearInterval(interval); };
+              let btn = document.querySelector(id);
+              if(btn) {
+                  btn.addEventListener('mousedown', start); btn.addEventListener('mouseup', stop); btn.addEventListener('mouseleave', stop);
+                  btn.addEventListener('touchstart', start, {passive: false}); btn.addEventListener('touchend', stop, {passive: false}); btn.addEventListener('touchcancel', stop, {passive: false});
+              }
+          };
+
+          bindRepeat('#btn-mob-rot-sx', () => simulateLeftThumb(-2.0));
+          bindRepeat('#btn-mob-rot-dx', () => simulateLeftThumb(2.0));
+          bindRepeat('#btn-mob-up', () => simulateRightThumb(-1.0)); // Y < 0 aumenta altezza/raggio
+          bindRepeat('#btn-mob-down', () => simulateRightThumb(1.0)); // Y > 0 diminuisce altezza/raggio
       },
 
       createEmptyAntenna: function() {
@@ -160,7 +277,7 @@
         if(d.antennas && d.antennas.length > 0) { this.antennas = d.antennas; this.activeAntIdx = d.activeAntIdx || 0; if(this.activeAntIdx >= this.antennas.length) this.activeAntIdx = 0; this.current = this.antennas[this.activeAntIdx]; }
         this.globalTextScale = parseFloat(d.globalTextScale) || 0.35;
         this.current.state = 'AWAITING_CALIB_PT1'; if(this.menuUI) this.menuUI.setAttribute('visible', true);
-        this.refreshAll(); alert("Scena " + name + " caricata! Allinea il visore agganciato ai diamanti.");
+        this.refreshAll(); alert("Scena " + name + " caricata! Allinea la telecamera agganciata ai diamanti.");
       },
       
       deleteAntennaFromDB: function() { let select = document.querySelector('#load-list'); if(!select) return; let name = select.value; if(name && confirm("Eliminare l'antenna '" + name + "'?")) { let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}'); delete db[name]; localStorage.setItem('antenneAR_DB', JSON.stringify(db)); this.refreshDBList(); } },
@@ -185,6 +302,15 @@
       },
 
       getLocalPoint: function(worldVec) { let local = new THREE.Vector3(); this.worldContentEl.object3D.worldToLocal(local.copy(worldVec)); return { x: local.x, y: local.y, z: local.z }; },
+
+      updateLaserVisibility: function() {
+        let isMenuOpen = this.menuUI && (this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true);
+        let isGWMenuOpen = this.gwUI && (this.gwUI.getAttribute('visible') === 'true' || this.gwUI.getAttribute('visible') === true);
+        let show = (this.pointerMode !== 'TRIANG') || isMenuOpen || isGWMenuOpen;
+        if (this.raycasterEl) {
+            this.raycasterEl.setAttribute('raycaster', 'showLine', show);
+        }
+      },
 
       toggleMenu: function() {
         if(this.gwState !== 'OFF') return; 
@@ -221,19 +347,22 @@
 
         let txtEl = document.querySelector('#txt-gw-status');
         if (txtEl) {
-            if (isMain) txtEl.setAttribute('value', 'PUNTA IL LASER SU CORNICE/COLLARE O CREA NUOVO');
-            if (isEditCollar) txtEl.setAttribute('value', 'JOYSTICK Y: CAMBIA ALTEZZA CORNICE\nGRILLETTO: CONFERMA');
-            if (this.gwState === 'EDIT_PEGS') txtEl.setAttribute('value', 'JOYSTICK Y: ALTEZZA | GRILLETTO A TERRA: PICCHETTO\nLASER SU PICCHETTO O COLLARE PER ELIMINARE');
+            if (isMain) txtEl.setAttribute('value', 'TOCCA CORNICE/COLLARE O CREA NUOVO');
+            if (isEditCollar) txtEl.setAttribute('value', 'USA ALZA/ABBASSA\nTAP SU SCHERMO PER CONFERMARE');
+            if (this.gwState === 'EDIT_PEGS') txtEl.setAttribute('value', 'TAP SU SCHERMO: PIAZZA PICCHETTO\nTOCCA PICCHETTO/COLLARE PER ELIMINARE');
             if (this.gwState === 'EDIT_TRALICCIO_PEGS') {
                 let req = this.current.traliccio.shape === 'square' ? 4 : 3; let c = this.current.traliccio.pegs ? this.current.traliccio.pegs.length : 0;
-                txtEl.setAttribute('value', `PIAZZAMENTO PICCHETTI CONDIVISI\nTERRA: ${c} su ${req} | GRILLETTO A TERRA: PIAZZA\nLASER SU PICCHETTO O CORNICE: ELIMINA`);
+                txtEl.setAttribute('value', `PIAZZAMENTO PICCHETTI CONDIVISI\nTERRA: ${c} su ${req} | TAP SCHERMO: PIAZZA\nTOCCA PICCHETTO/CORNICE: ELIMINA`);
             }
         }
         this.refreshRaycaster();
       },
 
       toggleButton: function(id, isVisible) { let btn = document.querySelector(id); if(!btn) return; btn.setAttribute('visible', isVisible); if(isVisible) btn.classList.add('clickable'); else btn.classList.remove('clickable'); },
-      refreshRaycaster: function() { setTimeout(() => { if (this.raycasterEl && this.raycasterEl.components.raycaster) this.raycasterEl.components.raycaster.refreshObjects(); }, 50); },
+      refreshRaycaster: function() { setTimeout(() => { 
+          if (this.raycasterEl && this.raycasterEl.components.raycaster) this.raycasterEl.components.raycaster.refreshObjects(); 
+          let mc = document.querySelector('#mouse-cursor'); if (mc && mc.components.raycaster) mc.components.raycaster.refreshObjects();
+      }, 50); },
 
       initPersistentElements: function() {
         let makeLocalDiamond = (color) => {
@@ -298,29 +427,27 @@
         let a = d1.dot(d1); let b = d1.dot(d2); let c = d2.dot(d2);
         let d = d1.dot(w0); let e = d2.dot(w0);
         let denom = a*c - b*b;
-
         if (denom < 1e-5) return null; // Paralleli
 
         let t1 = (b*e - c*d) / denom;
         let t2 = (a*e - b*d) / denom;
-
-        if (t1 < 0 || t2 < 0) return null; // Dietro l'utente
+        if (t1 < 0 || t2 < 0) return null; 
 
         let pt1 = new THREE.Vector3().copy(p1).addScaledVector(d1, t1);
         let pt2 = new THREE.Vector3().copy(p2).addScaledVector(d2, t2);
 
         let error = pt1.distanceTo(pt2);
         let midpoint = new THREE.Vector3().lerpVectors(pt1, pt2, 0.5);
-
         return { point: midpoint, error: error, dist1: t1, dist2: t2 };
       },
 
-      // Aggiornata per accettare la lunghezza desiderata (evita raggi infiniti incrociati)
       updateBeam: function(el, origin, dir, color, length = 150) {
           el.setAttribute('visible', 'true');
           el.setAttribute('material', `color: ${color}; shader: flat; transparent: true; opacity: 0.6`);
-          el.setAttribute('geometry', `primitive: cylinder; radius: 0.005; height: ${length}`);
-          let mid = new THREE.Vector3().copy(origin).addScaledVector(dir, length / 2);
+          let startOffset = 0.2; 
+          let actualLength = Math.max(0.1, length - startOffset);
+          el.setAttribute('geometry', `primitive: cylinder; radius: 0.003; height: ${actualLength}`);
+          let mid = new THREE.Vector3().copy(origin).addScaledVector(dir, startOffset + (actualLength / 2));
           el.setAttribute('position', `${mid.x} ${mid.y} ${mid.z}`);
           let quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
           let euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
@@ -331,7 +458,7 @@
         if(!this.current.state) return;
         let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
         
-        if (!isPlacingMode) this.triangState = 0; // Reset se usciamo dalla mod posizionamento
+        if (!isPlacingMode) this.triangState = 0;
 
         let indicator = document.querySelector('#touch-indicator'); 
         if (indicator) indicator.setAttribute('visible', isPlacingMode && this.pointerMode === 'TOUCH');
@@ -342,7 +469,11 @@
         if (cameraEl && cameraEl.object3D) { cameraEl.object3D.getWorldPosition(cameraPos); cameraDir.applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion())); }
 
         let ctrlPos = new THREE.Vector3(); let ctrlDir = new THREE.Vector3(0, 0, -1);
-        if (this.raycasterEl && this.raycasterEl.object3D) {
+        let isMobile = AFRAME.utils.device.isMobile();
+        
+        if (isMobile || !this.raycasterEl || !this.raycasterEl.components['tracked-controls']?.controller) {
+            ctrlPos.copy(cameraPos); ctrlDir.copy(cameraDir);
+        } else if (this.raycasterEl && this.raycasterEl.object3D) {
             this.raycasterEl.object3D.getWorldPosition(ctrlPos);
             ctrlDir.applyQuaternion(this.raycasterEl.object3D.getWorldQuaternion(new THREE.Quaternion()));
         }
@@ -352,44 +483,49 @@
             this.reticleValid = false; if (this.reticleWrapper) this.reticleWrapper.setAttribute('visible', 'false');
             this.triangUI.setAttribute('visible', 'true');
             
+            let aimOrigin = ctrlPos.clone();
+            let aimDir = ctrlDir.clone();
+            
             if (this.triangState === 0) {
-                this.updateBeam(this.beam1El, ctrlPos, ctrlDir, '#00BFFF', 150); // Raggio 1 (Azzurro live infinito)
+                this.updateBeam(this.beam1El, aimOrigin, aimDir, '#00BFFF', 150);
                 this.beam2El.setAttribute('visible', 'false'); this.triangMarkerEl.setAttribute('visible', 'false');
             } 
             else if (this.triangState === 1) {
-                this.triangResult = this.calculateIntersection(this.triangRay1, {origin: ctrlPos, dir: ctrlDir});
-                
+                this.triangResult = this.calculateIntersection(this.triangRay1, {origin: aimOrigin, dir: aimDir});
                 if (this.triangResult) {
-                    // Tagliamo i raggi visivamente esattamente al punto di intersezione calcolato
                     this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', this.triangResult.dist1); 
-                    this.updateBeam(this.beam2El, ctrlPos, ctrlDir, '#FF1744', this.triangResult.dist2); 
+                    this.updateBeam(this.beam2El, aimOrigin, aimDir, '#FF1744', this.triangResult.dist2); 
                     
                     this.triangMarkerEl.setAttribute('position', `${this.triangResult.point.x} ${this.triangResult.point.y} ${this.triangResult.point.z}`);
                     let color = this.triangResult.error < 0.3 ? '#00E676' : (this.triangResult.error < 1.0 ? '#FFEB3B' : '#D50000');
                     this.triangMarkerEl.setAttribute('material', `color: ${color}; shader: flat; transparent: true; opacity: 0.85`);
                     this.triangMarkerEl.setAttribute('visible', 'true');
+                    
+                    let s = Math.max(1, this.triangResult.dist2 / 4.0);
+                    this.triangMarkerEl.setAttribute('scale', `${s} ${s} ${s}`);
                     this.triangTextEl.setAttribute('value', `INTERSEZIONE!\nERRORE: ${this.triangResult.error.toFixed(2)}m\nDISTANZA: ${this.triangResult.dist2.toFixed(1)}m`);
                 } else {
-                    // Se non c'è incrocio visibile, lasciali lunghi per mirare
                     this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', 150);
-                    this.updateBeam(this.beam2El, ctrlPos, ctrlDir, '#FF1744', 150);
+                    this.updateBeam(this.beam2El, aimOrigin, aimDir, '#FF1744', 150);
                     this.triangMarkerEl.setAttribute('visible', 'false');
                 }
             } 
             else if (this.triangState === 2) {
                 if (this.triangResult) {
-                    // Manteniamo i raggi "tagliati a V" fissi per la conferma finale
                     this.updateBeam(this.beam1El, this.triangRay1.origin, this.triangRay1.dir, '#00BFFF', this.triangResult.dist1);
                     this.updateBeam(this.beam2El, this.triangRay2.origin, this.triangRay2.dir, '#FF1744', this.triangResult.dist2);
                     this.triangMarkerEl.setAttribute('position', `${this.triangResult.point.x} ${this.triangResult.point.y} ${this.triangResult.point.z}`);
-                    this.triangTextEl.setAttribute('value', `PUNTO PRONTO!\n[GRILLETTO] CONFERMA`);
+                    
+                    let s = Math.max(1, this.triangResult.dist2 / 4.0);
+                    this.triangMarkerEl.setAttribute('scale', `${s} ${s} ${s}`);
+                    this.triangTextEl.setAttribute('value', `PUNTO PRONTO!\n[TAP] CONFERMA`);
                 }
             }
         } 
         else {
             this.triangUI.setAttribute('visible', 'false');
             
-            // --- GESTIONE MODALITÀ LIDAR ---
+            // --- GESTIONE MODALITÀ LIDAR E AR HIT TEST ---
             if (this.pointerMode === 'LIDAR' && isPlacingMode && frame && sceneEl.is('ar-mode')) {
                 let session = sceneEl.renderer.xr.getSession(); let refSpace = sceneEl.renderer.xr.getReferenceSpace(); let hitFound = false;
                 if (!this.hitTestSource && !this.requestingHitTest) {
@@ -425,74 +561,23 @@
       getHitPoint: function() {
         if (this.pointerMode === 'TRIANG') {
             if (this.triangState === 2 && this.triangResult) { return { point: this.triangResult.point.clone() }; }
-            return null; // Nessun hit point finché la triangolazione non è completa
+            return null;
         }
-        if (this.pointerMode === 'LIDAR' && this.reticleValid) { let pos = new THREE.Vector3(); this.reticleWrapper.object3D.getWorldPosition(pos); return { point: pos }; }
+        if (this.reticleValid) { let pos = new THREE.Vector3(); this.reticleWrapper.object3D.getWorldPosition(pos); return { point: pos }; }
         
         let pos = new THREE.Vector3(); let indicator = document.querySelector('#touch-indicator');
-        if (indicator && (indicator.getAttribute('visible') === true || indicator.getAttribute('visible') === 'true')) { indicator.object3D.getWorldPosition(pos); } 
-        else if (this.raycasterEl) { this.raycasterEl.object3D.getWorldPosition(pos); }
+        let isMobile = AFRAME.utils.device.isMobile();
+        if (!isMobile && indicator && (indicator.getAttribute('visible') === true || indicator.getAttribute('visible') === 'true')) { indicator.object3D.getWorldPosition(pos); } 
+        else if (!isMobile && this.raycasterEl) { this.raycasterEl.object3D.getWorldPosition(pos); }
+        else {
+             let cameraEl = document.querySelector('#camera');
+             if (cameraEl) {
+                 let camPos = new THREE.Vector3(); cameraEl.object3D.getWorldPosition(camPos);
+                 let camDir = new THREE.Vector3(0,0,-1).applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion()));
+                 if (camDir.y < -0.01) { let dist = -camPos.y / camDir.y; pos.copy(camPos).addScaledVector(camDir, dist); return {point: pos}; }
+             }
+        }
         return { point: pos };
-      },
-
-      onLeftThumbstick: function(evt) {
-        if (Math.abs(evt.detail.x) > 0.3) {
-            let delta = evt.detail.x > 0 ? 2.0 : -2.0;
-            if (this.gwState !== 'OFF') return;
-            
-            if (this.current.state === 'SIZE_ROTATE_TRALICCIO') {
-               this.current.traliccio.rotationY += delta; this.refreshAll();
-            } else {
-               this.current.antennaRotationY += delta; this.refreshAll();
-               if(Date.now() - this.lastTriggerTime > 1000) { this.saveToStorage(); this.lastTriggerTime = Date.now(); }
-            }
-        }
-      },
-
-      onRightThumbstick: function (evt) {
-        let thumbTime = Date.now();
-        if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
-          
-          // --- NUOVI CONTROLLI ANNULLAMENTO TRIANGOLAZIONE ---
-          if (this.pointerMode === 'TRIANG' && this.triangState > 0) {
-              if (evt.detail.x > 0.4) {
-                  // Destra = Torna indietro di un passo (annulla Raggio 2, o Raggio 1)
-                  this.triangState = Math.max(0, this.triangState - 1);
-                  this.refreshAll(); this.lastThumbTime = thumbTime; return;
-              }
-              if (evt.detail.x < -0.4) {
-                  // Sinistra = Reset totale della triangolazione in corso
-                  this.triangState = 0;
-                  this.refreshAll(); this.lastThumbTime = thumbTime; return;
-              }
-          }
-
-          if (this.current.state === 'SIZE_ROTATE_TRALICCIO') {
-             if (Math.abs(evt.detail.y) > 0.3) {
-                 let step = evt.detail.y < 0 ? 0.05 : -0.05; 
-                 this.current.traliccio.radius = Math.max(0.15, this.current.traliccio.radius + step);
-                 this.refreshAll(); this.lastThumbTime = thumbTime;
-             }
-          }
-          else if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') {
-             if (Math.abs(evt.detail.y) > 0.4) {
-                 let step = evt.detail.y < 0 ? 0.2 : -0.2;
-                 this.current.traliccio.height = Math.max(1.0, this.current.traliccio.height + step);
-                 this.refreshAll(); this.lastThumbTime = thumbTime;
-             }
-          }
-          else if (this.current.state.includes('HEIGHT') && Math.abs(evt.detail.y) > 0.4 && this.current.state !== 'PLACE_HEIGHT_TRALICCIO') {
-            let step = evt.detail.y < 0 ? 0.1 : -0.1; 
-            this.currentHeight = Math.max(0.0, this.currentHeight + step);
-            this.updateHeightPreview(); this.lastThumbTime = thumbTime;
-          }
-          else if (this.gwState === 'EDIT_COLLAR' && this.activeAnchor && Math.abs(evt.detail.y) > 0.4) {
-            let step = evt.detail.y < 0 ? 0.1 : -0.1;
-            let maxH = this.activeAnchor.type === 'traliccio' ? this.current.traliccio.height : (this.activeAnchor.pole === 'A' ? (this.current.pointA.top.y - this.current.pointA.base.y) : (this.current.pointB.top.y - this.current.pointB.base.y));
-            this.activeAnchor.height = Math.max(0.1, Math.min(maxH, this.activeAnchor.height + step));
-            this.refreshAll(); this.lastThumbTime = thumbTime; this.saveToStorage();
-          }
-        }
       },
 
       updateHeightPreview: function() {
@@ -509,43 +594,48 @@
       onTriggerDown: function () {
         try {
             let now = Date.now(); if (now - this.lastTriggerTime < 300) return; this.lastTriggerTime = now;
-            let intersects = null; if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) intersects = this.raycasterEl.components.raycaster.intersectedEls;
             
-            let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
-            let ctrlPos = new THREE.Vector3(); let ctrlDir = new THREE.Vector3(0, 0, -1);
-            if (this.raycasterEl && this.raycasterEl.object3D) { this.raycasterEl.object3D.getWorldPosition(ctrlPos); ctrlDir.applyQuaternion(this.raycasterEl.object3D.getWorldQuaternion(new THREE.Quaternion())); }
+            // Gestione mista Controller fisico / Touch screen (mouse cursor)
+            let intersects = [];
+            if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) {
+                let rayIn = this.raycasterEl.components.raycaster.intersectedEls; if(rayIn) intersects = intersects.concat(rayIn);
+            }
+            let mouseCursor = document.querySelector('#mouse-cursor');
+            if (mouseCursor && mouseCursor.components && mouseCursor.components.raycaster) {
+                let mouseIn = mouseCursor.components.raycaster.intersectedEls; if(mouseIn) intersects = intersects.concat(mouseIn);
+            }
 
-            if (intersects) {
+            let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
+            
+            let hitUI = false;
+            for (let i = 0; i < intersects.length; i++) {
+                let el = intersects[i]; if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) { hitUI = true; break; }
+            }
+            if (hitUI) return; 
+
+            if (intersects && intersects.length > 0) {
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
               if (hitSelector) { let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx')); this.switchAntenna(targetIdx); return; }
 
               let hitPoleC = intersects.find(el => el.id === 'point-c-hitbox');
               if (hitPoleC) { this.current.state = 'REPOSITION_GROUND_C'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.refreshAll(); return; }
-
-              // Interazioni UI normali
-              for (let i = 0; i < intersects.length; i++) {
-                let el = intersects[i];
-                if (el.classList && el.classList.contains('clickable') && !el.classList.contains('gw-collar') && !el.classList.contains('gw-peg')) return;
-                if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) return;
-              }
             }
 
-            // GESTIONE TRIGGER IN MODALITA' TRIANGOLAZIONE
+            // GESTIONE TRIGGER TRIANGOLAZIONE
             if (isPlacingMode && this.pointerMode === 'TRIANG') {
-                if (this.triangState === 0) {
-                    this.triangRay1 = { origin: ctrlPos.clone(), dir: ctrlDir.clone() };
-                    this.triangState = 1; this.refreshAll(); return;
+                let ctrlPos = new THREE.Vector3(); let ctrlDir = new THREE.Vector3(0, 0, -1);
+                let isMobile = AFRAME.utils.device.isMobile();
+                let cameraEl = document.querySelector('#camera');
+                if (isMobile && cameraEl) {
+                    cameraEl.object3D.getWorldPosition(ctrlPos);
+                    ctrlDir.applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion()));
+                } else if (this.raycasterEl && this.raycasterEl.object3D) { 
+                    this.raycasterEl.object3D.getWorldPosition(ctrlPos); 
+                    ctrlDir.applyQuaternion(this.raycasterEl.object3D.getWorldQuaternion(new THREE.Quaternion())); 
                 }
-                if (this.triangState === 1) {
-                    if (this.triangResult) {
-                        this.triangRay2 = { origin: ctrlPos.clone(), dir: ctrlDir.clone() };
-                        this.triangState = 2; this.refreshAll(); 
-                    }
-                    return;
-                }
-                if (this.triangState === 2) {
-                    // Conferma finale: prosegue piazzando il punto reale nel blocco sottostante
-                }
+
+                if (this.triangState === 0) { this.triangRay1 = { origin: ctrlPos, dir: ctrlDir }; this.triangState = 1; this.refreshAll(); return; }
+                if (this.triangState === 1) { if (this.triangResult) { this.triangRay2 = { origin: ctrlPos, dir: ctrlDir }; this.triangState = 2; this.refreshAll(); } return; }
             }
 
             if (this.current.state === 'REPOSITION_GROUND_C') {
@@ -556,19 +646,16 @@
                     this.current.pointC.base.y = localHit.y; this.current.state = 'IDLE';
                     if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll();
                 }
-                if (this.triangState === 2) this.triangState = 0;
-                return;
+                if (this.triangState === 2) this.triangState = 0; return;
             }
 
             if (this.current.state === 'PLACE_TRALICCIO_CENTER') {
                let hitGround = this.getHitPoint();
                if(hitGround) {
-                   this.current.traliccio.center = this.getLocalPoint(hitGround.point);
-                   this.current.state = 'SIZE_ROTATE_TRALICCIO';
+                   this.current.traliccio.center = this.getLocalPoint(hitGround.point); this.current.state = 'SIZE_ROTATE_TRALICCIO';
                    if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll();
                }
-               if (this.triangState === 2) this.triangState = 0;
-               return;
+               if (this.triangState === 2) this.triangState = 0; return;
             }
             if (this.current.state === 'SIZE_ROTATE_TRALICCIO') { this.current.state = 'PLACE_HEIGHT_TRALICCIO'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.refreshAll(); return; }
             if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') {
@@ -577,9 +664,10 @@
             }
 
             if (this.gwState === 'EDIT_TRALICCIO_PEGS') {
-                let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
+                let hitPeg = intersects.find(el => el.classList && el.classList.contains('gw-peg'));
                 if (hitPeg) { let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx')); if(this.current.traliccio.pegs) this.current.traliccio.pegs.splice(pIdx, 1); this.updateGWUI(); this.refreshAll(); return; }
-                let hitCollar = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-collar')) : null;
+                
+                let hitCollar = intersects.find(el => el.classList && el.classList.contains('gw-collar'));
                 if (hitCollar) { let cIdx = parseInt(hitCollar.getAttribute('data-index')); if (this.current.guyWiresData[cIdx] === this.activeAnchor) { this.current.guyWiresData.splice(cIdx, 1); this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.refreshAll(); return; } }
                 
                 let req = this.current.traliccio.shape === 'square' ? 4 : 3;
@@ -592,8 +680,7 @@
                         this.refreshAll();
                     }
                 }
-                if (this.triangState === 2) this.triangState = 0;
-                return;
+                if (this.triangState === 2) this.triangState = 0; return;
             }
 
             if (this.current.state === 'AWAITING_CALIB_PT1') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibPt1 = hitGround.point.clone(); this.worldPivotEl.object3D.position.copy(this.calibPt1); this.current.state = 'AWAITING_CALIB_PT2'; this.updateMenuText(); } if (this.triangState === 2) this.triangState = 0; return; }
@@ -610,18 +697,19 @@
             }
 
             if (this.gwState === 'EDIT_PEGS') {
-                let hitPeg = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-peg')) : null;
+                let hitPeg = intersects.find(el => el.classList && el.classList.contains('gw-peg'));
                 if (hitPeg) { let pIdx = parseInt(hitPeg.getAttribute('data-peg-idx')); if(this.activeAnchor.pegs) this.activeAnchor.pegs.splice(pIdx, 1); this.refreshAll(); return; }
-                let hitCollar = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-collar')) : null;
+                
+                let hitCollar = intersects.find(el => el.classList && el.classList.contains('gw-collar'));
                 if (hitCollar) { let cIdx = parseInt(hitCollar.getAttribute('data-index')); if (this.current.guyWiresData[cIdx] === this.activeAnchor) { this.current.guyWiresData.splice(cIdx, 1); this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.refreshAll(); return; } }
+                
                 let hitGround = this.getHitPoint();
                 if (hitGround) { let localHit = this.getLocalPoint(hitGround.point); if(!this.activeAnchor.pegs) this.activeAnchor.pegs=[]; this.activeAnchor.pegs.push(localHit); this.refreshAll(); }
-                if (this.triangState === 2) this.triangState = 0;
-                return;
+                if (this.triangState === 2) this.triangState = 0; return;
             }
 
             if (this.gwState === 'MAIN') {
-                let hitCollar = intersects ? intersects.find(el => el.classList && el.classList.contains('gw-collar')) : null;
+                let hitCollar = intersects.find(el => el.classList && el.classList.contains('gw-collar'));
                 if (hitCollar) { let idx = parseInt(hitCollar.getAttribute('data-index')); this.activeAnchor = this.current.guyWiresData[idx]; this.gwState = 'EDIT_COLLAR';  this.updateGWUI(); this.refreshAll(); }
                 return;
             }
@@ -656,7 +744,7 @@
               this.current.pointB.top = { x: this.current.pointB.base.x, y: this.current.pointB.base.y + this.currentHeight, z: this.current.pointB.base.z }; this.resetVerticalPreviewMode(); this.current.state = 'IDLE'; if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll(); 
             }
 
-            if (this.triangState === 2) this.triangState = 0; // Reset fine interazione
+            if (this.triangState === 2) this.triangState = 0;
 
         } catch(e) { console.error("Errore onTriggerDown:", e); }
       },
@@ -683,25 +771,26 @@
 
         let infoTextStr = ""; let poleAH = (this.current.pointA && this.current.pointA.top && this.current.pointA.base) ? (this.current.pointA.top.y - this.current.pointA.base.y) : 0;
 
-        // Testo Istruzioni In base alla modalità e stato
+        let tapMode = AFRAME.utils.device.isMobile() ? "TAP" : "GRILLETTO";
+
         if (this.pointerMode === 'TRIANG' && this.current.state.includes('GROUND')) {
-            if (this.triangState === 0) infoTextStr = "TRIANGOLAZIONE: RAGGIO 1\nPunta al bersaglio e premi il Grilletto.";
-            else if (this.triangState === 1) infoTextStr = "TRIANGOLAZIONE: RAGGIO 2\nSpostati, punta all'incrocio e premi. (Joy DX: Annulla)";
-            else if (this.triangState === 2) infoTextStr = "TRIANGOLAZIONE: PUNTO ACQUISITO\n[GRILLETTO] Piazza | Joy DX: Rifai R2 | Joy SX: Reset";
+            if (this.triangState === 0) infoTextStr = "TRIANGOLAZIONE: RAGGIO 1\nMira al bersaglio e conferma.";
+            else if (this.triangState === 1) infoTextStr = "TRIANGOLAZIONE: RAGGIO 2\nSpostati, mira all'incrocio e conferma.";
+            else if (this.triangState === 2) infoTextStr = "TRIANGOLAZIONE: PUNTO ACQUISITO\n[CONFERMA] per Piazzare";
         }
-        else if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = "Punta il laser a terra sotto al Centro C\ne premi il grilletto per fissare la quota."; }
-        else if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = "Punta a terra e premi grilletto per\nil CENTRO del Traliccio."; }
-        else if (isTraliccioSetup) { infoTextStr = "JOYSTICK SX: Ruota | JOYSTICK DX: Misure\nGRILLETTO: Conferma forma e dimensioni"; let txtTralShape = document.querySelector('#txt-tral-shape'); if(txtTralShape && this.current.traliccio) txtTralShape.setAttribute('value', `FORMA: ${this.current.traliccio.shape === 'square' ? 'QUADRATA' : 'TRIANGOLARE'}`); }
-        else if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') { infoTextStr = "JOYSTICK DX: Alza o abbassa il traliccio\nGRILLETTO: Conferma altezza traliccio."; }
-        else if (this.current.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE: L'antenna è agganciata al controller.\nPosiziona il Diamante 1 sul VERO PUNTO 1."; }
-        else if (this.current.state === 'AWAITING_CALIB_PT2') { infoTextStr = "CALIBRAZIONE: Ruota l'antenna fino ad allineare\nil Diamante 2 sul VERO PUNTO 2."; }
-        else if (this.current.state === 'SET_CALIB_PT1') { infoTextStr = "IMPOSTA CAPISALDI:\nAppoggia il controller sul VERO PUNTO 1 e premi grilletto."; }
-        else if (this.current.state === 'SET_CALIB_PT2') { infoTextStr = "IMPOSTA CAPISALDI:\nOra sul VERO PUNTO 2. (Scompariranno appena confermati)."; }
+        else if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = `Punta a terra sotto al Centro C e dai ${tapMode}\nper fissare la quota.`; }
+        else if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = `Punta a terra e dai ${tapMode} per\nil CENTRO del Traliccio.`; }
+        else if (isTraliccioSetup) { infoTextStr = `USA I BOTTONI PER RUOTARE E MISURARE\n${tapMode}: Conferma forma e dimensioni`; let txtTralShape = document.querySelector('#txt-tral-shape'); if(txtTralShape && this.current.traliccio) txtTralShape.setAttribute('value', `FORMA: ${this.current.traliccio.shape === 'square' ? 'QUADRATA' : 'TRIANGOLARE'}`); }
+        else if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') { infoTextStr = `USA I BOTTONI PER ALZARE O ABBASSARE\n${tapMode}: Conferma altezza traliccio.`; }
+        else if (this.current.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE:\nPosiziona il Diamante 1 sul VERO PUNTO 1."; }
+        else if (this.current.state === 'AWAITING_CALIB_PT2') { infoTextStr = "CALIBRAZIONE:\nRuota l'ambiente fino ad allineare al PUNTO 2."; }
+        else if (this.current.state === 'SET_CALIB_PT1') { infoTextStr = `IMPOSTA CAPISALDI:\nAppoggia il device sul VERO PUNTO 1 e ${tapMode}.`; }
+        else if (this.current.state === 'SET_CALIB_PT2') { infoTextStr = `IMPOSTA CAPISALDI:\nOra sul VERO PUNTO 2 e ${tapMode}.`; }
         else if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA: ${this.getCalculatedLength().toFixed(2)}m`; } 
         else if (type === 'End Fed') { infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nAC: ${this.current.endFed_AC_Len.toFixed(2)}m | CB: ${this.current.endFed_CB_Len.toFixed(2)}m`; let txtEf = document.querySelector('#txt-ef-values'); if(txtEf) txtEf.setAttribute('value', `AC: ${this.current.endFed_AC_Len.toFixed(2)}m | CB: ${this.current.endFed_CB_Len.toFixed(2)}m`); }
         else if (type === 'Longwire') { infoTextStr = `ANTENNA: LONGWIRE | BANDA: ${band}\nVERTICE: DA ${this.current.longwireVertex} | LUNGH: ${this.current.longwireLen.toFixed(2)}m`; let lwV = document.querySelector('#txt-lw-vertex-val'); if(lwV) lwV.setAttribute('value', `VERTICE: DA ${this.current.longwireVertex}`); let lwL = document.querySelector('#txt-lw-len-val'); if(lwL) lwL.setAttribute('value', `LUNGH: ${this.current.longwireLen.toFixed(2)}m`); }
         else if (type === 'Verticale') { infoTextStr = `ANTENNA: VERTICALE | BANDA: ${band}\nSTILO: ${poleAH.toFixed(2)}m | RADIALI: ${this.current.numRadials} da ${this.current.radialLen.toFixed(1)}m`; let rNum = document.querySelector('#txt-rad-num-val'); if(rNum) rNum.setAttribute('value', `RADIALI: ${this.current.numRadials}`); let rLen = document.querySelector('#txt-rad-len-val'); if(rLen) rLen.setAttribute('value', `LUNGH R: ${this.current.radialLen.toFixed(1)}m`); }
-        else if (type === 'MMANA-GAL') { infoTextStr = `MMANA: ${this.mmanaModels[this.current.mmanaModelIdx]}\nFili conduttori: ${this.current.mmanaWires.length}\nRuota l'antenna col joystick sinistro.`; let mM = document.querySelector('#txt-mmana-model-val'); if(mM) mM.setAttribute('value', this.mmanaModels[this.current.mmanaModelIdx].toUpperCase()); }
+        else if (type === 'MMANA-GAL') { infoTextStr = `MMANA: ${this.mmanaModels[this.current.mmanaModelIdx]}\nFili conduttori: ${this.current.mmanaWires.length}\nRuota l'antenna coi bottoni.`; let mM = document.querySelector('#txt-mmana-model-val'); if(mM) mM.setAttribute('value', this.mmanaModels[this.current.mmanaModelIdx].toUpperCase()); }
         
         let infoEl = document.querySelector('#info-text'); if(infoEl) infoEl.setAttribute('value', infoTextStr);
       },
@@ -715,9 +804,7 @@
       createPoleAndLabel: function(topPos, basePos, labelName, color, container) {
           if (!topPos) return;
           let sphere = document.createElement('a-sphere'); sphere.setAttribute('radius', '0.05'); sphere.setAttribute('material', `color: ${color}; roughness: 0.3`); sphere.setAttribute('position', `${topPos.x} ${topPos.y} ${topPos.z}`); container.appendChild(sphere);
-
           let baseH = basePos ? basePos.y : 0; let actualHeight = topPos.y - baseH; let midY = baseH + (actualHeight / 2);
-          
           let pole = document.createElement('a-cylinder'); pole.setAttribute('geometry', `primitive: cylinder; radius: 0.008; height: ${actualHeight}`); pole.setAttribute('material', 'color: #888888; opacity: 0.6; shader: flat'); pole.setAttribute('position', `${topPos.x} ${midY} ${topPos.z}`); container.appendChild(pole);
           this.createLabel(`${labelName}\nALTEZZA PALO: ${actualHeight.toFixed(2)}m`, {x: topPos.x, y: midY, z: topPos.z}, '#00FF00', this.globalTextScale, container);
       },
@@ -758,9 +845,17 @@
             ant.traliccio.pegs.forEach((pegPosRaw, pIdx) => {
                 let pegPos = new THREE.Vector3(pegPosRaw.x, pegPosRaw.y, pegPosRaw.z); 
                 let peg = document.createElement('a-cone');
-                if (isCurrent && this.gwState === 'EDIT_TRALICCIO_PEGS') { peg.classList.add('gw-peg', 'clickable'); peg.setAttribute('btn-interaction', ''); }
-                peg.setAttribute('data-peg-idx', pIdx); peg.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.04; radiusTop: 0.005; height: 0.15');
-                peg.setAttribute('material', 'color: #FF9800; shader: flat'); peg.setAttribute('position', `${pegPos.x} ${pegPos.y + 0.075} ${pegPos.z}`); container.appendChild(peg);
+                peg.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.04; radiusTop: 0.005; height: 0.15');
+                peg.setAttribute('material', 'color: #FF9800; shader: flat'); peg.setAttribute('position', `${pegPos.x} ${pegPos.y + 0.075} ${pegPos.z}`); 
+                container.appendChild(peg);
+
+                let hitPeg = document.createElement('a-cylinder');
+                hitPeg.setAttribute('geometry', 'primitive: cylinder; radius: 0.15; height: 0.4');
+                hitPeg.setAttribute('material', 'opacity: 0; transparent: true; depthWrite: false');
+                hitPeg.setAttribute('position', `${pegPos.x} ${pegPos.y + 0.2} ${pegPos.z}`);
+                hitPeg.setAttribute('data-peg-idx', pIdx);
+                if (isCurrent && this.gwState === 'EDIT_TRALICCIO_PEGS') { hitPeg.classList.add('gw-peg', 'clickable'); }
+                container.appendChild(hitPeg);
             });
             if (isCurrent && this.gwState === 'EDIT_TRALICCIO_PEGS' && ant.traliccio.corners.length > 0) {
                 let req = ant.traliccio.shape === 'square' ? 4 : 3; let cIdx = ant.traliccio.pegs.length;
@@ -781,10 +876,14 @@
               let hY = tCenter.y + anchor.height; let frameColor = isSelected ? '#00FF00' : '#FF1744';
               for(let c=0; c<corners.length; c++) {
                   let nextC = (c+1)%corners.length; let p1 = new THREE.Vector3(corners[c].x, hY, corners[c].z); let p2 = new THREE.Vector3(corners[nextC].x, hY, corners[nextC].z);
-                  let tube = this.createLineTube(p1, p2, isSelected ? 0.03 : 0.02, `color: ${frameColor}; shader: flat`, container);
-                  tube.classList.add('gw-collar'); 
-                  if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_TRALICCIO_PEGS') && isSelected))) { tube.classList.add('clickable'); tube.setAttribute('btn-interaction', ''); }
-                  tube.setAttribute('data-index', idx);
+                  this.createLineTube(p1, p2, isSelected ? 0.03 : 0.02, `color: ${frameColor}; shader: flat`, container);
+                  
+                  let hitTube = this.createLineTube(p1, p2, 0.1, 'opacity: 0; transparent: true; depthWrite: false', container);
+                  hitTube.setAttribute('data-index', idx);
+                  if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_TRALICCIO_PEGS') && isSelected))) { 
+                      hitTube.classList.add('gw-collar', 'clickable'); 
+                  } else { hitTube.classList.add('gw-collar'); }
+                  
                   if (ant.traliccio.pegs && ant.traliccio.pegs[c]) {
                      let pegRaw = ant.traliccio.pegs[c]; let pegPos = new THREE.Vector3(pegRaw.x, pegRaw.y, pegRaw.z); let wLen = p1.distanceTo(pegPos);
                      this.createLineTube(p1, pegPos, 0.003, 'color: #B0BEC5; shader: flat', container);
@@ -798,19 +897,38 @@
           else if (anchor.type !== 'traliccio') {
             let pData = anchor.pole === 'A' ? ant.pointA : ant.pointB; if (!pData || !pData.base || !pData.top) return;
             let maxH = pData.top.y - pData.base.y; let h = Math.min(anchor.height, maxH); anchor.height = h; let anchorPos = new THREE.Vector3(pData.base.x, pData.base.y + h, pData.base.z);
-            let collar = document.createElement('a-torus'); collar.classList.add('gw-collar');
-            if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_PEGS') && isSelected))) { collar.classList.add('clickable'); collar.setAttribute('btn-interaction', ''); }
-            collar.setAttribute('data-index', idx); collar.setAttribute('geometry', `primitive: torus; radius: 0.04; radiusTubular: 0.006`);
+            
+            let collar = document.createElement('a-torus');
+            collar.setAttribute('geometry', `primitive: torus; radius: 0.04; radiusTubular: 0.006`);
             collar.setAttribute('material', isSelected ? 'color: #00FF00; shader: flat' : 'color: #FF1744; shader: flat'); if (isSelected) collar.setAttribute('scale', '1.3 1.3 1.3');
             collar.setAttribute('rotation', '90 0 0'); collar.setAttribute('position', `${anchorPos.x} ${anchorPos.y} ${anchorPos.z}`); container.appendChild(collar);
+            
+            let hitCollar = document.createElement('a-torus');
+            hitCollar.setAttribute('geometry', `primitive: torus; radius: 0.04; radiusTubular: 0.08`);
+            hitCollar.setAttribute('material', 'opacity: 0; transparent: true; depthWrite: false');
+            hitCollar.setAttribute('rotation', '90 0 0'); hitCollar.setAttribute('position', `${anchorPos.x} ${anchorPos.y} ${anchorPos.z}`);
+            hitCollar.setAttribute('data-index', idx);
+            if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_PEGS') && isSelected))) { hitCollar.classList.add('gw-collar', 'clickable'); } else { hitCollar.classList.add('gw-collar'); }
+            container.appendChild(hitCollar);
+            
             this.createLabel(`COLLARE: ${h.toFixed(2)}m`, {x: anchorPos.x, y: anchorPos.y + 0.08, z: anchorPos.z}, '#00E676', this.globalTextScale * 0.8, container);
+            
             if(anchor.pegs) anchor.pegs.forEach((pegPos, pegIdx) => {
               let pVec = new THREE.Vector3(pegPos.x, pegPos.y, pegPos.z); let wireLength = anchorPos.distanceTo(pVec);
               let groundDist = new THREE.Vector3(pData.base.x, pData.base.y, pData.base.z).distanceTo(new THREE.Vector3(pVec.x, pData.base.y, pVec.z));
+              
               let peg = document.createElement('a-cone');
-              if (isCurrent && isSelected && this.gwState === 'EDIT_PEGS') { peg.classList.add('gw-peg', 'clickable'); peg.setAttribute('btn-interaction', ''); }
-              peg.setAttribute('data-peg-idx', pegIdx); peg.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.04; radiusTop: 0.005; height: 0.15');
+              peg.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.04; radiusTop: 0.005; height: 0.15');
               peg.setAttribute('material', 'color: #FF9800; shader: flat'); peg.setAttribute('position', `${pVec.x} ${pVec.y + 0.075} ${pVec.z}`); container.appendChild(peg);
+              
+              let hitPegN = document.createElement('a-cylinder');
+              hitPegN.setAttribute('geometry', 'primitive: cylinder; radius: 0.15; height: 0.4');
+              hitPegN.setAttribute('material', 'opacity: 0; transparent: true; depthWrite: false');
+              hitPegN.setAttribute('position', `${pVec.x} ${pVec.y + 0.2} ${pVec.z}`);
+              hitPegN.setAttribute('data-peg-idx', pegIdx);
+              if (isCurrent && isSelected && this.gwState === 'EDIT_PEGS') { hitPegN.classList.add('gw-peg', 'clickable'); }
+              container.appendChild(hitPegN);
+
               this.createLineTube(anchorPos, pVec, 0.002, 'color: #B0BEC5; shader: flat', container);
               let textPos = new THREE.Vector3().lerpVectors(pVec, anchorPos, 0.3);
               this.createLabel(`DIST. TERRA: ${groundDist.toFixed(2)}m\nLUNGH. FILO: ${wireLength.toFixed(2)}m`, {x: textPos.x, y: textPos.y + 0.15, z: textPos.z}, '#FFEB3B', this.globalTextScale * 0.75, container);
@@ -952,10 +1070,10 @@
               let txt = document.querySelector('#txt-laser-toggle'); let btn = document.querySelector('#btn-laser-toggle');
               if (this.pointerMode === 'TOUCH') {
                   this.pointerMode = 'LIDAR';
-                  txt.setAttribute('value', "PUNTAMENTO: LIDAR + TOCCO"); btn.setAttribute('color', '#D81B60');
-              } else if (this.pointerMode === 'LIDAR') {
+                  txt.setAttribute('value', "PUNTAMENTO: LIDAR + TAP"); btn.setAttribute('color', '#D81B60');
+              } else if (this.pointerMode === 'LIDAR' && !AFRAME.utils.device.isMobile()) {
                   this.pointerMode = 'TRIANG'; this.hitTestSource = null;
-                  txt.setAttribute('value', "PUNTAMENTO: TRIANGOLAZIONE (2 RAGGI)"); btn.setAttribute('color', '#FF1744');
+                  txt.setAttribute('value', "PUNTAMENTO: TRIANGOLAZIONE"); btn.setAttribute('color', '#FF1744');
               } else {
                   this.pointerMode = 'TOUCH'; this.hitTestSource = null; this.triangState = 0;
                   txt.setAttribute('value', "PUNTAMENTO: SOLO TOCCO"); btn.setAttribute('color', '#5E35B1');
@@ -1031,39 +1149,62 @@
         });
       },
 
-      refreshAll: function() { this.updateMenuText(); this.updateGeometriesAndDrawings(); this.saveToStorage(); }
+      refreshAll: function() { 
+          this.updateMenuText(); 
+          this.updateGeometriesAndDrawings(); 
+          this.updateLaserVisibility();
+          this.saveToStorage(); 
+      }
     });
   </script>
 </head>
 <body>
-  
-  <div id="ui-2d-container">
-    <h3>DATABASE SCENE MULTIPLE</h3>
-    <input type="text" id="save-name" placeholder="Es. Campo Scout">
-    <button class="action" onclick="window.saveAntennaToDB()">SALVA SCENA NEL VISORE</button>
-    <hr>
-    <p>Carica una scena salvata:</p>
-    <select id="load-list"></select>
-    <button onclick="window.loadAntennaFromDB()">CARICA SCENA</button>
-    <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA SCENA</button>
-    <hr>
-    <h3>MMANA-GAL (.maa)</h3>
-    <input type="file" id="file-mmana" accept=".maa">
+
+  <!-- Overlay che raggruppa tutti i bottoni 2D per compatibilita WebXR -->
+  <div id="overlay-container">
+      <div id="ui-2d-container" class="pointer-auto">
+        <h3>DATABASE SCENE MULTIPLE</h3>
+        <input type="text" id="save-name" placeholder="Es. Campo Scout">
+        <button class="action" onclick="window.saveAntennaToDB()">SALVA SCENA NEL VISORE</button>
+        <hr>
+        <p>Carica una scena salvata:</p>
+        <select id="load-list"></select>
+        <button onclick="window.loadAntennaFromDB()">CARICA SCENA</button>
+        <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA SCENA</button>
+        <hr>
+        <h3>MMANA-GAL (.maa)</h3>
+        <input type="file" id="file-mmana" accept=".maa">
+      </div>
+
+      <!-- NUOVI CONTROLLI MOBILE SU SCHERMO -->
+      <div id="mobile-controls">
+          <button id="btn-mob-y" class="mob-btn btn-menu">MENU (Y)</button>
+          <button id="btn-mob-x" class="mob-btn btn-tiranti">TIRANTI (X)</button>
+          <button id="btn-mob-rot-sx" class="mob-btn">⟲ Ruota SX</button>
+          <button id="btn-mob-rot-dx" class="mob-btn">Ruota DX ⟳</button>
+          <button id="btn-mob-up" class="mob-btn">▲ Alza / Ing</button>
+          <button id="btn-mob-down" class="mob-btn">▼ Abb / Rid</button>
+          <div id="btn-mob-confirm-hint">[ TAP QUALSIASI PUNTO SCHERMO PER CONFERMARE O PIAZZARE ]</div>
+      </div>
   </div>
 
-  <a-scene webxr="optionalFeatures: local-floor, hit-test;" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: hit-test, local-floor, dom-overlay; overlayElement: #overlay-container;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
-      <a-camera id="camera" position="0 1.6 0"></a-camera>
+      <a-camera id="camera" position="0 1.6 0">
+          <!-- Questo raycaster associato al cursore mouse fa in modo che tappando lo schermo
+               si riescano a premere menu o selezionare collari 3D anche su cellulare. -->
+          <a-entity id="mouse-cursor" cursor="rayOrigin: mouse" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector, #point-c-hitbox"></a-entity>
+      </a-camera>
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.45" rotation="-30 0 0">
           <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO V36" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V38 MOBILE" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
           <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
-            <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
+            <a-text id="info-text" value="Tocca lo schermo per piazzare/confermare." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
           </a-plane>
 
           <a-text value="GESTIONE SCENA E SISTEMA PUNTAMENTO" position="0 0.31 0.01" align="center" scale="0.065 0.065 0.065" color="#00BFFF"></a-text>
@@ -1076,8 +1217,8 @@
           </a-plane>
           <a-text id="txt-scene-info" value="ANTENNA 1 DI 1" position="0 0.20 0.01" align="center" scale="0.055 0.055 0.055" color="#FFF"></a-text>
           
-          <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#5E35B1" position="0 0.16 0.01">
-            <a-text id="txt-laser-toggle" value="PUNTAMENTO: SOLO TOCCO" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
+          <a-plane id="btn-laser-toggle" class="clickable" btn-interaction width="0.45" height="0.035" color="#D81B60" position="0 0.16 0.01">
+            <a-text id="txt-laser-toggle" value="PUNTAMENTO: LIDAR + TAP" align="center" scale="0.065 0.065 0.065" color="#FFFFFF"></a-text>
           </a-plane>
 
           <a-plane id="btn-ant" class="clickable" btn-interaction width="0.2" height="0.04" color="#37474F" position="-0.11 0.09 0.01">
@@ -1177,7 +1318,7 @@
 
         <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
           <a-plane width="0.48" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
-          <a-text value="MODALITA' TIRANTI (TASTO X PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
+          <a-text value="MODALITA' TIRANTI (USA MENU PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
           
           <a-plane width="0.45" height="0.06" color="#3E2723" position="0 0.07 0.01">
             <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text>
