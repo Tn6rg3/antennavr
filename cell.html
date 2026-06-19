@@ -7,6 +7,7 @@
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; }
+    html { background-color: transparent; }
     
     /* Contenitore principale Overlay: copre tutto lo schermo ma lascia passare i click dove non serve */
     #overlay-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
@@ -71,9 +72,16 @@
     .mob-btn:active { background: #00E676; color: #000; transform: scale(0.95); }
     .mob-btn.btn-menu { background: rgba(0, 150, 136, 0.9); border-color: #00BFFF; flex: 1 1 45%; }
     .mob-btn.btn-tiranti { background: rgba(211, 47, 47, 0.9); border-color: #FF1744; flex: 1 1 45%; }
-    #btn-mob-confirm-hint { flex: 1 1 100%; background: transparent; border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; pointer-events: none; text-align: center; }
+    #btn-mob-confirm-hint { flex: 1 1 100%; background: rgba(0,0,0,0.5); border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; pointer-events: none; text-align: center; border-radius: 6px; font-weight: bold;}
   </style>
   <script>
+    // Controllo sicurezza HTTPS
+    window.addEventListener('DOMContentLoaded', () => {
+        if (!window.isSecureContext && location.hostname !== 'localhost') {
+            alert("ATTENZIONE!\nStai visualizzando il sito senza HTTPS.\nPer far funzionare la fotocamera in Realtà Aumentata (AR) senza avere lo schermo nero, devi caricare questo file su un server sicuro HTTPS (es. GitHub Pages, Vercel, o server certificato).");
+        }
+    });
+
     AFRAME.registerComponent('look-at-camera', { 
       tick: function () { 
         let cameraEl = document.querySelector('#camera'); 
@@ -114,6 +122,9 @@
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         try {
+            // ESPORTAZIONE GLOBALE PER I BOTTONI 2D
+            window.appContext = this;
+
             this.antennaTypes = ['Dipolo', 'End Fed', 'Longwire', 'Verticale', 'MMANA-GAL'];
             this.bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
             this.mmanaModels = ['Yagi 3 Elementi', 'Delta Loop', 'Dipolo MMANA', 'Modello Importato'];
@@ -128,12 +139,10 @@
             this.calibLocal1 = null; 
             this.calibLocal2 = null;
             
-            // Pointer Modes: 'TOUCH', 'LIDAR', 'TRIANG'
             this.pointerMode = AFRAME.utils.device.isMobile() ? 'LIDAR' : 'TOUCH';
             this.hitTestSource = null; this.requestingHitTest = false; this.reticleValid = false;
             this.targetReticlePos = new THREE.Vector3(); this.targetReticleQuat = new THREE.Quaternion(); this.lastFloorY = 0; 
 
-            // Triangulation Logic
             this.triangState = 0; 
             this.triangRay1 = null;
             this.triangRay2 = null;
@@ -153,114 +162,67 @@
             this.menuUI = document.querySelector('#menu-ui'); 
             this.gwUI = document.querySelector('#guy-wires-ui');
 
-            // CONTROLLER EVENT BINDINGS (Per VR nativa Oculus/Quest)
             if (this.raycasterEl) { this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this)); this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this)); }
             if (this.leftControllerEl) { this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this)); this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this)); this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this)); }
 
-            // MOBILE ON-SCREEN BUTTONS E TOUCH
-            this.setupMobileUI();
+            // SETUP AZIONI CONTINUATIVE (JOYSTICK SU SCHERMO)
+            this.actionInterval = null;
+            this.startAction = function(action) {
+                clearInterval(this.actionInterval);
+                let step = () => {
+                    let valL = (action === 'rot-sx') ? -2.0 : (action === 'rot-dx' ? 2.0 : 0);
+                    let valR = (action === 'up') ? -1.0 : (action === 'down' ? 1.0 : 0);
+                    
+                    if (valL !== 0) {
+                        if (this.current.state === 'SIZE_ROTATE_TRALICCIO') this.current.traliccio.rotationY += valL; 
+                        else this.current.antennaRotationY += valL;
+                    }
+                    if (valR !== 0) {
+                        if (this.current.state === 'SIZE_ROTATE_TRALICCIO') this.current.traliccio.radius = Math.max(0.15, this.current.traliccio.radius + (valR < 0 ? 0.05 : -0.05));
+                        else if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') this.current.traliccio.height = Math.max(1.0, this.current.traliccio.height + (valR < 0 ? 0.2 : -0.2));
+                        else if (this.current.state.includes('HEIGHT') && this.current.state !== 'PLACE_HEIGHT_TRALICCIO') {
+                            this.currentHeight = Math.max(0.0, this.currentHeight + (valR < 0 ? 0.1 : -0.1));
+                            this.updateHeightPreview();
+                        }
+                        else if (this.gwState === 'EDIT_COLLAR' && this.activeAnchor) {
+                            let maxH = this.activeAnchor.type === 'traliccio' ? this.current.traliccio.height : (this.activeAnchor.pole === 'A' ? (this.current.pointA.top.y - this.current.pointA.base.y) : (this.current.pointB.top.y - this.current.pointB.base.y));
+                            this.activeAnchor.height = Math.max(0.1, Math.min(maxH, this.activeAnchor.height + (valR < 0 ? 0.1 : -0.1)));
+                        }
+                    }
+                    this.refreshAll();
+                };
+                step(); // Execute once immediately
+                this.actionInterval = setInterval(step, 150);
+            };
+            this.stopAction = function() { clearInterval(this.actionInterval); this.saveToStorage(); };
 
             this.el.sceneEl.addEventListener('exit-vr', () => { this.hitTestSource = null; this.requestingHitTest = false; });
             
-            // TAP GLOBALE SULLO SCHERMO PER CONFERMARE/PIAZZARE
-            let tapHandler = (e) => {
-                // Se hai toccato un bottone della UI, ignora!
-                if (e.target.closest('.pointer-auto') || e.target.closest('.mob-btn') || e.target.closest('#btn-toggle-db')) {
-                    return;
-                }
+            // BLOCCO CLIC SU UI 2D PER NON PIAZZARE ANTENNE SOTTO AI BOTTONI
+            let overlay = document.getElementById('overlay-container');
+            if (overlay) {
+                overlay.addEventListener('beforexrselect', (e) => {
+                    // Se stiamo toccando l'UI HTML, cancella l'azione in AR 3D
+                    if (e.target.closest('.pointer-auto')) {
+                        e.preventDefault();
+                    }
+                });
+            }
+
+            // GESTIONE DEL TAP GLOBALE (SIA IN AR CHE 2D)
+            window.addEventListener('pointerdown', (e) => {
+                if (e.target.closest('.pointer-auto')) return; // Ignora se ha cliccato l'UI HTML
                 let now = Date.now();
-                if (now - this.lastTapTime < 300) return; // Anti-doppio click
+                if (now - this.lastTapTime < 300) return; 
                 this.lastTapTime = now;
-                
-                this.onTriggerDown();
-            };
-            
-            // Agganciamo i listener a tutto il documento
-            window.addEventListener('touchstart', tapHandler, {passive: true});
-            window.addEventListener('mousedown', tapHandler);
+                this.onTriggerDown(); // Piazza punto/conferma
+            });
 
             this.initPersistentElements(); this.setupGlobalEventDelegation(); this.setupMmanaFileLoader();
             window.saveAntennaToDB = this.saveAntennaToDB.bind(this); window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this); window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
             this.refreshDBList(); this.loadFromStorage(); 
             this.updateLaserVisibility();
         } catch (error) { console.error("Errore inizializzazione:", error); }
-      },
-
-      setupMobileUI: function() {
-          // Prevenzione bolle per non far triggerare tapHandler
-          let stopProp = (e) => e.stopPropagation();
-          document.querySelectorAll('.pointer-auto, .mob-btn, #btn-toggle-db').forEach(el => {
-              el.addEventListener('touchstart', stopProp, {passive: true});
-              el.addEventListener('mousedown', stopProp);
-          });
-
-          let btnMenu = document.querySelector('#btn-mob-y');
-          let btnTiranti = document.querySelector('#btn-mob-x');
-          let btnToggleDb = document.querySelector('#btn-toggle-db');
-          let ui2d = document.querySelector('#ui-2d-container');
-
-          if (btnMenu) btnMenu.addEventListener('click', (e) => { e.preventDefault(); this.toggleMenu(); });
-          if (btnTiranti) btnTiranti.addEventListener('click', (e) => { e.preventDefault(); this.toggleGuyWireMode(); });
-          
-          if (btnToggleDb && ui2d) {
-              btnToggleDb.addEventListener('click', (e) => {
-                  e.preventDefault();
-                  ui2d.style.display = (ui2d.style.display === 'none' || ui2d.style.display === '') ? 'block' : 'none';
-              });
-          }
-
-          let simulateLeftThumb = (val) => {
-              let thumbTime = Date.now();
-              if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
-                  if (this.current.state === 'SIZE_ROTATE_TRALICCIO') { this.current.traliccio.rotationY += val; } 
-                  else { this.current.antennaRotationY += val; }
-                  this.refreshAll(); this.lastThumbTime = thumbTime; this.saveToStorage();
-              }
-          };
-
-          let simulateRightThumb = (val) => {
-              let thumbTime = Date.now();
-              if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
-                  if (this.current.state === 'SIZE_ROTATE_TRALICCIO') {
-                      this.current.traliccio.radius = Math.max(0.15, this.current.traliccio.radius + (val < 0 ? -0.05 : 0.05));
-                  } else if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') {
-                      this.current.traliccio.height = Math.max(1.0, this.current.traliccio.height + (val < 0 ? -0.2 : 0.2));
-                  } else if (this.current.state.includes('HEIGHT') && this.current.state !== 'PLACE_HEIGHT_TRALICCIO') {
-                      this.currentHeight = Math.max(0.0, this.currentHeight + (val < 0 ? -0.1 : 0.1));
-                      this.updateHeightPreview();
-                  } else if (this.gwState === 'EDIT_COLLAR' && this.activeAnchor) {
-                      let maxH = this.activeAnchor.type === 'traliccio' ? this.current.traliccio.height : (this.activeAnchor.pole === 'A' ? (this.current.pointA.top.y - this.current.pointA.base.y) : (this.current.pointB.top.y - this.current.pointB.base.y));
-                      this.activeAnchor.height = Math.max(0.1, Math.min(maxH, this.activeAnchor.height + (val < 0 ? -0.1 : 0.1)));
-                  }
-                  this.refreshAll(); this.lastThumbTime = thumbTime; this.saveToStorage();
-              }
-          };
-
-          let bindRepeat = (id, action) => {
-              let interval;
-              let btn = document.querySelector(id);
-              if(!btn) return;
-              
-              let start = (e) => { 
-                  e.stopPropagation(); 
-                  if (e.type === 'touchstart') btn.dataset.touch = 'true';
-                  if (e.type === 'mousedown' && btn.dataset.touch === 'true') return; // Previeni doppio fire
-                  clearInterval(interval); action(); interval = setInterval(action, 150); 
-              };
-              let stop = (e) => { e.stopPropagation(); clearInterval(interval); };
-              
-              btn.addEventListener('mousedown', start);
-              btn.addEventListener('mouseup', stop);
-              btn.addEventListener('mouseleave', stop);
-              btn.addEventListener('touchstart', start, {passive: true});
-              btn.addEventListener('touchend', stop, {passive: true});
-              btn.addEventListener('touchcancel', stop, {passive: true});
-          };
-
-          bindRepeat('#btn-mob-rot-sx', () => simulateLeftThumb(-2.0));
-          bindRepeat('#btn-mob-rot-dx', () => simulateLeftThumb(2.0));
-          bindRepeat('#btn-mob-up', () => simulateRightThumb(-1.0)); // Y < 0 aumenta altezza/raggio
-          bindRepeat('#btn-mob-down', () => simulateRightThumb(1.0)); // Y > 0 diminuisce altezza/raggio
       },
 
       createEmptyAntenna: function() {
@@ -1103,6 +1065,8 @@
 
       setupGlobalEventDelegation: function() {
         let scene = this.el.sceneEl; this.lastClickTime = 0; 
+        
+        // Questo listener gestisce i menu 3D di A-Frame (la console in AR)
         scene.addEventListener('mousedown', (evt) => {
           let now = Date.now(); if (now - this.lastClickTime < 250) return; 
           let target = evt.target.closest('.clickable'); if(!target) return;
@@ -1209,7 +1173,7 @@
   <div id="overlay-container">
       
       <!-- BOTTONE PER APRIRE/CHIUDERE IL MENU SALVATAGGI -->
-      <button id="btn-toggle-db" class="pointer-auto">💾 MENU DB</button>
+      <button id="btn-toggle-db" class="pointer-auto" onclick="document.getElementById('ui-2d-container').style.display = document.getElementById('ui-2d-container').style.display === 'block' ? 'none' : 'block';">💾 MENU DB</button>
 
       <div id="ui-2d-container" class="pointer-auto">
         <h3>DATABASE SCENE MULTIPLE</h3>
@@ -1227,17 +1191,18 @@
 
       <!-- CONTROLLI MOBILE SU SCHERMO -->
       <div id="mobile-controls" class="pointer-auto">
-          <button id="btn-mob-y" class="mob-btn btn-menu">MENU (Y)</button>
-          <button id="btn-mob-x" class="mob-btn btn-tiranti">TIRANTI (X)</button>
-          <button id="btn-mob-rot-sx" class="mob-btn">⟲ Ruota SX</button>
-          <button id="btn-mob-rot-dx" class="mob-btn">Ruota DX ⟳</button>
-          <button id="btn-mob-up" class="mob-btn">▲ Alza / Ing</button>
-          <button id="btn-mob-down" class="mob-btn">▼ Abb / Rid</button>
-          <div id="btn-mob-confirm-hint">[ TAP QUALSIASI PUNTO SCHERMO PER CONFERMARE O PIAZZARE ]</div>
+          <button class="mob-btn btn-menu pointer-auto" onclick="window.appContext.toggleMenu();">MENU (Y)</button>
+          <button class="mob-btn btn-tiranti pointer-auto" onclick="window.appContext.toggleGuyWireMode();">TIRANTI (X)</button>
+          <button class="mob-btn pointer-auto" onpointerdown="window.appContext.startAction('rot-sx');" onpointerup="window.appContext.stopAction();" onpointerleave="window.appContext.stopAction();">⟲ Ruota SX</button>
+          <button class="mob-btn pointer-auto" onpointerdown="window.appContext.startAction('rot-dx');" onpointerup="window.appContext.stopAction();" onpointerleave="window.appContext.stopAction();">Ruota DX ⟳</button>
+          <button class="mob-btn pointer-auto" onpointerdown="window.appContext.startAction('up');" onpointerup="window.appContext.stopAction();" onpointerleave="window.appContext.stopAction();">▲ Alza / Ing</button>
+          <button class="mob-btn pointer-auto" onpointerdown="window.appContext.startAction('down');" onpointerup="window.appContext.stopAction();" onpointerleave="window.appContext.stopAction();">▼ Abb / Rid</button>
+          <div id="btn-mob-confirm-hint">[ TAP IN UN PUNTO VUOTO PER CONFERMARE/PIAZZARE ]</div>
       </div>
   </div>
 
-  <a-scene webxr="optionalFeatures: hit-test, dom-overlay; overlayElement: #overlay-container;" vr-mode-ui="enabled: true">
+  <!-- A-Scene adesso ha transparent="true" background="transparent" per sbloccare la camera AR! -->
+  <a-scene transparent="true" background="transparent" webxr="optionalFeatures: hit-test, dom-overlay; overlayElement: #overlay-container;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0">
