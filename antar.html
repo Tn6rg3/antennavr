@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <title>Antenne AR Pro V38 - Three.js Nativo e Mobile</title>
+  <title>Antenne AR Pro V38 - Mobile + VR Nativo</title>
   
   <style>
-    /* CSS STRUTTURALE (Esattamente come il codice funzionante originale) */
     body { margin: 0; overflow: hidden; background-color: #000; font-family: monospace; color: white; touch-action: none; }
     
+    /* Overlay contenitore AR. Deve partire invisibile per non bloccare il bottone WebXR */
     #ui-container { 
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 100; pointer-events: none; box-sizing: border-box;
-        display: none; /* Fondamentale: Parte nascosto per non rompere il tasto START AR! */
+        display: none; 
     }
     
     #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
     .pointer-auto { pointer-events: auto !important; }
     
-    /* STILI PANNELLI E BOTTONI */
+    /* STILI BOTTONI E PANNELLI */
     .ui-btn { padding: 10px; border: 1px solid #777; border-radius: 6px; background: rgba(50,50,50,0.9); color: white; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 11px; font-family: monospace; touch-action: manipulation; user-select: none; }
     .ui-btn:active { transform: scale(0.95); background: #00E676; color: black; }
 
@@ -35,13 +35,12 @@
     #gw-menu-panel { display: none; position: absolute; top: 15px; left: 15px; background: rgba(78,52,46,0.95); padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; width: 250px; box-shadow: 0 4px 10px rgba(0,0,0,0.8); pointer-events: auto;}
     #gw-menu-panel h3 { margin: 0 0 5px 0; font-size: 14px; color: #FFEB3B; text-align: center; }
 
-    /* CONTROLLI MOBILE IN BASSO */
     #mobile-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; width: 96%; max-width: 450px; pointer-events: auto;}
     .mob-btn { flex: 1 1 45%; padding: 12px; font-size: 13px; border: 2px solid #00E676; background: rgba(30,30,30,0.9); touch-action: none; }
     .btn-main-act { background: rgba(0, 150, 136, 0.9); border-color: #00BFFF; }
     .btn-gw-act { background: rgba(211, 47, 47, 0.9); border-color: #FF1744; }
     #info-text { flex: 1 1 100%; background: rgba(0,0,0,0.7); border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; text-align: center; border-radius: 6px; pointer-events: none;}
-
+    
     #browserWarning { display: none; position: absolute; top: 0; left: 0; width: 100%; background: #ff4757; color: white; padding: 10px; text-align: center; font-size: 13px; z-index: 1000; }
   </style>
 
@@ -56,12 +55,11 @@
 </head>
 <body>
 
-  <div id="browserWarning">⚠️ Attenzione: Usa HTTPS su Google Chrome/Safari per far funzionare la fotocamera AR.</div>
+  <div id="browserWarning">⚠️ Attenzione: Usa HTTPS su Google Chrome per far funzionare la fotocamera AR.</div>
 
-  <!-- INTERFACCIA HTML OVERLAY DOM: Inizia nascosta per non bloccare il pulsante START AR -->
+  <!-- INTERFACCIA HTML OVERLAY DOM -->
   <div id="ui-container">
       
-      <!-- Area trasparente per catturare i tap a vuoto nella stanza -->
       <div id="touchArea"></div>
 
       <button id="btn-toggle-db" class="ui-btn pointer-auto">💾 MENU DB</button>
@@ -193,10 +191,12 @@
       </div>
   </div>
 
+  <!-- SCRIPT LOGICA AR E APP IN PURO THREE.JS -->
   <script type="module">
     import * as THREE from 'three';
     import { ARButton } from 'three/addons/webxr/ARButton.js';
 
+    // === VARIABILI GLOBALI ===
     let container, camera, scene, renderer, controller;
     let hitTestSource = null, hitTestSourceRequested = false;
     let reticle, reticleValid = false;
@@ -234,89 +234,9 @@
     let lastTriggerTime = 0, lastTapTime = 0;
     let justClicked3DObject = false;
 
-    init();
-    animate();
-
-    function init() {
-        container = document.createElement('div');
-        document.body.appendChild(container);
-
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 2000);
-        scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3));
-
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
-        container.appendChild(renderer.domElement);
-
-        document.body.appendChild(ARButton.createButton(renderer, { 
-            requiredFeatures: ['hit-test', 'dom-overlay'],
-            optionalFeatures: ['anchors'],
-            domOverlay: { root: document.getElementById('ui-container') }
-        }));
-
-        controller = renderer.xr.getController(0);
-        controller.addEventListener('select', onTriggerDown);
-        scene.add(controller);
-
-        worldPivot.add(worldContent);
-        scene.add(worldPivot);
-
-        initPersistentElements();
-        setupMobileUI();
-        setupMmanaFileLoader();
-        refreshDBList();
-        loadFromStorage();
-        updateMenuText();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        renderer.xr.addEventListener('sessionstart', () => {
-            document.getElementById('ui-container').style.display = 'block';
-            let session = renderer.xr.getSession();
-            if (session) {
-                try { session.updateRenderState({ depthNear: 0.1, depthFar: 2500 }); } catch (e) {}
-            }
-        });
-        
-        renderer.xr.addEventListener('sessionend', () => { 
-            hitTestSource = null; hitTestSourceRequested = false; 
-            document.getElementById('ui-container').style.display = 'none';
-        });
-
-        document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
-            if (ev.target.id !== 'touchArea') ev.preventDefault();
-        });
-
-        document.getElementById('touchArea').addEventListener('pointerdown', (e) => {
-            let mouse = new THREE.Vector2();
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            let raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mouse, camera);
-            let intersects = raycaster.intersectObjects(clickableObjects, false);
-            
-            if (intersects.length > 0) {
-                justClicked3DObject = true; 
-                handle3DClick(intersects[0].object);
-                setTimeout(() => justClicked3DObject = false, 300);
-            } else {
-                if (!renderer.xr.isPresenting) {
-                    let now = Date.now();
-                    if (now - lastTapTime > 300) {
-                        lastTapTime = now;
-                        onTriggerDown();
-                    }
-                }
-            }
-        });
-    }
+    // ==========================================
+    // DEFINIZIONE DI TUTTE LE FUNZIONI
+    // ==========================================
 
     function createEmptyAntenna() {
         return {
@@ -372,294 +292,6 @@
         updateMenuText();
         drawGeometries();
         saveToStorage();
-    }
-
-    function setupMobileUI() {
-        const attachClick = (id, cb) => { let b = document.getElementById(id); if(b) b.addEventListener('click', (e)=>{e.preventDefault(); cb();}); };
-        
-        attachClick('btn-mob-y', toggleMenu);
-        attachClick('btn-mob-x', toggleGuyWireMode);
-        attachClick('btn-toggle-db', () => { let p = document.getElementById('db-panel'); p.style.display = p.style.display==='block'?'none':'block'; });
-        
-        const attachHold = (id, action) => {
-            let b = document.getElementById(id); if(!b) return;
-            b.addEventListener('pointerdown', (e) => { e.preventDefault(); startAction(action); });
-            b.addEventListener('pointerup', (e) => { e.preventDefault(); stopAction(); });
-            b.addEventListener('pointerleave', (e) => { e.preventDefault(); stopAction(); });
-        };
-        attachHold('btn-mob-rot-sx', 'rot-sx'); attachHold('btn-mob-rot-dx', 'rot-dx');
-        attachHold('btn-mob-up', 'up'); attachHold('btn-mob-down', 'down');
-
-        attachClick('btn-scene-prev', () => { if(antennas.length > 1) switchAntenna((activeAntIdx - 1 + antennas.length) % antennas.length); });
-        attachClick('btn-scene-next', () => { if(antennas.length > 1) switchAntenna((activeAntIdx + 1) % antennas.length); });
-        attachClick('btn-scene-new', () => { antennas.push(createEmptyAntenna()); activeAntIdx = antennas.length - 1; current = antennas[activeAntIdx]; refreshAll(); });
-        attachClick('btn-delete-antenna', () => { if(antennas.length > 1){ antennas.splice(activeAntIdx,1); activeAntIdx = Math.max(0, activeAntIdx-1); current = antennas[activeAntIdx]; } else { antennas=[createEmptyAntenna()]; activeAntIdx=0; current=antennas[0]; } refreshAll(); });
-
-        attachClick('btn-laser-toggle', () => {
-            let b = document.getElementById('btn-laser-toggle');
-            if(pointerMode === 'TOUCH'){ pointerMode = 'LIDAR'; b.innerText="MIRA: LIDAR + TAP"; b.style.background="#D81B60"; }
-            else if(pointerMode === 'LIDAR'){ pointerMode = 'TRIANG'; hitTestSource = null; b.innerText="MIRA: TRIANGOLAZIONE"; b.style.background="#FF1744"; }
-            else { pointerMode = 'TOUCH'; hitTestSource=null; triangState=0; b.innerText="MIRA: SOLO TOCCO"; b.style.background="#5E35B1"; }
-            refreshAll();
-        });
-
-        attachClick('btn-ant-type', () => { current.antIdx = (current.antIdx + 1) % antennaTypes.length; resetAntennaLengths(); refreshAll(); });
-        attachClick('btn-band', () => { current.bandIdx = (current.bandIdx + 1) % bands.length; resetAntennaLengths(); refreshAll(); });
-
-        let mr = (n) => Math.round(n*100)/100;
-        attachClick('btn-c-left', () => { current.pointC.percent = Math.max(0.02, mr(current.pointC.percent - 0.05)); refreshAll(); });
-        attachClick('btn-c-right', () => { current.pointC.percent = Math.min(0.98, mr(current.pointC.percent + 0.05)); refreshAll(); });
-        
-        let efSet = (id, delta, prop) => attachClick(id, () => { current[prop] = Math.max(0.1, mr(current[prop]+delta)); refreshAll(); });
-        efSet('btn-ac-m1', -1, 'endFed_AC_Len'); efSet('btn-ac-p1', 1, 'endFed_AC_Len');
-        efSet('btn-cb-m1', -1, 'endFed_CB_Len'); efSet('btn-cb-p1', 1, 'endFed_CB_Len');
-        
-        attachClick('btn-lw-vertex', () => { current.longwireVertex = current.longwireVertex==='A'?'B':'A'; refreshAll(); });
-        attachClick('btn-lw-m1', () => { current.longwireLen = Math.max(0.1, mr(current.longwireLen - 1)); refreshAll(); });
-        attachClick('btn-lw-p1', () => { current.longwireLen = mr(current.longwireLen + 1); refreshAll(); });
-        
-        attachClick('btn-rad-num-m', () => { current.numRadials = Math.max(0, current.numRadials - 1); refreshAll(); });
-        attachClick('btn-rad-num-p', () => { current.numRadials = Math.min(maxRadials, current.numRadials + 1); refreshAll(); });
-        attachClick('btn-rad-len-m', () => { current.radialLen = Math.max(0.1, mr(current.radialLen - 1)); refreshAll(); });
-        attachClick('btn-rad-len-p', () => { current.radialLen = mr(current.radialLen + 1); refreshAll(); });
-
-        attachClick('btn-mmana-model', () => { current.mmanaModelIdx = (current.mmanaModelIdx+1)%mmanaModels.length; loadPreloadedMmanaModel(current); refreshAll(); });
-        attachClick('btn-tral-shape', () => { current.traliccio.shape = current.traliccio.shape==='square'?'triangle':'square'; refreshAll(); });
-        
-        attachClick('btn-txt-m', () => { globalTextScale = Math.max(0.15, mr(globalTextScale - 0.05)); refreshAll(); });
-        attachClick('btn-txt-p', () => { globalTextScale = Math.min(1.2, mr(globalTextScale + 0.05)); refreshAll(); });
-
-        attachClick('btn-repo-a', () => { current.state = 'REPOSITION_GROUND_A'; document.getElementById('main-menu-panel').style.display='none'; refreshAll();});
-        attachClick('btn-h-a', () => { current.state='REPOSITION_HEIGHT_A'; currentHeight = current.pointA.top.y - current.pointA.base.y; setupHeightMode(current.pointA.base); document.getElementById('main-menu-panel').style.display='none'; });
-        attachClick('btn-repo-b', () => { current.state = 'REPOSITION_GROUND_B'; document.getElementById('main-menu-panel').style.display='none'; refreshAll();});
-        attachClick('btn-h-b', () => { current.state='REPOSITION_HEIGHT_B'; currentHeight = current.pointB.top.y - current.pointB.base.y; setupHeightMode(current.pointB.base); document.getElementById('main-menu-panel').style.display='none'; });
-
-        attachClick('btn-start-tral', () => { current = createEmptyAntenna(); antennas[activeAntIdx]=current; current.traliccio.active=true; current.state='PLACE_TRALICCIO_CENTER'; document.getElementById('main-menu-panel').style.display='none'; refreshAll(); });
-        attachClick('btn-cal-set', () => { if(current.pointA.base){ current.state='SET_CALIB_PT1'; document.getElementById('main-menu-panel').style.display='none'; updateMenuText(); }});
-        attachClick('btn-cal-rec', () => { if(calibLocal1 && calibLocal2){ current.state='AWAITING_CALIB_PT1'; document.getElementById('main-menu-panel').style.display='none'; updateMenuText(); }});
-        attachClick('btn-reset-all', () => { 
-            antennas = [createEmptyAntenna()]; activeAntIdx=0; current=antennas[0]; 
-            worldPivot.position.set(0,0,0); worldPivot.rotation.set(0,0,0); worldContent.position.set(0,0,0); 
-            calibLocal1=null; calibLocal2=null; diamondRef1.visible=false; diamondRef2.visible=false; 
-            localStorage.removeItem('antennaArProV38_DB'); refreshAll(); 
-        });
-
-        attachClick('btn-gw-new-tral', () => { let n={type:'traliccio', height:3.0}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
-        attachClick('btn-gw-new-a', () => { let maxH = current.pointA.top.y - current.pointA.base.y; let n={pole:'A', height:maxH/2, pegs:[]}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
-        attachClick('btn-gw-new-b', () => { let maxH = current.pointB.top.y - current.pointB.base.y; let n={pole:'B', height:maxH/2, pegs:[]}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
-        attachClick('btn-gw-done', () => { activeAnchor=null; gwState='MAIN'; updateGWUI(); refreshAll(); });
-
-        attachClick('btn-save-db', () => {
-            let name = document.getElementById('save-name').value.trim(); if(!name) return alert("Inserisci un nome!");
-            if(!current.pointA.base) return alert("Piazza almeno un'antenna.");
-            if(!calibLocal1) return alert("Imposta i diamanti di calibrazione (Menu > [1] IMPOSTA DIAMANTI).");
-            let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}');
-            db[name] = { antennas: JSON.parse(JSON.stringify(antennas)), activeAntIdx, globalTextScale, calibLocal1, calibLocal2 };
-            localStorage.setItem('antenneAR_DB', JSON.stringify(db)); refreshDBList(); alert(`Salvato: ${name}`);
-        });
-
-        attachClick('btn-load-db', () => {
-            let name = document.getElementById('load-list').value;
-            let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); let d = db[name]; if(!d) return;
-            calibLocal1 = d.calibLocal1; calibLocal2 = d.calibLocal2;
-            worldContent.position.set(-calibLocal1.x, -calibLocal1.y, -calibLocal1.z);
-            diamondRef1.position.copy(calibLocal1); diamondRef2.position.copy(calibLocal2);
-            diamondRef1.visible=true; diamondRef2.visible=true;
-            if(d.antennas) { antennas = d.antennas; activeAntIdx = d.activeAntIdx||0; current = antennas[activeAntIdx]; }
-            globalTextScale = d.globalTextScale || 0.35;
-            current.state = 'AWAITING_CALIB_PT1'; document.getElementById('db-panel').style.display='none'; refreshAll();
-        });
-
-        attachClick('btn-delete-db', () => {
-            let name = document.getElementById('load-list').value;
-            if(name && confirm("Eliminare "+name+"?")){ let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); delete db[name]; localStorage.setItem('antenneAR_DB', JSON.stringify(db)); refreshDBList(); }
-        });
-    }
-
-    function startAction(action) {
-        clearInterval(actionInterval);
-        let step = () => {
-            let valL = (action === 'rot-sx') ? -2.0 : (action === 'rot-dx' ? 2.0 : 0);
-            let valR = (action === 'up') ? -1.0 : (action === 'down' ? 1.0 : 0);
-            if (valL !== 0) { if (current.state === 'SIZE_ROTATE_TRALICCIO') current.traliccio.rotationY += valL; else current.antennaRotationY += valL; }
-            if (valR !== 0) {
-                if (current.state === 'SIZE_ROTATE_TRALICCIO') current.traliccio.radius = Math.max(0.15, current.traliccio.radius + (valR < 0 ? 0.05 : -0.05));
-                else if (current.state === 'PLACE_HEIGHT_TRALICCIO') current.traliccio.height = Math.max(1.0, current.traliccio.height + (valR < 0 ? 0.2 : -0.2));
-                else if (current.state.includes('HEIGHT') && current.state !== 'PLACE_HEIGHT_TRALICCIO') { currentHeight = Math.max(0.0, currentHeight + (valR < 0 ? 0.1 : -0.1)); updateHeightPreview(); }
-                else if (gwState === 'EDIT_COLLAR' && activeAnchor) { let maxH = activeAnchor.type === 'traliccio' ? current.traliccio.height : (activeAnchor.pole === 'A' ? (current.pointA.top.y - current.pointA.base.y) : (current.pointB.top.y - current.pointB.base.y)); activeAnchor.height = Math.max(0.1, Math.min(maxH, activeAnchor.height + (valR < 0 ? 0.1 : -0.1))); }
-            }
-            refreshAll();
-        };
-        step(); actionInterval = setInterval(step, 150);
-    }
-    function stopAction() { clearInterval(actionInterval); saveToStorage(); }
-
-    function switchAntenna(idx) {
-        gwState = 'OFF'; activeAnchor = null; activeAntIdx = idx; current = antennas[idx]; triangState = 0;
-        if (current.pointA.top && (current.state.startsWith('PLACE_') || current.state.startsWith('AWAITING_'))) current.state = 'IDLE';
-        document.getElementById('main-menu-panel').style.display='block'; refreshAll();
-    }
-    
-    function refreshDBList() {
-        let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); let s = document.getElementById('load-list'); if(!s) return; s.innerHTML='';
-        for(let n in db) { let o = document.createElement('option'); o.value=n; o.innerText=n; s.appendChild(o); }
-    }
-    function saveToStorage() {
-        let d = { antennas: JSON.parse(JSON.stringify(antennas)), activeAntIdx, globalTextScale, pivotPos: worldPivot.position, pivotRot: worldPivot.rotation, contentPos: worldContent.position };
-        localStorage.setItem('antennaArProV38_DB', JSON.stringify(d));
-    }
-    function loadFromStorage() {
-        let saved = localStorage.getItem('antennaArProV38_DB');
-        if (saved) {
-            try {
-                let d = JSON.parse(saved);
-                if(d.antennas && d.antennas.length>0) { antennas=d.antennas; activeAntIdx=d.activeAntIdx||0; current=antennas[activeAntIdx]; }
-                if(d.globalTextScale) globalTextScale = d.globalTextScale;
-                if(d.pivotPos) worldPivot.position.copy(d.pivotPos); if(d.pivotRot) worldPivot.rotation.copy(d.pivotRot); if(d.contentPos) worldContent.position.copy(d.contentPos);
-                if(current.state.startsWith('PLACE_HEIGHT') || current.state.startsWith('REPOSITION_HEIGHT') || current.state.startsWith('SET_CALIB') || current.state.startsWith('AWAITING_CALIB') || current.state.startsWith('SIZE_ROTATE')) current.state='IDLE';
-            } catch(e) {}
-        }
-        gwState = 'OFF'; activeAnchor = null; document.getElementById('gw-menu-panel').style.display='none'; refreshAll();
-    }
-
-    function toggleMenu() {
-        if(gwState !== 'OFF') return;
-        let p = document.getElementById('main-menu-panel');
-        p.style.display = p.style.display === 'block' ? 'none' : 'block';
-        refreshAll();
-    }
-    function toggleGuyWireMode() {
-        if(!current.pointA.top && !current.pointB.top && !current.traliccio.active) return;
-        if(current.state.startsWith('AWAITING') || current.state.startsWith('PLACE_HEIGHT') || current.state.startsWith('SET_CALIB') || current.state.startsWith('SIZE_ROTATE')) return;
-        
-        let pGW = document.getElementById('gw-menu-panel'); let pM = document.getElementById('main-menu-panel');
-        if (gwState === 'OFF') { gwState = 'MAIN'; pM.style.display = 'none'; pGW.style.display = 'block'; activeAnchor=null; updateGWUI(); refreshAll(); }
-        else { gwState = 'OFF'; pGW.style.display = 'none'; pM.style.display = 'block'; activeAnchor=null; refreshAll(); }
-    }
-
-    function updateGWUI() {
-        let isMain = (gwState === 'MAIN'); let isEditCollar = (gwState === 'EDIT_COLLAR'); let isAnyEdit = (gwState==='EDIT_COLLAR'||gwState==='EDIT_PEGS'||gwState==='EDIT_TRALICCIO_PEGS');
-        document.getElementById('gw-main').style.display = isMain ? 'block' : 'none';
-        document.getElementById('gw-edit').style.display = isAnyEdit ? 'block' : 'none';
-        document.getElementById('btn-gw-new-tral').style.display = current.traliccio.active ? 'block' : 'none';
-        document.getElementById('btn-gw-new-a').style.display = current.pointA.top ? 'block' : 'none';
-        document.getElementById('btn-gw-new-b').style.display = current.pointB.top ? 'block' : 'none';
-        
-        let txt = document.getElementById('txt-gw-status');
-        if(isMain) txt.innerText = "TOCCA COLLARE 3D O CREA NUOVO";
-        if(isEditCollar) txt.innerText = "USA FRECCE SU/GIU. TAP SCHERMO PER CONFERMA";
-        if(gwState==='EDIT_PEGS') txt.innerText = "TAP SCHERMO VUOTO: PICCHETTO\nTAP OGGETTO: ELIMINA";
-        if(gwState==='EDIT_TRALICCIO_PEGS') { let r=current.traliccio.shape==='square'?4:3; let c=current.traliccio.pegs?current.traliccio.pegs.length:0; txt.innerText = `PICCHETTI CONDIVISI\nTERRA: ${c}/${r} | TAP: PIAZZA`; }
-    }
-
-    function setupMmanaFileLoader() {
-        document.getElementById('file-mmana').addEventListener('change', (evt) => {
-            let f = evt.target.files[0]; if(!f) return; let reader = new FileReader();
-            reader.onload = (e) => {
-                let lines = e.target.result.split('\n'); importedMmanaWires = []; let inWires = false;
-                for(let line of lines) {
-                    let u = line.trim().toUpperCase();
-                    if(inWires && u.startsWith('***')) inWires = false;
-                    if(u.includes('***') && u.includes('WIRES')) { inWires = true; continue; }
-                    if(inWires && line.trim() !== "") { let tk = line.trim().split(/[\s,]+/).filter(t=>t!==''); if(tk.length>=7) importedMmanaWires.push({x1:parseFloat(tk[0]), y1:parseFloat(tk[1]), z1:parseFloat(tk[2]), x2:parseFloat(tk[3]), y2:parseFloat(tk[4]), z2:parseFloat(tk[5]), radius: parseFloat(tk[6])>0?parseFloat(tk[6])/1000:0.002}); }
-                }
-                if(importedMmanaWires.length>0) { current.mmanaWires = importedMmanaWires; current.mmanaModelIdx = mmanaModels.indexOf('Modello Importato'); current.antIdx = antennaTypes.indexOf('MMANA-GAL'); refreshAll(); alert(`Importati ${importedMmanaWires.length} fili!`); }
-            }; reader.readAsText(f);
-        });
-    }
-
-    function loadPreloadedMmanaModel(ant) {
-        let m = mmanaModels[ant.mmanaModelIdx];
-        if (m === 'Yagi 3 Elementi') ant.mmanaWires = [{x1:0,y1:-2.5,z1:0,x2:0,y2:2.5,z2:0,radius:0.004}, {x1:1.5,y1:-2.4,z1:0,x2:1.5,y2:2.4,z2:0,radius:0.004}, {x1:3.2,y1:-2.2,z1:0,x2:3.2,y2:2.2,z2:0,radius:0.004}];
-        else if (m === 'Delta Loop') ant.mmanaWires = [{x1:0,y1:-2.0,z1:0,x2:0,y2:2.0,z2:0,radius:0.002}, {x1:0,y1:-2.0,z1:0,x2:0,y2:0,z2:3.5,radius:0.002}, {x1:0,y1:2.0,z1:0,x2:0,y2:0,z2:3.5,radius:0.002}];
-        else if (m === 'Dipolo MMANA') ant.mmanaWires = [{x1:0,y1:-5.0,z1:0,x2:0,y2:5.0,z2:0,radius:0.002}];
-        else if (m === 'Modello Importato') ant.mmanaWires = importedMmanaWires || [];
-    }
-    
-    function resetAntennaLengths() {
-        let bm = parseInt(bands[current.bandIdx]); let t = antennaTypes[current.antIdx];
-        let bl = (t==='Dipolo'||t==='Verticale') ? bm/4 : (t==='End Fed' ? bm*0.45 : bm);
-        current.endFed_AC_Len = bl/2; current.endFed_CB_Len = bl/2; current.longwireLen = bl;
-    }
-
-    function getLocalPoint(v) { return worldContent.worldToLocal(v.clone()); }
-
-    function getHitPoint() {
-        if (pointerMode === 'TRIANG' && triangState === 2 && triangResult) return triangResult.point.clone();
-        if (reticleValid && reticle.visible) return reticle.position.clone();
-        let camPos = new THREE.Vector3(); let camQuat = new THREE.Quaternion(); camera.getWorldPosition(camPos); camera.getWorldQuaternion(camQuat);
-        let camDir = new THREE.Vector3(0,0,-1).applyQuaternion(camQuat);
-        if (camDir.y < -0.01) { let d = (lastFloorY - camPos.y) / camDir.y; if(d>0 && d<100) return camPos.clone().add(camDir.multiplyScalar(d)); }
-        return null;
-    }
-
-    function setupHeightMode(basePos) { verticalCylinder.visible = true; heightTextSprite.visible = true; updateHeightPreview(); }
-    function resetHeightMode() { verticalCylinder.visible = false; heightTextSprite.visible = false; }
-    function updateHeightPreview() {
-        let b = current.state.includes('_A') ? current.pointA.base : current.pointB.base; if(!b) return;
-        verticalCylinder.position.set(b.x, b.y + currentHeight/2, b.z); verticalCylinder.scale.set(1, currentHeight, 1);
-        heightTextSprite.position.set(b.x, b.y + currentHeight + 0.2, b.z);
-        heightTextSprite.scale.setScalar(globalTextScale); heightTextSprite.material.map.image.getContext('2d').clearRect(0,0,512,256);
-        let t = makeTextSprite(currentHeight.toFixed(1)+"m", "#00FF00", globalTextScale); heightTextSprite.material.map = t.material.map; heightTextSprite.material.needsUpdate=true;
-    }
-
-    function handle3DClick(object) {
-        let d = object.userData; if(!d || !d.type) return;
-        if(d.type === 'selector') switchAntenna(d.antIdx);
-        else if(d.type === 'pointC') { current.state = 'REPOSITION_GROUND_C'; document.getElementById('main-menu-panel').style.display='none'; refreshAll(); }
-        else if(d.type === 'collar') {
-            if(gwState === 'EDIT_TRALICCIO_PEGS' || gwState === 'EDIT_PEGS') {
-                if (current.guyWiresData[d.index] === activeAnchor) { current.guyWiresData.splice(d.index,1); activeAnchor=null; gwState='MAIN'; updateGWUI(); refreshAll(); }
-            } else if (gwState === 'MAIN') { activeAnchor = current.guyWiresData[d.index]; gwState = 'EDIT_COLLAR'; updateGWUI(); refreshAll(); }
-        }
-        else if(d.type === 'peg') {
-            if(gwState === 'EDIT_TRALICCIO_PEGS') { current.traliccio.pegs.splice(d.index,1); updateGWUI(); refreshAll(); }
-            else if(gwState === 'EDIT_PEGS' && activeAnchor) { activeAnchor.pegs.splice(d.index,1); refreshAll(); }
-        }
-    }
-
-    function onTriggerDown() {
-        if (justClicked3DObject) return; 
-        
-        let now = Date.now(); if(now - lastTriggerTime < 300) return; lastTriggerTime = now;
-
-        let isP = current.state.startsWith('PLACE_GROUND') || current.state.startsWith('REPOSITION_GROUND') || current.state.startsWith('AWAITING_CALIB') || current.state.startsWith('SET_CALIB') || current.state.startsWith('PLACE_TRALICCIO_CENTER') || (gwState && gwState.includes('PEGS'));
-        if(!isP) triangState = 0;
-
-        if (isP && pointerMode === 'TRIANG') {
-            let cp = new THREE.Vector3(); let cd = new THREE.Vector3(0,0,-1); camera.getWorldPosition(cp); cd.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
-            if(triangState === 0) { triangRay1 = {origin:cp, dir:cd}; triangState = 1; refreshAll(); return; }
-            if(triangState === 1) { if(triangResult) { triangRay2 = {origin:cp, dir:cd}; triangState = 2; refreshAll(); } return; }
-        }
-
-        if (current.state === 'REPOSITION_GROUND_C') { let h=getHitPoint(); if(h){ if(!current.pointC.base) current.pointC.base={}; current.pointC.base.y=getLocalPoint(h).y; current.state='IDLE'; document.getElementById('main-menu-panel').style.display='block'; refreshAll(); } triangState=0; return; }
-        if (current.state === 'PLACE_TRALICCIO_CENTER') { let h=getHitPoint(); if(h){ current.traliccio.center=getLocalPoint(h); current.state='SIZE_ROTATE_TRALICCIO'; document.getElementById('main-menu-panel').style.display='block'; refreshAll(); } triangState=0; return; }
-        if (current.state === 'SIZE_ROTATE_TRALICCIO') { current.state='PLACE_HEIGHT_TRALICCIO'; document.getElementById('main-menu-panel').style.display='none'; refreshAll(); return; }
-        if (current.state === 'PLACE_HEIGHT_TRALICCIO') { current.pointA.base={x:current.traliccio.center.x, y:current.traliccio.center.y+current.traliccio.height, z:current.traliccio.center.z}; currentHeight=1.0; current.state='PLACE_HEIGHT_A'; setupHeightMode(current.pointA.base); refreshAll(); return; }
-
-        if (gwState === 'EDIT_TRALICCIO_PEGS') { let r=current.traliccio.shape==='square'?4:3; if(!current.traliccio.pegs) current.traliccio.pegs=[]; if(current.traliccio.pegs.length < r) { let h=getHitPoint(); if(h){ current.traliccio.pegs.push(getLocalPoint(h)); if(current.traliccio.pegs.length>=r){ gwState='MAIN'; activeAnchor=null; } updateGWUI(); refreshAll(); } } triangState=0; return; }
-        if (gwState === 'EDIT_PEGS') { let h=getHitPoint(); if(h){ if(!activeAnchor.pegs) activeAnchor.pegs=[]; activeAnchor.pegs.push(getLocalPoint(h)); refreshAll(); } triangState=0; return; }
-        if (gwState === 'EDIT_COLLAR') { if(activeAnchor && activeAnchor.type==='traliccio'){ if(!current.traliccio.pegs) current.traliccio.pegs=[]; gwState='EDIT_TRALICCIO_PEGS'; } else gwState='EDIT_PEGS'; updateGWUI(); refreshAll(); return; }
-        
-        if (current.state === 'AWAITING_CALIB_PT1') { let h=getHitPoint(); if(h){ calibPt1=h.clone(); worldPivot.position.copy(calibPt1); current.state='AWAITING_CALIB_PT2'; updateMenuText(); } triangState=0; return; }
-        if (current.state === 'AWAITING_CALIB_PT2') { let h=getHitPoint(); if(h){ calibPt2=h.clone(); diamondRef1.visible=false; diamondRef2.visible=false; current.state='IDLE'; refreshAll(); } triangState=0; return; }
-        if (current.state === 'SET_CALIB_PT1') { let h=getHitPoint(); if(h){ calibLocal1=getLocalPoint(h); diamondRef1.position.copy(calibLocal1); diamondRef1.visible=true; current.state='SET_CALIB_PT2'; updateMenuText(); } triangState=0; return; }
-        if (current.state === 'SET_CALIB_PT2') { let h=getHitPoint(); if(h){ calibLocal2=getLocalPoint(h); diamondRef2.position.copy(calibLocal2); diamondRef2.visible=true; setTimeout(()=> {diamondRef1.visible=false; diamondRef2.visible=false;},1000); current.state='IDLE'; updateMenuText(); } triangState=0; return; }
-
-        let t = antennaTypes[current.antIdx];
-        if (current.state === 'PLACE_GROUND_A' || current.state === 'REPOSITION_GROUND_A') {
-            let h=getHitPoint(); if(!h) return; let n=getLocalPoint(h);
-            if(current.state==='REPOSITION_GROUND_A' && current.traliccio.active) { let o=current.traliccio.center; let off={x:n.x-o.x, y:n.y-o.y, z:n.z-o.z}; current.traliccio.center=n; current.pointA.base={x:n.x,y:n.y+current.traliccio.height,z:n.z}; if(current.traliccio.pegs) current.traliccio.pegs.forEach(p=>{p.x+=off.x; p.y+=off.y; p.z+=off.z;}); } else current.pointA.base=n;
-            current.state = current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A'; currentHeight = t==='Verticale'?parseInt(bands[current.bandIdx])/4:1.0; setupHeightMode(current.pointA.base);
-        } else if (current.state === 'PLACE_HEIGHT_A' || current.state === 'REPOSITION_HEIGHT_A') {
-            current.pointA.top = {x:current.pointA.base.x, y:current.pointA.base.y+currentHeight, z:current.pointA.base.z}; resetHeightMode();
-            if(current.state==='REPOSITION_HEIGHT_A'||t==='Verticale'||t==='MMANA-GAL') { current.state='IDLE'; document.getElementById('main-menu-panel').style.display='block'; refreshAll(); } else current.state='PLACE_GROUND_B';
-        } else if (current.state === 'PLACE_GROUND_B' || current.state === 'REPOSITION_GROUND_B') {
-            let h=getHitPoint(); if(!h) return; current.pointB.base=getLocalPoint(h); current.state = current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B'; currentHeight=1.0; setupHeightMode(current.pointB.base);
-        } else if (current.state === 'PLACE_HEIGHT_B' || current.state === 'REPOSITION_HEIGHT_B') {
-            current.pointB.top = {x:current.pointB.base.x, y:current.pointB.base.y+currentHeight, z:current.pointB.base.z}; resetHeightMode(); current.state='IDLE'; document.getElementById('main-menu-panel').style.display='block'; refreshAll(); 
-        }
-        triangState=0;
     }
 
     function updateMenuText() {
@@ -787,6 +419,301 @@
         return { point: new THREE.Vector3().lerpVectors(pt1,pt2,0.5), error: pt1.distanceTo(pt2), dist1: t1, dist2: t2 };
     }
 
+    function setupMobileUI() {
+        const attachClick = (id, cb) => { let b = document.getElementById(id); if(b) b.addEventListener('click', (e)=>{e.preventDefault(); cb();}); };
+        
+        attachClick('btn-mob-y', toggleMenu);
+        attachClick('btn-mob-x', toggleGuyWireMode);
+        attachClick('btn-toggle-db', () => { let p = document.getElementById('db-panel'); p.style.display = p.style.display==='block'?'none':'block'; });
+        
+        const attachHold = (id, action) => {
+            let b = document.getElementById(id); if(!b) return;
+            b.addEventListener('pointerdown', (e) => { e.preventDefault(); startAction(action); });
+            b.addEventListener('pointerup', (e) => { e.preventDefault(); stopAction(); });
+            b.addEventListener('pointerleave', (e) => { e.preventDefault(); stopAction(); });
+        };
+        attachHold('btn-mob-rot-sx', 'rot-sx'); attachHold('btn-mob-rot-dx', 'rot-dx');
+        attachHold('btn-mob-up', 'up'); attachHold('btn-mob-down', 'down');
+
+        attachClick('btn-scene-prev', () => { if(antennas.length > 1) switchAntenna((activeAntIdx - 1 + antennas.length) % antennas.length); });
+        attachClick('btn-scene-next', () => { if(antennas.length > 1) switchAntenna((activeAntIdx + 1) % antennas.length); });
+        attachClick('btn-scene-new', () => { antennas.push(createEmptyAntenna()); activeAntIdx = antennas.length - 1; current = antennas[activeAntIdx]; refreshAll(); });
+        attachClick('btn-delete-antenna', () => { if(antennas.length > 1){ antennas.splice(activeAntIdx,1); activeAntIdx = Math.max(0, activeAntIdx-1); current = antennas[activeAntIdx]; } else { antennas=[createEmptyAntenna()]; activeAntIdx=0; current=antennas[0]; } refreshAll(); });
+
+        attachClick('btn-laser-toggle', () => {
+            let b = document.getElementById('btn-laser-toggle');
+            if(pointerMode === 'TOUCH'){ pointerMode = 'LIDAR'; b.innerText="MIRA: LIDAR + TAP"; b.style.background="#D81B60"; }
+            else if(pointerMode === 'LIDAR'){ pointerMode = 'TRIANG'; hitTestSource = null; b.innerText="MIRA: TRIANGOLAZIONE"; b.style.background="#FF1744"; }
+            else { pointerMode = 'TOUCH'; hitTestSource=null; triangState=0; b.innerText="MIRA: SOLO TOCCO"; b.style.background="#5E35B1"; }
+            refreshAll();
+        });
+
+        attachClick('btn-ant-type', () => { current.antIdx = (current.antIdx + 1) % antennaTypes.length; resetAntennaLengths(); refreshAll(); });
+        attachClick('btn-band', () => { current.bandIdx = (current.bandIdx + 1) % bands.length; resetAntennaLengths(); refreshAll(); });
+
+        let mr = (n) => Math.round(n*100)/100;
+        attachClick('btn-c-left', () => { current.pointC.percent = Math.max(0.02, mr(current.pointC.percent - 0.05)); refreshAll(); });
+        attachClick('btn-c-right', () => { current.pointC.percent = Math.min(0.98, mr(current.pointC.percent + 0.05)); refreshAll(); });
+        
+        let efSet = (id, delta, prop) => attachClick(id, () => { current[prop] = Math.max(0.1, mr(current[prop]+delta)); refreshAll(); });
+        efSet('btn-ac-m1', -1, 'endFed_AC_Len'); efSet('btn-ac-p1', 1, 'endFed_AC_Len');
+        efSet('btn-cb-m1', -1, 'endFed_CB_Len'); efSet('btn-cb-p1', 1, 'endFed_CB_Len');
+        
+        attachClick('btn-lw-vertex', () => { current.longwireVertex = current.longwireVertex==='A'?'B':'A'; refreshAll(); });
+        attachClick('btn-lw-m1', () => { current.longwireLen = Math.max(0.1, mr(current.longwireLen - 1)); refreshAll(); });
+        attachClick('btn-lw-p1', () => { current.longwireLen = mr(current.longwireLen + 1); refreshAll(); });
+        
+        attachClick('btn-rad-num-m', () => { current.numRadials = Math.max(0, current.numRadials - 1); refreshAll(); });
+        attachClick('btn-rad-num-p', () => { current.numRadials = Math.min(maxRadials, current.numRadials + 1); refreshAll(); });
+        attachClick('btn-rad-len-m', () => { current.radialLen = Math.max(0.1, mr(current.radialLen - 1)); refreshAll(); });
+        attachClick('btn-rad-len-p', () => { current.radialLen = mr(current.radialLen + 1); refreshAll(); });
+
+        attachClick('btn-mmana-model', () => { current.mmanaModelIdx = (current.mmanaModelIdx+1)%mmanaModels.length; loadPreloadedMmanaModel(current); refreshAll(); });
+        attachClick('btn-tral-shape', () => { current.traliccio.shape = current.traliccio.shape==='square'?'triangle':'square'; refreshAll(); });
+        
+        attachClick('btn-txt-m', () => { globalTextScale = Math.max(0.15, mr(globalTextScale - 0.05)); refreshAll(); });
+        attachClick('btn-txt-p', () => { globalTextScale = Math.min(1.2, mr(globalTextScale + 0.05)); refreshAll(); });
+
+        attachClick('btn-repo-a', () => { current.state = 'REPOSITION_GROUND_A'; document.getElementById('main-menu-panel').style.display='none'; refreshAll();});
+        attachClick('btn-h-a', () => { current.state='REPOSITION_HEIGHT_A'; currentHeight = current.pointA.top.y - current.pointA.base.y; setupHeightMode(current.pointA.base); document.getElementById('main-menu-panel').style.display='none'; });
+        attachClick('btn-repo-b', () => { current.state = 'REPOSITION_GROUND_B'; document.getElementById('main-menu-panel').style.display='none'; refreshAll();});
+        attachClick('btn-h-b', () => { current.state='REPOSITION_HEIGHT_B'; currentHeight = current.pointB.top.y - current.pointB.base.y; setupHeightMode(current.pointB.base); document.getElementById('main-menu-panel').style.display='none'; });
+
+        attachClick('btn-start-tral', () => { current = createEmptyAntenna(); antennas[activeAntIdx]=current; current.traliccio.active=true; current.state='PLACE_TRALICCIO_CENTER'; document.getElementById('main-menu-panel').style.display='none'; refreshAll(); });
+        attachClick('btn-cal-set', () => { if(current.pointA.base){ current.state='SET_CALIB_PT1'; document.getElementById('main-menu-panel').style.display='none'; updateMenuText(); }});
+        attachClick('btn-cal-rec', () => { if(calibLocal1 && calibLocal2){ current.state='AWAITING_CALIB_PT1'; document.getElementById('main-menu-panel').style.display='none'; updateMenuText(); }});
+        attachClick('btn-reset-all', () => { 
+            antennas = [createEmptyAntenna()]; activeAntIdx=0; current=antennas[0]; 
+            worldPivot.position.set(0,0,0); worldPivot.rotation.set(0,0,0); worldContent.position.set(0,0,0); 
+            calibLocal1=null; calibLocal2=null; diamondRef1.visible=false; diamondRef2.visible=false; 
+            localStorage.removeItem('antennaArProV38_DB'); refreshAll(); 
+        });
+
+        attachClick('btn-gw-new-tral', () => { let n={type:'traliccio', height:3.0}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
+        attachClick('btn-gw-new-a', () => { let maxH = current.pointA.top.y - current.pointA.base.y; let n={pole:'A', height:maxH/2, pegs:[]}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
+        attachClick('btn-gw-new-b', () => { let maxH = current.pointB.top.y - current.pointB.base.y; let n={pole:'B', height:maxH/2, pegs:[]}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
+        attachClick('btn-gw-done', () => { activeAnchor=null; gwState='MAIN'; updateGWUI(); refreshAll(); });
+
+        attachClick('btn-save-db', () => {
+            let name = document.getElementById('save-name').value.trim(); if(!name) return alert("Inserisci un nome!");
+            if(!current.pointA.base) return alert("Piazza almeno un'antenna.");
+            if(!calibLocal1) return alert("Imposta i diamanti di calibrazione (Menu > [1] IMPOSTA DIAMANTI).");
+            let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}');
+            db[name] = { antennas: JSON.parse(JSON.stringify(antennas)), activeAntIdx, globalTextScale, calibLocal1, calibLocal2 };
+            localStorage.setItem('antenneAR_DB', JSON.stringify(db)); refreshDBList(); alert(`Salvato: ${name}`);
+        });
+
+        attachClick('btn-load-db', () => {
+            let name = document.getElementById('load-list').value;
+            let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); let d = db[name]; if(!d) return;
+            calibLocal1 = d.calibLocal1; calibLocal2 = d.calibLocal2;
+            worldContent.position.set(-calibLocal1.x, -calibLocal1.y, -calibLocal1.z);
+            diamondRef1.position.copy(calibLocal1); diamondRef2.position.copy(calibLocal2);
+            diamondRef1.visible=true; diamondRef2.visible=true;
+            if(d.antennas) { antennas = d.antennas; activeAntIdx = d.activeAntIdx||0; current = antennas[activeAntIdx]; }
+            globalTextScale = d.globalTextScale || 0.35;
+            current.state = 'AWAITING_CALIB_PT1'; document.getElementById('db-panel').style.display='none'; refreshAll();
+        });
+
+        attachClick('btn-delete-db', () => {
+            let name = document.getElementById('load-list').value;
+            if(name && confirm("Eliminare "+name+"?")){ let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); delete db[name]; localStorage.setItem('antenneAR_DB', JSON.stringify(db)); refreshDBList(); }
+        });
+    }
+
+    function startAction(action) {
+        clearInterval(actionInterval);
+        let step = () => {
+            let valL = (action === 'rot-sx') ? -2.0 : (action === 'rot-dx' ? 2.0 : 0);
+            let valR = (action === 'up') ? -1.0 : (action === 'down' ? 1.0 : 0);
+            if (valL !== 0) { if (current.state === 'SIZE_ROTATE_TRALICCIO') current.traliccio.rotationY += valL; else current.antennaRotationY += valL; }
+            if (valR !== 0) {
+                if (current.state === 'SIZE_ROTATE_TRALICCIO') current.traliccio.radius = Math.max(0.15, current.traliccio.radius + (valR < 0 ? 0.05 : -0.05));
+                else if (current.state === 'PLACE_HEIGHT_TRALICCIO') current.traliccio.height = Math.max(1.0, current.traliccio.height + (valR < 0 ? 0.2 : -0.2));
+                else if (current.state.includes('HEIGHT') && current.state !== 'PLACE_HEIGHT_TRALICCIO') { currentHeight = Math.max(0.0, currentHeight + (valR < 0 ? 0.1 : -0.1)); updateHeightPreview(); }
+                else if (gwState === 'EDIT_COLLAR' && activeAnchor) { let maxH = activeAnchor.type === 'traliccio' ? current.traliccio.height : (activeAnchor.pole === 'A' ? (current.pointA.top.y - current.pointA.base.y) : (current.pointB.top.y - current.pointB.base.y)); activeAnchor.height = Math.max(0.1, Math.min(maxH, activeAnchor.height + (valR < 0 ? 0.1 : -0.1))); }
+            }
+            refreshAll();
+        };
+        step(); actionInterval = setInterval(step, 150);
+    }
+
+    function stopAction() { clearInterval(actionInterval); saveToStorage(); }
+
+    function switchAntenna(idx) {
+        gwState = 'OFF'; activeAnchor = null; activeAntIdx = idx; current = antennas[idx]; triangState = 0;
+        if (current.pointA.top && (current.state.startsWith('PLACE_') || current.state.startsWith('AWAITING_'))) current.state = 'IDLE';
+        document.getElementById('main-menu-panel').style.display='block'; refreshAll();
+    }
+    
+    function refreshDBList() {
+        let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); let s = document.getElementById('load-list'); if(!s) return; s.innerHTML='';
+        for(let n in db) { let o = document.createElement('option'); o.value=n; o.innerText=n; s.appendChild(o); }
+    }
+
+    function saveToStorage() {
+        let d = { antennas: JSON.parse(JSON.stringify(antennas)), activeAntIdx, globalTextScale, pivotPos: worldPivot.position, pivotRot: worldPivot.rotation, contentPos: worldContent.position };
+        localStorage.setItem('antennaArProV38_DB', JSON.stringify(d));
+    }
+
+    function loadFromStorage() {
+        let saved = localStorage.getItem('antennaArProV38_DB');
+        if (saved) {
+            try {
+                let d = JSON.parse(saved);
+                if(d.antennas && d.antennas.length>0) { antennas=d.antennas; activeAntIdx=d.activeAntIdx||0; current=antennas[activeAntIdx]; }
+                if(d.globalTextScale) globalTextScale = d.globalTextScale;
+                if(d.pivotPos) worldPivot.position.copy(d.pivotPos); if(d.pivotRot) worldPivot.rotation.copy(d.pivotRot); if(d.contentPos) worldContent.position.copy(d.contentPos);
+                if(current.state.startsWith('PLACE_HEIGHT') || current.state.startsWith('REPOSITION_HEIGHT') || current.state.startsWith('SET_CALIB') || current.state.startsWith('AWAITING_CALIB') || current.state.startsWith('SIZE_ROTATE')) current.state='IDLE';
+            } catch(e) {}
+        }
+        gwState = 'OFF'; activeAnchor = null; 
+        let p = document.getElementById('gw-menu-panel'); if(p) p.style.display='none'; 
+        refreshAll();
+    }
+
+    function toggleMenu() {
+        if(gwState !== 'OFF') return;
+        let p = document.getElementById('main-menu-panel');
+        p.style.display = p.style.display === 'block' ? 'none' : 'block';
+        refreshAll();
+    }
+
+    function toggleGuyWireMode() {
+        if(!current.pointA.top && !current.pointB.top && !current.traliccio.active) return;
+        if(current.state.startsWith('AWAITING') || current.state.startsWith('PLACE_HEIGHT') || current.state.startsWith('SET_CALIB') || current.state.startsWith('SIZE_ROTATE')) return;
+        
+        let pGW = document.getElementById('gw-menu-panel'); let pM = document.getElementById('main-menu-panel');
+        if (gwState === 'OFF') { gwState = 'MAIN'; pM.style.display = 'none'; pGW.style.display = 'block'; activeAnchor=null; updateGWUI(); refreshAll(); }
+        else { gwState = 'OFF'; pGW.style.display = 'none'; pM.style.display = 'block'; activeAnchor=null; refreshAll(); }
+    }
+
+    function updateGWUI() {
+        let isMain = (gwState === 'MAIN'); let isEditCollar = (gwState === 'EDIT_COLLAR'); let isAnyEdit = (gwState==='EDIT_COLLAR'||gwState==='EDIT_PEGS'||gwState==='EDIT_TRALICCIO_PEGS');
+        document.getElementById('gw-main').style.display = isMain ? 'block' : 'none';
+        document.getElementById('gw-edit').style.display = isAnyEdit ? 'block' : 'none';
+        document.getElementById('btn-gw-new-tral').style.display = current.traliccio.active ? 'block' : 'none';
+        document.getElementById('btn-gw-new-a').style.display = current.pointA.top ? 'block' : 'none';
+        document.getElementById('btn-gw-new-b').style.display = current.pointB.top ? 'block' : 'none';
+        
+        let txt = document.getElementById('txt-gw-status');
+        if(isMain) txt.innerText = "TOCCA COLLARE 3D O CREA NUOVO";
+        if(isEditCollar) txt.innerText = "USA FRECCE SU/GIU. TAP SCHERMO PER CONFERMA";
+        if(gwState==='EDIT_PEGS') txt.innerText = "TAP SCHERMO VUOTO: PICCHETTO\nTAP OGGETTO: ELIMINA";
+        if(gwState==='EDIT_TRALICCIO_PEGS') { let r=current.traliccio.shape==='square'?4:3; let c=current.traliccio.pegs?current.traliccio.pegs.length:0; txt.innerText = `PICCHETTI CONDIVISI\nTERRA: ${c}/${r} | TAP: PIAZZA`; }
+    }
+
+    function setupMmanaFileLoader() {
+        document.getElementById('file-mmana').addEventListener('change', (evt) => {
+            let f = evt.target.files[0]; if(!f) return; let reader = new FileReader();
+            reader.onload = (e) => {
+                let lines = e.target.result.split('\n'); importedMmanaWires = []; let inWires = false;
+                for(let line of lines) {
+                    let u = line.trim().toUpperCase();
+                    if(inWires && u.startsWith('***')) inWires = false;
+                    if(u.includes('***') && u.includes('WIRES')) { inWires = true; continue; }
+                    if(inWires && line.trim() !== "") { let tk = line.trim().split(/[\s,]+/).filter(t=>t!==''); if(tk.length>=7) importedMmanaWires.push({x1:parseFloat(tk[0]), y1:parseFloat(tk[1]), z1:parseFloat(tk[2]), x2:parseFloat(tk[3]), y2:parseFloat(tk[4]), z2:parseFloat(tk[5]), radius: parseFloat(tk[6])>0?parseFloat(tk[6])/1000:0.002}); }
+                }
+                if(importedMmanaWires.length>0) { current.mmanaWires = importedMmanaWires; current.mmanaModelIdx = mmanaModels.indexOf('Modello Importato'); current.antIdx = antennaTypes.indexOf('MMANA-GAL'); refreshAll(); alert(`Importati ${importedMmanaWires.length} fili!`); }
+            }; reader.readAsText(f);
+        });
+    }
+
+    function loadPreloadedMmanaModel(ant) {
+        let m = mmanaModels[ant.mmanaModelIdx];
+        if (m === 'Yagi 3 Elementi') ant.mmanaWires = [{x1:0,y1:-2.5,z1:0,x2:0,y2:2.5,z2:0,radius:0.004}, {x1:1.5,y1:-2.4,z1:0,x2:1.5,y2:2.4,z2:0,radius:0.004}, {x1:3.2,y1:-2.2,z1:0,x2:3.2,y2:2.2,z2:0,radius:0.004}];
+        else if (m === 'Delta Loop') ant.mmanaWires = [{x1:0,y1:-2.0,z1:0,x2:0,y2:2.0,z2:0,radius:0.002}, {x1:0,y1:-2.0,z1:0,x2:0,y2:0,z2:3.5,radius:0.002}, {x1:0,y1:2.0,z1:0,x2:0,y2:0,z2:3.5,radius:0.002}];
+        else if (m === 'Dipolo MMANA') ant.mmanaWires = [{x1:0,y1:-5.0,z1:0,x2:0,y2:5.0,z2:0,radius:0.002}];
+        else if (m === 'Modello Importato') ant.mmanaWires = importedMmanaWires || [];
+    }
+    
+    function resetAntennaLengths() {
+        let bm = parseInt(bands[current.bandIdx]); let t = antennaTypes[current.antIdx];
+        let bl = (t==='Dipolo'||t==='Verticale') ? bm/4 : (t==='End Fed' ? bm*0.45 : bm);
+        current.endFed_AC_Len = bl/2; current.endFed_CB_Len = bl/2; current.longwireLen = bl;
+    }
+
+    function getLocalPoint(v) { return worldContent.worldToLocal(v.clone()); }
+
+    function getHitPoint() {
+        if (pointerMode === 'TRIANG' && triangState === 2 && triangResult) return triangResult.point.clone();
+        if (reticleValid && reticle.visible) return reticle.position.clone();
+        let camPos = new THREE.Vector3(); let camQuat = new THREE.Quaternion(); camera.getWorldPosition(camPos); camera.getWorldQuaternion(camQuat);
+        let camDir = new THREE.Vector3(0,0,-1).applyQuaternion(camQuat);
+        if (camDir.y < -0.01) { let d = (lastFloorY - camPos.y) / camDir.y; if(d>0 && d<100) return camPos.clone().add(camDir.multiplyScalar(d)); }
+        return null;
+    }
+
+    function setupHeightMode(basePos) { verticalCylinder.visible = true; heightTextSprite.visible = true; updateHeightPreview(); }
+    function resetHeightMode() { verticalCylinder.visible = false; heightTextSprite.visible = false; }
+    
+    function updateHeightPreview() {
+        let b = current.state.includes('_A') ? current.pointA.base : current.pointB.base; if(!b) return;
+        verticalCylinder.position.set(b.x, b.y + currentHeight/2, b.z); verticalCylinder.scale.set(1, currentHeight, 1);
+        heightTextSprite.position.set(b.x, b.y + currentHeight + 0.2, b.z);
+        heightTextSprite.scale.setScalar(globalTextScale); heightTextSprite.material.map.image.getContext('2d').clearRect(0,0,512,256);
+        let t = makeTextSprite(currentHeight.toFixed(1)+"m", "#00FF00", globalTextScale); heightTextSprite.material.map = t.material.map; heightTextSprite.material.needsUpdate=true;
+    }
+
+    function handle3DClick(object) {
+        let d = object.userData; if(!d || !d.type) return;
+        if(d.type === 'selector') switchAntenna(d.antIdx);
+        else if(d.type === 'pointC') { current.state = 'REPOSITION_GROUND_C'; document.getElementById('main-menu-panel').style.display='none'; refreshAll(); }
+        else if(d.type === 'collar') {
+            if(gwState === 'EDIT_TRALICCIO_PEGS' || gwState === 'EDIT_PEGS') {
+                if (current.guyWiresData[d.index] === activeAnchor) { current.guyWiresData.splice(d.index,1); activeAnchor=null; gwState='MAIN'; updateGWUI(); refreshAll(); }
+            } else if (gwState === 'MAIN') { activeAnchor = current.guyWiresData[d.index]; gwState = 'EDIT_COLLAR'; updateGWUI(); refreshAll(); }
+        }
+        else if(d.type === 'peg') {
+            if(gwState === 'EDIT_TRALICCIO_PEGS') { current.traliccio.pegs.splice(d.index,1); updateGWUI(); refreshAll(); }
+            else if(gwState === 'EDIT_PEGS' && activeAnchor) { activeAnchor.pegs.splice(d.index,1); refreshAll(); }
+        }
+    }
+
+    function onTriggerDown() {
+        if (justClicked3DObject) return; 
+        
+        let now = Date.now(); if(now - lastTriggerTime < 300) return; lastTriggerTime = now;
+
+        let isP = current.state.startsWith('PLACE_GROUND') || current.state.startsWith('REPOSITION_GROUND') || current.state.startsWith('AWAITING_CALIB') || current.state.startsWith('SET_CALIB') || current.state.startsWith('PLACE_TRALICCIO_CENTER') || (gwState && gwState.includes('PEGS'));
+        if(!isP) triangState = 0;
+
+        if (isP && pointerMode === 'TRIANG') {
+            let cp = new THREE.Vector3(); let cd = new THREE.Vector3(0,0,-1); camera.getWorldPosition(cp); cd.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+            if(triangState === 0) { triangRay1 = {origin:cp, dir:cd}; triangState = 1; refreshAll(); return; }
+            if(triangState === 1) { if(triangResult) { triangRay2 = {origin:cp, dir:cd}; triangState = 2; refreshAll(); } return; }
+        }
+
+        if (current.state === 'REPOSITION_GROUND_C') { let h=getHitPoint(); if(h){ if(!current.pointC.base) current.pointC.base={}; current.pointC.base.y=getLocalPoint(h).y; current.state='IDLE'; document.getElementById('main-menu-panel').style.display='block'; refreshAll(); } triangState=0; return; }
+        if (current.state === 'PLACE_TRALICCIO_CENTER') { let h=getHitPoint(); if(h){ current.traliccio.center=getLocalPoint(h); current.state='SIZE_ROTATE_TRALICCIO'; document.getElementById('main-menu-panel').style.display='block'; refreshAll(); } triangState=0; return; }
+        if (current.state === 'SIZE_ROTATE_TRALICCIO') { current.state='PLACE_HEIGHT_TRALICCIO'; document.getElementById('main-menu-panel').style.display='none'; refreshAll(); return; }
+        if (current.state === 'PLACE_HEIGHT_TRALICCIO') { current.pointA.base={x:current.traliccio.center.x, y:current.traliccio.center.y+current.traliccio.height, z:current.traliccio.center.z}; currentHeight=1.0; current.state='PLACE_HEIGHT_A'; setupHeightMode(current.pointA.base); refreshAll(); return; }
+
+        if (gwState === 'EDIT_TRALICCIO_PEGS') { let r=current.traliccio.shape==='square'?4:3; if(!current.traliccio.pegs) current.traliccio.pegs=[]; if(current.traliccio.pegs.length < r) { let h=getHitPoint(); if(h){ current.traliccio.pegs.push(getLocalPoint(h)); if(current.traliccio.pegs.length>=r){ gwState='MAIN'; activeAnchor=null; } updateGWUI(); refreshAll(); } } triangState=0; return; }
+        if (gwState === 'EDIT_PEGS') { let h=getHitPoint(); if(h){ if(!activeAnchor.pegs) activeAnchor.pegs=[]; activeAnchor.pegs.push(getLocalPoint(h)); refreshAll(); } triangState=0; return; }
+        if (gwState === 'EDIT_COLLAR') { if(activeAnchor && activeAnchor.type==='traliccio'){ if(!current.traliccio.pegs) current.traliccio.pegs=[]; gwState='EDIT_TRALICCIO_PEGS'; } else gwState='EDIT_PEGS'; updateGWUI(); refreshAll(); return; }
+        
+        if (current.state === 'AWAITING_CALIB_PT1') { let h=getHitPoint(); if(h){ calibPt1=h.clone(); worldPivot.position.copy(calibPt1); current.state='AWAITING_CALIB_PT2'; updateMenuText(); } triangState=0; return; }
+        if (current.state === 'AWAITING_CALIB_PT2') { let h=getHitPoint(); if(h){ calibPt2=h.clone(); diamondRef1.visible=false; diamondRef2.visible=false; current.state='IDLE'; refreshAll(); } triangState=0; return; }
+        if (current.state === 'SET_CALIB_PT1') { let h=getHitPoint(); if(h){ calibLocal1=getLocalPoint(h); diamondRef1.position.copy(calibLocal1); diamondRef1.visible=true; current.state='SET_CALIB_PT2'; updateMenuText(); } triangState=0; return; }
+        if (current.state === 'SET_CALIB_PT2') { let h=getHitPoint(); if(h){ calibLocal2=getLocalPoint(h); diamondRef2.position.copy(calibLocal2); diamondRef2.visible=true; setTimeout(()=> {diamondRef1.visible=false; diamondRef2.visible=false;},1000); current.state='IDLE'; updateMenuText(); } triangState=0; return; }
+
+        let t = antennaTypes[current.antIdx];
+        if (current.state === 'PLACE_GROUND_A' || current.state === 'REPOSITION_GROUND_A') {
+            let h=getHitPoint(); if(!h) return; let n=getLocalPoint(h);
+            if(current.state==='REPOSITION_GROUND_A' && current.traliccio.active) { let o=current.traliccio.center; let off={x:n.x-o.x, y:n.y-o.y, z:n.z-o.z}; current.traliccio.center=n; current.pointA.base={x:n.x,y:n.y+current.traliccio.height,z:n.z}; if(current.traliccio.pegs) current.traliccio.pegs.forEach(p=>{p.x+=off.x; p.y+=off.y; p.z+=off.z;}); } else current.pointA.base=n;
+            current.state = current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_A' : 'PLACE_HEIGHT_A'; currentHeight = t==='Verticale'?parseInt(bands[current.bandIdx])/4:1.0; setupHeightMode(current.pointA.base);
+        } else if (current.state === 'PLACE_HEIGHT_A' || current.state === 'REPOSITION_HEIGHT_A') {
+            current.pointA.top = {x:current.pointA.base.x, y:current.pointA.base.y+currentHeight, z:current.pointA.base.z}; resetHeightMode();
+            if(current.state==='REPOSITION_HEIGHT_A'||t==='Verticale'||t==='MMANA-GAL') { current.state='IDLE'; document.getElementById('main-menu-panel').style.display='block'; refreshAll(); } else current.state='PLACE_GROUND_B';
+        } else if (current.state === 'PLACE_GROUND_B' || current.state === 'REPOSITION_GROUND_B') {
+            let h=getHitPoint(); if(!h) return; current.pointB.base=getLocalPoint(h); current.state = current.state.startsWith('REPOSITION') ? 'REPOSITION_HEIGHT_B' : 'PLACE_HEIGHT_B'; currentHeight=1.0; setupHeightMode(current.pointB.base);
+        } else if (current.state === 'PLACE_HEIGHT_B' || current.state === 'REPOSITION_HEIGHT_B') {
+            current.pointB.top = {x:current.pointB.base.x, y:current.pointB.base.y+currentHeight, z:current.pointB.base.z}; resetHeightMode(); current.state='IDLE'; document.getElementById('main-menu-panel').style.display='block'; refreshAll(); 
+        }
+        triangState=0;
+    }
+
     function animate() { renderer.setAnimationLoop(render); }
     
     function render(timestamp, frame) {
@@ -823,6 +750,17 @@
             renderer.render(scene, camera); 
         }
     }
+
+    // ==========================================
+    // AVVIO APPLICAZIONE (EVITA HOISTING BUGS)
+    // ==========================================
+    function initApp() {
+        init();
+        animate();
+    }
+    
+    initApp();
+
   </script>
 </body>
 </html>
