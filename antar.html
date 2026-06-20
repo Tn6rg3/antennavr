@@ -6,13 +6,13 @@
   <title>Antenne AR Pro V38 - Three.js Nativo e Mobile</title>
   
   <style>
-    /* CSS STRUTTURALE (Esattamente come il tuo codice funzionante) */
+    /* CSS STRUTTURALE (Esattamente come il codice funzionante originale) */
     body { margin: 0; overflow: hidden; background-color: #000; font-family: monospace; color: white; touch-action: none; }
     
     #ui-container { 
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 100; pointer-events: none; box-sizing: border-box;
-        display: none; /* Parte nascosto per non rompere l'ARButton! */
+        display: none; /* Fondamentale: Parte nascosto per non rompere il tasto START AR! */
     }
     
     #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
@@ -58,8 +58,10 @@
 
   <div id="browserWarning">⚠️ Attenzione: Usa HTTPS su Google Chrome/Safari per far funzionare la fotocamera AR.</div>
 
-  <!-- INTERFACCIA HTML OVERLAY DOM: Parte Nascosta per l'ARButton -->
+  <!-- INTERFACCIA HTML OVERLAY DOM: Inizia nascosta per non bloccare il pulsante START AR -->
   <div id="ui-container">
+      
+      <!-- Area trasparente per catturare i tap a vuoto nella stanza -->
       <div id="touchArea"></div>
 
       <button id="btn-toggle-db" class="ui-btn pointer-auto">💾 MENU DB</button>
@@ -228,6 +230,7 @@
     let calibPt1 = null, calibPt2 = null, calibLocal1 = null, calibLocal2 = null;
     let actionInterval = null;
     let importedMmanaWires = [];
+    let lastTriggerTime = 0, lastTapTime = 0;
     let justClicked3DObject = false;
 
     init();
@@ -247,9 +250,10 @@
         renderer.xr.enabled = true;
         container.appendChild(renderer.domElement);
 
-        // IL SEGRETO E' QUI: domOverlay che garantisce il tap nativo e i bottoni funzionanti
+        // IL SEGRETO E' QUI: Ricreato identico al tuo codice funzionante per non rompere la cam AR
         document.body.appendChild(ARButton.createButton(renderer, { 
             requiredFeatures: ['hit-test', 'dom-overlay'],
+            optionalFeatures: ['anchors'],
             domOverlay: { root: document.getElementById('ui-container') }
         }));
 
@@ -274,9 +278,13 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // QUANDO PARTE L'AR, MOSTRA L'UI!
+        // QUANDO PARTE L'AR, MOSTRA L'UI! E fixa i piani di ritaglio (Bug Fix da te indicato)
         renderer.xr.addEventListener('sessionstart', () => {
             document.getElementById('ui-container').style.display = 'block';
+            let session = renderer.xr.getSession();
+            if (session) {
+                try { session.updateRenderState({ depthNear: 0.1, depthFar: 2500 }); } catch (e) {}
+            }
         });
         
         renderer.xr.addEventListener('sessionend', () => { 
@@ -284,7 +292,7 @@
             document.getElementById('ui-container').style.display = 'none';
         });
 
-        // EVITA CONFLITTI: Impedisce ad ARButton di sparare 'select' se l'utente clicca un bottone!
+        // EVITA CONFLITTI: Impedisce ad ARButton di sparare 'select' se l'utente clicca un bottone HTML!
         document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
             if (ev.target.id !== 'touchArea') ev.preventDefault();
         });
@@ -299,9 +307,18 @@
             let intersects = raycaster.intersectObjects(clickableObjects, false);
             
             if (intersects.length > 0) {
-                justClicked3DObject = true; // Impedisce a onTriggerDown di piazzare un'antenna
+                justClicked3DObject = true; // Impedisce a onTriggerDown di piazzare un'antenna nel vuoto
                 handle3DClick(intersects[0].object);
                 setTimeout(() => justClicked3DObject = false, 300);
+            } else {
+                // Fallback per Desktop/Non-AR
+                if (!renderer.xr.isPresenting) {
+                    let now = Date.now();
+                    if (now - lastTapTime > 300) {
+                        lastTapTime = now;
+                        onTriggerDown();
+                    }
+                }
             }
         });
     }
@@ -602,7 +619,9 @@
     }
 
     function onTriggerDown() {
-        if (justClicked3DObject) return; // Ha appena cliccato un oggetto, non piazzare punti
+        if (justClicked3DObject) return; // Ha appena cliccato un oggetto, non piazzare punti nel vuoto
+        
+        let now = Date.now(); if(now - lastTriggerTime < 300) return; lastTriggerTime = now;
 
         let isP = current.state.startsWith('PLACE_GROUND') || current.state.startsWith('REPOSITION_GROUND') || current.state.startsWith('AWAITING_CALIB') || current.state.startsWith('SET_CALIB') || current.state.startsWith('PLACE_TRALICCIO_CENTER') || (gwState && gwState.includes('PEGS'));
         if(!isP) triangState = 0;
@@ -772,28 +791,43 @@
     }
 
     function animate() { renderer.setAnimationLoop(render); }
+    
+    // Il Try-Catch dentro render garantisce che anche se una stringa dovesse generare un errore 
+    // la camera non diventi mai nera e continui a renderizzare l'ambiente
     function render(timestamp, frame) {
-        if(frame) {
-            let rs = renderer.xr.getReferenceSpace(); let session = renderer.xr.getSession();
-            if(!hitTestSourceRequested) { session.requestReferenceSpace('viewer').then(r=>{ session.requestHitTestSource({space:r}).then(s=>{ hitTestSource=s; }); }); hitTestSourceRequested=true; }
-            if(hitTestSource && pointerMode==='LIDAR') {
-                let hits = frame.getHitTestResults(hitTestSource);
-                if(hits.length>0){ let p=hits[0].getPose(rs); reticle.position.copy(p.transform.position); reticle.quaternion.copy(p.transform.orientation); reticle.visible=true; reticleValid=true; lastFloorY=p.transform.position.y; }
-                else { reticle.visible=false; reticleValid=false; }
-            } else { reticle.visible=false; reticleValid=false; }
+        try {
+            if(frame) {
+                let rs = renderer.xr.getReferenceSpace(); let session = renderer.xr.getSession();
+                if(!hitTestSourceRequested) { session.requestReferenceSpace('viewer').then(r=>{ session.requestHitTestSource({space:r}).then(s=>{ hitTestSource=s; }); }); hitTestSourceRequested=true; }
+                if(hitTestSource && pointerMode==='LIDAR') {
+                    let hits = frame.getHitTestResults(hitTestSource);
+                    if(hits.length>0){ 
+                        // FIX PER SCHERMO NERO: Protezione null reference su getPose!
+                        let p = hits[0].getPose(rs); 
+                        if(p) {
+                            reticle.position.copy(p.transform.position); 
+                            reticle.quaternion.copy(p.transform.orientation); 
+                            reticle.visible=true; reticleValid=true; lastFloorY=p.transform.position.y; 
+                        } else { reticle.visible=false; reticleValid=false; }
+                    } else { reticle.visible=false; reticleValid=false; }
+                } else { reticle.visible=false; reticleValid=false; }
+            }
+
+            let isP = current.state.startsWith('PLACE') || current.state.startsWith('REPO') || current.state.includes('CALIB');
+            
+            if (isP && pointerMode === 'TRIANG') {
+                triangMarker.visible = true;
+                let cp = new THREE.Vector3(); let cd = new THREE.Vector3(0,0,-1); camera.getWorldPosition(cp); cd.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+                if(triangState===0){ updateBeam(beam1, cp, cd, 0x00BFFF, 150); beam2.visible=false; triangMarker.visible=false; }
+                else if(triangState===1){ triangResult=calculateIntersection(triangRay1, {origin:cp, dir:cd}); if(triangResult){ updateBeam(beam1, triangRay1.origin, triangRay1.dir, 0x00BFFF, triangResult.dist1); updateBeam(beam2, cp, cd, 0xFF1744, triangResult.dist2); triangMarker.position.copy(triangResult.point); let errC = triangResult.error<0.3?0x00E676:(triangResult.error<1.0?0xFFEB3B:0xD50000); triangMarker.material.color.setHex(errC); triangMarker.visible=true; let s=Math.max(1, triangResult.dist2/4); triangMarker.scale.setScalar(s); triangTextSprite.material.map.image.getContext('2d').clearRect(0,0,512,256); let tex=makeTextSprite(`INTERSEZIONE!\nERR: ${triangResult.error.toFixed(2)}m`, "#FFF", 0.6); triangTextSprite.material.map=tex.material.map; triangTextSprite.material.needsUpdate=true; } }
+                else if(triangState===2){ if(triangResult){ updateBeam(beam1, triangRay1.origin, triangRay1.dir, 0x00BFFF, triangResult.dist1); updateBeam(beam2, triangRay2.origin, triangRay2.dir, 0xFF1744, triangResult.dist2); triangMarker.position.copy(triangResult.point); let s=Math.max(1, triangResult.dist2/4); triangMarker.scale.setScalar(s); triangTextSprite.material.map.image.getContext('2d').clearRect(0,0,512,256); let tex=makeTextSprite(`PUNTO OK!\nTAP PER PIAZZARE`, "#FFF", 0.6); triangTextSprite.material.map=tex.material.map; triangTextSprite.material.needsUpdate=true; } }
+            } else { triangMarker.visible=false; beam1.visible=false; beam2.visible=false; }
+
+            renderer.render(scene, camera);
+        } catch (e) {
+            console.error("Errore di rendering non fatale:", e);
+            renderer.render(scene, camera); // Evita che si spenga lo schermo e rimanga nero in caso di errore logico
         }
-
-        let isP = current.state.startsWith('PLACE') || current.state.startsWith('REPO') || current.state.includes('CALIB');
-        
-        if (isP && pointerMode === 'TRIANG') {
-            triangMarker.visible = true;
-            let cp = new THREE.Vector3(); let cd = new THREE.Vector3(0,0,-1); camera.getWorldPosition(cp); cd.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
-            if(triangState===0){ updateBeam(beam1, cp, cd, 0x00BFFF, 150); beam2.visible=false; triangMarker.visible=false; }
-            else if(triangState===1){ triangResult=calculateIntersection(triangRay1, {origin:cp, dir:cd}); if(triangResult){ updateBeam(beam1, triangRay1.origin, triangRay1.dir, 0x00BFFF, triangResult.dist1); updateBeam(beam2, cp, cd, 0xFF1744, triangResult.dist2); triangMarker.position.copy(triangResult.point); let errC = triangResult.error<0.3?0x00E676:(triangResult.error<1.0?0xFFEB3B:0xD50000); triangMarker.material.color.setHex(errC); triangMarker.visible=true; let s=Math.max(1, triangResult.dist2/4); triangMarker.scale.setScalar(s); triangTextSprite.material.map.image.getContext('2d').clearRect(0,0,512,256); let tex=makeTextSprite(`INTERSEZIONE!\nERR: ${triangResult.error.toFixed(2)}m`, "#FFF", 0.6); triangTextSprite.material.map=tex.material.map; triangTextSprite.material.needsUpdate=true; } }
-            else if(triangState===2){ if(triangResult){ updateBeam(beam1, triangRay1.origin, triangRay1.dir, 0x00BFFF, triangResult.dist1); updateBeam(beam2, triangRay2.origin, triangRay2.dir, 0xFF1744, triangResult.dist2); triangMarker.position.copy(triangResult.point); let s=Math.max(1, triangResult.dist2/4); triangMarker.scale.setScalar(s); triangTextSprite.material.map.image.getContext('2d').clearRect(0,0,512,256); let tex=makeTextSprite(`PUNTO OK!\nTAP PER PIAZZARE`, "#FFF", 0.6); triangTextSprite.material.map=tex.material.map; triangTextSprite.material.needsUpdate=true; } }
-        } else { triangMarker.visible=false; beam1.visible=false; beam2.visible=false; }
-
-        renderer.render(scene, camera);
     }
   </script>
 </body>
