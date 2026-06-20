@@ -1,24 +1,22 @@
-<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <title>Antenne AR Pro V38 - Mobile + VR Nativo</title>
+  <title>Antenne AR Pro V38 - Three.js Nativo e Mobile</title>
   
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: monospace; color: white; touch-action: none; }
     
-    /* Overlay contenitore AR. Deve partire invisibile per non bloccare il bottone WebXR */
+    /* Overlay UI AR: Copia esatta della tua logica funzionante */
     #ui-container { 
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 100; pointer-events: none; box-sizing: border-box;
-        display: none; 
     }
     
     #touchArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: -1; }
     .pointer-auto { pointer-events: auto !important; }
     
-    /* STILI BOTTONI E PANNELLI */
+    /* STILI PANNELLI E BOTTONI */
     .ui-btn { padding: 10px; border: 1px solid #777; border-radius: 6px; background: rgba(50,50,50,0.9); color: white; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 11px; font-family: monospace; touch-action: manipulation; user-select: none; }
     .ui-btn:active { transform: scale(0.95); background: #00E676; color: black; }
 
@@ -35,12 +33,13 @@
     #gw-menu-panel { display: none; position: absolute; top: 15px; left: 15px; background: rgba(78,52,46,0.95); padding: 10px; border: 2px solid #FFEB3B; border-radius: 8px; width: 250px; box-shadow: 0 4px 10px rgba(0,0,0,0.8); pointer-events: auto;}
     #gw-menu-panel h3 { margin: 0 0 5px 0; font-size: 14px; color: #FFEB3B; text-align: center; }
 
-    #mobile-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; width: 96%; max-width: 450px; pointer-events: auto;}
+    /* CONTROLLI MOBILE IN BASSO - Rialzati a 80px per NON coprire il pulsante START AR */
+    #mobile-controls { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; width: 96%; max-width: 450px; pointer-events: auto;}
     .mob-btn { flex: 1 1 45%; padding: 12px; font-size: 13px; border: 2px solid #00E676; background: rgba(30,30,30,0.9); touch-action: none; }
     .btn-main-act { background: rgba(0, 150, 136, 0.9); border-color: #00BFFF; }
     .btn-gw-act { background: rgba(211, 47, 47, 0.9); border-color: #FF1744; }
     #info-text { flex: 1 1 100%; background: rgba(0,0,0,0.7); border: 2px dashed #FFEB3B; color: #FFEB3B; padding: 6px; font-size: 11px; text-align: center; border-radius: 6px; pointer-events: none;}
-    
+
     #browserWarning { display: none; position: absolute; top: 0; left: 0; width: 100%; background: #ff4757; color: white; padding: 10px; text-align: center; font-size: 13px; z-index: 1000; }
   </style>
 
@@ -55,11 +54,12 @@
 </head>
 <body>
 
-  <div id="browserWarning">⚠️ Attenzione: Usa HTTPS su Google Chrome per far funzionare la fotocamera AR.</div>
+  <div id="browserWarning">⚠️ Attenzione: Usa HTTPS su Google Chrome/Safari per far funzionare la fotocamera AR.</div>
 
   <!-- INTERFACCIA HTML OVERLAY DOM -->
   <div id="ui-container">
       
+      <!-- Area trasparente per catturare i tap a vuoto nella stanza -->
       <div id="touchArea"></div>
 
       <button id="btn-toggle-db" class="ui-btn pointer-auto">💾 MENU DB</button>
@@ -196,6 +196,14 @@
     import * as THREE from 'three';
     import { ARButton } from 'three/addons/webxr/ARButton.js';
 
+    // Rilevamento piattaforma
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+    const isChrome = /Chrome/i.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+    if (isMobile && !isChrome) {
+        document.getElementById('browserWarning').style.display = 'block';
+        setTimeout(() => { document.getElementById('browserWarning').style.display = 'none'; }, 8000);
+    }
+
     // === VARIABILI GLOBALI ===
     let container, camera, scene, renderer, controller;
     let hitTestSource = null, hitTestSourceRequested = false;
@@ -220,7 +228,7 @@
     let activeAntIdx = 0;
     let current = antennas[0];
     
-    let pointerMode = /Mobi|Android/i.test(navigator.userAgent) ? 'LIDAR' : 'TOUCH';
+    let pointerMode = isMobile ? 'LIDAR' : 'TOUCH';
     let triangState = 0;
     let triangRay1 = null, triangRay2 = null, triangResult = null;
     
@@ -235,7 +243,98 @@
     let justClicked3DObject = false;
 
     // ==========================================
-    // DEFINIZIONE DI TUTTE LE FUNZIONI
+    // INIZIALIZZAZIONE DELLA SCENA
+    // ==========================================
+
+    init();
+    animate();
+
+    function init() {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 2000);
+        scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3));
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        // BOTTONE AR NATIVO CON DOM OVERLAY SULLA STRUTTURA ESISTENTE
+        document.body.appendChild(ARButton.createButton(renderer, { 
+            requiredFeatures: ['hit-test', 'dom-overlay'],
+            optionalFeatures: ['anchors'],
+            domOverlay: { root: document.getElementById('ui-container') }
+        }));
+
+        // GESTIONE TAP AR NATIVA: Usiamo l'evento standard 'select' di WebXR
+        controller = renderer.xr.getController(0);
+        controller.addEventListener('select', onTriggerDown);
+        scene.add(controller);
+
+        worldPivot.add(worldContent);
+        scene.add(worldPivot);
+
+        initPersistentElements();
+        setupMobileUI();
+        setupMmanaFileLoader();
+        refreshDBList();
+        loadFromStorage();
+        updateMenuText();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // RISOLUZIONE SCHERMO NERO / CAM NERA: Evita conflitti di depthBuffer e z-index
+        renderer.xr.addEventListener('sessionstart', () => {
+            let session = renderer.xr.getSession();
+            if (session) {
+                try { session.updateRenderState({ depthNear: 0.1, depthFar: 2500 }); } catch (e) {}
+            }
+        });
+        
+        renderer.xr.addEventListener('sessionend', () => { 
+            hitTestSource = null; hitTestSourceRequested = false; 
+        });
+
+        // FONDAMENTALE: Impedisce al tap sui bottoni HTML di attivare il raggio AR dietro di essi
+        document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
+            if (ev.target.id !== 'touchArea') ev.preventDefault();
+        });
+
+        // GESTIONE CLICK SULLO SCHERMO (OGGETTI 3D / Fallback non-AR)
+        document.getElementById('touchArea').addEventListener('pointerdown', (e) => {
+            let now = Date.now();
+            if (now - lastTapTime < 300) return;
+            lastTapTime = now;
+
+            let mouse = new THREE.Vector2();
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            let raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+            let intersects = raycaster.intersectObjects(clickableObjects, false);
+            
+            if (intersects.length > 0) {
+                justClicked3DObject = true; 
+                handle3DClick(intersects[0].object);
+                setTimeout(() => justClicked3DObject = false, 300);
+            } else {
+                if (!renderer.xr.isPresenting) {
+                    onTriggerDown(); // Fallback piazzamento antenna fuori dall'AR
+                }
+            }
+        });
+    }
+
+    // ==========================================
+    // DEFINIZIONE DI TUTTE LE FUNZIONI DI LOGICA
     // ==========================================
 
     function createEmptyAntenna() {
@@ -274,149 +373,34 @@
         diamondRef1 = makeLocalDiamond(0x00BFFF); diamondRef2 = makeLocalDiamond(0xFF00FF);
     }
 
+    // Crea un nuovo sprite text, ma la sua texture interna verrà riutilizzata in modo efficiente
     function makeTextSprite(message, textColor, scaleMult=1) {
         let canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 256;
-        let ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0,0,512,256);
-        ctx.fillStyle = textColor; ctx.font = 'bold 36px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        let lines = message.split('\n'); let lineH = 40; let startY = 128 - ((lines.length - 1) * lineH) / 2;
-        for(let i=0; i<lines.length; i++) ctx.fillText(lines[i], 256, startY + i * lineH);
         let tex = new THREE.CanvasTexture(canvas);
         let mat = new THREE.SpriteMaterial({map: tex, depthTest: false});
         let sprite = new THREE.Sprite(mat);
         sprite.scale.set(0.6 * scaleMult, 0.3 * scaleMult, 1);
+        updateTextSprite(sprite, message, textColor);
         return sprite;
+    }
+
+    // Aggiorna un text sprite senza causare perdite di memoria (memory leaks) nel ciclo di rendering
+    function updateTextSprite(sprite, message, textColor) {
+        if (!sprite || !sprite.material || !sprite.material.map) return;
+        let canvas = sprite.material.map.image;
+        let ctx = canvas.getContext('2d');
+        ctx.clearRect(0,0,512,256);
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0,0,512,256);
+        ctx.fillStyle = textColor; ctx.font = 'bold 36px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        let lines = message.split('\n'); let lineH = 40; let startY = 128 - ((lines.length - 1) * lineH) / 2;
+        for(let i=0; i<lines.length; i++) ctx.fillText(lines[i], 256, startY + i * lineH);
+        sprite.material.map.needsUpdate = true;
     }
 
     function refreshAll() {
         updateMenuText();
         drawGeometries();
         saveToStorage();
-    }
-
-    function updateMenuText() {
-        let t = antennaTypes[current.antIdx]; let b = bands[current.bandIdx];
-        document.getElementById('btn-ant-type').innerText = t.toUpperCase();
-        document.getElementById('btn-band').innerText = b;
-        document.getElementById('txt-scene-info').innerText = `ANTENNA ${activeAntIdx+1} DI ${antennas.length}`;
-
-        let isTS = current.state === 'SIZE_ROTATE_TRALICCIO';
-        document.getElementById('sub-dipolo').style.display = (t==='Dipolo'&&!isTS)?'block':'none';
-        document.getElementById('sub-endfed').style.display = (t==='End Fed'&&!isTS)?'block':'none';
-        document.getElementById('sub-longwire').style.display = (t==='Longwire'&&!isTS)?'block':'none';
-        document.getElementById('sub-verticale').style.display = (t==='Verticale'&&!isTS)?'block':'none';
-        document.getElementById('sub-mmana').style.display = (t==='MMANA-GAL'&&!isTS)?'block':'none';
-        document.getElementById('sub-traliccio').style.display = isTS?'block':'none';
-
-        document.getElementById('btn-repo-b').style.display = (t!=='Verticale'&&t!=='MMANA-GAL'&&!isTS)?'inline-block':'none';
-        document.getElementById('btn-h-b').style.display = (t!=='Verticale'&&t!=='MMANA-GAL'&&!isTS)?'inline-block':'none';
-
-        let info = "";
-        if (pointerMode === 'TRIANG' && current.state.includes('GROUND')) {
-            if(triangState===0) info="TRIANG: MIRA BERSAGLIO E TAPPA SCHERMO"; else if(triangState===1) info="TRIANG: SPOSTATI, MIRA INCROCIO E TAPPA"; else info="PUNTO TROVATO: TAP PER PIAZZARE";
-        }
-        else if (current.state === 'REPOSITION_GROUND_C') info = "TAP A TERRA SOTTO AL CENTRO";
-        else if (current.state === 'PLACE_TRALICCIO_CENTER') info = "TAP A TERRA PER CENTRO TRALICCIO";
-        else if (isTS) { info = "USA BOTTONI PER MISURE. TAP = OK"; document.getElementById('btn-tral-shape').innerText = "FORMA: "+(current.traliccio.shape==='square'?'QUADRATA':'TRIANGOLARE'); }
-        else if (current.state === 'PLACE_HEIGHT_TRALICCIO') info = "USA BOTTONI ALZA/ABB. TAP = OK";
-        else if (current.state === 'AWAITING_CALIB_PT1') info = "CALIB: SOVRAPPONI DIAMANTE 1 AL REALE E TAPPA";
-        else if (current.state === 'AWAITING_CALIB_PT2') info = "CALIB: RUOTA AMBIENTE SU DIAMANTE 2 E TAPPA";
-        else if (current.state === 'SET_CALIB_PT1') info = "APPOGGIA DEVICE SU PUNTO 1 E TAPPA";
-        else if (current.state === 'SET_CALIB_PT2') info = "APPOGGIA DEVICE SU PUNTO 2 E TAPPA";
-        else if (t==='End Fed') { document.getElementById('txt-ef-values').innerText = `AC: ${current.endFed_AC_Len}m | CB: ${current.endFed_CB_Len}m`; }
-        else if (t==='Longwire') { document.getElementById('btn-lw-vertex').innerText = "VERTICE DA: "+current.longwireVertex; document.getElementById('txt-lw-val').innerText = `L: ${current.longwireLen}m`; }
-        else if (t==='Verticale') { document.getElementById('txt-rad-val').innerText = `RADIALI: ${current.numRadials} | L: ${current.radialLen}m`; }
-        else if (t==='MMANA-GAL') { document.getElementById('btn-mmana-model').innerText = "MOD: "+mmanaModels[current.mmanaModelIdx].toUpperCase(); }
-        
-        if(!info) info = "[ TOCCA UNO STRUMENTO O PIAZZA ANTENNA ]";
-        document.getElementById('info-text').innerText = info;
-    }
-
-    function createLine(p1, p2, radius, color, isWireframe=false) {
-        let dist = p1.distanceTo(p2); if(dist<0.001) return null;
-        let m = new THREE.Mesh(new THREE.CylinderGeometry(radius,radius,dist,8), new THREE.MeshBasicMaterial({color:color, wireframe:isWireframe}));
-        m.position.copy(p1).lerp(p2, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), new THREE.Vector3().subVectors(p2,p1).normalize());
-        worldContent.add(m); appMeshes.push(m); return m;
-    }
-
-    function drawGeometries() {
-        appMeshes.forEach(m => { worldContent.remove(m); if(m.geometry) m.geometry.dispose(); if(m.material){ if(m.material.map) m.material.map.dispose(); m.material.dispose(); } });
-        appMeshes = []; clickableObjects = [];
-
-        antennas.forEach((ant, idx) => {
-            let isC = (idx === activeAntIdx);
-            
-            if(ant.traliccio && ant.traliccio.active && ant.traliccio.center) {
-                let t=ant.traliccio; let sq=t.shape==='square'; let ns=sq?4:3; t.corners=[]; let rot=(t.rotationY||0)*(Math.PI/180); let ba=sq?Math.PI/4:Math.PI/2;
-                for(let i=0;i<ns;i++){ t.corners.push(new THREE.Vector3(t.center.x+Math.cos(ba+(i*2*Math.PI/ns)+rot)*t.radius, t.center.y, t.center.z+Math.sin(ba+(i*2*Math.PI/ns)+rot)*t.radius)); }
-                let h = t.height||6; if(isC && ant.state==='SIZE_ROTATE_TRALICCIO') h=Math.max(1, t.radius*3);
-                t.corners.forEach(pos => createLine(pos, new THREE.Vector3(pos.x, pos.y+h, pos.z), 0.015, 0x90A4AE));
-                let sh=Math.max(0.3, t.radius*2.5); let nsec=Math.max(1, Math.floor(h/sh)); let ash=h/nsec;
-                for(let i=0;i<nsec;i++){ let yb=t.center.y+(i*ash); let yt=t.center.y+((i+1)*ash);
-                    for(let c=0;c<ns;c++){ let nc=(c+1)%ns; createLine(new THREE.Vector3(t.corners[c].x,yb,t.corners[c].z), new THREE.Vector3(t.corners[nc].x,yb,t.corners[nc].z), 0.008, 0xCFD8DC); if(i===nsec-1) createLine(new THREE.Vector3(t.corners[c].x,yt,t.corners[c].z), new THREE.Vector3(t.corners[nc].x,yt,t.corners[nc].z), 0.008, 0xCFD8DC); createLine(new THREE.Vector3(t.corners[c].x,yb,t.corners[c].z), new THREE.Vector3(t.corners[nc].x,yt,t.corners[nc].z), 0.006, 0xCFD8DC); createLine(new THREE.Vector3(t.corners[nc].x,yb,t.corners[nc].z), new THREE.Vector3(t.corners[c].x,yt,t.corners[c].z), 0.006, 0xCFD8DC); }
-                }
-                let l=t.corners[0].distanceTo(t.corners[1]); let s=makeTextSprite(isC&&ant.state==='SIZE_ROTATE_TRALICCIO'?`MODIFICA LATO: ${l.toFixed(2)}m\nROTAZIONE: ${t.rotationY}°`:(isC&&ant.state==='PLACE_HEIGHT_TRALICCIO'?`IMPOSTA ALTEZZA: ${h.toFixed(2)}m`:`TRALICCIO\nH: ${h.toFixed(2)}m | L: ${l.toFixed(2)}m`), "#FFEB3B", globalTextScale); s.position.set(t.center.x, t.center.y+h+0.2, t.center.z); worldContent.add(s); appMeshes.push(s);
-            }
-
-            if(ant.guyWiresData) ant.guyWiresData.forEach((anc, aIdx) => {
-                let isSel = isC && (activeAnchor === anc);
-                if(anc.type === 'traliccio' && ant.traliccio && ant.traliccio.active && ant.traliccio.corners.length>0) {
-                    let ty=ant.traliccio.center.y+anc.height; let col=isSel?0x00FF00:0xFF1744;
-                    for(let c=0;c<ant.traliccio.corners.length;c++){ 
-                        let nc=(c+1)%ant.traliccio.corners.length; let p1=new THREE.Vector3(ant.traliccio.corners[c].x, ty, ant.traliccio.corners[c].z); let p2=new THREE.Vector3(ant.traliccio.corners[nc].x, ty, ant.traliccio.corners[nc].z);
-                        let m = createLine(p1, p2, isSel?0.03:0.02, col); if(m){ m.scale.set(1.5,1.5,1.5); m.userData={type:'collar', index:aIdx}; clickableObjects.push(m); }
-                        if(ant.traliccio.pegs && ant.traliccio.pegs[c]){ let peg=new THREE.Vector3(ant.traliccio.pegs[c].x, ant.traliccio.pegs[c].y, ant.traliccio.pegs[c].z); createLine(p1, peg, 0.003, 0xB0BEC5); let pM = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.15), new THREE.MeshBasicMaterial({color:0xFF9800})); pM.position.set(peg.x, peg.y+0.075, peg.z); worldContent.add(pM); appMeshes.push(pM); pM.userData={type:'peg', index:c}; clickableObjects.push(pM); }
-                    }
-                } else if(anc.type !== 'traliccio') {
-                    let pD=anc.pole==='A'?ant.pointA:ant.pointB; if(pD&&pD.base&&pD.top){ let h=Math.min(anc.height, pD.top.y-pD.base.y); anc.height=h; let ap=new THREE.Vector3(pD.base.x, pD.base.y+h, pD.base.z);
-                        let m = new THREE.Mesh(new THREE.TorusGeometry(0.04, isSel?0.015:0.006), new THREE.MeshBasicMaterial({color:isSel?0x00FF00:0xFF1744})); m.rotation.x=Math.PI/2; m.position.copy(ap); m.userData={type:'collar', index:aIdx}; clickableObjects.push(m); worldContent.add(m); appMeshes.push(m);
-                        if(anc.pegs) anc.pegs.forEach((peg, pIdx)=>{ let pVec=new THREE.Vector3(peg.x,peg.y,peg.z); createLine(ap, pVec, 0.002, 0xB0BEC5); let pM=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.15), new THREE.MeshBasicMaterial({color:0xFF9800})); pM.position.set(pVec.x,pVec.y+0.075,pVec.z); pM.userData={type:'peg', index:pIdx}; clickableObjects.push(pM); worldContent.add(pM); appMeshes.push(pM); });
-                    }
-                }
-            });
-
-            if(!isC && (ant.pointA.base || ant.traliccio.center)) {
-                let bp = ant.traliccio.active ? ant.traliccio.center : ant.pointA.base;
-                let m = new THREE.Mesh(new THREE.OctahedronGeometry(0.08), new THREE.MeshBasicMaterial({color:0xFFEB3B, transparent:true, opacity:0.8})); m.position.set(bp.x, bp.y+0.4, bp.z); m.userData={type:'selector', antIdx:idx}; clickableObjects.push(m); worldContent.add(m); appMeshes.push(m);
-                return;
-            }
-
-            if(!ant.pointA.top) return;
-            let type = antennaTypes[ant.antIdx]; let drawP = (top, base, col) => { let m=new THREE.Mesh(new THREE.SphereGeometry(0.05), new THREE.MeshBasicMaterial({color:col})); m.position.copy(top); worldContent.add(m); appMeshes.push(m); createLine(top, new THREE.Vector3(top.x, base.y, top.z), 0.008, 0x888888); };
-
-            if (type === 'Verticale') {
-                drawP(ant.pointA.top, ant.pointA.base, 0xFF1744); createLine(new THREE.Vector3(ant.pointA.base.x, ant.pointA.base.y+0.002, ant.pointA.base.z), ant.pointA.top, 0.018, 0xFF5722);
-                if(!ant.traliccio.active) { let rrot=(ant.antennaRotationY*Math.PI/180); for(let i=0;i<ant.numRadials;i++){ let a=(i*2*Math.PI/ant.numRadials)+rrot; createLine(ant.pointA.base, new THREE.Vector3(ant.pointA.base.x+Math.cos(a)*ant.radialLen, ant.pointA.base.y, ant.pointA.base.z+Math.sin(a)*ant.radialLen), 0.004, 0x5D4037); } }
-            } else if (type === 'MMANA-GAL') {
-                drawP(ant.pointA.top, ant.pointA.base, 0xFF1744);
-                let g = new THREE.Group(); g.position.copy(ant.pointA.top); g.rotation.y = ant.antennaRotationY*(Math.PI/180); worldContent.add(g); appMeshes.push(g);
-                ant.mmanaWires.forEach(w=>{ let p1=new THREE.Vector3(w.x1,w.z1,w.y1); let p2=new THREE.Vector3(w.x2,w.z2,w.y2); let d=p1.distanceTo(p2); if(d>0.01){ let m=new THREE.Mesh(new THREE.CylinderGeometry(w.radius*2.8,w.radius*2.8,d,8), new THREE.MeshBasicMaterial({color:0x00E676})); m.position.copy(p1).lerp(p2,0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), new THREE.Vector3().subVectors(p2,p1).normalize()); g.add(m); } });
-            } else if (ant.pointB.top) {
-                drawP(ant.pointA.top, ant.pointA.base, 0xFF1744); drawP(ant.pointB.top, ant.pointB.base, 0x2979FF);
-                let vecC = new THREE.Vector3().lerpVectors(new THREE.Vector3(ant.pointA.top.x,ant.pointA.top.y,ant.pointA.top.z), new THREE.Vector3(ant.pointB.top.x,ant.pointB.top.y,ant.pointB.top.z), ant.pointC.percent); ant.pointC.top=vecC;
-                if(type !== 'Longwire') { let m=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.4), new THREE.MeshBasicMaterial({color:0x00E676, transparent:true, opacity:0.3})); m.position.copy(vecC); m.userData={type:'pointC'}; clickableObjects.push(m); worldContent.add(m); appMeshes.push(m); }
-                
-                let dirAB = new THREE.Vector3().subVectors(ant.pointB.top, ant.pointA.top).normalize(); let dirBA = new THREE.Vector3().subVectors(ant.pointA.top, ant.pointB.top).normalize();
-                if(type==='Dipolo'){ let l=parseInt(bands[ant.bandIdx])/4; createLine(vecC.clone().add(dirAB.clone().multiplyScalar(-l/2)), vecC.clone().add(dirAB.clone().multiplyScalar(l/2)), 0.015, 0xFF5722); }
-                else if(type==='End Fed'){ createLine(vecC, vecC.clone().add(dirBA.clone().multiplyScalar(ant.endFed_AC_Len)), 0.015, 0xFF5722); createLine(vecC, vecC.clone().add(dirAB.clone().multiplyScalar(ant.endFed_CB_Len)), 0.015, 0xFF5722); }
-                else if(type==='Longwire'){ let sv=ant.longwireVertex==='A'?ant.pointA.top:ant.pointB.top; let tv=ant.longwireVertex==='A'?ant.pointB.top:ant.pointA.top; createLine(sv, sv.clone().add(new THREE.Vector3().subVectors(tv,sv).normalize().multiplyScalar(ant.longwireLen)), 0.015, 0xFF5722); }
-            }
-        });
-    }
-
-    function updateBeam(mesh, origin, dir, color, len) {
-        mesh.visible=true; mesh.material.color.setHex(color);
-        let sl = Math.max(0.1, len-0.2); mesh.scale.set(1, sl, 1);
-        mesh.position.copy(origin).add(dir.clone().multiplyScalar(0.2 + sl/2));
-        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
-    }
-
-    function calculateIntersection(r1, r2) {
-        let p1=r1.origin, d1=r1.dir.clone().normalize(), p2=r2.origin, d2=r2.dir.clone().normalize();
-        let w0 = new THREE.Vector3().subVectors(p1, p2); let a=d1.dot(d1), b=d1.dot(d2), c=d2.dot(d2), d=d1.dot(w0), e=d2.dot(w0); let denom = a*c-b*b;
-        if(denom<1e-5) return null; let t1=(b*e-c*d)/denom; let t2=(a*e-b*d)/denom; if(t1<0||t2<0) return null;
-        let pt1=new THREE.Vector3().copy(p1).add(d1.multiplyScalar(t1)); let pt2=new THREE.Vector3().copy(p2).add(d2.multiplyScalar(t2));
-        return { point: new THREE.Vector3().lerpVectors(pt1,pt2,0.5), error: pt1.distanceTo(pt2), dist1: t1, dist2: t2 };
     }
 
     function setupMobileUI() {
@@ -489,6 +473,7 @@
             localStorage.removeItem('antennaArProV38_DB'); refreshAll(); 
         });
 
+        // Tiranti
         attachClick('btn-gw-new-tral', () => { let n={type:'traliccio', height:3.0}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
         attachClick('btn-gw-new-a', () => { let maxH = current.pointA.top.y - current.pointA.base.y; let n={pole:'A', height:maxH/2, pegs:[]}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
         attachClick('btn-gw-new-b', () => { let maxH = current.pointB.top.y - current.pointB.base.y; let n={pole:'B', height:maxH/2, pegs:[]}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
@@ -537,7 +522,6 @@
         };
         step(); actionInterval = setInterval(step, 150);
     }
-
     function stopAction() { clearInterval(actionInterval); saveToStorage(); }
 
     function switchAntenna(idx) {
@@ -550,12 +534,10 @@
         let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); let s = document.getElementById('load-list'); if(!s) return; s.innerHTML='';
         for(let n in db) { let o = document.createElement('option'); o.value=n; o.innerText=n; s.appendChild(o); }
     }
-
     function saveToStorage() {
         let d = { antennas: JSON.parse(JSON.stringify(antennas)), activeAntIdx, globalTextScale, pivotPos: worldPivot.position, pivotRot: worldPivot.rotation, contentPos: worldContent.position };
         localStorage.setItem('antennaArProV38_DB', JSON.stringify(d));
     }
-
     function loadFromStorage() {
         let saved = localStorage.getItem('antennaArProV38_DB');
         if (saved) {
@@ -567,9 +549,7 @@
                 if(current.state.startsWith('PLACE_HEIGHT') || current.state.startsWith('REPOSITION_HEIGHT') || current.state.startsWith('SET_CALIB') || current.state.startsWith('AWAITING_CALIB') || current.state.startsWith('SIZE_ROTATE')) current.state='IDLE';
             } catch(e) {}
         }
-        gwState = 'OFF'; activeAnchor = null; 
-        let p = document.getElementById('gw-menu-panel'); if(p) p.style.display='none'; 
-        refreshAll();
+        gwState = 'OFF'; activeAnchor = null; document.getElementById('gw-menu-panel').style.display='none'; refreshAll();
     }
 
     function toggleMenu() {
@@ -578,7 +558,6 @@
         p.style.display = p.style.display === 'block' ? 'none' : 'block';
         refreshAll();
     }
-
     function toggleGuyWireMode() {
         if(!current.pointA.top && !current.pointB.top && !current.traliccio.active) return;
         if(current.state.startsWith('AWAITING') || current.state.startsWith('PLACE_HEIGHT') || current.state.startsWith('SET_CALIB') || current.state.startsWith('SIZE_ROTATE')) return;
@@ -638,6 +617,7 @@
     function getHitPoint() {
         if (pointerMode === 'TRIANG' && triangState === 2 && triangResult) return triangResult.point.clone();
         if (reticleValid && reticle.visible) return reticle.position.clone();
+        
         let camPos = new THREE.Vector3(); let camQuat = new THREE.Quaternion(); camera.getWorldPosition(camPos); camera.getWorldQuaternion(camQuat);
         let camDir = new THREE.Vector3(0,0,-1).applyQuaternion(camQuat);
         if (camDir.y < -0.01) { let d = (lastFloorY - camPos.y) / camDir.y; if(d>0 && d<100) return camPos.clone().add(camDir.multiplyScalar(d)); }
@@ -651,8 +631,8 @@
         let b = current.state.includes('_A') ? current.pointA.base : current.pointB.base; if(!b) return;
         verticalCylinder.position.set(b.x, b.y + currentHeight/2, b.z); verticalCylinder.scale.set(1, currentHeight, 1);
         heightTextSprite.position.set(b.x, b.y + currentHeight + 0.2, b.z);
-        heightTextSprite.scale.setScalar(globalTextScale); heightTextSprite.material.map.image.getContext('2d').clearRect(0,0,512,256);
-        let t = makeTextSprite(currentHeight.toFixed(1)+"m", "#00FF00", globalTextScale); heightTextSprite.material.map = t.material.map; heightTextSprite.material.needsUpdate=true;
+        heightTextSprite.scale.setScalar(globalTextScale); 
+        updateTextSprite(heightTextSprite, currentHeight.toFixed(1)+"m", "#00FF00");
     }
 
     function handle3DClick(object) {
@@ -679,7 +659,16 @@
         if(!isP) triangState = 0;
 
         if (isP && pointerMode === 'TRIANG') {
-            let cp = new THREE.Vector3(); let cd = new THREE.Vector3(0,0,-1); camera.getWorldPosition(cp); cd.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+            let cp = new THREE.Vector3(); let cd = new THREE.Vector3(0,0,-1); 
+            
+            if (isMobile) {
+                camera.getWorldPosition(cp);
+                cd.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+            } else if (controller) {
+                controller.getWorldPosition(cp);
+                cd.applyQuaternion(controller.getWorldQuaternion(new THREE.Quaternion()));
+            }
+
             if(triangState === 0) { triangRay1 = {origin:cp, dir:cd}; triangState = 1; refreshAll(); return; }
             if(triangState === 1) { if(triangResult) { triangRay2 = {origin:cp, dir:cd}; triangState = 2; refreshAll(); } return; }
         }
@@ -738,10 +727,18 @@
             
             if (isP && pointerMode === 'TRIANG') {
                 triangMarker.visible = true;
-                let cp = new THREE.Vector3(); let cd = new THREE.Vector3(0,0,-1); camera.getWorldPosition(cp); cd.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+                let cp = new THREE.Vector3(); let cd = new THREE.Vector3(0,0,-1); 
+                if (isMobile) {
+                    camera.getWorldPosition(cp);
+                    cd.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+                } else if (controller) {
+                    controller.getWorldPosition(cp);
+                    cd.applyQuaternion(controller.getWorldQuaternion(new THREE.Quaternion()));
+                }
+
                 if(triangState===0){ updateBeam(beam1, cp, cd, 0x00BFFF, 150); beam2.visible=false; triangMarker.visible=false; }
-                else if(triangState===1){ triangResult=calculateIntersection(triangRay1, {origin:cp, dir:cd}); if(triangResult){ updateBeam(beam1, triangRay1.origin, triangRay1.dir, 0x00BFFF, triangResult.dist1); updateBeam(beam2, cp, cd, 0xFF1744, triangResult.dist2); triangMarker.position.copy(triangResult.point); let errC = triangResult.error<0.3?0x00E676:(triangResult.error<1.0?0xFFEB3B:0xD50000); triangMarker.material.color.setHex(errC); triangMarker.visible=true; let s=Math.max(1, triangResult.dist2/4); triangMarker.scale.setScalar(s); triangTextSprite.material.map.image.getContext('2d').clearRect(0,0,512,256); let tex=makeTextSprite(`INTERSEZIONE!\nERR: ${triangResult.error.toFixed(2)}m`, "#FFF", 0.6); triangTextSprite.material.map=tex.material.map; triangTextSprite.material.needsUpdate=true; } }
-                else if(triangState===2){ if(triangResult){ updateBeam(beam1, triangRay1.origin, triangRay1.dir, 0x00BFFF, triangResult.dist1); updateBeam(beam2, triangRay2.origin, triangRay2.dir, 0xFF1744, triangResult.dist2); triangMarker.position.copy(triangResult.point); let s=Math.max(1, triangResult.dist2/4); triangMarker.scale.setScalar(s); triangTextSprite.material.map.image.getContext('2d').clearRect(0,0,512,256); let tex=makeTextSprite(`PUNTO OK!\nTAP PER PIAZZARE`, "#FFF", 0.6); triangTextSprite.material.map=tex.material.map; triangTextSprite.material.needsUpdate=true; } }
+                else if(triangState===1){ triangResult=calculateIntersection(triangRay1, {origin:cp, dir:cd}); if(triangResult){ updateBeam(beam1, triangRay1.origin, triangRay1.dir, 0x00BFFF, triangResult.dist1); updateBeam(beam2, cp, cd, 0xFF1744, triangResult.dist2); triangMarker.position.copy(triangResult.point); let errC = triangResult.error<0.3?0x00E676:(triangResult.error<1.0?0xFFEB3B:0xD50000); triangMarker.material.color.setHex(errC); triangMarker.visible=true; let s=Math.max(1, triangResult.dist2/4); triangMarker.scale.setScalar(s); updateTextSprite(triangTextSprite, `INTERSEZIONE!\nERR: ${triangResult.error.toFixed(2)}m`, "#FFF"); } }
+                else if(triangState===2){ if(triangResult){ updateBeam(beam1, triangRay1.origin, triangRay1.dir, 0x00BFFF, triangResult.dist1); updateBeam(beam2, triangRay2.origin, triangRay2.dir, 0xFF1744, triangResult.dist2); triangMarker.position.copy(triangResult.point); let s=Math.max(1, triangResult.dist2/4); triangMarker.scale.setScalar(s); updateTextSprite(triangTextSprite, `PUNTO OK!\nTAP PER PIAZZARE`, "#FFF"); } }
             } else { triangMarker.visible=false; beam1.visible=false; beam2.visible=false; }
 
             renderer.render(scene, camera);
@@ -750,16 +747,6 @@
             renderer.render(scene, camera); 
         }
     }
-
-    // ==========================================
-    // AVVIO APPLICAZIONE (EVITA HOISTING BUGS)
-    // ==========================================
-    function initApp() {
-        init();
-        animate();
-    }
-    
-    initApp();
 
   </script>
 </body>
