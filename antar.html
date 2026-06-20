@@ -8,7 +8,7 @@
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: monospace; color: white; touch-action: none; }
     
-    /* Overlay UI AR: Copia esatta della tua logica funzionante */
+    /* Overlay UI AR */
     #ui-container { 
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 100; pointer-events: none; box-sizing: border-box;
@@ -18,7 +18,7 @@
     .pointer-auto { pointer-events: auto !important; }
     
     /* STILI PANNELLI E BOTTONI */
-    .ui-btn { padding: 10px; border: 1px solid #777; border-radius: 6px; background: rgba(50,50,50,0.9); color: white; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 11px; font-family: monospace; touch-action: manipulation; user-select: none; }
+    .ui-btn { padding: 10px; border: 1px solid #777; border-radius: 6px; background: rgba(50,50,50,0.9); color: white; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 11px; font-family: monospace; user-select: none; -webkit-tap-highlight-color: transparent; }
     .ui-btn:active { transform: scale(0.95); background: #00E676; color: black; }
 
     #btn-toggle-db { position: absolute; top: 15px; right: 15px; background: rgba(33, 150, 243, 0.9); border-color: #00BFFF; }
@@ -27,7 +27,7 @@
     #db-panel h3 { margin: 0 0 8px 0; font-size: 13px; color: #00E676; text-align: center; border-bottom: 1px solid #444; padding-bottom: 5px; }
     #db-panel input, #db-panel select { width: 90%; padding: 6px; background: #333; color: white; border: 1px solid #00E676; margin-bottom: 8px; border-radius: 4px; font-family: monospace;}
     
-    #main-menu-panel { display: none; position: absolute; top: 15px; left: 15px; background: rgba(20,20,20,0.95); padding: 10px; border: 2px solid #00BFFF; border-radius: 8px; width: 280px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.8); pointer-events: auto;}
+    #main-menu-panel { display: none; position: absolute; top: 15px; left: 15px; background: rgba(20,20,20,0.95); padding: 10px; border: 2px solid #00BFFF; border-radius: 8px; width: 280px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.8); pointer-events: auto; scroll-behavior: smooth;}
     #main-menu-panel h3 { margin: 0 0 5px 0; font-size: 14px; color: #FFEB3B; text-align: center; }
     .menu-section { margin-bottom: 10px; padding: 5px; background: rgba(255,255,255,0.05); border-radius: 6px; }
     
@@ -192,7 +192,6 @@
       </div>
   </div>
 
-  <!-- SCRIPT LOGICA AR E APP IN PURO THREE.JS -->
   <script type="module">
     import * as THREE from 'three';
     import { ARButton } from 'three/addons/webxr/ARButton.js';
@@ -326,9 +325,9 @@
                 handle3DClick(intersects[0].object);
                 setTimeout(() => justClicked3DObject = false, 300);
             } else {
-                // FORZATURA ASSOLUTA: Richiama SEMPRE la funzione di posizionamento
-                // a prescindere dal fatto che l'AR sia attivo o meno
-                onTriggerDown();
+                if (!renderer.xr.isPresenting) {
+                    onTriggerDown();
+                }
             }
         });
     }
@@ -396,13 +395,24 @@
     }
 
     function refreshAll() {
-        updateMenuText();
-        drawGeometries();
-        saveToStorage();
+        try { updateMenuText(); } catch (e) { console.error(e); }
+        try { drawGeometries(); } catch (e) { console.error(e); }
+        try { saveToStorage(); } catch (e) { console.warn("Salvataggio fallito."); }
     }
 
     function setupMobileUI() {
-        const attachClick = (id, cb) => { let b = document.getElementById(id); if(b) b.addEventListener('click', (e)=>{e.preventDefault(); cb();}); };
+        // Funzione di blocco garantita: intercetta sempre i click in modo pulito
+        const attachClick = (id, cb) => { 
+            let b = document.getElementById(id); 
+            if(b) {
+                b.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Ferma la bolla che fa crashare AR
+                    try { cb(); } catch (err) { console.error(`Errore bottone ${id}:`, err); }
+                });
+            } else {
+                console.warn("Bottone UI non trovato:", id);
+            }
+        };
         
         attachClick('btn-mob-y', toggleMenu);
         attachClick('btn-mob-x', toggleGuyWireMode);
@@ -410,9 +420,9 @@
         
         const attachHold = (id, action) => {
             let b = document.getElementById(id); if(!b) return;
-            b.addEventListener('pointerdown', (e) => { e.preventDefault(); startAction(action); });
-            b.addEventListener('pointerup', (e) => { e.preventDefault(); stopAction(); });
-            b.addEventListener('pointerleave', (e) => { e.preventDefault(); stopAction(); });
+            b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); startAction(action); });
+            b.addEventListener('pointerup', (e) => { e.preventDefault(); e.stopPropagation(); stopAction(); });
+            b.addEventListener('pointerleave', (e) => { e.preventDefault(); e.stopPropagation(); stopAction(); });
         };
         attachHold('btn-mob-rot-sx', 'rot-sx'); attachHold('btn-mob-rot-dx', 'rot-dx');
         attachHold('btn-mob-up', 'up'); attachHold('btn-mob-down', 'down');
@@ -519,6 +529,7 @@
         };
         step(); actionInterval = setInterval(step, 150);
     }
+    
     function stopAction() { clearInterval(actionInterval); saveToStorage(); }
 
     function switchAntenna(idx) {
@@ -531,10 +542,14 @@
         let db = JSON.parse(localStorage.getItem('antenneAR_DB')||'{}'); let s = document.getElementById('load-list'); if(!s) return; s.innerHTML='';
         for(let n in db) { let o = document.createElement('option'); o.value=n; o.innerText=n; s.appendChild(o); }
     }
+    
     function saveToStorage() {
-        let d = { antennas: JSON.parse(JSON.stringify(antennas)), activeAntIdx, globalTextScale, pivotPos: worldPivot.position, pivotRot: worldPivot.rotation, contentPos: worldContent.position };
-        localStorage.setItem('antennaArProV38_DB', JSON.stringify(d));
+        try {
+            let d = { antennas: JSON.parse(JSON.stringify(antennas)), activeAntIdx, globalTextScale, pivotPos: worldPivot.position, pivotRot: worldPivot.rotation, contentPos: worldContent.position };
+            localStorage.setItem('antennaArProV38_DB', JSON.stringify(d));
+        } catch(e) {}
     }
+    
     function loadFromStorage() {
         let saved = localStorage.getItem('antennaArProV38_DB');
         if (saved) {
@@ -555,6 +570,7 @@
         p.style.display = p.style.display === 'block' ? 'none' : 'block';
         refreshAll();
     }
+    
     function toggleGuyWireMode() {
         if(!current.pointA.top && !current.pointB.top && !current.traliccio.active) return;
         if(current.state.startsWith('AWAITING') || current.state.startsWith('PLACE_HEIGHT') || current.state.startsWith('SET_CALIB') || current.state.startsWith('SIZE_ROTATE')) return;
@@ -618,7 +634,6 @@
         let camPos = new THREE.Vector3(); let camQuat = new THREE.Quaternion(); camera.getWorldPosition(camPos); camera.getWorldQuaternion(camQuat);
         let camDir = new THREE.Vector3(0,0,-1).applyQuaternion(camQuat);
         
-        // Risoluzione matematica se il raggio guarda a terra
         if (camDir.y < -0.01) { 
             let d = (lastFloorY - camPos.y) / camDir.y; 
             if(d>0 && d<100) return camPos.clone().add(camDir.multiplyScalar(d)); 
@@ -738,9 +753,9 @@
         else if (current.state === 'AWAITING_CALIB_PT2') info = "CALIB: RUOTA AMBIENTE SU DIAMANTE 2 E TAPPA";
         else if (current.state === 'SET_CALIB_PT1') info = "APPOGGIA DEVICE SU PUNTO 1 E TAPPA";
         else if (current.state === 'SET_CALIB_PT2') info = "APPOGGIA DEVICE SU PUNTO 2 E TAPPA";
-        else if (t==='End Fed') { document.getElementById('txt-ef-values').innerText = `AC: ${current.endFed_AC_Len}m | CB: ${current.endFed_CB_Len}m`; }
-        else if (t==='Longwire') { document.getElementById('btn-lw-vertex').innerText = "VERTICE DA: "+current.longwireVertex; document.getElementById('txt-lw-val').innerText = `L: ${current.longwireLen}m`; }
-        else if (t==='Verticale') { document.getElementById('txt-rad-val').innerText = `RADIALI: ${current.numRadials} | L: ${current.radialLen}m`; }
+        else if (t==='End Fed') { document.getElementById('txt-ef-values').innerText = `AC: ${current.endFed_AC_Len.toFixed(1)}m | CB: ${current.endFed_CB_Len.toFixed(1)}m`; }
+        else if (t==='Longwire') { document.getElementById('btn-lw-vertex').innerText = "VERTICE DA: "+current.longwireVertex; document.getElementById('txt-lw-val').innerText = `L: ${current.longwireLen.toFixed(1)}m`; }
+        else if (t==='Verticale') { document.getElementById('txt-rad-val').innerText = `RADIALI: ${current.numRadials} | L: ${current.radialLen.toFixed(1)}m`; }
         else if (t==='MMANA-GAL') { document.getElementById('btn-mmana-model').innerText = "MOD: "+mmanaModels[current.mmanaModelIdx].toUpperCase(); }
         
         if(!info) info = "[ TOCCA IN UN PUNTO VUOTO PER INIZIARE O CONFERMARE ]";
