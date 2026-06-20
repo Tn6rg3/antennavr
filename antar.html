@@ -214,6 +214,7 @@
     const antennaTypes = ['Dipolo', 'End Fed', 'Longwire', 'Verticale', 'MMANA-GAL'];
     const bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
     const mmanaModels = ['Yagi 3 Elementi', 'Delta Loop', 'Dipolo MMANA', 'Modello Importato'];
+    const maxRadials = 16;
     
     let antennas = [ createEmptyAntenna() ];
     let activeAntIdx = 0;
@@ -250,14 +251,12 @@
         renderer.xr.enabled = true;
         container.appendChild(renderer.domElement);
 
-        // IL SEGRETO E' QUI: Ricreato identico al tuo codice funzionante per non rompere la cam AR
         document.body.appendChild(ARButton.createButton(renderer, { 
             requiredFeatures: ['hit-test', 'dom-overlay'],
             optionalFeatures: ['anchors'],
             domOverlay: { root: document.getElementById('ui-container') }
         }));
 
-        // GESTIONE TAP AR NATIVA: Usiamo l'evento standard 'select'
         controller = renderer.xr.getController(0);
         controller.addEventListener('select', onTriggerDown);
         scene.add(controller);
@@ -278,7 +277,6 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // QUANDO PARTE L'AR, MOSTRA L'UI! E fixa i piani di ritaglio (Bug Fix da te indicato)
         renderer.xr.addEventListener('sessionstart', () => {
             document.getElementById('ui-container').style.display = 'block';
             let session = renderer.xr.getSession();
@@ -292,12 +290,10 @@
             document.getElementById('ui-container').style.display = 'none';
         });
 
-        // EVITA CONFLITTI: Impedisce ad ARButton di sparare 'select' se l'utente clicca un bottone HTML!
         document.getElementById('ui-container').addEventListener('beforexrselect', (ev) => {
             if (ev.target.id !== 'touchArea') ev.preventDefault();
         });
 
-        // GESTIONE DEL CLICK SU OGGETTI 3D
         document.getElementById('touchArea').addEventListener('pointerdown', (e) => {
             let mouse = new THREE.Vector2();
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -307,11 +303,10 @@
             let intersects = raycaster.intersectObjects(clickableObjects, false);
             
             if (intersects.length > 0) {
-                justClicked3DObject = true; // Impedisce a onTriggerDown di piazzare un'antenna nel vuoto
+                justClicked3DObject = true; 
                 handle3DClick(intersects[0].object);
                 setTimeout(() => justClicked3DObject = false, 300);
             } else {
-                // Fallback per Desktop/Non-AR
                 if (!renderer.xr.isPresenting) {
                     let now = Date.now();
                     if (now - lastTapTime > 300) {
@@ -371,6 +366,12 @@
         let sprite = new THREE.Sprite(mat);
         sprite.scale.set(0.6 * scaleMult, 0.3 * scaleMult, 1);
         return sprite;
+    }
+
+    function refreshAll() {
+        updateMenuText();
+        drawGeometries();
+        saveToStorage();
     }
 
     function setupMobileUI() {
@@ -443,7 +444,6 @@
             localStorage.removeItem('antennaArProV38_DB'); refreshAll(); 
         });
 
-        // Tiranti
         attachClick('btn-gw-new-tral', () => { let n={type:'traliccio', height:3.0}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
         attachClick('btn-gw-new-a', () => { let maxH = current.pointA.top.y - current.pointA.base.y; let n={pole:'A', height:maxH/2, pegs:[]}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
         attachClick('btn-gw-new-b', () => { let maxH = current.pointB.top.y - current.pointB.base.y; let n={pole:'B', height:maxH/2, pegs:[]}; current.guyWiresData.push(n); activeAnchor=n; gwState='EDIT_COLLAR'; updateGWUI(); refreshAll(); });
@@ -619,7 +619,7 @@
     }
 
     function onTriggerDown() {
-        if (justClicked3DObject) return; // Ha appena cliccato un oggetto, non piazzare punti nel vuoto
+        if (justClicked3DObject) return; 
         
         let now = Date.now(); if(now - lastTriggerTime < 300) return; lastTriggerTime = now;
 
@@ -714,7 +714,6 @@
         antennas.forEach((ant, idx) => {
             let isC = (idx === activeAntIdx);
             
-            // Traliccio
             if(ant.traliccio && ant.traliccio.active && ant.traliccio.center) {
                 let t=ant.traliccio; let sq=t.shape==='square'; let ns=sq?4:3; t.corners=[]; let rot=(t.rotationY||0)*(Math.PI/180); let ba=sq?Math.PI/4:Math.PI/2;
                 for(let i=0;i<ns;i++){ t.corners.push(new THREE.Vector3(t.center.x+Math.cos(ba+(i*2*Math.PI/ns)+rot)*t.radius, t.center.y, t.center.z+Math.sin(ba+(i*2*Math.PI/ns)+rot)*t.radius)); }
@@ -727,7 +726,6 @@
                 let l=t.corners[0].distanceTo(t.corners[1]); let s=makeTextSprite(isC&&ant.state==='SIZE_ROTATE_TRALICCIO'?`MODIFICA LATO: ${l.toFixed(2)}m\nROTAZIONE: ${t.rotationY}°`:(isC&&ant.state==='PLACE_HEIGHT_TRALICCIO'?`IMPOSTA ALTEZZA: ${h.toFixed(2)}m`:`TRALICCIO\nH: ${h.toFixed(2)}m | L: ${l.toFixed(2)}m`), "#FFEB3B", globalTextScale); s.position.set(t.center.x, t.center.y+h+0.2, t.center.z); worldContent.add(s); appMeshes.push(s);
             }
 
-            // Tiranti
             if(ant.guyWiresData) ant.guyWiresData.forEach((anc, aIdx) => {
                 let isSel = isC && (activeAnchor === anc);
                 if(anc.type === 'traliccio' && ant.traliccio && ant.traliccio.active && ant.traliccio.corners.length>0) {
@@ -745,11 +743,10 @@
                 }
             });
 
-            // Selezionatore
             if(!isC && (ant.pointA.base || ant.traliccio.center)) {
                 let bp = ant.traliccio.active ? ant.traliccio.center : ant.pointA.base;
                 let m = new THREE.Mesh(new THREE.OctahedronGeometry(0.08), new THREE.MeshBasicMaterial({color:0xFFEB3B, transparent:true, opacity:0.8})); m.position.set(bp.x, bp.y+0.4, bp.z); m.userData={type:'selector', antIdx:idx}; clickableObjects.push(m); worldContent.add(m); appMeshes.push(m);
-                return; // Non renderizzare il resto se non è attiva
+                return;
             }
 
             if(!ant.pointA.top) return;
@@ -792,8 +789,6 @@
 
     function animate() { renderer.setAnimationLoop(render); }
     
-    // Il Try-Catch dentro render garantisce che anche se una stringa dovesse generare un errore 
-    // la camera non diventi mai nera e continui a renderizzare l'ambiente
     function render(timestamp, frame) {
         try {
             if(frame) {
@@ -802,7 +797,6 @@
                 if(hitTestSource && pointerMode==='LIDAR') {
                     let hits = frame.getHitTestResults(hitTestSource);
                     if(hits.length>0){ 
-                        // FIX PER SCHERMO NERO: Protezione null reference su getPose!
                         let p = hits[0].getPose(rs); 
                         if(p) {
                             reticle.position.copy(p.transform.position); 
@@ -826,7 +820,7 @@
             renderer.render(scene, camera);
         } catch (e) {
             console.error("Errore di rendering non fatale:", e);
-            renderer.render(scene, camera); // Evita che si spenga lo schermo e rimanga nero in caso di errore logico
+            renderer.render(scene, camera); 
         }
     }
   </script>
