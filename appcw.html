@@ -78,7 +78,7 @@
         th, td { border-bottom: 1px solid var(--hint-color); padding: 12px 5px; text-align: center; }
         th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
         
-        /* Input permanente per evitare la chiusura della tastiera */
+        /* Input permanente per la tastiera */
         #permanentGameInput { border: 2px solid var(--link-color); outline: none; margin: 0; font-weight: bold; }
         #permanentGameInput:focus { background-color: var(--sec-bg-color); }
         
@@ -133,7 +133,7 @@
         <div class="box-panel" style="flex-grow: 1; display: flex; flex-direction: column;">
             <h3>Bacheca Sfide ⏳</h3>
             <ul id="waitingRoomsList" class="rooms-list" style="flex-grow: 1;">
-                <li style="justify-content: center; color: var(--hint-color);">Nessuna stanza disponibile.</li>
+                <li style="justify-content: center; color: var(--hint-color);">Nessuna sfida attiva. Creane una!</li>
             </ul>
         </div>
         
@@ -153,7 +153,7 @@
 
     <div id="lobbyScreen" class="screen">
         <h2>Lobby Stanza</h2>
-        <h3 style="margin-top: 10px;">Giocatori presenti: h3>
+        <h3 style="margin-top: 10px;">Giocatori presenti:</h3>
         <ul id="playersList"></ul>
         
         <div style="margin-top: auto; width: 100%;">
@@ -242,7 +242,7 @@
         }
 
         function initGame() {
-            // --- CONFIGURAZIONE FIREBASE (Usa la tua) ---
+            // --- CONFIGURAZIONE FIREBASE (Usa la tua config originale) ---
             const firebaseConfig = {
                 apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
                 authDomain: "telegrafiabot.firebaseapp.com",
@@ -256,25 +256,37 @@
             db = firebase.database();
             auth = firebase.auth();
 
+            // CORREZIONE: Migliorata gestione errori per spiegare il blocco sulla scritta "connessione in corso"
             auth.signInAnonymously()
                 .then(() => {
+                    // Nascondi la scritta "in corso"
+                    document.getElementById('loadingText').style.display = 'none';
+                    document.getElementById('createRoomBtn').disabled = false;
                     document.getElementById('playerName').textContent = myName;
-                    // Pulizia automatica su disconnessione totale dell'app
+                    
+                    // Pulizia automatica su disconnessione totale dell'app (utile se crasha l'app intera)
                     db.ref('.info/connected').on('value', (snap) => {
                         if (snap.val() === false) return;
-                        // Se ci ricolleghiamo dopo un break, assicuriamoci di non essere in nessuna room
-                        if (roomCode) joinRoomLogic(true); // Re-join if we were in a room
+                        // Se ci ricolleghiamo dopo una caduta totale e eravamo in una room, proviamo il re-join pulito
+                        if (roomCode) joinRoomLogic(true); 
                     });
                     
                     showScreen('setupScreen'); 
                     listenToRooms();
                 })
                 .catch((error) => {
-                    document.getElementById('initStatusText').innerHTML = "<span style='color:red;'>Errore connessione.</span>";
+                    // Se Firebase non risponde o l'autenticazione anonima è disabilitata
+                    // Aggiorniamo la scritta per mostrare l'errore reale
+                    console.error("Firebase Auth Error:", error);
+                    const loadingTextEl = document.getElementById('loadingText');
+                    loadingTextEl.style.color = '#d32f2f';
+                    loadingTextEl.innerHTML = "<b>Errore di connessione a Firebase.</b><br>" + 
+                                            "Verifica di aver abilitato 'Accesso Anonimo' nella console Firebase.<br>" +
+                                            "<small>Dettagli: " + error.message + "</small>";
                 });
         }
 
-        const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "controllo", "coraggio", "corrente", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "giardino", "giornale", "giudizio", "giustizia", "governo", "graduale", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "mattina", "medicina", "memoria", "messaggio", "metallo", "miniera", "miracolo", "mistero", "modello", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
+        const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "mattina", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
         const morseDict = { 'a': '.-', 'b': '-...', 'c': '-.-.', 'd': '-..', 'e': '.', 'f': '..-.', 'g': '--.', 'h': '....', 'i': '..', 'j': '.---', 'k': '-.-', 'l': '.-..', 'm': '--', 'n': '-.', 'o': '---', 'p': '.--.', 'q': '--.-', 'r': '.-.', 's': '...', 't': '-', 'u': '..-', 'v': '...-', 'w': '.--', 'x': '-..-', 'y': '-.--', 'z': '--..' };
 
         let roomCode = "";
@@ -362,11 +374,9 @@
             });
         });
 
-        // Tasto per l'Host per eliminare la stanza manualmente
         document.getElementById('deleteRoomBtn').addEventListener('click', () => {
             if (confirm("Vuoi eliminare questa stanza? Tutti i partecipanti saranno espulsi.")) {
                 db.ref(`rooms/${roomCode}`).remove();
-                // Non serve fare altro, il listener `on('value')` sulla room gestirà l'uscita
             }
         });
 
@@ -374,57 +384,57 @@
             exitRoomCleanly();
         });
 
-        // Funzione per uscire pulitamente dalla stanza (rimuovendo il proprio nodo)
         function exitRoomCleanly() {
             if (currentRoomListener) {
-                currentRoomListener.off(); // Fermiamo il listener prima di cancellarci
+                currentRoomListener.off(); 
                 currentRoomListener = null;
             }
             if (roomCode) {
-                // Rimuoviamo il nostro onDisconnect attivo
                 db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
-                // Ci cancelliamo fisicamente
                 db.ref(`rooms/${roomCode}/players/${myId}`).remove();
             }
             showScreen('setupScreen');
         }
 
-        // --- CORE LOGIC: GESTIONE LOBBY, DISCONNESSONI E HOST MIGRATION ---
+        // --- GESTIONE LOBBY, DISCONNESSONI E HOST MIGRATION ---
         function joinRoomLogic(isReconnect = false) {
             showScreen('lobbyScreen');
-            document.getElementById('permanentGameInput').blur(); // Chiudi tastiera se aperta
+            document.getElementById('permanentGameInput').blur(); 
 
             const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
             
-            // 1. Setup PRESENZA: Se mi disconnetto, Firebase cancella automaticamente il mio nodo giocatore
-            // Questo è fondamentale per il rilevamento della disconnessione degli altri client.
+            // Setup PRESENZA: Se mi disconnetto, Firebase cancella automaticamente il mio nodo giocatore
             playerRef.onDisconnect().remove();
 
-            // 2. Mi aggiungo alla lista giocatori (o mi aggiorno se rientro)
+            // Mi aggiungo alla lista giocatori
             playerRef.set({ 
                 name: myName, 
                 score: 0, 
                 finished: false, 
-                joinedAt: firebase.database.ServerValue.TIMESTAMP // Utile per decidere il nuovo host (il più "vecchio")
+                joinedAt: firebase.database.ServerValue.TIMESTAMP 
             });
 
-            // 3. Monitoraggio della Stanza in tempo reale
             if (currentRoomListener) currentRoomListener.off();
             currentRoomListener = db.ref(`rooms/${roomCode}`);
             
             currentRoomListener.on('value', snapshot => {
-                // CASO A: La stanza è stata eliminata (dall'host o dal sistema)
+                // La stanza è stata eliminata
                 if (!snapshot.exists()) {
-                    exitRoomCleanly();
-                    if (!gameRunning) alert("La stanza è stata chiusa dall'host o non è più disponibile.");
+                    if (!gameRunning) {
+                        alert("La stanza è stata chiusa.");
+                        exitRoomCleanly();
+                    } else {
+                        // Se eravamo in gioco, smettiamo e puliamo
+                        gameRunning = false;
+                        exitRoomCleanly();
+                    }
                     return;
                 }
 
                 const roomData = snapshot.val();
                 const playersData = roomData.players || {};
-                const playerIds = Object.keys(playersData);
                 
-                // CASO B: La partita è stata avviata
+                // La partita è stata avviata
                 if (roomData.status === 'countdown' && !gameRunning) {
                     currentWpm = roomData.wpm; 
                     currentTone = roomData.tone; 
@@ -433,51 +443,42 @@
                     return;
                 }
 
-                // CASO C: Gestione Lobby (Lista giocatori, Auto-eliminazione, Host Migration)
+                // Gestione Lobby (Lista giocatori, Auto-eliminazione, Host Migration)
                 if (roomData.status === 'waiting') {
                     renderPlayersList(playersData, roomData.hostId);
                     
-                    // Verifichiamo la salute della stanza
+                    // Verifichiamo se l'host c'è ancora
                     handleRoomHealth(roomCode, playersData, roomData.hostId);
                 }
             });
         }
 
-        // --- GESTIONE SALUTE STANZA (TRANSACTIONS) ---
-        // Questa funzione gira su TUTTI i client nella lobby. Controlla se l'host c'è ancora.
-        // Se l'host manca, usiamo una Transazione Firebase per eleggere il nuovo host in modo sicuro.
+        // --- GESTIONE SALUTE STANZA (HOST MIGRATION) ---
         function handleRoomHealth(roomId, players, currentHostId) {
             const playerIds = Object.keys(players);
 
-            // 1. Auto-eliminazione: Se sono l'ultimo rimasto e sto vedendo la lobby vuota (Firebase async), cancello.
-            // Nota: playerIds conterrà me stesso. Se ci sono altri playerIds.length > 1.
-            
-            // 2. Host Migration: L'host attuale è ancora nella lista giocatori?
+            // Host Migration: L'host attuale è ancora nella lista giocatori?
             if (currentHostId && !players[currentHostId]) {
                 console.log("Host disconnesso. Avvio migrazione...");
                 
-                // Usiamo una TRANSAZIONE sul nodo hostId della room.
-                // Firebase assicura che solo un client riuscirà a completare la transazione con successo.
+                // Usiamo una TRANSAZIONE per eleggere il nuovo host in modo sicuro
                 db.ref(`rooms/${roomId}/hostId`).transaction((storedHostId) => {
-                    // Verifichiamo all'interno della transazione se l'host è ancora quello vecchio
-                    // SeStoredHostId è diverso, un altro client ha già completato la migrazione.
+                    // Verifichiamo se l'host è ancora quello vecchio (evita race condition)
                     if (storedHostId === currentHostId) {
-                        // Ordiniamo i giocatori rimasti per tempo di ingresso (il più vecchio diventa host)
+                        // Ordiniamo per tempo di ingresso (il più "vecchio" diventa host)
                         const remainingPlayers = Object.entries(players)
                             .map(([id, data]) => ({id, joinedAt: data.joinedAt || 0}))
                             .sort((a, b) => a.joinedAt - b.joinedAt);
 
                         if (remainingPlayers.length > 0) {
-                            console.log(`Eletto nuovo host: ${remainingPlayers[0].id}`);
-                            return remainingPlayers[0].id; // Questo valore sovrascrive 'hostId' nel DB
+                            return remainingPlayers[0].id; // Nuovo hostId
                         }
                     }
-                    return; // Aborta transazione se l'host è già cambiato
+                    return; // Aborta transazione
                 });
             }
         }
 
-        // Renderizza la lista giocatori e aggiorna l'UI in base al ruolo (Host o Partecipante)
         function renderPlayersList(playersData, hostId) {
             const playersList = document.getElementById('playersList');
             playersList.innerHTML = '';
@@ -489,7 +490,7 @@
                 playersList.appendChild(li);
             });
 
-            // Aggiornamento interfaccia utente
+            // Aggiornamento interfaccia utente in base al ruolo
             const amIHost = (myId === hostId);
             const startBtn = document.getElementById('startMultiplayerBtn');
             const deleteBtn = document.getElementById('deleteRoomBtn');
@@ -514,14 +515,13 @@
         }
 
         document.getElementById('startMultiplayerBtn').addEventListener('click', () => {
-            // L'host cambia lo stato della room. Tutti i client riceveranno l'aggiornamento.
             db.ref(`rooms/${roomCode}/status`).set('countdown');
         });
 
-        // --- LOGICA GIOCO (Invariata ma ottimizzata per pulizia finale) ---
+        // --- LOGICA GIOCO ---
         function startCountdownSequence() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (currentRoomListener) currentRoomListener.off(); // Smettiamo di ascoltare la lobby
+            if (currentRoomListener) currentRoomListener.off(); 
             
             document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
             document.getElementById('scoreDisplay').textContent = `Punti: 0`;
@@ -543,7 +543,6 @@
                     setTimeout(() => {
                         if (!gameRunning) return;
                         showScreen('gameArea');
-                        // Focus e tastiera
                         setTimeout(() => { document.getElementById('permanentGameInput').focus(); }, 200);
                         setTimeout(() => { if (gameRunning) playNextWord(); }, 800); 
                     }, 500); 
@@ -623,7 +622,7 @@
             document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
 
             // Aggiorniamo il punteggio live nel DB
-            db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore });
+            if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore });
             
             wordIndex++; 
             setTimeout(playNextWord, 600); 
@@ -642,13 +641,12 @@
             if (confirm("Vuoi abbandonare la partita?")) quitGame();
         });
 
-        // Uscita forzata durante il gioco (cancella il nodo)
         function quitGame() {
             gameRunning = false;
             exitRoomCleanly();
         }
 
-        // --- FINE PARTITA E PULIZIA STANZE ---
+        // --- FINE PARTITA E PULIZIA ---
         function finishGame() {
             gameRunning = false;
             inputActive = false;
@@ -656,12 +654,11 @@
             showScreen('leaderboardScreen');
             activeTab = "room";
             
-            // Ci segniamo come "finito" nel DB
-            const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-            myPlayerRef.update({ finished: true });
-            
-            // Rimuoviamo onDisconnect, la pulizia avverrà tra 1 minuto
-            myPlayerRef.onDisconnect().cancel(); 
+            if (roomCode) {
+                const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
+                myPlayerRef.update({ finished: true });
+                myPlayerRef.onDisconnect().cancel(); 
+            }
             
             // Salvataggio Record Globale
             if (totalScore > 0) {
@@ -675,30 +672,32 @@
             }
 
             // Ascoltiamo i risultati live della stanza
-            db.ref(`rooms/${roomCode}`).on('value', snapshot => {
-                if (!snapshot.exists()) return;
-                const roomData = snapshot.val();
-                if (activeTab === "room") renderRoomLeaderboard(roomData.players || {});
-            });
-            
-            // --- PULIZIA FINALE STANZA (Solo se siamo l'host attuale) ---
-            db.ref(`rooms/${roomCode}/hostId`).once('value', hostIdSnap => {
-                if (hostIdSnap.val() === myId) {
-                    // Impostiamo lo stato a finished per nasconderla subito dalla bacheca
-                    db.ref(`rooms/${roomCode}/status`).set('finished');
-                    // Cancelliamo l'intera stanza dopo 60 secondi (tempo per leggere i risultati)
-                    setTimeout(() => {
-                        db.ref(`rooms/${roomCode}`).remove();
-                    }, 60000);
-                }
-            });
+            if (roomCode) {
+                db.ref(`rooms/${roomCode}`).on('value', snapshot => {
+                    if (!snapshot.exists()) return;
+                    const roomData = snapshot.val();
+                    if (activeTab === "room") renderRoomLeaderboard(roomData.players || {});
+                });
+                
+                // PULIZIA FINALE STANZA (Solo se siamo l'host attuale)
+                db.ref(`rooms/${roomCode}/hostId`).once('value', hostIdSnap => {
+                    if (hostIdSnap.val() === myId) {
+                        // Stato finished per nasconderla SUBITO dalla bacheca
+                        db.ref(`rooms/${roomCode}/status`).set('finished');
+                        // Cancelliamo l'intera stanza dopo 60 secondi
+                        setTimeout(() => {
+                            if (roomCode) db.ref(`rooms/${roomCode}`).remove();
+                        }, 60000);
+                    }
+                });
+            }
         }
 
         document.getElementById('tabRoomBtn').addEventListener('click', () => {
             activeTab = "room";
             document.getElementById('tabRoomBtn').classList.add('active-tab');
             document.getElementById('tabGlobalBtn').classList.remove('active-tab');
-            db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
+            if (roomCode) db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
         });
 
         document.getElementById('tabGlobalBtn').addEventListener('click', () => {
@@ -739,7 +738,7 @@
                 container.innerHTML = '<h3 style="text-align:center;">Top 50 Globale</h3>';
                 let players = [];
                 snapshot.forEach(child => { players.push(child.val()); });
-                players.reverse(); // orderByChild è ascendente
+                players.reverse(); 
 
                 if (players.length === 0) { container.innerHTML += '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; return; }
 
