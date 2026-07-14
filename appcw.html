@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sfida Telegrafia Multiplayer</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <!-- Librerie Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -16,32 +14,24 @@
         .screen { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 400px; margin-top: 20px; }
         .active-screen { display: flex; }
         button { background-color: var(--tg-theme-button-color, #3390ec); color: var(--tg-theme-button-text-color, #ffffff); border: none; padding: 12px 25px; font-size: 1.1em; border-radius: 8px; cursor: pointer; margin-top: 10px; width: 100%; }
-        button:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
         .btn-secondary { background-color: #ff9800; }
         .btn-danger { background-color: #d32f2f; }
         .btn-link { background: none; color: #888; text-decoration: underline; padding: 5px; font-size: 0.9em; margin-top: 15px; border: none; cursor: pointer; }
-        
         input[type="number"], input[type="text"] { padding: 10px; font-size: 1.1em; width: 90%; text-align: center; margin: 5px 0; border: 1px solid #ccc; border-radius: 5px; }
         .settings-row { display: flex; justify-content: center; align-items: center; width: 100%; margin-bottom: 10px; gap: 10px; }
         #countdownNumber { font-size: 5em; font-weight: bold; color: #ff9800; margin: 20px 0; }
         .room-code { font-size: 2em; letter-spacing: 5px; font-weight: bold; color: #3390ec; margin: 10px 0; }
-        
         .header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px; font-weight: bold; font-size: 1.2em; }
         #scoreDisplay { color: #4caf50; }
-        
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         th, td { border: 1px solid var(--tg-theme-hint-color, #ccc); padding: 8px; text-align: center; }
         th { background-color: var(--tg-theme-secondary-bg-color, #f0f0f0); }
         input.game-input { width: 90%; border: 1px solid #007bff; }
-        input:read-only { border: none; background: transparent; text-align: center; }
-        
         #playersList { list-style: none; padding: 0; width: 100%; text-align: left; }
         #playersList li { padding: 8px; border-bottom: 1px solid #eee; }
         .leaderboard-row { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #ccc; width: 100%; align-items: center; }
-        #loadingText { font-style: italic; color: #ff9800; margin-bottom: 15px; }
-        #notificationArea { color: #d32f2f; font-weight: bold; margin-bottom: 15px; min-height: 20px; }
-        
-        .privacy-box { text-align: left; font-size: 0.9em; line-height: 1.5; background: var(--tg-theme-secondary-bg-color, #f9f9f9); padding: 15px; border-radius: 8px; border: 1px solid #ccc; max-height: 300px; overflow-y: auto; }
+        .privacy-box { text-align: left; font-size: 0.9em; line-height: 1.5; background: var(--tg-theme-secondary-bg-color, #f9f9f9); padding: 15px; border-radius: 8px; border: 1px solid #ccc; }
         .tab-buttons { display: flex; width: 100%; gap: 10px; margin-bottom: 15px; }
         .tab-btn { background-color: #eee; color: #333; }
         .tab-btn.active-tab { background-color: #3390ec; color: #fff; }
@@ -49,11 +39,9 @@
 </head>
 <body>
 
-    <!-- 1. Setup (Lobby Iniziale) -->
     <div id="setupScreen" class="screen active-screen">
         <h2>Ciao <span id="playerName">Giocatore</span>! 📻</h2>
         <p id="loadingText">Connessione sicura al server in corso...</p>
-
         <div style="border: 1px solid #ccc; padding: 15px; border-radius: 10px; width: 100%; margin-bottom: 15px;">
             <h3>Crea Nuova Sfida</h3>
             <div class="settings-row">
@@ -62,77 +50,62 @@
             </div>
             <button id="createRoomBtn" disabled>Crea Stanza</button>
         </div>
-
         <div style="border: 1px solid #ccc; padding: 15px; border-radius: 10px; width: 100%;">
             <h3>Unisciti a una Sfida</h3>
             <input type="text" id="joinCodeInput" placeholder="Codice Stanza" maxlength="4">
             <button id="joinRoomBtn" class="btn-secondary" disabled>Entra</button>
         </div>
-        
         <button id="viewGlobalLeaderboardBtn" class="btn-link" style="margin-top:20px; font-weight: bold; color: #3390ec;">🏆 Guarda Classifica Globale</button>
         <button id="showPrivacyBtn" class="btn-link">Informativa sulla Privacy</button>
     </div>
 
-    <!-- Schermata Privacy Policy -->
     <div id="privacyScreen" class="screen">
         <h2>Privacy Policy</h2>
         <div class="privacy-box">
-            <p><strong>Dati raccolti:</strong> Per il funzionamento del gioco, elaboriamo esclusivamente il tuo Nome Pubblico di Telegram e il tuo ID univoco.</p>
-            <p><strong>Uso dei dati:</strong> I dati vengono utilizzati per la classifica della stanza e per memorizzare il tuo record personale nella classifica globale storica.</p>
-            <p><strong>Conservazione:</strong> I record storici (Punti massimi raggiunti) rimangono salvati su Firebase. Puoi richiedere la cancellazione in qualsiasi momento.</p>
+            <p><strong>Dati:</strong> Nome Telegram e ID. Salviamo il tuo punteggio record per la classifica storica.</p>
+            <p><strong>Diritti:</strong> Puoi rimuovere i tuoi dati in qualsiasi momento.</p>
         </div>
-        <button id="closePrivacyBtn">Ho Capito (Torna Indietro)</button>
+        <button id="deleteMyDataBtn" class="btn-danger" style="width: auto; padding: 10px 20px;">Cancella i miei record</button>
+        <button id="closePrivacyBtn">Torna Indietro</button>
     </div>
 
-    <!-- 2. Lobby di attesa -->
     <div id="lobbyScreen" class="screen">
         <h2>Lobby Stanza</h2>
         <div class="room-code" id="displayRoomCode">----</div>
-        <p>Condividi questo codice con i tuoi amici.</p>
-        <h3 style="margin-top: 20px;">Giocatori (live):</h3>
         <ul id="playersList"></ul>
-        <button id="startMultiplayerBtn" style="display:none; background-color: #4caf50;">Tutti Pronti: AVVIA!</button>
-        <p id="waitingHostText" style="display:none; font-style: italic;">In attesa che l'Host avvii la partita...</p>
+        <button id="startMultiplayerBtn" style="display:none; background-color: #4caf50;">AVVIA!</button>
     </div>
 
-    <!-- 3. Conto alla Rovescia -->
     <div id="countdownScreen" class="screen">
-        <h2>Preparati!</h2>
+        <h2>VIA!</h2>
         <div id="countdownNumber">3</div>
     </div>
 
-    <!-- 4. Gioco -->
     <div id="gameArea" class="screen">
         <div class="header-stats">
             <div id="wpmDisplay">WPM: 20</div>
             <div id="scoreDisplay">Punti: 0</div>
         </div>
-        <div id="notificationArea"></div>
-        <table id="gameTable">
-            <thead>
-                <tr><th>Scrivi</th><th>Reale</th><th>Punti</th></tr>
-            </thead>
+        <div id="notificationArea" style="color:red; font-weight:bold;"></div>
+        <table>
+            <thead><tr><th>Scrivi</th><th>Reale</th><th>Punti</th></tr></thead>
             <tbody id="tableBody"></tbody>
         </table>
-        <button id="quitGameBtn" class="btn-danger" style="margin-top: 20px;">Termina Partita Ora</button>
+        <button id="quitGameBtn" class="btn-danger">Termina Partita</button>
     </div>
 
-    <!-- 5. Classifica Finale -->
     <div id="leaderboardScreen" class="screen">
         <h2>🏆 Classifiche</h2>
-        
         <div class="tab-buttons">
-            <button id="tabRoomBtn" class="tab-btn active-tab" style="margin:0;">Questa Partita</button>
-            <button id="tabGlobalBtn" class="tab-btn" style="margin:0;">Globale Storica</button>
+            <button id="tabRoomBtn" class="tab-btn active-tab">Questa Partita</button>
+            <button id="tabGlobalBtn" class="tab-btn">Globale Storica</button>
         </div>
-
-        <div id="leaderboardContainer" style="width: 100%; margin-top: 10px;"></div>
-        <button onclick="location.reload()">Torna al menu principale</button>
+        <div id="leaderboardContainer" style="width: 100%;"></div>
+        <button onclick="location.reload()">Menu Principale</button>
     </div>
 
     <script>
-        // --- INSERISCI QUI I TUOI CODICI FIREBASE ---
-       const firebaseConfig = {
+         const firebaseConfig = {
   apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
   authDomain: "telegrafiabot.firebaseapp.com",
   databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
@@ -145,38 +118,22 @@
         const db = firebase.database();
         const auth = firebase.auth();
 
-        auth.signInAnonymously()
-            .then(() => {
-                document.getElementById('loadingText').style.display = 'none';
-                document.getElementById('createRoomBtn').disabled = false;
-                document.getElementById('joinRoomBtn').disabled = false;
-            })
-            .catch((error) => console.error("Errore Firebase:", error));
+        auth.signInAnonymously().then(() => {
+            document.getElementById('loadingText').style.display = 'none';
+            document.getElementById('createRoomBtn').disabled = false;
+            document.getElementById('joinRoomBtn').disabled = false;
+        });
 
         window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand();
-        
         const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
         const myName = tgUser ? tgUser.first_name : "User_" + Math.floor(Math.random()*1000);
+        const myId = tgUser ? tgUser.id.toString() : Math.floor(Math.random()*1000000).toString();
         document.getElementById('playerName').textContent = myName;
-        const myId = tgUser ? tgUser.id : Math.floor(Math.random()*1000000).toString();
 
         const morseDict = { 'a': '.-', 'b': '-...', 'c': '-.-.', 'd': '-..', 'e': '.', 'f': '..-.', 'g': '--.', 'h': '....', 'i': '..', 'j': '.---', 'k': '-.-', 'l': '.-..', 'm': '--', 'n': '-.', 'o': '---', 'p': '.--.', 'q': '--.-', 'r': '.-.', 's': '...', 't': '-', 'u': '..-', 'v': '...-', 'w': '.--', 'x': '-..-', 'y': '-.--', 'z': '--..' };
         const dictionary = ["casa", "albero", "telegrafo", "radio", "segnale", "morse", "treno", "nave", "cielo", "marconi", "onda", "antenna", "frequenza", "tasto", "punto", "linea", "messaggio", "codice", "rete", "suono", "spazio", "tempo"];
         
-        let roomCode = "";
-        let isHost = false;
-        let gameWords = [];
-        let currentWpm = 20;
-        let currentTone = 600;
-        let totalScore = 0; // Nuova variabile punteggio
-        let totalErrors = 0; // Mantenuta per statistiche secondarie
-        let wordIndex = 0;
-        let audioCtx;
-        let inputActive = false;
-        let gameRunning = false;
-        let knownPlayers = {}; 
-        let activeTab = "room";
+        let roomCode = "", isHost = false, gameWords = [], currentWpm = 20, currentTone = 600, totalScore = 0, wordIndex = 0, audioCtx, gameRunning = false;
 
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(el => el.classList.remove('active-screen'));
@@ -186,375 +143,101 @@
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
 
-        document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => {
-            showScreen('leaderboardScreen');
-            activeTab = "global";
-            document.getElementById('tabRoomBtn').style.display = 'none';
-            document.getElementById('tabGlobalBtn').classList.add('active-tab');
-            fetchAndRenderGlobalLeaderboard();
+        document.getElementById('deleteMyDataBtn').addEventListener('click', () => {
+            if (confirm("Cancella record globale?")) {
+                db.ref('leaderboard/' + myId).remove().then(() => { alert("Dati cancellati."); showScreen('setupScreen'); });
+            }
         });
 
-        function generateRoomCode() { return Math.floor(1000 + Math.random() * 9000).toString(); }
-        function shuffleWords(numWords) { return dictionary.sort(() => 0.5 - Math.random()).slice(0, numWords); }
-        
-        function showNotification(msg) {
-            const notifArea = document.getElementById('notificationArea');
-            notifArea.textContent = msg;
-            setTimeout(() => { notifArea.textContent = ""; }, 4000);
-        }
-
-        // -- LOGICA LOBBY --
         document.getElementById('createRoomBtn').addEventListener('click', () => {
             currentWpm = parseInt(document.getElementById('startWpmInput').value);
             currentTone = parseInt(document.getElementById('toneInput').value);
-            roomCode = generateRoomCode();
+            roomCode = Math.floor(1000 + Math.random() * 9000).toString();
             isHost = true;
-            gameWords = shuffleWords(10); 
-
-            db.ref('rooms/' + roomCode).set({
-                status: 'waiting', wpm: currentWpm, tone: currentTone, words: gameWords
-            });
+            gameWords = dictionary.sort(() => 0.5 - Math.random()).slice(0, 10);
+            db.ref('rooms/' + roomCode).set({ status: 'waiting', wpm: currentWpm, tone: currentTone, words: gameWords });
             joinRoomLogic();
-        });
-
-        document.getElementById('joinRoomBtn').addEventListener('click', () => {
-            roomCode = document.getElementById('joinCodeInput').value;
-            if (roomCode.length !== 4) return alert("Codice non valido.");
-            
-            db.ref('rooms/' + roomCode).once('value', snapshot => {
-                if (snapshot.exists()) {
-                    let roomData = snapshot.val();
-                    if(roomData.status !== 'waiting') return alert("Partita già iniziata!");
-                    currentWpm = roomData.wpm; currentTone = roomData.tone; gameWords = roomData.words;
-                    isHost = false;
-                    joinRoomLogic();
-                } else {
-                    alert("Stanza non trovata!");
-                }
-            });
         });
 
         function joinRoomLogic() {
             showScreen('lobbyScreen');
             document.getElementById('displayRoomCode').textContent = roomCode;
-
-            const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-            
-            myPlayerRef.set({
-                name: myName, wpm: currentWpm, score: 0, errors: 0, finished: false, abandoned: false
-            });
-
-            myPlayerRef.onDisconnect().update({ abandoned: true, finished: true });
-
+            db.ref(`rooms/${roomCode}/players/${myId}`).set({ name: myName, wpm: currentWpm, score: 0, finished: false, abandoned: false });
+            db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().update({ abandoned: true, finished: true });
             if (isHost) document.getElementById('startMultiplayerBtn').style.display = 'block';
-            else document.getElementById('waitingHostText').style.display = 'block';
-
-            db.ref(`rooms/${roomCode}/players`).on('value', snapshot => {
-                const playersList = document.getElementById('playersList');
-                if(playersList) playersList.innerHTML = '';
-                
-                let players = [];
-                snapshot.forEach(child => {
-                    let p = child.val();
-                    let pid = child.key;
-                    players.push(p);
-
-                    if (playersList) {
-                        let li = document.createElement('li');
-                        li.textContent = "🟢 " + p.name;
-                        playersList.appendChild(li);
-                    }
-
-                    if (p.abandoned && knownPlayers[pid] && !knownPlayers[pid].abandoned && pid !== myId) {
-                        showNotification(`⚠️ ${p.name} si è ritirato!`);
-                    }
-                    knownPlayers[pid] = p;
-                });
-
-                if (document.getElementById('leaderboardScreen').classList.contains('active-screen') && activeTab === "room") {
-                    renderRoomLeaderboard(players);
-                }
+            db.ref(`rooms/${roomCode}/players`).on('value', snap => {
+                const list = document.getElementById('playersList'); list.innerHTML = '';
+                snap.forEach(c => { let p = c.val(); list.innerHTML += `<li>🟢 ${p.name}</li>`; });
             });
-
-            db.ref(`rooms/${roomCode}/status`).on('value', snapshot => {
-                if (snapshot.val() === 'countdown') startCountdownSequence();
-            });
+            db.ref(`rooms/${roomCode}/status`).on('value', snap => { if (snap.val() === 'countdown') startCountdownSequence(); });
         }
 
-        document.getElementById('startMultiplayerBtn').addEventListener('click', () => {
-            db.ref(`rooms/${roomCode}/status`).set('countdown');
-        });
+        document.getElementById('startMultiplayerBtn').addEventListener('click', () => db.ref(`rooms/${roomCode}/status`).set('countdown'));
 
-        // -- LOGICA GIOCO E AUDIO --
         function startCountdownSequence() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
-            document.getElementById('scoreDisplay').textContent = `Punti: 0`;
-            showScreen('gameArea');
-            showScreen('countdownScreen');
-            gameRunning = true;
-            
+            showScreen('countdownScreen'); gameRunning = true;
             let count = 3;
-            const countdownEl = document.getElementById('countdownNumber');
             const interval = setInterval(() => {
-                if (count > 0) {
-                    countdownEl.textContent = count; playBeep(currentTone, 0.2); count--;
-                } else {
+                if (count > 0) { document.getElementById('countdownNumber').textContent = count--; }
+                else {
                     clearInterval(interval);
-                    countdownEl.textContent = "VIA!"; playBeep(currentTone + 200, 0.5);
-                    setTimeout(() => {
-                        if (!gameRunning) return;
-                        showScreen('gameArea');
-                        setTimeout(() => { if (gameRunning) createRow(); }, 1000); 
-                    }, 500); 
+                    showScreen('gameArea');
+                    setTimeout(createRow, 1000);
                 }
             }, 1000);
         }
 
-        function playBeep(freq, duration) {
-            if (!audioCtx) return;
-            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-            osc.frequency.value = freq; osc.connect(gain); gain.connect(audioCtx.destination);
-            const time = audioCtx.currentTime;
-            gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(1, time + 0.01);
-            gain.gain.setValueAtTime(1, time + duration - 0.01); gain.gain.linearRampToValueAtTime(0, time + duration);
-            osc.start(time); osc.stop(time + duration);
-        }
-
-        function playMorseAudio(text, wpm) {
-            if (!audioCtx) return;
-            const unitDuration = 1.2 / wpm; let time = audioCtx.currentTime;
+        function playMorse(text) {
+            const unit = 1.2 / currentWpm;
+            let time = audioCtx.currentTime;
             for (let char of text) {
                 if (morseDict[char]) {
-                    for (let symbol of morseDict[char]) {
+                    for (let s of morseDict[char]) {
                         const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
                         osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
-                        const duration = (symbol === '-') ? (3 * unitDuration) : (1 * unitDuration);
-                        gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(1, time + 0.005);
-                        gain.gain.setValueAtTime(1, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
-                        osc.start(time); osc.stop(time + duration);
-                        time += duration + unitDuration; 
+                        const d = (s === '-') ? 3 * unit : unit;
+                        gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(1, time + 0.01);
+                        gain.gain.setValueAtTime(1, time + d - 0.01); gain.gain.linearRampToValueAtTime(0, time + d);
+                        osc.start(time); osc.stop(time + d);
+                        time += d + unit;
                     }
-                    time += 2 * unitDuration; 
+                    time += 2 * unit;
                 }
             }
-        }
-
-        // Nuovo algoritmo per il punteggio posizionale
-        function calculatePoints(target, user) {
-            if (target === user) return 10; // Parola perfetta = 10 punti fissi
-            
-            let partialScore = 0;
-            const minLen = Math.min(target.length, user.length);
-            
-            for (let i = 0; i < minLen; i++) {
-                if (target[i] === user[i]) {
-                    partialScore += 2; // 2 punti per ogni carattere nella posizione corretta
-                }
-            }
-            return partialScore;
-        }
-
-        // Mantenuto per calcolare penalità puramente statistiche o in backend se serve
-        function getLevenshteinDistance(a, b) {
-            const matrix = [];
-            for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-            for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-            for (let i = 1; i <= b.length; i++) {
-                for (let j = 1; j <= a.length; j++) {
-                    if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1];
-                    else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
-                }
-            }
-            return matrix[b.length][a.length];
         }
 
         function createRow() {
-            if (!gameRunning) return;
-            if (wordIndex >= gameWords.length) {
-                finishGame(false);
-                return;
-            }
-
+            if (wordIndex >= gameWords.length) return finishGame(false);
             const tr = document.createElement('tr');
-            const tdInput = document.createElement('td');
-            const inputField = document.createElement('input');
-            inputField.type = "text"; inputField.className = "game-input";
-            inputField.autocomplete = "off"; inputField.autocapitalize = "none";
-            tdInput.appendChild(inputField);
-
-            const tdReal = document.createElement('td'); const tdScore = document.createElement('td');
-            tr.appendChild(tdInput); tr.appendChild(tdReal); tr.appendChild(tdScore);
+            tr.innerHTML = '<td><input type="text" class="game-input"></td><td></td><td></td>';
             document.getElementById('tableBody').appendChild(tr);
-
-            const currentWord = gameWords[wordIndex];
-            playMorseAudio(currentWord, currentWpm);
-            inputField.focus(); inputActive = true;
-
-            inputField.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && inputActive && gameRunning) {
-                    const userWord = inputField.value.trim().toLowerCase();
-                    if (userWord === "") return;
-
-                    inputActive = false; 
-                    
-                    const points = calculatePoints(currentWord, userWord);
-                    const errors = getLevenshteinDistance(currentWord, userWord);
-                    
-                    if (currentWord === userWord) {
-                        currentWpm += 2; 
-                        tdScore.style.color = "green"; 
-                        tdScore.innerHTML = `<b>+${points}</b>`;
-                    } else {
-                        currentWpm -= 2; 
-                        tdScore.style.color = (points > 0) ? "#ff9800" : "red";
-                        tdScore.innerHTML = `<b>+${points}</b>`;
-                    }
-                    if (currentWpm < 5) currentWpm = 5; 
-                    
-                    totalScore += points;
-                    totalErrors += errors;
-
-                    inputField.readOnly = true; 
-                    tdReal.textContent = currentWord; 
-                    
-                    document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
-                    document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
-
-                    db.ref(`rooms/${roomCode}/players/${myId}`).update({ 
-                        wpm: currentWpm, 
-                        score: totalScore, 
-                        errors: totalErrors 
-                    });
-                    
-                    wordIndex++; setTimeout(createRow, 1000); 
+            const input = tr.querySelector('input');
+            const word = gameWords[wordIndex];
+            playMorse(word);
+            input.focus();
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const val = input.value.toLowerCase();
+                    let pts = 0;
+                    for(let i=0; i<Math.min(val.length, word.length); i++) if(val[i] === word[i]) pts += 2;
+                    if (val === word) pts = 10;
+                    totalScore += pts;
+                    tr.cells[1].textContent = word;
+                    tr.cells[2].textContent = pts;
+                    document.getElementById('scoreDisplay').textContent = "Punti: " + totalScore;
+                    db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore });
+                    wordIndex++; setTimeout(createRow, 1000);
                 }
             });
         }
 
-        document.getElementById('quitGameBtn').addEventListener('click', () => {
-            if (audioCtx) { audioCtx.suspend(); }
-            finishGame(true);
-        });
-
-        // -- FINE E SALVATAGGIO DEI DATI GLOBALI --
         function finishGame(isAbandoned) {
             gameRunning = false;
             showScreen('leaderboardScreen');
-            activeTab = "room";
-            
-            const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-            playerRef.onDisconnect().cancel(); 
-            
-            const finalState = { finished: true, abandoned: isAbandoned, wpm: currentWpm, score: totalScore, errors: totalErrors };
-            playerRef.update(finalState);
-            
-            // AGGIORNAMENTO CLASSIFICA GLOBALE STORICA (Basata ora sul punteggio massimo)
-            if (!isAbandoned) {
-                const globalUserRef = db.ref(`leaderboard/${myId}`);
-                globalUserRef.once('value', snapshot => {
-                    let recordExists = snapshot.exists();
-                    let oldData = snapshot.val();
-                    
-                    if (!recordExists || totalScore > oldData.score || (totalScore === oldData.score && currentWpm > oldData.wpm)) {
-                        globalUserRef.set({
-                            name: myName,
-                            score: totalScore,
-                            wpm: currentWpm,
-                            date: new Date().toLocaleDateString('it-IT')
-                        });
-                    }
-                });
-            }
-
-            db.ref(`rooms/${roomCode}/players`).once('value', snapshot => {
-                let players = [];
-                snapshot.forEach(child => players.push(child.val()));
-                renderRoomLeaderboard(players);
-            });
-        }
-
-        // --- GESTIONE DEI TAB NELLA CLASSIFICA ---
-        document.getElementById('tabRoomBtn').addEventListener('click', () => {
-            activeTab = "room";
-            document.getElementById('tabRoomBtn').classList.add('active-tab');
-            document.getElementById('tabGlobalBtn').classList.remove('active-tab');
-            
-            db.ref(`rooms/${roomCode}/players`).once('value', snapshot => {
-                let players = [];
-                snapshot.forEach(child => players.push(child.val()));
-                renderRoomLeaderboard(players);
-            });
-        });
-
-        document.getElementById('tabGlobalBtn').addEventListener('click', () => {
-            activeTab = "global";
-            document.getElementById('tabGlobalBtn').classList.add('active-tab');
-            document.getElementById('tabRoomBtn').classList.remove('active-tab');
-            fetchAndRenderGlobalLeaderboard();
-        });
-
-        // Mostra la classifica della partita corrente
-        function renderRoomLeaderboard(players) {
-            // Regola: Vince chi ha più punti, a parità di punti vince chi ha più WPM
-            players.sort((a, b) => {
-                if (a.abandoned && !b.abandoned) return 1;
-                if (!a.abandoned && b.abandoned) return -1;
-                if (b.score !== a.score) return b.score - a.score;
-                return b.wpm - a.wpm;
-            });
-
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<h3>Partita Corrente</h3>';
-
-            players.forEach((player, index) => {
-                const row = document.createElement('div');
-                row.className = 'leaderboard-row';
-                let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                let status = player.abandoned ? "(Ritirato ❌)" : (!player.finished ? "(In gioco...)" : "");
-                if (player.abandoned) medal = "💀";
-                
-                row.innerHTML = `
-                    <span>${medal} ${player.name} <small style="color:gray">${status}</small></span>
-                    <span style="text-align: right;"><b>${player.score} Punti</b><br><small style="color:gray;">${player.wpm} WPM</small></span>
-                `;
-                container.appendChild(row);
-            });
-        }
-
-        // Recupera e mostra la classifica storica globale
-        function fetchAndRenderGlobalLeaderboard() {
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<p>Caricamento record globali...</p>';
-
-            db.ref('leaderboard').once('value', snapshot => {
-                let players = [];
-                snapshot.forEach(child => {
-                    players.push(child.val());
-                });
-
-                players.sort((a, b) => {
-                    if (b.score !== a.score) return b.score - a.score;
-                    return b.wpm - a.wpm;
-                });
-
-                container.innerHTML = '<h3>🏆 Classifica Record Storici</h3>';
-                if (players.length === 0) {
-                    container.innerHTML += '<p style="color:gray; font-style:italic;">Ancora nessun record salvato.</p>';
-                    return;
-                }
-
-                players.forEach((player, index) => {
-                    const row = document.createElement('div');
-                    row.className = 'leaderboard-row';
-                    let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                    
-                    row.innerHTML = `
-                        <span>${medal} ${player.name} <small style="color:gray; font-size:0.8em;">(${player.date})</small></span>
-                        <span style="text-align: right;"><b>${player.score} Punti</b><br><small style="color:gray;">${player.wpm} WPM</small></span>
-                    `;
-                    container.appendChild(row);
-                });
+            db.ref(`rooms/${roomCode}/players/${myId}`).update({ finished: true, abandoned: isAbandoned });
+            if (!isAbandoned) db.ref('leaderboard/' + myId).once('value', s => {
+                if (!s.exists() || totalScore > s.val().score) db.ref('leaderboard/' + myId).set({ name: myName, score: totalScore, date: new Date().toLocaleDateString() });
             });
         }
     </script>
