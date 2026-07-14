@@ -6,103 +6,154 @@
     <title>Sfida Telegrafia Multiplayer</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
-    <!-- Librerie Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     
     <style>
-        body { font-family: Arial, sans-serif; background-color: var(--tg-theme-bg-color, #ffffff); color: var(--tg-theme-text-color, #000000); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-        .screen { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 400px; margin-top: 20px; }
+        :root {
+            --bg-color: var(--tg-theme-bg-color, #ffffff);
+            --text-color: var(--tg-theme-text-color, #000000);
+            --hint-color: var(--tg-theme-hint-color, #999999);
+            --link-color: var(--tg-theme-link-color, #3390ec);
+            --btn-color: var(--tg-theme-button-color, #3390ec);
+            --btn-text-color: var(--tg-theme-button-text-color, #ffffff);
+            --sec-bg-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            margin: 0; 
+            padding: 15px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            text-align: center; 
+            overflow-x: hidden;
+        }
+        
+        .screen { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 500px; margin-top: 10px; }
         .active-screen { display: flex; }
-        button { background-color: var(--tg-theme-button-color, #3390ec); color: var(--tg-theme-button-text-color, #ffffff); border: none; padding: 12px 25px; font-size: 1.1em; border-radius: 8px; cursor: pointer; margin-top: 10px; width: 100%; }
+        
+        button { background-color: var(--btn-color); color: var(--btn-text-color); border: none; padding: 12px 20px; font-size: 1.1em; border-radius: 8px; cursor: pointer; margin-top: 10px; width: 100%; font-weight: bold; transition: opacity 0.2s;}
+        button:active { opacity: 0.8; }
         button:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
-        .btn-secondary { background-color: #ff9800; }
-        .btn-danger { background-color: #d32f2f; }
-        .btn-link { background: none; color: #888; text-decoration: underline; padding: 5px; font-size: 0.9em; margin-top: 15px; border: none; cursor: pointer; }
         
-        input[type="number"], input[type="text"] { padding: 10px; font-size: 1.1em; width: 90%; text-align: center; margin: 5px 0; border: 1px solid #ccc; border-radius: 5px; }
-        .settings-row { display: flex; justify-content: center; align-items: center; width: 100%; margin-bottom: 10px; gap: 10px; }
-        #countdownNumber { font-size: 5em; font-weight: bold; color: #ff9800; margin: 20px 0; }
-        .room-code { font-size: 2em; letter-spacing: 5px; font-weight: bold; color: #3390ec; margin: 10px 0; }
+        .btn-secondary { background-color: #ff9800; color: #fff; }
+        .btn-danger { background-color: #d32f2f; color: #fff; }
+        .btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 5px; font-size: 0.9em; margin-top: 15px; border: none; cursor: pointer; }
         
-        .header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px; font-weight: bold; font-size: 1.2em; }
+        input[type="number"], input[type="text"] { padding: 12px; font-size: 1.1em; width: calc(100% - 24px); text-align: center; margin: 5px 0; border: 1px solid var(--hint-color); border-radius: 8px; background-color: var(--bg-color); color: var(--text-color); }
+        .settings-row { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; gap: 10px; }
+        .settings-row > div { width: 50%; }
+        
+        #countdownNumber { font-size: 6em; font-weight: bold; color: #ff9800; margin: 40px 0; }
+        .room-code { font-size: 2.5em; letter-spacing: 5px; font-weight: bold; color: var(--link-color); margin: 10px 0; }
+        
+        .header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 15px; font-weight: bold; font-size: 1.2em; background: var(--sec-bg-color); padding: 10px; border-radius: 8px; box-sizing: border-box;}
         #scoreDisplay { color: #4caf50; }
         
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th, td { border: 1px solid var(--tg-theme-hint-color, #ccc); padding: 8px; text-align: center; }
-        th { background-color: var(--tg-theme-secondary-bg-color, #f0f0f0); }
-        input.game-input { width: 90%; border: 1px solid #007bff; }
-        input:read-only { border: none; background: transparent; text-align: center; }
+        th, td { border: 1px solid var(--hint-color); padding: 10px 5px; text-align: center; }
+        th { background-color: var(--sec-bg-color); }
+        input.game-input { width: 90%; border: 2px solid var(--link-color); outline: none; }
+        input:read-only { border: none; background: transparent; text-align: center; font-weight: bold; }
         
-        #playersList { list-style: none; padding: 0; width: 100%; text-align: left; }
-        #playersList li { padding: 8px; border-bottom: 1px solid #eee; }
-        .leaderboard-row { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #ccc; width: 100%; align-items: center; }
-        #loadingText { font-style: italic; color: #ff9800; margin-bottom: 15px; }
+        .box-panel { border: 1px solid var(--hint-color); padding: 15px; border-radius: 10px; width: 100%; margin-bottom: 15px; box-sizing: border-box; background: var(--sec-bg-color); }
+        .box-panel h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; }
+        
+        .rooms-list { list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto; text-align: left; }
+        .rooms-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 5px; border-radius: 5px; }
+        .join-btn-small { width: auto; padding: 6px 12px; font-size: 0.9em; margin: 0; }
+        
+        #playersList { list-style: none; padding: 0; width: 100%; text-align: left; background: var(--sec-bg-color); border-radius: 8px; overflow: hidden;}
+        #playersList li { padding: 12px; border-bottom: 1px solid var(--hint-color); font-weight: bold; }
+        
+        .leaderboard-row { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--hint-color); width: 100%; align-items: center; box-sizing: border-box; background: var(--sec-bg-color); margin-bottom: 5px; border-radius: 5px;}
+        
+        #loadingText { font-style: italic; color: #ff9800; margin-bottom: 15px; font-weight: bold; }
         #notificationArea { color: #d32f2f; font-weight: bold; margin-bottom: 15px; min-height: 20px; }
         
-        .privacy-box { text-align: left; font-size: 0.9em; line-height: 1.5; background: var(--tg-theme-secondary-bg-color, #f9f9f9); padding: 15px; border-radius: 8px; border: 1px solid #ccc; max-height: 300px; overflow-y: auto; }
+        .privacy-box { text-align: left; font-size: 0.9em; line-height: 1.5; background: var(--sec-bg-color); padding: 15px; border-radius: 8px; border: 1px solid var(--hint-color); max-height: 300px; overflow-y: auto; }
         .tab-buttons { display: flex; width: 100%; gap: 10px; margin-bottom: 15px; }
-        .tab-btn { background-color: #eee; color: #333; }
-        .tab-btn.active-tab { background-color: #3390ec; color: #fff; }
+        .tab-btn { background-color: var(--hint-color); color: var(--bg-color); }
+        .tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); }
     </style>
 </head>
 <body>
 
-    <!-- 1. Setup (Lobby Iniziale) -->
-    <div id="setupScreen" class="screen active-screen">
-        <h2>Ciao <span id="playerName">Giocatore</span>! 📻</h2>
-        <p id="loadingText">Connessione sicura al server in corso...</p>
+    <div id="errorScreen" class="screen">
+        <h2>Accesso Negato 🛑</h2>
+        <p>Questa applicazione è progettata per funzionare <b>esclusivamente</b> all'interno di Telegram.</p>
+        <p>Apri il bot su Telegram per giocare!</p>
+    </div>
 
-        <div style="border: 1px solid #ccc; padding: 15px; border-radius: 10px; width: 100%; margin-bottom: 15px;">
+    <div id="setupScreen" class="screen">
+        <h2>Ciao <span id="playerName">Giocatore</span>! 📻</h2>
+        <p id="loadingText">Connessione sicura in corso...</p>
+
+        <div class="box-panel">
             <h3>Crea Nuova Sfida</h3>
             <div class="settings-row">
-                <label>WPM:</label> <input type="number" id="startWpmInput" value="20" min="5" max="50" style="width:60px;">
-                <label>Hz:</label> <input type="number" id="toneInput" value="600" min="300" max="1000" step="50" style="width:60px;">
+                <div><label>WPM:</label> <input type="number" id="startWpmInput" value="20" min="5" max="50"></div>
+                <div><label>Hz:</label> <input type="number" id="toneInput" value="600" min="300" max="1000" step="50"></div>
             </div>
             <button id="createRoomBtn" disabled>Crea Stanza</button>
         </div>
 
-        <div style="border: 1px solid #ccc; padding: 15px; border-radius: 10px; width: 100%;">
-            <h3>Unisciti a una Sfida</h3>
-            <input type="text" id="joinCodeInput" placeholder="Codice Stanza" maxlength="4">
+        <div class="box-panel">
+            <h3>Partite in Attesa ⏳</h3>
+            <ul id="waitingRoomsList" class="rooms-list">
+                <li style="justify-content: center; color: var(--hint-color);">Nessuna stanza in attesa.</li>
+            </ul>
+        </div>
+        
+        <div class="box-panel">
+            <h3>Partite in Corso 🚀</h3>
+            <ul id="activeRoomsList" class="rooms-list">
+                <li style="justify-content: center; color: var(--hint-color);">Nessuna partita in corso.</li>
+            </ul>
+        </div>
+
+        <div class="box-panel">
+            <h3>Unisciti con Codice Privato</h3>
+            <input type="text" id="joinCodeInput" placeholder="Es. 1234" maxlength="4">
             <button id="joinRoomBtn" class="btn-secondary" disabled>Entra</button>
         </div>
         
-        <button id="viewGlobalLeaderboardBtn" class="btn-link" style="margin-top:20px; font-weight: bold; color: #3390ec;">🏆 Guarda Classifica Globale</button>
-        <button id="showPrivacyBtn" class="btn-link">Informativa sulla Privacy</button>
+        <button id="viewGlobalLeaderboardBtn" class="btn-link" style="font-weight: bold; font-size: 1.1em;">🏆 Classifica Globale</button>
+        <button id="showPrivacyBtn" class="btn-link">Privacy & Gestione Account</button>
     </div>
 
-    <!-- Schermata Privacy Policy (Aggiornata) -->
-<div id="privacyScreen" class="screen">
-    <h2>Privacy Policy</h2>
-    <div class="privacy-box">
-        <p><strong>Dati raccolti:</strong> Elaboriamo il tuo Nome Pubblico di Telegram e il tuo ID univoco.</p>
-        <p><strong>Classifica Globale:</strong> Memorizziamo in modo permanente il tuo punteggio migliore (Record) nella nostra "Classifica Globale Storica". Questo dato include il tuo nome, il punteggio raggiunto e la data del record.</p>
-        <p><strong>Uso dei dati:</strong> I dati vengono salvati per permettere la competizione tra gli utenti nel tempo. Non vengono mai ceduti a terzi né utilizzati per scopi pubblicitari o di profilazione.</p>
-        <p><strong>I tuoi diritti:</strong> In conformità al GDPR, puoi richiedere la cancellazione dei tuoi dati (il tuo record storico) contattando l'amministratore del bot. L'app non utilizza cookie di tracciamento.</p>
+    <div id="privacyScreen" class="screen">
+        <h2>Privacy & Dati</h2>
+        <div class="privacy-box">
+            <p><strong>Dati raccolti:</strong> Elaboriamo il tuo Nome Pubblico di Telegram e il tuo ID univoco.</p>
+            <p><strong>Classifica Globale:</strong> Memorizziamo permanentemente il tuo record storico (Nome, Punteggio, Data).</p>
+            <p><strong>Cancellazione Dati:</strong> Puoi eliminare immediatamente il tuo record dai nostri database usando il pulsante qui sotto.</p>
+        </div>
+        <button id="deleteDataBtn" class="btn-danger" style="margin-top: 15px;">🗑️ Elimina il mio Record</button>
+        <button id="closePrivacyBtn">Torna Indietro</button>
     </div>
-    <button id="closePrivacyBtn">Ho Capito (Torna Indietro)</button>
-</div>
 
-    <!-- 2. Lobby di attesa -->
     <div id="lobbyScreen" class="screen">
         <h2>Lobby Stanza</h2>
         <div class="room-code" id="displayRoomCode">----</div>
-        <p>Condividi questo codice con i tuoi amici.</p>
-        <h3 style="margin-top: 20px;">Giocatori (live):</h3>
+        <p>Condividi il codice o fai unire gli amici dalla bacheca.</p>
+        <h3 style="margin-top: 20px;">Giocatori pronti:</h3>
         <ul id="playersList"></ul>
         <button id="startMultiplayerBtn" style="display:none; background-color: #4caf50;">Tutti Pronti: AVVIA!</button>
         <p id="waitingHostText" style="display:none; font-style: italic;">In attesa che l'Host avvii la partita...</p>
+        <button id="leaveLobbyBtn" class="btn-danger" style="margin-top: 20px;">Esci dalla Stanza</button>
     </div>
 
-    <!-- 3. Conto alla Rovescia -->
     <div id="countdownScreen" class="screen">
         <h2>Preparati!</h2>
         <div id="countdownNumber">3</div>
     </div>
 
-    <!-- 4. Gioco -->
     <div id="gameArea" class="screen">
         <div class="header-stats">
             <div id="wpmDisplay">WPM: 20</div>
@@ -115,10 +166,9 @@
             </thead>
             <tbody id="tableBody"></tbody>
         </table>
-        <button id="quitGameBtn" class="btn-danger" style="margin-top: 20px;">Termina Partita Ora</button>
+        <button id="quitGameBtn" class="btn-danger" style="margin-top: 20px;">Abbandona Partita</button>
     </div>
 
-    <!-- 5. Classifica Finale -->
     <div id="leaderboardScreen" class="screen">
         <h2>🏆 Classifiche</h2>
         
@@ -128,65 +178,219 @@
         </div>
 
         <div id="leaderboardContainer" style="width: 100%; margin-top: 10px;"></div>
-        <button onclick="location.reload()">Torna al menu principale</button>
+        <button onclick="location.reload()">Torna al Menu Principale</button>
     </div>
 
     <script>
-        // --- INSERISCI QUI I TUOI CODICI FIREBASE ---
-       const firebaseConfig = {
-  apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
-  authDomain: "telegrafiabot.firebaseapp.com",
-  databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "telegrafiabot",
-  storageBucket: "telegrafiabot.firebasestorage.app",
-  messagingSenderId: "575790683327",
-  appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
-};
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        const auth = firebase.auth();
-
-        auth.signInAnonymously()
-            .then(() => {
-                document.getElementById('loadingText').style.display = 'none';
-                document.getElementById('createRoomBtn').disabled = false;
-                document.getElementById('joinRoomBtn').disabled = false;
-            })
-            .catch((error) => console.error("Errore Firebase:", error));
-
+        // Controllo Telegram Web App
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
         
         const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
-        const myName = tgUser ? tgUser.first_name : "User_" + Math.floor(Math.random()*1000);
-        document.getElementById('playerName').textContent = myName;
-        const myId = tgUser ? tgUser.id : Math.floor(Math.random()*1000000).toString();
+        
+        // Scommenta la riga qui sotto per forzare l'accesso solo da Telegram in produzione:
+        // if (!tgUser) { document.getElementById('errorScreen').classList.add('active-screen'); throw new Error("Non in Telegram"); }
 
+        // --- CONFIGURAZIONE FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
+            authDomain: "telegrafiabot.firebaseapp.com",
+            databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "telegrafiabot",
+            storageBucket: "telegrafiabot.firebasestorage.app",
+            messagingSenderId: "575790683327",
+            appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const auth = firebase.auth();
+
+        // Vocabolario Esteso (> 5 caratteri)
+        const masterDictionary = [
+            "abbandono", "abbaglio", "abitare", "accademia", "accendere", "accettare", "accordo", "affetto", "aggettivo", "aggiungere",
+            "albergo", "allegria", "ambiente", "amicizia", "ammirare", "analizzare", "animale", "antenna", "apertura", "apparecchio",
+            "archivio", "argomento", "armonia", "arrivare", "articolo", "ascoltare", "aspetto", "assoluto", "astratto", "atmosfera",
+            "attraverso", "aumento", "autunno", "avanzare", "avventura", "bambino", "bandiera", "barriera", "battaglia", "batteria",
+            "bellezza", "bersaglio", "binario", "biscotto", "bolletta", "bottiglia", "brillante", "calcolo", "campagna", "campione",
+            "cancello", "canzone", "capitale", "carattere", "carrozza", "cartella", "castello", "cavaliere", "cellulare", "centrale",
+            "certezza", "chiamata", "chiaro", "chimica", "chitarra", "cilindro", "circuito", "cittadino", "classifica", "clinica",
+            "collega", "colonna", "comando", "commercio", "compagno", "complesso", "comunicare", "concerto", "condizione", "conferma",
+            "conoscere", "consiglio", "contatto", "contesto", "continuo", "controllo", "copertura", "coraggio", "corrente", "costante",
+            "creazione", "crescere", "cristallo", "cultura", "custodia", "davanti", "decisione", "dedicare", "denaro", "deserto",
+            "destino", "dettaglio", "dialogo", "differenza", "difficile", "dinamico", "direzione", "discorso", "disegno", "distanza",
+            "documento", "domanda", "dominio", "dovere", "dozzina", "eccezione", "economia", "edizione", "effetto", "efficace",
+            "elefante", "elegante", "elemento", "energia", "entrare", "episodio", "equilibrio", "errore", "esempio", "esercizio",
+            "esperienza", "esplorare", "esprimere", "esterno", "estremo", "fabbrica", "famiglia", "fantasia", "fascino", "faticoso",
+            "fenomeno", "ferrovia", "fiducia", "figura", "filosofia", "finestra", "fiorentino", "fisica", "flusso", "foresta",
+            "formaggio", "formula", "fortuna", "forzare", "fotografia", "fragile", "fratello", "frequenza", "frontiera", "funzione",
+            "galleria", "garanzia", "generale", "genitore", "geografia", "gestione", "giardino", "giocare", "giornale", "giovane",
+            "giudizio", "giustizia", "globale", "governo", "graduale", "grafico", "grandezza", "gravità", "guardare", "guidare",
+            "identità", "illusione", "immagine", "imparare", "impegno", "impianto", "importante", "impresa", "incendio", "incidente",
+            "incontro", "indagare", "indicare", "indietro", "industria", "infanzia", "inferiore", "infinito", "informare", "ingresso",
+            "iniziale", "innocente", "insegnare", "insieme", "intenso", "interesse", "interno", "intorno", "inverno", "invitare",
+            "ipotesi", "ispirare", "istituto", "istante", "italiano", "laboratorio", "lacrima", "lampada", "lasciare", "lavorare",
+            "legame", "leggere", "lettera", "lettura", "libertà", "linguaggio", "liquido", "livello", "logica", "lontano",
+            "macchina", "maestro", "maggiore", "malattia", "mangiare", "maniera", "mantenere", "manuale", "marconi", "margine",
+            "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "minatore",
+            "miniera", "minimo", "minuto", "miracolo", "misura", "mistero", "modello", "moderno", "momento", "montagna",
+            "morale", "morbido", "motore", "movimento", "musica", "nascere", "nascosto", "natura", "naturale", "navigare",
+            "nazione", "necessario", "nemico", "nessuno", "niente", "normale", "notizia", "nuvola", "obiettivo", "obbligo",
+            "oceano", "occhio", "odiare", "offrire", "oggetto", "ognuno", "opinione", "opposto", "orario", "orecchio",
+            "organico", "orgoglio", "oriente", "origine", "orizzonte", "osservare", "ostacolo", "ottenere", "ottimo", "padre",
+            "padrone", "paesaggio", "pagina", "palazzo", "panchina", "panorama", "paradiso", "paragrafo", "parente", "parlare",
+            "parola", "partecipare", "partenza", "particolare", "passaggio", "passato", "passione", "patria", "paura", "pazienza",
+            "peccato", "pensare", "pensiero", "percorso", "perdere", "perfetto", "pericolo", "periodo", "persona", "pesante",
+            "piacere", "pianeta", "pianta", "piazza", "piccolo", "pietra", "pittura", "pianura", "poesia", "politica",
+            "popolo", "portare", "posizione", "possibile", "potenza", "potere", "pratica", "preciso", "preferire", "pregare",
+            "premio", "prendere", "preparare", "presenza", "pressione", "presto", "prevedere", "principio", "privato", "problema",
+            "processo", "prodotto", "produrre", "professore", "profilo", "profondo", "progetto", "programma", "promessa", "pronto",
+            "proposito", "proprio", "prossimo", "prova", "pubblico", "pulito", "puntare", "qualche", "qualità", "qualsiasi",
+            "quantità", "quartiere", "questione", "questo", "quiete", "racconto", "ragazza", "ragazzo", "raggio", "ragione",
+            "rapido", "rapporto", "rappresentare", "realtà", "recente", "regione", "regola", "relazione", "religione", "rendere",
+            "resistere", "respiro", "resto", "ricchezza", "ricerca", "ricevere", "richiesta", "ricordare", "ricordo", "ridurre",
+            "riempire", "rifiutare", "riflesso", "riguardo", "rimanere", "rimedio", "ringraziare", "ripetere", "riposo", "risolvere",
+            "risorse", "rispetto", "rispondere", "risposta", "risultato", "ritardo", "ritmo", "ritorno", "riunione", "riuscire",
+            "rivista", "rompere", "rovina", "rumore", "ruota", "sabbia", "sacrificio", "salute", "salvare", "sangue",
+            "sapere", "sbaglio", "scambio", "scappare", "scarpa", "scatola", "scegliere", "scelta", "scena", "scendere",
+            "schermo", "scienza", "scoperta", "scoprire", "scopo", "scorrere", "scrittore", "scrivere", "scuola", "scusare",
+            "secolo", "secondo", "segnalare", "segnale", "segreto", "seguire", "sembrare", "semplice", "senso", "sentimento",
+            "sentire", "separare", "serata", "serio", "servizio", "settimana", "settore", "sfondo", "sforzo", "sguardo",
+            "sicurezza", "sicuro", "significato", "signore", "silenzio", "simbolo", "sinistra", "sindaco", "sistema", "situazione",
+            "sociale", "società", "soffrire", "sogno", "soldato", "sole", "solito", "soltanto", "soluzione", "sonno",
+            "sorpresa", "sorridere", "sorriso", "sospendere", "sostenere", "sotto", "spazio", "specchio", "speciale", "speranza",
+            "sperare", "spesa", "spettacolo", "spiegare", "spirito", "splendido", "spostare", "squadra", "stagione", "stampa",
+            "stanco", "stanza", "stazione", "stella", "stesso", "storia", "storico", "strada", "straniero", "strano",
+            "straordinario", "stretto", "strumento", "studiare", "studio", "stupido", "subire", "successo", "suono", "superare",
+            "superiore", "sviluppo", "tavola", "teatro", "tecnica", "telegrafo", "telefono", "televisione", "temperatura", "tempesta",
+            "tempo", "tendenza", "tenere", "tensione", "teoria", "termine", "terreno", "territorio", "testa", "testo",
+            "timore", "titolo", "toccare", "tollerare", "tornare", "tradizione", "traffico", "tragedia", "tranquillo", "trasmissione",
+            "trasportare", "trattare", "treno", "triste", "trovare", "trucco", "turismo", "tuttavia", "ufficiale", "ufficio",
+            "uguale", "ultimo", "umano", "umore", "universo", "uscire", "utile", "valle", "valore", "valutare",
+            "vantaggio", "vecchio", "vedere", "velocità", "vendere", "venerdì", "verità", "versione", "vestito", "viaggio",
+            "vicino", "villaggio", "vincere", "visione", "visita", "visivo", "vitale", "vivere", "vocabolario", "volante",
+            "volere", "volontà", "volume", "zucchero", "zuppa"
+        ];
+        
         const morseDict = { 'a': '.-', 'b': '-...', 'c': '-.-.', 'd': '-..', 'e': '.', 'f': '..-.', 'g': '--.', 'h': '....', 'i': '..', 'j': '.---', 'k': '-.-', 'l': '.-..', 'm': '--', 'n': '-.', 'o': '---', 'p': '.--.', 'q': '--.-', 'r': '.-.', 's': '...', 't': '-', 'u': '..-', 'v': '...-', 'w': '.--', 'x': '-..-', 'y': '-.--', 'z': '--..' };
-        const dictionary = ["casa", "albero", "telegrafo", "radio", "segnale", "morse", "treno", "nave", "cielo", "marconi", "onda", "antenna", "frequenza", "tasto", "punto", "linea", "messaggio", "codice", "rete", "suono", "spazio", "tempo"];
+
+        // Variabili Globali
+        const myName = tgUser ? tgUser.first_name : "User_" + Math.floor(Math.random()*1000);
+        const myId = tgUser ? tgUser.id : Math.floor(Math.random()*1000000).toString();
         
         let roomCode = "";
         let isHost = false;
         let gameWords = [];
         let currentWpm = 20;
         let currentTone = 600;
-        let totalScore = 0; // Nuova variabile punteggio
-        let totalErrors = 0; // Mantenuta per statistiche secondarie
+        let totalScore = 0; 
+        let totalErrors = 0; 
         let wordIndex = 0;
         let audioCtx;
         let inputActive = false;
         let gameRunning = false;
         let knownPlayers = {}; 
         let activeTab = "room";
+        let roomListListener = null;
+
+        // Inizializzazione Auth e UI
+        auth.signInAnonymously()
+            .then(() => {
+                document.getElementById('loadingText').style.display = 'none';
+                document.getElementById('createRoomBtn').disabled = false;
+                document.getElementById('joinRoomBtn').disabled = false;
+                document.getElementById('playerName').textContent = myName;
+                if(!tgUser) showScreen('setupScreen'); // Mostra la home (se il blocco TG è disattivato per test)
+                else showScreen('setupScreen');
+                
+                listenToRooms();
+            })
+            .catch((error) => {
+                document.getElementById('loadingText').textContent = "Errore di connessione.";
+                console.error("Errore Firebase:", error);
+            });
 
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(el => el.classList.remove('active-screen'));
             document.getElementById(screenId).classList.add('active-screen');
         }
 
+        // --- GESTIONE PAROLE E ANTI-RIPETIZIONE ---
+        function getGameWords(numWords) {
+            let recentWords = JSON.parse(localStorage.getItem('recentWords') || '[]');
+            let availableWords = masterDictionary.filter(w => !recentWords.includes(w));
+            
+            // Se le parole nuove scarseggiano, svuota la memoria
+            if (availableWords.length < numWords) {
+                availableWords = masterDictionary;
+                recentWords = [];
+            }
+            
+            let selected = availableWords.sort(() => 0.5 - Math.random()).slice(0, numWords);
+            
+            // Salva fino alle ultime 100 parole giocate
+            recentWords = [...recentWords, ...selected].slice(-100);
+            localStorage.setItem('recentWords', JSON.stringify(recentWords));
+            
+            return selected;
+        }
+
+        // --- BACHECA STANZE LIVE ---
+        function listenToRooms() {
+            if (roomListListener) db.ref('rooms').off('value', roomListListener);
+            roomListListener = db.ref('rooms').on('value', snapshot => {
+                const waitingList = document.getElementById('waitingRoomsList');
+                const activeList = document.getElementById('activeRoomsList');
+                waitingList.innerHTML = ''; activeList.innerHTML = '';
+                
+                let wCount = 0, aCount = 0;
+                
+                snapshot.forEach(child => {
+                    const room = child.val();
+                    const code = child.key;
+                    
+                    // Pulisce stanze vecchie bloccate (rudimentale garbage collection)
+                    if (Date.now() - (room.createdAt || 0) > 3600000) { db.ref(`rooms/${code}`).remove(); return; }
+
+                    const li = document.createElement('li');
+                    let pCount = room.players ? Object.keys(room.players).length : 0;
+                    
+                    if (room.status === 'waiting') {
+                        wCount++;
+                        li.innerHTML = `<span><b>#${code}</b> - ${pCount} Giocatori <br><small>${room.wpm} WPM | ${room.tone} Hz</small></span>
+                                        <button class="join-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
+                        waitingList.appendChild(li);
+                    } else if (room.status === 'countdown' || room.status === 'playing') {
+                        aCount++;
+                        li.innerHTML = `<span><b>#${code}</b> - In corso... <br><small>${pCount} giocatori attivi</small></span>
+                                        <span style="font-size:1.5em;">🏁</span>`;
+                        activeList.appendChild(li);
+                    }
+                });
+                
+                if (wCount === 0) waitingList.innerHTML = '<li style="justify-content: center; color: var(--hint-color);">Nessuna stanza in attesa.</li>';
+                if (aCount === 0) activeList.innerHTML = '<li style="justify-content: center; color: var(--hint-color);">Nessuna partita in corso.</li>';
+            });
+        }
+
+        window.joinSpecificRoom = function(code) {
+            document.getElementById('joinCodeInput').value = code;
+            document.getElementById('joinRoomBtn').click();
+        }
+
+        // --- GESTIONE ACCOUNT & PRIVACY ---
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
 
+        document.getElementById('deleteDataBtn').addEventListener('click', () => {
+            if (confirm("⚠️ Sei sicuro di voler ELIMINARE PER SEMPRE i tuoi record storici? L'azione è irreversibile.")) {
+                db.ref(`leaderboard/${myId}`).remove().then(() => {
+                    alert("I tuoi dati sono stati eliminati dai nostri server.");
+                    showScreen('setupScreen');
+                }).catch(e => alert("Errore durante l'eliminazione."));
+            }
+        });
+
+        // Classifica globale visibile dalla lobby
         document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => {
             showScreen('leaderboardScreen');
             activeTab = "global";
@@ -196,7 +400,6 @@
         });
 
         function generateRoomCode() { return Math.floor(1000 + Math.random() * 9000).toString(); }
-        function shuffleWords(numWords) { return dictionary.sort(() => 0.5 - Math.random()).slice(0, numWords); }
         
         function showNotification(msg) {
             const notifArea = document.getElementById('notificationArea');
@@ -210,22 +413,22 @@
             currentTone = parseInt(document.getElementById('toneInput').value);
             roomCode = generateRoomCode();
             isHost = true;
-            gameWords = shuffleWords(10); 
+            gameWords = getGameWords(10); 
 
             db.ref('rooms/' + roomCode).set({
-                status: 'waiting', wpm: currentWpm, tone: currentTone, words: gameWords
+                status: 'waiting', wpm: currentWpm, tone: currentTone, words: gameWords, createdAt: firebase.database.ServerValue.TIMESTAMP
             });
             joinRoomLogic();
         });
 
         document.getElementById('joinRoomBtn').addEventListener('click', () => {
-            roomCode = document.getElementById('joinCodeInput').value;
+            roomCode = document.getElementById('joinCodeInput').value.trim();
             if (roomCode.length !== 4) return alert("Codice non valido.");
             
             db.ref('rooms/' + roomCode).once('value', snapshot => {
                 if (snapshot.exists()) {
                     let roomData = snapshot.val();
-                    if(roomData.status !== 'waiting') return alert("Partita già iniziata!");
+                    if(roomData.status !== 'waiting') return alert("Partita già iniziata o non disponibile!");
                     currentWpm = roomData.wpm; currentTone = roomData.tone; gameWords = roomData.words;
                     isHost = false;
                     joinRoomLogic();
@@ -233,6 +436,12 @@
                     alert("Stanza non trovata!");
                 }
             });
+        });
+
+        document.getElementById('leaveLobbyBtn').addEventListener('click', () => {
+            db.ref(`rooms/${roomCode}/players/${myId}`).remove();
+            if(isHost) { db.ref(`rooms/${roomCode}`).remove(); } // Se l'host esce, chiudi la stanza
+            showScreen('setupScreen');
         });
 
         function joinRoomLogic() {
@@ -247,8 +456,13 @@
 
             myPlayerRef.onDisconnect().update({ abandoned: true, finished: true });
 
-            if (isHost) document.getElementById('startMultiplayerBtn').style.display = 'block';
-            else document.getElementById('waitingHostText').style.display = 'block';
+            if (isHost) {
+                document.getElementById('startMultiplayerBtn').style.display = 'block';
+                document.getElementById('waitingHostText').style.display = 'none';
+            } else {
+                document.getElementById('startMultiplayerBtn').style.display = 'none';
+                document.getElementById('waitingHostText').style.display = 'block';
+            }
 
             db.ref(`rooms/${roomCode}/players`).on('value', snapshot => {
                 const playersList = document.getElementById('playersList');
@@ -260,7 +474,7 @@
                     let pid = child.key;
                     players.push(p);
 
-                    if (playersList) {
+                    if (playersList && !p.abandoned) {
                         let li = document.createElement('li');
                         li.textContent = "🟢 " + p.name;
                         playersList.appendChild(li);
@@ -291,12 +505,19 @@
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
             document.getElementById('scoreDisplay').textContent = `Punti: 0`;
-            showScreen('gameArea');
+            totalScore = 0; totalErrors = 0; wordIndex = 0;
+            document.getElementById('tableBody').innerHTML = ""; // Pulisci la tabella
+            
             showScreen('countdownScreen');
             gameRunning = true;
             
+            // Segna la stanza come "in gioco" per la bacheca
+            if(isHost) db.ref(`rooms/${roomCode}/status`).set('playing');
+            
             let count = 3;
             const countdownEl = document.getElementById('countdownNumber');
+            countdownEl.textContent = count;
+            
             const interval = setInterval(() => {
                 if (count > 0) {
                     countdownEl.textContent = count; playBeep(currentTone, 0.2); count--;
@@ -341,22 +562,16 @@
             }
         }
 
-        // Nuovo algoritmo per il punteggio posizionale
         function calculatePoints(target, user) {
-            if (target === user) return 10; // Parola perfetta = 10 punti fissi
-            
+            if (target === user) return 10; 
             let partialScore = 0;
             const minLen = Math.min(target.length, user.length);
-            
             for (let i = 0; i < minLen; i++) {
-                if (target[i] === user[i]) {
-                    partialScore += 2; // 2 punti per ogni carattere nella posizione corretta
-                }
+                if (target[i] === user[i]) partialScore += 2; 
             }
             return partialScore;
         }
 
-        // Mantenuto per calcolare penalità puramente statistiche o in backend se serve
         function getLevenshteinDistance(a, b) {
             const matrix = [];
             for (let i = 0; i <= b.length; i++) matrix[i] = [i];
@@ -387,6 +602,9 @@
             const tdReal = document.createElement('td'); const tdScore = document.createElement('td');
             tr.appendChild(tdInput); tr.appendChild(tdReal); tr.appendChild(tdScore);
             document.getElementById('tableBody').appendChild(tr);
+            
+            // Scroll automatico
+            window.scrollTo(0, document.body.scrollHeight);
 
             const currentWord = gameWords[wordIndex];
             playMorseAudio(currentWord, currentWpm);
@@ -423,9 +641,7 @@
                     document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
 
                     db.ref(`rooms/${roomCode}/players/${myId}`).update({ 
-                        wpm: currentWpm, 
-                        score: totalScore, 
-                        errors: totalErrors 
+                        wpm: currentWpm, score: totalScore, errors: totalErrors 
                     });
                     
                     wordIndex++; setTimeout(createRow, 1000); 
@@ -441,6 +657,7 @@
         // -- FINE E SALVATAGGIO DEI DATI GLOBALI --
         function finishGame(isAbandoned) {
             gameRunning = false;
+            document.getElementById('tabRoomBtn').style.display = 'block';
             showScreen('leaderboardScreen');
             activeTab = "room";
             
@@ -450,8 +667,8 @@
             const finalState = { finished: true, abandoned: isAbandoned, wpm: currentWpm, score: totalScore, errors: totalErrors };
             playerRef.update(finalState);
             
-            // AGGIORNAMENTO CLASSIFICA GLOBALE STORICA (Basata ora sul punteggio massimo)
-            if (!isAbandoned) {
+            // AGGIORNAMENTO CLASSIFICA GLOBALE
+            if (!isAbandoned && totalScore > 0) {
                 const globalUserRef = db.ref(`leaderboard/${myId}`);
                 globalUserRef.once('value', snapshot => {
                     let recordExists = snapshot.exists();
@@ -473,6 +690,13 @@
                 snapshot.forEach(child => players.push(child.val()));
                 renderRoomLeaderboard(players);
             });
+            
+            // Cleanup stanza se host 
+            if(isHost) {
+                setTimeout(() => {
+                    db.ref(`rooms/${roomCode}`).remove(); // Rimuove la stanza dal DB dopo un po'
+                }, 30000);
+            }
         }
 
         // --- GESTIONE DEI TAB NELLA CLASSIFICA ---
@@ -495,9 +719,7 @@
             fetchAndRenderGlobalLeaderboard();
         });
 
-        // Mostra la classifica della partita corrente
         function renderRoomLeaderboard(players) {
-            // Regola: Vince chi ha più punti, a parità di punti vince chi ha più WPM
             players.sort((a, b) => {
                 if (a.abandoned && !b.abandoned) return 1;
                 if (!a.abandoned && b.abandoned) return -1;
@@ -516,14 +738,13 @@
                 if (player.abandoned) medal = "💀";
                 
                 row.innerHTML = `
-                    <span>${medal} ${player.name} <small style="color:gray">${status}</small></span>
-                    <span style="text-align: right;"><b>${player.score} Punti</b><br><small style="color:gray;">${player.wpm} WPM</small></span>
+                    <span>${medal} ${player.name} <br><small style="color:var(--hint-color)">${status}</small></span>
+                    <span style="text-align: right;"><b>${player.score} Punti</b><br><small style="color:var(--hint-color);">${player.wpm} WPM</small></span>
                 `;
                 container.appendChild(row);
             });
         }
 
-        // Recupera e mostra la classifica storica globale
         function fetchAndRenderGlobalLeaderboard() {
             const container = document.getElementById('leaderboardContainer');
             container.innerHTML = '<p>Caricamento record globali...</p>';
@@ -539,20 +760,20 @@
                     return b.wpm - a.wpm;
                 });
 
-                container.innerHTML = '<h3>🏆 Classifica Record Storici</h3>';
+                container.innerHTML = '<h3>🏆 Top 50 Globale</h3>';
                 if (players.length === 0) {
-                    container.innerHTML += '<p style="color:gray; font-style:italic;">Ancora nessun record salvato.</p>';
+                    container.innerHTML += '<p style="color:var(--hint-color); font-style:italic;">Nessun record salvato.</p>';
                     return;
                 }
 
-                players.forEach((player, index) => {
+                players.slice(0, 50).forEach((player, index) => {
                     const row = document.createElement('div');
                     row.className = 'leaderboard-row';
                     let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
                     
                     row.innerHTML = `
-                        <span>${medal} ${player.name} <small style="color:gray; font-size:0.8em;">(${player.date})</small></span>
-                        <span style="text-align: right;"><b>${player.score} Punti</b><br><small style="color:gray;">${player.wpm} WPM</small></span>
+                        <span>${medal} ${player.name} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date})</small></span>
+                        <span style="text-align: right;"><b>${player.score} Punti</b><br><small style="color:var(--hint-color);">${player.wpm} WPM</small></span>
                     `;
                     container.appendChild(row);
                 });
