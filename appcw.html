@@ -78,7 +78,7 @@
         th, td { border-bottom: 1px solid var(--hint-color); padding: 12px 5px; text-align: center; }
         th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
         
-        /* Input fisso che tiene la tastiera sempre visibile */
+        /* Input permanente per la tastiera */
         #permanentGameInput { border: 2px solid var(--link-color); outline: none; margin: 0; font-weight: bold; }
         #permanentGameInput:focus { background-color: var(--sec-bg-color); }
         
@@ -363,7 +363,7 @@
             return selected;
         }
 
-        // --- GESTIONE BACHECA STANZE (Modificata) ---
+        // --- GESTIONE BACHECA STANZE ---
         function listenToRooms() {
             if (roomListListener) db.ref('rooms').off('value', roomListListener);
             roomListListener = db.ref('rooms').on('value', snapshot => {
@@ -377,10 +377,8 @@
                     const room = child.val();
                     const code = child.key;
                     
-                    // Pulizia stanze orfane da troppo tempo (15 minuti max)
                     if (Date.now() - (room.createdAt || 0) > 900000) { db.ref(`rooms/${code}`).remove(); return; }
 
-                    // IGNORA le stanze 'finished' affinché non appaiano MAI nell'interfaccia
                     if (room.status === 'finished') return; 
 
                     const li = document.createElement('li');
@@ -440,7 +438,6 @@
                         await db.ref().update(updates);
                     }
 
-                    // Elimina definitivamente l'utente da Firebase Authentication
                     const currentUser = auth.currentUser;
                     if (currentUser) {
                         await currentUser.delete();
@@ -695,7 +692,7 @@
             finishGame(true);
         });
 
-        // --- FINE PARTITA E RIMOZIONE STANZE DALLA BACHECA ---
+        // --- FINE PARTITA ---
         function finishGame(isAbandoned) {
             gameRunning = false;
             inputActive = false;
@@ -733,11 +730,8 @@
             });
             
             if(isHost) {
-                // FASE 1: Aggiorna lo stato in 'finished'. Questo nasconde SUBITO la stanza dalla UI di tutti.
                 db.ref(`rooms/${roomCode}/status`).set('finished');
                 
-                // FASE 2: Elimina definitivamente i dati dal server dopo 60 secondi
-                // (dà il tempo agli altri giocatori di terminare l'ultima parola e vedere la classifica della stanza)
                 setTimeout(() => {
                     db.ref(`rooms/${roomCode}`).remove();
                 }, 60000);
@@ -763,7 +757,9 @@
             fetchAndRenderGlobalLeaderboard();
         });
 
+        // --- SISTEMA DI CALCOLO DINAMICO DEL VINCITORE ---
         function renderRoomLeaderboard(players) {
+            // Ordina i giocatori: punteggio maggiore in alto, ritirati in fondo
             players.sort((a, b) => {
                 if (a.abandoned && !b.abandoned) return 1;
                 if (!a.abandoned && b.abandoned) return -1;
@@ -772,8 +768,50 @@
             });
 
             const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<h3 style="text-align: center;">Partita Corrente</h3>';
+            container.innerHTML = ''; // Svuota la classifica precedente
 
+            // Filtra solo chi NON si è ritirato
+            const activePlayers = players.filter(p => !p.abandoned);
+            const allFinished = activePlayers.every(p => p.finished);
+
+            // Crea il Box del Vincitore
+            const winnerBox = document.createElement('div');
+            winnerBox.style.margin = "10px 0 20px 0";
+            winnerBox.style.padding = "15px";
+            winnerBox.style.borderRadius = "10px";
+            winnerBox.style.background = "var(--sec-bg-color)";
+            winnerBox.style.border = "2px solid var(--hint-color)";
+            winnerBox.style.textAlign = "center";
+            winnerBox.style.fontWeight = "bold";
+            winnerBox.style.fontSize = "1.15em";
+
+            if (activePlayers.length === 0) {
+                winnerBox.innerHTML = "Tutti i partecipanti si sono ritirati! 🛑";
+                winnerBox.style.borderColor = "#d32f2f";
+                winnerBox.style.color = "#d32f2f";
+            } else if (allFinished) {
+                // Se tutti i rimasti hanno finito, dichiara il vincitore ufficiale
+                const winner = activePlayers[0];
+                winnerBox.innerHTML = `🏆 Il Vincitore è <b>${winner.name}</b> con <b>${winner.score}</b> punti! 🎉`;
+                winnerBox.style.borderColor = "#4caf50";
+                winnerBox.style.color = "#4caf50";
+            } else {
+                // Altrimenti mostra chi sta guidando la partita mentre si aspetta la fine degli altri
+                const currentLeader = activePlayers[0];
+                winnerBox.innerHTML = `⏳ In attesa degli altri partecipanti... <br><span style="font-size:0.85em; font-weight:normal; color:var(--text-color);">Attuale Leader: <b>${currentLeader.name}</b> (${currentLeader.score} pt)</span>`;
+                winnerBox.style.borderColor = "#ff9800";
+            }
+
+            container.appendChild(winnerBox);
+
+            // Titolo della tabella
+            const title = document.createElement('h3');
+            title.style.textAlign = 'center';
+            title.style.margin = "10px 0";
+            title.textContent = 'Partita Corrente';
+            container.appendChild(title);
+
+            // Rendering di tutte le righe della classifica
             players.forEach((player, index) => {
                 const row = document.createElement('div');
                 row.className = 'leaderboard-row';
