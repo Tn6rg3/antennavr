@@ -2,10 +2,10 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Sfida Telegrafia Multiplayer</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -21,64 +21,86 @@
             --sec-bg-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
         }
 
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+        /* Reset globale: blocca lo scroll dell'intera pagina web */
+        html, body {
+            margin: 0; 
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* La magia per non far scorrere la pagina su/giù */
             background-color: var(--bg-color); 
             color: var(--text-color); 
-            margin: 0; 
-            padding: 15px; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            text-align: center; 
-            overflow-x: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
         }
         
-        .screen { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 500px; margin-top: 10px; }
+        /* I contenitori delle singole schermate */
+        .screen { 
+            display: none; 
+            flex-direction: column; 
+            align-items: center; 
+            width: 100%; 
+            height: 100%; /* Occupa tutto lo schermo disponibile */
+            max-width: 500px; 
+            margin: 0 auto;
+            padding: 20px 15px; 
+            box-sizing: border-box;
+            overflow-y: auto; /* Permette lo scroll SOLO interno alla schermata se necessario */
+        }
         .active-screen { display: flex; }
         
-        button { background-color: var(--btn-color); color: var(--btn-text-color); border: none; padding: 12px 20px; font-size: 1.1em; border-radius: 8px; cursor: pointer; margin-top: 10px; width: 100%; font-weight: bold; transition: opacity 0.2s;}
-        button:active { opacity: 0.8; }
+        h2 { margin-top: 0; }
+
+        button { background-color: var(--btn-color); color: var(--btn-text-color); border: none; padding: 14px 20px; font-size: 1.1em; border-radius: 10px; cursor: pointer; margin-top: 10px; width: 100%; font-weight: bold; transition: opacity 0.2s;}
+        button:active { opacity: 0.8; transform: scale(0.98); }
         button:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
         
         .btn-secondary { background-color: #ff9800; color: #fff; }
         .btn-danger { background-color: #d32f2f; color: #fff; }
-        .btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 5px; font-size: 0.9em; margin-top: 15px; border: none; cursor: pointer; }
+        .btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 10px; font-size: 1em; margin-top: 15px; border: none; cursor: pointer; }
         
-        input[type="number"], input[type="text"] { padding: 12px; font-size: 1.1em; width: calc(100% - 24px); text-align: center; margin: 5px 0; border: 1px solid var(--hint-color); border-radius: 8px; background-color: var(--bg-color); color: var(--text-color); }
+        input[type="number"], input[type="text"] { padding: 12px; font-size: 1.1em; width: 100%; box-sizing: border-box; text-align: center; margin: 5px 0; border: 1px solid var(--hint-color); border-radius: 10px; background-color: var(--bg-color); color: var(--text-color); }
         .settings-row { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; gap: 10px; }
         .settings-row > div { width: 50%; }
         
-        #countdownNumber { font-size: 6em; font-weight: bold; color: #ff9800; margin: 40px 0; }
-        .room-code { font-size: 2.5em; letter-spacing: 5px; font-weight: bold; color: var(--link-color); margin: 10px 0; }
+        #countdownNumber { font-size: 6em; font-weight: bold; color: #ff9800; margin: auto 0; }
         
-        .header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 15px; font-weight: bold; font-size: 1.2em; background: var(--sec-bg-color); padding: 10px; border-radius: 8px; box-sizing: border-box;}
+        .header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px; font-weight: bold; font-size: 1.2em; background: var(--sec-bg-color); padding: 12px; border-radius: 10px; box-sizing: border-box;}
         #scoreDisplay { color: #4caf50; }
         
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th, td { border: 1px solid var(--hint-color); padding: 10px 5px; text-align: center; }
-        th { background-color: var(--sec-bg-color); }
-        input.game-input { width: 90%; border: 2px solid var(--link-color); outline: none; }
+        /* Contenitore con scroll per la tabella di gioco */
+        .table-wrapper {
+            flex-grow: 1; /* Prende tutto lo spazio rimanente */
+            width: 100%;
+            overflow-y: auto; /* Scorre solo la tabella */
+            border-radius: 10px;
+            background: var(--sec-bg-color);
+            margin-bottom: 15px;
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border-bottom: 1px solid var(--hint-color); padding: 12px 5px; text-align: center; }
+        th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
+        input.game-input { width: 90%; border: 2px solid var(--link-color); outline: none; margin: 0; }
         input:read-only { border: none; background: transparent; text-align: center; font-weight: bold; }
         
         .box-panel { border: 1px solid var(--hint-color); padding: 15px; border-radius: 10px; width: 100%; margin-bottom: 15px; box-sizing: border-box; background: var(--sec-bg-color); }
         .box-panel h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; }
         
-        .rooms-list { list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto; text-align: left; }
-        .rooms-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 5px; border-radius: 5px; }
-        .join-btn-small { width: auto; padding: 6px 12px; font-size: 0.9em; margin: 0; }
+        .rooms-list { list-style: none; padding: 0; margin: 0; max-height: 180px; overflow-y: auto; text-align: left; }
+        .rooms-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 5px; border-radius: 8px; }
+        .join-btn-small { width: auto; padding: 8px 15px; font-size: 0.9em; margin: 0; }
         
-        #playersList { list-style: none; padding: 0; width: 100%; text-align: left; background: var(--sec-bg-color); border-radius: 8px; overflow: hidden;}
-        #playersList li { padding: 12px; border-bottom: 1px solid var(--hint-color); font-weight: bold; }
+        #playersList { list-style: none; padding: 0; width: 100%; text-align: left; background: var(--sec-bg-color); border-radius: 10px; overflow: hidden;}
+        #playersList li { padding: 15px; border-bottom: 1px solid var(--hint-color); font-weight: bold; }
         
-        .leaderboard-row { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--hint-color); width: 100%; align-items: center; box-sizing: border-box; background: var(--sec-bg-color); margin-bottom: 5px; border-radius: 5px;}
+        .leaderboard-row { display: flex; justify-content: space-between; padding: 15px; border-bottom: 1px solid var(--hint-color); width: 100%; align-items: center; box-sizing: border-box; background: var(--sec-bg-color); margin-bottom: 8px; border-radius: 8px;}
         
         #loadingText { font-style: italic; color: #ff9800; margin-bottom: 15px; font-weight: bold; }
-        #notificationArea { color: #d32f2f; font-weight: bold; margin-bottom: 15px; min-height: 20px; }
+        #notificationArea { color: #d32f2f; font-weight: bold; margin-bottom: 10px; min-height: 20px; text-align: center;}
         
-        .privacy-box { text-align: left; font-size: 0.9em; line-height: 1.5; background: var(--sec-bg-color); padding: 15px; border-radius: 8px; border: 1px solid var(--hint-color); max-height: 300px; overflow-y: auto; }
+        .privacy-box { text-align: left; font-size: 0.9em; line-height: 1.5; background: var(--sec-bg-color); padding: 15px; border-radius: 10px; border: 1px solid var(--hint-color); max-height: 300px; overflow-y: auto; width: 100%; box-sizing: border-box;}
         .tab-buttons { display: flex; width: 100%; gap: 10px; margin-bottom: 15px; }
-        .tab-btn { background-color: var(--hint-color); color: var(--bg-color); }
+        .tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; }
         .tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); }
     </style>
 </head>
@@ -103,9 +125,9 @@
             <button id="createRoomBtn" disabled>Crea Stanza</button>
         </div>
 
-        <div class="box-panel">
+        <div class="box-panel" style="flex-grow: 1; display: flex; flex-direction: column;">
             <h3>Partite in Attesa ⏳</h3>
-            <ul id="waitingRoomsList" class="rooms-list">
+            <ul id="waitingRoomsList" class="rooms-list" style="flex-grow: 1;">
                 <li style="justify-content: center; color: var(--hint-color);">Nessuna stanza in attesa.</li>
             </ul>
         </div>
@@ -116,15 +138,9 @@
                 <li style="justify-content: center; color: var(--hint-color);">Nessuna partita in corso.</li>
             </ul>
         </div>
-
-        <div class="box-panel">
-            <h3>Unisciti con Codice Privato</h3>
-            <input type="text" id="joinCodeInput" placeholder="Es. 1234" maxlength="4">
-            <button id="joinRoomBtn" class="btn-secondary" disabled>Entra</button>
-        </div>
         
         <button id="viewGlobalLeaderboardBtn" class="btn-link" style="font-weight: bold; font-size: 1.1em;">🏆 Classifica Globale</button>
-        <button id="showPrivacyBtn" class="btn-link">Privacy & Gestione Account</button>
+        <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Account</button>
     </div>
 
     <div id="privacyScreen" class="screen">
@@ -134,24 +150,26 @@
             <p><strong>Classifica Globale:</strong> Memorizziamo permanentemente il tuo record storico (Nome, Punteggio, Data).</p>
             <p><strong>Cancellazione Dati:</strong> Puoi eliminare immediatamente il tuo record dai nostri database usando il pulsante qui sotto.</p>
         </div>
-        <button id="deleteDataBtn" class="btn-danger" style="margin-top: 15px;">🗑️ Elimina il mio Record</button>
+        <button id="deleteDataBtn" class="btn-danger" style="margin-top: auto;">🗑️ Elimina il mio Record</button>
         <button id="closePrivacyBtn">Torna Indietro</button>
     </div>
 
     <div id="lobbyScreen" class="screen">
         <h2>Lobby Stanza</h2>
-        <div class="room-code" id="displayRoomCode">----</div>
-        <p>Condividi il codice o fai unire gli amici dalla bacheca.</p>
-        <h3 style="margin-top: 20px;">Giocatori pronti:</h3>
+        <h3 style="margin-top: 10px;">Giocatori presenti:</h3>
         <ul id="playersList"></ul>
-        <button id="startMultiplayerBtn" style="display:none; background-color: #4caf50;">Tutti Pronti: AVVIA!</button>
-        <p id="waitingHostText" style="display:none; font-style: italic;">In attesa che l'Host avvii la partita...</p>
-        <button id="leaveLobbyBtn" class="btn-danger" style="margin-top: 20px;">Esci dalla Stanza</button>
+        
+        <div style="margin-top: auto; width: 100%;">
+            <button id="startMultiplayerBtn" style="display:none; background-color: #4caf50;">Tutti Pronti: AVVIA!</button>
+            <p id="waitingHostText" style="display:none; font-style: italic; text-align: center;">In attesa che l'Host avvii la partita...</p>
+            <button id="leaveLobbyBtn" class="btn-danger" style="margin-top: 15px;">Esci dalla Stanza</button>
+        </div>
     </div>
 
     <div id="countdownScreen" class="screen">
-        <h2>Preparati!</h2>
+        <h2 style="margin-top: auto;">Preparati!</h2>
         <div id="countdownNumber">3</div>
+        <div style="margin-top: auto;"></div>
     </div>
 
     <div id="gameArea" class="screen">
@@ -160,29 +178,33 @@
             <div id="scoreDisplay">Punti: 0</div>
         </div>
         <div id="notificationArea"></div>
-        <table id="gameTable">
-            <thead>
-                <tr><th>Scrivi</th><th>Reale</th><th>Punti</th></tr>
-            </thead>
-            <tbody id="tableBody"></tbody>
-        </table>
-        <button id="quitGameBtn" class="btn-danger" style="margin-top: 20px;">Abbandona Partita</button>
+        
+        <div class="table-wrapper" id="tableWrapper">
+            <table id="gameTable">
+                <thead>
+                    <tr><th>Scrivi</th><th>Reale</th><th>Punti</th></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+        
+        <button id="quitGameBtn" class="btn-danger" style="margin-top: auto;">Abbandona Partita</button>
     </div>
 
     <div id="leaderboardScreen" class="screen">
         <h2>🏆 Classifiche</h2>
         
         <div class="tab-buttons">
-            <button id="tabRoomBtn" class="tab-btn active-tab" style="margin:0;">Questa Partita</button>
-            <button id="tabGlobalBtn" class="tab-btn" style="margin:0;">Globale Storica</button>
+            <button id="tabRoomBtn" class="tab-btn active-tab">Questa Partita</button>
+            <button id="tabGlobalBtn" class="tab-btn">Globale Storica</button>
         </div>
 
-        <div id="leaderboardContainer" style="width: 100%; margin-top: 10px;"></div>
-        <button onclick="location.reload()">Torna al Menu Principale</button>
+        <div id="leaderboardContainer" style="width: 100%; flex-grow: 1; overflow-y: auto; margin-top: 10px;"></div>
+        <button onclick="location.reload()" style="margin-top: 15px;">Torna al Menu Principale</button>
     </div>
 
     <script>
-        // Controllo Telegram Web App
+        // Controllo Telegram Web App e Forza lo Schermo Intero Nativo
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
         
@@ -201,7 +223,7 @@
             messagingSenderId: "575790683327",
             appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
         };
-        firebase.initializeApp(firebaseConfig);
+        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
         const db = firebase.database();
         const auth = firebase.auth();
 
@@ -297,10 +319,8 @@
             .then(() => {
                 document.getElementById('loadingText').style.display = 'none';
                 document.getElementById('createRoomBtn').disabled = false;
-                document.getElementById('joinRoomBtn').disabled = false;
                 document.getElementById('playerName').textContent = myName;
-                if(!tgUser) showScreen('setupScreen'); // Mostra la home (se il blocco TG è disattivato per test)
-                else showScreen('setupScreen');
+                showScreen('setupScreen'); 
                 
                 listenToRooms();
             })
@@ -319,15 +339,12 @@
             let recentWords = JSON.parse(localStorage.getItem('recentWords') || '[]');
             let availableWords = masterDictionary.filter(w => !recentWords.includes(w));
             
-            // Se le parole nuove scarseggiano, svuota la memoria
             if (availableWords.length < numWords) {
                 availableWords = masterDictionary;
                 recentWords = [];
             }
             
             let selected = availableWords.sort(() => 0.5 - Math.random()).slice(0, numWords);
-            
-            // Salva fino alle ultime 100 parole giocate
             recentWords = [...recentWords, ...selected].slice(-100);
             localStorage.setItem('recentWords', JSON.stringify(recentWords));
             
@@ -348,7 +365,6 @@
                     const room = child.val();
                     const code = child.key;
                     
-                    // Pulisce stanze vecchie bloccate (rudimentale garbage collection)
                     if (Date.now() - (room.createdAt || 0) > 3600000) { db.ref(`rooms/${code}`).remove(); return; }
 
                     const li = document.createElement('li');
@@ -356,12 +372,12 @@
                     
                     if (room.status === 'waiting') {
                         wCount++;
-                        li.innerHTML = `<span><b>#${code}</b> - ${pCount} Giocatori <br><small>${room.wpm} WPM | ${room.tone} Hz</small></span>
+                        li.innerHTML = `<span><b>Codice #${code}</b> <br><small>${pCount} Giocatori | ${room.wpm} WPM</small></span>
                                         <button class="join-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
                         waitingList.appendChild(li);
                     } else if (room.status === 'countdown' || room.status === 'playing') {
                         aCount++;
-                        li.innerHTML = `<span><b>#${code}</b> - In corso... <br><small>${pCount} giocatori attivi</small></span>
+                        li.innerHTML = `<span><b>Codice #${code}</b> <br><small>In corso - ${pCount} giocatori</small></span>
                                         <span style="font-size:1.5em;">🏁</span>`;
                         activeList.appendChild(li);
                     }
@@ -373,8 +389,18 @@
         }
 
         window.joinSpecificRoom = function(code) {
-            document.getElementById('joinCodeInput').value = code;
-            document.getElementById('joinRoomBtn').click();
+            roomCode = code;
+            db.ref('rooms/' + roomCode).once('value', snapshot => {
+                if (snapshot.exists()) {
+                    let roomData = snapshot.val();
+                    if(roomData.status !== 'waiting') return alert("Partita già iniziata o non disponibile!");
+                    currentWpm = roomData.wpm; currentTone = roomData.tone; gameWords = roomData.words;
+                    isHost = false;
+                    joinRoomLogic();
+                } else {
+                    alert("Stanza non trovata!");
+                }
+            });
         }
 
         // --- GESTIONE ACCOUNT & PRIVACY ---
@@ -390,7 +416,6 @@
             }
         });
 
-        // Classifica globale visibile dalla lobby
         document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => {
             showScreen('leaderboardScreen');
             activeTab = "global";
@@ -421,39 +446,17 @@
             joinRoomLogic();
         });
 
-        document.getElementById('joinRoomBtn').addEventListener('click', () => {
-            roomCode = document.getElementById('joinCodeInput').value.trim();
-            if (roomCode.length !== 4) return alert("Codice non valido.");
-            
-            db.ref('rooms/' + roomCode).once('value', snapshot => {
-                if (snapshot.exists()) {
-                    let roomData = snapshot.val();
-                    if(roomData.status !== 'waiting') return alert("Partita già iniziata o non disponibile!");
-                    currentWpm = roomData.wpm; currentTone = roomData.tone; gameWords = roomData.words;
-                    isHost = false;
-                    joinRoomLogic();
-                } else {
-                    alert("Stanza non trovata!");
-                }
-            });
-        });
-
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => {
             db.ref(`rooms/${roomCode}/players/${myId}`).remove();
-            if(isHost) { db.ref(`rooms/${roomCode}`).remove(); } // Se l'host esce, chiudi la stanza
+            if(isHost) { db.ref(`rooms/${roomCode}`).remove(); } 
             showScreen('setupScreen');
         });
 
         function joinRoomLogic() {
             showScreen('lobbyScreen');
-            document.getElementById('displayRoomCode').textContent = roomCode;
 
             const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-            
-            myPlayerRef.set({
-                name: myName, wpm: currentWpm, score: 0, errors: 0, finished: false, abandoned: false
-            });
-
+            myPlayerRef.set({ name: myName, wpm: currentWpm, score: 0, errors: 0, finished: false, abandoned: false });
             myPlayerRef.onDisconnect().update({ abandoned: true, finished: true });
 
             if (isHost) {
@@ -506,12 +509,11 @@
             document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
             document.getElementById('scoreDisplay').textContent = `Punti: 0`;
             totalScore = 0; totalErrors = 0; wordIndex = 0;
-            document.getElementById('tableBody').innerHTML = ""; // Pulisci la tabella
+            document.getElementById('tableBody').innerHTML = ""; 
             
             showScreen('countdownScreen');
             gameRunning = true;
             
-            // Segna la stanza come "in gioco" per la bacheca
             if(isHost) db.ref(`rooms/${roomCode}/status`).set('playing');
             
             let count = 3;
@@ -603,8 +605,9 @@
             tr.appendChild(tdInput); tr.appendChild(tdReal); tr.appendChild(tdScore);
             document.getElementById('tableBody').appendChild(tr);
             
-            // Scroll automatico
-            window.scrollTo(0, document.body.scrollHeight);
+            // Scroll automatico LIMITATO SOLO ALLA TABELLA
+            const tableWrapper = document.getElementById('tableWrapper');
+            tableWrapper.scrollTop = tableWrapper.scrollHeight;
 
             const currentWord = gameWords[wordIndex];
             playMorseAudio(currentWord, currentWpm);
@@ -622,11 +625,11 @@
                     
                     if (currentWord === userWord) {
                         currentWpm += 2; 
-                        tdScore.style.color = "green"; 
+                        tdScore.style.color = "#4caf50"; 
                         tdScore.innerHTML = `<b>+${points}</b>`;
                     } else {
                         currentWpm -= 2; 
-                        tdScore.style.color = (points > 0) ? "#ff9800" : "red";
+                        tdScore.style.color = (points > 0) ? "#ff9800" : "#d32f2f";
                         tdScore.innerHTML = `<b>+${points}</b>`;
                     }
                     if (currentWpm < 5) currentWpm = 5; 
@@ -667,7 +670,6 @@
             const finalState = { finished: true, abandoned: isAbandoned, wpm: currentWpm, score: totalScore, errors: totalErrors };
             playerRef.update(finalState);
             
-            // AGGIORNAMENTO CLASSIFICA GLOBALE
             if (!isAbandoned && totalScore > 0) {
                 const globalUserRef = db.ref(`leaderboard/${myId}`);
                 globalUserRef.once('value', snapshot => {
@@ -691,10 +693,9 @@
                 renderRoomLeaderboard(players);
             });
             
-            // Cleanup stanza se host 
             if(isHost) {
                 setTimeout(() => {
-                    db.ref(`rooms/${roomCode}`).remove(); // Rimuove la stanza dal DB dopo un po'
+                    db.ref(`rooms/${roomCode}`).remove();
                 }, 30000);
             }
         }
@@ -728,7 +729,7 @@
             });
 
             const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<h3>Partita Corrente</h3>';
+            container.innerHTML = '<h3 style="text-align: center;">Partita Corrente</h3>';
 
             players.forEach((player, index) => {
                 const row = document.createElement('div');
@@ -747,7 +748,7 @@
 
         function fetchAndRenderGlobalLeaderboard() {
             const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<p>Caricamento record globali...</p>';
+            container.innerHTML = '<p style="text-align: center;">Caricamento record globali...</p>';
 
             db.ref('leaderboard').once('value', snapshot => {
                 let players = [];
@@ -760,9 +761,9 @@
                     return b.wpm - a.wpm;
                 });
 
-                container.innerHTML = '<h3>🏆 Top 50 Globale</h3>';
+                container.innerHTML = '<h3 style="text-align: center;">🏆 Top 50 Globale</h3>';
                 if (players.length === 0) {
-                    container.innerHTML += '<p style="color:var(--hint-color); font-style:italic;">Nessun record salvato.</p>';
+                    container.innerHTML += '<p style="color:var(--hint-color); font-style:italic; text-align: center;">Nessun record salvato.</p>';
                     return;
                 }
 
