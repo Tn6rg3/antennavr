@@ -424,32 +424,44 @@
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
 
-        document.getElementById('deleteDataBtn').addEventListener('click', async () => {
-            if (confirm("⚠️ Sei sicuro di voler ELIMINARE PER SEMPRE i tuoi dati e punteggi? L'azione è irreversibile.")) {
-                try {
-                    // 1. Rimuovi dalla leaderboard globale
-                    await db.ref(`leaderboard/${myId}`).remove();
-                    
-                    // 2. Rimuovi l'utente ricorsivamente da tutte le stanze (rooms)
-                    const roomsSnapshot = await db.ref('rooms').once('value');
-                    let updates = {};
-                    roomsSnapshot.forEach(roomSnap => {
-                        if (roomSnap.hasChild(`players/${myId}`)) {
-                            updates[`rooms/${roomSnap.key}/players/${myId}`] = null;
-                        }
-                    });
-                    
-                    if (Object.keys(updates).length > 0) {
-                        await db.ref().update(updates);
-                    }
-
-                    alert("Dati eliminati con successo dal database!");
-                    location.reload();
-                } catch (e) {
-                    alert("Errore Firebase: " + e.message + "\nAssicurati che le impostazioni Firebase siano corrette.");
+  document.getElementById('deleteDataBtn').addEventListener('click', async () => {
+    if (confirm("⚠️ Sei sicuro di voler ELIMINARE PER SEMPRE i tuoi dati, punteggi e il tuo account? L'azione è irreversibile.")) {
+        try {
+            // 1. Rimuovi dalla leaderboard globale (Database)
+            await db.ref(`leaderboard/${myId}`).remove();
+            
+            // 2. Rimuovi l'utente ricorsivamente da tutte le stanze (Database)
+            const roomsSnapshot = await db.ref('rooms').once('value');
+            let updates = {};
+            roomsSnapshot.forEach(roomSnap => {
+                if (roomSnap.hasChild(`players/${myId}`)) {
+                    updates[`rooms/${roomSnap.key}/players/${myId}`] = null;
                 }
+            });
+            
+            if (Object.keys(updates).length > 0) {
+                await db.ref().update(updates);
             }
-        });
+
+            // 3. ELIMINA L'ACCOUNT DA FIREBASE AUTHENTICATION (Novità)
+            const currentUser = auth.currentUser;
+            if (currentUser) {
+                await currentUser.delete();
+            }
+
+            alert("Account e dati eliminati completamente dai server!");
+            
+            // Chiudiamo direttamente la Mini App per forzare un riavvio pulito
+            window.Telegram.WebApp.close(); 
+            
+        } catch (e) {
+            // Nota: Firebase richiede che l'accesso sia "recente" per eliminare un account.
+            // Se dà errore, basta ricaricare la pagina (che rifarà il login automatico) e riprovare.
+            alert("Errore durante l'eliminazione: " + e.message);
+        }
+    }
+});
+      
 
         document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => {
             showScreen('leaderboardScreen');
