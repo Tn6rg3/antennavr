@@ -21,30 +21,28 @@
             --sec-bg-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
         }
 
-        /* Reset globale: blocca lo scroll dell'intera pagina web */
         html, body {
             margin: 0; 
             padding: 0;
             width: 100%;
             height: 100%;
-            overflow: hidden; /* La magia per non far scorrere la pagina su/giù */
+            overflow: hidden; 
             background-color: var(--bg-color); 
             color: var(--text-color); 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
         }
         
-        /* I contenitori delle singole schermate */
         .screen { 
             display: none; 
             flex-direction: column; 
             align-items: center; 
             width: 100%; 
-            height: 100%; /* Occupa tutto lo schermo disponibile */
+            height: 100%; 
             max-width: 500px; 
             margin: 0 auto;
             padding: 20px 15px; 
             box-sizing: border-box;
-            overflow-y: auto; /* Permette lo scroll SOLO interno alla schermata se necessario */
+            overflow-y: auto; 
         }
         .active-screen { display: flex; }
         
@@ -67,21 +65,22 @@
         .header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px; font-weight: bold; font-size: 1.2em; background: var(--sec-bg-color); padding: 12px; border-radius: 10px; box-sizing: border-box;}
         #scoreDisplay { color: #4caf50; }
         
-        /* Contenitore con scroll per la tabella di gioco */
         .table-wrapper {
-            flex-grow: 1; /* Prende tutto lo spazio rimanente */
+            flex-grow: 1; 
             width: 100%;
-            overflow-y: auto; /* Scorre solo la tabella */
+            overflow-y: auto; 
             border-radius: 10px;
             background: var(--sec-bg-color);
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         table { width: 100%; border-collapse: collapse; }
         th, td { border-bottom: 1px solid var(--hint-color); padding: 12px 5px; text-align: center; }
         th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
-        input.game-input { width: 90%; border: 2px solid var(--link-color); outline: none; margin: 0; }
-        input:read-only { border: none; background: transparent; text-align: center; font-weight: bold; }
+        
+        /* Input fisso per mantenere la tastiera aperta */
+        #permanentGameInput { border: 2px solid var(--link-color); outline: none; margin: 0; font-weight: bold; }
+        #permanentGameInput:focus { background-color: var(--sec-bg-color); }
         
         .box-panel { border: 1px solid var(--hint-color); padding: 15px; border-radius: 10px; width: 100%; margin-bottom: 15px; box-sizing: border-box; background: var(--sec-bg-color); }
         .box-panel h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; }
@@ -148,9 +147,9 @@
         <div class="privacy-box">
             <p><strong>Dati raccolti:</strong> Elaboriamo il tuo Nome Pubblico di Telegram e il tuo ID univoco.</p>
             <p><strong>Classifica Globale:</strong> Memorizziamo permanentemente il tuo record storico (Nome, Punteggio, Data).</p>
-            <p><strong>Cancellazione Dati:</strong> Puoi eliminare immediatamente il tuo record dai nostri database usando il pulsante qui sotto.</p>
+            <p><strong>Cancellazione Dati:</strong> Verranno eliminati immediatamente sia il record globale che la tua presenza in qualsiasi stanza passata o presente.</p>
         </div>
-        <button id="deleteDataBtn" class="btn-danger" style="margin-top: auto;">🗑️ Elimina il mio Record</button>
+        <button id="deleteDataBtn" class="btn-danger" style="margin-top: auto;">🗑️ Elimina tutti i miei Dati</button>
         <button id="closePrivacyBtn">Torna Indietro</button>
     </div>
 
@@ -182,13 +181,17 @@
         <div class="table-wrapper" id="tableWrapper">
             <table id="gameTable">
                 <thead>
-                    <tr><th>Scrivi</th><th>Reale</th><th>Punti</th></tr>
+                    <tr><th>Scritto</th><th>Reale</th><th>Punti</th></tr>
                 </thead>
                 <tbody id="tableBody"></tbody>
             </table>
         </div>
         
-        <button id="quitGameBtn" class="btn-danger" style="margin-top: auto;">Abbandona Partita</button>
+        <div style="width: 100%; margin-bottom: 10px;">
+            <input type="text" id="permanentGameInput" placeholder="Tocca qui e preparati..." autocomplete="off" autocapitalize="none">
+        </div>
+        
+        <button id="quitGameBtn" class="btn-danger" style="margin-top: 0;">Abbandona Partita</button>
     </div>
 
     <div id="leaderboardScreen" class="screen">
@@ -204,13 +207,11 @@
     </div>
 
     <script>
-        // Controllo Telegram Web App e Forza lo Schermo Intero Nativo
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
         
         const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
         
-        // Scommenta la riga qui sotto per forzare l'accesso solo da Telegram in produzione:
         // if (!tgUser) { document.getElementById('errorScreen').classList.add('active-screen'); throw new Error("Non in Telegram"); }
 
         // --- CONFIGURAZIONE FIREBASE ---
@@ -227,7 +228,7 @@
         const db = firebase.database();
         const auth = firebase.auth();
 
-        // Vocabolario Esteso (> 5 caratteri)
+        // Vocabolario Esteso
         const masterDictionary = [
             "abbandono", "abbaglio", "abitare", "accademia", "accendere", "accettare", "accordo", "affetto", "aggettivo", "aggiungere",
             "albergo", "allegria", "ambiente", "amicizia", "ammirare", "analizzare", "animale", "antenna", "apertura", "apparecchio",
@@ -334,7 +335,7 @@
             document.getElementById(screenId).classList.add('active-screen');
         }
 
-        // --- GESTIONE PAROLE E ANTI-RIPETIZIONE ---
+        // --- GESTIONE PAROLE ---
         function getGameWords(numWords) {
             let recentWords = JSON.parse(localStorage.getItem('recentWords') || '[]');
             let availableWords = masterDictionary.filter(w => !recentWords.includes(w));
@@ -403,16 +404,33 @@
             });
         }
 
-        // --- GESTIONE ACCOUNT & PRIVACY ---
+        // --- GESTIONE ACCOUNT & PRIVACY (AGGIORNATA: Eliminazione profonda) ---
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
 
         document.getElementById('deleteDataBtn').addEventListener('click', () => {
-            if (confirm("⚠️ Sei sicuro di voler ELIMINARE PER SEMPRE i tuoi record storici? L'azione è irreversibile.")) {
-                db.ref(`leaderboard/${myId}`).remove().then(() => {
-                    alert("I tuoi dati sono stati eliminati dai nostri server.");
+            if (confirm("⚠️ Sei sicuro di voler ELIMINARE PER SEMPRE i tuoi record storici e i tuoi dati attuali? L'azione è irreversibile.")) {
+                
+                // 1. Elimina dalla classifica globale
+                db.ref(`leaderboard/${myId}`).remove();
+                
+                // 2. Cerca e cancella l'utente da tutte le rooms (attive e passate)
+                db.ref('rooms').once('value', snapshot => {
+                    let updates = {};
+                    snapshot.forEach(roomSnap => {
+                        // Se l'utente esiste dentro l'oggetto players di questa stanza
+                        if (roomSnap.hasChild(`players/${myId}`)) {
+                            updates[`${roomSnap.key}/players/${myId}`] = null;
+                        }
+                    });
+                    
+                    if (Object.keys(updates).length > 0) {
+                        db.ref('rooms').update(updates);
+                    }
+                }).then(() => {
+                    alert("I tuoi dati sono stati eliminati completamente dai nostri server.");
                     showScreen('setupScreen');
-                }).catch(e => alert("Errore durante l'eliminazione."));
+                }).catch(e => alert("Errore durante l'eliminazione: " + e));
             }
         });
 
@@ -529,7 +547,13 @@
                     setTimeout(() => {
                         if (!gameRunning) return;
                         showScreen('gameArea');
-                        setTimeout(() => { if (gameRunning) createRow(); }, 1000); 
+                        
+                        // Fai focus sul campo fisso e fallo rimanere sempre attivo
+                        const permInput = document.getElementById('permanentGameInput');
+                        permInput.value = "";
+                        permInput.focus();
+                        
+                        setTimeout(() => { if (gameRunning) playNextWord(); }, 1000); 
                     }, 500); 
                 }
             }, 1000);
@@ -587,69 +611,71 @@
             return matrix[b.length][a.length];
         }
 
-        function createRow() {
+        // --- GESTIONE DEL GIOCO E DELL'INPUT PERMANENTE ---
+        const permInput = document.getElementById('permanentGameInput');
+
+        // Ascoltatore fisso: la casella di testo non viene mai distrutta
+        permInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && inputActive && gameRunning) {
+                const userWord = permInput.value.trim().toLowerCase();
+                if (userWord === "") return;
+
+                inputActive = false; // Blocca gli invii multipli mentre carica la prossima
+                permInput.value = ""; // Svuota l'input fisso
+                
+                const currentWord = gameWords[wordIndex];
+                const points = calculatePoints(currentWord, userWord);
+                const errors = getLevenshteinDistance(currentWord, userWord);
+                
+                let scoreColor = "";
+                let scoreText = "";
+
+                if (currentWord === userWord) {
+                    currentWpm += 2; 
+                    scoreColor = "#4caf50"; 
+                    scoreText = `<b>+${points}</b>`;
+                } else {
+                    currentWpm -= 2; 
+                    scoreColor = (points > 0) ? "#ff9800" : "#d32f2f";
+                    scoreText = `<b>+${points}</b>`;
+                }
+                if (currentWpm < 5) currentWpm = 5; 
+                
+                totalScore += points;
+                totalErrors += errors;
+
+                // Crea la riga dello storico nella tabella in alto
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}">${scoreText}</td>`;
+                document.getElementById('tableBody').appendChild(tr);
+                
+                // Scroll automatico solo della tabella
+                const tableWrapper = document.getElementById('tableWrapper');
+                tableWrapper.scrollTop = tableWrapper.scrollHeight;
+
+                document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
+                document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
+
+                db.ref(`rooms/${roomCode}/players/${myId}`).update({ 
+                    wpm: currentWpm, score: totalScore, errors: totalErrors 
+                });
+                
+                wordIndex++; 
+                setTimeout(playNextWord, 1000); // Pausa tra una parola e l'altra
+            }
+        });
+
+        function playNextWord() {
             if (!gameRunning) return;
             if (wordIndex >= gameWords.length) {
                 finishGame(false);
                 return;
             }
 
-            const tr = document.createElement('tr');
-            const tdInput = document.createElement('td');
-            const inputField = document.createElement('input');
-            inputField.type = "text"; inputField.className = "game-input";
-            inputField.autocomplete = "off"; inputField.autocapitalize = "none";
-            tdInput.appendChild(inputField);
-
-            const tdReal = document.createElement('td'); const tdScore = document.createElement('td');
-            tr.appendChild(tdInput); tr.appendChild(tdReal); tr.appendChild(tdScore);
-            document.getElementById('tableBody').appendChild(tr);
-            
-            // Scroll automatico LIMITATO SOLO ALLA TABELLA
-            const tableWrapper = document.getElementById('tableWrapper');
-            tableWrapper.scrollTop = tableWrapper.scrollHeight;
-
             const currentWord = gameWords[wordIndex];
             playMorseAudio(currentWord, currentWpm);
-            inputField.focus(); inputActive = true;
-
-            inputField.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && inputActive && gameRunning) {
-                    const userWord = inputField.value.trim().toLowerCase();
-                    if (userWord === "") return;
-
-                    inputActive = false; 
-                    
-                    const points = calculatePoints(currentWord, userWord);
-                    const errors = getLevenshteinDistance(currentWord, userWord);
-                    
-                    if (currentWord === userWord) {
-                        currentWpm += 2; 
-                        tdScore.style.color = "#4caf50"; 
-                        tdScore.innerHTML = `<b>+${points}</b>`;
-                    } else {
-                        currentWpm -= 2; 
-                        tdScore.style.color = (points > 0) ? "#ff9800" : "#d32f2f";
-                        tdScore.innerHTML = `<b>+${points}</b>`;
-                    }
-                    if (currentWpm < 5) currentWpm = 5; 
-                    
-                    totalScore += points;
-                    totalErrors += errors;
-
-                    inputField.readOnly = true; 
-                    tdReal.textContent = currentWord; 
-                    
-                    document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
-                    document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
-
-                    db.ref(`rooms/${roomCode}/players/${myId}`).update({ 
-                        wpm: currentWpm, score: totalScore, errors: totalErrors 
-                    });
-                    
-                    wordIndex++; setTimeout(createRow, 1000); 
-                }
-            });
+            inputActive = true;
+            // permInput.focus(); // Assicurati che il focus non sia perso
         }
 
         document.getElementById('quitGameBtn').addEventListener('click', () => {
@@ -660,6 +686,7 @@
         // -- FINE E SALVATAGGIO DEI DATI GLOBALI --
         function finishGame(isAbandoned) {
             gameRunning = false;
+            inputActive = false;
             document.getElementById('tabRoomBtn').style.display = 'block';
             showScreen('leaderboardScreen');
             activeTab = "room";
