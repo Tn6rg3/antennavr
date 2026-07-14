@@ -26,7 +26,7 @@
             padding: 0;
             width: 100%;
             height: 100%;
-            overflow: hidden; /* Blocca lo scroll globale del body */
+            overflow: hidden; 
             background-color: var(--bg-color); 
             color: var(--text-color); 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
@@ -212,7 +212,6 @@
     </div>
 
     <script>
-        // Inizializzazione SDK Telegram
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
         
@@ -222,12 +221,10 @@
         let myName, myId;
         let db, auth;
 
-        // --- SISTEMA DI BLOCCO ACCESSO WEB ESTERNO ---
+        // Blocco di sicurezza rigoroso
         if (!tgUser) {
-            // Se l'utente non viene da Telegram mostra l'errore
             showScreen('errorScreen');
         } else {
-            // Se l'utente viene da Telegram inizializza il gioco
             myName = tgUser.first_name;
             myId = tgUser.id.toString();
             initGame();
@@ -263,12 +260,11 @@
                     listenToRooms();
                 })
                 .catch((error) => {
-                    document.getElementById('initStatusText').innerHTML = "<span style='color:red;'>Errore di autenticazione con il server Firebase.</span>";
-                    console.error("Errore Firebase:", error);
+                    document.getElementById('initStatusText').innerHTML = "<span style='color:red;'>Errore di autenticazione Firebase.</span>";
+                    console.error(error);
                 });
         }
 
-        // Vocabolario
         const masterDictionary = [
             "abbandono", "abbaglio", "abitare", "accademia", "accendere", "accettare", "accordo", "affetto", "aggettivo", "aggiungere",
             "albergo", "allegria", "ambiente", "amicizia", "ammirare", "analizzare", "animale", "antenna", "apertura", "apparecchio",
@@ -351,7 +347,6 @@
         let activeTab = "room";
         let roomListListener = null;
 
-        // --- GESTIONE PAROLE ---
         function getGameWords(numWords) {
             let recentWords = JSON.parse(localStorage.getItem('recentWords') || '[]');
             let availableWords = masterDictionary.filter(w => !recentWords.includes(w));
@@ -368,7 +363,7 @@
             return selected;
         }
 
-        // --- BACHECA STANZE LIVE ---
+        // --- GESTIONE BACHECA STANZE (Modificata) ---
         function listenToRooms() {
             if (roomListListener) db.ref('rooms').off('value', roomListListener);
             roomListListener = db.ref('rooms').on('value', snapshot => {
@@ -382,7 +377,11 @@
                     const room = child.val();
                     const code = child.key;
                     
-                    if (Date.now() - (room.createdAt || 0) > 3600000) { db.ref(`rooms/${code}`).remove(); return; }
+                    // Pulizia stanze orfane da troppo tempo (15 minuti max)
+                    if (Date.now() - (room.createdAt || 0) > 900000) { db.ref(`rooms/${code}`).remove(); return; }
+
+                    // IGNORA le stanze 'finished' affinché non appaiano MAI nell'interfaccia
+                    if (room.status === 'finished') return; 
 
                     const li = document.createElement('li');
                     let pCount = room.players ? Object.keys(room.players).length : 0;
@@ -420,48 +419,40 @@
             });
         }
 
-        // --- GESTIONE PRIVACY (Cancellazione profonda corretta con async/await) ---
+        // --- GESTIONE PRIVACY CON ELIMINAZIONE ACCOUNT TOTALE ---
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
 
-  document.getElementById('deleteDataBtn').addEventListener('click', async () => {
-    if (confirm("⚠️ Sei sicuro di voler ELIMINARE PER SEMPRE i tuoi dati, punteggi e il tuo account? L'azione è irreversibile.")) {
-        try {
-            // 1. Rimuovi dalla leaderboard globale (Database)
-            await db.ref(`leaderboard/${myId}`).remove();
-            
-            // 2. Rimuovi l'utente ricorsivamente da tutte le stanze (Database)
-            const roomsSnapshot = await db.ref('rooms').once('value');
-            let updates = {};
-            roomsSnapshot.forEach(roomSnap => {
-                if (roomSnap.hasChild(`players/${myId}`)) {
-                    updates[`rooms/${roomSnap.key}/players/${myId}`] = null;
+        document.getElementById('deleteDataBtn').addEventListener('click', async () => {
+            if (confirm("⚠️ Sei sicuro di voler ELIMINARE PER SEMPRE i tuoi dati, punteggi e il tuo account? L'azione è irreversibile.")) {
+                try {
+                    await db.ref(`leaderboard/${myId}`).remove();
+                    
+                    const roomsSnapshot = await db.ref('rooms').once('value');
+                    let updates = {};
+                    roomsSnapshot.forEach(roomSnap => {
+                        if (roomSnap.hasChild(`players/${myId}`)) {
+                            updates[`rooms/${roomSnap.key}/players/${myId}`] = null;
+                        }
+                    });
+                    
+                    if (Object.keys(updates).length > 0) {
+                        await db.ref().update(updates);
+                    }
+
+                    // Elimina definitivamente l'utente da Firebase Authentication
+                    const currentUser = auth.currentUser;
+                    if (currentUser) {
+                        await currentUser.delete();
+                    }
+
+                    alert("Account e dati eliminati completamente dai server!");
+                    window.Telegram.WebApp.close(); 
+                } catch (e) {
+                    alert("Errore durante l'eliminazione: " + e.message);
                 }
-            });
-            
-            if (Object.keys(updates).length > 0) {
-                await db.ref().update(updates);
             }
-
-            // 3. ELIMINA L'ACCOUNT DA FIREBASE AUTHENTICATION (Novità)
-            const currentUser = auth.currentUser;
-            if (currentUser) {
-                await currentUser.delete();
-            }
-
-            alert("Account e dati eliminati completamente dai server!");
-            
-            // Chiudiamo direttamente la Mini App per forzare un riavvio pulito
-            window.Telegram.WebApp.close(); 
-            
-        } catch (e) {
-            // Nota: Firebase richiede che l'accesso sia "recente" per eliminare un account.
-            // Se dà errore, basta ricaricare la pagina (che rifarà il login automatico) e riprovare.
-            alert("Errore durante l'eliminazione: " + e.message);
-        }
-    }
-});
-      
+        });
 
         document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => {
             showScreen('leaderboardScreen');
@@ -479,7 +470,6 @@
             setTimeout(() => { notifArea.textContent = ""; }, 4000);
         }
 
-        // -- LOGICA LOBBY --
         document.getElementById('createRoomBtn').addEventListener('click', () => {
             currentWpm = parseInt(document.getElementById('startWpmInput').value);
             currentTone = parseInt(document.getElementById('toneInput').value);
@@ -550,7 +540,6 @@
             db.ref(`rooms/${roomCode}/status`).set('countdown');
         });
 
-        // -- LOGICA GIOCO E AUDIO --
         function startCountdownSequence() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
@@ -577,7 +566,6 @@
                         if (!gameRunning) return;
                         showScreen('gameArea');
                         
-                        // Focus iniziale sull'input permanente
                         const permInput = document.getElementById('permanentGameInput');
                         permInput.value = "";
                         permInput.focus();
@@ -640,16 +628,14 @@
             return matrix[b.length][a.length];
         }
 
-        // --- GESTIONE INPUT PERMANENTE (TASTIERA SEMPRE APERTA) ---
         const permInput = document.getElementById('permanentGameInput');
-
         permInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && inputActive && gameRunning) {
                 const userWord = permInput.value.trim().toLowerCase();
                 if (userWord === "") return;
 
                 inputActive = false; 
-                permInput.value = ""; // Svuota lasciando l'input sempre attivo e a fuoco
+                permInput.value = ""; 
                 
                 const currentWord = gameWords[wordIndex];
                 const points = calculatePoints(currentWord, userWord);
@@ -672,12 +658,10 @@
                 totalScore += points;
                 totalErrors += errors;
 
-                // Aggiunge la riga alla tabella visiva in alto
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}">${scoreText}</td>`;
                 document.getElementById('tableBody').appendChild(tr);
                 
-                // Scrolla solo la tabella internamente
                 const tableWrapper = document.getElementById('tableWrapper');
                 tableWrapper.scrollTop = tableWrapper.scrollHeight;
 
@@ -703,7 +687,7 @@
             const currentWord = gameWords[wordIndex];
             playMorseAudio(currentWord, currentWpm);
             inputActive = true;
-            permInput.focus(); // Riconferma il focus sull'input permanente
+            permInput.focus(); 
         }
 
         document.getElementById('quitGameBtn').addEventListener('click', () => {
@@ -711,7 +695,7 @@
             finishGame(true);
         });
 
-        // -- LOGICA FINE PARTITA --
+        // --- FINE PARTITA E RIMOZIONE STANZE DALLA BACHECA ---
         function finishGame(isAbandoned) {
             gameRunning = false;
             inputActive = false;
@@ -749,13 +733,17 @@
             });
             
             if(isHost) {
+                // FASE 1: Aggiorna lo stato in 'finished'. Questo nasconde SUBITO la stanza dalla UI di tutti.
+                db.ref(`rooms/${roomCode}/status`).set('finished');
+                
+                // FASE 2: Elimina definitivamente i dati dal server dopo 60 secondi
+                // (dà il tempo agli altri giocatori di terminare l'ultima parola e vedere la classifica della stanza)
                 setTimeout(() => {
                     db.ref(`rooms/${roomCode}`).remove();
-                }, 30000);
+                }, 60000);
             }
         }
 
-        // --- GESTIONE TAB CLASSIFICA ---
         document.getElementById('tabRoomBtn').addEventListener('click', () => {
             activeTab = "room";
             document.getElementById('tabRoomBtn').classList.add('active-tab');
