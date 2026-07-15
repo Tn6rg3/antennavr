@@ -58,9 +58,9 @@
         
         input[type="number"], input[type="text"] { padding: 10px; font-size: 1.1em; width: 100%; box-sizing: border-box; text-align: center; margin: 5px 0; border: 1px solid var(--hint-color); border-radius: 10px; background-color: var(--bg-color); color: var(--text-color); }
         
-        .settings-row { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; gap: 8px; }
-        .settings-row > div { width: 33%; text-align: center; }
-        .settings-row label { font-size: 0.9em; font-weight: bold; }
+        .settings-row { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; gap: 8px; flex-wrap: wrap;}
+        .settings-row > div { width: 48%; margin-bottom: 10px; text-align: center; }
+        .settings-row label { font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 3px; }
         
         #countdownNumber { font-size: 6em; font-weight: bold; color: #ff9800; margin: auto 0; }
         
@@ -144,6 +144,7 @@
                 <div><label>WPM:</label> <input type="number" id="startWpmInput" value="20" min="5" max="50"></div>
                 <div><label>Hz:</label> <input type="number" id="toneInput" value="600" min="300" max="1000" step="50"></div>
                 <div><label>Parole:</label> <input type="number" id="wordCountInput" value="10" min="3" max="50"></div>
+                <div><label>Timeout (min):</label> <input type="number" id="roomTimerInput" value="5" min="5" max="60"></div>
             </div>
             <button id="createRoomBtn" disabled>Crea Stanza</button>
         </div>
@@ -171,6 +172,7 @@
 
     <div id="lobbyScreen" class="screen">
         <h2>Lobby Stanza</h2>
+        <p id="lobbyTimerText" style="text-align: center; font-weight: bold; color: #ff9800; margin-top: 5px;"></p>
         <h3 style="margin-top: 10px;">Giocatori presenti:</h3>
         <ul id="playersList"></ul>
         
@@ -219,6 +221,7 @@
         <h2>🏆 Risultati</h2>
         
         <div id="roomWinnerBanner"></div>
+        <p id="waitingOthersText" style="text-align: center; font-style: italic; color: #ff9800; display: none; font-weight: bold;">⏳ In attesa che gli altri giocatori terminino la partita...</p>
 
         <div class="tab-buttons">
             <button id="tabRoomBtn" class="tab-btn active-tab">Questa Partita</button>
@@ -243,6 +246,7 @@
         let chatListener = null;
         let myCreatedRoomCode = ""; 
         let lastPlayerCount = 0;
+        let lobbyTimerInterval = null;
 
         if (!tgUser) {
             showScreen('errorScreen');
@@ -330,76 +334,68 @@
         }
 
         function listenToRooms() {
-    if (roomListListener) db.ref('rooms').off('value', roomListListener);
-    document.getElementById('createRoomBtn').disabled = false;
-    
-    roomListListener = db.ref('rooms').on('value', snapshot => {
-        const waitingList = document.getElementById('waitingRoomsList');
-        waitingList.innerHTML = '';
-        let wCount = 0;
-        
-        snapshot.forEach(child => {
-            const room = child.val();
-            const code = child.key;
+            if (roomListListener) db.ref('rooms').off('value', roomListListener);
+            document.getElementById('createRoomBtn').disabled = false;
             
-            // Ignora stanze scadute basate sul timer impostato dall'host
-            if (room.expiresAt && Date.now() > room.expiresAt) {
-                return;
-            }
+            roomListListener = db.ref('rooms').on('value', snapshot => {
+                const waitingList = document.getElementById('waitingRoomsList');
+                waitingList.innerHTML = '';
+                let wCount = 0;
+                
+                snapshot.forEach(child => {
+                    const room = child.val();
+                    const code = child.key;
+                    
+                    if (room.expiresAt && Date.now() > room.expiresAt) {
+                        return;
+                    }
 
-            let pCount = room.players ? Object.keys(room.players).length : 0;
-            
-            // Pulizia stanze vuote (vecchie più di 10 secondi) per evitare accumuli di stanze fantasma
-            if (pCount === 0 && typeof room.createdAt === 'number' && Date.now() - room.createdAt > 10000) {
-                db.ref(`rooms/${code}`).remove();
-                return;
-            }
+                    let pCount = room.players ? Object.keys(room.players).length : 0;
+                    
+                    if (pCount === 0 && typeof room.createdAt === 'number' && Date.now() - room.createdAt > 10000) {
+                        db.ref(`rooms/${code}`).remove();
+                        return;
+                    }
 
-            if (room.status === 'waiting') {
-                wCount++;
-                const li = document.createElement('li');
+                    if (room.status === 'waiting') {
+                        wCount++;
+                        const li = document.createElement('li');
+                        
+                        const span = document.createElement('span');
+                        const boldCode = document.createElement('b');
+                        boldCode.textContent = `#${code}`;
+                        
+                        const smallDetails = document.createElement('small');
+                        const wordCountDisplay = room.wordCount || (room.words ? room.words.length : 10);
+                        smallDetails.textContent = `${pCount} Gioc. | ${room.wpm} WPM | ${wordCountDisplay} Parole`;
+                        
+                        span.appendChild(boldCode);
+                        span.appendChild(document.createElement('br'));
+                        span.appendChild(smallDetails);
+                        
+                        const btn = document.createElement('button');
+                        btn.className = 'join-btn-small';
+                        btn.textContent = 'Entra';
+                        btn.onclick = function() { joinSpecificRoom(code); };
+                        
+                        li.appendChild(span);
+                        li.appendChild(btn);
+                        waitingList.appendChild(li);
+                    }
+                });
                 
-                // Creazione sicura degli elementi per evitare XSS
-                const span = document.createElement('span');
-                const boldCode = document.createElement('b');
-                boldCode.textContent = `#${code}`;
-                
-                const smallDetails = document.createElement('small');
-                const wordCountDisplay = room.wordCount || (room.words ? room.words.length : 10);
-                smallDetails.textContent = `${pCount} Gioc. | ${room.wpm} WPM | ${wordCountDisplay} Parole`;
-                
-                span.appendChild(boldCode);
-                span.appendChild(document.createElement('br'));
-                span.appendChild(smallDetails);
-                
-                const btn = document.createElement('button');
-                btn.className = 'join-btn-small';
-                btn.textContent = 'Entra';
-                btn.onclick = function() { joinSpecificRoom(code); };
-                
-                li.appendChild(span);
-                li.appendChild(btn);
-                waitingList.appendChild(li);
-            }
-        });
-        
-        if (wCount === 0) {
-            const li = document.createElement('li');
-            li.style.justifyContent = 'center';
-            li.style.color = 'var(--hint-color)';
-            li.textContent = 'Nessuna sfida attiva. Creane una!';
-            waitingList.appendChild(li);
+                if (wCount === 0) {
+                    const li = document.createElement('li');
+                    li.style.justifyContent = 'center';
+                    li.style.color = 'var(--hint-color)';
+                    li.textContent = 'Nessuna sfida attiva. Creane una!';
+                    waitingList.appendChild(li);
+                }
+            });
         }
-    });
-}
-
-window.joinSpecificRoom = function(code) {
-    if (!code) return;
-    roomCode = code;
-    joinRoomLogic(false);
-}
 
         window.joinSpecificRoom = function(code) {
+            if (!code) return;
             roomCode = code;
             joinRoomLogic(false);
         }
@@ -422,12 +418,15 @@ window.joinSpecificRoom = function(code) {
             currentWpm = parseInt(document.getElementById('startWpmInput').value);
             currentTone = parseInt(document.getElementById('toneInput').value);
             let requestedWordCount = parseInt(document.getElementById('wordCountInput').value);
+            let timerMinutes = parseInt(document.getElementById('roomTimerInput').value);
             
             if (isNaN(requestedWordCount) || requestedWordCount < 3) requestedWordCount = 3;
             if (requestedWordCount > 50) requestedWordCount = 50;
+            if (isNaN(timerMinutes) || timerMinutes < 5) timerMinutes = 5; 
 
             roomCode = generateRoomCode();
             gameWords = getGameWords(requestedWordCount); 
+            let expiresAtValue = Date.now() + (timerMinutes * 60 * 1000); 
 
             db.ref('rooms/' + roomCode).set({
                 status: 'waiting', 
@@ -436,6 +435,7 @@ window.joinSpecificRoom = function(code) {
                 wordCount: requestedWordCount,
                 words: gameWords, 
                 createdAt: firebase.database.ServerValue.TIMESTAMP,
+                expiresAt: expiresAtValue,
                 hostId: myId
             }).then(() => {
                 joinRoomLogic(false);
@@ -468,22 +468,15 @@ window.joinSpecificRoom = function(code) {
             document.getElementById('reenterRoomBtn').style.display = 'none';
             joinRoomLogic(true);
         });
-// Pulsante Invita Amici su Telegram
-document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
-    if (roomCode) {
-        // 1. INSERISCI QUI L'USERNAME DEL TUO BOT (senza la @)
-        const linkAlMioBot = "https://t.me/cwappgame_bot"; 
-        
-        // 2. Il testo del messaggio
-        const text = "Ehi! Vieni a sfidarmi a Telegrafia! Apri il gioco ed entra nella stanza: " + roomCode;
-        
-        // 3. Creiamo l'URL di condivisione unendo il link del bot e il testo
-        const shareUrl = "https://t.me/share/url?url=" + encodeURIComponent(linkAlMioBot) + "&text=" + encodeURIComponent(text);
-        
-        // 4. Apriamo la finestra di Telegram per inoltrare il messaggio
-        tg.openTelegramLink(shareUrl);
-    }
-});
+
+        document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
+            if (roomCode) {
+                const linkAlMioBot = "https://t.me/cwappgame_bot"; 
+                const text = "Ehi! Vieni a sfidarmi a Telegrafia! Apri il gioco ed entra nella stanza: " + roomCode;
+                const shareUrl = "https://t.me/share/url?url=" + encodeURIComponent(linkAlMioBot) + "&text=" + encodeURIComponent(text);
+                tg.openTelegramLink(shareUrl);
+            }
+        });
 
         function exitRoomCleanly() {
             if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
@@ -505,55 +498,90 @@ document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
             showScreen('lobbyScreen');
             document.getElementById('permanentGameInput').blur(); 
 
+            if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
+            document.getElementById('lobbyTimerText').textContent = "";
+
             const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-            playerRef.onDisconnect().remove();
-
-            playerRef.set({ 
-                name: myName, 
-                username: tgUsername, 
-                score: 0, 
-                finished: false, 
-                joinedAt: firebase.database.ServerValue.TIMESTAMP 
-            });
-
-            showChatButton();
-            listenToChat();
-
-            if (currentRoomListener && !isReconnect) currentRoomListener.off();
-            currentRoomListener = db.ref(`rooms/${roomCode}`);
             
-            currentRoomListener.on('value', snapshot => {
+            playerRef.once('value', snapshot => {
+                if (snapshot.exists() && snapshot.val().finished) {
+                    alert("Hai già terminato questa partita! Attendi gli altri o cambia stanza.");
+                    showScreen('leaderboardScreen');
+                    return;
+                }
+
+                playerRef.onDisconnect().remove();
+
                 if (!snapshot.exists()) {
-                    myCreatedRoomCode = "";
-                    document.getElementById('reenterRoomBtn').style.display = 'none';
-                    if (!gameRunning) alert("La stanza è stata chiusa.");
-                    gameRunning = false;
-                    exitRoomCleanly();
-                    return;
+                    playerRef.set({ 
+                        name: myName, 
+                        username: tgUsername, 
+                        score: 0, 
+                        finished: false, 
+                        joinedAt: firebase.database.ServerValue.TIMESTAMP 
+                    });
+                } else {
+                    playerRef.update({ joinedAt: firebase.database.ServerValue.TIMESTAMP });
                 }
 
-                const roomData = snapshot.val();
-                const playersData = roomData.players || {};
+                showChatButton();
+                listenToChat();
+
+                if (currentRoomListener && !isReconnect) currentRoomListener.off();
+                currentRoomListener = db.ref(`rooms/${roomCode}`);
                 
-                if (roomData.status === 'countdown' && !gameRunning) {
-                    currentWpm = roomData.wpm; 
-                    currentTone = roomData.tone; 
-                    gameWords = roomData.words;
-                    startCountdownSequence();
-                    return;
-                }
-
-                if (roomData.status === 'waiting') {
-                    renderPlayersList(playersData, roomData.hostId);
-                    
-                    const playerCount = Object.keys(playersData).length;
-                    if (lastPlayerCount > 0 && playerCount > lastPlayerCount) {
-                        playNotificationSound();
+                currentRoomListener.on('value', snapshot => {
+                    if (!snapshot.exists()) {
+                        myCreatedRoomCode = "";
+                        document.getElementById('reenterRoomBtn').style.display = 'none';
+                        if (!gameRunning) alert("La stanza è stata chiusa o è scaduta.");
+                        gameRunning = false;
+                        if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
+                        exitRoomCleanly();
+                        return;
                     }
-                    lastPlayerCount = playerCount;
 
-                    handleRoomHealth(roomCode, playersData, roomData.hostId);
-                }
+                    const roomData = snapshot.val();
+                    const playersData = roomData.players || {};
+                    
+                    if (roomData.status === 'countdown' && !gameRunning) {
+                        if (lobbyTimerInterval) clearInterval(lobbyTimerInterval); 
+                        document.getElementById('lobbyTimerText').textContent = "";
+                        currentWpm = roomData.wpm; 
+                        currentTone = roomData.tone; 
+                        gameWords = roomData.words;
+                        startCountdownSequence();
+                        return;
+                    }
+
+                    if (roomData.status === 'waiting') {
+                        renderPlayersList(playersData, roomData.hostId);
+                        
+                        if (roomData.expiresAt && !lobbyTimerInterval) {
+                            lobbyTimerInterval = setInterval(() => {
+                                let timeLeft = roomData.expiresAt - Date.now();
+                                if (timeLeft <= 0) {
+                                    clearInterval(lobbyTimerInterval);
+                                    if (roomData.hostId === myId) {
+                                        db.ref(`rooms/${roomCode}`).remove(); 
+                                    }
+                                } else {
+                                    let min = Math.floor(timeLeft / 60000);
+                                    let sec = Math.floor((timeLeft % 60000) / 1000);
+                                    document.getElementById('lobbyTimerText').textContent = `⏳ Chiusura stanza in: ${min}:${sec.toString().padStart(2, '0')}`;
+                                }
+                            }, 1000);
+                        }
+
+                        const playerCount = Object.keys(playersData).length;
+                        if (lastPlayerCount > 0 && playerCount > lastPlayerCount) {
+                            playNotificationSound();
+                        }
+                        lastPlayerCount = playerCount;
+
+                        handleRoomHealth(roomCode, playersData, roomData.hostId);
+                    }
+                });
             });
         }
 
@@ -643,39 +671,35 @@ document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
         }
 
         function listenToChat() {
-    if (!roomCode) return;
-    const chatRef = db.ref(`rooms/${roomCode}/chat`);
-    if (chatListener) chatRef.off();
-    
-    chatListener = chatRef.limitToLast(40).on('value', snapshot => {
-        const container = document.getElementById('chatMessages');
-        container.innerHTML = ''; // Questa riga è sicura perché svuota solo il contenitore
-        
-        snapshot.forEach(child => {
-            const msg = child.val();
+            if (!roomCode) return;
+            const chatRef = db.ref(`rooms/${roomCode}/chat`);
+            if (chatListener) chatRef.off();
             
-            // Crea il div contenitore
-            const div = document.createElement('div');
-            div.style.marginBottom = '6px';
-            
-            // Crea il nome in grassetto
-            const nameBold = document.createElement('b');
-            nameBold.style.color = 'var(--link-color)';
-            nameBold.textContent = msg.name + ': ';
-            
-            // Crea il testo del messaggio (nodo di testo puro)
-            const textNode = document.createTextNode(msg.text);
-            
-            // Assembla il tutto
-            div.appendChild(nameBold);
-            div.appendChild(textNode);
-            
-            container.appendChild(div);
-        });
-        
-        container.scrollTop = container.scrollHeight;
-    });
-}
+            chatListener = chatRef.limitToLast(40).on('value', snapshot => {
+                const container = document.getElementById('chatMessages');
+                container.innerHTML = ''; 
+                
+                snapshot.forEach(child => {
+                    const msg = child.val();
+                    
+                    const div = document.createElement('div');
+                    div.style.marginBottom = '6px';
+                    
+                    const nameBold = document.createElement('b');
+                    nameBold.style.color = 'var(--link-color)';
+                    nameBold.textContent = msg.name + ': ';
+                    
+                    const textNode = document.createTextNode(msg.text);
+                    
+                    div.appendChild(nameBold);
+                    div.appendChild(textNode);
+                    
+                    container.appendChild(div);
+                });
+                
+                container.scrollTop = container.scrollHeight;
+            });
+        }
 
         function sendChatMessage() {
             const input = document.getElementById('chatInput');
@@ -765,89 +789,88 @@ document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
         }
 
         function getLevenshteinDistance(a, b) {
-    const matrix = [];
-    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-    for (let i = 1; i <= b.length; i++) {
-        for (let j = 1; j <= a.length; j++) {
-            if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1];
-            else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
-        }
-    }
-    return matrix[b.length][a.length];
-}
-
-const permInput = document.getElementById('permanentGameInput');
-permInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter' && inputActive && gameRunning) {
-        const userWord = permInput.value.trim().toLowerCase();
-        if (userWord === "") return;
-        
-        inputActive = false; 
-        permInput.value = ""; 
-        
-        const currentWord = gameWords[wordIndex];
-        const errors = getLevenshteinDistance(currentWord, userWord);
-        
-        let points = 0;
-        let scoreColor = "";
-
-        // Logica punteggio basata su errori (Levenshtein)
-        if (errors === 0) {
-            points = 10;
-            currentWpm += 2;
-            scoreColor = "#4caf50"; // Verde
-        } else if (errors === 1) {
-            points = 2;
-            currentWpm -= 1;
-            scoreColor = "#ff9800"; // Arancione
-        } else {
-            points = 0;
-            currentWpm -= 2;
-            scoreColor = "#d32f2f"; // Rosso
+            const matrix = [];
+            for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+            for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1];
+                    else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+                }
+            }
+            return matrix[b.length][a.length];
         }
 
-        currentWpm = Math.max(5, currentWpm); // Sintassi più pulita per il minimo
-        totalScore += points;
+        const permInput = document.getElementById('permanentGameInput');
+        permInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && inputActive && gameRunning) {
+                const userWord = permInput.value.trim().toLowerCase();
+                if (userWord === "") return;
+                
+                inputActive = false; 
+                permInput.value = ""; 
+                
+                const currentWord = gameWords[wordIndex];
+                const errors = getLevenshteinDistance(currentWord, userWord);
+                
+                let points = 0;
+                let scoreColor = "";
 
-        // --- CREAZIONE SICURA DOM (Standard CodeQL) ---
-        const tr = document.createElement('tr');
+                if (errors === 0) {
+                    points = 10;
+                    currentWpm += 2;
+                    scoreColor = "#4caf50"; 
+                } else if (errors === 1) {
+                    points = 2;
+                    currentWpm -= 1;
+                    scoreColor = "#ff9800"; 
+                } else {
+                    points = 0;
+                    currentWpm -= 2;
+                    scoreColor = "#d32f2f"; 
+                }
 
-        const tdScritto = document.createElement('td');
-        tdScritto.textContent = userWord;
-        tr.appendChild(tdScritto);
+                currentWpm = Math.max(5, currentWpm); 
+                totalScore += points;
 
-        const tdReale = document.createElement('td');
-        const boldReale = document.createElement('b');
-        boldReale.textContent = currentWord;
-        tdReale.appendChild(boldReale);
-        tr.appendChild(tdReale);
+                const tr = document.createElement('tr');
 
-        const tdPunti = document.createElement('td');
-        tdPunti.style.color = scoreColor;
-        tdPunti.textContent = (points > 0 ? "+" : "") + points;
-        tr.appendChild(tdPunti);
+                const tdScritto = document.createElement('td');
+                tdScritto.textContent = userWord;
+                tr.appendChild(tdScritto);
 
-        const tbody = document.getElementById('tableBody');
-        tbody.appendChild(tr);
-        
-        const tableWrapper = document.getElementById('tableWrapper');
-        tableWrapper.scrollTop = tableWrapper.scrollHeight;
+                const tdReale = document.createElement('td');
+                const boldReale = document.createElement('b');
+                boldReale.textContent = currentWord;
+                tdReale.appendChild(boldReale);
+                tr.appendChild(tdReale);
 
-        document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
-        document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
+                const tdPunti = document.createElement('td');
+                tdPunti.style.color = scoreColor;
+                tdPunti.textContent = (points > 0 ? "+" : "") + points;
+                tr.appendChild(tdPunti);
 
-        if (roomCode) {
-            db.ref(`rooms/${roomCode}/players/${myId}`).update({ 
-                score: totalScore, 
-                wpm: currentWpm 
-            });
-        }
-        
-        wordIndex++; 
-        setTimeout(playNextWord, 600); 
-    }
-});
+                const tbody = document.getElementById('tableBody');
+                tbody.appendChild(tr);
+                
+                const tableWrapper = document.getElementById('tableWrapper');
+                tableWrapper.scrollTop = tableWrapper.scrollHeight;
+
+                document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
+                document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
+
+                if (roomCode) {
+                    db.ref(`rooms/${roomCode}/players/${myId}`).update({ 
+                        score: totalScore, 
+                        wpm: currentWpm 
+                    });
+                }
+                
+                wordIndex++; 
+                setTimeout(playNextWord, 600); 
+            }
+        });
+
         function playNextWord() {
             if (!gameRunning) return;
             if (wordIndex >= gameWords.length) { finishGame(); return; }
@@ -930,117 +953,124 @@ permInput.addEventListener('keypress', function(e) {
         });
 
         function renderRoomLeaderboard(players) {
-    const container = document.getElementById('leaderboardContainer');
-    container.innerHTML = '';
-    const winnerBanner = document.getElementById('roomWinnerBanner');
-    winnerBanner.innerHTML = '';
+            const container = document.getElementById('leaderboardContainer');
+            container.innerHTML = '';
+            const winnerBanner = document.getElementById('roomWinnerBanner');
+            winnerBanner.innerHTML = '';
+            const waitingText = document.getElementById('waitingOthersText');
 
-    const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score);
-    
-    if (sortedPlayers.length > 0) {
-        const winner = sortedPlayers[0];
-        // Banner Vincitore creato in modo sicuro
-        const bannerDiv = document.createElement('div');
-        bannerDiv.className = 'box-panel';
-        bannerDiv.style.cssText = 'background:#4caf50; color:white; text-align:center;';
-        bannerDiv.textContent = `🎉 Vincitore: ${winner.name} con ${winner.score} punti! 🎉`;
-        winnerBanner.appendChild(bannerDiv);
-    }
+            let allFinished = true;
+            const playersArray = Object.values(players);
+            playersArray.forEach(p => {
+                if (!p.finished) allFinished = false;
+            });
 
-    sortedPlayers.forEach((player, index) => {
-        const row = document.createElement('div');
-        row.className = 'leaderboard-row';
-        
-        let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-        
-        // Contenitore Nome
-        const nameSpan = document.createElement('span');
-        
-        if (player.username) {
-            const nameLink = document.createElement('span');
-            nameLink.textContent = `${medal} ${player.name}`;
-            nameLink.style.color = 'var(--link-color)';
-            nameLink.style.cursor = 'pointer';
-            nameLink.style.textDecoration = 'underline';
-            nameLink.onclick = function() { openTelegramProfile(player.username); };
-            nameSpan.appendChild(nameLink);
-        } else {
-            nameSpan.textContent = `${medal} ${player.name}`;
-        }
-        
-        // Contenitore Punteggio
-        const scoreSpan = document.createElement('span');
-        const scoreBold = document.createElement('b');
-        scoreBold.textContent = `${player.score} pt`;
-        scoreSpan.appendChild(scoreBold);
-        
-        row.appendChild(nameSpan);
-        row.appendChild(scoreSpan);
-        container.appendChild(row);
-    });
-}
-        function fetchAndRenderGlobalLeaderboard() {
-    const container = document.getElementById('leaderboardContainer');
-    container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-    document.getElementById('roomWinnerBanner').innerHTML = '';
-
-    if (!db) return;
-
-    db.ref('leaderboard').orderByChild('score').limitToLast(50).once('value', snapshot => {
-        container.innerHTML = '<h3 style="text-align:center;">Top 50 Globale</h3>';
-        let players = [];
-        snapshot.forEach(child => { players.push(child.val()); });
-        players.reverse(); 
-
-        if (players.length === 0) { 
-            container.innerHTML += '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; 
-            return; 
-        }
-
-        players.forEach((player, index) => {
-            const row = document.createElement('div');
-            row.className = 'leaderboard-row';
-            
-            let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-            
-            // Creazione sicura del contenuto
-            const nameSpan = document.createElement('span');
-            
-            // Gestione cliccabilità nome
-            if (player.username) {
-                const nameLink = document.createElement('span');
-                nameLink.textContent = `${medalText} ${player.name}`;
-                nameLink.style.color = 'var(--link-color)';
-                nameLink.style.cursor = 'pointer';
-                nameLink.style.textDecoration = 'underline';
-                nameLink.onclick = function() { openTelegramProfile(player.username); };
-                nameSpan.appendChild(nameLink);
+            if (allFinished) {
+                waitingText.style.display = 'none';
             } else {
-                nameSpan.textContent = `${medalText} ${player.name}`;
+                waitingText.style.display = 'block';
             }
 
-            // Aggiunta dettagli wpm e data
-            const details = document.createElement('br');
-            const small = document.createElement('small');
-            small.style.color = 'var(--hint-color)';
-            small.style.fontSize = '0.8em';
-            small.textContent = `(${player.date} - ${player.wpm} WPM)`;
+            const sortedPlayers = playersArray.sort((a, b) => b.score - a.score);
             
-            nameSpan.appendChild(details);
-            nameSpan.appendChild(small);
+            if (sortedPlayers.length > 0 && allFinished) {
+                const winner = sortedPlayers[0];
+                const bannerDiv = document.createElement('div');
+                bannerDiv.className = 'box-panel';
+                bannerDiv.style.cssText = 'background:#4caf50; color:white; text-align:center;';
+                bannerDiv.textContent = `🎉 Vincitore: ${winner.name} con ${winner.score} punti! 🎉`;
+                winnerBanner.appendChild(bannerDiv);
+            }
 
-            // Punteggio
-            const scoreSpan = document.createElement('span');
-            const boldScore = document.createElement('b');
-            boldScore.textContent = `${player.score} pt`;
-            scoreSpan.appendChild(boldScore);
+            sortedPlayers.forEach((player, index) => {
+                const row = document.createElement('div');
+                row.className = 'leaderboard-row';
+                
+                let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                
+                const nameSpan = document.createElement('span');
+                
+                if (player.username) {
+                    const nameLink = document.createElement('span');
+                    nameLink.textContent = `${medal} ${player.name}`;
+                    nameLink.style.color = 'var(--link-color)';
+                    nameLink.style.cursor = 'pointer';
+                    nameLink.style.textDecoration = 'underline';
+                    nameLink.onclick = function() { openTelegramProfile(player.username); };
+                    nameSpan.appendChild(nameLink);
+                } else {
+                    nameSpan.textContent = `${medal} ${player.name}`;
+                }
+                
+                const scoreSpan = document.createElement('span');
+                const scoreBold = document.createElement('b');
+                scoreBold.textContent = `${player.score} pt`;
+                scoreSpan.appendChild(scoreBold);
+                
+                row.appendChild(nameSpan);
+                row.appendChild(scoreSpan);
+                container.appendChild(row);
+            });
+        }
 
-            row.appendChild(nameSpan);
-            row.appendChild(scoreSpan);
-            container.appendChild(row);
-        });
-    });
-}
+        function fetchAndRenderGlobalLeaderboard() {
+            const container = document.getElementById('leaderboardContainer');
+            container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+            document.getElementById('roomWinnerBanner').innerHTML = '';
+
+            if (!db) return;
+
+            db.ref('leaderboard').orderByChild('score').limitToLast(50).once('value', snapshot => {
+                container.innerHTML = '<h3 style="text-align:center;">Top 50 Globale</h3>';
+                let players = [];
+                snapshot.forEach(child => { players.push(child.val()); });
+                players.reverse(); 
+
+                if (players.length === 0) { 
+                    container.innerHTML += '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; 
+                    return; 
+                }
+
+                players.forEach((player, index) => {
+                    const row = document.createElement('div');
+                    row.className = 'leaderboard-row';
+                    
+                    let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                    
+                    const nameSpan = document.createElement('span');
+                    
+                    if (player.username) {
+                        const nameLink = document.createElement('span');
+                        nameLink.textContent = `${medalText} ${player.name}`;
+                        nameLink.style.color = 'var(--link-color)';
+                        nameLink.style.cursor = 'pointer';
+                        nameLink.style.textDecoration = 'underline';
+                        nameLink.onclick = function() { openTelegramProfile(player.username); };
+                        nameSpan.appendChild(nameLink);
+                    } else {
+                        nameSpan.textContent = `${medalText} ${player.name}`;
+                    }
+
+                    const details = document.createElement('br');
+                    const small = document.createElement('small');
+                    small.style.color = 'var(--hint-color)';
+                    small.style.fontSize = '0.8em';
+                    small.textContent = `(${player.date} - ${player.wpm} WPM)`;
+                    
+                    nameSpan.appendChild(details);
+                    nameSpan.appendChild(small);
+
+                    const scoreSpan = document.createElement('span');
+                    const boldScore = document.createElement('b');
+                    boldScore.textContent = `${player.score} pt`;
+                    scoreSpan.appendChild(boldScore);
+
+                    row.appendChild(nameSpan);
+                    row.appendChild(scoreSpan);
+                    container.appendChild(row);
+                });
+            });
+        }
     </script>
 </body>
 </html>
