@@ -643,23 +643,39 @@ document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
         }
 
         function listenToChat() {
-            if (!roomCode) return;
-            const chatRef = db.ref(`rooms/${roomCode}/chat`);
-            if (chatListener) chatRef.off();
+    if (!roomCode) return;
+    const chatRef = db.ref(`rooms/${roomCode}/chat`);
+    if (chatListener) chatRef.off();
+    
+    chatListener = chatRef.limitToLast(40).on('value', snapshot => {
+        const container = document.getElementById('chatMessages');
+        container.innerHTML = ''; // Questa riga è sicura perché svuota solo il contenitore
+        
+        snapshot.forEach(child => {
+            const msg = child.val();
             
-            chatListener = chatRef.limitToLast(40).on('value', snapshot => {
-                const container = document.getElementById('chatMessages');
-                container.innerHTML = '';
-                snapshot.forEach(child => {
-                    const msg = child.val();
-                    const div = document.createElement('div');
-                    div.style.marginBottom = '6px';
-                    div.innerHTML = `<b style="color:var(--link-color);">${msg.name}:</b> ${msg.text}`;
-                    container.appendChild(div);
-                });
-                container.scrollTop = container.scrollHeight;
-            });
-        }
+            // Crea il div contenitore
+            const div = document.createElement('div');
+            div.style.marginBottom = '6px';
+            
+            // Crea il nome in grassetto
+            const nameBold = document.createElement('b');
+            nameBold.style.color = 'var(--link-color)';
+            nameBold.textContent = msg.name + ': ';
+            
+            // Crea il testo del messaggio (nodo di testo puro)
+            const textNode = document.createTextNode(msg.text);
+            
+            // Assembla il tutto
+            div.appendChild(nameBold);
+            div.appendChild(textNode);
+            
+            container.appendChild(div);
+        });
+        
+        container.scrollTop = container.scrollHeight;
+    });
+}
 
         function sendChatMessage() {
             const input = document.getElementById('chatInput');
