@@ -434,13 +434,22 @@
         });
 
         // Pulsante Invita Amici su Telegram
-        document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
-            if (roomCode) {
-                const text = "Ehi! Vieni a sfidarmi a Telegrafia! Apri il bot e inserisci il codice stanza: " + roomCode;
-                const shareUrl = "https://t.me/share/url?url=&text=" + encodeURIComponent(text);
-                tg.openTelegramLink(shareUrl);
-            }
-        });
+document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
+    if (roomCode) {
+        // 1. INSERISCI QUI L'USERNAME DEL TUO BOT (senza la @)
+        const linkAlMioBot = "https://t.me/cwappgame_bot"; 
+        
+        // 2. Il testo del messaggio
+        const text = "Ehi! Vieni a sfidarmi a Telegrafia! Apri il gioco e unisciti alla atanza: " + roomCode;
+        
+        // 3. Creiamo l'URL di condivisione unendo il link del bot e il testo
+        const shareUrl = "https://t.me/share/url?url=" + encodeURIComponent(linkAlMioBot) + "&text=" + encodeURIComponent(text);
+        
+        // 4. Apriamo la finestra di Telegram per inoltrare il messaggio
+        tg.openTelegramLink(shareUrl);
+    }
+});
+
 
         function exitRoomCleanly() {
             if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
