@@ -59,7 +59,7 @@
         input[type="number"], input[type="text"] { padding: 10px; font-size: 1.1em; width: 100%; box-sizing: border-box; text-align: center; margin: 5px 0; border: 1px solid var(--hint-color); border-radius: 10px; background-color: var(--bg-color); color: var(--text-color); }
         
         .settings-row { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; gap: 8px; }
-        .settings-row > div { width: 50%; text-align: center; }
+        .settings-row > div { width: 33%; text-align: center; }
         .settings-row label { font-size: 0.9em; font-weight: bold; }
         
         #countdownNumber { font-size: 6em; font-weight: bold; color: #ff9800; margin: auto 0; }
@@ -122,7 +122,7 @@
     </div>
 
     <div id="loadingScreen" class="screen active-screen">
-        <h2>Caricamento... 📻</h2>
+        <h2 style="margin-top: 40px;">Caricamento... 📻</h2>
         <p id="initStatusText">Verifica delle credenziali Telegram in corso...</p>
     </div>
 
@@ -143,10 +143,7 @@
             <div class="settings-row">
                 <div><label>WPM:</label> <input type="number" id="startWpmInput" value="20" min="5" max="50"></div>
                 <div><label>Hz:</label> <input type="number" id="toneInput" value="600" min="300" max="1000" step="50"></div>
-            </div>
-            <div class="settings-row">
                 <div><label>Parole:</label> <input type="number" id="wordCountInput" value="10" min="3" max="50"></div>
-                <div><label>Scadenza (min):</label> <input type="number" id="roomTimeoutInput" value="5" min="1" max="30"></div>
             </div>
             <button id="createRoomBtn" disabled>Crea Stanza</button>
         </div>
@@ -174,18 +171,16 @@
 
     <div id="lobbyScreen" class="screen">
         <h2>Lobby Stanza</h2>
-        
-        <p id="roomTimerText" style="text-align: center; color: var(--btn-secondary); font-weight: bold; margin-bottom: 10px; font-size: 1.1em;"></p>
-
         <h3 style="margin-top: 10px;">Giocatori presenti:</h3>
         <ul id="playersList"></ul>
         
+        <!-- Pulsante Inoltro Invito su Telegram -->
         <button id="inviteFriendsBtn" class="btn-link" style="font-weight: bold; font-size: 1em; margin-bottom: 10px;">📢 Invita Amici su Telegram</button>
 
         <div style="margin-top: auto; width: 100%;">
             <p id="statusInfoText" style="text-align: center; color: var(--hint-color); font-style: italic; margin-bottom: 10px;">Verifica ruolo...</p>
             <button id="startMultiplayerBtn" style="display:none; background-color: #4caf50;">AVVIA PARTITA</button>
-            <button id="deleteRoomBtn" style="display:none;" class="btn-danger">ELIMINA STANZA DEFINITIVAMENTE</button>
+            <button id="deleteRoomBtn" style="display:none;" class="btn-danger">ELIMINA STANZA</button>
             <p id="waitingHostText" style="display:none; font-style: italic; text-align: center;">In attesa che l'Host avvii...</p>
             <button id="leaveLobbyBtn" class="btn-secondary" style="margin-top: 15px;">Esci dalla Stanza</button>
         </div>
@@ -235,12 +230,6 @@
     </div>
 
     <script>
-        // --- ⚠️ INSERISCI QUI IL TOKEN DEL TUO BOT TELEGRAM DA BOTFATHER ---
-        const BOT_TOKEN = ""; // Mettilo qui se lo vuoi usare. Se lo lasci vuoto (""), non farà errori.
-        
-        // --- ⚠️ INSERISCI QUI IL NOME DEL TUO BOT (es. TelegrafiaGameBot) ---
-        const NOME_BOT = "TelegrafiaBot"; // Sostituiscilo con il vero nome del tuo bot
-
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
         
@@ -254,7 +243,6 @@
         let chatListener = null;
         let myCreatedRoomCode = ""; 
         let lastPlayerCount = 0;
-        let roomTimerInterval = null;
 
         if (!tgUser) {
             showScreen('errorScreen');
@@ -265,10 +253,8 @@
         }
 
         function showScreen(screenId) {
-            if (screenId === 'setupScreen') {
-                clearInterval(roomTimerInterval);
-                document.getElementById('roomTimerText').textContent = "";
-                if (!myCreatedRoomCode && currentRoomListener) {
+            if (screenId === 'setupScreen' && currentRoomListener) {
+                if (!myCreatedRoomCode) {
                     currentRoomListener.off();
                     currentRoomListener = null;
                     roomCode = "";
@@ -316,10 +302,33 @@
                 });
         }
 
-        const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "misura", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
+        const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
         const morseDict = { 'a': '.-', 'b': '-...', 'c': '-.-.', 'd': '-..', 'e': '.', 'f': '..-.', 'g': '--.', 'h': '....', 'i': '..', 'j': '.---', 'k': '-.-', 'l': '.-..', 'm': '--', 'n': '-.', 'o': '---', 'p': '.--.', 'q': '--.-', 'r': '.-.', 's': '...', 't': '-', 'u': '..-', 'v': '...-', 'w': '.--', 'x': '-..-', 'y': '-.--', 'z': '--..' };
 
-        // Spazzino automatico (Ora si basa SOLO sulla scadenza del timer)
+        let roomCode = "";
+        let gameWords = [];
+        let currentWpm = 20;
+        let currentTone = 600;
+        let totalScore = 0; 
+        let totalErrors = 0; 
+        let wordIndex = 0;
+        let audioCtx;
+        let inputActive = false;
+        let gameRunning = false;
+        let knownPlayers = {}; 
+        let activeTab = "room";
+        let roomListListener = null;
+
+        function getGameWords(numWords) {
+            let recentWords = JSON.parse(localStorage.getItem('recentWords') || '[]');
+            let availableWords = masterDictionary.filter(w => !recentWords.includes(w));
+            if (availableWords.length < numWords) { availableWords = masterDictionary; recentWords = []; }
+            let selected = availableWords.sort(() => 0.5 - Math.random()).slice(0, numWords);
+            recentWords = [...recentWords, ...selected].slice(-100);
+            localStorage.setItem('recentWords', JSON.stringify(recentWords));
+            return selected;
+        }
+
         function listenToRooms() {
             if (roomListListener) db.ref('rooms').off('value', roomListListener);
             document.getElementById('createRoomBtn').disabled = false;
@@ -333,8 +342,9 @@
                     const room = child.val();
                     const code = child.key;
                     
-                    // L'unica regola per distruggere una stanza automaticamente è la scadenza del timer impostata dall'host
-                    if (room.expiresAt && Date.now() > room.expiresAt) {
+                    let pCount = room.players ? Object.keys(room.players).length : 0;
+                    
+                    if (pCount === 0 && Date.now() - (room.createdAt || 0) > 10000) {
                         db.ref(`rooms/${code}`).remove();
                         return;
                     }
@@ -342,7 +352,6 @@
                     if (room.status === 'waiting') {
                         wCount++;
                         const li = document.createElement('li');
-                        const pCount = room.players ? Object.keys(room.players).length : 0;
                         const wordCountDisplay = room.wordCount || (room.words ? room.words.length : 10);
                         li.innerHTML = `<span><b>#${code}</b> <br><small>${pCount} Gioc. | ${room.wpm} WPM | ${wordCountDisplay} Parole</small></span>
                                         <button class="join-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
@@ -377,12 +386,9 @@
             currentWpm = parseInt(document.getElementById('startWpmInput').value);
             currentTone = parseInt(document.getElementById('toneInput').value);
             let requestedWordCount = parseInt(document.getElementById('wordCountInput').value);
-            let requestedTimeout = parseInt(document.getElementById('roomTimeoutInput').value) || 5;
             
             if (isNaN(requestedWordCount) || requestedWordCount < 3) requestedWordCount = 3;
             if (requestedWordCount > 50) requestedWordCount = 50;
-            
-            let expiresAt = Date.now() + (requestedTimeout * 60 * 1000);
 
             roomCode = generateRoomCode();
             gameWords = getGameWords(requestedWordCount); 
@@ -394,7 +400,6 @@
                 wordCount: requestedWordCount,
                 words: gameWords, 
                 createdAt: firebase.database.ServerValue.TIMESTAMP,
-                expiresAt: expiresAt,
                 hostId: myId
             }).then(() => {
                 joinRoomLogic(false);
@@ -410,7 +415,6 @@
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => {
             db.ref(`rooms/${roomCode}/hostId`).once('value', snap => {
                 if (snap.val() === myId) {
-                    // L'HOST ESCI: La sfida rimane aperta
                     myCreatedRoomCode = roomCode;
                     const reenterBtn = document.getElementById('reenterRoomBtn');
                     reenterBtn.textContent = `Rientra nella tua Sfida #${roomCode}`;
@@ -429,18 +433,16 @@
             joinRoomLogic(true);
         });
 
-        // Pulsante Invito Sistemato
+        // Pulsante Invita Amici su Telegram
         document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
             if (roomCode) {
-                const linkAlMioBot = "https://t.me/" + NOME_BOT; 
-                const text = "Ehi! Vieni a sfidarmi a Telegrafia! Apri il gioco e inserisci il codice stanza: " + roomCode;
-                const shareUrl = "https://t.me/share/url?url=" + encodeURIComponent(linkAlMioBot) + "&text=" + encodeURIComponent(text);
+                const text = "Ehi! Vieni a sfidarmi a Telegrafia! Apri il bot e inserisci il codice stanza: " + roomCode;
+                const shareUrl = "https://t.me/share/url?url=&text=" + encodeURIComponent(text);
                 tg.openTelegramLink(shareUrl);
             }
         });
 
         function exitRoomCleanly() {
-            clearInterval(roomTimerInterval);
             if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
             if (roomCode) {
                 const rc = roomCode; 
@@ -448,25 +450,12 @@
                 db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
                 db.ref(`rooms/${rc}/players/${myId}`).remove().then(() => {
                     db.ref(`rooms/${rc}/players`).once('value', snap => {
-                        // Se la stanza è vuota ED io ero l'host, la distruggo (evita orfani non voluti se il giocatore partecipante esce per ultimo)
-                        db.ref(`rooms/${rc}/hostId`).once('value', hostSnap => {
-                            if ((!snap.exists() || snap.numChildren() === 0) && hostSnap.val() !== myId) { 
-                                db.ref(`rooms/${rc}`).remove(); 
-                            }
-                        });
+                        if (!snap.exists() || snap.numChildren() === 0) { db.ref(`rooms/${rc}`).remove(); }
                     });
                 });
             }
             hideChat();
             showScreen('setupScreen');
-        }
-
-        // --- Notifica Telegram ---
-        function sendBotNotification(targetTgId, rCode, playerName) {
-            if (!BOT_TOKEN || BOT_TOKEN === "") return;
-            const text = `📻 Il giocatore ${playerName} è appena entrato nella tua stanza #${rCode}!\nApri il gioco per avviare la sfida!`;
-            const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${targetTgId}&text=${encodeURIComponent(text)}`;
-            fetch(url).catch(err => console.error("Errore notifica bot:", err));
         }
 
         function joinRoomLogic(isReconnect = false) {
@@ -494,7 +483,7 @@
                 if (!snapshot.exists()) {
                     myCreatedRoomCode = "";
                     document.getElementById('reenterRoomBtn').style.display = 'none';
-                    if (!gameRunning) alert("La stanza è stata chiusa o è scaduta.");
+                    if (!gameRunning) alert("La stanza è stata chiusa.");
                     gameRunning = false;
                     exitRoomCleanly();
                     return;
@@ -503,17 +492,6 @@
                 const roomData = snapshot.val();
                 const playersData = roomData.players || {};
                 
-                // NOTIFICA VIA BOT SE UN UTENTE ENTRA (Lanciata dal partecipante verso l'host)
-                if (myId !== roomData.hostId) {
-                    const notifyRef = db.ref(`rooms/${roomCode}/notified_players/${myId}`);
-                    notifyRef.once('value', snap => {
-                        if (!snap.exists()) {
-                            notifyRef.set(true);
-                            sendBotNotification(roomData.hostId, roomCode, myName);
-                        }
-                    });
-                }
-
                 if (roomData.status === 'countdown' && !gameRunning) {
                     currentWpm = roomData.wpm; 
                     currentTone = roomData.tone; 
@@ -525,28 +503,13 @@
                 if (roomData.status === 'waiting') {
                     renderPlayersList(playersData, roomData.hostId);
                     
-                    // Notifica Audio
                     const playerCount = Object.keys(playersData).length;
                     if (lastPlayerCount > 0 && playerCount > lastPlayerCount) {
                         playNotificationSound();
                     }
                     lastPlayerCount = playerCount;
 
-                    // Timer visivo di scadenza della stanza
-                    if (roomData.expiresAt) {
-                        clearInterval(roomTimerInterval);
-                        roomTimerInterval = setInterval(() => {
-                            let timeLeft = roomData.expiresAt - Date.now();
-                            if (timeLeft <= 0) {
-                                clearInterval(roomTimerInterval);
-                                db.ref(`rooms/${roomCode}`).remove(); // Scaduta
-                            } else {
-                                let minutes = Math.floor(timeLeft / 60000);
-                                let seconds = Math.floor((timeLeft % 60000) / 1000);
-                                document.getElementById('roomTimerText').textContent = `⏱️ Auto-chiusura tra: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-                            }
-                        }, 1000);
-                    }
+                    handleRoomHealth(roomCode, playersData, roomData.hostId);
                 }
             });
         }
@@ -555,6 +518,22 @@
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             playBeep(880, 0.08);
             setTimeout(() => { playBeep(1150, 0.12); }, 100);
+        }
+
+        function handleRoomHealth(roomId, players, currentHostId) {
+            if (!players) return;
+            if (!currentHostId || !players[currentHostId]) {
+                const remainingPlayers = Object.entries(players)
+                    .map(([id, data]) => ({id, joinedAt: data.joinedAt || Date.now()}))
+                    .sort((a, b) => a.joinedAt - b.joinedAt);
+
+                if (remainingPlayers.length > 0) {
+                    const newHostId = remainingPlayers[0].id;
+                    if (newHostId === myId) {
+                        db.ref(`rooms/${roomId}/hostId`).set(myId);
+                    }
+                }
+            }
         }
 
         window.openTelegramProfile = function(username) {
@@ -656,12 +635,12 @@
             if (e.key === 'Enter') sendChatMessage();
         });
 
+
         document.getElementById('startMultiplayerBtn').addEventListener('click', () => {
             db.ref(`rooms/${roomCode}/status`).set('countdown');
         });
 
         function startCountdownSequence() {
-            clearInterval(roomTimerInterval);
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (currentRoomListener) currentRoomListener.off(); 
             
@@ -754,21 +733,24 @@
                 let points = 0;
                 let scoreColor = "";
 
+                // Nuovo sistema Punti e Velocità
                 if (errors === 0) {
                     points = 10;
                     currentWpm += 2;
-                    scoreColor = "#4caf50"; 
+                    scoreColor = "#4caf50"; // Verde
                 } else if (errors === 1) {
                     points = 2;
                     currentWpm -= 1;
-                    scoreColor = "#ff9800"; 
+                    scoreColor = "#ff9800"; // Arancione
                 } else {
                     points = 0;
                     currentWpm -= 2;
-                    scoreColor = "#d32f2f"; 
+                    scoreColor = "#d32f2f"; // Rosso
                 }
 
+                // Limite minimo di WPM
                 if (currentWpm < 5) currentWpm = 5;
+                
                 totalScore += points;
 
                 const tr = document.createElement('tr');
@@ -846,14 +828,6 @@
         window.goBackToMenu = function() {
             showScreen('setupScreen');
         };
-
-        window.openTelegramProfile = function(username) {
-            if (username) {
-                tg.openTelegramLink('https://t.me/' + username);
-            } else {
-                tg.showAlert("Questo utente non ha impostato un Username pubblico su Telegram.");
-            }
-        }
 
         document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => {
             showScreen('leaderboardScreen');
