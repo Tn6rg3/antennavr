@@ -326,110 +326,71 @@
     // 1.B LOBBY E PRESENZA (SOCIAL & INVITI)
     // =======================================================
     function updateLobbyPresence() {
-        const user = document.getElementById('n_user').value.trim();
-        if(!user) return;
-        
-        if(myPresenceRef) myPresenceRef.remove(); 
-        
-        myPresenceRef = db.ref('lobby/users/' + user);
-        myPresenceRef.set({ t: Date.now() });
-        myPresenceRef.onDisconnect().remove();
-        
-        db.ref('lobby/pms/' + user).on('child_added', (snap) => {
-            const data = snap.val();
-            if(data) {
-                if (data.type === 'INVITE') {
-                    const div = document.createElement('div');
-                    div.className = 'chat-pm';
-                    div.style.backgroundColor = '#2c3e50';
-                    div.style.padding = '10px';
-                    div.style.borderRadius = '5px';
-                    div.style.marginTop = '8px';
-                    div.style.marginBottom = '8px';
-                    div.style.borderLeft = '4px solid #3498db';
-                    div.innerHTML = `🔔 <strong>Da ${data.from}:</strong> Ti ha invitato in una stanza P2P! <br>
-                                     <button onclick="acceptInvite('${data.room}', '${data.pass}')" style="background-color:#27ae60; padding:6px 15px; margin-top:8px; font-size:12px; border-radius:4px; border:none; color:white; cursor:pointer;">✔️ ACCETTA E CONNETTI</button>`;
-                    
-                    const b = document.getElementById('chat-global');
-                    b.appendChild(div);
-                    b.scrollTop = b.scrollHeight;
-                    
-                    if(document.getElementById('a_sys_sounds').checked) playSystemCW("I"); 
-                } else {
-                    appendChat("Da " + data.from, data.msg, "chat-pm", "global");
-                    if(document.getElementById('a_sys_sounds').checked) playSystemCW("M");
-                }
-            }
-            snap.ref.remove(); 
-        });
-    }
-
-    db.ref('lobby/users').on('value', (snap) => {
-        const listDiv = document.getElementById('lobby-list');
-        listDiv.textContent = '';
-
-        const users = snap.val() || {};
-        const currentUsers = Object.keys(users);
-        const myName = document.getElementById('n_user').value.trim();
-        
-        if(currentUsers.length === 0) {
-            listDiv.innerHTML = '<div style="color:#7f8c8d; text-align:center; margin-top: 20px;">Nessuno online</div>';
-            knownUsers.clear();
-            return;
-        }
-
-        currentUsers.forEach(u => {
-            if (u !== myName && !knownUsers.has(u)) {
-                if(document.getElementById('a_sys_sounds').checked) playSystemCW(u + " IN");
-            }
-        });
-        knownUsers = new Set(currentUsers);
-
-        currentUsers.forEach(u => {
-            const userDiv = document.createElement('div');
-            userDiv.className = 'lobby-user';
-            
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = u === myName ? u + " (Tu)" : u;
-            nameSpan.style.color = u === myName ? "#2ecc71" : "#bdc3c7";
-            userDiv.appendChild(nameSpan);
-
-            if (u !== myName) {
-                const btnContainer = document.createElement('div');
-                
-                const btnChat = document.createElement('button');
-                btnChat.textContent = "💬 PM";
-                btnChat.onclick = () => {
-                    const msg = prompt(`Invia messaggio privato a ${u}:`);
-                    if(msg && msg.trim()) {
-                        const pmRef = db.ref('lobby/pms/' + u).push({ from: myName, msg: msg });
-                        appendChat(`A ${u}`, msg, "chat-pm", "global");
-                        pmRef.onDisconnect().remove();
-                        setTimeout(() => { pmRef.remove(); pmRef.onDisconnect().cancel(); }, 5000);
-                    }
-                };
-                
-                const btnInvita = document.createElement('button');
-                btnInvita.textContent = "🔗 Invita";
-                btnInvita.style.backgroundColor = "#2980b9";
-                btnInvita.onclick = () => sendInvite(u);
-                
-                btnContainer.appendChild(btnChat);
-                btnContainer.appendChild(btnInvita);
-                userDiv.appendChild(btnContainer);
-            }
-            listDiv.appendChild(userDiv);
-        });
-    });
-
-    db.ref('lobby/global_chat').on('child_added', (snap) => {
+    const user = document.getElementById('n_user').value.trim();
+    if (!user) return;
+    
+    if (myPresenceRef) myPresenceRef.remove(); 
+    
+    myPresenceRef = db.ref('lobby/users/' + user);
+    myPresenceRef.set({ t: Date.now() });
+    myPresenceRef.onDisconnect().remove();
+    
+    db.ref('lobby/pms/' + user).on('child_added', (snap) => {
         const data = snap.val();
-        const myName = document.getElementById('n_user').value.trim();
-        if(data && data.from !== myName && (Date.now() - data.t < 10000)) { 
-            appendChat("🌎 " + data.from, data.msg, "", "global");
-        }
-    });
+        if (!data) return;
 
+        if (data.type === 'INVITE') {
+            const div = document.createElement('div');
+            div.className = 'chat-pm';
+            Object.assign(div.style, {
+                backgroundColor: '#2c3e50',
+                padding: '10px',
+                borderRadius: '5px',
+                marginTop: '8px',
+                marginBottom: '8px',
+                borderLeft: '4px solid #3498db',
+                color: 'white'
+            });
+
+            // Creazione testo sicuro
+            const textNode = document.createTextNode(`🔔 Da ${data.from}: Ti ha invitato in una stanza P2P! `);
+            div.appendChild(textNode);
+            div.appendChild(document.createElement('br'));
+
+            // Creazione bottone sicuro senza onclick inline
+            const btn = document.createElement('button');
+            btn.textContent = '✔️ ACCETTA E CONNETTI';
+            Object.assign(btn.style, {
+                backgroundColor: '#27ae60',
+                padding: '6px 15px',
+                marginTop: '8px',
+                fontSize: '12px',
+                borderRadius: '4px',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer'
+            });
+            
+            // Assegnazione evento tramite funzione, non stringa
+            btn.onclick = () => acceptInvite(data.room, data.pass);
+            
+            div.appendChild(btn);
+            
+            const b = document.getElementById('chat-global');
+            if (b) {
+                b.appendChild(div);
+                b.scrollTop = b.scrollHeight;
+            }
+            
+            if (document.getElementById('a_sys_sounds')?.checked) playSystemCW("I"); 
+        } else {
+            appendChat("Da " + data.from, data.msg, "chat-pm", "global");
+            if (document.getElementById('a_sys_sounds')?.checked) playSystemCW("M");
+        }
+        
+        snap.ref.remove(); 
+    });
+}
     // SISTEMA INVITI
     function sendInvite(toUser) {
         const randRoom = "cw-" + Math.random().toString(36).substr(2, 5);
