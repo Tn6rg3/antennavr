@@ -330,38 +330,74 @@
         }
 
         function listenToRooms() {
-            if (roomListListener) db.ref('rooms').off('value', roomListListener);
-            document.getElementById('createRoomBtn').disabled = false;
+    if (roomListListener) db.ref('rooms').off('value', roomListListener);
+    document.getElementById('createRoomBtn').disabled = false;
+    
+    roomListListener = db.ref('rooms').on('value', snapshot => {
+        const waitingList = document.getElementById('waitingRoomsList');
+        waitingList.innerHTML = '';
+        let wCount = 0;
+        
+        snapshot.forEach(child => {
+            const room = child.val();
+            const code = child.key;
             
-            roomListListener = db.ref('rooms').on('value', snapshot => {
-                const waitingList = document.getElementById('waitingRoomsList');
-                waitingList.innerHTML = '';
-                let wCount = 0;
-                
-                snapshot.forEach(child => {
-                    const room = child.val();
-                    const code = child.key;
-                    
-                    let pCount = room.players ? Object.keys(room.players).length : 0;
-                    
-                    if (pCount === 0 && Date.now() - (room.createdAt || 0) > 10000) {
-                        db.ref(`rooms/${code}`).remove();
-                        return;
-                    }
+            // Ignora stanze scadute basate sul timer impostato dall'host
+            if (room.expiresAt && Date.now() > room.expiresAt) {
+                return;
+            }
 
-                    if (room.status === 'waiting') {
-                        wCount++;
-                        const li = document.createElement('li');
-                        const wordCountDisplay = room.wordCount || (room.words ? room.words.length : 10);
-                        li.innerHTML = `<span><b>#${code}</b> <br><small>${pCount} Gioc. | ${room.wpm} WPM | ${wordCountDisplay} Parole</small></span>
-                                        <button class="join-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
-                        waitingList.appendChild(li);
-                    }
-                });
+            let pCount = room.players ? Object.keys(room.players).length : 0;
+            
+            // Pulizia stanze vuote (vecchie più di 10 secondi) per evitare accumuli di stanze fantasma
+            if (pCount === 0 && typeof room.createdAt === 'number' && Date.now() - room.createdAt > 10000) {
+                db.ref(`rooms/${code}`).remove();
+                return;
+            }
+
+            if (room.status === 'waiting') {
+                wCount++;
+                const li = document.createElement('li');
                 
-                if (wCount === 0) waitingList.innerHTML = '<li style="justify-content: center; color: var(--hint-color);">Nessuna sfida attiva. Creane una!</li>';
-            });
+                // Creazione sicura degli elementi per evitare XSS
+                const span = document.createElement('span');
+                const boldCode = document.createElement('b');
+                boldCode.textContent = `#${code}`;
+                
+                const smallDetails = document.createElement('small');
+                const wordCountDisplay = room.wordCount || (room.words ? room.words.length : 10);
+                smallDetails.textContent = `${pCount} Gioc. | ${room.wpm} WPM | ${wordCountDisplay} Parole`;
+                
+                span.appendChild(boldCode);
+                span.appendChild(document.createElement('br'));
+                span.appendChild(smallDetails);
+                
+                const btn = document.createElement('button');
+                btn.className = 'join-btn-small';
+                btn.textContent = 'Entra';
+                btn.onclick = function() { joinSpecificRoom(code); };
+                
+                li.appendChild(span);
+                li.appendChild(btn);
+                waitingList.appendChild(li);
+            }
+        });
+        
+        if (wCount === 0) {
+            const li = document.createElement('li');
+            li.style.justifyContent = 'center';
+            li.style.color = 'var(--hint-color)';
+            li.textContent = 'Nessuna sfida attiva. Creane una!';
+            waitingList.appendChild(li);
         }
+    });
+}
+
+window.joinSpecificRoom = function(code) {
+    if (!code) return;
+    roomCode = code;
+    joinRoomLogic(false);
+}
 
         window.joinSpecificRoom = function(code) {
             roomCode = code;
