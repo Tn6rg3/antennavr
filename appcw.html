@@ -235,7 +235,6 @@
     </div>
 
     <script>
-        // --- ⚠️ INSERISCI QUI IL TOKEN DEL TUO BOT TELEGRAM DA BOTFATHER ---
         const BOT_TOKEN = "IL_TUO_BOT_TOKEN_DI_BOTFATHER_QUI"; 
 
         window.Telegram.WebApp.ready();
@@ -316,7 +315,6 @@
         const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "misura", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
         const morseDict = { 'a': '.-', 'b': '-...', 'c': '-.-.', 'd': '-..', 'e': '.', 'f': '..-.', 'g': '--.', 'h': '....', 'i': '..', 'j': '.---', 'k': '-.-', 'l': '.-..', 'm': '--', 'n': '-.', 'o': '---', 'p': '.--.', 'q': '--.-', 'r': '.-.', 's': '...', 't': '-', 'u': '..-', 'v': '...-', 'w': '.--', 'x': '-..-', 'y': '-.--', 'z': '--..' };
 
-        // Spazzino automatico stanze scadute sulla bacheca
         function listenToRooms() {
             if (roomListListener) db.ref('rooms').off('value', roomListListener);
             document.getElementById('createRoomBtn').disabled = false;
@@ -335,11 +333,19 @@
                         return;
                     }
 
+                    let pCount = room.players ? Object.keys(room.players).length : 0;
+                    
+                    // CORREZIONE: Controlla che room.createdAt sia un numero per evitare auto-cancellazioni istantanee all'avvio
+                    if (pCount === 0 && typeof room.createdAt === 'number' && Date.now() - room.createdAt > 10000) {
+                        db.ref(`rooms/${code}`).remove();
+                        return;
+                    }
+
                     if (room.status === 'waiting') {
                         wCount++;
                         const li = document.createElement('li');
                         const wordCountDisplay = room.wordCount || (room.words ? room.words.length : 10);
-                        li.innerHTML = `<span><b>#${code}</b> <br><small>${room.players ? Object.keys(room.players).length : 0} Gioc. | ${room.wpm} WPM | ${wordCountDisplay} Parole</small></span>
+                        li.innerHTML = `<span><b>#${code}</b> <br><small>${pCount} Gioc. | ${room.wpm} WPM | ${wordCountDisplay} Parole</small></span>
                                         <button class="join-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
                         waitingList.appendChild(li);
                     }
@@ -366,6 +372,8 @@
             }
         });
 
+        function generateRoomCode() { return Math.floor(1000 + Math.random() * 9000).toString(); }
+        
         document.getElementById('createRoomBtn').addEventListener('click', () => {
             currentWpm = parseInt(document.getElementById('startWpmInput').value);
             currentTone = parseInt(document.getElementById('toneInput').value);
@@ -403,7 +411,6 @@
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => {
             db.ref(`rooms/${roomCode}/hostId`).once('value', snap => {
                 if (snap.val() === myId) {
-                    // SE SEI L'HOST: Esci senza cancellare e tieni la sfida aperta
                     myCreatedRoomCode = roomCode;
                     const reenterBtn = document.getElementById('reenterRoomBtn');
                     reenterBtn.textContent = `Rientra nella tua Sfida #${roomCode}`;
@@ -422,7 +429,6 @@
             joinRoomLogic(true);
         });
 
-        // Pulsante Invita Amici su Telegram
         document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
             if (roomCode) {
                 const linkAlMioBot = "https://t.me/" + tg.initDataUnsafe?.receiver?.username; 
@@ -449,12 +455,11 @@
             showScreen('setupScreen');
         }
 
-        // --- SISTEMA DI MESSAGGISTICA BOT (Notifica ad app chiusa) ---
         function sendBotNotification(targetTgId, rCode, playerName) {
             if (!BOT_TOKEN || BOT_TOKEN.includes("IL_TUO_BOT_TOKEN")) return;
             const text = `📻 Il giocatore ${playerName} è appena entrato nella tua stanza #${rCode}!\nApri il gioco per avviare la sfida!`;
             const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${targetTgId}&text=${encodeURIComponent(text)}`;
-            fetch(url).catch(err => console.error("Errore notifica bot:", err));
+            fetch(url).catch(err => console.error(err));
         }
 
         function joinRoomLogic(isReconnect = false) {
@@ -491,7 +496,6 @@
                 const roomData = snapshot.val();
                 const playersData = roomData.players || {};
                 
-                // NOTIFICA VIA BOT SE UN UTENTE ENTRA (Lanciata dal partecipante stesso verso l'host)
                 if (myId !== roomData.hostId) {
                     const notifyRef = db.ref(`rooms/${roomCode}/notified_players/${myId}`);
                     notifyRef.once('value', snap => {
@@ -513,14 +517,12 @@
                 if (roomData.status === 'waiting') {
                     renderPlayersList(playersData, roomData.hostId);
                     
-                    // Notifica Audio di Ingresso
                     const playerCount = Object.keys(playersData).length;
                     if (lastPlayerCount > 0 && playerCount > lastPlayerCount) {
                         playNotificationSound();
                     }
                     lastPlayerCount = playerCount;
 
-                    // Gestione del Timer visivo di scadenza della stanza
                     if (roomData.expiresAt) {
                         clearInterval(roomTimerInterval);
                         roomTimerInterval = setInterval(() => {
@@ -543,6 +545,22 @@
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             playBeep(880, 0.08);
             setTimeout(() => { playBeep(1150, 0.12); }, 100);
+        }
+
+        function handleRoomHealth(roomId, players, currentHostId) {
+            if (!players) return;
+            if (!currentHostId || !players[currentHostId]) {
+                const remainingPlayers = Object.entries(players)
+                    .map(([id, data]) => ({id, joinedAt: data.joinedAt || Date.now()}))
+                    .sort((a, b) => a.joinedAt - b.joinedAt);
+
+                if (remainingPlayers.length > 0) {
+                    const newHostId = remainingPlayers[0].id;
+                    if (newHostId === myId) {
+                        db.ref(`rooms/${roomId}/hostId`).set(myId);
+                    }
+                }
+            }
         }
 
         function renderPlayersList(playersData, hostId) {
@@ -572,7 +590,7 @@
                 startBtn.style.display = 'block';
                 deleteBtn.style.display = 'block';
                 waitText.style.display = 'none';
-                startBtn.disabled = false; // Permettiamo all'host di avviarla anche da solo per allenarsi
+                startBtn.disabled = false; 
                 if (Object.keys(playersData).length < 2) statusInfo.textContent += " (In attesa di sfidanti...)";
             } else {
                 statusInfo.textContent = "Sei un partecipante.";
@@ -635,7 +653,6 @@
         document.getElementById('chatInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') sendChatMessage();
         });
-
 
         document.getElementById('startMultiplayerBtn').addEventListener('click', () => {
             db.ref(`rooms/${roomCode}/status`).set('countdown');
@@ -735,7 +752,6 @@
                 let points = 0;
                 let scoreColor = "";
 
-                // ALGORITMO DI ASSEGNAZIONE PUNTEGGI E INCREMENTO WPM RICHIESTO
                 if (errors === 0) {
                     points = 10;
                     currentWpm += 2;
