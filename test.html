@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Ham Radio Planner - Open Source</title>
+    
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #222; color: white;}
+        
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
+
+        #ui-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: space-between;
+            z-index: 10; pointer-events: none; padding: 10px; box-sizing: border-box;
+        }
+
+        #top-bar { display: flex; justify-content: space-between; width: 100%; pointer-events: auto;}
+
+        #dataPanel {
+            background: rgba(0, 0, 0, 0.85); padding: 15px; border-radius: 8px; font-size: 14px;
+            width: fit-content; max-width: 45%; border-left: 4px solid #ffdd59; box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        }
+        .data-value { font-weight: bold; color: #ffdd59; font-size: 16px; }
+
+        .bottom-controls { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; pointer-events: auto;}
+        .btn-row { display: flex; gap: 10px; width: 100%; max-width: 600px; justify-content: center; }
+        .main-btn {
+            padding: 12px 10px; font-size: 14px; font-weight: bold; flex: 1; border-radius: 8px;
+            border: 2px solid transparent; cursor: pointer; color: white; opacity: 0.8; transition: 0.2s;
+        }
+        .main-btn.active { opacity: 1; border-color: white; transform: scale(1.05); box-shadow: 0 0 10px rgba(255,255,255,0.5);}
+        
+        #btnA { background: #ff4757; }
+        #btnB { background: #1e90ff; }
+        #btnReset { background: #555; color: white; }
+        
+        #instruction { text-align: center; color: #000; font-weight: bold; background: #2ed573; padding: 10px; border-radius: 5px; width: 100%; max-width: 600px; box-sizing: border-box; font-size: 14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);}
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div id="ui-container">
+        <div id="top-bar">
+            <div id="dataPanel">
+                <strong>ALTITUDINE (s.l.m.):</strong><br>
+                A: <span id="hA" class="data-value">--</span> m<br>
+                B: <span id="hB" class="data-value">--</span> m<br>
+                <hr style="border-color:#555; margin: 8px 0;">
+                Distanza 3D (Filo):<br><span id="distAB" class="data-value" style="font-size: 20px;">--</span> m
+            </div>
+        </div>
+
+        <div class="bottom-controls">
+            <div id="instruction">Usa Mouse/Touch per navigare (Tasto Destro per inclinare il 3D).</div>
+
+            <div class="btn-row">
+                <button id="btnA" class="main-btn">1. Pila A</button>
+                <button id="btnB" class="main-btn">2. Pila B</button>
+                <button id="btnReset" class="main-btn">🔄 Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. INIZIALIZZAZIONE MAPPA 3D (Nessuna API Key richiesta!) ---
+        const map = new maplibregl.Map({
+            container: 'map',
+            zoom: 13,
+            center: [11.23, 46.06], // Centro indicativo (zona collinare per testare il 3D)
+            pitch: 65, // Inclinazione iniziale per vedere il 3D
+            bearing: -20,
+            style: {
+                version: 8,
+                sources: {
+                    // Mappa base OpenStreetMap (Raster 2D)
+                    'osm-tiles': {
+                        type: 'raster',
+                        tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors'
+                    },
+                    // Dati di Elevazione 3D (Terreno pubblico di test)
+                    'terrain-source': {
+                        type: 'raster-dem',
+                        url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
+                        tileSize: 256
+                    }
+                },
+                layers: [
+                    {
+                        id: 'osm-layer',
+                        type: 'raster',
+                        source: 'osm-tiles'
+                    }
+                ],
+                terrain: {
+                    source: 'terrain-source',
+                    exaggeration: 1 // Moltiplicatore altezza montagne
+                }
+            }
+        });
+
+        // Aggiungi controlli di navigazione (zoom, rotazione)
+        map.addControl(new maplibregl.NavigationControl({
+            visualizePitch: true,
+            showZoom: true,
+            showCompass: true
+        }));
+
+        // --- 2. VARIABILI DI STATO ---
+        let currentAction = 'NONE';
+        let pointA = null; // { lng, lat, alt }
+        let pointB = null;
+
+        let markerA = new maplibregl.Marker({ color: "#ff4757" });
+        let markerB = new maplibregl.Marker({ color: "#1e90ff" });
+
+        // --- 3. EVENTI INTERFACCIA ---
+        const btnA = document.getElementById('btnA');
+        const btnB = document.getElementById('btnB');
+        const btnReset = document.getElementById('btnReset');
+        const instruction = document.getElementById('instruction');
+
+        function clearButtons() {
+            btnA.classList.remove('active');
+            btnB.classList.remove('active');
+        }
+
+        btnA.addEventListener('click', () => {
+            currentAction = 'SET_A';
+            clearButtons(); btnA.classList.add('active');
+            instruction.innerText = "Clicca sulla mappa per posizionare il Punto A";
+            map.getCanvas().style.cursor = 'crosshair';
+        });
+
+        btnB.addEventListener('click', () => {
+            currentAction = 'SET_B';
+            clearButtons(); btnB.classList.add('active');
+            instruction.innerText = "Clicca sulla mappa per posizionare il Punto B";
+            map.getCanvas().style.cursor = 'crosshair';
+        });
+
+        btnReset.addEventListener('click', () => {
+            currentAction = 'NONE';
+            pointA = null; pointB = null;
+            markerA.remove(); markerB.remove();
+            if (map.getSource('line-source')) {
+                map.getSource('line-source').setData({ type: 'FeatureCollection', features: [] });
+            }
+            clearButtons();
+            updateDataPanel();
+            instruction.innerText = "Usa Mouse/Touch per navigare (Tasto Destro per inclinare il 3D).";
+            map.getCanvas().style.cursor = '';
+        });
+
+        // --- 4. GESTIONE CLICK SULLA MAPPA ---
+        map.on('click', (e) => {
+            if (currentAction === 'NONE') return;
+
+            const lngLat = e.lngLat;
+            // Ottieni l'elevazione del terreno in quel punto specifico
+            const elevation = map.queryTerrainElevation(lngLat) || 0; 
+            
+            const pointData = {
+                lng: lngLat.lng,
+                lat: lngLat.lat,
+                alt: elevation
+            };
+
+            if (currentAction === 'SET_A') {
+                pointA = pointData;
+                markerA.setLngLat([pointA.lng, pointA.lat]).addTo(map);
+            } else if (currentAction === 'SET_B') {
+                pointB = pointData;
+                markerB.setLngLat([pointB.lng, pointB.lat]).addTo(map);
+            }
+
+            drawLine();
+            updateDataPanel();
+
+            currentAction = 'NONE';
+            clearButtons();
+            map.getCanvas().style.cursor = '';
+            instruction.innerText = "Punto posizionato! Seleziona l'altro o ruota la mappa.";
+        });
+
+        // --- 5. DISEGNO ANTENNA (Linea 3D) ---
+        map.on('load', () => {
+            // Prepariamo il layer per la linea, che aggiorneremo dinamicamente
+            map.addSource('line-source', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+
+            map.addLayer({
+                id: 'antenna-line',
+                type: 'line',
+                source: 'line-source',
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': '#ffdd59',
+                    'line-width': 4,
+                    'line-dasharray': [2, 2] // Linea tratteggiata
+                }
+            });
+        });
+
+        function drawLine() {
+            if (pointA && pointB) {
+                const geojson = {
+                    type: 'FeatureCollection',
+                    features: [{
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            // Inseriamo anche l'altitudine nelle coordinate per il rendering 3D
+                            coordinates: [
+                                [pointA.lng, pointA.lat, pointA.alt],
+                                [pointB.lng, pointB.lat, pointB.alt]
+                            ]
+                        }
+                    }]
+                };
+                if(map.getSource('line-source')) {
+                    map.getSource('line-source').setData(geojson);
+                }
+            }
+        }
+
+        // --- 6. CALCOLI MATEMATICI (Distanza Reale 3D) ---
+        // Formula di Haversine per calcolare la distanza 2D sulla sfera terrestre
+        function getDistance2D(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Raggio Terra in metri
+            const φ1 = lat1 * Math.PI/180;
+            const φ2 = lat2 * Math.PI/180;
+            const Δφ = (lat2-lat1) * Math.PI/180;
+            const Δλ = (lon2-lon1) * Math.PI/180;
+
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c; 
+        }
+
+        function updateDataPanel() {
+            document.getElementById('hA').innerText = pointA ? pointA.alt.toFixed(1) : '--';
+            document.getElementById('hB').innerText = pointB ? pointB.alt.toFixed(1) : '--';
+
+            if (pointA && pointB) {
+                // Calcola distanza 2D (orizzontale)
+                const dist2D = getDistance2D(pointA.lat, pointA.lng, pointB.lat, pointB.lng);
+                // Calcola dislivello (verticale)
+                const altDiff = Math.abs(pointA.alt - pointB.alt);
+                // Teorema di Pitagora per la distanza 3D esatta (il filo teso)
+                const dist3D = Math.sqrt(Math.pow(dist2D, 2) + Math.pow(altDiff, 2));
+
+                document.getElementById('distAB').innerText = dist3D.toFixed(1);
+            } else {
+                document.getElementById('distAB').innerText = '--';
+            }
+        }
+    </script>
+</body>
+</html>
