@@ -898,62 +898,117 @@ document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
         });
 
         function renderRoomLeaderboard(players) {
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '';
-            const winnerBanner = document.getElementById('roomWinnerBanner');
-            winnerBanner.innerHTML = '';
+    const container = document.getElementById('leaderboardContainer');
+    container.innerHTML = '';
+    const winnerBanner = document.getElementById('roomWinnerBanner');
+    winnerBanner.innerHTML = '';
 
-            const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score);
+    const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score);
+    
+    if (sortedPlayers.length > 0) {
+        const winner = sortedPlayers[0];
+        // Banner Vincitore creato in modo sicuro
+        const bannerDiv = document.createElement('div');
+        bannerDiv.className = 'box-panel';
+        bannerDiv.style.cssText = 'background:#4caf50; color:white; text-align:center;';
+        bannerDiv.textContent = `🎉 Vincitore: ${winner.name} con ${winner.score} punti! 🎉`;
+        winnerBanner.appendChild(bannerDiv);
+    }
+
+    sortedPlayers.forEach((player, index) => {
+        const row = document.createElement('div');
+        row.className = 'leaderboard-row';
+        
+        let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+        
+        // Contenitore Nome
+        const nameSpan = document.createElement('span');
+        
+        if (player.username) {
+            const nameLink = document.createElement('span');
+            nameLink.textContent = `${medal} ${player.name}`;
+            nameLink.style.color = 'var(--link-color)';
+            nameLink.style.cursor = 'pointer';
+            nameLink.style.textDecoration = 'underline';
+            nameLink.onclick = function() { openTelegramProfile(player.username); };
+            nameSpan.appendChild(nameLink);
+        } else {
+            nameSpan.textContent = `${medal} ${player.name}`;
+        }
+        
+        // Contenitore Punteggio
+        const scoreSpan = document.createElement('span');
+        const scoreBold = document.createElement('b');
+        scoreBold.textContent = `${player.score} pt`;
+        scoreSpan.appendChild(scoreBold);
+        
+        row.appendChild(nameSpan);
+        row.appendChild(scoreSpan);
+        container.appendChild(row);
+    });
+}
+        function fetchAndRenderGlobalLeaderboard() {
+    const container = document.getElementById('leaderboardContainer');
+    container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+    document.getElementById('roomWinnerBanner').innerHTML = '';
+
+    if (!db) return;
+
+    db.ref('leaderboard').orderByChild('score').limitToLast(50).once('value', snapshot => {
+        container.innerHTML = '<h3 style="text-align:center;">Top 50 Globale</h3>';
+        let players = [];
+        snapshot.forEach(child => { players.push(child.val()); });
+        players.reverse(); 
+
+        if (players.length === 0) { 
+            container.innerHTML += '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; 
+            return; 
+        }
+
+        players.forEach((player, index) => {
+            const row = document.createElement('div');
+            row.className = 'leaderboard-row';
             
-            if (sortedPlayers.length > 0) {
-                const winner = sortedPlayers[0];
-                winnerBanner.innerHTML = `<div class="box-panel" style="background:#4caf50; color:white; text-align:center;">🎉 Vincitore: <b>${winner.name}</b> con ${winner.score} punti! 🎉</div>`;
+            let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+            
+            // Creazione sicura del contenuto
+            const nameSpan = document.createElement('span');
+            
+            // Gestione cliccabilità nome
+            if (player.username) {
+                const nameLink = document.createElement('span');
+                nameLink.textContent = `${medalText} ${player.name}`;
+                nameLink.style.color = 'var(--link-color)';
+                nameLink.style.cursor = 'pointer';
+                nameLink.style.textDecoration = 'underline';
+                nameLink.onclick = function() { openTelegramProfile(player.username); };
+                nameSpan.appendChild(nameLink);
+            } else {
+                nameSpan.textContent = `${medalText} ${player.name}`;
             }
 
-            sortedPlayers.forEach((player, index) => {
-                const row = document.createElement('div');
-                row.className = 'leaderboard-row';
-                let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                
-                const nameHtml = player.username ? 
-                    `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color); cursor:pointer; text-decoration:underline;">${medal} ${player.name}</span>` : 
-                    `<span>${medal} ${player.name}</span>`;
-                
-                row.innerHTML = `${nameHtml} <span><b>${player.score} pt</b></span>`;
-                container.appendChild(row);
-            });
-        }
+            // Aggiunta dettagli wpm e data
+            const details = document.createElement('br');
+            const small = document.createElement('small');
+            small.style.color = 'var(--hint-color)';
+            small.style.fontSize = '0.8em';
+            small.textContent = `(${player.date} - ${player.wpm} WPM)`;
+            
+            nameSpan.appendChild(details);
+            nameSpan.appendChild(small);
 
-        function fetchAndRenderGlobalLeaderboard() {
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-            document.getElementById('roomWinnerBanner').innerHTML = '';
+            // Punteggio
+            const scoreSpan = document.createElement('span');
+            const boldScore = document.createElement('b');
+            boldScore.textContent = `${player.score} pt`;
+            scoreSpan.appendChild(boldScore);
 
-            if (!db) return;
-
-            db.ref('leaderboard').orderByChild('score').limitToLast(50).once('value', snapshot => {
-                container.innerHTML = '<h3 style="text-align:center;">Top 50 Globale</h3>';
-                let players = [];
-                snapshot.forEach(child => { players.push(child.val()); });
-                players.reverse(); 
-
-                if (players.length === 0) { container.innerHTML += '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; return; }
-
-                players.forEach((player, index) => {
-                    const row = document.createElement('div');
-                    row.className = 'leaderboard-row';
-                    let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                    
-                    const nameHtml = player.username ? 
-                        `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color); cursor:pointer; text-decoration:underline;">${medal} ${player.name}</span>` : 
-                        `<span>${medal} ${player.name}</span>`;
-                    
-                    row.innerHTML = `<span>${nameHtml} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM)</small></span>
-                                    <span><b>${player.score} pt</b></span>`;
-                    container.appendChild(row);
-                });
-            });
-        }
+            row.appendChild(nameSpan);
+            row.appendChild(scoreSpan);
+            container.appendChild(row);
+        });
+    });
+}
     </script>
 </body>
 </html>
