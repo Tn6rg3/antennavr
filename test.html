@@ -3,12 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Ham Radio Planner - Terreno ed Edifici Open</title>
+    <title>3D Ham Radio Planner - OpenFreeMap</title>
     
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/osmtogeojson/3.0.0-beta.4/osmtogeojson.min.js"></script>
 
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #222; color: white;}
@@ -41,7 +39,6 @@
         #btnReset { background: #555; color: white; }
         
         #instruction { text-align: center; color: #000; font-weight: bold; background: #2ed573; padding: 10px; border-radius: 5px; width: 100%; max-width: 600px; box-sizing: border-box; font-size: 14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);}
-        #loading-buildings { display: none; background: rgba(255, 165, 0, 0.9); color: black; padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 12px; margin-top: 5px; text-align: center; pointer-events: none;}
     </style>
 </head>
 <body>
@@ -56,12 +53,11 @@
                 B: <span id="hB" class="data-value">--</span> m<br>
                 <hr style="border-color:#555; margin: 8px 0;">
                 Distanza 3D (Filo):<br><span id="distAB" class="data-value" style="font-size: 20px;">--</span> m
-                <div id="loading-buildings">⬇️ Scaricando Edifici 3D...</div>
             </div>
         </div>
 
         <div class="bottom-controls">
-            <div id="instruction">Tasto Destro (o due dita) e trascina per vedere il 3D. Fai zoom per i palazzi!</div>
+            <div id="instruction">Tasto Destro e trascina verso l'alto per vedere il 3D.</div>
 
             <div class="btn-row">
                 <button id="btnA" class="main-btn">1. Pila A</button>
@@ -72,50 +68,68 @@
     </div>
 
     <script>
-        // --- 1. INIZIALIZZAZIONE MAPPA 3D ---
+        // --- 1. INIZIALIZZAZIONE MAPPA CON OPENFREEMAP ---
+        // OpenFreeMap è gratis, non serve API key e contiene già la logica dei palazzi!
         const map = new maplibregl.Map({
             container: 'map',
-            zoom: 15.5,
-            center: [11.121, 46.067], // Trento (perfetto per testare montagne e palazzi)
-            pitch: 65,
+            style: 'https://tiles.openfreemap.org/styles/bright', // Stile vettoriale completo
+            center: [11.121, 46.067], // Trento (Perfetto per testare montagne e palazzi)
+            zoom: 15,
+            pitch: 65, // Inclina la visuale per vedere il 3D
             bearing: -20,
-            style: {
-                version: 8,
-                sources: {
-                    'osm-tiles': {
-                        type: 'raster',
-                        tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                        tileSize: 256,
-                        attribution: '© OpenStreetMap contributors'
-                    },
-                    // Amazon AWS Terrarium - Dati di Elevazione Globali (Affidabili e gratuiti)
-                    'terrain-source': {
-                        type: 'raster-dem',
-                        tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-                        encoding: 'terrarium',
-                        tileSize: 256,
-                        maxzoom: 14 // AWS Terrain arriva a zoom 14, MapLibre interpola per gli zoom maggiori
-                    }
-                },
-                layers: [
-                    {
-                        id: 'osm-layer',
-                        type: 'raster',
-                        source: 'osm-tiles'
-                    }
-                ],
-                terrain: {
-                    source: 'terrain-source',
-                    exaggeration: 1.2 // Aumenta leggermente il rilievo delle montagne per vederle meglio
-                }
-            }
+            antialias: true // Migliora i bordi dei palazzi 3D
         });
 
         map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
 
-        // --- 2. GESTIONE EDIFICI 3D (Tramite Overpass API) ---
+        // --- 2. AGGIUNTA TERRENO 3D ED EDIFICI ---
         map.on('load', () => {
-            // Layer per l'Antenna
+            
+            // A. Terreno (Montagne tramite server AWS Terrarium gratuiti)
+            map.addSource('terrain-source', {
+                type: 'raster-dem',
+                tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+                encoding: 'terrarium',
+                tileSize: 256,
+                maxzoom: 14
+            });
+            // Attiva il 3D delle montagne
+            map.setTerrain({ source: 'terrain-source', exaggeration: 1.2 });
+
+            // B. Palazzi 3D (Estraendo i dati da OpenFreeMap)
+            // Troviamo il livello dei testi per mettere i palazzi *sotto* le scritte delle vie
+            const layers = map.getStyle().layers;
+            let labelLayerId;
+            for (let i = 0; i < layers.length; i++) {
+                if (layers[i].type === 'symbol' && layers[i].layout['text-field']) {
+                    labelLayerId = layers[i].id;
+                    break;
+                }
+            }
+
+            // Aggiungiamo i muri dei palazzi
+            map.addLayer(
+                {
+                    'id': '3d-buildings',
+                    'source': 'openfreemap', // Usa la sorgente vettoriale interna
+                    'source-layer': 'building',
+                    'type': 'fill-extrusion',
+                    'minzoom': 14,
+                    'paint': {
+                        'fill-extrusion-color': '#cccccc',
+                        // Alza i palazzi in base al dato "render_height" oppure default 12 metri
+                        'fill-extrusion-height': [
+                            'case',
+                            ['has', 'render_height'], ['get', 'render_height'],
+                            12 
+                        ],
+                        'fill-extrusion-opacity': 0.85
+                    }
+                },
+                labelLayerId // Posiziona il layer sotto le etichette
+            );
+
+            // C. Layer per disegnare l'Antenna
             map.addSource('line-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
             map.addLayer({
                 id: 'antenna-line',
@@ -124,63 +138,9 @@
                 layout: { 'line-join': 'round', 'line-cap': 'round' },
                 paint: { 'line-color': '#ffdd59', 'line-width': 5, 'line-dasharray': [2, 2] }
             });
-
-            // Layer per i Palazzi 3D
-            map.addSource('buildings-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-            map.addLayer({
-                id: '3d-buildings',
-                source: 'buildings-source',
-                type: 'fill-extrusion',
-                paint: {
-                    'fill-extrusion-color': '#aaaaaa',
-                    'fill-extrusion-opacity': 0.8,
-                    // Logica per calcolare l'altezza: usa l'altezza reale, oppure i piani * 3 metri, oppure 12 metri di default
-                    'fill-extrusion-height': [
-                        'case',
-                        ['has', 'height'], ['to-number', ['get', 'height']],
-                        ['has', 'building:levels'], ['*', ['to-number', ['get', 'building:levels']], 3],
-                        12
-                    ]
-                }
-            });
         });
 
-        // Funzione per scaricare i palazzi in diretta!
-        async function fetchBuildings() {
-            if (map.getZoom() < 15) {
-                // Se sei troppo lontano, svuota i palazzi per non far esplodere il computer
-                map.getSource('buildings-source').setData({ type: 'FeatureCollection', features: [] });
-                return; 
-            }
-
-            document.getElementById('loading-buildings').style.display = 'block';
-            
-            const bounds = map.getBounds();
-            const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
-            // Query per OpenStreetMap: "Dammi tutti gli edifici in questa vista"
-            const query = `[out:json][timeout:15];(way["building"](${bbox});relation["building"](${bbox}););out body;>;out skel qt;`;
-            const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-
-            try {
-                const response = await fetch(url);
-                const data = await response.json();
-                const geojson = osmtogeojson(data); // Converte i dati nel formato della mappa
-                
-                if(map.getSource('buildings-source')) {
-                    map.getSource('buildings-source').setData(geojson);
-                }
-            } catch(e) {
-                console.log("Errore nel caricamento palazzi", e);
-            } finally {
-                document.getElementById('loading-buildings').style.display = 'none';
-            }
-        }
-
-        // Scarica i palazzi ogni volta che finisci di muovere la mappa
-        map.on('moveend', fetchBuildings);
-
-
-        // --- 3. LOGICA DI POSIZIONAMENTO ANTENNE ---
+        // --- 3. LOGICA DI POSIZIONAMENTO ---
         let currentAction = 'NONE';
         let pointA = null; let pointB = null;
         let markerA = new maplibregl.Marker({ color: "#ff4757" });
@@ -210,7 +170,7 @@
             markerA.remove(); markerB.remove();
             if (map.getSource('line-source')) map.getSource('line-source').setData({ type: 'FeatureCollection', features: [] });
             clearButtons(); updateDataPanel();
-            instruction.innerText = "Tasto Destro (o due dita) e trascina per vedere il 3D. Fai zoom per i palazzi!";
+            instruction.innerText = "Tasto Destro e trascina verso l'alto per vedere il 3D.";
             map.getCanvas().style.cursor = '';
         });
 
@@ -218,7 +178,16 @@
             if (currentAction === 'NONE') return;
 
             const lngLat = e.lngLat;
-            const elevation = map.queryTerrainElevation(lngLat) || 0; 
+            // Ottieni l'altezza della montagna/suolo
+            let elevation = map.queryTerrainElevation(lngLat) || 0; 
+            
+            // Cerca se l'utente ha cliccato sopra un palazzo 3D
+            const features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
+            if (features.length > 0) {
+                // Aggiungi l'altezza del tetto all'altezza del suolo
+                const buildingHeight = features[0].properties.render_height || 12;
+                elevation += buildingHeight;
+            }
             
             const pointData = { lng: lngLat.lng, lat: lngLat.lat, alt: elevation };
 
