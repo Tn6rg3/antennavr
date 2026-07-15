@@ -235,7 +235,11 @@
     </div>
 
     <script>
-        const BOT_TOKEN = "IL_TUO_BOT_TOKEN_DI_BOTFATHER_QUI"; 
+        // --- ⚠️ INSERISCI QUI IL TOKEN DEL TUO BOT TELEGRAM DA BOTFATHER ---
+        const BOT_TOKEN = ""; // Mettilo qui se lo vuoi usare. Se lo lasci vuoto (""), non farà errori.
+        
+        // --- ⚠️ INSERISCI QUI IL NOME DEL TUO BOT (es. TelegrafiaGameBot) ---
+        const NOME_BOT = "TelegrafiaBot"; // Sostituiscilo con il vero nome del tuo bot
 
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
@@ -315,6 +319,7 @@
         const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "misura", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
         const morseDict = { 'a': '.-', 'b': '-...', 'c': '-.-.', 'd': '-..', 'e': '.', 'f': '..-.', 'g': '--.', 'h': '....', 'i': '..', 'j': '.---', 'k': '-.-', 'l': '.-..', 'm': '--', 'n': '-.', 'o': '---', 'p': '.--.', 'q': '--.-', 'r': '.-.', 's': '...', 't': '-', 'u': '..-', 'v': '...-', 'w': '.--', 'x': '-..-', 'y': '-.--', 'z': '--..' };
 
+        // Spazzino automatico (Ora si basa SOLO sulla scadenza del timer)
         function listenToRooms() {
             if (roomListListener) db.ref('rooms').off('value', roomListListener);
             document.getElementById('createRoomBtn').disabled = false;
@@ -328,15 +333,8 @@
                     const room = child.val();
                     const code = child.key;
                     
+                    // L'unica regola per distruggere una stanza automaticamente è la scadenza del timer impostata dall'host
                     if (room.expiresAt && Date.now() > room.expiresAt) {
-                        db.ref(`rooms/${code}`).remove();
-                        return;
-                    }
-
-                    let pCount = room.players ? Object.keys(room.players).length : 0;
-                    
-                    // CORREZIONE: Controlla che room.createdAt sia un numero per evitare auto-cancellazioni istantanee all'avvio
-                    if (pCount === 0 && typeof room.createdAt === 'number' && Date.now() - room.createdAt > 10000) {
                         db.ref(`rooms/${code}`).remove();
                         return;
                     }
@@ -344,6 +342,7 @@
                     if (room.status === 'waiting') {
                         wCount++;
                         const li = document.createElement('li');
+                        const pCount = room.players ? Object.keys(room.players).length : 0;
                         const wordCountDisplay = room.wordCount || (room.words ? room.words.length : 10);
                         li.innerHTML = `<span><b>#${code}</b> <br><small>${pCount} Gioc. | ${room.wpm} WPM | ${wordCountDisplay} Parole</small></span>
                                         <button class="join-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
@@ -411,6 +410,7 @@
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => {
             db.ref(`rooms/${roomCode}/hostId`).once('value', snap => {
                 if (snap.val() === myId) {
+                    // L'HOST ESCI: La sfida rimane aperta
                     myCreatedRoomCode = roomCode;
                     const reenterBtn = document.getElementById('reenterRoomBtn');
                     reenterBtn.textContent = `Rientra nella tua Sfida #${roomCode}`;
@@ -429,9 +429,10 @@
             joinRoomLogic(true);
         });
 
+        // Pulsante Invito Sistemato
         document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
             if (roomCode) {
-                const linkAlMioBot = "https://t.me/" + tg.initDataUnsafe?.receiver?.username; 
+                const linkAlMioBot = "https://t.me/" + NOME_BOT; 
                 const text = "Ehi! Vieni a sfidarmi a Telegrafia! Apri il gioco e inserisci il codice stanza: " + roomCode;
                 const shareUrl = "https://t.me/share/url?url=" + encodeURIComponent(linkAlMioBot) + "&text=" + encodeURIComponent(text);
                 tg.openTelegramLink(shareUrl);
@@ -447,7 +448,12 @@
                 db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
                 db.ref(`rooms/${rc}/players/${myId}`).remove().then(() => {
                     db.ref(`rooms/${rc}/players`).once('value', snap => {
-                        if (!snap.exists() || snap.numChildren() === 0) { db.ref(`rooms/${rc}`).remove(); }
+                        // Se la stanza è vuota ED io ero l'host, la distruggo (evita orfani non voluti se il giocatore partecipante esce per ultimo)
+                        db.ref(`rooms/${rc}/hostId`).once('value', hostSnap => {
+                            if ((!snap.exists() || snap.numChildren() === 0) && hostSnap.val() !== myId) { 
+                                db.ref(`rooms/${rc}`).remove(); 
+                            }
+                        });
                     });
                 });
             }
@@ -455,11 +461,12 @@
             showScreen('setupScreen');
         }
 
+        // --- Notifica Telegram ---
         function sendBotNotification(targetTgId, rCode, playerName) {
-            if (!BOT_TOKEN || BOT_TOKEN.includes("IL_TUO_BOT_TOKEN")) return;
+            if (!BOT_TOKEN || BOT_TOKEN === "") return;
             const text = `📻 Il giocatore ${playerName} è appena entrato nella tua stanza #${rCode}!\nApri il gioco per avviare la sfida!`;
             const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${targetTgId}&text=${encodeURIComponent(text)}`;
-            fetch(url).catch(err => console.error(err));
+            fetch(url).catch(err => console.error("Errore notifica bot:", err));
         }
 
         function joinRoomLogic(isReconnect = false) {
@@ -487,7 +494,7 @@
                 if (!snapshot.exists()) {
                     myCreatedRoomCode = "";
                     document.getElementById('reenterRoomBtn').style.display = 'none';
-                    if (!gameRunning) alert("La stanza è stata chiusa.");
+                    if (!gameRunning) alert("La stanza è stata chiusa o è scaduta.");
                     gameRunning = false;
                     exitRoomCleanly();
                     return;
@@ -496,6 +503,7 @@
                 const roomData = snapshot.val();
                 const playersData = roomData.players || {};
                 
+                // NOTIFICA VIA BOT SE UN UTENTE ENTRA (Lanciata dal partecipante verso l'host)
                 if (myId !== roomData.hostId) {
                     const notifyRef = db.ref(`rooms/${roomCode}/notified_players/${myId}`);
                     notifyRef.once('value', snap => {
@@ -517,19 +525,21 @@
                 if (roomData.status === 'waiting') {
                     renderPlayersList(playersData, roomData.hostId);
                     
+                    // Notifica Audio
                     const playerCount = Object.keys(playersData).length;
                     if (lastPlayerCount > 0 && playerCount > lastPlayerCount) {
                         playNotificationSound();
                     }
                     lastPlayerCount = playerCount;
 
+                    // Timer visivo di scadenza della stanza
                     if (roomData.expiresAt) {
                         clearInterval(roomTimerInterval);
                         roomTimerInterval = setInterval(() => {
                             let timeLeft = roomData.expiresAt - Date.now();
                             if (timeLeft <= 0) {
                                 clearInterval(roomTimerInterval);
-                                db.ref(`rooms/${roomCode}`).remove();
+                                db.ref(`rooms/${roomCode}`).remove(); // Scaduta
                             } else {
                                 let minutes = Math.floor(timeLeft / 60000);
                                 let seconds = Math.floor((timeLeft % 60000) / 1000);
@@ -547,19 +557,11 @@
             setTimeout(() => { playBeep(1150, 0.12); }, 100);
         }
 
-        function handleRoomHealth(roomId, players, currentHostId) {
-            if (!players) return;
-            if (!currentHostId || !players[currentHostId]) {
-                const remainingPlayers = Object.entries(players)
-                    .map(([id, data]) => ({id, joinedAt: data.joinedAt || Date.now()}))
-                    .sort((a, b) => a.joinedAt - b.joinedAt);
-
-                if (remainingPlayers.length > 0) {
-                    const newHostId = remainingPlayers[0].id;
-                    if (newHostId === myId) {
-                        db.ref(`rooms/${roomId}/hostId`).set(myId);
-                    }
-                }
+        window.openTelegramProfile = function(username) {
+            if (username) {
+                tg.openTelegramLink('https://t.me/' + username);
+            } else {
+                tg.showAlert("Questo utente non ha impostato un Username pubblico su Telegram.");
             }
         }
 
