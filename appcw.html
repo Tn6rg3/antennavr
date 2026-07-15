@@ -765,72 +765,87 @@ document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
         }
 
         function getLevenshteinDistance(a, b) {
-            const matrix = [];
-            for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-            for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-            for (let i = 1; i <= b.length; i++) {
-                for (let j = 1; j <= a.length; j++) {
-                    if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1];
-                    else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
-                }
-            }
-            return matrix[b.length][a.length];
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1];
+            else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+        }
+    }
+    return matrix[b.length][a.length];
+}
+
+const permInput = document.getElementById('permanentGameInput');
+permInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && inputActive && gameRunning) {
+        const userWord = permInput.value.trim().toLowerCase();
+        if (userWord === "") return;
+        
+        inputActive = false; 
+        permInput.value = ""; 
+        
+        const currentWord = gameWords[wordIndex];
+        const errors = getLevenshteinDistance(currentWord, userWord);
+        
+        let points = 0;
+        let scoreColor = "";
+
+        if (errors === 0) {
+            points = 10;
+            currentWpm += 2;
+            scoreColor = "#4caf50"; // Verde
+        } else if (errors === 1) {
+            points = 2;
+            currentWpm -= 1;
+            scoreColor = "#ff9800"; // Arancione
+        } else {
+            points = 0;
+            currentWpm -= 2;
+            scoreColor = "#d32f2f"; // Rosso
         }
 
-        const permInput = document.getElementById('permanentGameInput');
-        permInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && inputActive && gameRunning) {
-                const userWord = permInput.value.trim().toLowerCase();
-                if (userWord === "") return;
-                
-                inputActive = false; 
-                permInput.value = ""; 
-                
-                const currentWord = gameWords[wordIndex];
-                const errors = getLevenshteinDistance(currentWord, userWord);
-                
-                let points = 0;
-                let scoreColor = "";
+        if (currentWpm < 5) currentWpm = 5;
+        
+        totalScore += points;
 
-                // Nuovo sistema Punti e Velocità
-                if (errors === 0) {
-                    points = 10;
-                    currentWpm += 2;
-                    scoreColor = "#4caf50"; // Verde
-                } else if (errors === 1) {
-                    points = 2;
-                    currentWpm -= 1;
-                    scoreColor = "#ff9800"; // Arancione
-                } else {
-                    points = 0;
-                    currentWpm -= 2;
-                    scoreColor = "#d32f2f"; // Rosso
-                }
+        // --- CREAZIONE SICURA DELLA RIGA TABELLA (Niente XSS) ---
+        const tr = document.createElement('tr');
 
-                // Limite minimo di WPM
-                if (currentWpm < 5) currentWpm = 5;
-                
-                totalScore += points;
+        const tdScritto = document.createElement('td');
+        tdScritto.textContent = userWord;
+        tr.appendChild(tdScritto);
 
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}">+${points}</td>`;
-                document.getElementById('tableBody').appendChild(tr);
-                
-                const tableWrapper = document.getElementById('tableWrapper');
-                tableWrapper.scrollTop = tableWrapper.scrollHeight;
+        const tdReale = document.createElement('td');
+        const boldReale = document.createElement('b');
+        boldReale.textContent = currentWord;
+        tdReale.appendChild(boldReale);
+        tr.appendChild(tdReale);
 
-                document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
-                document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
+        const tdPunti = document.createElement('td');
+        tdPunti.style.color = scoreColor;
+        tdPunti.textContent = "+" + points;
+        tr.appendChild(tdPunti);
 
-                if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ 
-                    score: totalScore, 
-                    wpm: currentWpm 
-                });
-                
-                wordIndex++; 
-                setTimeout(playNextWord, 600); 
-            }
+        document.getElementById('tableBody').appendChild(tr);
+        // --- FINE CREAZIONE SICURA ---
+        
+        const tableWrapper = document.getElementById('tableWrapper');
+        tableWrapper.scrollTop = tableWrapper.scrollHeight;
+
+        document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
+        document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
+
+        if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ 
+            score: totalScore, 
+            wpm: currentWpm 
         });
+        
+        wordIndex++; 
+        setTimeout(playNextWord, 600); 
+    }
+});
 
         function playNextWord() {
             if (!gameRunning) return;
