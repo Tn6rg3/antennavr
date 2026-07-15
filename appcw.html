@@ -792,6 +792,7 @@ permInput.addEventListener('keypress', function(e) {
         let points = 0;
         let scoreColor = "";
 
+        // Logica punteggio basata su errori (Levenshtein)
         if (errors === 0) {
             points = 10;
             currentWpm += 2;
@@ -806,11 +807,10 @@ permInput.addEventListener('keypress', function(e) {
             scoreColor = "#d32f2f"; // Rosso
         }
 
-        if (currentWpm < 5) currentWpm = 5;
-        
+        currentWpm = Math.max(5, currentWpm); // Sintassi più pulita per il minimo
         totalScore += points;
 
-        // --- CREAZIONE SICURA DELLA RIGA TABELLA (Niente XSS) ---
+        // --- CREAZIONE SICURA DOM (Standard CodeQL) ---
         const tr = document.createElement('tr');
 
         const tdScritto = document.createElement('td');
@@ -825,11 +825,11 @@ permInput.addEventListener('keypress', function(e) {
 
         const tdPunti = document.createElement('td');
         tdPunti.style.color = scoreColor;
-        tdPunti.textContent = "+" + points;
+        tdPunti.textContent = (points > 0 ? "+" : "") + points;
         tr.appendChild(tdPunti);
 
-        document.getElementById('tableBody').appendChild(tr);
-        // --- FINE CREAZIONE SICURA ---
+        const tbody = document.getElementById('tableBody');
+        tbody.appendChild(tr);
         
         const tableWrapper = document.getElementById('tableWrapper');
         tableWrapper.scrollTop = tableWrapper.scrollHeight;
@@ -837,16 +837,17 @@ permInput.addEventListener('keypress', function(e) {
         document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
         document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
 
-        if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ 
-            score: totalScore, 
-            wpm: currentWpm 
-        });
+        if (roomCode) {
+            db.ref(`rooms/${roomCode}/players/${myId}`).update({ 
+                score: totalScore, 
+                wpm: currentWpm 
+            });
+        }
         
         wordIndex++; 
         setTimeout(playNextWord, 600); 
     }
 });
-
         function playNextWord() {
             if (!gameRunning) return;
             if (wordIndex >= gameWords.length) { finishGame(); return; }
