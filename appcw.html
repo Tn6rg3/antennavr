@@ -193,6 +193,7 @@
         <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Account</button>
     </div>
 
+    <!-- SCHERMATA CAMPIONATO -->
     <div id="tournamentScreen" class="screen">
         <h2>🏆 Campionato a Squadre</h2>
         
@@ -552,7 +553,7 @@
                 hostId: myId
             }).then(() => {
                 joinRoomLogic(false);
-            });
+            }).catch(e => alert("Errore connessione Database: " + e.message));
         });
 
         window.toggleChat = function() {
@@ -937,7 +938,7 @@
                             mode: roomData.mode,
                             wordCount: roomData.wordCount,
                             players: Object.values(players).map(p => ({ name: p.name, score: p.score, wpm: p.wpm }))
-                        });
+                        }).catch(e => console.error("Non salvato nello storico causa regole db:", e));
 
                         setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 30000); 
                     }
@@ -1212,8 +1213,9 @@
                     if (foundTeam.captainId === myId) {
                         readyBtn.style.display = 'block';
                         readyBtn.onclick = () => {
-                            db.ref(`teams/${myTeamId}/status`).set('ready');
-                            tg.showAlert("La tua squadra è segnata come PRONTA!");
+                            db.ref(`teams/${myTeamId}/status`).set('ready')
+                              .then(() => tg.showAlert("La tua squadra è segnata come PRONTA!"))
+                              .catch(e => alert("Errore connessione db: " + e.message));
                         };
                     } else {
                         readyBtn.style.display = 'none';
@@ -1230,6 +1232,10 @@
             const teamName = document.getElementById('teamNameInput').value.trim();
             if (!teamName) { tg.showAlert("Inserisci un nome valido!"); return; }
 
+            const btn = document.getElementById('createTeamBtn');
+            btn.disabled = true;
+            btn.textContent = "Creazione in corso...";
+
             const newTeamId = 'team_' + Math.floor(1000 + Math.random() * 9000);
             db.ref(`teams/${newTeamId}`).set({
                 name: teamName,
@@ -1239,8 +1245,14 @@
                     [myId]: { id: myId, name: myName, username: tgUsername }
                 }
             }).then(() => {
+                btn.disabled = false;
+                btn.textContent = "Fonda e diventa Capitano";
                 document.getElementById('teamNameInput').value = '';
                 checkMyTeam();
+            }).catch((err) => {
+                btn.disabled = false;
+                btn.textContent = "Fonda e diventa Capitano";
+                alert("Errore DB (Firebase): " + err.message + "\n\n⚠️ Assicurati che le regole del tuo Database Firebase (.read e .write) siano impostate su 'true' come spiegato sopra.");
             });
         });
 
@@ -1260,7 +1272,7 @@
                     tg.showAlert("Ti sei unito con successo alla squadra!");
                     checkMyTeam();
                     showScreen('tournamentScreen');
-                });
+                }).catch(e => alert("Errore unione squadra: " + e.message));
             });
         }
 
@@ -1324,7 +1336,7 @@
                         thirdPlace: { team1: null, team2: null, score1: 0, score2: 0, winner: null }
                     }
                 }
-            });
+            }).catch(e => alert("Errore creazione Torneo: " + e.message));
         }
 
         function renderBracket(tData) {
@@ -1429,20 +1441,18 @@
                         words: sharedWords,
                         hostId: myId
                     }).then(() => {
-                        // Monitora la fine della stanza per aggiornare il tabellone automaticamente
                         db.ref(`rooms/${roomCode}`).on('value', snap => {
                             if (!snap.exists()) return;
                             let rData = snap.val();
                             if (rData.status === 'finished') {
                                 let players = Object.values(rData.players || {});
                                 if (players.length >= 2) {
-                                    // Risoluzione punteggi per il tabellone
                                     resolveTournamentScores(path, players, t1Id, t2Id);
                                 }
                             }
                         });
                         joinRoomLogic(false);
-                    });
+                    }).catch(e => alert("Errore Avvio Match Torneo: " + e.message));
                 };
             }
         }
@@ -1459,7 +1469,6 @@
                 score2: score2,
                 winner: score1 > score2 ? 't1' : 't2'
             }).then(() => {
-                // Ricalcola avanzamento finali
                 db.ref('tournament/rounds').once('value', snap => {
                     let r = snap.val();
                     if (r.semifinals.match1.winner && r.semifinals.match2.winner) {
