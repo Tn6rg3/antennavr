@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sfida Telegrafia</title>
+    <title>Sfida Telegrafia - Campionato</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -22,37 +22,26 @@
         }
 
         html, body {
-            margin: 0; 
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden; 
-            background-color: var(--bg-color); 
-            color: var(--text-color); 
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; 
+            background-color: var(--bg-color); color: var(--text-color); 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
         }
         
         .screen { 
-            display: none; 
-            flex-direction: column; 
-            align-items: center; 
-            width: 100%; 
-            height: 100%; 
-            max-width: 500px; 
-            margin: 0 auto;
-            padding: 20px 15px; 
-            box-sizing: border-box;
-            overflow-y: auto; 
+            display: none; flex-direction: column; align-items: center; 
+            width: 100%; height: 100%; max-width: 500px; margin: 0 auto;
+            padding: 20px 15px; box-sizing: border-box; overflow-y: auto; 
         }
         .active-screen { display: flex; }
         
-        h2 { margin-top: 0; }
+        h2 { margin-top: 0; text-align: center; }
 
         button { background-color: var(--btn-color); color: var(--btn-text-color); border: none; padding: 14px 20px; font-size: 1.1em; border-radius: 10px; cursor: pointer; margin-top: 10px; width: 100%; font-weight: bold; transition: opacity 0.2s;}
         button:active { opacity: 0.8; transform: scale(0.98); }
         button:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; opacity: 0.6; }
         
         .btn-secondary { background-color: #ff9800; color: #fff; }
+        .btn-success { background-color: #4caf50; color: #fff; }
         .btn-danger { background-color: #d32f2f; color: #fff; }
         .btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 10px; font-size: 1em; margin-top: 15px; border: none; cursor: pointer; }
         
@@ -67,15 +56,7 @@
         .header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px; font-weight: bold; font-size: 1.2em; background: var(--sec-bg-color); padding: 12px; border-radius: 10px; box-sizing: border-box;}
         #scoreDisplay { color: #4caf50; }
         
-        .table-wrapper {
-            flex-grow: 1; 
-            width: 100%;
-            overflow-y: auto; 
-            border-radius: 10px;
-            background: var(--sec-bg-color);
-            margin-bottom: 10px;
-        }
-
+        .table-wrapper { flex-grow: 1; width: 100%; overflow-y: auto; border-radius: 10px; background: var(--sec-bg-color); margin-bottom: 10px; }
         table { width: 100%; border-collapse: collapse; }
         th, td { border-bottom: 1px solid var(--hint-color); padding: 12px 5px; text-align: center; }
         th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
@@ -84,37 +65,34 @@
         #permanentGameInput:focus { background-color: var(--sec-bg-color); }
         
         .box-panel { border: 1px solid var(--hint-color); padding: 15px; border-radius: 10px; width: 100%; margin-bottom: 15px; box-sizing: border-box; background: var(--sec-bg-color); }
-        .box-panel h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; }
+        .box-panel h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; text-align: center;}
         
-        .rooms-list { list-style: none; padding: 0; margin: 0; max-height: 180px; overflow-y: auto; text-align: left; }
-        .rooms-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 5px; border-radius: 8px; }
-        .join-btn-small { width: auto; padding: 8px 15px; font-size: 0.9em; margin: 0; }
+        .data-list { list-style: none; padding: 0; margin: 0; max-height: 180px; overflow-y: auto; text-align: left; }
+        .data-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 5px; border-radius: 8px; }
+        .action-btn-small { width: auto; padding: 8px 15px; font-size: 0.9em; margin: 0; }
         
-        #playersList { list-style: none; padding: 0; width: 100%; text-align: left; background: var(--sec-bg-color); border-radius: 10px; overflow: hidden;}
-        #playersList li { padding: 15px; border-bottom: 1px solid var(--hint-color); font-weight: bold; display: flex; justify-content: space-between;}
-        .host-badge { color: var(--link-color); font-size: 0.8em; font-weight: normal;}
-
         .leaderboard-row { display: flex; justify-content: space-between; padding: 15px; border-bottom: 1px solid var(--hint-color); width: 100%; align-items: center; box-sizing: border-box; background: var(--sec-bg-color); margin-bottom: 8px; border-radius: 8px;}
         
         #loadingText { font-style: italic; color: #ff9800; margin-bottom: 15px; font-weight: bold; }
         #notificationArea { color: #d32f2f; font-weight: bold; margin-bottom: 10px; min-height: 20px; text-align: center;}
-        
-        .privacy-box { text-align: left; font-size: 0.9em; line-height: 1.5; background: var(--sec-bg-color); padding: 15px; border-radius: 10px; border: 1px solid var(--hint-color); max-height: 300px; overflow-y: auto; width: 100%; box-sizing: border-box;}
         
         .tab-buttons { display: flex; width: 100%; gap: 6px; margin-bottom: 15px; flex-wrap: wrap; justify-content: space-between;}
         .tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 10px; font-size: 0.85em; border-radius: 8px; flex: 1 1 45%; text-align: center; }
         .tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); box-shadow: inset 0 0 5px rgba(0,0,0,0.2);}
         #tabGlobalCWFreakBtn.active-tab { background-color: #9c27b0; }
         #tabGlobalCWFreakBtn { background-color: #ce93d8; color: #fff;}
+
+        .match-card { background: var(--bg-color); border: 1px solid var(--hint-color); border-radius: 8px; padding: 10px; margin-bottom: 10px; text-align: center; }
+        .match-vs { font-weight: bold; color: #ff9800; margin: 0 10px; }
     </style>
 </head>
 <body>
 
     <button id="globalChatBtn" style="display:none; position:fixed; top:15px; right:15px; width:auto; z-index:1500; margin:0; padding:8px 15px; font-size:0.9em;" class="btn-secondary" onclick="toggleChat()">💬 Chat</button>
 
-    <div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:40%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
+    <div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:45%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--hint-color); padding-bottom:5px; margin-bottom:5px;">
-            <span style="font-weight:bold;">💬 Chat della Stanza</span>
+            <span id="chatTitle" style="font-weight:bold;">💬 Chat</span>
             <button onclick="toggleChat()" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-danger">Chiudi</button>
         </div>
         <div id="chatMessages" style="flex-grow:1; overflow-y:auto; text-align:left; font-size:0.9em; margin-bottom:5px; padding:8px; background:var(--bg-color); border-radius:8px;"></div>
@@ -126,7 +104,7 @@
 
     <div id="loadingScreen" class="screen active-screen">
         <h2 style="margin-top: 40px;">Caricamento... 📻</h2>
-        <p id="initStatusText">Verifica delle credenziali in corso...</p>
+        <p id="initStatusText">Verifica credenziali in corso...</p>
     </div>
 
     <div id="errorScreen" class="screen">
@@ -138,7 +116,7 @@
         <h2>Ciao <span id="playerName">Giocatore</span>! 📻</h2>
         <p id="loadingText">Connessione sicura in corso...</p>
 
-        <button id="reenterRoomBtn" class="btn-secondary" style="display:none; margin-bottom:15px; background-color: #4caf50;"></button>
+        <button id="goToTeamsBtn" class="btn-success" style="margin-bottom: 15px;">🛡️ Squadre e Campionato</button>
 
         <div class="box-panel">
             <h3>Crea Nuova Sfida</h3>
@@ -169,7 +147,7 @@
 
         <div class="box-panel" style="flex-grow: 1; display: flex; flex-direction: column;">
             <h3>Bacheca Sfide Multi ⏳</h3>
-            <ul id="waitingRoomsList" class="rooms-list" style="flex-grow: 1;">
+            <ul id="waitingRoomsList" class="data-list" style="flex-grow: 1;">
                 <li style="justify-content: center; color: var(--hint-color);">Nessuna sfida attiva. Creane una!</li>
             </ul>
         </div>
@@ -178,11 +156,55 @@
         <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Account</button>
     </div>
 
+    <div id="teamsScreen" class="screen">
+        <h2>🛡️ Gestione Squadre</h2>
+        
+        <div id="noTeamView" style="width: 100%; display: none;">
+            <div class="box-panel">
+                <h3>Crea la tua Squadra</h3>
+                <input type="text" id="newTeamName" placeholder="Nome Squadra..." maxlength="20">
+                <button id="createTeamBtn" class="btn-success">Crea Squadra</button>
+            </div>
+            <div class="box-panel">
+                <h3>Squadre in cerca di membri</h3>
+                <ul id="openTeamsList" class="data-list"></ul>
+            </div>
+        </div>
+
+        <div id="myTeamView" style="width: 100%; display: none; flex-grow:1; flex-direction:column;">
+            <div class="box-panel">
+                <h3 id="myTeamNameDisplay" style="color: var(--link-color);">Nome Squadra</h3>
+                <p style="text-align:center; margin-top:0; font-size:0.9em;" id="teamStatusText"></p>
+                <button id="inviteTeamBtn" class="btn-link" style="margin:0; padding:5px;">📢 Link di Invito su Telegram</button>
+                <hr style="border:0; border-top:1px solid var(--hint-color); margin:10px 0;">
+                <ul id="myTeamMembersList" class="data-list" style="max-height: 120px;"></ul>
+                
+                <div id="captainActions" style="display:none; margin-top:10px;">
+                    <button id="toggleTeamLockBtn" class="btn-secondary" style="margin-bottom:5px;">Chiudi Adesioni</button>
+                    <input type="text" id="editTeamNameInput" placeholder="Nuovo nome..." style="display:none; margin-bottom:5px;">
+                    <button id="editTeamNameBtn" class="btn-secondary" style="margin-bottom:5px;">Modifica Nome Squadra</button>
+                </div>
+                
+                <button id="leaveTeamBtn" class="btn-danger" style="margin-top:15px;">Abbandona Squadra</button>
+            </div>
+            
+            <div class="box-panel" style="flex-grow:1;">
+                <h3>🏆 Tabellone Campionato</h3>
+                <div id="bracketContainer" style="font-size:0.9em; text-align:center; overflow-y:auto; max-height:150px;">
+                    <p style="color:var(--hint-color);">Nessun match attivo.</p>
+                </div>
+                <button id="generateBracketBtn" class="btn-secondary" style="display:none; margin-top:10px;">Genera Scontri Casuali</button>
+            </div>
+        </div>
+
+        <button onclick="goBackToMenu()" style="margin-top: auto;">Torna al Menu</button>
+    </div>
+
     <div id="privacyScreen" class="screen">
         <h2>Privacy & Dati</h2>
-        <div class="privacy-box">
+        <div class="box-panel" style="text-align: left; font-size: 0.9em;">
             <p><strong>Dati raccolti:</strong> ID univoco e Nome di Telegram.</p>
-            <p><strong>Cancellazione Dati:</strong> Verranno eliminati record storici e sessioni attive.</p>
+            <p><strong>Cancellazione Dati:</strong> Verranno eliminati record storici, appartenenza a squadre e sessioni attive.</p>
         </div>
         <button id="deleteDataBtn" class="btn-danger" style="margin-top: auto;">🗑️ Elimina tutti i miei Dati</button>
         <button id="closePrivacyBtn">Torna Indietro</button>
@@ -192,13 +214,11 @@
         <h2>Lobby Stanza</h2>
         <p id="lobbyTimerText" style="text-align: center; font-weight: bold; color: #ff9800; margin-top: 5px;"></p>
         <h3 style="margin-top: 10px;">Giocatori presenti:</h3>
-        <ul id="playersList"></ul>
+        <ul id="playersList" class="data-list" style="width: 100%;"></ul>
         
-        <button id="inviteFriendsBtn" class="btn-link" style="font-weight: bold; font-size: 1em; margin-bottom: 10px;">📢 Invita Amici su Telegram</button>
-
         <div style="margin-top: auto; width: 100%;">
             <p id="statusInfoText" style="text-align: center; color: var(--hint-color); font-style: italic; margin-bottom: 10px;">Verifica ruolo...</p>
-            <button id="startMultiplayerBtn" style="display:none; background-color: #4caf50;">AVVIA PARTITA</button>
+            <button id="startMultiplayerBtn" style="display:none;" class="btn-success">AVVIA PARTITA</button>
             <button id="deleteRoomBtn" style="display:none;" class="btn-danger">ELIMINA STANZA</button>
             <p id="waitingHostText" style="display:none; font-style: italic; text-align: center;">In attesa che l'Host avvii...</p>
             <button id="leaveLobbyBtn" class="btn-secondary" style="margin-top: 15px;">Esci dalla Stanza</button>
@@ -220,9 +240,7 @@
         
         <div class="table-wrapper" id="tableWrapper">
             <table id="gameTable">
-                <thead>
-                    <tr><th>Scritto</th><th>Reale</th><th>Punti</th></tr>
-                </thead>
+                <thead><tr><th>Scritto</th><th>Reale</th><th>Punti</th></tr></thead>
                 <tbody id="tableBody"></tbody>
             </table>
         </div>
@@ -230,13 +248,11 @@
         <div style="width: 100%; margin-bottom: 10px;">
             <input type="text" id="permanentGameInput" placeholder="Digita qui..." autocomplete="off" autocapitalize="none">
         </div>
-        
         <button id="quitGameBtn" class="btn-danger" style="margin-top: 0;">Abbandona</button>
     </div>
 
     <div id="leaderboardScreen" class="screen">
         <h2>🏆 Risultati</h2>
-        
         <div id="roomWinnerBanner"></div>
         <p id="waitingOthersText" style="text-align: center; font-style: italic; color: #ff9800; display: none; font-weight: bold;">⏳ In attesa degli altri giocatori...</p>
 
@@ -262,20 +278,44 @@
     </div>
 
     <script>
+        // SOSTITUISCI CON I NOMI REALI DEL TUO BOT TELEGRAM (Utile per gli inviti in squadra)
+        const BOT_USERNAME = "TUO_BOT_USERNAME_QUI"; 
+        const WEBAPP_NAME = "NOME_DELLA_TUA_WEBAPP_QUI"; 
+
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
         
         const tg = window.Telegram.WebApp;
         const tgUser = tg.initDataUnsafe?.user;
         const tgUsername = tgUser?.username || ""; 
+        
+        // Questo parametro cattura i dati del deep link di Telegram (es. startapp=team_1234)
+        const startParam = tg.initDataUnsafe?.start_param; 
 
         let myName, myId;
         let db, auth;
         let currentRoomListener = null; 
         let chatListener = null;
-        let myCreatedRoomCode = ""; 
+        let roomCode = ""; 
         let lastPlayerCount = 0;
         let lobbyTimerInterval = null;
+        
+        // VARIABILI SQUADRE E CHAT CONTESTUALE
+        let myTeamId = null;
+        let isTeamCaptain = false;
+        let teamListener = null;
+        let allTeamsListener = null;
+        let bracketListener = null;
+        let activeChatContext = null; // Può essere 'room' o 'team'
+
+        // Audio e Variabili Gioco originali
+        const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
+        const morseDict = { 'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.' };
+
+        let gameWords = [];
+        let currentWpm = 20, currentTone = 600, totalScore = 0, currentStreak = 0, wordIndex = 0;
+        let audioCtx, inputActive = false, gameRunning = false, activeTab = "room";
+        let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 
         if (!tgUser) {
             showScreen('errorScreen');
@@ -286,17 +326,19 @@
         }
 
         function showScreen(screenId) {
-            if (screenId === 'setupScreen' && currentRoomListener) {
-                if (!myCreatedRoomCode) {
-                    currentRoomListener.off();
-                    currentRoomListener = null;
-                    roomCode = "";
-                    hideChat();
-                }
-            }
             document.querySelectorAll('.screen').forEach(el => el.classList.remove('active-screen'));
-            const targetScreen = document.getElementById(screenId);
-            if (targetScreen) targetScreen.classList.add('active-screen');
+            document.getElementById(screenId).classList.add('active-screen');
+            hideChat(); // Chiude la drawer se aperta e stacca il listener non necessario
+            
+            // Imposta il contesto corretto della chat in base alla schermata
+            if(screenId === 'teamsScreen') {
+                activeChatContext = 'team';
+                checkMyTeamStatus();
+            } else if (screenId === 'lobbyScreen' || screenId === 'gameArea') {
+                activeChatContext = 'room';
+            } else {
+                activeChatContext = null;
+            }
         }
 
         function initGame() {
@@ -309,239 +351,105 @@
                 messagingSenderId: "575790683327",
                 appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
             };
-            if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+            if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
             db = firebase.database();
             auth = firebase.auth();
 
-            auth.signInAnonymously()
-                .then(() => {
-                    document.getElementById('loadingText').style.display = 'none';
-                    document.getElementById('createRoomBtn').disabled = false;
-                    document.getElementById('playerName').textContent = myName;
-                    
-                    db.ref('.info/connected').on('value', (snap) => {
-                        if (snap.val() === false) return;
-                        if (roomCode) joinRoomLogic(true); 
-                    });
-                    
+            auth.signInAnonymously().then(() => {
+                document.getElementById('loadingText').style.display = 'none';
+                document.getElementById('createRoomBtn').disabled = false;
+                document.getElementById('playerName').textContent = myName;
+                
+                db.ref('.info/connected').on('value', (snap) => {
+                    if (snap.val() === false) return;
+                    if (roomCode) joinRoomLogic(true); 
+                });
+
+                // GESTIONE LINK DI INVITO SQUADRA (startapp=team_ID)
+                if (startParam && startParam.startsWith('team_')) {
+                    const inviteTeamId = startParam.replace('team_', '');
+                    processTeamInvite(inviteTeamId);
+                } else {
                     showScreen('setupScreen'); 
-                    listenToRooms();
-                })
-                .catch((error) => {
-                    console.error("Firebase Auth Error:", error);
-                    const loadingTextEl = document.getElementById('loadingText');
-                    loadingTextEl.style.color = '#d32f2f';
-                    loadingTextEl.innerHTML = "<b>Errore di connessione a Firebase.</b>";
-                });
-        }
-
-        const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
-        const morseDict = { 'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.' };
-
-        let roomCode = "";
-        let gameWords = [];
-        let currentWpm = 20;
-        let currentTone = 600;
-        let totalScore = 0; 
-        let currentStreak = 0; 
-        let wordIndex = 0;
-        let audioCtx;
-        let inputActive = false;
-        let gameRunning = false;
-        let activeTab = "room";
-        let roomListListener = null;
-        
-        // Configurazioni partita
-        let isSinglePlayer = false;
-        let currentMode = "standard"; 
-        let requestedWordCount = 10;
-
-        document.getElementById('gameTypeInput').addEventListener('change', (e) => {
-            const isSingle = e.target.value === 'single';
-            document.getElementById('timeoutDiv').style.display = isSingle ? 'none' : 'block';
-            document.getElementById('createRoomBtn').textContent = isSingle ? "Gioca Subito" : "Crea Stanza";
-        });
-        
-        // BLOCCA WPM, PAROLE E TONO IN MODALITA' CW FREAK
-        document.getElementById('gameModeInput').addEventListener('change', (e) => {
-            const isCallsign = e.target.value === 'callsign';
-            
-            const wpmInput = document.getElementById('startWpmInput');
-            const wordInput = document.getElementById('wordCountInput');
-            const toneInput = document.getElementById('toneInput');
-
-            wpmInput.disabled = isCallsign;
-            wordInput.disabled = isCallsign;
-            toneInput.disabled = isCallsign;
-
-            if (isCallsign) {
-                wpmInput.value = 25; 
-                wordInput.value = 25; 
-            }
-        });
-
-        // GENERATORE NOMINATIVI (CW FREAK)
-        function generateCallsign() {
-            const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "AA", "VE", "G", "M", "2E", "F", "EA", "EB", "DL", "DJ", "DK", "SP", "SQ", "UA", "UB", "UR", "JA", "VK", "ZL", "PY", "LU", "ZS"];
-            const p = prefixes[Math.floor(Math.random() * prefixes.length)];
-            const n = Math.floor(Math.random() * 10);
-            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            let sLen = Math.floor(Math.random() * 3) + 1; 
-            let s = "";
-            for(let i=0; i<sLen; i++) s += chars[Math.floor(Math.random() * chars.length)];
-            return p + n + s;
-        }
-
-        function getGameWords(numWords, mode) {
-            if (mode === 'callsign') {
-                let res = [];
-                for(let i=0; i<numWords; i++) res.push(generateCallsign());
-                return res;
-            } else {
-                let recentWords = JSON.parse(localStorage.getItem('recentWords') || '[]');
-                let availableWords = masterDictionary.filter(w => !recentWords.includes(w));
-                if (availableWords.length < numWords) { availableWords = masterDictionary; recentWords = []; }
-                let selected = availableWords.sort(() => 0.5 - Math.random()).slice(0, numWords);
-                recentWords = [...recentWords, ...selected].slice(-100);
-                localStorage.setItem('recentWords', JSON.stringify(recentWords));
-                return selected.map(w => w.toUpperCase());
-            }
-        }
-
-        function listenToRooms() {
-            if (roomListListener) db.ref('rooms').off('value', roomListListener);
-            
-            roomListListener = db.ref('rooms').on('value', snapshot => {
-                const waitingList = document.getElementById('waitingRoomsList');
-                waitingList.innerHTML = '';
-                let wCount = 0;
-                
-                snapshot.forEach(child => {
-                    const room = child.val();
-                    const code = child.key;
-                    
-                    if (room.expiresAt && Date.now() > room.expiresAt) {
-                        db.ref(`rooms/${code}`).remove();
-                        return;
-                    }
-
-                    if (room.status === 'waiting' && room.type !== 'single') {
-                        wCount++;
-                        let pCount = room.players ? Object.keys(room.players).length : 0;
-                        const li = document.createElement('li');
-                        const span = document.createElement('span');
-                        const boldCode = document.createElement('b');
-                        
-                        let modeTxt = room.mode === 'callsign' ? "🎙️ Nominativi (CW Freak)" : "🔤 Parole";
-                        boldCode.textContent = `#${code} - ${modeTxt}`;
-                        
-                        const smallDetails = document.createElement('small');
-                        smallDetails.textContent = `${pCount} Giocatori | Inizia a ${room.wpm} WPM | ${room.wordCount} Test`;
-                        
-                        span.appendChild(boldCode);
-                        span.appendChild(document.createElement('br'));
-                        span.appendChild(smallDetails);
-                        
-                        const btn = document.createElement('button');
-                        btn.className = 'join-btn-small';
-                        btn.textContent = 'Entra';
-                        btn.onclick = function() { joinSpecificRoom(code); };
-                        
-                        li.appendChild(span);
-                        li.appendChild(btn);
-                        waitingList.appendChild(li);
-                    }
-                });
-                
-                if (wCount === 0) {
-                    const li = document.createElement('li');
-                    li.style.justifyContent = 'center';
-                    li.style.color = 'var(--hint-color)';
-                    li.textContent = 'Nessuna sfida attiva. Creane una!';
-                    waitingList.appendChild(li);
                 }
+
+                listenToRooms();
+            }).catch(e => {
+                document.getElementById('loadingText').innerHTML = "<b style='color:red'>Errore Firebase.</b>";
             });
         }
 
-        window.joinSpecificRoom = function(code) {
-            if (!code) return;
-            roomCode = code;
-            joinRoomLogic(false);
+        // ================= GESTIONE AUDIO =================
+        function playBeep(freq, duration) {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            try {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.frequency.value = freq; osc.connect(gain); gain.connect(audioCtx.destination);
+                const time = audioCtx.currentTime;
+                gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
+                gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
+                osc.start(time); osc.stop(time + duration);
+            } catch(e) {}
         }
 
-        document.getElementById('createRoomBtn').addEventListener('click', () => {
-            currentMode = document.getElementById('gameModeInput').value;
-            isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
-            
-            if (currentMode === 'callsign') {
-                currentWpm = 25;
-                requestedWordCount = 25;
-            } else {
-                currentWpm = parseInt(document.getElementById('startWpmInput').value);
-                requestedWordCount = parseInt(document.getElementById('wordCountInput').value);
-                if (isNaN(requestedWordCount) || requestedWordCount < 3) requestedWordCount = 3;
-                if (requestedWordCount > 50) requestedWordCount = 50;
+        function playMorseAudio(text, wpm) {
+            if (!audioCtx || !gameRunning) return;
+            const unitDuration = 1.2 / wpm; 
+            let time = audioCtx.currentTime + 0.05;
+            for (let char of text) {
+                if (!gameRunning) break;
+                if (morseDict[char]) {
+                    for (let symbol of morseDict[char]) {
+                        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                        osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
+                        const duration = (symbol === '-') ? (3 * unitDuration) : (unitDuration);
+                        gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
+                        gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
+                        osc.start(time); osc.stop(time + duration);
+                        time += duration + unitDuration; 
+                    }
+                    time += 2 * unitDuration; 
+                } else if (char === ' ') { time += 4 * unitDuration; }
             }
-            
-            currentTone = parseInt(document.getElementById('toneInput').value); 
-            
-            let timerMinutes = parseInt(document.getElementById('roomTimerInput').value);
-            if (isNaN(timerMinutes) || timerMinutes < 1) timerMinutes = 1; 
+        }
 
-            roomCode = Math.floor(1000 + Math.random() * 9000).toString();
-            gameWords = getGameWords(requestedWordCount, currentMode); 
-
-            db.ref('rooms/' + roomCode).set({
-                status: isSinglePlayer ? 'countdown' : 'waiting', 
-                type: isSinglePlayer ? 'single' : 'multi',
-                mode: currentMode,
-                wpm: currentWpm, 
-                tone: currentTone, 
-                wordCount: requestedWordCount,
-                words: gameWords, 
-                createdAt: firebase.database.ServerValue.TIMESTAMP,
-                expiresAt: isSinglePlayer ? null : Date.now() + (timerMinutes * 60 * 1000),
-                hostId: myId
-            }).then(() => {
-                joinRoomLogic(false);
-            });
-        });
-
+        // ================= GESTIONE CHAT DINAMICA =================
         window.toggleChat = function() {
             const drawer = document.getElementById('chatDrawer');
             if (drawer.style.display === 'none') {
                 drawer.style.display = 'flex';
                 document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
-            } else {
-                drawer.style.display = 'none';
-            }
+            } else { drawer.style.display = 'none'; }
         }
         function hideChat() {
             document.getElementById('chatDrawer').style.display = 'none';
             document.getElementById('globalChatBtn').style.display = 'none';
-            if (chatListener) { db.ref(`rooms/${roomCode}/chat`).off(); chatListener = null; }
+            if (chatListener && activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).off();
         }
-        function showChatButton() { document.getElementById('globalChatBtn').style.display = 'block'; }
-
+        
         function listenToChat() {
-            if (!roomCode) return;
-            const chatRef = db.ref(`rooms/${roomCode}/chat`);
-            if (chatListener) chatRef.off();
+            let chatRef;
+            if (activeChatContext === 'room' && roomCode) {
+                chatRef = db.ref(`rooms/${roomCode}/chat`);
+                document.getElementById('chatTitle').textContent = "💬 Chat Stanza";
+                document.getElementById('globalChatBtn').style.display = 'block';
+            } else if (activeChatContext === 'team' && myTeamId) {
+                chatRef = db.ref(`teams/${myTeamId}/chat`);
+                document.getElementById('chatTitle').textContent = "💬 Chat Squadra";
+                document.getElementById('globalChatBtn').style.display = 'block';
+            } else { return; }
+
+            if (chatListener) db.ref().off('value', chatListener);
             
-            chatListener = chatRef.limitToLast(40).on('value', snapshot => {
+            chatRef.limitToLast(40).on('value', snapshot => {
+                chatListener = snapshot;
                 const container = document.getElementById('chatMessages');
                 container.innerHTML = ''; 
-                
                 snapshot.forEach(child => {
                     const msg = child.val();
                     const div = document.createElement('div');
                     div.style.marginBottom = '6px';
-                    const nameBold = document.createElement('b');
-                    nameBold.style.color = 'var(--link-color)';
-                    nameBold.textContent = msg.name + ': ';
-                    const textNode = document.createTextNode(msg.text);
-                    div.appendChild(nameBold);
-                    div.appendChild(textNode);
+                    div.innerHTML = `<b style="color:var(--link-color)">${msg.name}:</b> ${msg.text}`;
                     container.appendChild(div);
                 });
                 container.scrollTop = container.scrollHeight;
@@ -551,112 +459,163 @@
         function sendChatMessage() {
             const input = document.getElementById('chatInput');
             const txt = input.value.trim();
-            if (!txt || !roomCode) return;
-            db.ref(`rooms/${roomCode}/chat`).push({ name: myName, text: txt, timestamp: firebase.database.ServerValue.TIMESTAMP });
+            if (!txt) return;
+            if (activeChatContext === 'room' && roomCode) {
+                db.ref(`rooms/${roomCode}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            } else if (activeChatContext === 'team' && myTeamId) {
+                db.ref(`teams/${myTeamId}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            }
             input.value = '';
         }
-
         document.getElementById('sendChatBtn').addEventListener('click', sendChatMessage);
-        document.getElementById('chatInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') sendChatMessage();
+        document.getElementById('chatInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendChatMessage(); });
+
+        // ================= GESTIONE STANZE E IMPOSTAZIONI =================
+        function generateCallsign() {
+            const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "AA", "VE", "G", "M", "2E", "F", "EA", "EB", "DL", "DJ", "DK", "SP", "SQ", "UA", "UB", "UR", "JA", "VK", "ZL", "PY", "LU", "ZS"];
+            const p = prefixes[Math.floor(Math.random() * prefixes.length)];
+            const n = Math.floor(Math.random() * 10);
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            let s = ""; for(let i=0; i<(Math.floor(Math.random()*3)+1); i++) s += chars[Math.floor(Math.random()*chars.length)];
+            return p + n + s;
+        }
+        function getGameWords(num, mode) {
+            if (mode === 'callsign') return Array.from({length: num}, generateCallsign);
+            let selected = masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num);
+            return selected.map(w => w.toUpperCase());
+        }
+
+        document.getElementById('gameModeInput').addEventListener('change', (e) => {
+            const isC = e.target.value === 'callsign';
+            ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => {
+                document.getElementById(id).disabled = isC;
+                if(isC && id!=='toneInput') document.getElementById(id).value = 25;
+            });
         });
-        
+
+        document.getElementById('gameTypeInput').addEventListener('change', (e) => {
+            const isS = e.target.value === 'single';
+            document.getElementById('timeoutDiv').style.display = isS ? 'none' : 'block';
+            document.getElementById('createRoomBtn').textContent = isS ? "Gioca Subito" : "Crea Stanza";
+        });
+
+        function listenToRooms() {
+            db.ref('rooms').on('value', snapshot => {
+                const list = document.getElementById('waitingRoomsList');
+                list.innerHTML = ''; let wCount = 0;
+                snapshot.forEach(child => {
+                    const room = child.val(); const code = child.key;
+                    if (room.expiresAt && Date.now() > room.expiresAt) { db.ref(`rooms/${code}`).remove(); return; }
+                    if (room.status === 'waiting' && room.type !== 'single') {
+                        wCount++;
+                        let pCount = room.players ? Object.keys(room.players).length : 0;
+                        const li = document.createElement('li');
+                        li.innerHTML = `<span><b>#${code} - ${room.mode==='callsign'?'🎙️ Nom.':'🔤 Parole'}</b><br><small>${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test</small></span>
+                                        <button class="action-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
+                        list.appendChild(li);
+                    }
+                });
+                if (wCount === 0) list.innerHTML = '<li style="justify-content:center;color:var(--hint-color)">Nessuna sfida attiva. Creane una!</li>';
+            });
+        }
+        window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
+
+        document.getElementById('createRoomBtn').addEventListener('click', () => {
+            currentMode = document.getElementById('gameModeInput').value;
+            isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
+            currentWpm = currentMode==='callsign' ? 25 : parseInt(document.getElementById('startWpmInput').value);
+            requestedWordCount = currentMode==='callsign' ? 25 : Math.max(3, parseInt(document.getElementById('wordCountInput').value));
+            currentTone = parseInt(document.getElementById('toneInput').value); 
+            let timerMins = Math.max(1, parseInt(document.getElementById('roomTimerInput').value));
+
+            roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+            gameWords = getGameWords(requestedWordCount, currentMode); 
+
+            db.ref('rooms/' + roomCode).set({
+                status: isSinglePlayer ? 'countdown' : 'waiting', type: isSinglePlayer ? 'single' : 'multi',
+                mode: currentMode, wpm: currentWpm, tone: currentTone, wordCount: requestedWordCount, words: gameWords, 
+                createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: isSinglePlayer ? null : Date.now() + (timerMins * 60000), hostId: myId
+            }).then(() => joinRoomLogic(false));
+        });
+
         function joinRoomLogic(isReconnect = false) {
             const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-            
             playerRef.once('value', snapshot => {
-                const playerData = snapshot.val();
-                
-                if (playerData && playerData.finished) {
-                    showScreen('leaderboardScreen');
-                    activeTab = "room";
-                    showLeaderboardTab('tabRoomBtn');
-                    listenToRoomLeaderboard();
-                    return;
+                if (snapshot.val()?.finished) {
+                    showScreen('leaderboardScreen'); activeTab="room"; showLeaderboardTab('tabRoomBtn'); return;
                 }
-
+                
                 showScreen('lobbyScreen');
-                document.getElementById('permanentGameInput').blur(); 
-                
+                document.getElementById('permanentGameInput').blur();
                 playerRef.onDisconnect().remove();
+                if (!snapshot.val()) playerRef.set({ name: myName, username: tgUsername, score: 0, wpm: 0, finished: false });
 
-                if (!playerData) {
-                    playerRef.set({ name: myName, username: tgUsername, score: 0, wpm: 0, finished: false, joinedAt: firebase.database.ServerValue.TIMESTAMP });
-                }
-
-                showChatButton();
                 listenToChat();
-
                 if (currentRoomListener && !isReconnect) currentRoomListener.off();
-                currentRoomListener = db.ref(`rooms/${roomCode}`);
                 
+                currentRoomListener = db.ref(`rooms/${roomCode}`);
                 currentRoomListener.on('value', roomSnap => {
-                    if (!roomSnap.exists()) {
-                        exitRoomCleanly();
-                        return;
-                    }
-
+                    if (!roomSnap.exists()) { exitRoomCleanly(); return; }
                     const roomData = roomSnap.val();
-                    currentMode = roomData.mode;
-                    requestedWordCount = roomData.wordCount;
-                    isSinglePlayer = roomData.type === 'single';
+                    currentMode = roomData.mode; requestedWordCount = roomData.wordCount; isSinglePlayer = roomData.type === 'single';
                     
                     if (roomData.status === 'countdown' && !gameRunning) {
-                        currentWpm = roomData.wpm; 
-                        currentTone = roomData.tone; 
-                        gameWords = roomData.words;
-                        startCountdownSequence();
-                        return;
+                        currentWpm = roomData.wpm; currentTone = roomData.tone; gameWords = roomData.words;
+                        startCountdownSequence(); return;
                     }
-
                     if (roomData.status === 'waiting') {
                         renderPlayersList(roomData.players || {}, roomData.hostId);
+                        
+                        // FIX TIMER
+                        if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
+                        if (roomData.expiresAt && !isSinglePlayer) {
+                            lobbyTimerInterval = setInterval(() => {
+                                const diff = roomData.expiresAt - Date.now();
+                                if (diff <= 0) {
+                                    clearInterval(lobbyTimerInterval);
+                                    document.getElementById('lobbyTimerText').textContent = "Tempo per entrare scaduto!";
+                                } else {
+                                    const m = Math.floor(diff / 60000);
+                                    const s = Math.floor((diff % 60000) / 1000);
+                                    document.getElementById('lobbyTimerText').textContent = `Scade tra: ${m}:${s.toString().padStart(2, '0')}`;
+                                }
+                            }, 1000);
+                        }
                     }
                 });
             });
         }
-        
+
         window.openTelegramProfile = function(username) {
             if (username) tg.openTelegramLink('https://t.me/' + username);
-            else tg.showAlert("Questo utente non ha impostato un Username pubblico su Telegram.");
+            else tg.showAlert("Utente senza Username pubblico.");
         }
 
         function renderPlayersList(playersData, hostId) {
-            const playersList = document.getElementById('playersList');
-            playersList.innerHTML = '';
+            const list = document.getElementById('playersList'); list.innerHTML = '';
+            const count = Object.keys(playersData).length;
             
+            // FIX AUDIO INGRESSO: Suona se i giocatori aumentano (rispetto al count precedente)
+            if (count > lastPlayerCount && lastPlayerCount > 0) {
+                playBeep(500, 0.1); setTimeout(() => playBeep(700, 0.15), 150);
+            }
+            lastPlayerCount = count;
+
             Object.entries(playersData).forEach(([id, data]) => {
-                const li = document.createElement('li');
-                const isHost = (id === hostId);
-                const nameHtml = data.username ? 
-                    `<span onclick="openTelegramProfile('${data.username}')" style="color:var(--link-color); cursor:pointer; text-decoration:underline;">🟢 ${data.name}</span>` : 
-                    `<span>🟢 ${data.name}</span>`;
-                
-                li.innerHTML = `${nameHtml} ${isHost ? '<span class="host-badge">(HOST)</span>' : ''}`;
-                playersList.appendChild(li);
+                const isH = (id === hostId);
+                const nHtml = data.username ? `<span onclick="openTelegramProfile('${data.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">🟢 ${data.name}</span>` : `<span>🟢 ${data.name}</span>`;
+                const li = document.createElement('li'); li.innerHTML = `${nHtml} ${isH ? '<small>(HOST)</small>' : ''}`;
+                list.appendChild(li);
             });
 
             const amIHost = (myId === hostId);
-            const startBtn = document.getElementById('startMultiplayerBtn');
-            const deleteBtn = document.getElementById('deleteRoomBtn');
-            const waitText = document.getElementById('waitingHostText');
-            const statusInfo = document.getElementById('statusInfoText');
-
-            if (amIHost) {
-                statusInfo.textContent = "Sei l'Host di questa sfida.";
-                startBtn.style.display = 'block';
-                deleteBtn.style.display = 'block';
-                waitText.style.display = 'none';
-                startBtn.disabled = false; 
-                if (Object.keys(playersData).length < 2) statusInfo.textContent += " (In attesa di sfidanti...)";
-            } else {
-                statusInfo.textContent = "Sei un partecipante.";
-                startBtn.style.display = 'none';
-                deleteBtn.style.display = 'none';
-                waitText.style.display = 'block';
-            }
+            document.getElementById('startMultiplayerBtn').style.display = amIHost ? 'block' : 'none';
+            document.getElementById('deleteRoomBtn').style.display = amIHost ? 'block' : 'none';
+            document.getElementById('waitingHostText').style.display = amIHost ? 'none' : 'block';
+            document.getElementById('statusInfoText').textContent = amIHost ? `Sei l'Host. ${count<2?'(In attesa di sfidanti...)':''}` : "Sei un partecipante.";
         }
 
+        // ================= GIOCO MORSE (COMPLETO) =================
         function getLevenshteinDistance(a, b) {
             const matrix = [];
             for (let i = 0; i <= b.length; i++) matrix[i] = [i];
@@ -690,10 +649,7 @@
                         currentWpm += 2;
                         scoreColor = "#4caf50";
                     } else {
-                        currentStreak = 0;
-                        points = 0;
-                        currentWpm -= 1;
-                        scoreColor = "#d32f2f";
+                        currentStreak = 0; points = 0; currentWpm -= 1; scoreColor = "#d32f2f";
                     }
                 } else {
                     const errors = getLevenshteinDistance(currentWord, userWord);
@@ -706,266 +662,27 @@
                 totalScore += points;
 
                 const tr = document.createElement('tr');
-                const tdScritto = document.createElement('td'); tdScritto.textContent = userWord; tr.appendChild(tdScritto);
-                const tdReale = document.createElement('td'); const boldReale = document.createElement('b'); boldReale.textContent = currentWord; tdReale.appendChild(boldReale); tr.appendChild(tdReale);
-                const tdPunti = document.createElement('td'); tdPunti.style.color = scoreColor; tdPunti.textContent = (points > 0 ? "+" : "") + points; tr.appendChild(tdPunti);
-
+                tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}">${points > 0 ? "+"+points : points}</td>`;
                 document.getElementById('tableBody').appendChild(tr);
+                
                 const tableWrapper = document.getElementById('tableWrapper');
                 tableWrapper.scrollTop = tableWrapper.scrollHeight;
 
                 document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
                 document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
 
-                if (roomCode) {
-                    db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm });
-                }
+                if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm });
                 
                 wordIndex++; 
                 setTimeout(playNextWord, 600); 
             }
         });
 
-        // ================= GESTIONE CLASSIFICHE =================
-
-        function finishGame() {
-            gameRunning = false;
-            inputActive = false;
-            document.getElementById('permanentGameInput').blur();
-            showScreen('leaderboardScreen');
-            
-            if (roomCode) {
-                const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-                myPlayerRef.update({ finished: true });
-                myPlayerRef.onDisconnect().cancel(); 
-            }
-            
-            if (totalScore > 0) {
-                let dbPath = "";
-                if (currentMode === 'callsign') {
-                    dbPath = `leaderboard/callsign/global/${myId}`; // CW Freak va tutto qui
-                } else {
-                    dbPath = `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
-                    
-                    // Aggiungo il numero di parole al menu a tendina se non c'è già
-                    let select = document.getElementById('lbWordFilter');
-                    let exists = Array.from(select.options).some(opt => opt.value == requestedWordCount);
-                    if (!exists) {
-                        let opt = document.createElement('option');
-                        opt.value = requestedWordCount;
-                        opt.text = `${requestedWordCount} Parole`;
-                        select.add(opt);
-                    }
-                    select.value = requestedWordCount;
-                }
-
-                const globalUserRef = db.ref(dbPath);
-                
-                globalUserRef.once('value', snapshot => {
-                    let oldData = snapshot.val();
-                    if (!oldData || totalScore > oldData.score) {
-                        globalUserRef.set({ 
-                            name: myName, 
-                            username: tgUsername, 
-                            score: totalScore, 
-                            wpm: currentWpm, 
-                            wordCount: requestedWordCount,
-                            date: new Date().toLocaleDateString('it-IT') 
-                        });
-                    }
-                });
-            }
-
-            // Indirizza l'utente alla scheda corretta
-            if (isSinglePlayer && currentMode === 'callsign') {
-                activeTab = "cwfreak";
-                showLeaderboardTab('tabGlobalCWFreakBtn');
-            } else if (isSinglePlayer) {
-                activeTab = "std_single";
-                showLeaderboardTab('tabGlobalStandardSingleBtn');
-            } else {
-                activeTab = "room";
-                showLeaderboardTab('tabRoomBtn');
-                listenToRoomLeaderboard();
-            }
-        }
-
-        function showLeaderboardTab(tabId) {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
-            document.getElementById(tabId).classList.add('active-tab');
-            
-            const filterArea = document.getElementById('lbFilterArea');
-            const roomWinnerBanner = document.getElementById('roomWinnerBanner');
-            const waitingText = document.getElementById('waitingOthersText');
-            
-            if (tabId === 'tabRoomBtn') {
-                filterArea.style.display = 'none';
-                roomWinnerBanner.style.display = 'block';
-                document.getElementById('leaderboardContainer').innerHTML = ''; // pulizia rapida
-                if (roomCode) {
-                    db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
-                } else {
-                    document.getElementById('leaderboardContainer').innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>";
-                    waitingText.style.display = 'none';
-                }
-            } else if (tabId === 'tabGlobalCWFreakBtn') {
-                filterArea.style.display = 'none';
-                roomWinnerBanner.style.display = 'none';
-                waitingText.style.display = 'none';
-                fetchAndRenderGlobalLeaderboard(`leaderboard/callsign/global`, `🏆 CW Freak (Assoluta)`);
-            } else {
-                // Tab Standard (Multi o Single)
-                filterArea.style.display = 'block';
-                roomWinnerBanner.style.display = 'none';
-                waitingText.style.display = 'none';
-                
-                let wc = document.getElementById('lbWordFilter').value;
-                let type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
-                let typeText = type === 'multi' ? 'Multiplayer' : 'Singleplayer';
-                
-                fetchAndRenderGlobalLeaderboard(`leaderboard/standard/${type}_${wc}`, `🏆 Parole ${typeText} (${wc} par.)`);
-            }
-        }
-
-        document.getElementById('tabRoomBtn').addEventListener('click', () => { activeTab="room"; showLeaderboardTab('tabRoomBtn'); });
-        document.getElementById('tabGlobalCWFreakBtn').addEventListener('click', () => { activeTab="cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); });
-        document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; showLeaderboardTab('tabGlobalStandardMultiBtn'); });
-        document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { activeTab="std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); });
-        
-        document.getElementById('lbWordFilter').addEventListener('change', () => {
-            if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn');
-            else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn');
-        });
-
-        function listenToRoomLeaderboard() {
-            if (roomCode) {
-                db.ref(`rooms/${roomCode}`).on('value', snapshot => {
-                    if (!snapshot.exists()) return;
-                    const roomData = snapshot.val();
-                    const players = roomData.players || {};
-                    
-                    if (activeTab === "room") renderRoomLeaderboard(players);
-
-                    let allFinished = true;
-                    Object.values(players).forEach(p => { if (!p.finished) allFinished = false; });
-                    
-                    if (allFinished && roomData.hostId === myId && roomData.status !== 'finished') {
-                        db.ref(`rooms/${roomCode}/status`).set('finished');
-                        setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 30000); 
-                    }
-                });
-            }
-        }
-
-        function renderRoomLeaderboard(players) {
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '';
-            document.getElementById('roomWinnerBanner').innerHTML = '';
-            const waitingText = document.getElementById('waitingOthersText');
-
-            let allFinished = true;
-            const playersArray = Object.values(players);
-            playersArray.forEach(p => { if (!p.finished) allFinished = false; });
-
-            waitingText.style.display = allFinished ? 'none' : 'block';
-
-            const sortedPlayers = playersArray.sort((a, b) => b.score - a.score);
-            
-            sortedPlayers.forEach((player, index) => {
-                const row = document.createElement('div');
-                row.className = 'leaderboard-row';
-                let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                
-                const nameSpan = document.createElement('span');
-                nameSpan.innerHTML = `${medal} ${player.name} <br><small style="color:var(--hint-color)">(${player.wpm || 0} WPM)</small>`;
-                
-                const scoreSpan = document.createElement('span');
-                scoreSpan.innerHTML = `<b>${player.score} pt</b>`;
-                
-                row.appendChild(nameSpan);
-                row.appendChild(scoreSpan);
-                container.appendChild(row);
-            });
-        }
-
-        function fetchAndRenderGlobalLeaderboard(path, title) {
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-
-            db.ref(path).orderByChild('score').limitToLast(50).once('value', snapshot => {
-                container.innerHTML = `<h3 style="text-align:center;">${title}</h3>`;
-                let players = [];
-                snapshot.forEach(child => { players.push(child.val()); });
-                players.reverse(); 
-
-                if (players.length === 0) { 
-                    container.innerHTML += '<p style="text-align:center; color:var(--hint-color);">Nessun record in questa categoria.</p>'; 
-                    return; 
-                }
-
-                players.forEach((player, index) => {
-                    const row = document.createElement('div');
-                    row.className = 'leaderboard-row';
-                    let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                    
-                    const nameSpan = document.createElement('span');
-                    nameSpan.innerHTML = `${medalText} ${player.name} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM)</small>`;
-
-                    const scoreSpan = document.createElement('span');
-                    scoreSpan.innerHTML = `<b>${player.score} pt</b>`;
-
-                    row.appendChild(nameSpan);
-                    row.appendChild(scoreSpan);
-                    container.appendChild(row);
-                });
-            });
-        }
-
-        // ================= AUDIO E GIOCO =================
-        
-        function playBeep(freq, duration) {
-            if (!audioCtx) return;
-            try {
-                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-                osc.frequency.value = freq; osc.connect(gain); gain.connect(audioCtx.destination);
-                const time = audioCtx.currentTime;
-                gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
-                gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
-                osc.start(time); osc.stop(time + duration);
-            } catch(e) { console.error("Audio error", e)}
-        }
-
-        function playMorseAudio(text, wpm) {
-            if (!audioCtx || !gameRunning) return;
-            const unitDuration = 1.2 / wpm; 
-            let time = audioCtx.currentTime + 0.05;
-
-            for (let char of text) {
-                if (!gameRunning) break;
-                if (morseDict[char]) {
-                    for (let symbol of morseDict[char]) {
-                        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-                        osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
-                        const duration = (symbol === '-') ? (3 * unitDuration) : (unitDuration);
-                        gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
-                        gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
-                        osc.start(time); osc.stop(time + duration);
-                        time += duration + unitDuration; 
-                    }
-                    time += 2 * unitDuration; 
-                } else if (char === ' ') { time += 4 * unitDuration; }
-            }
-        }
-
         function playNextWord() {
             if (!gameRunning) return;
             if (wordIndex >= gameWords.length) { finishGame(); return; }
             const currentWord = gameWords[wordIndex].toUpperCase();
-            
-            if (currentMode === 'callsign') {
-                currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400; 
-            }
-
+            if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400; 
             playMorseAudio(currentWord, currentWpm);
             inputActive = true;
             document.getElementById('permanentGameInput').focus();
@@ -995,58 +712,351 @@
                     setTimeout(() => {
                         if (!gameRunning) return;
                         showScreen('gameArea');
-                        setTimeout(() => { document.getElementById('permanentGameInput').focus(); }, 200);
+                        setTimeout(() => document.getElementById('permanentGameInput').focus(), 200);
                         setTimeout(() => { if (gameRunning) playNextWord(); }, 800); 
                     }, 500); 
                 }
             }, 1000);
         }
 
-        document.getElementById('quitGameBtn').addEventListener('click', () => {
-            if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); }
+        function finishGame() {
+            gameRunning = false;
+            inputActive = false;
+            document.getElementById('permanentGameInput').blur();
+            showScreen('leaderboardScreen');
+            
+            if (roomCode) {
+                const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
+                myPlayerRef.update({ finished: true });
+                myPlayerRef.onDisconnect().cancel(); 
+            }
+            
+            // LOGICA SALVATAGGIO CLASSIFICA
+            if (totalScore > 0) {
+                let dbPath = currentMode === 'callsign' 
+                    ? `leaderboard/callsign/global/${myId}` 
+                    : `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                    
+                if (currentMode !== 'callsign') {
+                    let select = document.getElementById('lbWordFilter');
+                    let exists = Array.from(select.options).some(opt => opt.value == requestedWordCount);
+                    if (!exists) {
+                        let opt = document.createElement('option');
+                        opt.value = requestedWordCount; opt.text = `${requestedWordCount} Parole`;
+                        select.add(opt);
+                    }
+                    select.value = requestedWordCount;
+                }
+
+                const globalUserRef = db.ref(dbPath);
+                globalUserRef.once('value', snapshot => {
+                    let oldData = snapshot.val();
+                    if (!oldData || totalScore > oldData.score) {
+                        globalUserRef.set({ 
+                            name: myName, username: tgUsername, score: totalScore, wpm: currentWpm, 
+                            wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') 
+                        });
+                    }
+                });
+            }
+
+            if (isSinglePlayer && currentMode === 'callsign') { activeTab = "cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); } 
+            else if (isSinglePlayer) { activeTab = "std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); } 
+            else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
+        }
+
+        // ================= LEADERBOARDS & CLASSIFICHE =================
+        function showLeaderboardTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
+            document.getElementById(tabId).classList.add('active-tab');
+            
+            const filterArea = document.getElementById('lbFilterArea');
+            const roomWinnerBanner = document.getElementById('roomWinnerBanner');
+            const waitingText = document.getElementById('waitingOthersText');
+            
+            if (tabId === 'tabRoomBtn') {
+                filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'block';
+                document.getElementById('leaderboardContainer').innerHTML = ''; 
+                if (roomCode) db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
+                else { document.getElementById('leaderboardContainer').innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>"; waitingText.style.display = 'none'; }
+            } else if (tabId === 'tabGlobalCWFreakBtn') {
+                filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+                fetchAndRenderGlobalLeaderboard(`leaderboard/callsign/global`, `🏆 CW Freak (Assoluta)`);
+            } else {
+                filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+                let wc = document.getElementById('lbWordFilter').value;
+                let type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
+                let typeText = type === 'multi' ? 'Multiplayer' : 'Singleplayer';
+                fetchAndRenderGlobalLeaderboard(`leaderboard/standard/${type}_${wc}`, `🏆 Parole ${typeText} (${wc} par.)`);
+            }
+        }
+
+        document.getElementById('tabRoomBtn').addEventListener('click', () => { activeTab="room"; showLeaderboardTab('tabRoomBtn'); });
+        document.getElementById('tabGlobalCWFreakBtn').addEventListener('click', () => { activeTab="cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); });
+        document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; showLeaderboardTab('tabGlobalStandardMultiBtn'); });
+        document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { activeTab="std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); });
+        document.getElementById('lbWordFilter').addEventListener('change', () => {
+            if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn');
+            else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn');
         });
-        
+
+        function listenToRoomLeaderboard() {
+            if (roomCode) {
+                db.ref(`rooms/${roomCode}`).on('value', snapshot => {
+                    if (!snapshot.exists()) return;
+                    const roomData = snapshot.val();
+                    const players = roomData.players || {};
+                    if (activeTab === "room") renderRoomLeaderboard(players);
+                    let allFinished = true;
+                    Object.values(players).forEach(p => { if (!p.finished) allFinished = false; });
+                    if (allFinished && roomData.hostId === myId && roomData.status !== 'finished') {
+                        db.ref(`rooms/${roomCode}/status`).set('finished');
+                        setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 30000); 
+                    }
+                });
+            }
+        }
+
+        function renderRoomLeaderboard(players) {
+            const container = document.getElementById('leaderboardContainer'); container.innerHTML = '';
+            document.getElementById('roomWinnerBanner').innerHTML = '';
+            const waitingText = document.getElementById('waitingOthersText');
+            let allFinished = true;
+            const playersArray = Object.values(players);
+            playersArray.forEach(p => { if (!p.finished) allFinished = false; });
+            waitingText.style.display = allFinished ? 'none' : 'block';
+            
+            const sortedPlayers = playersArray.sort((a, b) => b.score - a.score);
+            sortedPlayers.forEach((player, index) => {
+                const row = document.createElement('div'); row.className = 'leaderboard-row';
+                let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                row.innerHTML = `<span>${medal} ${player.name} <br><small style="color:var(--hint-color)">(${player.wpm || 0} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
+                container.appendChild(row);
+            });
+        }
+
+        function fetchAndRenderGlobalLeaderboard(path, title) {
+            const container = document.getElementById('leaderboardContainer');
+            container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+            db.ref(path).orderByChild('score').limitToLast(50).once('value', snapshot => {
+                container.innerHTML = `<h3 style="text-align:center;">${title}</h3>`;
+                let players = []; snapshot.forEach(child => { players.push(child.val()); }); players.reverse(); 
+                if (players.length === 0) { container.innerHTML += '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; return; }
+                players.forEach((player, index) => {
+                    const row = document.createElement('div'); row.className = 'leaderboard-row';
+                    let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                    row.innerHTML = `<span>${medalText} ${player.name} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
+                    container.appendChild(row);
+                });
+            });
+        }
+
         function exitRoomCleanly() {
             if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
             if (roomCode) {
-                const rc = roomCode; 
-                roomCode = ""; 
+                const rc = roomCode; roomCode = ""; 
                 db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
                 db.ref(`rooms/${rc}/players/${myId}`).remove();
             }
-            hideChat();
-            showScreen('setupScreen');
+            hideChat(); showScreen('setupScreen');
         }
         
-        window.goBackToMenu = function() { showScreen('setupScreen'); };
-        
-        document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => {
-            showScreen('leaderboardScreen');
-            showLeaderboardTab('tabGlobalCWFreakBtn'); 
+        document.getElementById('quitGameBtn').addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
+        document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
+        document.getElementById('startMultiplayerBtn').addEventListener('click', () => { db.ref(`rooms/${roomCode}/status`).set('countdown'); });
+        document.getElementById('deleteRoomBtn').addEventListener('click', () => {
+            if (confirm("Vuoi eliminare definitivamente questa stanza?")) db.ref(`rooms/${roomCode}`).remove();
         });
-        
+        document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => { showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn'); });
+        window.goBackToMenu = function() { showScreen('setupScreen'); };
+
+        // ================= CANCELLAZIONE DATI TOTALE (FIXED) =================
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
-
         document.getElementById('deleteDataBtn').addEventListener('click', async () => {
-            if (confirm("⚠️ Eliminerai per sempre i tuoi punteggi globali. Confermi?")) {
+            if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati (classifiche, squadre e stanze attive). Confermi?")) {
                 try {
+                    // 1. Rimuovi da classifiche
                     await db.ref(`leaderboard`).once('value', snapshot => {
-                       snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); });
+                        snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); });
                     });
-                    alert("Dati eliminati.");
+                    // 2. Rimuovi da stanza corrente
+                    if (roomCode) await db.ref(`rooms/${roomCode}/players/${myId}`).remove();
+                    // 3. Rimuovi dalla squadra
+                    if (myTeamId) await db.ref(`teams/${myTeamId}/members/${myId}`).remove();
+                    
+                    alert("Dati eliminati con successo.");
                     window.Telegram.WebApp.close(); 
                 } catch (e) { alert("Errore: " + e.message); }
             }
         });
-        
-        document.getElementById('startMultiplayerBtn').addEventListener('click', () => { db.ref(`rooms/${roomCode}/status`).set('countdown'); });
-        
-        document.getElementById('deleteRoomBtn').addEventListener('click', () => {
-            if (confirm("Vuoi eliminare definitivamente questa stanza? Tutti i partecipanti saranno espulsi.")) db.ref(`rooms/${roomCode}`).remove();
+
+
+        // ================= SISTEMA SQUADRE & CAMPIONATO (NEW) =================
+        document.getElementById('goToTeamsBtn').addEventListener('click', () => showScreen('teamsScreen'));
+
+        // FUNZIONE CHE CATTURA IL LINK STARTAPP
+        function processTeamInvite(inviteTeamId) {
+            db.ref(`teams/${inviteTeamId}`).once('value', snap => {
+                if(snap.exists() && snap.val().status === 'open') {
+                    db.ref(`teams/${inviteTeamId}/members/${myId}`).set({ name: myName, username: tgUsername });
+                    tg.showAlert(`Sei entrato nella squadra ${snap.val().name}!`);
+                    showScreen('teamsScreen');
+                } else {
+                    tg.showAlert("La squadra non esiste o le iscrizioni sono state chiuse dal Capitano.");
+                    showScreen('setupScreen');
+                }
+            });
+        }
+
+        function checkMyTeamStatus() {
+            db.ref('teams').once('value', snapshot => {
+                myTeamId = null; isTeamCaptain = false;
+                snapshot.forEach(team => {
+                    if (team.child('members').hasChild(myId)) {
+                        myTeamId = team.key;
+                        isTeamCaptain = (team.val().captainId === myId);
+                    }
+                });
+
+                if (myTeamId) {
+                    document.getElementById('noTeamView').style.display = 'none';
+                    document.getElementById('myTeamView').style.display = 'flex';
+                    listenToMyTeam(); listenToChampionship();
+                } else {
+                    document.getElementById('myTeamView').style.display = 'none';
+                    document.getElementById('noTeamView').style.display = 'block';
+                    listenToAllTeams();
+                }
+            });
+        }
+
+        // Creazione Squadra
+        document.getElementById('createTeamBtn').addEventListener('click', () => {
+            const tName = document.getElementById('newTeamName').value.trim();
+            if(!tName) return;
+            const newTeamRef = db.ref('teams').push();
+            newTeamRef.set({
+                name: tName, captainId: myId, status: 'open', score: 0,
+                members: { [myId]: { name: myName, username: tgUsername } }
+            }).then(() => checkMyTeamStatus());
         });
-        
-        document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
+
+        function listenToAllTeams() {
+            if (allTeamsListener) db.ref('teams').off('value', allTeamsListener);
+            allTeamsListener = db.ref('teams').on('value', snap => {
+                const list = document.getElementById('openTeamsList'); list.innerHTML = '';
+                snap.forEach(child => {
+                    const t = child.val();
+                    if(t.status === 'open') {
+                        const count = Object.keys(t.members || {}).length;
+                        const li = document.createElement('li');
+                        li.innerHTML = `<span><b>${t.name}</b> <small>(${count} membri)</small></span>
+                                        <button class="action-btn-small" onclick="joinTeam('${child.key}')">Unisciti</button>`;
+                        list.appendChild(li);
+                    }
+                });
+                if(list.innerHTML === '') list.innerHTML = '<li>Nessuna squadra aperta.</li>';
+            });
+        }
+
+        window.joinTeam = function(tId) {
+            db.ref(`teams/${tId}/members/${myId}`).set({ name: myName, username: tgUsername }).then(() => checkMyTeamStatus());
+        }
+
+        function listenToMyTeam() {
+            if (teamListener) db.ref(`teams/${myTeamId}`).off('value', teamListener);
+            teamListener = db.ref(`teams/${myTeamId}`).on('value', snap => {
+                if(!snap.exists()) { checkMyTeamStatus(); return; }
+                const team = snap.val();
+                
+                document.getElementById('myTeamNameDisplay').textContent = team.name;
+                document.getElementById('teamStatusText').innerHTML = team.status === 'open' ? '🟢 Adesioni Aperte' : '🔴 Adesioni Chiuse';
+                
+                const list = document.getElementById('myTeamMembersList'); list.innerHTML = '';
+                Object.entries(team.members || {}).forEach(([id, mem]) => {
+                    const isC = (id === team.captainId);
+                    list.innerHTML += `<li>${mem.name} ${isC?'<b style="color:var(--hint-color)">(Capitano)</b>':''}</li>`;
+                });
+
+                document.getElementById('captainActions').style.display = isTeamCaptain ? 'block' : 'none';
+                
+                const btnLock = document.getElementById('toggleTeamLockBtn');
+                btnLock.textContent = team.status === 'open' ? "Chiudi Adesioni" : "Riapri Adesioni";
+                btnLock.onclick = () => db.ref(`teams/${myTeamId}/status`).set(team.status === 'open' ? 'closed' : 'open');
+                
+                document.getElementById('editTeamNameBtn').onclick = () => {
+                    const inpt = document.getElementById('editTeamNameInput');
+                    if (inpt.style.display === 'none') { inpt.style.display = 'inline-block'; inpt.value = team.name; }
+                    else { db.ref(`teams/${myTeamId}/name`).set(inpt.value); inpt.style.display = 'none'; }
+                }
+
+                // Genera Link Invito Telegram (usando startapp)
+                document.getElementById('inviteTeamBtn').onclick = () => {
+                    const link = `https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=team_${myTeamId}`;
+                    tg.showPopup({ title: 'Copia il Link per invitare amici', message: link, buttons: [{type:'close'}] });
+                }
+
+                // Attiva Chat di Squadra
+                listenToChat();
+            });
+        }
+
+        document.getElementById('leaveTeamBtn').addEventListener('click', () => {
+            if(confirm("Vuoi davvero abbandonare la squadra?")) {
+                if(isTeamCaptain) db.ref(`teams/${myTeamId}`).remove().then(() => checkMyTeamStatus());
+                else db.ref(`teams/${myTeamId}/members/${myId}`).remove().then(() => checkMyTeamStatus());
+                hideChat();
+            }
+        });
+
+        // Generazione Tabellone Scontri
+        function listenToChampionship() {
+            if (bracketListener) db.ref('championship').off('value', bracketListener);
+            bracketListener = db.ref('championship').on('value', snap => {
+                const data = snap.val() || {};
+                const bracket = data.bracket || {};
+                const container = document.getElementById('bracketContainer');
+                container.innerHTML = '';
+                
+                document.getElementById('generateBracketBtn').style.display = isTeamCaptain ? 'block' : 'none';
+
+                if (!bracket.round1) {
+                    container.innerHTML = '<p style="color:var(--hint-color);">Il torneo non è ancora iniziato.</p>';
+                    return;
+                }
+
+                Object.values(bracket.round1).forEach((match) => {
+                    const card = document.createElement('div'); card.className = 'match-card';
+                    card.innerHTML = `<span>${match.teamAName}</span> <span class="match-vs">VS</span> <span>${match.teamBName}</span>`;
+                    container.appendChild(card);
+                });
+            });
+        }
+
+        document.getElementById('generateBracketBtn').addEventListener('click', () => {
+            db.ref('teams').once('value', snap => {
+                let teams = [];
+                snap.forEach(child => teams.push({ id: child.key, name: child.val().name }));
+                
+                for (let i = teams.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [teams[i], teams[j]] = [teams[j], teams[i]];
+                }
+
+                let round1 = {};
+                for(let i=0; i<teams.length; i+=2) {
+                    if (teams[i+1]) {
+                        round1[`match_${i/2}`] = { 
+                            teamA: teams[i].id, teamAName: teams[i].name, scoreA: 0, 
+                            teamB: teams[i+1].id, teamBName: teams[i+1].name, scoreB: 0 
+                        };
+                    }
+                }
+                db.ref('championship/bracket/round1').set(round1);
+                db.ref('championship/status').set('active');
+            });
+        });
 
     </script>
 </body>
