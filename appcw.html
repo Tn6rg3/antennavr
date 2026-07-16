@@ -107,12 +107,10 @@
         <p>Questa applicazione è progettata per funzionare <b>esclusivamente</b> all'interno di Telegram.</p>
     </div>
 
-    <!-- MENU PRINCIPALE - BEN DIVISO -->
     <div id="setupScreen" class="screen">
         <h2>Ciao <span id="playerName">Giocatore</span>! 📻</h2>
         <p id="loadingText">Connessione sicura in corso...</p>
 
-        <!-- SEZIONE CAMPIONATO -->
         <div style="width: 100%; text-align: center; margin-bottom: 5px;">
             <button id="goToTeamsBtn" class="btn-champ">🏆 ACCEDI AL CAMPIONATO SQUADRE 🏆</button>
             <p style="font-size: 0.85em; color: var(--hint-color); margin-top: 5px;">Crea il tuo team, partecipa al torneo e chatta con la squadra.</p>
@@ -120,7 +118,6 @@
 
         <hr class="divider">
 
-        <!-- SEZIONE GIOCO LIBERO (Classico) -->
         <h3 style="margin: 0 0 10px 0; color: var(--link-color);">⚡ Sfida Libera</h3>
         <div class="box-panel">
             <h3>Gioca da Solo o Sfida un Amico</h3>
@@ -160,11 +157,9 @@
         <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Dati</button>
     </div>
 
-    <!-- SCHERMATA SQUADRE E CAMPIONATO -->
     <div id="teamsScreen" class="screen">
         <h2 style="color: var(--champ-color);">🏆 Campionato Squadre</h2>
         
-        <!-- Vista Nessuna Squadra -->
         <div id="noTeamView" style="width: 100%; display: none;">
             <div class="box-panel">
                 <h3>Fonda la tua Squadra</h3>
@@ -177,7 +172,6 @@
             </div>
         </div>
 
-        <!-- Vista La Mia Squadra -->
         <div id="myTeamView" style="width: 100%; display: none; flex-grow:1; flex-direction:column;">
             <div class="box-panel">
                 <h3 id="myTeamNameDisplay" style="color: var(--link-color); font-size: 1.4em;">Nome Squadra</h3>
@@ -210,17 +204,15 @@
         <button onclick="goBackToMenu()" style="margin-top: auto;">Torna al Menu Principale</button>
     </div>
 
-    <!-- PRIVACY -->
     <div id="privacyScreen" class="screen">
         <h2>Privacy & Dati</h2>
         <div class="box-panel" style="text-align: left; font-size: 0.9em;">
-            <p><strong>Cancellazione Dati:</strong> Verranno eliminati record storici, appartenenza a squadre e sessioni attive.</p>
+            <p><strong>Cancellazione Dati:</strong> Verranno eliminati permanentemente tutti i tuoi record storici, la tua appartenenza alle squadre e verrai rimosso da tutte le stanze attive. L'operazione è irreversibile.</p>
         </div>
-        <button id="deleteDataBtn" class="btn-danger" style="margin-top: auto;">🗑️ Elimina tutti i miei Dati</button>
+        <button id="deleteDataBtn" class="btn-danger" style="margin-top: auto;">🗑️ Elimina Definitivamente i miei Dati</button>
         <button id="closePrivacyBtn">Torna Indietro</button>
     </div>
 
-    <!-- LOBBY GIOCO -->
     <div id="lobbyScreen" class="screen">
         <h2 id="lobbyTitleText">Lobby Stanza</h2>
         <p id="lobbyTimerText" style="text-align: center; font-weight: bold; color: #ff9800; margin-top: 5px;"></p>
@@ -228,7 +220,6 @@
         <h3 style="margin-top: 10px;">Giocatori presenti:</h3>
         <ul id="playersList" class="data-list" style="width: 100%;"></ul>
         
-        <!-- RIPRISTINATO: Pulsante per invitare amici nella partita libera -->
         <button id="inviteFriendsBtn" class="btn-link" style="font-weight: bold; font-size: 1em; margin-bottom: 10px;">📢 Invita Amici su Telegram</button>
 
         <div style="margin-top: auto; width: 100%;">
@@ -246,7 +237,6 @@
         <div style="margin-top: auto;"></div>
     </div>
 
-    <!-- AREA GIOCO -->
     <div id="gameArea" class="screen">
         <div class="header-stats">
             <div id="wpmDisplay">WPM: 20</div>
@@ -266,7 +256,6 @@
         <button id="quitGameBtn" class="btn-danger" style="margin-top: 0;">Abbandona</button>
     </div>
 
-    <!-- LEADERBOARD -->
     <div id="leaderboardScreen" class="screen">
         <h2>🏆 Risultati</h2>
         <div id="roomWinnerBanner"></div>
@@ -294,7 +283,7 @@
     </div>
 
     <script>
-        // SOSTITUISCI QUESTI CON I NOMI REALI DEL TUO BOT E WEBAPP SU BOTFATHER
+        // CONFIGURAZIONE DEL TUO BOT TELEGRAM PER I LINK STARTAPP
         const BOT_USERNAME = "cwappgame_bot"; 
         const WEBAPP_NAME = "cwgame"; 
 
@@ -321,6 +310,12 @@
         let gameWords = [], currentWpm = 20, currentTone = 600, totalScore = 0, currentStreak = 0, wordIndex = 0;
         let audioCtx, inputActive = false, gameRunning = false, activeTab = "room";
         let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
+
+        // Funzione Globale per Aprire Profili Telegram
+        window.openTelegramProfile = function(username) {
+            if (username) tg.openTelegramLink('https://t.me/' + username);
+            else tg.showAlert("Questo utente non ha impostato un Username pubblico su Telegram.");
+        }
 
         if (!tgUser) {
             document.getElementById('loadingScreen').classList.remove('active-screen');
@@ -364,7 +359,7 @@
                     if (roomCode) joinRoomLogic(true); 
                 });
 
-                // LOGICA PER RICEVERE GLI INVITI (Sia Squadre che Partite Libere)
+                // GESTIONE DEI LINK (Squadre o Stanze Libere)
                 if (startParam) {
                     if (startParam.startsWith('team_')) {
                         processTeamInvite(startParam.replace('team_', ''));
@@ -378,7 +373,7 @@
 
                 listenToRooms();
             }).catch(e => {
-                document.getElementById('loadingText').innerHTML = "<b style='color:red'>Errore Firebase.</b>";
+                document.getElementById('loadingText').innerHTML = "<b style='color:red'>Errore di Connessione al Server.</b>";
             });
         }
 
@@ -442,7 +437,11 @@
                 chatListener = snapshot; const container = document.getElementById('chatMessages'); container.innerHTML = ''; 
                 snapshot.forEach(child => {
                     const msg = child.val(); const div = document.createElement('div'); div.style.marginBottom = '6px';
-                    div.innerHTML = `<b style="color:var(--link-color)">${msg.name}:</b> ${msg.text}`; container.appendChild(div);
+                    
+                    // Rendi il nome nella chat cliccabile se ha lo username
+                    let nHtml = `<b style="color:var(--link-color)">${msg.name}:</b>`;
+                    
+                    div.innerHTML = `${nHtml} ${msg.text}`; container.appendChild(div);
                 });
                 container.scrollTop = container.scrollHeight;
             });
@@ -450,8 +449,8 @@
 
         document.getElementById('sendChatBtn').addEventListener('click', () => {
             const input = document.getElementById('chatInput'); const txt = input.value.trim(); if (!txt) return;
-            if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
-            else if (activeChatContext === 'team' && myTeamId) db.ref(`teams/${myTeamId}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            else if (activeChatContext === 'team' && myTeamId) db.ref(`teams/${myTeamId}/chat`).push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
             input.value = '';
         });
 
@@ -487,7 +486,6 @@
                 const list = document.getElementById('waitingRoomsList'); list.innerHTML = ''; let wCount = 0;
                 snapshot.forEach(child => {
                     const room = child.val(); const code = child.key;
-                    // Esclude le stanze del campionato dalla lista pubblica
                     if (code.startsWith("CHAMP_")) return;
 
                     if (room.expiresAt && Date.now() > room.expiresAt) { db.ref(`rooms/${code}`).remove(); return; }
@@ -504,7 +502,6 @@
         }
         window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
 
-        // Creazione Stanza Normale
         document.getElementById('createRoomBtn').addEventListener('click', () => {
             currentMode = document.getElementById('gameModeInput').value;
             isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
@@ -531,8 +528,8 @@
                 showScreen('lobbyScreen');
                 
                 document.getElementById('lobbyTitleText').textContent = roomCode.startsWith("CHAMP_") ? "Lobby Scontro Torneo 🥊" : "Lobby Stanza Libera";
-                
                 document.getElementById('permanentGameInput').blur();
+                
                 playerRef.onDisconnect().remove();
                 if (!snapshot.val()) playerRef.set({ name: myName, username: tgUsername, score: 0, wpm: 0, finished: false });
 
@@ -564,18 +561,13 @@
             });
         }
 
-        // EVENTO: INVITA AMICI PER PARTITA LIBERA
+        // EVENTO: INVITA AMICI PER PARTITA LIBERA (Usa il Bot Reale)
         document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
             const botUrl = `https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=room_${roomCode}`;
             const shareText = `Sfida in Telegrafia! Entra nella mia stanza per giocare: #${roomCode}`;
             const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(botUrl)}&text=${encodeURIComponent(shareText)}`;
             tg.openTelegramLink(shareUrl);
         });
-
-        window.openTelegramProfile = function(username) {
-            if (username) tg.openTelegramLink('https://t.me/' + username);
-            else tg.showAlert("Utente senza Username pubblico.");
-        }
 
         function renderPlayersList(playersData, hostId) {
             const list = document.getElementById('playersList'); list.innerHTML = '';
@@ -585,6 +577,7 @@
 
             Object.entries(playersData).forEach(([id, data]) => {
                 const isH = (id === hostId);
+                // Nomi Cliccabili
                 const nHtml = data.username ? `<span onclick="openTelegramProfile('${data.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">🟢 ${data.name}</span>` : `<span>🟢 ${data.name}</span>`;
                 const li = document.createElement('li'); li.innerHTML = `${nHtml} ${isH ? '<small>(HOST)</small>' : ''}`; list.appendChild(li);
             });
@@ -734,14 +727,42 @@
         
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
+        
+        // ELIMINAZIONE ACCOUNT PROFONDA (TOTALE E DEFINITIVA)
         document.getElementById('deleteDataBtn').addEventListener('click', async () => {
             if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati. Confermi?")) {
                 try {
-                    await db.ref(`leaderboard`).once('value', snapshot => { snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); }); });
-                    if (roomCode) await db.ref(`rooms/${roomCode}/players/${myId}`).remove();
-                    if (myTeamId) await db.ref(`teams/${myTeamId}/members/${myId}`).remove();
-                    alert("Dati eliminati."); window.Telegram.WebApp.close(); 
-                } catch (e) { alert("Errore: " + e.message); }
+                    // 1. Elimina dalle Classifiche
+                    await db.ref(`leaderboard`).once('value', snapshot => { 
+                        snapshot.forEach(mode => { 
+                            mode.forEach(type => { 
+                                if(type.hasChild(myId)) type.child(myId).ref.remove(); 
+                            }); 
+                        }); 
+                    });
+                    
+                    // 2. Elimina dalla Stanza Attuale (Se Host, chiude la stanza)
+                    if (roomCode) { 
+                        const roomSnap = await db.ref(`rooms/${roomCode}`).once('value');
+                        if (roomSnap.exists() && roomSnap.val().hostId === myId) {
+                            await db.ref(`rooms/${roomCode}`).remove();
+                        } else {
+                            await db.ref(`rooms/${roomCode}/players/${myId}`).remove(); 
+                        }
+                    }
+
+                    // 3. Elimina dalla Squadra (Se Capitano, scioglie la squadra)
+                    if (myTeamId) { 
+                        if (isTeamCaptain) {
+                            await db.ref(`teams/${myTeamId}`).remove();
+                        } else {
+                            await db.ref(`teams/${myTeamId}/members/${myId}`).remove(); 
+                        }
+                    }
+                    
+                    alert("I tuoi dati sono stati eliminati definitivamente."); 
+                    window.Telegram.WebApp.close(); 
+                } catch (e) { alert("Errore durante l'eliminazione: " + e.message); }
             }
         });
 
@@ -780,6 +801,7 @@
                 }
             });
         }
+
         function renderRoomLeaderboard(players) {
             const container = document.getElementById('leaderboardContainer'); container.innerHTML = '';
             const waitingText = document.getElementById('waitingOthersText'); let allFinished = true;
@@ -788,10 +810,13 @@
             playersArray.sort((a, b) => b.score - a.score).forEach((player, index) => {
                 const row = document.createElement('div'); row.className = 'leaderboard-row';
                 let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                row.innerHTML = `<span>${medal} ${player.name} <br><small style="color:var(--hint-color)">(${player.wpm || 0} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
+                // Nomi cliccabili anche in classifica
+                const nHtml = player.username ? `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${player.name}</span>` : `<span>${player.name}</span>`;
+                row.innerHTML = `<span>${medal} ${nHtml} <br><small style="color:var(--hint-color)">(${player.wpm || 0} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
                 container.appendChild(row);
             });
         }
+
         function fetchAndRenderGlobalLeaderboard(path, title) {
             const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
             db.ref(path).orderByChild('score').limitToLast(50).once('value', snapshot => {
@@ -801,7 +826,9 @@
                 players.forEach((player, index) => {
                     const row = document.createElement('div'); row.className = 'leaderboard-row';
                     let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                    row.innerHTML = `<span>${medalText} ${player.name} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
+                    // Nomi cliccabili in classifica globale
+                    const nHtml = player.username ? `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${player.name}</span>` : `<span>${player.name}</span>`;
+                    row.innerHTML = `<span>${medalText} ${nHtml} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
                     container.appendChild(row);
                 });
             });
@@ -876,7 +903,9 @@
                 const list = document.getElementById('myTeamMembersList'); list.innerHTML = '';
                 Object.entries(team.members || {}).forEach(([id, mem]) => {
                     const isC = (id === team.captainId);
-                    list.innerHTML += `<li>${mem.name} ${isC?'<b style="color:var(--hint-color)">(Capitano)</b>':''}</li>`;
+                    // Nomi Cliccabili per la squadra
+                    const nHtml = mem.username ? `<span onclick="openTelegramProfile('${mem.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${mem.name}</span>` : `<span>${mem.name}</span>`;
+                    list.innerHTML += `<li>${nHtml} ${isC?'<b style="color:var(--hint-color)">(Capitano)</b>':''}</li>`;
                 });
 
                 document.getElementById('captainActions').style.display = isTeamCaptain ? 'block' : 'none';
