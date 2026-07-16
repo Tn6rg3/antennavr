@@ -22,20 +22,31 @@
         }
 
         html, body {
-            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; 
-            background-color: var(--bg-color); color: var(--text-color); 
+            margin: 0; 
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
         }
         
         .screen { 
-            display: none; flex-direction: column; align-items: center; 
-            width: 100%; height: 100%; max-width: 500px; margin: 0 auto;
-            padding: 20px 15px; box-sizing: border-box; overflow-y: auto; 
+            display: none; 
+            flex-direction: column; 
+            align-items: center; 
+            width: 100%; 
+            height: 100%; 
+            max-width: 500px; 
+            margin: 0 auto;
+            padding: 20px 15px; 
+            box-sizing: border-box;
+            overflow-y: auto; 
         }
         .active-screen { display: flex; }
         
-        h2 { margin-top: 0; text-align: center; }
-        h3 { margin-top: 0; }
+        h2 { margin-top: 0; }
 
         button { background-color: var(--btn-color); color: var(--btn-text-color); border: none; padding: 14px 20px; font-size: 1.1em; border-radius: 10px; cursor: pointer; margin-top: 10px; width: 100%; font-weight: bold; transition: opacity 0.2s;}
         button:active { opacity: 0.8; transform: scale(0.98); }
@@ -44,7 +55,6 @@
         .btn-secondary { background-color: #ff9800; color: #fff; }
         .btn-danger { background-color: #d32f2f; color: #fff; }
         .btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 10px; font-size: 1em; margin-top: 15px; border: none; cursor: pointer; }
-        .btn-tournament { background-color: #9c27b0; color: #fff; border: 2px solid #ce93d8; }
         
         input[type="number"], input[type="text"], select { padding: 10px; font-size: 1.1em; width: 100%; box-sizing: border-box; text-align: center; margin: 5px 0; border: 1px solid var(--hint-color); border-radius: 10px; background-color: var(--bg-color); color: var(--text-color); }
         
@@ -57,7 +67,15 @@
         .header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px; font-weight: bold; font-size: 1.2em; background: var(--sec-bg-color); padding: 12px; border-radius: 10px; box-sizing: border-box;}
         #scoreDisplay { color: #4caf50; }
         
-        .table-wrapper { flex-grow: 1; width: 100%; overflow-y: auto; border-radius: 10px; background: var(--sec-bg-color); margin-bottom: 10px; }
+        .table-wrapper {
+            flex-grow: 1; 
+            width: 100%;
+            overflow-y: auto; 
+            border-radius: 10px;
+            background: var(--sec-bg-color);
+            margin-bottom: 10px;
+        }
+
         table { width: 100%; border-collapse: collapse; }
         th, td { border-bottom: 1px solid var(--hint-color); padding: 12px 5px; text-align: center; }
         th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
@@ -72,34 +90,22 @@
         .rooms-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 5px; border-radius: 8px; }
         .join-btn-small { width: auto; padding: 8px 15px; font-size: 0.9em; margin: 0; }
         
-        #playersList, #teamMembersList { list-style: none; padding: 0; width: 100%; text-align: left; background: var(--sec-bg-color); border-radius: 10px; overflow: hidden;}
-        #playersList li, #teamMembersList li { padding: 15px; border-bottom: 1px solid var(--hint-color); font-weight: bold; display: flex; justify-content: space-between;}
+        #playersList { list-style: none; padding: 0; width: 100%; text-align: left; background: var(--sec-bg-color); border-radius: 10px; overflow: hidden;}
+        #playersList li { padding: 15px; border-bottom: 1px solid var(--hint-color); font-weight: bold; display: flex; justify-content: space-between;}
         .host-badge { color: var(--link-color); font-size: 0.8em; font-weight: normal;}
 
         .leaderboard-row { display: flex; justify-content: space-between; padding: 15px; border-bottom: 1px solid var(--hint-color); width: 100%; align-items: center; box-sizing: border-box; background: var(--sec-bg-color); margin-bottom: 8px; border-radius: 8px;}
-        
-        .match-card { background: var(--bg-color); padding: 12px; border-radius: 8px; border: 1px solid var(--hint-color); margin-bottom: 10px; text-align: left;}
-        .match-card h4 { margin: 0 0 5px 0; color: var(--link-color); }
-        .match-card p { margin: 3px 0; font-size: 0.9em; }
-
-        .tab-buttons { display: flex; width: 100%; gap: 6px; margin-bottom: 15px; flex-wrap: wrap; justify-content: space-between;}
-        .tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 10px; font-size: 0.82em; border-radius: 8px; flex: 1 1 22%; text-align: center; font-weight: bold;}
-        .tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); box-shadow: inset 0 0 5px rgba(0,0,0,0.2);}
-        #tabGlobalCWFreakBtn.active-tab { background-color: #9c27b0; }
-        #tabGlobalCWFreakBtn { background-color: #ce93d8; color: #fff;}
-
-        /* Grafica Tabellone Calcio */
-        .bracket-container { display: flex; flex-direction: column; width: 100%; gap: 15px; margin-top: 10px; }
-        .bracket-round { background: var(--sec-bg-color); padding: 10px; border-radius: 10px; border: 1px solid var(--hint-color); }
-        .bracket-round h4 { margin: 0 0 10px 0; text-align: center; color: var(--link-color); }
-        .bracket-match { display: flex; flex-direction: column; background: var(--bg-color); border: 1px solid var(--hint-color); border-radius: 8px; padding: 10px; margin-bottom: 8px; gap: 4px; }
-        .bracket-team-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.95em; }
-        .bracket-team-row.winner { color: #4caf50; }
         
         #loadingText { font-style: italic; color: #ff9800; margin-bottom: 15px; font-weight: bold; }
         #notificationArea { color: #d32f2f; font-weight: bold; margin-bottom: 10px; min-height: 20px; text-align: center;}
         
         .privacy-box { text-align: left; font-size: 0.9em; line-height: 1.5; background: var(--sec-bg-color); padding: 15px; border-radius: 10px; border: 1px solid var(--hint-color); max-height: 300px; overflow-y: auto; width: 100%; box-sizing: border-box;}
+        
+        .tab-buttons { display: flex; width: 100%; gap: 6px; margin-bottom: 15px; flex-wrap: wrap; justify-content: space-between;}
+        .tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 10px; font-size: 0.85em; border-radius: 8px; flex: 1 1 45%; text-align: center; }
+        .tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); box-shadow: inset 0 0 5px rgba(0,0,0,0.2);}
+        #tabGlobalCWFreakBtn.active-tab { background-color: #9c27b0; }
+        #tabGlobalCWFreakBtn { background-color: #ce93d8; color: #fff;}
     </style>
 </head>
 <body>
@@ -132,7 +138,6 @@
         <h2>Ciao <span id="playerName">Giocatore</span>! 📻</h2>
         <p id="loadingText">Connessione sicura in corso...</p>
 
-        <button id="tournamentMenuBtn" class="btn-tournament" style="margin-bottom:15px; width:100%;">🏆 CAMPIONATO A SQUADRE</button>
         <button id="reenterRoomBtn" class="btn-secondary" style="display:none; margin-bottom:15px; background-color: #4caf50;"></button>
 
         <div class="box-panel">
@@ -156,7 +161,7 @@
             <div class="settings-row">
                 <div><label>WPM:</label> <input type="number" id="startWpmInput" value="20" min="5" max="50"></div>
                 <div><label>Hz:</label> <input type="number" id="toneInput" value="600" min="300" max="1000" step="50"></div>
-                <div><label>Parole/Nom.:</label> <input type="number" id="wordCountInput" value="10" min="3" max="200"></div>
+                <div><label>Parole/Nom.:</label> <input type="number" id="wordCountInput" value="10" min="3" max="50"></div>
                 <div id="timeoutDiv"><label>Timeout (min):</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
             </div>
             <button id="createRoomBtn" disabled>Inizia / Crea Stanza</button>
@@ -169,37 +174,8 @@
             </ul>
         </div>
         
-        <button id="viewGlobalLeaderboardBtn" class="btn-link" style="font-weight: bold; font-size: 1.1em;">🏆 Classifiche e Storico</button>
+        <button id="viewGlobalLeaderboardBtn" class="btn-link" style="font-weight: bold; font-size: 1.1em;">🏆 Classifiche</button>
         <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Account</button>
-    </div>
-
-    <div id="tournamentScreen" class="screen">
-        <h2>🏆 Campionato a Squadre</h2>
-        
-        <div class="box-panel" id="createTeamPanel">
-            <h3>Fonda una Squadra</h3>
-            <input type="text" id="teamNameInput" placeholder="Nome della tua Squadra...">
-            <button id="createTeamBtn" class="btn-tournament">Fonda e diventa Capitano</button>
-        </div>
-
-        <div class="box-panel" id="myTeamPanel" style="display:none;">
-            <h3 id="myTeamNameDisplay">Nome Squadra</h3>
-            <p style="font-size: 0.9em; color: var(--hint-color);">Capitano: <span id="myTeamCaptain"></span></p>
-            <button id="inviteTeamBtn" class="btn-link" style="padding: 5px; font-weight: bold;">📢 Invita Amici su Telegram</button>
-            <h4 style="margin-top: 10px; margin-bottom: 5px;">Giocatori:</h4>
-            <ul id="teamMembersList"></ul>
-            <button id="confirmTeamReadyBtn" class="btn-secondary" style="margin-top: 15px;">Conferma Squadra (Pronto)</button>
-        </div>
-
-        <div class="box-panel" id="championshipPanel" style="display:none; width:100%;">
-            <h3>Tabellone Campionato ⚽</h3>
-            <p id="champStatusText" style="text-align:center; font-weight:bold; color:#ff9800;"></p>
-            <button id="generateBracketBtn" style="display:none; background-color:#4caf50; margin-bottom:15px;">Genera Tabellone Campionato</button>
-            
-            <div class="bracket-container" id="bracketContainer"></div>
-        </div>
-
-        <button onclick="showScreen('setupScreen')" style="margin-top:auto;" class="btn-danger">Torna Indietro</button>
     </div>
 
     <div id="privacyScreen" class="screen">
@@ -259,22 +235,26 @@
     </div>
 
     <div id="leaderboardScreen" class="screen">
-        <h2>🏆 Risultati & Storico</h2>
+        <h2>🏆 Risultati</h2>
         
         <div id="roomWinnerBanner"></div>
         <p id="waitingOthersText" style="text-align: center; font-style: italic; color: #ff9800; display: none; font-weight: bold;">⏳ In attesa degli altri giocatori...</p>
 
         <div class="tab-buttons" id="leaderboardTabs">
-            <button id="tabRoomBtn" class="tab-btn active-tab">Questa Partita</button>
-            <button id="tabGlobalCWFreakBtn" class="tab-btn">CW Freak</button>
-            <button id="tabGlobalStandardMultiBtn" class="tab-btn">Parole Multi</button>
-            <button id="tabGlobalStandardSingleBtn" class="tab-btn">Parole Single</button>
-            <button id="tabMatchHistoryBtn" class="tab-btn" style="background-color:#4caf50; color:#fff;">Storico Sfide</button>
+            <button id="tabRoomBtn" class="tab-btn active-tab" style="width: 100%;">Questa Partita</button>
+            <button id="tabGlobalCWFreakBtn" class="tab-btn">Generale CW Freak</button>
+            <button id="tabGlobalStandardMultiBtn" class="tab-btn">Parole (Multi)</button>
+            <button id="tabGlobalStandardSingleBtn" class="tab-btn">Parole (Single)</button>
         </div>
 
         <div id="lbFilterArea" style="display:none; width:100%; text-align:center; margin-bottom:10px;">
-            <label style="font-size:0.9em; font-weight:bold;">Filtra per N° Parole (Dinamico): </label>
-            <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px; outline:none; border:1px solid var(--hint-color); background: var(--bg-color); color: var(--text-color);"></select>
+            <label style="font-size:0.9em; font-weight:bold;">Filtra per N° Parole: </label>
+            <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px; outline:none; border:1px solid var(--hint-color); background: var(--bg-color); color: var(--text-color);">
+                <option value="10">10 Parole</option>
+                <option value="20">20 Parole</option>
+                <option value="30">30 Parole</option>
+                <option value="50">50 Parole</option>
+            </select>
         </div>
 
         <div id="leaderboardContainer" style="width: 100%; flex-grow: 1; overflow-y: auto; margin-top: 5px;"></div>
@@ -346,14 +326,6 @@
                     
                     showScreen('setupScreen'); 
                     listenToRooms();
-
-                    const startParam = tg.initDataUnsafe?.start_param;
-                    if (startParam && startParam.startsWith('team_')) {
-                        const targetTeamId = startParam.substring(5);
-                        joinTeam(targetTeamId);
-                    } else {
-                        checkMyTeam();
-                    }
                 })
                 .catch((error) => {
                     console.error("Firebase Auth Error:", error);
@@ -379,10 +351,10 @@
         let activeTab = "room";
         let roomListListener = null;
         
+        // Configurazioni partita
         let isSinglePlayer = false;
         let currentMode = "standard"; 
         let requestedWordCount = 10;
-        let myTeamId = null;
 
         document.getElementById('gameTypeInput').addEventListener('change', (e) => {
             const isSingle = e.target.value === 'single';
@@ -390,6 +362,7 @@
             document.getElementById('createRoomBtn').textContent = isSingle ? "Gioca Subito" : "Crea Stanza";
         });
         
+        // BLOCCA WPM, PAROLE E TONO IN MODALITA' CW FREAK
         document.getElementById('gameModeInput').addEventListener('change', (e) => {
             const isCallsign = e.target.value === 'callsign';
             
@@ -407,6 +380,7 @@
             }
         });
 
+        // GENERATORE NOMINATIVI (CW FREAK)
         function generateCallsign() {
             const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "AA", "VE", "G", "M", "2E", "F", "EA", "EB", "DL", "DJ", "DK", "SP", "SQ", "UA", "UB", "UR", "JA", "VK", "ZL", "PY", "LU", "ZS"];
             const p = prefixes[Math.floor(Math.random() * prefixes.length)];
@@ -506,7 +480,7 @@
                 currentWpm = parseInt(document.getElementById('startWpmInput').value);
                 requestedWordCount = parseInt(document.getElementById('wordCountInput').value);
                 if (isNaN(requestedWordCount) || requestedWordCount < 3) requestedWordCount = 3;
-                if (requestedWordCount > 200) requestedWordCount = 200;
+                if (requestedWordCount > 50) requestedWordCount = 50;
             }
             
             currentTone = parseInt(document.getElementById('toneInput').value); 
@@ -530,7 +504,7 @@
                 hostId: myId
             }).then(() => {
                 joinRoomLogic(false);
-            }).catch(e => tg.showAlert("Errore connessione Database: " + e.message));
+            });
         });
 
         window.toggleChat = function() {
@@ -578,11 +552,7 @@
             const input = document.getElementById('chatInput');
             const txt = input.value.trim();
             if (!txt || !roomCode) return;
-            db.ref(`rooms/${roomCode}/chat`).push({
-                name: myName,
-                text: txt,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            });
+            db.ref(`rooms/${roomCode}/chat`).push({ name: myName, text: txt, timestamp: firebase.database.ServerValue.TIMESTAMP });
             input.value = '';
         }
 
@@ -644,6 +614,11 @@
                     }
                 });
             });
+        }
+        
+        window.openTelegramProfile = function(username) {
+            if (username) tg.openTelegramLink('https://t.me/' + username);
+            else tg.showAlert("Questo utente non ha impostato un Username pubblico su Telegram.");
         }
 
         function renderPlayersList(playersData, hostId) {
@@ -751,35 +726,7 @@
             }
         });
 
-        // ================= GESTIONE CLASSIFICHE DINAMICHE =================
-
-        function updateDynamicWordFilter(callback) {
-            db.ref('leaderboard/standard').once('value', snap => {
-                let counts = new Set();
-                snap.forEach(typeSnap => {
-                    let key = typeSnap.key; // es: multi_10, single_25
-                    let parts = key.split('_');
-                    if (parts.length === 2) {
-                        counts.add(parseInt(parts[1]));
-                    }
-                });
-                
-                let select = document.getElementById('lbWordFilter');
-                select.innerHTML = '';
-                let sorted = Array.from(counts).sort((a, b) => a - b);
-                sorted.forEach(c => {
-                    let opt = document.createElement('option');
-                    opt.value = c;
-                    opt.text = `${c} Parole`;
-                    select.add(opt);
-                });
-                
-                if (sorted.length === 0) {
-                    select.innerHTML = '<option value="10">10 Parole</option>';
-                }
-                if (callback) callback();
-            });
-        }
+        // ================= GESTIONE CLASSIFICHE =================
 
         function finishGame() {
             gameRunning = false;
@@ -796,12 +743,24 @@
             if (totalScore > 0) {
                 let dbPath = "";
                 if (currentMode === 'callsign') {
-                    dbPath = `leaderboard/callsign/global/${myId}`;
+                    dbPath = `leaderboard/callsign/global/${myId}`; // CW Freak va tutto qui
                 } else {
                     dbPath = `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                    
+                    // Aggiungo il numero di parole al menu a tendina se non c'è già
+                    let select = document.getElementById('lbWordFilter');
+                    let exists = Array.from(select.options).some(opt => opt.value == requestedWordCount);
+                    if (!exists) {
+                        let opt = document.createElement('option');
+                        opt.value = requestedWordCount;
+                        opt.text = `${requestedWordCount} Parole`;
+                        select.add(opt);
+                    }
+                    select.value = requestedWordCount;
                 }
 
                 const globalUserRef = db.ref(dbPath);
+                
                 globalUserRef.once('value', snapshot => {
                     let oldData = snapshot.val();
                     if (!oldData || totalScore > oldData.score) {
@@ -817,17 +776,13 @@
                 });
             }
 
-            if (isSinglePlayer) {
-                if (currentMode === 'callsign') {
-                    activeTab = "cwfreak";
-                    showLeaderboardTab('tabGlobalCWFreakBtn');
-                } else {
-                    activeTab = "std_single";
-                    updateDynamicWordFilter(() => {
-                        document.getElementById('lbWordFilter').value = requestedWordCount;
-                        showLeaderboardTab('tabGlobalStandardSingleBtn');
-                    });
-                }
+            // Indirizza l'utente alla scheda corretta
+            if (isSinglePlayer && currentMode === 'callsign') {
+                activeTab = "cwfreak";
+                showLeaderboardTab('tabGlobalCWFreakBtn');
+            } else if (isSinglePlayer) {
+                activeTab = "std_single";
+                showLeaderboardTab('tabGlobalStandardSingleBtn');
             } else {
                 activeTab = "room";
                 showLeaderboardTab('tabRoomBtn');
@@ -842,16 +797,15 @@
             const filterArea = document.getElementById('lbFilterArea');
             const roomWinnerBanner = document.getElementById('roomWinnerBanner');
             const waitingText = document.getElementById('waitingOthersText');
-            const container = document.getElementById('leaderboardContainer');
             
             if (tabId === 'tabRoomBtn') {
                 filterArea.style.display = 'none';
                 roomWinnerBanner.style.display = 'block';
-                container.innerHTML = ''; 
+                document.getElementById('leaderboardContainer').innerHTML = ''; // pulizia rapida
                 if (roomCode) {
                     db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
                 } else {
-                    container.innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>";
+                    document.getElementById('leaderboardContainer').innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>";
                     waitingText.style.display = 'none';
                 }
             } else if (tabId === 'tabGlobalCWFreakBtn') {
@@ -859,12 +813,8 @@
                 roomWinnerBanner.style.display = 'none';
                 waitingText.style.display = 'none';
                 fetchAndRenderGlobalLeaderboard(`leaderboard/callsign/global`, `🏆 CW Freak (Assoluta)`);
-            } else if (tabId === 'tabMatchHistoryBtn') {
-                filterArea.style.display = 'none';
-                roomWinnerBanner.style.display = 'none';
-                waitingText.style.display = 'none';
-                fetchAndRenderMatchHistory();
             } else {
+                // Tab Standard (Multi o Single)
                 filterArea.style.display = 'block';
                 roomWinnerBanner.style.display = 'none';
                 waitingText.style.display = 'none';
@@ -879,15 +829,8 @@
 
         document.getElementById('tabRoomBtn').addEventListener('click', () => { activeTab="room"; showLeaderboardTab('tabRoomBtn'); });
         document.getElementById('tabGlobalCWFreakBtn').addEventListener('click', () => { activeTab="cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); });
-        document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { 
-            activeTab="std_multi"; 
-            updateDynamicWordFilter(() => showLeaderboardTab('tabGlobalStandardMultiBtn')); 
-        });
-        document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { 
-            activeTab="std_single"; 
-            updateDynamicWordFilter(() => showLeaderboardTab('tabGlobalStandardSingleBtn')); 
-        });
-        document.getElementById('tabMatchHistoryBtn').addEventListener('click', () => { activeTab="history"; showLeaderboardTab('tabMatchHistoryBtn'); });
+        document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; showLeaderboardTab('tabGlobalStandardMultiBtn'); });
+        document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { activeTab="std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); });
         
         document.getElementById('lbWordFilter').addEventListener('change', () => {
             if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn');
@@ -908,15 +851,6 @@
                     
                     if (allFinished && roomData.hostId === myId && roomData.status !== 'finished') {
                         db.ref(`rooms/${roomCode}/status`).set('finished');
-                        
-                        // Scrive nello storico delle sfide multiplayer conclusesi
-                        db.ref(`match_history`).push({
-                            date: new Date().toLocaleDateString('it-IT') + " " + new Date().toLocaleTimeString('it-IT'),
-                            mode: roomData.mode,
-                            wordCount: roomData.wordCount,
-                            players: Object.values(players).map(p => ({ name: p.name, score: p.score, wpm: p.wpm }))
-                        }).catch(e => console.error("Non salvato nello storico causa regole db:", e));
-
                         setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 30000); 
                     }
                 });
@@ -983,37 +917,6 @@
                     row.appendChild(nameSpan);
                     row.appendChild(scoreSpan);
                     container.appendChild(row);
-                });
-            });
-        }
-
-        function fetchAndRenderMatchHistory() {
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-
-            db.ref('match_history').limitToLast(30).once('value', snap => {
-                container.innerHTML = '<h3 style="text-align:center;">Storico Match Multi</h3>';
-                let matches = [];
-                snap.forEach(c => { matches.push(c.val()); });
-                matches.reverse();
-
-                if (matches.length === 0) {
-                    container.innerHTML += "<p style='text-align:center; color:var(--hint-color);'>Nessun match recente registrato.</p>";
-                    return;
-                }
-
-                matches.forEach(m => {
-                    let div = document.createElement('div');
-                    div.className = 'match-card';
-                    let modeStr = m.mode === 'callsign' ? '🎙️ CW Freak (Nominativi)' : `🔤 ${m.wordCount} Parole`;
-                    let html = `<h4>${modeStr} - <small style="color:var(--text-color);">${m.date}</small></h4>`;
-                    
-                    m.players.sort((a,b) => b.score - a.score).forEach((p, idx) => {
-                        let trophy = idx === 0 ? '🏆' : '⚔️';
-                        html += `<p>${trophy} <b>${p.name}</b>: ${p.score} punti (${p.wpm} WPM)</p>`;
-                    });
-                    div.innerHTML = html;
-                    container.appendChild(div);
                 });
             });
         }
@@ -1100,9 +1003,7 @@
         }
 
         document.getElementById('quitGameBtn').addEventListener('click', () => {
-            tg.showConfirm("Vuoi abbandonare la partita?", function(agreed) {
-                if(agreed) { gameRunning = false; exitRoomCleanly(); }
-            });
+            if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); }
         });
         
         function exitRoomCleanly() {
@@ -1121,352 +1022,32 @@
         
         document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => {
             showScreen('leaderboardScreen');
-            showLeaderboardTab('tabMatchHistoryBtn'); 
+            showLeaderboardTab('tabGlobalCWFreakBtn'); 
         });
         
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
 
-        document.getElementById('deleteDataBtn').addEventListener('click', () => {
-            tg.showConfirm("⚠️ Eliminerai per sempre i tuoi punteggi globali. Confermi?", async function(agreed) {
-                if(agreed) {
-                    try {
-                        await db.ref(`leaderboard`).once('value', snapshot => { snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); }); });
-                        tg.showAlert("Dati eliminati."); window.Telegram.WebApp.close(); 
-                    } catch (e) { tg.showAlert("Errore: " + e.message); }
-                }
-            });
+        document.getElementById('deleteDataBtn').addEventListener('click', async () => {
+            if (confirm("⚠️ Eliminerai per sempre i tuoi punteggi globali. Confermi?")) {
+                try {
+                    await db.ref(`leaderboard`).once('value', snapshot => {
+                       snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); });
+                    });
+                    alert("Dati eliminati.");
+                    window.Telegram.WebApp.close(); 
+                } catch (e) { alert("Errore: " + e.message); }
+            }
         });
         
         document.getElementById('startMultiplayerBtn').addEventListener('click', () => { db.ref(`rooms/${roomCode}/status`).set('countdown'); });
         
         document.getElementById('deleteRoomBtn').addEventListener('click', () => {
-            tg.showConfirm("Vuoi eliminare definitivamente questa stanza? Tutti i partecipanti saranno espulsi.", function(agreed) {
-                if(agreed) db.ref(`rooms/${roomCode}`).remove();
-            });
+            if (confirm("Vuoi eliminare definitivamente questa stanza? Tutti i partecipanti saranno espulsi.")) db.ref(`rooms/${roomCode}`).remove();
         });
         
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
 
-
-        // ================= GESTIONE CAMPIONATO A SQUADRE =================
-
-        document.getElementById('tournamentMenuBtn').addEventListener('click', () => {
-            showScreen('tournamentScreen');
-            checkMyTeam();
-            listenToTournament();
-        });
-
-        function checkMyTeam() {
-            db.ref('teams').once('value', snap => {
-                let foundTeam = null;
-                snap.forEach(child => {
-                    let team = child.val();
-                    if (team.members && team.members[myId]) {
-                        foundTeam = { id: child.key, ...team };
-                    }
-                });
-
-                if (foundTeam) {
-                    myTeamId = foundTeam.id;
-                    document.getElementById('createTeamPanel').style.display = 'none';
-                    document.getElementById('myTeamPanel').style.display = 'block';
-                    document.getElementById('myTeamNameDisplay').textContent = "🛡️ " + foundTeam.name;
-                    document.getElementById('myTeamCaptain').textContent = foundTeam.members[foundTeam.captainId]?.name || "Sconosciuto";
-                    
-                    let membersList = document.getElementById('teamMembersList');
-                    membersList.innerHTML = '';
-                    Object.values(foundTeam.members).forEach(member => {
-                        let li = document.createElement('li');
-                        let role = member.id === foundTeam.captainId ? "👑 Capitano" : "👤 Membro";
-                        li.innerHTML = `<span>${member.name}</span> <span style="font-size:0.8em; color:var(--hint-color);">${role}</span>`;
-                        membersList.appendChild(li);
-                    });
-
-                    document.getElementById('inviteTeamBtn').onclick = () => {
-                        const botLink = "https://t.me/cwappgame_bot?start=team_" + myTeamId;
-                        const text = "Unisciti alla mia squadra '" + foundTeam.name + "' per sfidarci nel torneo CW Freak!";
-                        tg.openTelegramLink("https://t.me/share/url?url=" + encodeURIComponent(botLink) + "&text=" + encodeURIComponent(text));
-                    };
-
-                    const readyBtn = document.getElementById('confirmTeamReadyBtn');
-                    if (foundTeam.captainId === myId) {
-                        readyBtn.style.display = 'block';
-                        readyBtn.onclick = () => {
-                            db.ref(`teams/${myTeamId}/status`).set('ready')
-                              .then(() => tg.showAlert("La tua squadra è segnata come PRONTA!"))
-                              .catch(e => tg.showAlert("Errore: " + e.message));
-                        };
-                    } else {
-                        readyBtn.style.display = 'none';
-                    }
-                } else {
-                    myTeamId = null;
-                    document.getElementById('createTeamPanel').style.display = 'block';
-                    document.getElementById('myTeamPanel').style.display = 'none';
-                }
-            }).catch(e => tg.showAlert("Impossibile leggere il Database. Sicuro di aver aggiornato e salvato le regole Firebase su Realtime Database?"));
-        }
-
-        document.getElementById('createTeamBtn').addEventListener('click', () => {
-            const teamName = document.getElementById('teamNameInput').value.trim();
-            if (!teamName) { tg.showAlert("Inserisci un nome valido per la squadra!"); return; }
-
-            const btn = document.getElementById('createTeamBtn');
-            btn.disabled = true;
-            btn.textContent = "Creazione in corso...";
-
-            const newTeamId = 'team_' + Math.floor(1000 + Math.random() * 9000);
-            db.ref(`teams/${newTeamId}`).set({
-                name: teamName,
-                captainId: myId,
-                status: 'forming',
-                members: {
-                    [myId]: { id: myId, name: myName, username: tgUsername }
-                }
-            }).then(() => {
-                btn.disabled = false;
-                btn.textContent = "Fonda e diventa Capitano";
-                document.getElementById('teamNameInput').value = '';
-                checkMyTeam();
-            }).catch((err) => {
-                btn.disabled = false;
-                btn.textContent = "Fonda e diventa Capitano";
-                tg.showAlert("Errore Firebase: " + err.message + "\n\nNon hai i permessi di scrittura per 'teams'. Controlla di aver incollato le ultime regole e premuto su Pubblica nel Realtime Database.");
-            });
-        });
-
-        function joinTeam(teamId) {
-            db.ref(`teams/${teamId}`).once('value', snap => {
-                if (!snap.exists()) {
-                    tg.showAlert("La squadra d'invito non esiste più.");
-                    checkMyTeam();
-                    return;
-                }
-                
-                db.ref(`teams/${teamId}/members/${myId}`).set({
-                    id: myId,
-                    name: myName,
-                    username: tgUsername
-                }).then(() => {
-                    tg.showAlert("Ti sei unito con successo alla squadra!");
-                    checkMyTeam();
-                    showScreen('tournamentScreen');
-                }).catch(e => tg.showAlert("Errore unione squadra: " + e.message));
-            });
-        }
-
-        // Sistema di Tabellone Torneo a 4 Squadre
-        function listenToTournament() {
-            const champPanel = document.getElementById('championshipPanel');
-            const generateBtn = document.getElementById('generateBracketBtn');
-            const statusText = document.getElementById('champStatusText');
-
-            db.ref('teams').on('value', snap => {
-                let teamsList = [];
-                snap.forEach(child => {
-                    let team = child.val();
-                    team.id = child.key;
-                    if (team.status === 'ready') teamsList.push(team);
-                });
-
-                db.ref('tournament').on('value', tSnap => {
-                    const tData = tSnap.val();
-                    if (tData && tData.status === 'active') {
-                        champPanel.style.display = 'block';
-                        generateBtn.style.display = 'none';
-                        statusText.textContent = "🏆 Torneo in corso!";
-                        renderBracket(tData);
-                    } else {
-                        if (teamsList.length >= 4) {
-                            champPanel.style.display = 'block';
-                            statusText.textContent = `Ci sono ${teamsList.length} squadre pronte!`;
-                            
-                            // Solo i capitani possono generare il tabellone
-                            db.ref(`teams/${myTeamId}/captainId`).once('value', capSnap => {
-                                generateBtn.style.display = (capSnap.val() === myId) ? 'block' : 'none';
-                            });
-
-                            generateBtn.onclick = () => {
-                                generateChampionshipBracket(teamsList.slice(0, 4));
-                            };
-                        } else {
-                            champPanel.style.display = 'none';
-                        }
-                    }
-                });
-            });
-        }
-
-        function generateChampionshipBracket(fourTeams) {
-            // Mischia le squadre
-            let shuffled = fourTeams.sort(() => 0.5 - Math.random());
-            let fixedCallsigns = getGameWords(25, 'callsign'); // Rigorosamente gli stessi nominativi per equità
-
-            db.ref('tournament').set({
-                status: 'active',
-                words: fixedCallsigns,
-                rounds: {
-                    semifinals: {
-                        match1: { team1: shuffled[0], team2: shuffled[1], score1: 0, score2: 0, winner: null },
-                        match2: { team2_1: shuffled[2], team2_2: shuffled[3], score1: 0, score2: 0, winner: null }
-                    },
-                    finals: {
-                        firstPlace: { team1: null, team2: null, score1: 0, score2: 0, winner: null },
-                        thirdPlace: { team1: null, team2: null, score1: 0, score2: 0, winner: null }
-                    }
-                }
-            }).catch(e => tg.showAlert("Errore creazione Torneo: " + e.message));
-        }
-
-        function renderBracket(tData) {
-            const container = document.getElementById('bracketContainer');
-            container.innerHTML = '';
-
-            let semi = tData.rounds.semifinals;
-            let finals = tData.rounds.finals;
-
-            let html = `
-                <div class="bracket-round">
-                    <h4>Semifinali ⚔️</h4>
-                    <div class="bracket-match" id="semiMatch1">
-                        <div class="bracket-team-row ${semi.match1.winner === 't1'?'winner':''}">
-                            <span>${semi.match1.team1.name}</span>
-                            <span>${semi.match1.score1} pt</span>
-                        </div>
-                        <div class="bracket-team-row ${semi.match1.winner === 't2'?'winner':''}">
-                            <span>${semi.match1.team2.name}</span>
-                            <span>${semi.match1.score2} pt</span>
-                        </div>
-                        <button id="playSemi1Btn" style="font-size:0.8em; padding:8px; display:none;">Gioca Sfida Sincrona</button>
-                    </div>
-                    
-                    <div class="bracket-match" id="semiMatch2">
-                        <div class="bracket-team-row ${semi.match2.winner === 't1'?'winner':''}">
-                            <span>${semi.match2.team2_1.name}</span>
-                            <span>${semi.match2.score1} pt</span>
-                        </div>
-                        <div class="bracket-team-row ${semi.match2.winner === 't2'?'winner':''}">
-                            <span>${semi.match2.team2_2.name}</span>
-                            <span>${semi.match2.score2} pt</span>
-                        </div>
-                        <button id="playSemi2Btn" style="font-size:0.8em; padding:8px; display:none;">Gioca Sfida Sincrona</button>
-                    </div>
-                </div>
-
-                <div class="bracket-round" style="border-color:#ff9800;">
-                    <h4>Finali 🏆</h4>
-                    <div class="bracket-match">
-                        <div style="font-size:0.8em; color:var(--hint-color); text-align:center;">Finale 1° e 2° Posto</div>
-                        <div class="bracket-team-row ${finals.firstPlace.winner === 't1'?'winner':''}">
-                            <span>${finals.firstPlace.team1 ? finals.firstPlace.team1.name : 'Da definire'}</span>
-                            <span>${finals.firstPlace.score1} pt</span>
-                        </div>
-                        <div class="bracket-team-row ${finals.firstPlace.winner === 't2'?'winner':''}">
-                            <span>${finals.firstPlace.team2 ? finals.firstPlace.team2.name : 'Da definire'}</span>
-                            <span>${finals.firstPlace.score2} pt</span>
-                        </div>
-                        <button id="playFinal1Btn" style="font-size:0.8em; padding:8px; display:none;">Gioca Finale</button>
-                    </div>
-
-                    <div class="bracket-match">
-                        <div style="font-size:0.8em; color:var(--hint-color); text-align:center;">Finale 3° e 4° Posto</div>
-                        <div class="bracket-team-row ${finals.thirdPlace.winner === 't1'?'winner':''}">
-                            <span>${finals.thirdPlace.team1 ? finals.thirdPlace.team1.name : 'Da definire'}</span>
-                            <span>${finals.thirdPlace.score1} pt</span>
-                        </div>
-                        <div class="bracket-team-row ${finals.thirdPlace.winner === 't2'?'winner':''}">
-                            <span>${finals.thirdPlace.team2 ? finals.thirdPlace.team2.name : 'Da definire'}</span>
-                            <span>${finals.thirdPlace.score2} pt</span>
-                        </div>
-                        <button id="playFinal2Btn" style="font-size:0.8em; padding:8px; display:none;">Gioca Finalina</button>
-                    </div>
-                </div>
-            `;
-            container.innerHTML = html;
-
-            // Mostra tasto Gioca solo per i membri delle rispettive squadre dello scontro
-            setupTournamentActionBtn('playSemi1Btn', semi.match1.team1.id, semi.match1.team2.id, 'semifinals/match1', tData.words);
-            setupTournamentActionBtn('playSemi2Btn', semi.match2.team2_1.id, semi.match2.team2_2.id, 'semifinals/match2', tData.words);
-            
-            if (finals.firstPlace.team1 && finals.firstPlace.team2) {
-                setupTournamentActionBtn('playFinal1Btn', finals.firstPlace.team1.id, finals.firstPlace.team2.id, 'finals/firstPlace', tData.words);
-            }
-            if (finals.thirdPlace.team1 && finals.thirdPlace.team2) {
-                setupTournamentActionBtn('playFinal2Btn', finals.thirdPlace.team1.id, finals.thirdPlace.team2.id, 'finals/thirdPlace', tData.words);
-            }
-        }
-
-        function setupTournamentActionBtn(btnId, t1Id, t2Id, path, sharedWords) {
-            const btn = document.getElementById(btnId);
-            if (!btn) return;
-
-            if (myTeamId === t1Id || myTeamId === t2Id) {
-                btn.style.display = 'block';
-                btn.onclick = () => {
-                    // Crea una stanza multiplayer preimpostata sul tabellone
-                    roomCode = "tour_" + btnId;
-                    gameWords = sharedWords;
-                    currentMode = "callsign";
-                    currentWpm = 25;
-                    requestedWordCount = 25;
-
-                    db.ref('rooms/' + roomCode).set({
-                        status: 'waiting',
-                        type: 'multi',
-                        mode: 'callsign',
-                        wpm: 25,
-                        tone: 600,
-                        wordCount: 25,
-                        words: sharedWords,
-                        hostId: myId
-                    }).then(() => {
-                        // Monitora la fine della stanza per aggiornare il tabellone automaticamente
-                        db.ref(`rooms/${roomCode}`).on('value', snap => {
-                            if (!snap.exists()) return;
-                            let rData = snap.val();
-                            if (rData.status === 'finished') {
-                                let players = Object.values(rData.players || {});
-                                if (players.length >= 2) {
-                                    // Risoluzione punteggi per il tabellone
-                                    resolveTournamentScores(path, players, t1Id, t2Id);
-                                }
-                            }
-                        });
-                        joinRoomLogic(false);
-                    }).catch(e => tg.showAlert("Errore Database (Verifica regole): " + e.message));
-                };
-            }
-        }
-
-        function resolveTournamentScores(path, players, t1Id, t2Id) {
-            let p1 = players[0];
-            let p2 = players[1];
-
-            let score1 = p1.score;
-            let score2 = p2.score;
-
-            db.ref(`tournament/rounds/${path}`).update({
-                score1: score1,
-                score2: score2,
-                winner: score1 > score2 ? 't1' : 't2'
-            }).then(() => {
-                // Ricalcola avanzamento finali
-                db.ref('tournament/rounds').once('value', snap => {
-                    let r = snap.val();
-                    if (r.semifinals.match1.winner && r.semifinals.match2.winner) {
-                        let w1 = r.semifinals.match1.winner === 't1' ? r.semifinals.match1.team1 : r.semifinals.match1.team2;
-                        let l1 = r.semifinals.match1.winner === 't1' ? r.semifinals.match1.team2 : r.semifinals.match1.team1;
-                        
-                        let w2 = r.semifinals.match2.winner === 't1' ? r.semifinals.match2.team2_1 : r.semifinals.match2.team2_2;
-                        let l2 = r.semifinals.match2.winner === 't1' ? r.semifinals.match2.team2_2 : r.semifinals.match2.team2_1;
-
-                        db.ref('tournament/rounds/finals/firstPlace').update({ team1: w1, team2: w2 });
-                        db.ref('tournament/rounds/finals/thirdPlace').update({ team1: l1, team2: l2 });
-                    }
-                });
-            });
-        }
     </script>
 </body>
 </html>
