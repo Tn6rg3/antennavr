@@ -67,7 +67,7 @@
         .box-panel { border: 1px solid var(--hint-color); padding: 15px; border-radius: 10px; width: 100%; margin-bottom: 15px; box-sizing: border-box; background: var(--sec-bg-color); }
         .box-panel h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; text-align: center;}
         
-        .data-list { list-style: none; padding: 0; margin: 0; max-height: 180px; overflow-y: auto; text-align: left; }
+        .data-list { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; text-align: left; }
         .data-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 5px; border-radius: 8px; }
         .action-btn-small { width: auto; padding: 8px 15px; font-size: 0.9em; margin: 0; }
         
@@ -82,8 +82,8 @@
         #tabGlobalCWFreakBtn.active-tab { background-color: #9c27b0; }
         #tabGlobalCWFreakBtn { background-color: #ce93d8; color: #fff;}
 
-        .match-card { background: var(--bg-color); border: 1px solid var(--hint-color); border-radius: 8px; padding: 10px; margin-bottom: 10px; text-align: center; }
-        .match-vs { font-weight: bold; color: #ff9800; margin: 0 10px; }
+        .match-card { background: var(--bg-color); border: 1px solid var(--hint-color); border-radius: 8px; padding: 10px; margin-bottom: 10px; text-align: center; display: flex; flex-direction: column; align-items: center;}
+        .match-vs { font-weight: bold; color: #ff9800; margin: 5px 0; }
     </style>
 </head>
 <body>
@@ -105,11 +105,6 @@
     <div id="loadingScreen" class="screen active-screen">
         <h2 style="margin-top: 40px;">Caricamento... 📻</h2>
         <p id="initStatusText">Verifica credenziali in corso...</p>
-    </div>
-
-    <div id="errorScreen" class="screen">
-        <h2>Accesso Negato 🛑</h2>
-        <p>Questa applicazione è progettata per funzionare <b>esclusivamente</b> all'interno di Telegram.</p>
     </div>
 
     <div id="setupScreen" class="screen">
@@ -153,7 +148,7 @@
         </div>
         
         <button id="viewGlobalLeaderboardBtn" class="btn-link" style="font-weight: bold; font-size: 1.1em;">🏆 Classifiche</button>
-        <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Account</button>
+        <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Dati</button>
     </div>
 
     <div id="teamsScreen" class="screen">
@@ -166,7 +161,7 @@
                 <button id="createTeamBtn" class="btn-success">Crea Squadra</button>
             </div>
             <div class="box-panel">
-                <h3>Squadre in cerca di membri</h3>
+                <h3>Elenco Squadre</h3>
                 <ul id="openTeamsList" class="data-list"></ul>
             </div>
         </div>
@@ -175,14 +170,12 @@
             <div class="box-panel">
                 <h3 id="myTeamNameDisplay" style="color: var(--link-color);">Nome Squadra</h3>
                 <p style="text-align:center; margin-top:0; font-size:0.9em;" id="teamStatusText"></p>
-                <button id="inviteTeamBtn" class="btn-link" style="margin:0; padding:5px;">📢 Link di Invito su Telegram</button>
+                <button id="inviteTeamBtn" class="btn-link" style="margin:0; padding:5px; font-weight:bold;">📢 Invia Link di Invito (Telegram)</button>
                 <hr style="border:0; border-top:1px solid var(--hint-color); margin:10px 0;">
                 <ul id="myTeamMembersList" class="data-list" style="max-height: 120px;"></ul>
                 
                 <div id="captainActions" style="display:none; margin-top:10px;">
                     <button id="toggleTeamLockBtn" class="btn-secondary" style="margin-bottom:5px;">Chiudi Adesioni</button>
-                    <input type="text" id="editTeamNameInput" placeholder="Nuovo nome..." style="display:none; margin-bottom:5px;">
-                    <button id="editTeamNameBtn" class="btn-secondary" style="margin-bottom:5px;">Modifica Nome Squadra</button>
                 </div>
                 
                 <button id="leaveTeamBtn" class="btn-danger" style="margin-top:15px;">Abbandona Squadra</button>
@@ -190,10 +183,15 @@
             
             <div class="box-panel" style="flex-grow:1;">
                 <h3>🏆 Tabellone Campionato</h3>
-                <div id="bracketContainer" style="font-size:0.9em; text-align:center; overflow-y:auto; max-height:150px;">
+                <div id="bracketContainer" style="font-size:0.9em; text-align:center; overflow-y:auto; max-height:200px;">
                     <p style="color:var(--hint-color);">Nessun match attivo.</p>
                 </div>
                 <button id="generateBracketBtn" class="btn-secondary" style="display:none; margin-top:10px;">Genera Scontri Casuali</button>
+            </div>
+
+            <div class="box-panel">
+                <h3>Altre Squadre Iscritte</h3>
+                <ul id="allTeamsList" class="data-list" style="max-height: 120px;"></ul>
             </div>
         </div>
 
@@ -203,7 +201,6 @@
     <div id="privacyScreen" class="screen">
         <h2>Privacy & Dati</h2>
         <div class="box-panel" style="text-align: left; font-size: 0.9em;">
-            <p><strong>Dati raccolti:</strong> ID univoco e Nome di Telegram.</p>
             <p><strong>Cancellazione Dati:</strong> Verranno eliminati record storici, appartenenza a squadre e sessioni attive.</p>
         </div>
         <button id="deleteDataBtn" class="btn-danger" style="margin-top: auto;">🗑️ Elimina tutti i miei Dati</button>
@@ -265,7 +262,7 @@
 
         <div id="lbFilterArea" style="display:none; width:100%; text-align:center; margin-bottom:10px;">
             <label style="font-size:0.9em; font-weight:bold;">Filtra per N° Parole: </label>
-            <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px; outline:none; border:1px solid var(--hint-color); background: var(--bg-color); color: var(--text-color);">
+            <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px;">
                 <option value="10">10 Parole</option>
                 <option value="20">20 Parole</option>
                 <option value="30">30 Parole</option>
@@ -278,9 +275,10 @@
     </div>
 
     <script>
-        // SOSTITUISCI CON I NOMI REALI DEL TUO BOT TELEGRAM (Utile per gli inviti in squadra)
-        const BOT_USERNAME = "TUO_BOT_USERNAME_QUI"; 
-        const WEBAPP_NAME = "NOME_DELLA_TUA_WEBAPP_QUI"; 
+        // SOSTITUISCI QUESTI CON I NOMI REALI DEL TUO BOT E WEBAPP SU BOTFATHER
+        // Esempio: BOT_USERNAME = "TelegrafiaGameBot", WEBAPP_NAME = "Play"
+        const BOT_USERNAME = "INSERISCI_USERNAME_BOT"; 
+        const WEBAPP_NAME = "INSERISCI_NOME_WEBAPP"; 
 
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
@@ -288,57 +286,41 @@
         const tg = window.Telegram.WebApp;
         const tgUser = tg.initDataUnsafe?.user;
         const tgUsername = tgUser?.username || ""; 
-        
-        // Questo parametro cattura i dati del deep link di Telegram (es. startapp=team_1234)
         const startParam = tg.initDataUnsafe?.start_param; 
 
         let myName, myId;
         let db, auth;
-        let currentRoomListener = null; 
-        let chatListener = null;
-        let roomCode = ""; 
-        let lastPlayerCount = 0;
-        let lobbyTimerInterval = null;
+        let currentRoomListener = null, chatListener = null;
+        let roomCode = "", lastPlayerCount = 0, lobbyTimerInterval = null;
         
-        // VARIABILI SQUADRE E CHAT CONTESTUALE
-        let myTeamId = null;
-        let isTeamCaptain = false;
-        let teamListener = null;
-        let allTeamsListener = null;
-        let bracketListener = null;
-        let activeChatContext = null; // Può essere 'room' o 'team'
+        let myTeamId = null, isTeamCaptain = false;
+        let teamListener = null, allTeamsListener = null, bracketListener = null;
+        let activeChatContext = null; 
 
-        // Audio e Variabili Gioco originali
         const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
         const morseDict = { 'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.' };
 
-        let gameWords = [];
-        let currentWpm = 20, currentTone = 600, totalScore = 0, currentStreak = 0, wordIndex = 0;
+        let gameWords = [], currentWpm = 20, currentTone = 600, totalScore = 0, currentStreak = 0, wordIndex = 0;
         let audioCtx, inputActive = false, gameRunning = false, activeTab = "room";
         let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 
         if (!tgUser) {
-            showScreen('errorScreen');
+            document.getElementById('loadingScreen').classList.remove('active-screen');
+            document.getElementById('errorScreen').classList.add('active-screen');
         } else {
-            myName = tgUser.first_name;
-            myId = tgUser.id.toString();
-            initGame();
+            myName = tgUser.first_name; myId = tgUser.id.toString(); initGame();
         }
 
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(el => el.classList.remove('active-screen'));
             document.getElementById(screenId).classList.add('active-screen');
-            hideChat(); // Chiude la drawer se aperta e stacca il listener non necessario
+            hideChat(); 
             
-            // Imposta il contesto corretto della chat in base alla schermata
             if(screenId === 'teamsScreen') {
-                activeChatContext = 'team';
-                checkMyTeamStatus();
+                activeChatContext = 'team'; checkMyTeamStatus();
             } else if (screenId === 'lobbyScreen' || screenId === 'gameArea') {
                 activeChatContext = 'room';
-            } else {
-                activeChatContext = null;
-            }
+            } else { activeChatContext = null; }
         }
 
         function initGame() {
@@ -352,8 +334,7 @@
                 appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
             };
             if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-            db = firebase.database();
-            auth = firebase.auth();
+            db = firebase.database(); auth = firebase.auth();
 
             auth.signInAnonymously().then(() => {
                 document.getElementById('loadingText').style.display = 'none';
@@ -365,13 +346,10 @@
                     if (roomCode) joinRoomLogic(true); 
                 });
 
-                // GESTIONE LINK DI INVITO SQUADRA (startapp=team_ID)
                 if (startParam && startParam.startsWith('team_')) {
                     const inviteTeamId = startParam.replace('team_', '');
                     processTeamInvite(inviteTeamId);
-                } else {
-                    showScreen('setupScreen'); 
-                }
+                } else { showScreen('setupScreen'); }
 
                 listenToRooms();
             }).catch(e => {
@@ -379,7 +357,7 @@
             });
         }
 
-        // ================= GESTIONE AUDIO =================
+        /* ----- AUDIO E MORSE ----- */
         function playBeep(freq, duration) {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             try {
@@ -413,7 +391,7 @@
             }
         }
 
-        // ================= GESTIONE CHAT DINAMICA =================
+        /* ----- CHAT ----- */
         window.toggleChat = function() {
             const drawer = document.getElementById('chatDrawer');
             if (drawer.style.display === 'none') {
@@ -443,12 +421,10 @@
             
             chatRef.limitToLast(40).on('value', snapshot => {
                 chatListener = snapshot;
-                const container = document.getElementById('chatMessages');
-                container.innerHTML = ''; 
+                const container = document.getElementById('chatMessages'); container.innerHTML = ''; 
                 snapshot.forEach(child => {
                     const msg = child.val();
-                    const div = document.createElement('div');
-                    div.style.marginBottom = '6px';
+                    const div = document.createElement('div'); div.style.marginBottom = '6px';
                     div.innerHTML = `<b style="color:var(--link-color)">${msg.name}:</b> ${msg.text}`;
                     container.appendChild(div);
                 });
@@ -456,23 +432,17 @@
             });
         }
 
-        function sendChatMessage() {
-            const input = document.getElementById('chatInput');
-            const txt = input.value.trim();
+        document.getElementById('sendChatBtn').addEventListener('click', () => {
+            const input = document.getElementById('chatInput'); const txt = input.value.trim();
             if (!txt) return;
-            if (activeChatContext === 'room' && roomCode) {
-                db.ref(`rooms/${roomCode}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
-            } else if (activeChatContext === 'team' && myTeamId) {
-                db.ref(`teams/${myTeamId}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
-            }
+            if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            else if (activeChatContext === 'team' && myTeamId) db.ref(`teams/${myTeamId}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
             input.value = '';
-        }
-        document.getElementById('sendChatBtn').addEventListener('click', sendChatMessage);
-        document.getElementById('chatInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendChatMessage(); });
+        });
 
-        // ================= GESTIONE STANZE E IMPOSTAZIONI =================
+        /* ----- GESTIONE STANZE MULTIPLAYER E SINGLE ----- */
         function generateCallsign() {
-            const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "AA", "VE", "G", "M", "2E", "F", "EA", "EB", "DL", "DJ", "DK", "SP", "SQ", "UA", "UB", "UR", "JA", "VK", "ZL", "PY", "LU", "ZS"];
+            const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "DL", "EA", "F"];
             const p = prefixes[Math.floor(Math.random() * prefixes.length)];
             const n = Math.floor(Math.random() * 10);
             const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -481,8 +451,7 @@
         }
         function getGameWords(num, mode) {
             if (mode === 'callsign') return Array.from({length: num}, generateCallsign);
-            let selected = masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num);
-            return selected.map(w => w.toUpperCase());
+            return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
         }
 
         document.getElementById('gameModeInput').addEventListener('change', (e) => {
@@ -492,7 +461,6 @@
                 if(isC && id!=='toneInput') document.getElementById(id).value = 25;
             });
         });
-
         document.getElementById('gameTypeInput').addEventListener('change', (e) => {
             const isS = e.target.value === 'single';
             document.getElementById('timeoutDiv').style.display = isS ? 'none' : 'block';
@@ -501,14 +469,12 @@
 
         function listenToRooms() {
             db.ref('rooms').on('value', snapshot => {
-                const list = document.getElementById('waitingRoomsList');
-                list.innerHTML = ''; let wCount = 0;
+                const list = document.getElementById('waitingRoomsList'); list.innerHTML = ''; let wCount = 0;
                 snapshot.forEach(child => {
                     const room = child.val(); const code = child.key;
                     if (room.expiresAt && Date.now() > room.expiresAt) { db.ref(`rooms/${code}`).remove(); return; }
                     if (room.status === 'waiting' && room.type !== 'single') {
-                        wCount++;
-                        let pCount = room.players ? Object.keys(room.players).length : 0;
+                        wCount++; let pCount = room.players ? Object.keys(room.players).length : 0;
                         const li = document.createElement('li');
                         li.innerHTML = `<span><b>#${code} - ${room.mode==='callsign'?'🎙️ Nom.':'🔤 Parole'}</b><br><small>${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test</small></span>
                                         <button class="action-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
@@ -541,10 +507,7 @@
         function joinRoomLogic(isReconnect = false) {
             const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
             playerRef.once('value', snapshot => {
-                if (snapshot.val()?.finished) {
-                    showScreen('leaderboardScreen'); activeTab="room"; showLeaderboardTab('tabRoomBtn'); return;
-                }
-                
+                if (snapshot.val()?.finished) { showScreen('leaderboardScreen'); activeTab="room"; showLeaderboardTab('tabRoomBtn'); return; }
                 showScreen('lobbyScreen');
                 document.getElementById('permanentGameInput').blur();
                 playerRef.onDisconnect().remove();
@@ -565,20 +528,12 @@
                     }
                     if (roomData.status === 'waiting') {
                         renderPlayersList(roomData.players || {}, roomData.hostId);
-                        
-                        // FIX TIMER
                         if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
                         if (roomData.expiresAt && !isSinglePlayer) {
                             lobbyTimerInterval = setInterval(() => {
                                 const diff = roomData.expiresAt - Date.now();
-                                if (diff <= 0) {
-                                    clearInterval(lobbyTimerInterval);
-                                    document.getElementById('lobbyTimerText').textContent = "Tempo per entrare scaduto!";
-                                } else {
-                                    const m = Math.floor(diff / 60000);
-                                    const s = Math.floor((diff % 60000) / 1000);
-                                    document.getElementById('lobbyTimerText').textContent = `Scade tra: ${m}:${s.toString().padStart(2, '0')}`;
-                                }
+                                if (diff <= 0) { clearInterval(lobbyTimerInterval); document.getElementById('lobbyTimerText').textContent = "Tempo scaduto!"; } 
+                                else { document.getElementById('lobbyTimerText').textContent = `Scade tra: ${Math.floor(diff/60000)}:${Math.floor((diff%60000)/1000).toString().padStart(2, '0')}`; }
                             }, 1000);
                         }
                     }
@@ -594,18 +549,13 @@
         function renderPlayersList(playersData, hostId) {
             const list = document.getElementById('playersList'); list.innerHTML = '';
             const count = Object.keys(playersData).length;
-            
-            // FIX AUDIO INGRESSO: Suona se i giocatori aumentano (rispetto al count precedente)
-            if (count > lastPlayerCount && lastPlayerCount > 0) {
-                playBeep(500, 0.1); setTimeout(() => playBeep(700, 0.15), 150);
-            }
+            if (count > lastPlayerCount && lastPlayerCount > 0) { playBeep(500, 0.1); setTimeout(() => playBeep(700, 0.15), 150); }
             lastPlayerCount = count;
 
             Object.entries(playersData).forEach(([id, data]) => {
                 const isH = (id === hostId);
                 const nHtml = data.username ? `<span onclick="openTelegramProfile('${data.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">🟢 ${data.name}</span>` : `<span>🟢 ${data.name}</span>`;
-                const li = document.createElement('li'); li.innerHTML = `${nHtml} ${isH ? '<small>(HOST)</small>' : ''}`;
-                list.appendChild(li);
+                const li = document.createElement('li'); li.innerHTML = `${nHtml} ${isH ? '<small>(HOST)</small>' : ''}`; list.appendChild(li);
             });
 
             const amIHost = (myId === hostId);
@@ -615,15 +565,15 @@
             document.getElementById('statusInfoText').textContent = amIHost ? `Sei l'Host. ${count<2?'(In attesa di sfidanti...)':''}` : "Sei un partecipante.";
         }
 
-        // ================= GIOCO MORSE (COMPLETO) =================
+        /* ----- GIOCO IN GAME ----- */
         function getLevenshteinDistance(a, b) {
             const matrix = [];
             for (let i = 0; i <= b.length; i++) matrix[i] = [i];
             for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
             for (let i = 1; i <= b.length; i++) {
                 for (let j = 1; j <= a.length; j++) {
-                    if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1];
-                    else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+                    if (b.charAt(i-1) === a.charAt(j-1)) matrix[i][j] = matrix[i-1][j-1];
+                    else matrix[i][j] = Math.min(matrix[i-1][j-1]+1, Math.min(matrix[i][j-1]+1, matrix[i-1][j]+1));
                 }
             }
             return matrix[b.length][a.length];
@@ -634,23 +584,15 @@
             if (e.key === 'Enter' && inputActive && gameRunning) {
                 const userWord = permInput.value.trim().toUpperCase();
                 if (userWord === "") return;
-                
-                inputActive = false; 
-                permInput.value = ""; 
+                inputActive = false; permInput.value = ""; 
                 
                 const currentWord = gameWords[wordIndex].toUpperCase();
-                let points = 0;
-                let scoreColor = "";
+                let points = 0, scoreColor = "";
 
                 if (currentMode === 'callsign') {
                     if (userWord === currentWord) {
-                        currentStreak++;
-                        points = (currentWpm * 2) + (currentStreak * 5); 
-                        currentWpm += 2;
-                        scoreColor = "#4caf50";
-                    } else {
-                        currentStreak = 0; points = 0; currentWpm -= 1; scoreColor = "#d32f2f";
-                    }
+                        currentStreak++; points = (currentWpm * 2) + (currentStreak * 5); currentWpm += 2; scoreColor = "#4caf50";
+                    } else { currentStreak = 0; points = 0; currentWpm -= 1; scoreColor = "#d32f2f"; }
                 } else {
                     const errors = getLevenshteinDistance(currentWord, userWord);
                     if (errors === 0) { points = 10; currentWpm += 2; scoreColor = "#4caf50"; } 
@@ -658,34 +600,28 @@
                     else { points = 0; currentWpm -= 2; scoreColor = "#d32f2f"; }
                 }
 
-                currentWpm = Math.max(5, currentWpm); 
-                totalScore += points;
+                currentWpm = Math.max(5, currentWpm); totalScore += points;
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}">${points > 0 ? "+"+points : points}</td>`;
                 document.getElementById('tableBody').appendChild(tr);
                 
-                const tableWrapper = document.getElementById('tableWrapper');
-                tableWrapper.scrollTop = tableWrapper.scrollHeight;
+                const tableWrapper = document.getElementById('tableWrapper'); tableWrapper.scrollTop = tableWrapper.scrollHeight;
 
                 document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
                 document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
 
                 if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm });
-                
-                wordIndex++; 
-                setTimeout(playNextWord, 600); 
+                wordIndex++; setTimeout(playNextWord, 600); 
             }
         });
 
         function playNextWord() {
             if (!gameRunning) return;
             if (wordIndex >= gameWords.length) { finishGame(); return; }
-            const currentWord = gameWords[wordIndex].toUpperCase();
             if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400; 
-            playMorseAudio(currentWord, currentWpm);
-            inputActive = true;
-            document.getElementById('permanentGameInput').focus();
+            playMorseAudio(gameWords[wordIndex].toUpperCase(), currentWpm);
+            inputActive = true; document.getElementById('permanentGameInput').focus();
         }
 
         function startCountdownSequence() {
@@ -694,21 +630,15 @@
             
             document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
             document.getElementById('scoreDisplay').textContent = `Punti: 0`;
-            totalScore = 0; currentStreak = 0; wordIndex = 0;
-            document.getElementById('tableBody').innerHTML = ""; 
+            totalScore = 0; currentStreak = 0; wordIndex = 0; document.getElementById('tableBody').innerHTML = ""; 
             
-            showScreen('countdownScreen');
-            gameRunning = true;
-            
-            let count = 3;
-            const countdownEl = document.getElementById('countdownNumber');
-            countdownEl.textContent = count;
+            showScreen('countdownScreen'); gameRunning = true;
+            let count = 3; document.getElementById('countdownNumber').textContent = count;
             
             const interval = setInterval(() => {
-                if (count > 1) { count--; countdownEl.textContent = count; playBeep(600, 0.1); } 
+                if (count > 1) { count--; document.getElementById('countdownNumber').textContent = count; playBeep(600, 0.1); } 
                 else {
-                    clearInterval(interval);
-                    countdownEl.textContent = "VIA!"; playBeep(800, 0.3); 
+                    clearInterval(interval); document.getElementById('countdownNumber').textContent = "VIA!"; playBeep(800, 0.3); 
                     setTimeout(() => {
                         if (!gameRunning) return;
                         showScreen('gameArea');
@@ -720,30 +650,22 @@
         }
 
         function finishGame() {
-            gameRunning = false;
-            inputActive = false;
-            document.getElementById('permanentGameInput').blur();
+            gameRunning = false; inputActive = false; document.getElementById('permanentGameInput').blur();
             showScreen('leaderboardScreen');
             
             if (roomCode) {
                 const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-                myPlayerRef.update({ finished: true });
-                myPlayerRef.onDisconnect().cancel(); 
+                myPlayerRef.update({ finished: true }); myPlayerRef.onDisconnect().cancel(); 
             }
             
-            // LOGICA SALVATAGGIO CLASSIFICA
             if (totalScore > 0) {
                 let dbPath = currentMode === 'callsign' 
-                    ? `leaderboard/callsign/global/${myId}` 
-                    : `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                    ? `leaderboard/callsign/global/${myId}` : `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                     
                 if (currentMode !== 'callsign') {
                     let select = document.getElementById('lbWordFilter');
-                    let exists = Array.from(select.options).some(opt => opt.value == requestedWordCount);
-                    if (!exists) {
-                        let opt = document.createElement('option');
-                        opt.value = requestedWordCount; opt.text = `${requestedWordCount} Parole`;
-                        select.add(opt);
+                    if (!Array.from(select.options).some(opt => opt.value == requestedWordCount)) {
+                        let opt = document.createElement('option'); opt.value = requestedWordCount; opt.text = `${requestedWordCount} Parole`; select.add(opt);
                     }
                     select.value = requestedWordCount;
                 }
@@ -752,10 +674,7 @@
                 globalUserRef.once('value', snapshot => {
                     let oldData = snapshot.val();
                     if (!oldData || totalScore > oldData.score) {
-                        globalUserRef.set({ 
-                            name: myName, username: tgUsername, score: totalScore, wpm: currentWpm, 
-                            wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') 
-                        });
+                        globalUserRef.set({ name: myName, username: tgUsername, score: totalScore, wpm: currentWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') });
                     }
                 });
             }
@@ -765,18 +684,40 @@
             else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
         }
 
-        // ================= LEADERBOARDS & CLASSIFICHE =================
+        // Leaderboards/Abbandono Stanza (Rimane invariato)
+        function exitRoomCleanly() {
+            if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
+            if (roomCode) {
+                const rc = roomCode; roomCode = ""; 
+                db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
+                db.ref(`rooms/${rc}/players/${myId}`).remove();
+            }
+            hideChat(); showScreen('setupScreen');
+        }
+        document.getElementById('quitGameBtn').addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
+        document.getElementById('leaveLobbyBtn').addEventListener('click', exitRoomCleanly);
+        document.getElementById('startMultiplayerBtn').addEventListener('click', () => db.ref(`rooms/${roomCode}/status`).set('countdown'));
+        document.getElementById('deleteRoomBtn').addEventListener('click', () => { if (confirm("Vuoi eliminare definitivamente questa stanza?")) db.ref(`rooms/${roomCode}`).remove(); });
+        document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => { showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn'); });
+        window.goBackToMenu = function() { showScreen('setupScreen'); };
+        document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
+        document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
+        document.getElementById('deleteDataBtn').addEventListener('click', async () => {
+            if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati. Confermi?")) {
+                try {
+                    await db.ref(`leaderboard`).once('value', snapshot => { snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); }); });
+                    if (roomCode) await db.ref(`rooms/${roomCode}/players/${myId}`).remove();
+                    if (myTeamId) await db.ref(`teams/${myTeamId}/members/${myId}`).remove();
+                    alert("Dati eliminati."); window.Telegram.WebApp.close(); 
+                } catch (e) { alert("Errore: " + e.message); }
+            }
+        });
         function showLeaderboardTab(tabId) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
             document.getElementById(tabId).classList.add('active-tab');
-            
-            const filterArea = document.getElementById('lbFilterArea');
-            const roomWinnerBanner = document.getElementById('roomWinnerBanner');
-            const waitingText = document.getElementById('waitingOthersText');
-            
+            const filterArea = document.getElementById('lbFilterArea'), roomWinnerBanner = document.getElementById('roomWinnerBanner'), waitingText = document.getElementById('waitingOthersText');
             if (tabId === 'tabRoomBtn') {
-                filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'block';
-                document.getElementById('leaderboardContainer').innerHTML = ''; 
+                filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'block'; document.getElementById('leaderboardContainer').innerHTML = ''; 
                 if (roomCode) db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
                 else { document.getElementById('leaderboardContainer').innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>"; waitingText.style.display = 'none'; }
             } else if (tabId === 'tabGlobalCWFreakBtn') {
@@ -784,60 +725,42 @@
                 fetchAndRenderGlobalLeaderboard(`leaderboard/callsign/global`, `🏆 CW Freak (Assoluta)`);
             } else {
                 filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
-                let wc = document.getElementById('lbWordFilter').value;
-                let type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
-                let typeText = type === 'multi' ? 'Multiplayer' : 'Singleplayer';
-                fetchAndRenderGlobalLeaderboard(`leaderboard/standard/${type}_${wc}`, `🏆 Parole ${typeText} (${wc} par.)`);
+                let wc = document.getElementById('lbWordFilter').value, type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
+                fetchAndRenderGlobalLeaderboard(`leaderboard/standard/${type}_${wc}`, `🏆 Parole ${type === 'multi' ? 'Multiplayer' : 'Singleplayer'} (${wc} par.)`);
             }
         }
-
         document.getElementById('tabRoomBtn').addEventListener('click', () => { activeTab="room"; showLeaderboardTab('tabRoomBtn'); });
         document.getElementById('tabGlobalCWFreakBtn').addEventListener('click', () => { activeTab="cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); });
         document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; showLeaderboardTab('tabGlobalStandardMultiBtn'); });
         document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { activeTab="std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); });
-        document.getElementById('lbWordFilter').addEventListener('change', () => {
-            if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn');
-            else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn');
-        });
+        document.getElementById('lbWordFilter').addEventListener('change', () => { if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn'); else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn'); });
 
         function listenToRoomLeaderboard() {
-            if (roomCode) {
-                db.ref(`rooms/${roomCode}`).on('value', snapshot => {
-                    if (!snapshot.exists()) return;
-                    const roomData = snapshot.val();
-                    const players = roomData.players || {};
-                    if (activeTab === "room") renderRoomLeaderboard(players);
-                    let allFinished = true;
-                    Object.values(players).forEach(p => { if (!p.finished) allFinished = false; });
-                    if (allFinished && roomData.hostId === myId && roomData.status !== 'finished') {
-                        db.ref(`rooms/${roomCode}/status`).set('finished');
-                        setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 30000); 
-                    }
-                });
-            }
+            if (!roomCode) return;
+            db.ref(`rooms/${roomCode}`).on('value', snapshot => {
+                if (!snapshot.exists()) return;
+                const roomData = snapshot.val(), players = roomData.players || {};
+                if (activeTab === "room") renderRoomLeaderboard(players);
+                let allFinished = true; Object.values(players).forEach(p => { if (!p.finished) allFinished = false; });
+                if (allFinished && roomData.hostId === myId && roomData.status !== 'finished') {
+                    db.ref(`rooms/${roomCode}/status`).set('finished'); setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 30000); 
+                }
+            });
         }
-
         function renderRoomLeaderboard(players) {
             const container = document.getElementById('leaderboardContainer'); container.innerHTML = '';
-            document.getElementById('roomWinnerBanner').innerHTML = '';
-            const waitingText = document.getElementById('waitingOthersText');
-            let allFinished = true;
-            const playersArray = Object.values(players);
-            playersArray.forEach(p => { if (!p.finished) allFinished = false; });
+            const waitingText = document.getElementById('waitingOthersText'); let allFinished = true;
+            const playersArray = Object.values(players); playersArray.forEach(p => { if (!p.finished) allFinished = false; });
             waitingText.style.display = allFinished ? 'none' : 'block';
-            
-            const sortedPlayers = playersArray.sort((a, b) => b.score - a.score);
-            sortedPlayers.forEach((player, index) => {
+            playersArray.sort((a, b) => b.score - a.score).forEach((player, index) => {
                 const row = document.createElement('div'); row.className = 'leaderboard-row';
                 let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
                 row.innerHTML = `<span>${medal} ${player.name} <br><small style="color:var(--hint-color)">(${player.wpm || 0} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
                 container.appendChild(row);
             });
         }
-
         function fetchAndRenderGlobalLeaderboard(path, title) {
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+            const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
             db.ref(path).orderByChild('score').limitToLast(50).once('value', snapshot => {
                 container.innerHTML = `<h3 style="text-align:center;">${title}</h3>`;
                 let players = []; snapshot.forEach(child => { players.push(child.val()); }); players.reverse(); 
@@ -851,60 +774,17 @@
             });
         }
 
-        function exitRoomCleanly() {
-            if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
-            if (roomCode) {
-                const rc = roomCode; roomCode = ""; 
-                db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
-                db.ref(`rooms/${rc}/players/${myId}`).remove();
-            }
-            hideChat(); showScreen('setupScreen');
-        }
-        
-        document.getElementById('quitGameBtn').addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
-        document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
-        document.getElementById('startMultiplayerBtn').addEventListener('click', () => { db.ref(`rooms/${roomCode}/status`).set('countdown'); });
-        document.getElementById('deleteRoomBtn').addEventListener('click', () => {
-            if (confirm("Vuoi eliminare definitivamente questa stanza?")) db.ref(`rooms/${roomCode}`).remove();
-        });
-        document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => { showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn'); });
-        window.goBackToMenu = function() { showScreen('setupScreen'); };
-
-        // ================= CANCELLAZIONE DATI TOTALE (FIXED) =================
-        document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
-        document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
-        document.getElementById('deleteDataBtn').addEventListener('click', async () => {
-            if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati (classifiche, squadre e stanze attive). Confermi?")) {
-                try {
-                    // 1. Rimuovi da classifiche
-                    await db.ref(`leaderboard`).once('value', snapshot => {
-                        snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); });
-                    });
-                    // 2. Rimuovi da stanza corrente
-                    if (roomCode) await db.ref(`rooms/${roomCode}/players/${myId}`).remove();
-                    // 3. Rimuovi dalla squadra
-                    if (myTeamId) await db.ref(`teams/${myTeamId}/members/${myId}`).remove();
-                    
-                    alert("Dati eliminati con successo.");
-                    window.Telegram.WebApp.close(); 
-                } catch (e) { alert("Errore: " + e.message); }
-            }
-        });
-
-
-        // ================= SISTEMA SQUADRE & CAMPIONATO (NEW) =================
+        /* ================= SISTEMA SQUADRE & CAMPIONATO ================= */
         document.getElementById('goToTeamsBtn').addEventListener('click', () => showScreen('teamsScreen'));
 
-        // FUNZIONE CHE CATTURA IL LINK STARTAPP
+        // Gestione Link StartApp
         function processTeamInvite(inviteTeamId) {
             db.ref(`teams/${inviteTeamId}`).once('value', snap => {
                 if(snap.exists() && snap.val().status === 'open') {
                     db.ref(`teams/${inviteTeamId}/members/${myId}`).set({ name: myName, username: tgUsername });
-                    tg.showAlert(`Sei entrato nella squadra ${snap.val().name}!`);
-                    showScreen('teamsScreen');
+                    tg.showAlert(`Sei entrato nella squadra ${snap.val().name}!`); showScreen('teamsScreen');
                 } else {
-                    tg.showAlert("La squadra non esiste o le iscrizioni sono state chiuse dal Capitano.");
-                    showScreen('setupScreen');
+                    tg.showAlert("La squadra non esiste o le iscrizioni sono state chiuse dal Capitano."); showScreen('setupScreen');
                 }
             });
         }
@@ -912,57 +792,48 @@
         function checkMyTeamStatus() {
             db.ref('teams').once('value', snapshot => {
                 myTeamId = null; isTeamCaptain = false;
-                snapshot.forEach(team => {
-                    if (team.child('members').hasChild(myId)) {
-                        myTeamId = team.key;
-                        isTeamCaptain = (team.val().captainId === myId);
-                    }
-                });
+                snapshot.forEach(team => { if (team.child('members').hasChild(myId)) { myTeamId = team.key; isTeamCaptain = (team.val().captainId === myId); } });
 
                 if (myTeamId) {
-                    document.getElementById('noTeamView').style.display = 'none';
-                    document.getElementById('myTeamView').style.display = 'flex';
-                    listenToMyTeam(); listenToChampionship();
+                    document.getElementById('noTeamView').style.display = 'none'; document.getElementById('myTeamView').style.display = 'flex';
+                    listenToMyTeam(); listenToChampionship(); listenToAllTeams(true); // Aggiorna anche la lista sotto al pannello
                 } else {
-                    document.getElementById('myTeamView').style.display = 'none';
-                    document.getElementById('noTeamView').style.display = 'block';
-                    listenToAllTeams();
+                    document.getElementById('myTeamView').style.display = 'none'; document.getElementById('noTeamView').style.display = 'block';
+                    listenToAllTeams(false);
                 }
             });
         }
 
-        // Creazione Squadra
         document.getElementById('createTeamBtn').addEventListener('click', () => {
-            const tName = document.getElementById('newTeamName').value.trim();
-            if(!tName) return;
-            const newTeamRef = db.ref('teams').push();
-            newTeamRef.set({
-                name: tName, captainId: myId, status: 'open', score: 0,
-                members: { [myId]: { name: myName, username: tgUsername } }
-            }).then(() => checkMyTeamStatus());
+            const tName = document.getElementById('newTeamName').value.trim(); if(!tName) return;
+            db.ref('teams').push().set({ name: tName, captainId: myId, status: 'open', members: { [myId]: { name: myName, username: tgUsername } } }).then(() => checkMyTeamStatus());
         });
 
-        function listenToAllTeams() {
+        // Mostra la lista di tutte le squadre (per chi non ne ha una, o per curiosità)
+        function listenToAllTeams(isAlreadyInTeam) {
             if (allTeamsListener) db.ref('teams').off('value', allTeamsListener);
             allTeamsListener = db.ref('teams').on('value', snap => {
-                const list = document.getElementById('openTeamsList'); list.innerHTML = '';
+                const listId = isAlreadyInTeam ? 'allTeamsList' : 'openTeamsList';
+                const list = document.getElementById(listId); list.innerHTML = '';
                 snap.forEach(child => {
-                    const t = child.val();
-                    if(t.status === 'open') {
-                        const count = Object.keys(t.members || {}).length;
-                        const li = document.createElement('li');
-                        li.innerHTML = `<span><b>${t.name}</b> <small>(${count} membri)</small></span>
+                    const t = child.val(); const count = Object.keys(t.members || {}).length;
+                    const li = document.createElement('li');
+                    
+                    if (isAlreadyInTeam) {
+                        // Se sono già in una squadra, vedo solo la lista senza pulsante Unisciti
+                        li.innerHTML = `<span><b>${t.name}</b></span> <small>(${count} membri)</small>`;
+                    } else if (t.status === 'open') {
+                        // Se non ho una squadra, vedo il pulsante Unisciti
+                        li.innerHTML = `<span><b>${t.name}</b> <small>(${count} mem.)</small></span>
                                         <button class="action-btn-small" onclick="joinTeam('${child.key}')">Unisciti</button>`;
-                        list.appendChild(li);
                     }
+                    if(li.innerHTML !== '') list.appendChild(li);
                 });
-                if(list.innerHTML === '') list.innerHTML = '<li>Nessuna squadra aperta.</li>';
+                if(list.innerHTML === '') list.innerHTML = '<li style="color:var(--hint-color);">Nessuna squadra presente.</li>';
             });
         }
 
-        window.joinTeam = function(tId) {
-            db.ref(`teams/${tId}/members/${myId}`).set({ name: myName, username: tgUsername }).then(() => checkMyTeamStatus());
-        }
+        window.joinTeam = function(tId) { db.ref(`teams/${tId}/members/${myId}`).set({ name: myName, username: tgUsername }).then(() => checkMyTeamStatus()); }
 
         function listenToMyTeam() {
             if (teamListener) db.ref(`teams/${myTeamId}`).off('value', teamListener);
@@ -976,28 +847,22 @@
                 const list = document.getElementById('myTeamMembersList'); list.innerHTML = '';
                 Object.entries(team.members || {}).forEach(([id, mem]) => {
                     const isC = (id === team.captainId);
-                    list.innerHTML += `<li>${mem.name} ${isC?'<b style="color:var(--hint-color)">(Capitano)</b>':''}</li>`;
+                    list.innerHTML += `<li>${mem.name} ${isC?'<b style="color:var(--hint-color)">(Cap.)</b>':''}</li>`;
                 });
 
                 document.getElementById('captainActions').style.display = isTeamCaptain ? 'block' : 'none';
-                
                 const btnLock = document.getElementById('toggleTeamLockBtn');
                 btnLock.textContent = team.status === 'open' ? "Chiudi Adesioni" : "Riapri Adesioni";
                 btnLock.onclick = () => db.ref(`teams/${myTeamId}/status`).set(team.status === 'open' ? 'closed' : 'open');
                 
-                document.getElementById('editTeamNameBtn').onclick = () => {
-                    const inpt = document.getElementById('editTeamNameInput');
-                    if (inpt.style.display === 'none') { inpt.style.display = 'inline-block'; inpt.value = team.name; }
-                    else { db.ref(`teams/${myTeamId}/name`).set(inpt.value); inpt.style.display = 'none'; }
-                }
-
-                // Genera Link Invito Telegram (usando startapp)
+                // CONDIVISIONE LINK NATIVA (Apre il selettore contatti Telegram)
                 document.getElementById('inviteTeamBtn').onclick = () => {
-                    const link = `https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=team_${myTeamId}`;
-                    tg.showPopup({ title: 'Copia il Link per invitare amici', message: link, buttons: [{type:'close'}] });
+                    const botUrl = `https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=team_${myTeamId}`;
+                    const shareText = `Unisciti alla mia squadra di Telegrafia: ${team.name}!`;
+                    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(botUrl)}&text=${encodeURIComponent(shareText)}`;
+                    tg.openTelegramLink(shareUrl);
                 }
 
-                // Attiva Chat di Squadra
                 listenToChat();
             });
         }
@@ -1010,53 +875,76 @@
             }
         });
 
-        // Generazione Tabellone Scontri
+        // Tabellone e Scontri Diretti
         function listenToChampionship() {
             if (bracketListener) db.ref('championship').off('value', bracketListener);
             bracketListener = db.ref('championship').on('value', snap => {
-                const data = snap.val() || {};
-                const bracket = data.bracket || {};
-                const container = document.getElementById('bracketContainer');
-                container.innerHTML = '';
+                const data = snap.val() || {}; const bracket = data.bracket || {};
+                const container = document.getElementById('bracketContainer'); container.innerHTML = '';
                 
                 document.getElementById('generateBracketBtn').style.display = isTeamCaptain ? 'block' : 'none';
 
                 if (!bracket.round1) {
-                    container.innerHTML = '<p style="color:var(--hint-color);">Il torneo non è ancora iniziato.</p>';
-                    return;
+                    container.innerHTML = '<p style="color:var(--hint-color);">Il torneo non è ancora iniziato.</p>'; return;
                 }
 
-                Object.values(bracket.round1).forEach((match) => {
+                Object.entries(bracket.round1).forEach(([matchId, match]) => {
                     const card = document.createElement('div'); card.className = 'match-card';
-                    card.innerHTML = `<span>${match.teamAName}</span> <span class="match-vs">VS</span> <span>${match.teamBName}</span>`;
+                    card.innerHTML = `<span><b>${match.teamAName}</b></span> <span class="match-vs">VS</span> <span><b>${match.teamBName}</b></span>`;
+                    
+                    // Se la mia squadra fa parte di questo match, mostro il pulsante per avviare la gara
+                    if (match.teamA === myTeamId || match.teamB === myTeamId) {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn-success'; btn.style.padding = '8px'; btn.style.fontSize = '0.9em'; btn.style.marginTop = '10px';
+                        btn.textContent = "🥊 ENTRA NELLA SFIDA";
+                        btn.onclick = () => startChampionshipMatch(matchId);
+                        card.appendChild(btn);
+                    }
                     container.appendChild(card);
                 });
             });
         }
 
+        // Funzione per generare lo scontro casuale
         document.getElementById('generateBracketBtn').addEventListener('click', () => {
             db.ref('teams').once('value', snap => {
-                let teams = [];
-                snap.forEach(child => teams.push({ id: child.key, name: child.val().name }));
+                let teams = []; snap.forEach(child => teams.push({ id: child.key, name: child.val().name }));
                 
-                for (let i = teams.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [teams[i], teams[j]] = [teams[j], teams[i]];
-                }
+                // Shuffle (Mischia le squadre)
+                for (let i = teams.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [teams[i], teams[j]] = [teams[j], teams[i]]; }
 
                 let round1 = {};
                 for(let i=0; i<teams.length; i+=2) {
                     if (teams[i+1]) {
-                        round1[`match_${i/2}`] = { 
-                            teamA: teams[i].id, teamAName: teams[i].name, scoreA: 0, 
-                            teamB: teams[i+1].id, teamBName: teams[i+1].name, scoreB: 0 
-                        };
+                        round1[`match_${i/2}`] = { teamA: teams[i].id, teamAName: teams[i].name, teamB: teams[i+1].id, teamBName: teams[i+1].name };
                     }
                 }
                 db.ref('championship/bracket/round1').set(round1);
                 db.ref('championship/status').set('active');
             });
         });
+
+        // Quando il giocatore clicca "ENTRA NELLA SFIDA" dal tabellone
+        function startChampionshipMatch(matchId) {
+            const specificRoomCode = "CHAMP_" + matchId.toUpperCase();
+            
+            // Controlliamo se la stanza esiste già (se l'ha creata un avversario)
+            db.ref(`rooms/${specificRoomCode}`).once('value', snapshot => {
+                if (snapshot.exists()) {
+                    // La stanza esiste, ci uniamo e basta
+                    window.joinSpecificRoom(specificRoomCode);
+                } else {
+                    // La stanza non esiste, la creiamo in automatico e poi entriamo
+                    gameWords = getGameWords(20, 'standard'); // Gara standard a 20 parole per il campionato
+                    db.ref('rooms/' + specificRoomCode).set({
+                        status: 'waiting', type: 'multi', mode: 'standard', wpm: 20, tone: 600, wordCount: 20, words: gameWords, 
+                        createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + (10 * 60000), hostId: myId // 10 min timeout
+                    }).then(() => {
+                        window.joinSpecificRoom(specificRoomCode);
+                    });
+                }
+            });
+        }
 
     </script>
 </body>
