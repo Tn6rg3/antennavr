@@ -107,10 +107,12 @@
         <p>Questa applicazione è progettata per funzionare <b>esclusivamente</b> all'interno di Telegram.</p>
     </div>
 
+    <!-- MENU PRINCIPALE -->
     <div id="setupScreen" class="screen">
         <h2>Ciao <span id="playerName">Giocatore</span>! 📻</h2>
         <p id="loadingText">Connessione sicura in corso...</p>
 
+        <!-- SEZIONE CAMPIONATO -->
         <div style="width: 100%; text-align: center; margin-bottom: 5px;">
             <button id="goToTeamsBtn" class="btn-champ">🏆 ACCEDI AL CAMPIONATO SQUADRE 🏆</button>
             <p style="font-size: 0.85em; color: var(--hint-color); margin-top: 5px;">Crea il tuo team, partecipa al torneo e chatta con la squadra.</p>
@@ -118,6 +120,7 @@
 
         <hr class="divider">
 
+        <!-- SEZIONE GIOCO LIBERO -->
         <h3 style="margin: 0 0 10px 0; color: var(--link-color);">⚡ Sfida Libera</h3>
         <div class="box-panel">
             <h3>Gioca da Solo o Sfida un Amico</h3>
@@ -157,6 +160,7 @@
         <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Dati</button>
     </div>
 
+    <!-- SCHERMATA SQUADRE E CAMPIONATO -->
     <div id="teamsScreen" class="screen">
         <h2 style="color: var(--champ-color);">🏆 Campionato Squadre</h2>
         
@@ -204,6 +208,7 @@
         <button onclick="goBackToMenu()" style="margin-top: auto;">Torna al Menu Principale</button>
     </div>
 
+    <!-- PRIVACY -->
     <div id="privacyScreen" class="screen">
         <h2>Privacy & Dati</h2>
         <div class="box-panel" style="text-align: left; font-size: 0.9em;">
@@ -213,6 +218,7 @@
         <button id="closePrivacyBtn">Torna Indietro</button>
     </div>
 
+    <!-- LOBBY GIOCO -->
     <div id="lobbyScreen" class="screen">
         <h2 id="lobbyTitleText">Lobby Stanza</h2>
         <p id="lobbyTimerText" style="text-align: center; font-weight: bold; color: #ff9800; margin-top: 5px;"></p>
@@ -237,6 +243,7 @@
         <div style="margin-top: auto;"></div>
     </div>
 
+    <!-- AREA GIOCO -->
     <div id="gameArea" class="screen">
         <div class="header-stats">
             <div id="wpmDisplay">WPM: 20</div>
@@ -256,6 +263,7 @@
         <button id="quitGameBtn" class="btn-danger" style="margin-top: 0;">Abbandona</button>
     </div>
 
+    <!-- LEADERBOARD -->
     <div id="leaderboardScreen" class="screen">
         <h2>🏆 Risultati</h2>
         <div id="roomWinnerBanner"></div>
@@ -283,7 +291,6 @@
     </div>
 
     <script>
-        // CONFIGURAZIONE DEL TUO BOT TELEGRAM PER I LINK STARTAPP
         const BOT_USERNAME = "cwappgame_bot"; 
         const WEBAPP_NAME = "cwgame"; 
 
@@ -311,7 +318,6 @@
         let audioCtx, inputActive = false, gameRunning = false, activeTab = "room";
         let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 
-        // Funzione Globale per Aprire Profili Telegram
         window.openTelegramProfile = function(username) {
             if (username) tg.openTelegramLink('https://t.me/' + username);
             else tg.showAlert("Questo utente non ha impostato un Username pubblico su Telegram.");
@@ -359,7 +365,6 @@
                     if (roomCode) joinRoomLogic(true); 
                 });
 
-                // GESTIONE DEI LINK (Squadre o Stanze Libere)
                 if (startParam) {
                     if (startParam.startsWith('team_')) {
                         processTeamInvite(startParam.replace('team_', ''));
@@ -437,10 +442,7 @@
                 chatListener = snapshot; const container = document.getElementById('chatMessages'); container.innerHTML = ''; 
                 snapshot.forEach(child => {
                     const msg = child.val(); const div = document.createElement('div'); div.style.marginBottom = '6px';
-                    
-                    // Rendi il nome nella chat cliccabile se ha lo username
                     let nHtml = `<b style="color:var(--link-color)">${msg.name}:</b>`;
-                    
                     div.innerHTML = `${nHtml} ${msg.text}`; container.appendChild(div);
                 });
                 container.scrollTop = container.scrollHeight;
@@ -454,7 +456,7 @@
             input.value = '';
         });
 
-        /* ----- GESTIONE GIOCO LIBERO (CLASSICO) ----- */
+        /* ----- GESTIONE GIOCO LIBERO ----- */
         function generateCallsign() {
             const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "DL", "EA", "F"];
             const p = prefixes[Math.floor(Math.random() * prefixes.length)];
@@ -520,6 +522,22 @@
             }).then(() => joinRoomLogic(false));
         });
 
+        // ATTENZIONE: LOGICA DI USCITA CORRETTA PER EVITARE "STANZE FANTASMA"
+        function exitRoomCleanly(roomWasDeletedByHost = false) {
+            if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
+            if (roomCode) {
+                const rc = roomCode; roomCode = ""; 
+                db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
+                // Eliminiamo il giocatore solo se la stanza esiste ancora
+                if (!roomWasDeletedByHost) {
+                    db.ref(`rooms/${rc}`).once('value', snap => {
+                        if (snap.exists()) db.ref(`rooms/${rc}/players/${myId}`).remove();
+                    });
+                }
+            }
+            hideChat(); showScreen('setupScreen');
+        }
+
         function joinRoomLogic(isReconnect = false) {
             const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
             playerRef.once('value', snapshot => {
@@ -538,7 +556,9 @@
                 
                 currentRoomListener = db.ref(`rooms/${roomCode}`);
                 currentRoomListener.on('value', roomSnap => {
-                    if (!roomSnap.exists()) { exitRoomCleanly(); return; }
+                    // SE LA STANZA VIENE ELIMINATA DAL DATABASE: usciamo puliti
+                    if (!roomSnap.exists()) { exitRoomCleanly(true); return; }
+                    
                     const roomData = roomSnap.val();
                     currentMode = roomData.mode; requestedWordCount = roomData.wordCount; isSinglePlayer = roomData.type === 'single';
                     
@@ -561,7 +581,6 @@
             });
         }
 
-        // EVENTO: INVITA AMICI PER PARTITA LIBERA (Usa il Bot Reale)
         document.getElementById('inviteFriendsBtn').addEventListener('click', () => {
             const botUrl = `https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=room_${roomCode}`;
             const shareText = `Sfida in Telegrafia! Entra nella mia stanza per giocare: #${roomCode}`;
@@ -577,11 +596,11 @@
 
             Object.entries(playersData).forEach(([id, data]) => {
                 const isH = (id === hostId);
-                // Nomi Cliccabili
                 const nHtml = data.username ? `<span onclick="openTelegramProfile('${data.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">🟢 ${data.name}</span>` : `<span>🟢 ${data.name}</span>`;
                 const li = document.createElement('li'); li.innerHTML = `${nHtml} ${isH ? '<small>(HOST)</small>' : ''}`; list.appendChild(li);
             });
 
+            // GESTIONE DEI PULSANTI HOST
             const amIHost = (myId === hostId);
             document.getElementById('startMultiplayerBtn').style.display = amIHost ? 'block' : 'none';
             document.getElementById('deleteRoomBtn').style.display = amIHost ? 'block' : 'none';
@@ -708,40 +727,48 @@
             else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
         }
 
-        // Chiusura Stanza/App
-        function exitRoomCleanly() {
-            if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
-            if (roomCode) {
-                const rc = roomCode; roomCode = ""; 
-                db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
-                db.ref(`rooms/${rc}/players/${myId}`).remove();
-            }
-            hideChat(); showScreen('setupScreen');
-        }
+        // AZIONI PULSANTI STANZA
         document.getElementById('quitGameBtn').addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
-        document.getElementById('leaveLobbyBtn').addEventListener('click', exitRoomCleanly);
         document.getElementById('startMultiplayerBtn').addEventListener('click', () => db.ref(`rooms/${roomCode}/status`).set('countdown'));
-        document.getElementById('deleteRoomBtn').addEventListener('click', () => { if (confirm("Vuoi eliminare definitivamente questa stanza?")) db.ref(`rooms/${roomCode}`).remove(); });
+        
+        // ELIMINA STANZA (Pulsante Host)
+        document.getElementById('deleteRoomBtn').addEventListener('click', () => { 
+            if (confirm("Vuoi eliminare definitivamente questa stanza?")) {
+                db.ref(`rooms/${roomCode}`).remove(); // Questo triggera !roomSnap.exists()
+            }
+        });
+
+        // ESCI DALLA LOBBY (Se l'Host esce, elimina la stanza in automatico)
+        document.getElementById('leaveLobbyBtn').addEventListener('click', () => {
+            if (roomCode) {
+                db.ref(`rooms/${roomCode}`).once('value', snap => {
+                    if (snap.exists() && snap.val().hostId === myId) {
+                        if(confirm("Sei l'Host. Se esci, la stanza verrà eliminata per tutti. Procedere?")) {
+                            db.ref(`rooms/${roomCode}`).remove();
+                        }
+                    } else {
+                        exitRoomCleanly();
+                    }
+                });
+            } else {
+                exitRoomCleanly();
+            }
+        });
+
         document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => { showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn'); });
         window.goBackToMenu = function() { showScreen('setupScreen'); };
         
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
         
-        // ELIMINAZIONE ACCOUNT PROFONDA (TOTALE E DEFINITIVA)
+        // ELIMINAZIONE ACCOUNT PROFONDA
         document.getElementById('deleteDataBtn').addEventListener('click', async () => {
             if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati. Confermi?")) {
                 try {
-                    // 1. Elimina dalle Classifiche
                     await db.ref(`leaderboard`).once('value', snapshot => { 
-                        snapshot.forEach(mode => { 
-                            mode.forEach(type => { 
-                                if(type.hasChild(myId)) type.child(myId).ref.remove(); 
-                            }); 
-                        }); 
+                        snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); }); 
                     });
                     
-                    // 2. Elimina dalla Stanza Attuale (Se Host, chiude la stanza)
                     if (roomCode) { 
                         const roomSnap = await db.ref(`rooms/${roomCode}`).once('value');
                         if (roomSnap.exists() && roomSnap.val().hostId === myId) {
@@ -751,13 +778,9 @@
                         }
                     }
 
-                    // 3. Elimina dalla Squadra (Se Capitano, scioglie la squadra)
                     if (myTeamId) { 
-                        if (isTeamCaptain) {
-                            await db.ref(`teams/${myTeamId}`).remove();
-                        } else {
-                            await db.ref(`teams/${myTeamId}/members/${myId}`).remove(); 
-                        }
+                        if (isTeamCaptain) { await db.ref(`teams/${myTeamId}`).remove(); } 
+                        else { await db.ref(`teams/${myTeamId}/members/${myId}`).remove(); }
                     }
                     
                     alert("I tuoi dati sono stati eliminati definitivamente."); 
@@ -810,7 +833,6 @@
             playersArray.sort((a, b) => b.score - a.score).forEach((player, index) => {
                 const row = document.createElement('div'); row.className = 'leaderboard-row';
                 let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                // Nomi cliccabili anche in classifica
                 const nHtml = player.username ? `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${player.name}</span>` : `<span>${player.name}</span>`;
                 row.innerHTML = `<span>${medal} ${nHtml} <br><small style="color:var(--hint-color)">(${player.wpm || 0} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
                 container.appendChild(row);
@@ -826,7 +848,6 @@
                 players.forEach((player, index) => {
                     const row = document.createElement('div'); row.className = 'leaderboard-row';
                     let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                    // Nomi cliccabili in classifica globale
                     const nHtml = player.username ? `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${player.name}</span>` : `<span>${player.name}</span>`;
                     row.innerHTML = `<span>${medalText} ${nHtml} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
                     container.appendChild(row);
@@ -834,7 +855,7 @@
             });
         }
 
-        /* ================= SISTEMA SQUADRE E CAMPIONATO (SEPARATO) ================= */
+        /* ================= SISTEMA SQUADRE ================= */
         document.getElementById('goToTeamsBtn').addEventListener('click', () => showScreen('teamsScreen'));
 
         function processTeamInvite(inviteTeamId) {
@@ -903,7 +924,6 @@
                 const list = document.getElementById('myTeamMembersList'); list.innerHTML = '';
                 Object.entries(team.members || {}).forEach(([id, mem]) => {
                     const isC = (id === team.captainId);
-                    // Nomi Cliccabili per la squadra
                     const nHtml = mem.username ? `<span onclick="openTelegramProfile('${mem.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${mem.name}</span>` : `<span>${mem.name}</span>`;
                     list.innerHTML += `<li>${nHtml} ${isC?'<b style="color:var(--hint-color)">(Capitano)</b>':''}</li>`;
                 });
@@ -963,14 +983,10 @@
         document.getElementById('generateBracketBtn').addEventListener('click', () => {
             db.ref('teams').once('value', snap => {
                 let teams = []; snap.forEach(child => teams.push({ id: child.key, name: child.val().name }));
-                
                 for (let i = teams.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [teams[i], teams[j]] = [teams[j], teams[i]]; }
-
                 let round1 = {};
                 for(let i=0; i<teams.length; i+=2) {
-                    if (teams[i+1]) {
-                        round1[`match_${i/2}`] = { teamA: teams[i].id, teamAName: teams[i].name, teamB: teams[i+1].id, teamBName: teams[i+1].name };
-                    }
+                    if (teams[i+1]) round1[`match_${i/2}`] = { teamA: teams[i].id, teamAName: teams[i].name, teamB: teams[i+1].id, teamBName: teams[i+1].name };
                 }
                 db.ref('championship/bracket/round1').set(round1);
                 db.ref('championship/status').set('active');
@@ -979,18 +995,14 @@
 
         function startChampionshipMatch(matchId) {
             const specificRoomCode = "CHAMP_" + matchId.toUpperCase();
-            
             db.ref(`rooms/${specificRoomCode}`).once('value', snapshot => {
-                if (snapshot.exists()) {
-                    window.joinSpecificRoom(specificRoomCode);
-                } else {
+                if (snapshot.exists()) { window.joinSpecificRoom(specificRoomCode); } 
+                else {
                     gameWords = getGameWords(20, 'standard'); 
                     db.ref('rooms/' + specificRoomCode).set({
                         status: 'waiting', type: 'multi', mode: 'standard', wpm: 20, tone: 600, wordCount: 20, words: gameWords, 
                         createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + (10 * 60000), hostId: myId
-                    }).then(() => {
-                        window.joinSpecificRoom(specificRoomCode);
-                    });
+                    }).then(() => { window.joinSpecificRoom(specificRoomCode); });
                 }
             });
         }
