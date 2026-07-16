@@ -19,19 +19,12 @@
             --btn-color: var(--tg-theme-button-color, #3390ec);
             --btn-text-color: var(--tg-theme-button-text-color, #ffffff);
             --sec-bg-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            --champ-color: #9c27b0;
         }
 
-        html, body {
-            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; 
-            background-color: var(--bg-color); color: var(--text-color); 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-        }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: var(--bg-color); color: var(--text-color); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         
-        .screen { 
-            display: none; flex-direction: column; align-items: center; 
-            width: 100%; height: 100%; max-width: 500px; margin: 0 auto;
-            padding: 20px 15px; box-sizing: border-box; overflow-y: auto; 
-        }
+        .screen { display: none; flex-direction: column; align-items: center; width: 100%; height: 100%; max-width: 500px; margin: 0 auto; padding: 20px 15px; box-sizing: border-box; overflow-y: auto; }
         .active-screen { display: flex; }
         
         h2 { margin-top: 0; text-align: center; }
@@ -43,6 +36,7 @@
         .btn-secondary { background-color: #ff9800; color: #fff; }
         .btn-success { background-color: #4caf50; color: #fff; }
         .btn-danger { background-color: #d32f2f; color: #fff; }
+        .btn-champ { background-color: var(--champ-color); color: #fff; padding: 18px 20px; font-size: 1.2em; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(156, 39, 176, 0.4);}
         .btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 10px; font-size: 1em; margin-top: 15px; border: none; cursor: pointer; }
         
         input[type="number"], input[type="text"], select { padding: 10px; font-size: 1.1em; width: 100%; box-sizing: border-box; text-align: center; margin: 5px 0; border: 1px solid var(--hint-color); border-radius: 10px; background-color: var(--bg-color); color: var(--text-color); }
@@ -73,8 +67,7 @@
         
         .leaderboard-row { display: flex; justify-content: space-between; padding: 15px; border-bottom: 1px solid var(--hint-color); width: 100%; align-items: center; box-sizing: border-box; background: var(--sec-bg-color); margin-bottom: 8px; border-radius: 8px;}
         
-        #loadingText { font-style: italic; color: #ff9800; margin-bottom: 15px; font-weight: bold; }
-        #notificationArea { color: #d32f2f; font-weight: bold; margin-bottom: 10px; min-height: 20px; text-align: center;}
+        #loadingText { font-style: italic; color: #ff9800; margin-bottom: 15px; font-weight: bold; text-align:center;}
         
         .tab-buttons { display: flex; width: 100%; gap: 6px; margin-bottom: 15px; flex-wrap: wrap; justify-content: space-between;}
         .tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 10px; font-size: 0.85em; border-radius: 8px; flex: 1 1 45%; text-align: center; }
@@ -84,6 +77,8 @@
 
         .match-card { background: var(--bg-color); border: 1px solid var(--hint-color); border-radius: 8px; padding: 10px; margin-bottom: 10px; text-align: center; display: flex; flex-direction: column; align-items: center;}
         .match-vs { font-weight: bold; color: #ff9800; margin: 5px 0; }
+        
+        hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 20px 0; width: 100%; opacity: 0.5; }
     </style>
 </head>
 <body>
@@ -111,10 +106,16 @@
         <h2>Ciao <span id="playerName">Giocatore</span>! 📻</h2>
         <p id="loadingText">Connessione sicura in corso...</p>
 
-        <button id="goToTeamsBtn" class="btn-success" style="margin-bottom: 15px;">🛡️ Squadre e Campionato</button>
+        <div style="width: 100%; text-align: center; margin-bottom: 5px;">
+            <button id="goToTeamsBtn" class="btn-champ">🏆 ACCEDI AL CAMPIONATO SQUADRE 🏆</button>
+            <p style="font-size: 0.85em; color: var(--hint-color); margin-top: 5px;">Crea il tuo team, partecipa al torneo e chatta con la squadra.</p>
+        </div>
 
+        <hr class="divider">
+
+        <h3 style="margin: 0 0 10px 0; color: var(--link-color);">⚡ Sfida Libera</h3>
         <div class="box-panel">
-            <h3>Crea Nuova Sfida</h3>
+            <h3>Gioca da Solo o Sfida un Amico</h3>
             <div class="settings-row full-width">
                 <div>
                     <label>Tipo di Gioco:</label>
@@ -137,40 +138,40 @@
                 <div><label>Parole/Nom.:</label> <input type="number" id="wordCountInput" value="10" min="3" max="50"></div>
                 <div id="timeoutDiv"><label>Timeout (min):</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
             </div>
-            <button id="createRoomBtn" disabled>Inizia / Crea Stanza</button>
+            <button id="createRoomBtn" disabled class="btn-success">Inizia Partita Libera</button>
         </div>
 
         <div class="box-panel" style="flex-grow: 1; display: flex; flex-direction: column;">
-            <h3>Bacheca Sfide Multi ⏳</h3>
+            <h3>Bacheca Sfide Libere ⏳</h3>
             <ul id="waitingRoomsList" class="data-list" style="flex-grow: 1;">
-                <li style="justify-content: center; color: var(--hint-color);">Nessuna sfida attiva. Creane una!</li>
+                <li style="justify-content: center; color: var(--hint-color);">Nessuna sfida attiva al momento.</li>
             </ul>
         </div>
         
-        <button id="viewGlobalLeaderboardBtn" class="btn-link" style="font-weight: bold; font-size: 1.1em;">🏆 Classifiche</button>
+        <button id="viewGlobalLeaderboardBtn" class="btn-link" style="font-weight: bold; font-size: 1.1em;">🏆 Classifiche Generali</button>
         <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Dati</button>
     </div>
 
     <div id="teamsScreen" class="screen">
-        <h2>🛡️ Gestione Squadre</h2>
+        <h2 style="color: var(--champ-color);">🏆 Campionato Squadre</h2>
         
         <div id="noTeamView" style="width: 100%; display: none;">
             <div class="box-panel">
-                <h3>Crea la tua Squadra</h3>
-                <input type="text" id="newTeamName" placeholder="Nome Squadra..." maxlength="20">
-                <button id="createTeamBtn" class="btn-success">Crea Squadra</button>
+                <h3>Fonda la tua Squadra</h3>
+                <input type="text" id="newTeamName" placeholder="Scegli un nome..." maxlength="20">
+                <button id="createTeamBtn" class="btn-champ">Crea Squadra</button>
             </div>
             <div class="box-panel">
-                <h3>Elenco Squadre</h3>
+                <h3>Elenco Squadre Iscritte</h3>
                 <ul id="openTeamsList" class="data-list"></ul>
             </div>
         </div>
 
         <div id="myTeamView" style="width: 100%; display: none; flex-grow:1; flex-direction:column;">
             <div class="box-panel">
-                <h3 id="myTeamNameDisplay" style="color: var(--link-color);">Nome Squadra</h3>
-                <p style="text-align:center; margin-top:0; font-size:0.9em;" id="teamStatusText"></p>
-                <button id="inviteTeamBtn" class="btn-link" style="margin:0; padding:5px; font-weight:bold;">📢 Invia Link di Invito (Telegram)</button>
+                <h3 id="myTeamNameDisplay" style="color: var(--link-color); font-size: 1.4em;">Nome Squadra</h3>
+                <p style="text-align:center; margin-top:0; font-size:0.9em; font-weight:bold;" id="teamStatusText"></p>
+                <button id="inviteTeamBtn" class="btn-link" style="margin:0; padding:5px; font-weight:bold;">📢 Condividi Link d'Invito</button>
                 <hr style="border:0; border-top:1px solid var(--hint-color); margin:10px 0;">
                 <ul id="myTeamMembersList" class="data-list" style="max-height: 120px;"></ul>
                 
@@ -181,12 +182,12 @@
                 <button id="leaveTeamBtn" class="btn-danger" style="margin-top:15px;">Abbandona Squadra</button>
             </div>
             
-            <div class="box-panel" style="flex-grow:1;">
-                <h3>🏆 Tabellone Campionato</h3>
+            <div class="box-panel" style="flex-grow:1; border: 2px solid var(--champ-color);">
+                <h3 style="color: var(--champ-color);">🥊 Tabellone Scontri</h3>
                 <div id="bracketContainer" style="font-size:0.9em; text-align:center; overflow-y:auto; max-height:200px;">
-                    <p style="color:var(--hint-color);">Nessun match attivo.</p>
+                    <p style="color:var(--hint-color);">Nessun match attivo. In attesa del via.</p>
                 </div>
-                <button id="generateBracketBtn" class="btn-secondary" style="display:none; margin-top:10px;">Genera Scontri Casuali</button>
+                <button id="generateBracketBtn" class="btn-champ" style="display:none; margin-top:10px;">Genera Tabellone Torneo</button>
             </div>
 
             <div class="box-panel">
@@ -195,7 +196,7 @@
             </div>
         </div>
 
-        <button onclick="goBackToMenu()" style="margin-top: auto;">Torna al Menu</button>
+        <button onclick="goBackToMenu()" style="margin-top: auto;">Torna al Menu Principale</button>
     </div>
 
     <div id="privacyScreen" class="screen">
@@ -208,7 +209,7 @@
     </div>
 
     <div id="lobbyScreen" class="screen">
-        <h2>Lobby Stanza</h2>
+        <h2 id="lobbyTitleText">Lobby Stanza</h2>
         <p id="lobbyTimerText" style="text-align: center; font-weight: bold; color: #ff9800; margin-top: 5px;"></p>
         <h3 style="margin-top: 10px;">Giocatori presenti:</h3>
         <ul id="playersList" class="data-list" style="width: 100%;"></ul>
@@ -233,7 +234,6 @@
             <div id="wpmDisplay">WPM: 20</div>
             <div id="scoreDisplay">Punti: 0</div>
         </div>
-        <div id="notificationArea"></div>
         
         <div class="table-wrapper" id="tableWrapper">
             <table id="gameTable">
@@ -276,9 +276,8 @@
 
     <script>
         // SOSTITUISCI QUESTI CON I NOMI REALI DEL TUO BOT E WEBAPP SU BOTFATHER
-        // Esempio: BOT_USERNAME = "TelegrafiaGameBot", WEBAPP_NAME = "Play"
-        const BOT_USERNAME = "cwappgame_bot"; 
-        const WEBAPP_NAME = "cwgame"; 
+        const BOT_USERNAME = "INSERISCI_USERNAME_BOT"; 
+        const WEBAPP_NAME = "INSERISCI_NOME_WEBAPP"; 
 
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
@@ -395,52 +394,42 @@
         window.toggleChat = function() {
             const drawer = document.getElementById('chatDrawer');
             if (drawer.style.display === 'none') {
-                drawer.style.display = 'flex';
-                document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+                drawer.style.display = 'flex'; document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
             } else { drawer.style.display = 'none'; }
         }
         function hideChat() {
-            document.getElementById('chatDrawer').style.display = 'none';
-            document.getElementById('globalChatBtn').style.display = 'none';
+            document.getElementById('chatDrawer').style.display = 'none'; document.getElementById('globalChatBtn').style.display = 'none';
             if (chatListener && activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).off();
         }
         
         function listenToChat() {
             let chatRef;
             if (activeChatContext === 'room' && roomCode) {
-                chatRef = db.ref(`rooms/${roomCode}/chat`);
-                document.getElementById('chatTitle').textContent = "💬 Chat Stanza";
-                document.getElementById('globalChatBtn').style.display = 'block';
+                chatRef = db.ref(`rooms/${roomCode}/chat`); document.getElementById('chatTitle').textContent = "💬 Chat Stanza"; document.getElementById('globalChatBtn').style.display = 'block';
             } else if (activeChatContext === 'team' && myTeamId) {
-                chatRef = db.ref(`teams/${myTeamId}/chat`);
-                document.getElementById('chatTitle').textContent = "💬 Chat Squadra";
-                document.getElementById('globalChatBtn').style.display = 'block';
+                chatRef = db.ref(`teams/${myTeamId}/chat`); document.getElementById('chatTitle').textContent = "💬 Chat Squadra"; document.getElementById('globalChatBtn').style.display = 'block';
             } else { return; }
 
             if (chatListener) db.ref().off('value', chatListener);
             
             chatRef.limitToLast(40).on('value', snapshot => {
-                chatListener = snapshot;
-                const container = document.getElementById('chatMessages'); container.innerHTML = ''; 
+                chatListener = snapshot; const container = document.getElementById('chatMessages'); container.innerHTML = ''; 
                 snapshot.forEach(child => {
-                    const msg = child.val();
-                    const div = document.createElement('div'); div.style.marginBottom = '6px';
-                    div.innerHTML = `<b style="color:var(--link-color)">${msg.name}:</b> ${msg.text}`;
-                    container.appendChild(div);
+                    const msg = child.val(); const div = document.createElement('div'); div.style.marginBottom = '6px';
+                    div.innerHTML = `<b style="color:var(--link-color)">${msg.name}:</b> ${msg.text}`; container.appendChild(div);
                 });
                 container.scrollTop = container.scrollHeight;
             });
         }
 
         document.getElementById('sendChatBtn').addEventListener('click', () => {
-            const input = document.getElementById('chatInput'); const txt = input.value.trim();
-            if (!txt) return;
+            const input = document.getElementById('chatInput'); const txt = input.value.trim(); if (!txt) return;
             if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
             else if (activeChatContext === 'team' && myTeamId) db.ref(`teams/${myTeamId}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
             input.value = '';
         });
 
-        /* ----- GESTIONE STANZE MULTIPLAYER E SINGLE ----- */
+        /* ----- GESTIONE GIOCO LIBERO (CLASSICO) ----- */
         function generateCallsign() {
             const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "DL", "EA", "F"];
             const p = prefixes[Math.floor(Math.random() * prefixes.length)];
@@ -464,7 +453,7 @@
         document.getElementById('gameTypeInput').addEventListener('change', (e) => {
             const isS = e.target.value === 'single';
             document.getElementById('timeoutDiv').style.display = isS ? 'none' : 'block';
-            document.getElementById('createRoomBtn').textContent = isS ? "Gioca Subito" : "Crea Stanza";
+            document.getElementById('createRoomBtn').textContent = isS ? "Gioca Subito" : "Inizia Partita Libera";
         });
 
         function listenToRooms() {
@@ -472,6 +461,9 @@
                 const list = document.getElementById('waitingRoomsList'); list.innerHTML = ''; let wCount = 0;
                 snapshot.forEach(child => {
                     const room = child.val(); const code = child.key;
+                    // Esclude le stanze del campionato dalla lista pubblica
+                    if (code.startsWith("CHAMP_")) return;
+
                     if (room.expiresAt && Date.now() > room.expiresAt) { db.ref(`rooms/${code}`).remove(); return; }
                     if (room.status === 'waiting' && room.type !== 'single') {
                         wCount++; let pCount = room.players ? Object.keys(room.players).length : 0;
@@ -481,11 +473,12 @@
                         list.appendChild(li);
                     }
                 });
-                if (wCount === 0) list.innerHTML = '<li style="justify-content:center;color:var(--hint-color)">Nessuna sfida attiva. Creane una!</li>';
+                if (wCount === 0) list.innerHTML = '<li style="justify-content:center;color:var(--hint-color)">Nessuna sfida attiva al momento.</li>';
             });
         }
         window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
 
+        // Creazione Stanza Normale
         document.getElementById('createRoomBtn').addEventListener('click', () => {
             currentMode = document.getElementById('gameModeInput').value;
             isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
@@ -508,7 +501,12 @@
             const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
             playerRef.once('value', snapshot => {
                 if (snapshot.val()?.finished) { showScreen('leaderboardScreen'); activeTab="room"; showLeaderboardTab('tabRoomBtn'); return; }
+                
                 showScreen('lobbyScreen');
+                
+                // Titolo della lobby cambia se è campionato
+                document.getElementById('lobbyTitleText').textContent = roomCode.startsWith("CHAMP_") ? "Lobby Scontro Torneo 🥊" : "Lobby Stanza Libera";
+                
                 document.getElementById('permanentGameInput').blur();
                 playerRef.onDisconnect().remove();
                 if (!snapshot.val()) playerRef.set({ name: myName, username: tgUsername, score: 0, wpm: 0, finished: false });
@@ -562,7 +560,7 @@
             document.getElementById('startMultiplayerBtn').style.display = amIHost ? 'block' : 'none';
             document.getElementById('deleteRoomBtn').style.display = amIHost ? 'block' : 'none';
             document.getElementById('waitingHostText').style.display = amIHost ? 'none' : 'block';
-            document.getElementById('statusInfoText').textContent = amIHost ? `Sei l'Host. ${count<2?'(In attesa di sfidanti...)':''}` : "Sei un partecipante.";
+            document.getElementById('statusInfoText').textContent = amIHost ? `Sei l'Host della partita.` : "Sei un partecipante. Attendi il via.";
         }
 
         /* ----- GIOCO IN GAME ----- */
@@ -658,7 +656,8 @@
                 myPlayerRef.update({ finished: true }); myPlayerRef.onDisconnect().cancel(); 
             }
             
-            if (totalScore > 0) {
+            // Le gare di campionato non salvano sulle classifiche generiche libere per non falsarle
+            if (totalScore > 0 && !roomCode.startsWith("CHAMP_")) {
                 let dbPath = currentMode === 'callsign' 
                     ? `leaderboard/callsign/global/${myId}` : `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                     
@@ -684,7 +683,7 @@
             else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
         }
 
-        // Leaderboards/Abbandono Stanza (Rimane invariato)
+        // Chiusura Stanza/App
         function exitRoomCleanly() {
             if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
             if (roomCode) {
@@ -700,6 +699,7 @@
         document.getElementById('deleteRoomBtn').addEventListener('click', () => { if (confirm("Vuoi eliminare definitivamente questa stanza?")) db.ref(`rooms/${roomCode}`).remove(); });
         document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => { showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn'); });
         window.goBackToMenu = function() { showScreen('setupScreen'); };
+        
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
         document.getElementById('deleteDataBtn').addEventListener('click', async () => {
@@ -712,6 +712,7 @@
                 } catch (e) { alert("Errore: " + e.message); }
             }
         });
+
         function showLeaderboardTab(tabId) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
             document.getElementById(tabId).classList.add('active-tab');
@@ -774,17 +775,16 @@
             });
         }
 
-        /* ================= SISTEMA SQUADRE & CAMPIONATO ================= */
+        /* ================= SISTEMA SQUADRE E CAMPIONATO (SEPARATO) ================= */
         document.getElementById('goToTeamsBtn').addEventListener('click', () => showScreen('teamsScreen'));
 
-        // Gestione Link StartApp
         function processTeamInvite(inviteTeamId) {
             db.ref(`teams/${inviteTeamId}`).once('value', snap => {
                 if(snap.exists() && snap.val().status === 'open') {
                     db.ref(`teams/${inviteTeamId}/members/${myId}`).set({ name: myName, username: tgUsername });
                     tg.showAlert(`Sei entrato nella squadra ${snap.val().name}!`); showScreen('teamsScreen');
                 } else {
-                    tg.showAlert("La squadra non esiste o le iscrizioni sono state chiuse dal Capitano."); showScreen('setupScreen');
+                    tg.showAlert("La squadra non esiste o le iscrizioni sono chiuse."); showScreen('setupScreen');
                 }
             });
         }
@@ -796,7 +796,7 @@
 
                 if (myTeamId) {
                     document.getElementById('noTeamView').style.display = 'none'; document.getElementById('myTeamView').style.display = 'flex';
-                    listenToMyTeam(); listenToChampionship(); listenToAllTeams(true); // Aggiorna anche la lista sotto al pannello
+                    listenToMyTeam(); listenToChampionship(); listenToAllTeams(true); 
                 } else {
                     document.getElementById('myTeamView').style.display = 'none'; document.getElementById('noTeamView').style.display = 'block';
                     listenToAllTeams(false);
@@ -809,7 +809,6 @@
             db.ref('teams').push().set({ name: tName, captainId: myId, status: 'open', members: { [myId]: { name: myName, username: tgUsername } } }).then(() => checkMyTeamStatus());
         });
 
-        // Mostra la lista di tutte le squadre (per chi non ne ha una, o per curiosità)
         function listenToAllTeams(isAlreadyInTeam) {
             if (allTeamsListener) db.ref('teams').off('value', allTeamsListener);
             allTeamsListener = db.ref('teams').on('value', snap => {
@@ -820,10 +819,8 @@
                     const li = document.createElement('li');
                     
                     if (isAlreadyInTeam) {
-                        // Se sono già in una squadra, vedo solo la lista senza pulsante Unisciti
                         li.innerHTML = `<span><b>${t.name}</b></span> <small>(${count} membri)</small>`;
                     } else if (t.status === 'open') {
-                        // Se non ho una squadra, vedo il pulsante Unisciti
                         li.innerHTML = `<span><b>${t.name}</b> <small>(${count} mem.)</small></span>
                                         <button class="action-btn-small" onclick="joinTeam('${child.key}')">Unisciti</button>`;
                     }
@@ -847,7 +844,7 @@
                 const list = document.getElementById('myTeamMembersList'); list.innerHTML = '';
                 Object.entries(team.members || {}).forEach(([id, mem]) => {
                     const isC = (id === team.captainId);
-                    list.innerHTML += `<li>${mem.name} ${isC?'<b style="color:var(--hint-color)">(Cap.)</b>':''}</li>`;
+                    list.innerHTML += `<li>${mem.name} ${isC?'<b style="color:var(--hint-color)">(Capitano)</b>':''}</li>`;
                 });
 
                 document.getElementById('captainActions').style.display = isTeamCaptain ? 'block' : 'none';
@@ -855,7 +852,6 @@
                 btnLock.textContent = team.status === 'open' ? "Chiudi Adesioni" : "Riapri Adesioni";
                 btnLock.onclick = () => db.ref(`teams/${myTeamId}/status`).set(team.status === 'open' ? 'closed' : 'open');
                 
-                // CONDIVISIONE LINK NATIVA (Apre il selettore contatti Telegram)
                 document.getElementById('inviteTeamBtn').onclick = () => {
                     const botUrl = `https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=team_${myTeamId}`;
                     const shareText = `Unisciti alla mia squadra di Telegrafia: ${team.name}!`;
@@ -875,7 +871,6 @@
             }
         });
 
-        // Tabellone e Scontri Diretti
         function listenToChampionship() {
             if (bracketListener) db.ref('championship').off('value', bracketListener);
             bracketListener = db.ref('championship').on('value', snap => {
@@ -892,10 +887,9 @@
                     const card = document.createElement('div'); card.className = 'match-card';
                     card.innerHTML = `<span><b>${match.teamAName}</b></span> <span class="match-vs">VS</span> <span><b>${match.teamBName}</b></span>`;
                     
-                    // Se la mia squadra fa parte di questo match, mostro il pulsante per avviare la gara
                     if (match.teamA === myTeamId || match.teamB === myTeamId) {
                         const btn = document.createElement('button');
-                        btn.className = 'btn-success'; btn.style.padding = '8px'; btn.style.fontSize = '0.9em'; btn.style.marginTop = '10px';
+                        btn.className = 'btn-champ'; btn.style.padding = '8px'; btn.style.fontSize = '0.9em'; btn.style.marginTop = '10px';
                         btn.textContent = "🥊 ENTRA NELLA SFIDA";
                         btn.onclick = () => startChampionshipMatch(matchId);
                         card.appendChild(btn);
@@ -905,12 +899,10 @@
             });
         }
 
-        // Funzione per generare lo scontro casuale
         document.getElementById('generateBracketBtn').addEventListener('click', () => {
             db.ref('teams').once('value', snap => {
                 let teams = []; snap.forEach(child => teams.push({ id: child.key, name: child.val().name }));
                 
-                // Shuffle (Mischia le squadre)
                 for (let i = teams.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [teams[i], teams[j]] = [teams[j], teams[i]]; }
 
                 let round1 = {};
@@ -924,28 +916,23 @@
             });
         });
 
-        // Quando il giocatore clicca "ENTRA NELLA SFIDA" dal tabellone
         function startChampionshipMatch(matchId) {
             const specificRoomCode = "CHAMP_" + matchId.toUpperCase();
             
-            // Controlliamo se la stanza esiste già (se l'ha creata un avversario)
             db.ref(`rooms/${specificRoomCode}`).once('value', snapshot => {
                 if (snapshot.exists()) {
-                    // La stanza esiste, ci uniamo e basta
                     window.joinSpecificRoom(specificRoomCode);
                 } else {
-                    // La stanza non esiste, la creiamo in automatico e poi entriamo
-                    gameWords = getGameWords(20, 'standard'); // Gara standard a 20 parole per il campionato
+                    gameWords = getGameWords(20, 'standard'); 
                     db.ref('rooms/' + specificRoomCode).set({
                         status: 'waiting', type: 'multi', mode: 'standard', wpm: 20, tone: 600, wordCount: 20, words: gameWords, 
-                        createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + (10 * 60000), hostId: myId // 10 min timeout
+                        createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + (10 * 60000), hostId: myId
                     }).then(() => {
                         window.joinSpecificRoom(specificRoomCode);
                     });
                 }
             });
         }
-
     </script>
 </body>
 </html>
