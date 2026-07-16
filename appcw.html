@@ -22,27 +22,15 @@
         }
 
         html, body {
-            margin: 0; 
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden; 
-            background-color: var(--bg-color); 
-            color: var(--text-color); 
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; 
+            background-color: var(--bg-color); color: var(--text-color); 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
         }
         
         .screen { 
-            display: none; 
-            flex-direction: column; 
-            align-items: center; 
-            width: 100%; 
-            height: 100%; 
-            max-width: 500px; 
-            margin: 0 auto;
-            padding: 20px 15px; 
-            box-sizing: border-box;
-            overflow-y: auto; 
+            display: none; flex-direction: column; align-items: center; 
+            width: 100%; height: 100%; max-width: 500px; margin: 0 auto;
+            padding: 20px 15px; box-sizing: border-box; overflow-y: auto; 
         }
         .active-screen { display: flex; }
         
@@ -69,15 +57,7 @@
         .header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px; font-weight: bold; font-size: 1.2em; background: var(--sec-bg-color); padding: 12px; border-radius: 10px; box-sizing: border-box;}
         #scoreDisplay { color: #4caf50; }
         
-        .table-wrapper {
-            flex-grow: 1; 
-            width: 100%;
-            overflow-y: auto; 
-            border-radius: 10px;
-            background: var(--sec-bg-color);
-            margin-bottom: 10px;
-        }
-
+        .table-wrapper { flex-grow: 1; width: 100%; overflow-y: auto; border-radius: 10px; background: var(--sec-bg-color); margin-bottom: 10px; }
         table { width: 100%; border-collapse: collapse; }
         th, td { border-bottom: 1px solid var(--hint-color); padding: 12px 5px; text-align: center; }
         th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
@@ -367,7 +347,6 @@
                     showScreen('setupScreen'); 
                     listenToRooms();
 
-                    // Gestione Deep Linking Telegram (?start=team_id)
                     const startParam = tg.initDataUnsafe?.start_param;
                     if (startParam && startParam.startsWith('team_')) {
                         const targetTeamId = startParam.substring(5);
@@ -428,7 +407,6 @@
             }
         });
 
-        // GENERATORE NOMINATIVI REALI FITTIZI (CW FREAK)
         function generateCallsign() {
             const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "AA", "VE", "G", "M", "2E", "F", "EA", "EB", "DL", "DJ", "DK", "SP", "SQ", "UA", "UB", "UR", "JA", "VK", "ZL", "PY", "LU", "ZS"];
             const p = prefixes[Math.floor(Math.random() * prefixes.length)];
@@ -552,7 +530,7 @@
                 hostId: myId
             }).then(() => {
                 joinRoomLogic(false);
-            });
+            }).catch(e => tg.showAlert("Errore connessione Database: " + e.message));
         });
 
         window.toggleChat = function() {
@@ -937,7 +915,7 @@
                             mode: roomData.mode,
                             wordCount: roomData.wordCount,
                             players: Object.values(players).map(p => ({ name: p.name, score: p.score, wpm: p.wpm }))
-                        });
+                        }).catch(e => console.error("Non salvato nello storico causa regole db:", e));
 
                         setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 30000); 
                     }
@@ -1122,7 +1100,9 @@
         }
 
         document.getElementById('quitGameBtn').addEventListener('click', () => {
-            if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); }
+            tg.showConfirm("Vuoi abbandonare la partita?", function(agreed) {
+                if(agreed) { gameRunning = false; exitRoomCleanly(); }
+            });
         });
         
         function exitRoomCleanly() {
@@ -1147,22 +1127,23 @@
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
 
-        document.getElementById('deleteDataBtn').addEventListener('click', async () => {
-            if (confirm("⚠️ Eliminerai per sempre i tuoi punteggi globali. Confermi?")) {
-                try {
-                    await db.ref(`leaderboard`).once('value', snapshot => {
-                       snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); });
-                    });
-                    alert("Dati eliminati.");
-                    window.Telegram.WebApp.close(); 
-                } catch (e) { alert("Errore: " + e.message); }
-            }
+        document.getElementById('deleteDataBtn').addEventListener('click', () => {
+            tg.showConfirm("⚠️ Eliminerai per sempre i tuoi punteggi globali. Confermi?", async function(agreed) {
+                if(agreed) {
+                    try {
+                        await db.ref(`leaderboard`).once('value', snapshot => { snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); }); });
+                        tg.showAlert("Dati eliminati."); window.Telegram.WebApp.close(); 
+                    } catch (e) { tg.showAlert("Errore: " + e.message); }
+                }
+            });
         });
         
         document.getElementById('startMultiplayerBtn').addEventListener('click', () => { db.ref(`rooms/${roomCode}/status`).set('countdown'); });
         
         document.getElementById('deleteRoomBtn').addEventListener('click', () => {
-            if (confirm("Vuoi eliminare definitivamente questa stanza? Tutti i partecipanti saranno espulsi.")) db.ref(`rooms/${roomCode}`).remove();
+            tg.showConfirm("Vuoi eliminare definitivamente questa stanza? Tutti i partecipanti saranno espulsi.", function(agreed) {
+                if(agreed) db.ref(`rooms/${roomCode}`).remove();
+            });
         });
         
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
@@ -1212,8 +1193,9 @@
                     if (foundTeam.captainId === myId) {
                         readyBtn.style.display = 'block';
                         readyBtn.onclick = () => {
-                            db.ref(`teams/${myTeamId}/status`).set('ready');
-                            tg.showAlert("La tua squadra è segnata come PRONTA!");
+                            db.ref(`teams/${myTeamId}/status`).set('ready')
+                              .then(() => tg.showAlert("La tua squadra è segnata come PRONTA!"))
+                              .catch(e => tg.showAlert("Errore: " + e.message));
                         };
                     } else {
                         readyBtn.style.display = 'none';
@@ -1223,12 +1205,16 @@
                     document.getElementById('createTeamPanel').style.display = 'block';
                     document.getElementById('myTeamPanel').style.display = 'none';
                 }
-            });
+            }).catch(e => tg.showAlert("Impossibile leggere il Database. Sicuro di aver aggiornato e salvato le regole Firebase su Realtime Database?"));
         }
 
         document.getElementById('createTeamBtn').addEventListener('click', () => {
             const teamName = document.getElementById('teamNameInput').value.trim();
-            if (!teamName) { tg.showAlert("Inserisci un nome valido!"); return; }
+            if (!teamName) { tg.showAlert("Inserisci un nome valido per la squadra!"); return; }
+
+            const btn = document.getElementById('createTeamBtn');
+            btn.disabled = true;
+            btn.textContent = "Creazione in corso...";
 
             const newTeamId = 'team_' + Math.floor(1000 + Math.random() * 9000);
             db.ref(`teams/${newTeamId}`).set({
@@ -1239,8 +1225,14 @@
                     [myId]: { id: myId, name: myName, username: tgUsername }
                 }
             }).then(() => {
+                btn.disabled = false;
+                btn.textContent = "Fonda e diventa Capitano";
                 document.getElementById('teamNameInput').value = '';
                 checkMyTeam();
+            }).catch((err) => {
+                btn.disabled = false;
+                btn.textContent = "Fonda e diventa Capitano";
+                tg.showAlert("Errore Firebase: " + err.message + "\n\nNon hai i permessi di scrittura per 'teams'. Controlla di aver incollato le ultime regole e premuto su Pubblica nel Realtime Database.");
             });
         });
 
@@ -1260,7 +1252,7 @@
                     tg.showAlert("Ti sei unito con successo alla squadra!");
                     checkMyTeam();
                     showScreen('tournamentScreen');
-                });
+                }).catch(e => tg.showAlert("Errore unione squadra: " + e.message));
             });
         }
 
@@ -1324,7 +1316,7 @@
                         thirdPlace: { team1: null, team2: null, score1: 0, score2: 0, winner: null }
                     }
                 }
-            });
+            }).catch(e => tg.showAlert("Errore creazione Torneo: " + e.message));
         }
 
         function renderBracket(tData) {
@@ -1442,7 +1434,7 @@
                             }
                         });
                         joinRoomLogic(false);
-                    });
+                    }).catch(e => tg.showAlert("Errore Database (Verifica regole): " + e.message));
                 };
             }
         }
