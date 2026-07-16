@@ -490,7 +490,9 @@
                     const room = child.val(); const code = child.key;
                     if (code.startsWith("CHAMP_")) return;
 
+                    // Eliminazione automatica alla scadenza del timer
                     if (room.expiresAt && Date.now() > room.expiresAt) { db.ref(`rooms/${code}`).remove(); return; }
+                    
                     if (room.status === 'waiting' && room.type !== 'single') {
                         wCount++; let pCount = room.players ? Object.keys(room.players).length : 0;
                         const li = document.createElement('li');
@@ -522,13 +524,13 @@
             }).then(() => joinRoomLogic(false));
         });
 
-        // ATTENZIONE: LOGICA DI USCITA CORRETTA PER EVITARE "STANZE FANTASMA"
+        // FUNZIONE USCITA PULITA
         function exitRoomCleanly(roomWasDeletedByHost = false) {
             if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
             if (roomCode) {
                 const rc = roomCode; roomCode = ""; 
                 db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
-                // Eliminiamo il giocatore solo se la stanza esiste ancora
+                // Eliminiamo il giocatore dalla stanza, ma la stanza rimane per gli altri finché non scade
                 if (!roomWasDeletedByHost) {
                     db.ref(`rooms/${rc}`).once('value', snap => {
                         if (snap.exists()) db.ref(`rooms/${rc}/players/${myId}`).remove();
@@ -556,7 +558,7 @@
                 
                 currentRoomListener = db.ref(`rooms/${roomCode}`);
                 currentRoomListener.on('value', roomSnap => {
-                    // SE LA STANZA VIENE ELIMINATA DAL DATABASE: usciamo puliti
+                    // SE LA STANZA VIENE ELIMINATA (dal timer o pulsante rosso Host)
                     if (!roomSnap.exists()) { exitRoomCleanly(true); return; }
                     
                     const roomData = roomSnap.val();
@@ -731,28 +733,16 @@
         document.getElementById('quitGameBtn').addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
         document.getElementById('startMultiplayerBtn').addEventListener('click', () => db.ref(`rooms/${roomCode}/status`).set('countdown'));
         
-        // ELIMINA STANZA (Pulsante Host)
+        // ELIMINA STANZA (Pulsante rosso per l'Host se vuole cancellarla volontariamente)
         document.getElementById('deleteRoomBtn').addEventListener('click', () => { 
             if (confirm("Vuoi eliminare definitivamente questa stanza?")) {
-                db.ref(`rooms/${roomCode}`).remove(); // Questo triggera !roomSnap.exists()
+                db.ref(`rooms/${roomCode}`).remove(); // Triggera !roomSnap.exists() per tutti
             }
         });
 
-        // ESCI DALLA LOBBY (Se l'Host esce, elimina la stanza in automatico)
+        // ESCI DALLA LOBBY (La stanza rimane attiva finché non scade il tempo)
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => {
-            if (roomCode) {
-                db.ref(`rooms/${roomCode}`).once('value', snap => {
-                    if (snap.exists() && snap.val().hostId === myId) {
-                        if(confirm("Sei l'Host. Se esci, la stanza verrà eliminata per tutti. Procedere?")) {
-                            db.ref(`rooms/${roomCode}`).remove();
-                        }
-                    } else {
-                        exitRoomCleanly();
-                    }
-                });
-            } else {
-                exitRoomCleanly();
-            }
+            exitRoomCleanly();
         });
 
         document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => { showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn'); });
