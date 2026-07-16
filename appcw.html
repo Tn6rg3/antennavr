@@ -108,7 +108,6 @@
         #tabGlobalCWFreakBtn.active-tab { background-color: #9c27b0; }
         #tabGlobalCWFreakBtn { background-color: #ce93d8; color: #fff;}
 
-        /* Grafica Tabellone Calcio */
         .bracket-container { display: flex; flex-direction: column; width: 100%; gap: 15px; margin-top: 10px; }
         .bracket-round { background: var(--sec-bg-color); padding: 10px; border-radius: 10px; border: 1px solid var(--hint-color); }
         .bracket-round h4 { margin: 0 0 10px 0; text-align: center; color: var(--link-color); }
@@ -193,7 +192,6 @@
         <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Account</button>
     </div>
 
-    <!-- SCHERMATA CAMPIONATO -->
     <div id="tournamentScreen" class="screen">
         <h2>🏆 Campionato a Squadre</h2>
         
@@ -368,7 +366,6 @@
                     showScreen('setupScreen'); 
                     listenToRooms();
 
-                    // Gestione Deep Linking Telegram (?start=team_id)
                     const startParam = tg.initDataUnsafe?.start_param;
                     if (startParam && startParam.startsWith('team_')) {
                         const targetTeamId = startParam.substring(5);
@@ -399,7 +396,6 @@
         let inputActive = false;
         let gameRunning = false;
         let activeTab = "room";
-        let roomListListener = null;
         
         let isSinglePlayer = false;
         let currentMode = "standard"; 
@@ -414,22 +410,15 @@
         
         document.getElementById('gameModeInput').addEventListener('change', (e) => {
             const isCallsign = e.target.value === 'callsign';
-            
-            const wpmInput = document.getElementById('startWpmInput');
-            const wordInput = document.getElementById('wordCountInput');
-            const toneInput = document.getElementById('toneInput');
-
-            wpmInput.disabled = isCallsign;
-            wordInput.disabled = isCallsign;
-            toneInput.disabled = isCallsign;
-
+            document.getElementById('startWpmInput').disabled = isCallsign;
+            document.getElementById('wordCountInput').disabled = isCallsign;
+            document.getElementById('toneInput').disabled = isCallsign;
             if (isCallsign) {
-                wpmInput.value = 25; 
-                wordInput.value = 25; 
+                document.getElementById('startWpmInput').value = 25; 
+                document.getElementById('wordCountInput').value = 25; 
             }
         });
 
-        // GENERATORE NOMINATIVI REALI FITTIZI (CW FREAK)
         function generateCallsign() {
             const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "AA", "VE", "G", "M", "2E", "F", "EA", "EB", "DL", "DJ", "DK", "SP", "SQ", "UA", "UB", "UR", "JA", "VK", "ZL", "PY", "LU", "ZS"];
             const p = prefixes[Math.floor(Math.random() * prefixes.length)];
@@ -459,49 +448,39 @@
 
         function listenToRooms() {
             if (roomListListener) db.ref('rooms').off('value', roomListListener);
-            
             roomListListener = db.ref('rooms').on('value', snapshot => {
                 const waitingList = document.getElementById('waitingRoomsList');
                 waitingList.innerHTML = '';
                 let wCount = 0;
-                
                 snapshot.forEach(child => {
                     const room = child.val();
                     const code = child.key;
-                    
                     if (room.expiresAt && Date.now() > room.expiresAt) {
                         db.ref(`rooms/${code}`).remove();
                         return;
                     }
-
                     if (room.status === 'waiting' && room.type !== 'single') {
                         wCount++;
                         let pCount = room.players ? Object.keys(room.players).length : 0;
                         const li = document.createElement('li');
                         const span = document.createElement('span');
                         const boldCode = document.createElement('b');
-                        
                         let modeTxt = room.mode === 'callsign' ? "🎙️ Nominativi (CW Freak)" : "🔤 Parole";
                         boldCode.textContent = `#${code} - ${modeTxt}`;
-                        
                         const smallDetails = document.createElement('small');
                         smallDetails.textContent = `${pCount} Giocatori | Inizia a ${room.wpm} WPM | ${room.wordCount} Test`;
-                        
                         span.appendChild(boldCode);
                         span.appendChild(document.createElement('br'));
                         span.appendChild(smallDetails);
-                        
                         const btn = document.createElement('button');
                         btn.className = 'join-btn-small';
                         btn.textContent = 'Entra';
                         btn.onclick = function() { joinSpecificRoom(code); };
-                        
                         li.appendChild(span);
                         li.appendChild(btn);
                         waitingList.appendChild(li);
                     }
                 });
-                
                 if (wCount === 0) {
                     const li = document.createElement('li');
                     li.style.justifyContent = 'center';
@@ -521,7 +500,6 @@
         document.getElementById('createRoomBtn').addEventListener('click', () => {
             currentMode = document.getElementById('gameModeInput').value;
             isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
-            
             if (currentMode === 'callsign') {
                 currentWpm = 25;
                 requestedWordCount = 25;
@@ -531,9 +509,7 @@
                 if (isNaN(requestedWordCount) || requestedWordCount < 3) requestedWordCount = 3;
                 if (requestedWordCount > 200) requestedWordCount = 200;
             }
-            
             currentTone = parseInt(document.getElementById('toneInput').value); 
-            
             let timerMinutes = parseInt(document.getElementById('roomTimerInput').value);
             if (isNaN(timerMinutes) || timerMinutes < 1) timerMinutes = 1; 
 
@@ -553,7 +529,7 @@
                 hostId: myId
             }).then(() => {
                 joinRoomLogic(false);
-            }).catch(e => alert("Errore connessione Database: " + e.message));
+            }).catch(e => tg.showAlert("Errore connessione Database: " + e.message));
         });
 
         window.toggleChat = function() {
@@ -561,9 +537,7 @@
             if (drawer.style.display === 'none') {
                 drawer.style.display = 'flex';
                 document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
-            } else {
-                drawer.style.display = 'none';
-            }
+            } else { drawer.style.display = 'none'; }
         }
         function hideChat() {
             document.getElementById('chatDrawer').style.display = 'none';
@@ -576,11 +550,9 @@
             if (!roomCode) return;
             const chatRef = db.ref(`rooms/${roomCode}/chat`);
             if (chatListener) chatRef.off();
-            
             chatListener = chatRef.limitToLast(40).on('value', snapshot => {
                 const container = document.getElementById('chatMessages');
                 container.innerHTML = ''; 
-                
                 snapshot.forEach(child => {
                     const msg = child.val();
                     const div = document.createElement('div');
@@ -602,9 +574,7 @@
             const txt = input.value.trim();
             if (!txt || !roomCode) return;
             db.ref(`rooms/${roomCode}/chat`).push({
-                name: myName,
-                text: txt,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
+                name: myName, text: txt, timestamp: firebase.database.ServerValue.TIMESTAMP
             });
             input.value = '';
         }
@@ -616,10 +586,8 @@
         
         function joinRoomLogic(isReconnect = false) {
             const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-            
             playerRef.once('value', snapshot => {
                 const playerData = snapshot.val();
-                
                 if (playerData && playerData.finished) {
                     showScreen('leaderboardScreen');
                     activeTab = "room";
@@ -627,41 +595,30 @@
                     listenToRoomLeaderboard();
                     return;
                 }
-
                 showScreen('lobbyScreen');
                 document.getElementById('permanentGameInput').blur(); 
-                
                 playerRef.onDisconnect().remove();
-
                 if (!playerData) {
                     playerRef.set({ name: myName, username: tgUsername, score: 0, wpm: 0, finished: false, joinedAt: firebase.database.ServerValue.TIMESTAMP });
                 }
-
                 showChatButton();
                 listenToChat();
-
                 if (currentRoomListener && !isReconnect) currentRoomListener.off();
                 currentRoomListener = db.ref(`rooms/${roomCode}`);
-                
                 currentRoomListener.on('value', roomSnap => {
                     if (!roomSnap.exists()) {
-                        exitRoomCleanly();
-                        return;
+                        exitRoomCleanly(); return;
                     }
-
                     const roomData = roomSnap.val();
                     currentMode = roomData.mode;
                     requestedWordCount = roomData.wordCount;
                     isSinglePlayer = roomData.type === 'single';
-                    
                     if (roomData.status === 'countdown' && !gameRunning) {
                         currentWpm = roomData.wpm; 
                         currentTone = roomData.tone; 
                         gameWords = roomData.words;
-                        startCountdownSequence();
-                        return;
+                        startCountdownSequence(); return;
                     }
-
                     if (roomData.status === 'waiting') {
                         renderPlayersList(roomData.players || {}, roomData.hostId);
                     }
@@ -672,35 +629,28 @@
         function renderPlayersList(playersData, hostId) {
             const playersList = document.getElementById('playersList');
             playersList.innerHTML = '';
-            
             Object.entries(playersData).forEach(([id, data]) => {
                 const li = document.createElement('li');
                 const isHost = (id === hostId);
                 const nameHtml = data.username ? 
                     `<span onclick="openTelegramProfile('${data.username}')" style="color:var(--link-color); cursor:pointer; text-decoration:underline;">🟢 ${data.name}</span>` : 
                     `<span>🟢 ${data.name}</span>`;
-                
                 li.innerHTML = `${nameHtml} ${isHost ? '<span class="host-badge">(HOST)</span>' : ''}`;
                 playersList.appendChild(li);
             });
-
             const amIHost = (myId === hostId);
             const startBtn = document.getElementById('startMultiplayerBtn');
             const deleteBtn = document.getElementById('deleteRoomBtn');
             const waitText = document.getElementById('waitingHostText');
             const statusInfo = document.getElementById('statusInfoText');
-
             if (amIHost) {
                 statusInfo.textContent = "Sei l'Host di questa sfida.";
-                startBtn.style.display = 'block';
-                deleteBtn.style.display = 'block';
-                waitText.style.display = 'none';
-                startBtn.disabled = false; 
+                startBtn.style.display = 'block'; deleteBtn.style.display = 'block';
+                waitText.style.display = 'none'; startBtn.disabled = false; 
                 if (Object.keys(playersData).length < 2) statusInfo.textContent += " (In attesa di sfidanti...)";
             } else {
                 statusInfo.textContent = "Sei un partecipante.";
-                startBtn.style.display = 'none';
-                deleteBtn.style.display = 'none';
+                startBtn.style.display = 'none'; deleteBtn.style.display = 'none';
                 waitText.style.display = 'block';
             }
         }
@@ -723,25 +673,15 @@
             if (e.key === 'Enter' && inputActive && gameRunning) {
                 const userWord = permInput.value.trim().toUpperCase();
                 if (userWord === "") return;
-                
-                inputActive = false; 
-                permInput.value = ""; 
-                
+                inputActive = false; permInput.value = ""; 
                 const currentWord = gameWords[wordIndex].toUpperCase();
-                let points = 0;
-                let scoreColor = "";
-
+                let points = 0; let scoreColor = "";
                 if (currentMode === 'callsign') {
                     if (userWord === currentWord) {
-                        currentStreak++;
-                        points = (currentWpm * 2) + (currentStreak * 5); 
-                        currentWpm += 2;
-                        scoreColor = "#4caf50";
+                        currentStreak++; points = (currentWpm * 2) + (currentStreak * 5); 
+                        currentWpm += 2; scoreColor = "#4caf50";
                     } else {
-                        currentStreak = 0;
-                        points = 0;
-                        currentWpm -= 1;
-                        scoreColor = "#d32f2f";
+                        currentStreak = 0; points = 0; currentWpm -= 1; scoreColor = "#d32f2f";
                     }
                 } else {
                     const errors = getLevenshteinDistance(currentWord, userWord);
@@ -749,197 +689,114 @@
                     else if (errors === 1) { points = 2; currentWpm -= 1; scoreColor = "#ff9800"; } 
                     else { points = 0; currentWpm -= 2; scoreColor = "#d32f2f"; }
                 }
-
-                currentWpm = Math.max(5, currentWpm); 
-                totalScore += points;
-
+                currentWpm = Math.max(5, currentWpm); totalScore += points;
                 const tr = document.createElement('tr');
                 const tdScritto = document.createElement('td'); tdScritto.textContent = userWord; tr.appendChild(tdScritto);
                 const tdReale = document.createElement('td'); const boldReale = document.createElement('b'); boldReale.textContent = currentWord; tdReale.appendChild(boldReale); tr.appendChild(tdReale);
                 const tdPunti = document.createElement('td'); tdPunti.style.color = scoreColor; tdPunti.textContent = (points > 0 ? "+" : "") + points; tr.appendChild(tdPunti);
-
                 document.getElementById('tableBody').appendChild(tr);
                 const tableWrapper = document.getElementById('tableWrapper');
                 tableWrapper.scrollTop = tableWrapper.scrollHeight;
-
                 document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
                 document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
-
-                if (roomCode) {
-                    db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm });
-                }
-                
-                wordIndex++; 
-                setTimeout(playNextWord, 600); 
+                if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm });
+                wordIndex++; setTimeout(playNextWord, 600); 
             }
         });
-
-        // ================= GESTIONE CLASSIFICHE DINAMICHE =================
 
         function updateDynamicWordFilter(callback) {
             db.ref('leaderboard/standard').once('value', snap => {
                 let counts = new Set();
                 snap.forEach(typeSnap => {
-                    let key = typeSnap.key; // es: multi_10, single_25
+                    let key = typeSnap.key;
                     let parts = key.split('_');
-                    if (parts.length === 2) {
-                        counts.add(parseInt(parts[1]));
-                    }
+                    if (parts.length === 2) counts.add(parseInt(parts[1]));
                 });
-                
-                let select = document.getElementById('lbWordFilter');
-                select.innerHTML = '';
+                let select = document.getElementById('lbWordFilter'); select.innerHTML = '';
                 let sorted = Array.from(counts).sort((a, b) => a - b);
                 sorted.forEach(c => {
-                    let opt = document.createElement('option');
-                    opt.value = c;
-                    opt.text = `${c} Parole`;
-                    select.add(opt);
+                    let opt = document.createElement('option'); opt.value = c; opt.text = `${c} Parole`; select.add(opt);
                 });
-                
-                if (sorted.length === 0) {
-                    select.innerHTML = '<option value="10">10 Parole</option>';
-                }
+                if (sorted.length === 0) select.innerHTML = '<option value="10">10 Parole</option>';
                 if (callback) callback();
             });
         }
 
         function finishGame() {
-            gameRunning = false;
-            inputActive = false;
+            gameRunning = false; inputActive = false;
             document.getElementById('permanentGameInput').blur();
             showScreen('leaderboardScreen');
-            
             if (roomCode) {
                 const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-                myPlayerRef.update({ finished: true });
-                myPlayerRef.onDisconnect().cancel(); 
+                myPlayerRef.update({ finished: true }); myPlayerRef.onDisconnect().cancel(); 
             }
-            
             if (totalScore > 0) {
-                let dbPath = "";
-                if (currentMode === 'callsign') {
-                    dbPath = `leaderboard/callsign/global/${myId}`;
-                } else {
-                    dbPath = `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
-                }
-
+                let dbPath = currentMode === 'callsign' ? `leaderboard/callsign/global/${myId}` : `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                 const globalUserRef = db.ref(dbPath);
                 globalUserRef.once('value', snapshot => {
                     let oldData = snapshot.val();
                     if (!oldData || totalScore > oldData.score) {
-                        globalUserRef.set({ 
-                            name: myName, 
-                            username: tgUsername, 
-                            score: totalScore, 
-                            wpm: currentWpm, 
-                            wordCount: requestedWordCount,
-                            date: new Date().toLocaleDateString('it-IT') 
-                        });
+                        globalUserRef.set({ name: myName, username: tgUsername, score: totalScore, wpm: currentWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') });
                     }
                 });
             }
-
             if (isSinglePlayer) {
-                if (currentMode === 'callsign') {
-                    activeTab = "cwfreak";
-                    showLeaderboardTab('tabGlobalCWFreakBtn');
-                } else {
-                    activeTab = "std_single";
-                    updateDynamicWordFilter(() => {
-                        document.getElementById('lbWordFilter').value = requestedWordCount;
-                        showLeaderboardTab('tabGlobalStandardSingleBtn');
-                    });
-                }
+                if (currentMode === 'callsign') { activeTab = "cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); } 
+                else { activeTab = "std_single"; updateDynamicWordFilter(() => { document.getElementById('lbWordFilter').value = requestedWordCount; showLeaderboardTab('tabGlobalStandardSingleBtn'); }); }
             } else {
-                activeTab = "room";
-                showLeaderboardTab('tabRoomBtn');
-                listenToRoomLeaderboard();
+                activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard();
             }
         }
 
         function showLeaderboardTab(tabId) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
             document.getElementById(tabId).classList.add('active-tab');
-            
             const filterArea = document.getElementById('lbFilterArea');
             const roomWinnerBanner = document.getElementById('roomWinnerBanner');
             const waitingText = document.getElementById('waitingOthersText');
             const container = document.getElementById('leaderboardContainer');
-            
             if (tabId === 'tabRoomBtn') {
-                filterArea.style.display = 'none';
-                roomWinnerBanner.style.display = 'block';
-                container.innerHTML = ''; 
-                if (roomCode) {
-                    db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
-                } else {
-                    container.innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>";
-                    waitingText.style.display = 'none';
-                }
+                filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'block'; container.innerHTML = ''; 
+                if (roomCode) db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
+                else { container.innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>"; waitingText.style.display = 'none'; }
             } else if (tabId === 'tabGlobalCWFreakBtn') {
-                filterArea.style.display = 'none';
-                roomWinnerBanner.style.display = 'none';
-                waitingText.style.display = 'none';
+                filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
                 fetchAndRenderGlobalLeaderboard(`leaderboard/callsign/global`, `🏆 CW Freak (Assoluta)`);
             } else if (tabId === 'tabMatchHistoryBtn') {
-                filterArea.style.display = 'none';
-                roomWinnerBanner.style.display = 'none';
-                waitingText.style.display = 'none';
+                filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
                 fetchAndRenderMatchHistory();
             } else {
-                filterArea.style.display = 'block';
-                roomWinnerBanner.style.display = 'none';
-                waitingText.style.display = 'none';
-                
+                filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
                 let wc = document.getElementById('lbWordFilter').value;
                 let type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
                 let typeText = type === 'multi' ? 'Multiplayer' : 'Singleplayer';
-                
                 fetchAndRenderGlobalLeaderboard(`leaderboard/standard/${type}_${wc}`, `🏆 Parole ${typeText} (${wc} par.)`);
             }
         }
 
         document.getElementById('tabRoomBtn').addEventListener('click', () => { activeTab="room"; showLeaderboardTab('tabRoomBtn'); });
         document.getElementById('tabGlobalCWFreakBtn').addEventListener('click', () => { activeTab="cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); });
-        document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { 
-            activeTab="std_multi"; 
-            updateDynamicWordFilter(() => showLeaderboardTab('tabGlobalStandardMultiBtn')); 
-        });
-        document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { 
-            activeTab="std_single"; 
-            updateDynamicWordFilter(() => showLeaderboardTab('tabGlobalStandardSingleBtn')); 
-        });
+        document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; updateDynamicWordFilter(() => showLeaderboardTab('tabGlobalStandardMultiBtn')); });
+        document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { activeTab="std_single"; updateDynamicWordFilter(() => showLeaderboardTab('tabGlobalStandardSingleBtn')); });
         document.getElementById('tabMatchHistoryBtn').addEventListener('click', () => { activeTab="history"; showLeaderboardTab('tabMatchHistoryBtn'); });
-        
         document.getElementById('lbWordFilter').addEventListener('change', () => {
-            if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn');
-            else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn');
+            if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn'); else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn');
         });
 
         function listenToRoomLeaderboard() {
             if (roomCode) {
                 db.ref(`rooms/${roomCode}`).on('value', snapshot => {
                     if (!snapshot.exists()) return;
-                    const roomData = snapshot.val();
-                    const players = roomData.players || {};
-                    
+                    const roomData = snapshot.val(); const players = roomData.players || {};
                     if (activeTab === "room") renderRoomLeaderboard(players);
-
-                    let allFinished = true;
-                    Object.values(players).forEach(p => { if (!p.finished) allFinished = false; });
-                    
+                    let allFinished = true; Object.values(players).forEach(p => { if (!p.finished) allFinished = false; });
                     if (allFinished && roomData.hostId === myId && roomData.status !== 'finished') {
                         db.ref(`rooms/${roomCode}/status`).set('finished');
-                        
-                        // Scrive nello storico delle sfide multiplayer conclusesi
                         db.ref(`match_history`).push({
                             date: new Date().toLocaleDateString('it-IT') + " " + new Date().toLocaleTimeString('it-IT'),
-                            mode: roomData.mode,
-                            wordCount: roomData.wordCount,
+                            mode: roomData.mode, wordCount: roomData.wordCount,
                             players: Object.values(players).map(p => ({ name: p.name, score: p.score, wpm: p.wpm }))
-                        }).catch(e => console.error("Non salvato nello storico causa regole db:", e));
-
+                        }).catch(e => console.error("Non salvato nello storico:", e));
                         setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 30000); 
                     }
                 });
@@ -947,101 +804,52 @@
         }
 
         function renderRoomLeaderboard(players) {
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '';
-            document.getElementById('roomWinnerBanner').innerHTML = '';
-            const waitingText = document.getElementById('waitingOthersText');
-
-            let allFinished = true;
-            const playersArray = Object.values(players);
+            const container = document.getElementById('leaderboardContainer'); container.innerHTML = '';
+            document.getElementById('roomWinnerBanner').innerHTML = ''; const waitingText = document.getElementById('waitingOthersText');
+            let allFinished = true; const playersArray = Object.values(players);
             playersArray.forEach(p => { if (!p.finished) allFinished = false; });
-
             waitingText.style.display = allFinished ? 'none' : 'block';
-
             const sortedPlayers = playersArray.sort((a, b) => b.score - a.score);
-            
             sortedPlayers.forEach((player, index) => {
-                const row = document.createElement('div');
-                row.className = 'leaderboard-row';
+                const row = document.createElement('div'); row.className = 'leaderboard-row';
                 let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                
-                const nameSpan = document.createElement('span');
-                nameSpan.innerHTML = `${medal} ${player.name} <br><small style="color:var(--hint-color)">(${player.wpm || 0} WPM)</small>`;
-                
-                const scoreSpan = document.createElement('span');
-                scoreSpan.innerHTML = `<b>${player.score} pt</b>`;
-                
-                row.appendChild(nameSpan);
-                row.appendChild(scoreSpan);
-                container.appendChild(row);
+                const nameSpan = document.createElement('span'); nameSpan.innerHTML = `${medal} ${player.name} <br><small style="color:var(--hint-color)">(${player.wpm || 0} WPM)</small>`;
+                const scoreSpan = document.createElement('span'); scoreSpan.innerHTML = `<b>${player.score} pt</b>`;
+                row.appendChild(nameSpan); row.appendChild(scoreSpan); container.appendChild(row);
             });
         }
 
         function fetchAndRenderGlobalLeaderboard(path, title) {
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-
+            const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
             db.ref(path).orderByChild('score').limitToLast(50).once('value', snapshot => {
                 container.innerHTML = `<h3 style="text-align:center;">${title}</h3>`;
-                let players = [];
-                snapshot.forEach(child => { players.push(child.val()); });
-                players.reverse(); 
-
-                if (players.length === 0) { 
-                    container.innerHTML += '<p style="text-align:center; color:var(--hint-color);">Nessun record in questa categoria.</p>'; 
-                    return; 
-                }
-
+                let players = []; snapshot.forEach(child => { players.push(child.val()); }); players.reverse(); 
+                if (players.length === 0) { container.innerHTML += '<p style="text-align:center; color:var(--hint-color);">Nessun record in questa categoria.</p>'; return; }
                 players.forEach((player, index) => {
-                    const row = document.createElement('div');
-                    row.className = 'leaderboard-row';
+                    const row = document.createElement('div'); row.className = 'leaderboard-row';
                     let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                    
-                    const nameSpan = document.createElement('span');
-                    nameSpan.innerHTML = `${medalText} ${player.name} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM)</small>`;
-
-                    const scoreSpan = document.createElement('span');
-                    scoreSpan.innerHTML = `<b>${player.score} pt</b>`;
-
-                    row.appendChild(nameSpan);
-                    row.appendChild(scoreSpan);
-                    container.appendChild(row);
+                    const nameSpan = document.createElement('span'); nameSpan.innerHTML = `${medalText} ${player.name} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM)</small>`;
+                    const scoreSpan = document.createElement('span'); scoreSpan.innerHTML = `<b>${player.score} pt</b>`;
+                    row.appendChild(nameSpan); row.appendChild(scoreSpan); container.appendChild(row);
                 });
             });
         }
 
         function fetchAndRenderMatchHistory() {
-            const container = document.getElementById('leaderboardContainer');
-            container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-
+            const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
             db.ref('match_history').limitToLast(30).once('value', snap => {
-                container.innerHTML = '<h3 style="text-align:center;">Storico Match Multi</h3>';
-                let matches = [];
-                snap.forEach(c => { matches.push(c.val()); });
-                matches.reverse();
-
-                if (matches.length === 0) {
-                    container.innerHTML += "<p style='text-align:center; color:var(--hint-color);'>Nessun match recente registrato.</p>";
-                    return;
-                }
-
+                container.innerHTML = '<h3 style="text-align:center;">Storico Match Multi</h3>'; let matches = [];
+                snap.forEach(c => { matches.push(c.val()); }); matches.reverse();
+                if (matches.length === 0) { container.innerHTML += "<p style='text-align:center; color:var(--hint-color);'>Nessun match recente registrato.</p>"; return; }
                 matches.forEach(m => {
-                    let div = document.createElement('div');
-                    div.className = 'match-card';
-                    let modeStr = m.mode === 'callsign' ? '🎙️ CW Freak (Nominativi)' : `🔤 ${m.wordCount} Parole`;
+                    let div = document.createElement('div'); div.className = 'match-card';
+                    let modeStr = m.mode === 'callsign' ? '🎙️ CW Freak' : `🔤 ${m.wordCount} Parole`;
                     let html = `<h4>${modeStr} - <small style="color:var(--text-color);">${m.date}</small></h4>`;
-                    
-                    m.players.sort((a,b) => b.score - a.score).forEach((p, idx) => {
-                        let trophy = idx === 0 ? '🏆' : '⚔️';
-                        html += `<p>${trophy} <b>${p.name}</b>: ${p.score} punti (${p.wpm} WPM)</p>`;
-                    });
-                    div.innerHTML = html;
-                    container.appendChild(div);
+                    m.players.sort((a,b) => b.score - a.score).forEach((p, idx) => { let trophy = idx === 0 ? '🏆' : '⚔️'; html += `<p>${trophy} <b>${p.name}</b>: ${p.score} punti (${p.wpm} WPM)</p>`; });
+                    div.innerHTML = html; container.appendChild(div);
                 });
             });
         }
-
-        // ================= AUDIO E GIOCO =================
         
         function playBeep(freq, duration) {
             if (!audioCtx) return;
@@ -1057,9 +865,7 @@
 
         function playMorseAudio(text, wpm) {
             if (!audioCtx || !gameRunning) return;
-            const unitDuration = 1.2 / wpm; 
-            let time = audioCtx.currentTime + 0.05;
-
+            const unitDuration = 1.2 / wpm; let time = audioCtx.currentTime + 0.05;
             for (let char of text) {
                 if (!gameRunning) break;
                 if (morseDict[char]) {
@@ -1081,95 +887,70 @@
             if (!gameRunning) return;
             if (wordIndex >= gameWords.length) { finishGame(); return; }
             const currentWord = gameWords[wordIndex].toUpperCase();
-            
-            if (currentMode === 'callsign') {
-                currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400; 
-            }
-
-            playMorseAudio(currentWord, currentWpm);
-            inputActive = true;
-            document.getElementById('permanentGameInput').focus();
+            if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400; 
+            playMorseAudio(currentWord, currentWpm); inputActive = true; document.getElementById('permanentGameInput').focus();
         }
 
         function startCountdownSequence() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (currentRoomListener) currentRoomListener.off(); 
-            
-            document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`;
-            document.getElementById('scoreDisplay').textContent = `Punti: 0`;
-            totalScore = 0; currentStreak = 0; wordIndex = 0;
-            document.getElementById('tableBody').innerHTML = ""; 
-            
-            showScreen('countdownScreen');
-            gameRunning = true;
-            
-            let count = 3;
-            const countdownEl = document.getElementById('countdownNumber');
-            countdownEl.textContent = count;
-            
+            document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}`; document.getElementById('scoreDisplay').textContent = `Punti: 0`;
+            totalScore = 0; currentStreak = 0; wordIndex = 0; document.getElementById('tableBody').innerHTML = ""; 
+            showScreen('countdownScreen'); gameRunning = true;
+            let count = 3; const countdownEl = document.getElementById('countdownNumber'); countdownEl.textContent = count;
             const interval = setInterval(() => {
                 if (count > 1) { count--; countdownEl.textContent = count; playBeep(600, 0.1); } 
                 else {
-                    clearInterval(interval);
-                    countdownEl.textContent = "VIA!"; playBeep(800, 0.3); 
-                    setTimeout(() => {
-                        if (!gameRunning) return;
-                        showScreen('gameArea');
-                        setTimeout(() => { document.getElementById('permanentGameInput').focus(); }, 200);
-                        setTimeout(() => { if (gameRunning) playNextWord(); }, 800); 
-                    }, 500); 
+                    clearInterval(interval); countdownEl.textContent = "VIA!"; playBeep(800, 0.3); 
+                    setTimeout(() => { if (!gameRunning) return; showScreen('gameArea'); setTimeout(() => { document.getElementById('permanentGameInput').focus(); }, 200); setTimeout(() => { if (gameRunning) playNextWord(); }, 800); }, 500); 
                 }
             }, 1000);
         }
 
         document.getElementById('quitGameBtn').addEventListener('click', () => {
-            if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); }
+            tg.showConfirm("Vuoi abbandonare la partita?", function(agreed) {
+                if(agreed) { gameRunning = false; exitRoomCleanly(); }
+            });
         });
         
         function exitRoomCleanly() {
             if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
             if (roomCode) {
-                const rc = roomCode; 
-                roomCode = ""; 
-                db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
-                db.ref(`rooms/${rc}/players/${myId}`).remove();
+                const rc = roomCode; roomCode = ""; 
+                db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel(); db.ref(`rooms/${rc}/players/${myId}`).remove();
             }
-            hideChat();
-            showScreen('setupScreen');
+            hideChat(); showScreen('setupScreen');
         }
         
         window.goBackToMenu = function() { showScreen('setupScreen'); };
         
-        document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => {
-            showScreen('leaderboardScreen');
-            showLeaderboardTab('tabMatchHistoryBtn'); 
-        });
-        
+        document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => { showScreen('leaderboardScreen'); showLeaderboardTab('tabMatchHistoryBtn'); });
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
 
-        document.getElementById('deleteDataBtn').addEventListener('click', async () => {
-            if (confirm("⚠️ Eliminerai per sempre i tuoi punteggi globali. Confermi?")) {
-                try {
-                    await db.ref(`leaderboard`).once('value', snapshot => {
-                       snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); });
-                    });
-                    alert("Dati eliminati.");
-                    window.Telegram.WebApp.close(); 
-                } catch (e) { alert("Errore: " + e.message); }
-            }
+        document.getElementById('deleteDataBtn').addEventListener('click', () => {
+            tg.showConfirm("⚠️ Eliminerai per sempre i tuoi punteggi globali. Confermi?", async function(agreed) {
+                if(agreed) {
+                    try {
+                        await db.ref(`leaderboard`).once('value', snapshot => { snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); }); });
+                        tg.showAlert("Dati eliminati."); window.Telegram.WebApp.close(); 
+                    } catch (e) { tg.showAlert("Errore: " + e.message); }
+                }
+            });
         });
         
         document.getElementById('startMultiplayerBtn').addEventListener('click', () => { db.ref(`rooms/${roomCode}/status`).set('countdown'); });
         
         document.getElementById('deleteRoomBtn').addEventListener('click', () => {
-            if (confirm("Vuoi eliminare definitivamente questa stanza? Tutti i partecipanti saranno espulsi.")) db.ref(`rooms/${roomCode}`).remove();
+            tg.showConfirm("Vuoi eliminare definitivamente questa stanza? Tutti i partecipanti saranno espulsi.", function(agreed) {
+                if(agreed) db.ref(`rooms/${roomCode}`).remove();
+            });
         });
         
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
 
 
-        // ================= GESTIONE CAMPIONATO A SQUADRE =================
+        // ================= CAMPIONATO A SQUADRE =================
 
         document.getElementById('tournamentMenuBtn').addEventListener('click', () => {
             showScreen('tournamentScreen');
@@ -1182,9 +963,7 @@
                 let foundTeam = null;
                 snap.forEach(child => {
                     let team = child.val();
-                    if (team.members && team.members[myId]) {
-                        foundTeam = { id: child.key, ...team };
-                    }
+                    if (team.members && team.members[myId]) foundTeam = { id: child.key, ...team };
                 });
 
                 if (foundTeam) {
@@ -1215,68 +994,47 @@
                         readyBtn.onclick = () => {
                             db.ref(`teams/${myTeamId}/status`).set('ready')
                               .then(() => tg.showAlert("La tua squadra è segnata come PRONTA!"))
-                              .catch(e => alert("Errore connessione db: " + e.message));
+                              .catch(e => tg.showAlert("Errore: " + e.message));
                         };
-                    } else {
-                        readyBtn.style.display = 'none';
-                    }
+                    } else { readyBtn.style.display = 'none'; }
                 } else {
                     myTeamId = null;
                     document.getElementById('createTeamPanel').style.display = 'block';
                     document.getElementById('myTeamPanel').style.display = 'none';
                 }
-            });
+            }).catch(e => tg.showAlert("Impossibile leggere il Database: " + e.message + " - Verifica le regole Firebase."));
         }
 
         document.getElementById('createTeamBtn').addEventListener('click', () => {
             const teamName = document.getElementById('teamNameInput').value.trim();
-            if (!teamName) { tg.showAlert("Inserisci un nome valido!"); return; }
+            if (!teamName) { tg.showAlert("Inserisci un nome valido per la squadra!"); return; }
 
             const btn = document.getElementById('createTeamBtn');
-            btn.disabled = true;
-            btn.textContent = "Creazione in corso...";
+            btn.disabled = true; btn.textContent = "Creazione in corso...";
 
             const newTeamId = 'team_' + Math.floor(1000 + Math.random() * 9000);
             db.ref(`teams/${newTeamId}`).set({
-                name: teamName,
-                captainId: myId,
-                status: 'forming',
-                members: {
-                    [myId]: { id: myId, name: myName, username: tgUsername }
-                }
+                name: teamName, captainId: myId, status: 'forming',
+                members: { [myId]: { id: myId, name: myName, username: tgUsername } }
             }).then(() => {
-                btn.disabled = false;
-                btn.textContent = "Fonda e diventa Capitano";
+                btn.disabled = false; btn.textContent = "Fonda e diventa Capitano";
                 document.getElementById('teamNameInput').value = '';
                 checkMyTeam();
             }).catch((err) => {
-                btn.disabled = false;
-                btn.textContent = "Fonda e diventa Capitano";
-                alert("Errore DB (Firebase): " + err.message + "\n\n⚠️ Assicurati che le regole del tuo Database Firebase (.read e .write) siano impostate su 'true' come spiegato sopra.");
+                btn.disabled = false; btn.textContent = "Fonda e diventa Capitano";
+                tg.showAlert("Errore Firebase: " + err.message + "\n\nSe leggi PERMISSION_DENIED, non hai modificato correttamente le regole del Database.");
             });
         });
 
         function joinTeam(teamId) {
             db.ref(`teams/${teamId}`).once('value', snap => {
-                if (!snap.exists()) {
-                    tg.showAlert("La squadra d'invito non esiste più.");
-                    checkMyTeam();
-                    return;
-                }
-                
-                db.ref(`teams/${teamId}/members/${myId}`).set({
-                    id: myId,
-                    name: myName,
-                    username: tgUsername
-                }).then(() => {
-                    tg.showAlert("Ti sei unito con successo alla squadra!");
-                    checkMyTeam();
-                    showScreen('tournamentScreen');
-                }).catch(e => alert("Errore unione squadra: " + e.message));
+                if (!snap.exists()) { tg.showAlert("La squadra d'invito non esiste più."); checkMyTeam(); return; }
+                db.ref(`teams/${teamId}/members/${myId}`).set({ id: myId, name: myName, username: tgUsername }).then(() => {
+                    tg.showAlert("Ti sei unito con successo alla squadra!"); checkMyTeam(); showScreen('tournamentScreen');
+                }).catch(e => tg.showAlert("Errore unione squadra: " + e.message));
             });
         }
 
-        // Sistema di Tabellone Torneo a 4 Squadre
         function listenToTournament() {
             const champPanel = document.getElementById('championshipPanel');
             const generateBtn = document.getElementById('generateBracketBtn');
@@ -1285,47 +1043,33 @@
             db.ref('teams').on('value', snap => {
                 let teamsList = [];
                 snap.forEach(child => {
-                    let team = child.val();
-                    team.id = child.key;
+                    let team = child.val(); team.id = child.key;
                     if (team.status === 'ready') teamsList.push(team);
                 });
 
                 db.ref('tournament').on('value', tSnap => {
                     const tData = tSnap.val();
                     if (tData && tData.status === 'active') {
-                        champPanel.style.display = 'block';
-                        generateBtn.style.display = 'none';
-                        statusText.textContent = "🏆 Torneo in corso!";
-                        renderBracket(tData);
+                        champPanel.style.display = 'block'; generateBtn.style.display = 'none';
+                        statusText.textContent = "🏆 Torneo in corso!"; renderBracket(tData);
                     } else {
                         if (teamsList.length >= 4) {
-                            champPanel.style.display = 'block';
-                            statusText.textContent = `Ci sono ${teamsList.length} squadre pronte!`;
-                            
-                            // Solo i capitani possono generare il tabellone
+                            champPanel.style.display = 'block'; statusText.textContent = `Ci sono ${teamsList.length} squadre pronte!`;
                             db.ref(`teams/${myTeamId}/captainId`).once('value', capSnap => {
                                 generateBtn.style.display = (capSnap.val() === myId) ? 'block' : 'none';
                             });
-
-                            generateBtn.onclick = () => {
-                                generateChampionshipBracket(teamsList.slice(0, 4));
-                            };
-                        } else {
-                            champPanel.style.display = 'none';
-                        }
+                            generateBtn.onclick = () => generateChampionshipBracket(teamsList.slice(0, 4));
+                        } else { champPanel.style.display = 'none'; }
                     }
                 });
             });
         }
 
         function generateChampionshipBracket(fourTeams) {
-            // Mischia le squadre
             let shuffled = fourTeams.sort(() => 0.5 - Math.random());
-            let fixedCallsigns = getGameWords(25, 'callsign'); // Rigorosamente gli stessi nominativi per equità
-
+            let fixedCallsigns = getGameWords(25, 'callsign'); 
             db.ref('tournament').set({
-                status: 'active',
-                words: fixedCallsigns,
+                status: 'active', words: fixedCallsigns,
                 rounds: {
                     semifinals: {
                         match1: { team1: shuffled[0], team2: shuffled[1], score1: 0, score2: 0, winner: null },
@@ -1336,148 +1080,79 @@
                         thirdPlace: { team1: null, team2: null, score1: 0, score2: 0, winner: null }
                     }
                 }
-            }).catch(e => alert("Errore creazione Torneo: " + e.message));
+            }).catch(e => tg.showAlert("Errore creazione Torneo: " + e.message));
         }
 
         function renderBracket(tData) {
-            const container = document.getElementById('bracketContainer');
-            container.innerHTML = '';
-
-            let semi = tData.rounds.semifinals;
-            let finals = tData.rounds.finals;
-
+            const container = document.getElementById('bracketContainer'); container.innerHTML = '';
+            let semi = tData.rounds.semifinals; let finals = tData.rounds.finals;
             let html = `
                 <div class="bracket-round">
                     <h4>Semifinali ⚔️</h4>
                     <div class="bracket-match" id="semiMatch1">
-                        <div class="bracket-team-row ${semi.match1.winner === 't1'?'winner':''}">
-                            <span>${semi.match1.team1.name}</span>
-                            <span>${semi.match1.score1} pt</span>
-                        </div>
-                        <div class="bracket-team-row ${semi.match1.winner === 't2'?'winner':''}">
-                            <span>${semi.match1.team2.name}</span>
-                            <span>${semi.match1.score2} pt</span>
-                        </div>
+                        <div class="bracket-team-row ${semi.match1.winner === 't1'?'winner':''}"><span>${semi.match1.team1.name}</span><span>${semi.match1.score1} pt</span></div>
+                        <div class="bracket-team-row ${semi.match1.winner === 't2'?'winner':''}"><span>${semi.match1.team2.name}</span><span>${semi.match1.score2} pt</span></div>
                         <button id="playSemi1Btn" style="font-size:0.8em; padding:8px; display:none;">Gioca Sfida Sincrona</button>
                     </div>
-                    
                     <div class="bracket-match" id="semiMatch2">
-                        <div class="bracket-team-row ${semi.match2.winner === 't1'?'winner':''}">
-                            <span>${semi.match2.team2_1.name}</span>
-                            <span>${semi.match2.score1} pt</span>
-                        </div>
-                        <div class="bracket-team-row ${semi.match2.winner === 't2'?'winner':''}">
-                            <span>${semi.match2.team2_2.name}</span>
-                            <span>${semi.match2.score2} pt</span>
-                        </div>
+                        <div class="bracket-team-row ${semi.match2.winner === 't1'?'winner':''}"><span>${semi.match2.team2_1.name}</span><span>${semi.match2.score1} pt</span></div>
+                        <div class="bracket-team-row ${semi.match2.winner === 't2'?'winner':''}"><span>${semi.match2.team2_2.name}</span><span>${semi.match2.score2} pt</span></div>
                         <button id="playSemi2Btn" style="font-size:0.8em; padding:8px; display:none;">Gioca Sfida Sincrona</button>
                     </div>
                 </div>
-
                 <div class="bracket-round" style="border-color:#ff9800;">
                     <h4>Finali 🏆</h4>
                     <div class="bracket-match">
                         <div style="font-size:0.8em; color:var(--hint-color); text-align:center;">Finale 1° e 2° Posto</div>
-                        <div class="bracket-team-row ${finals.firstPlace.winner === 't1'?'winner':''}">
-                            <span>${finals.firstPlace.team1 ? finals.firstPlace.team1.name : 'Da definire'}</span>
-                            <span>${finals.firstPlace.score1} pt</span>
-                        </div>
-                        <div class="bracket-team-row ${finals.firstPlace.winner === 't2'?'winner':''}">
-                            <span>${finals.firstPlace.team2 ? finals.firstPlace.team2.name : 'Da definire'}</span>
-                            <span>${finals.firstPlace.score2} pt</span>
-                        </div>
+                        <div class="bracket-team-row ${finals.firstPlace.winner === 't1'?'winner':''}"><span>${finals.firstPlace.team1 ? finals.firstPlace.team1.name : 'Da definire'}</span><span>${finals.firstPlace.score1} pt</span></div>
+                        <div class="bracket-team-row ${finals.firstPlace.winner === 't2'?'winner':''}"><span>${finals.firstPlace.team2 ? finals.firstPlace.team2.name : 'Da definire'}</span><span>${finals.firstPlace.score2} pt</span></div>
                         <button id="playFinal1Btn" style="font-size:0.8em; padding:8px; display:none;">Gioca Finale</button>
                     </div>
-
                     <div class="bracket-match">
                         <div style="font-size:0.8em; color:var(--hint-color); text-align:center;">Finale 3° e 4° Posto</div>
-                        <div class="bracket-team-row ${finals.thirdPlace.winner === 't1'?'winner':''}">
-                            <span>${finals.thirdPlace.team1 ? finals.thirdPlace.team1.name : 'Da definire'}</span>
-                            <span>${finals.thirdPlace.score1} pt</span>
-                        </div>
-                        <div class="bracket-team-row ${finals.thirdPlace.winner === 't2'?'winner':''}">
-                            <span>${finals.thirdPlace.team2 ? finals.thirdPlace.team2.name : 'Da definire'}</span>
-                            <span>${finals.thirdPlace.score2} pt</span>
-                        </div>
+                        <div class="bracket-team-row ${finals.thirdPlace.winner === 't1'?'winner':''}"><span>${finals.thirdPlace.team1 ? finals.thirdPlace.team1.name : 'Da definire'}</span><span>${finals.thirdPlace.score1} pt</span></div>
+                        <div class="bracket-team-row ${finals.thirdPlace.winner === 't2'?'winner':''}"><span>${finals.thirdPlace.team2 ? finals.thirdPlace.team2.name : 'Da definire'}</span><span>${finals.thirdPlace.score2} pt</span></div>
                         <button id="playFinal2Btn" style="font-size:0.8em; padding:8px; display:none;">Gioca Finalina</button>
                     </div>
-                </div>
-            `;
+                </div>`;
             container.innerHTML = html;
-
-            // Mostra tasto Gioca solo per i membri delle rispettive squadre dello scontro
             setupTournamentActionBtn('playSemi1Btn', semi.match1.team1.id, semi.match1.team2.id, 'semifinals/match1', tData.words);
             setupTournamentActionBtn('playSemi2Btn', semi.match2.team2_1.id, semi.match2.team2_2.id, 'semifinals/match2', tData.words);
-            
-            if (finals.firstPlace.team1 && finals.firstPlace.team2) {
-                setupTournamentActionBtn('playFinal1Btn', finals.firstPlace.team1.id, finals.firstPlace.team2.id, 'finals/firstPlace', tData.words);
-            }
-            if (finals.thirdPlace.team1 && finals.thirdPlace.team2) {
-                setupTournamentActionBtn('playFinal2Btn', finals.thirdPlace.team1.id, finals.thirdPlace.team2.id, 'finals/thirdPlace', tData.words);
-            }
+            if (finals.firstPlace.team1 && finals.firstPlace.team2) setupTournamentActionBtn('playFinal1Btn', finals.firstPlace.team1.id, finals.firstPlace.team2.id, 'finals/firstPlace', tData.words);
+            if (finals.thirdPlace.team1 && finals.thirdPlace.team2) setupTournamentActionBtn('playFinal2Btn', finals.thirdPlace.team1.id, finals.thirdPlace.team2.id, 'finals/thirdPlace', tData.words);
         }
 
         function setupTournamentActionBtn(btnId, t1Id, t2Id, path, sharedWords) {
             const btn = document.getElementById(btnId);
-            if (!btn) return;
-
-            if (myTeamId === t1Id || myTeamId === t2Id) {
-                btn.style.display = 'block';
-                btn.onclick = () => {
-                    // Crea una stanza multiplayer preimpostata sul tabellone
-                    roomCode = "tour_" + btnId;
-                    gameWords = sharedWords;
-                    currentMode = "callsign";
-                    currentWpm = 25;
-                    requestedWordCount = 25;
-
-                    db.ref('rooms/' + roomCode).set({
-                        status: 'waiting',
-                        type: 'multi',
-                        mode: 'callsign',
-                        wpm: 25,
-                        tone: 600,
-                        wordCount: 25,
-                        words: sharedWords,
-                        hostId: myId
-                    }).then(() => {
-                        db.ref(`rooms/${roomCode}`).on('value', snap => {
-                            if (!snap.exists()) return;
-                            let rData = snap.val();
-                            if (rData.status === 'finished') {
-                                let players = Object.values(rData.players || {});
-                                if (players.length >= 2) {
-                                    resolveTournamentScores(path, players, t1Id, t2Id);
-                                }
-                            }
-                        });
-                        joinRoomLogic(false);
-                    }).catch(e => alert("Errore Avvio Match Torneo: " + e.message));
-                };
-            }
+            if (!btn || (myTeamId !== t1Id && myTeamId !== t2Id)) return;
+            btn.style.display = 'block';
+            btn.onclick = () => {
+                roomCode = "tour_" + btnId; gameWords = sharedWords; currentMode = "callsign"; currentWpm = 25; requestedWordCount = 25;
+                db.ref('rooms/' + roomCode).set({
+                    status: 'waiting', type: 'multi', mode: 'callsign', wpm: 25, tone: 600, wordCount: 25, words: sharedWords, hostId: myId
+                }).then(() => {
+                    db.ref(`rooms/${roomCode}`).on('value', snap => {
+                        if (!snap.exists()) return; let rData = snap.val();
+                        if (rData.status === 'finished') {
+                            let players = Object.values(rData.players || {});
+                            if (players.length >= 2) resolveTournamentScores(path, players, t1Id, t2Id);
+                        }
+                    });
+                    joinRoomLogic(false);
+                }).catch(e => tg.showAlert("Errore Avvio Match Torneo: " + e.message));
+            };
         }
 
         function resolveTournamentScores(path, players, t1Id, t2Id) {
-            let p1 = players[0];
-            let p2 = players[1];
-
-            let score1 = p1.score;
-            let score2 = p2.score;
-
-            db.ref(`tournament/rounds/${path}`).update({
-                score1: score1,
-                score2: score2,
-                winner: score1 > score2 ? 't1' : 't2'
-            }).then(() => {
+            let p1 = players[0]; let p2 = players[1];
+            db.ref(`tournament/rounds/${path}`).update({ score1: p1.score, score2: p2.score, winner: p1.score > p2.score ? 't1' : 't2' }).then(() => {
                 db.ref('tournament/rounds').once('value', snap => {
                     let r = snap.val();
                     if (r.semifinals.match1.winner && r.semifinals.match2.winner) {
                         let w1 = r.semifinals.match1.winner === 't1' ? r.semifinals.match1.team1 : r.semifinals.match1.team2;
                         let l1 = r.semifinals.match1.winner === 't1' ? r.semifinals.match1.team2 : r.semifinals.match1.team1;
-                        
                         let w2 = r.semifinals.match2.winner === 't1' ? r.semifinals.match2.team2_1 : r.semifinals.match2.team2_2;
                         let l2 = r.semifinals.match2.winner === 't1' ? r.semifinals.match2.team2_2 : r.semifinals.match2.team2_1;
-
                         db.ref('tournament/rounds/finals/firstPlace').update({ team1: w1, team2: w2 });
                         db.ref('tournament/rounds/finals/thirdPlace').update({ team1: l1, team2: l2 });
                     }
