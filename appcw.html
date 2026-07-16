@@ -100,9 +100,12 @@
         #notificationArea { color: #d32f2f; font-weight: bold; margin-bottom: 10px; min-height: 20px; text-align: center;}
         
         .privacy-box { text-align: left; font-size: 0.9em; line-height: 1.5; background: var(--sec-bg-color); padding: 15px; border-radius: 10px; border: 1px solid var(--hint-color); max-height: 300px; overflow-y: auto; width: 100%; box-sizing: border-box;}
-        .tab-buttons { display: flex; width: 100%; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;}
-        .tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; flex-grow: 1; padding: 10px;}
-        .tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); }
+        
+        .tab-buttons { display: flex; width: 100%; gap: 6px; margin-bottom: 15px; flex-wrap: wrap; justify-content: space-between;}
+        .tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 10px; font-size: 0.85em; border-radius: 8px; flex: 1 1 45%; text-align: center; }
+        .tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); box-shadow: inset 0 0 5px rgba(0,0,0,0.2);}
+        #tabGlobalCWFreakBtn.active-tab { background-color: #9c27b0; }
+        #tabGlobalCWFreakBtn { background-color: #ce93d8; color: #fff;}
     </style>
 </head>
 <body>
@@ -235,15 +238,26 @@
         <h2>🏆 Risultati</h2>
         
         <div id="roomWinnerBanner"></div>
-        <p id="waitingOthersText" style="text-align: center; font-style: italic; color: #ff9800; display: none; font-weight: bold;">⏳ In attesa che gli altri giocatori terminino...</p>
+        <p id="waitingOthersText" style="text-align: center; font-style: italic; color: #ff9800; display: none; font-weight: bold;">⏳ In attesa degli altri giocatori...</p>
 
         <div class="tab-buttons" id="leaderboardTabs">
-            <button id="tabRoomBtn" class="tab-btn active-tab">Questa Partita</button>
-            <button id="tabGlobalStandardBtn" class="tab-btn">Classifica Parole</button>
-            <button id="tabGlobalCallsignBtn" class="tab-btn">Classifica Nominativi</button>
+            <button id="tabRoomBtn" class="tab-btn active-tab" style="width: 100%;">Questa Partita</button>
+            <button id="tabGlobalCWFreakBtn" class="tab-btn">Generale CW Freak</button>
+            <button id="tabGlobalStandardMultiBtn" class="tab-btn">Parole (Multi)</button>
+            <button id="tabGlobalStandardSingleBtn" class="tab-btn">Parole (Single)</button>
         </div>
 
-        <div id="leaderboardContainer" style="width: 100%; flex-grow: 1; overflow-y: auto; margin-top: 10px;"></div>
+        <div id="lbFilterArea" style="display:none; width:100%; text-align:center; margin-bottom:10px;">
+            <label style="font-size:0.9em; font-weight:bold;">Filtra per N° Parole: </label>
+            <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px; outline:none; border:1px solid var(--hint-color); background: var(--bg-color); color: var(--text-color);">
+                <option value="10">10 Parole</option>
+                <option value="20">20 Parole</option>
+                <option value="30">30 Parole</option>
+                <option value="50">50 Parole</option>
+            </select>
+        </div>
+
+        <div id="leaderboardContainer" style="width: 100%; flex-grow: 1; overflow-y: auto; margin-top: 5px;"></div>
         <button onclick="goBackToMenu()" style="margin-top: 15px;">Torna al Menu</button>
     </div>
 
@@ -329,7 +343,7 @@
         let currentWpm = 20;
         let currentTone = 600;
         let totalScore = 0; 
-        let currentStreak = 0; // Per calcolo CW Freak
+        let currentStreak = 0; 
         let wordIndex = 0;
         let audioCtx;
         let inputActive = false;
@@ -339,7 +353,7 @@
         
         // Configurazioni partita
         let isSinglePlayer = false;
-        let currentMode = "standard"; // "standard" o "callsign"
+        let currentMode = "standard"; 
         let requestedWordCount = 10;
 
         document.getElementById('gameTypeInput').addEventListener('change', (e) => {
@@ -361,8 +375,8 @@
             toneInput.disabled = isCallsign;
 
             if (isCallsign) {
-                wpmInput.value = 25; // Fisso 25
-                wordInput.value = 25; // Fisso 25
+                wpmInput.value = 25; 
+                wordInput.value = 25; 
             }
         });
 
@@ -418,7 +432,7 @@
                         const span = document.createElement('span');
                         const boldCode = document.createElement('b');
                         
-                        let modeTxt = room.mode === 'callsign' ? "🎙️ Nominativi" : "🔤 Parole";
+                        let modeTxt = room.mode === 'callsign' ? "🎙️ Nominativi (CW Freak)" : "🔤 Parole";
                         boldCode.textContent = `#${code} - ${modeTxt}`;
                         
                         const smallDetails = document.createElement('small');
@@ -459,7 +473,6 @@
             currentMode = document.getElementById('gameModeInput').value;
             isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
             
-            // Impostazioni bloccate per CW Freak, libere per Standard
             if (currentMode === 'callsign') {
                 currentWpm = 25;
                 requestedWordCount = 25;
@@ -470,7 +483,7 @@
                 if (requestedWordCount > 50) requestedWordCount = 50;
             }
             
-            currentTone = parseInt(document.getElementById('toneInput').value); // Usato solo nella standard come base
+            currentTone = parseInt(document.getElementById('toneInput').value); 
             
             let timerMinutes = parseInt(document.getElementById('roomTimerInput').value);
             if (isNaN(timerMinutes) || timerMinutes < 1) timerMinutes = 1; 
@@ -494,7 +507,6 @@
             });
         });
 
-        // Chat Logic
         window.toggleChat = function() {
             const drawer = document.getElementById('chatDrawer');
             if (drawer.style.display === 'none') {
@@ -532,7 +544,6 @@
                     div.appendChild(textNode);
                     container.appendChild(div);
                 });
-                
                 container.scrollTop = container.scrollHeight;
             });
         }
@@ -541,11 +552,7 @@
             const input = document.getElementById('chatInput');
             const txt = input.value.trim();
             if (!txt || !roomCode) return;
-            db.ref(`rooms/${roomCode}/chat`).push({
-                name: myName,
-                text: txt,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            });
+            db.ref(`rooms/${roomCode}/chat`).push({ name: myName, text: txt, timestamp: firebase.database.ServerValue.TIMESTAMP });
             input.value = '';
         }
 
@@ -563,6 +570,7 @@
                 if (playerData && playerData.finished) {
                     showScreen('leaderboardScreen');
                     activeTab = "room";
+                    showLeaderboardTab('tabRoomBtn');
                     listenToRoomLeaderboard();
                     return;
                 }
@@ -573,9 +581,7 @@
                 playerRef.onDisconnect().remove();
 
                 if (!playerData) {
-                    playerRef.set({ 
-                        name: myName, username: tgUsername, score: 0, wpm: 0, finished: false, joinedAt: firebase.database.ServerValue.TIMESTAMP 
-                    });
+                    playerRef.set({ name: myName, username: tgUsername, score: 0, wpm: 0, finished: false, joinedAt: firebase.database.ServerValue.TIMESTAMP });
                 }
 
                 showChatButton();
@@ -611,11 +617,8 @@
         }
         
         window.openTelegramProfile = function(username) {
-            if (username) {
-                tg.openTelegramLink('https://t.me/' + username);
-            } else {
-                tg.showAlert("Questo utente non ha impostato un Username pubblico su Telegram.");
-            }
+            if (username) tg.openTelegramLink('https://t.me/' + username);
+            else tg.showAlert("Questo utente non ha impostato un Username pubblico su Telegram.");
         }
 
         function renderPlayersList(playersData, hostId) {
@@ -681,10 +684,9 @@
                 let scoreColor = "";
 
                 if (currentMode === 'callsign') {
-                    // LOGICA CW FREAK
                     if (userWord === currentWord) {
                         currentStreak++;
-                        points = (currentWpm * 2) + (currentStreak * 5); // Formula bonus
+                        points = (currentWpm * 2) + (currentStreak * 5); 
                         currentWpm += 2;
                         scoreColor = "#4caf50";
                     } else {
@@ -694,15 +696,10 @@
                         scoreColor = "#d32f2f";
                     }
                 } else {
-                    // LOGICA STANDARD PAROLE
                     const errors = getLevenshteinDistance(currentWord, userWord);
-                    if (errors === 0) {
-                        points = 10; currentWpm += 2; scoreColor = "#4caf50"; 
-                    } else if (errors === 1) {
-                        points = 2; currentWpm -= 1; scoreColor = "#ff9800"; 
-                    } else {
-                        points = 0; currentWpm -= 2; scoreColor = "#d32f2f"; 
-                    }
+                    if (errors === 0) { points = 10; currentWpm += 2; scoreColor = "#4caf50"; } 
+                    else if (errors === 1) { points = 2; currentWpm -= 1; scoreColor = "#ff9800"; } 
+                    else { points = 0; currentWpm -= 2; scoreColor = "#d32f2f"; }
                 }
 
                 currentWpm = Math.max(5, currentWpm); 
@@ -729,12 +726,13 @@
             }
         });
 
+        // ================= GESTIONE CLASSIFICHE =================
+
         function finishGame() {
             gameRunning = false;
             inputActive = false;
             document.getElementById('permanentGameInput').blur();
             showScreen('leaderboardScreen');
-            activeTab = "room";
             
             if (roomCode) {
                 const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
@@ -742,9 +740,25 @@
                 myPlayerRef.onDisconnect().cancel(); 
             }
             
-            // Salvataggio nelle Classifiche Separate
             if (totalScore > 0) {
-                let dbPath = `leaderboard/${currentMode}/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                let dbPath = "";
+                if (currentMode === 'callsign') {
+                    dbPath = `leaderboard/callsign/global/${myId}`; // CW Freak va tutto qui
+                } else {
+                    dbPath = `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                    
+                    // Aggiungo il numero di parole al menu a tendina se non c'è già
+                    let select = document.getElementById('lbWordFilter');
+                    let exists = Array.from(select.options).some(opt => opt.value == requestedWordCount);
+                    if (!exists) {
+                        let opt = document.createElement('option');
+                        opt.value = requestedWordCount;
+                        opt.text = `${requestedWordCount} Parole`;
+                        select.add(opt);
+                    }
+                    select.value = requestedWordCount;
+                }
+
                 const globalUserRef = db.ref(dbPath);
                 
                 globalUserRef.once('value', snapshot => {
@@ -762,8 +776,66 @@
                 });
             }
 
-            listenToRoomLeaderboard();
+            // Indirizza l'utente alla scheda corretta
+            if (isSinglePlayer && currentMode === 'callsign') {
+                activeTab = "cwfreak";
+                showLeaderboardTab('tabGlobalCWFreakBtn');
+            } else if (isSinglePlayer) {
+                activeTab = "std_single";
+                showLeaderboardTab('tabGlobalStandardSingleBtn');
+            } else {
+                activeTab = "room";
+                showLeaderboardTab('tabRoomBtn');
+                listenToRoomLeaderboard();
+            }
         }
+
+        function showLeaderboardTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
+            document.getElementById(tabId).classList.add('active-tab');
+            
+            const filterArea = document.getElementById('lbFilterArea');
+            const roomWinnerBanner = document.getElementById('roomWinnerBanner');
+            const waitingText = document.getElementById('waitingOthersText');
+            
+            if (tabId === 'tabRoomBtn') {
+                filterArea.style.display = 'none';
+                roomWinnerBanner.style.display = 'block';
+                document.getElementById('leaderboardContainer').innerHTML = ''; // pulizia rapida
+                if (roomCode) {
+                    db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
+                } else {
+                    document.getElementById('leaderboardContainer').innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>";
+                    waitingText.style.display = 'none';
+                }
+            } else if (tabId === 'tabGlobalCWFreakBtn') {
+                filterArea.style.display = 'none';
+                roomWinnerBanner.style.display = 'none';
+                waitingText.style.display = 'none';
+                fetchAndRenderGlobalLeaderboard(`leaderboard/callsign/global`, `🏆 CW Freak (Assoluta)`);
+            } else {
+                // Tab Standard (Multi o Single)
+                filterArea.style.display = 'block';
+                roomWinnerBanner.style.display = 'none';
+                waitingText.style.display = 'none';
+                
+                let wc = document.getElementById('lbWordFilter').value;
+                let type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
+                let typeText = type === 'multi' ? 'Multiplayer' : 'Singleplayer';
+                
+                fetchAndRenderGlobalLeaderboard(`leaderboard/standard/${type}_${wc}`, `🏆 Parole ${typeText} (${wc} par.)`);
+            }
+        }
+
+        document.getElementById('tabRoomBtn').addEventListener('click', () => { activeTab="room"; showLeaderboardTab('tabRoomBtn'); });
+        document.getElementById('tabGlobalCWFreakBtn').addEventListener('click', () => { activeTab="cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); });
+        document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; showLeaderboardTab('tabGlobalStandardMultiBtn'); });
+        document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { activeTab="std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); });
+        
+        document.getElementById('lbWordFilter').addEventListener('change', () => {
+            if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn');
+            else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn');
+        });
 
         function listenToRoomLeaderboard() {
             if (roomCode) {
@@ -816,32 +888,9 @@
             });
         }
 
-        document.getElementById('tabRoomBtn').addEventListener('click', () => {
-            activeTab = "room";
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
-            document.getElementById('tabRoomBtn').classList.add('active-tab');
-            if (roomCode) db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
-        });
-
-        document.getElementById('tabGlobalStandardBtn').addEventListener('click', () => {
-            activeTab = "global_standard";
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
-            document.getElementById('tabGlobalStandardBtn').classList.add('active-tab');
-            fetchAndRenderGlobalLeaderboard(`leaderboard/standard/multi_${requestedWordCount}`, `Classifica Standard Multi (${requestedWordCount} parole)`);
-        });
-
-        document.getElementById('tabGlobalCallsignBtn').addEventListener('click', () => {
-            activeTab = "global_callsign";
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
-            document.getElementById('tabGlobalCallsignBtn').classList.add('active-tab');
-            fetchAndRenderGlobalLeaderboard(`leaderboard/callsign/multi_${requestedWordCount}`, `Classifica Nominativi (${requestedWordCount} nom.)`);
-        });
-
         function fetchAndRenderGlobalLeaderboard(path, title) {
             const container = document.getElementById('leaderboardContainer');
             container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-            document.getElementById('roomWinnerBanner').innerHTML = '';
-            document.getElementById('waitingOthersText').style.display = 'none';
 
             db.ref(path).orderByChild('score').limitToLast(50).once('value', snapshot => {
                 container.innerHTML = `<h3 style="text-align:center;">${title}</h3>`;
@@ -871,6 +920,8 @@
                 });
             });
         }
+
+        // ================= AUDIO E GIOCO =================
         
         function playBeep(freq, duration) {
             if (!audioCtx) return;
@@ -911,9 +962,8 @@
             if (wordIndex >= gameWords.length) { finishGame(); return; }
             const currentWord = gameWords[wordIndex].toUpperCase();
             
-            // RANDOMIZZA IL TONO SE SIAMO IN MODALITÀ CW FREAK
             if (currentMode === 'callsign') {
-                currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400; // Valore tra 400 e 700 Hz
+                currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400; 
             }
 
             playMorseAudio(currentWord, currentWpm);
@@ -941,7 +991,7 @@
                 if (count > 1) { count--; countdownEl.textContent = count; playBeep(600, 0.1); } 
                 else {
                     clearInterval(interval);
-                    countdownEl.textContent = "VIA!"; playBeep(800, 0.3); // Tono fisso di partenza
+                    countdownEl.textContent = "VIA!"; playBeep(800, 0.3); 
                     setTimeout(() => {
                         if (!gameRunning) return;
                         showScreen('gameArea');
@@ -968,29 +1018,21 @@
             showScreen('setupScreen');
         }
         
-        window.goBackToMenu = function() {
-            showScreen('setupScreen');
-        };
+        window.goBackToMenu = function() { showScreen('setupScreen'); };
         
         document.getElementById('viewGlobalLeaderboardBtn').addEventListener('click', () => {
             showScreen('leaderboardScreen');
-            document.getElementById('tabGlobalStandardBtn').click();
+            showLeaderboardTab('tabGlobalCWFreakBtn'); 
         });
         
-        // Listeners Privacy
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
 
-        // Delete Data
         document.getElementById('deleteDataBtn').addEventListener('click', async () => {
             if (confirm("⚠️ Eliminerai per sempre i tuoi punteggi globali. Confermi?")) {
                 try {
                     await db.ref(`leaderboard`).once('value', snapshot => {
-                       snapshot.forEach(mode => {
-                           mode.forEach(type => {
-                               if(type.hasChild(myId)) type.child(myId).ref.remove();
-                           });
-                       });
+                       snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); });
                     });
                     alert("Dati eliminati.");
                     window.Telegram.WebApp.close(); 
@@ -998,22 +1040,13 @@
             }
         });
         
-        // Start Multiplayer Button (Host)
-        document.getElementById('startMultiplayerBtn').addEventListener('click', () => {
-            db.ref(`rooms/${roomCode}/status`).set('countdown');
-        });
+        document.getElementById('startMultiplayerBtn').addEventListener('click', () => { db.ref(`rooms/${roomCode}/status`).set('countdown'); });
         
-        // Delete Room (Host)
         document.getElementById('deleteRoomBtn').addEventListener('click', () => {
-            if (confirm("Vuoi eliminare definitivamente questa stanza? Tutti i partecipanti saranno espulsi.")) {
-                db.ref(`rooms/${roomCode}`).remove();
-            }
+            if (confirm("Vuoi eliminare definitivamente questa stanza? Tutti i partecipanti saranno espulsi.")) db.ref(`rooms/${roomCode}`).remove();
         });
         
-        // Leave Lobby Button
-        document.getElementById('leaveLobbyBtn').addEventListener('click', () => {
-            exitRoomCleanly();
-        });
+        document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
 
     </script>
 </body>
