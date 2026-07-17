@@ -208,15 +208,36 @@
         <button onclick="goBackToMenu()" style="margin-top: auto;">Torna al Menu Principale</button>
     </div>
 
-    <!-- PRIVACY -->
+       <!-- PRIVACY E GESTIONE DATI -->
     <div id="privacyScreen" class="screen">
-        <h2>Privacy & Dati</h2>
-        <div class="box-panel" style="text-align: left; font-size: 0.9em;">
-            <p><strong>Cancellazione Dati:</strong> Verranno eliminati permanentemente tutti i tuoi record storici, la tua appartenenza alle squadre e verrai rimosso da tutte le stanze attive. L'operazione è irreversibile.</p>
+        <h2 style="margin-bottom: 15px;">Privacy & Gestione Dati 🛡️</h2>
+        
+        <div class="box-panel" style="text-align: left; font-size: 0.9em; flex-grow: 1; overflow-y: auto;">
+            <p style="margin-top: 0;">Questa Web App è progettata per rispettare la tua privacy. Ecco tutto ciò che devi sapere sui dati che gestiamo.</p>
+            
+            <h3 style="color: var(--link-color); font-size: 1.05em; margin-bottom: 5px;">1. Quali dati raccogliamo?</h3>
+            <ul style="margin-top: 5px; padding-left: 20px;">
+                <li><b>Profilo Telegram:</b> Raccogliamo in automatico il tuo <i>Nome</i>, <i>ID Numerico</i> ed eventuale <i>Username pubblico</i> per identificarti nel gioco. Non abbiamo accesso al tuo numero di telefono.</li>
+                <li><b>Dati di Gioco:</b> Salviamo i tuoi punteggi, WPM, messaggi inviati nelle chat interne, la tua appartenenza a stanze e squadre.</li>
+            </ul>
+
+            <h3 style="color: var(--link-color); font-size: 1.05em; margin-bottom: 5px;">2. Come usiamo e salviamo i dati?</h3>
+            <p style="margin-top: 5px;">I tuoi dati vengono utilizzati esclusivamente per il funzionamento del gioco (creazione classifiche, gestione dei tornei e chat). Sono ospitati su server cloud sicuri (Google Firebase). Non cediamo, vendiamo o utilizziamo i tuoi dati per fini pubblicitari.</p>
+
+            <h3 style="color: #d32f2f; font-size: 1.05em; margin-bottom: 5px;">3. Diritto all'oblio (Cancellazione)</h3>
+            <p style="margin-top: 5px; margin-bottom: 0;">Hai il controllo totale. Utilizzando il pulsante qui sotto, revocherai l'accesso e cancellerai istantaneamente dal nostro database:</p>
+            <ul style="margin-top: 5px; padding-left: 20px; color: #d32f2f;">
+                <li>Tutti i record e punteggi storici nelle classifiche.</li>
+                <li>L'appartenenza a qualsiasi squadra o stanza.</li>
+                <li>Il tuo profilo giocatore (ID, Nome, Username).</li>
+            </ul>
+            <p style="font-weight: bold; font-style: italic; text-align: center; margin-top: 10px;">L'operazione è immediata e irreversibile.</p>
         </div>
-        <button id="deleteDataBtn" class="btn-danger" style="margin-top: auto;">🗑️ Elimina Definitivamente i miei Dati</button>
-        <button id="closePrivacyBtn">Torna Indietro</button>
+
+        <button id="deleteDataBtn" class="btn-danger" style="margin-top: 10px;">🗑️ Elimina Definitivamente i miei Dati</button>
+        <button id="closePrivacyBtn" style="margin-top: 10px;">Torna al Menu</button>
     </div>
+
 
     <!-- LOBBY GIOCO -->
     <div id="lobbyScreen" class="screen">
