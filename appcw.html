@@ -929,7 +929,8 @@ function generateCallsign() {
                 totalScore += points;
                 
                 // Salva dettaglio per lo storico
-                matchDetailsArray.push({ real: currentWord, typed: userWord, points: points });
+                // Salva dettaglio per lo storico includendo il WPM della singola parola
+                matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm });
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}; font-weight:bold;">${usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points)}</td>`;
@@ -1218,10 +1219,79 @@ function generateCallsign() {
         }
 
         window.deleteHistoryItem = function(key) {
-            if(confirm("Eliminare questa partita dallo storico?")) {
-                db.ref(`users/${myId}/history/${key}`).remove().then(() => showProfileScreen());
-            }
+    if(confirm("Eliminare questa partita dallo storico? Le statistiche verranno ricalcolate.")) {
+        const match = userMatchHistory.find(m => m.key === key);
+        
+        if (match) {
+            // Calcola gli errori generati esattamente in questa partita
+            let matchCharErrs = {};
+            let matchWpmErrs = {};
+            
+            (match.details || []).forEach(row => {
+                let real = row.real || "";
+                let typed = row.typed || "";
+                // Fallback al wpm finale della partita per le partite vecchie che non lo avevano salvato
+                let wordWpm = row.wpm || match.wpm || 20; 
+                
+                if (real !== typed) {
+                    let wrongChars = [];
+                    let maxLen = Math.max(real.length, typed.length);
+                    for(let i=0; i<maxLen; i++) {
+                        if(typed[i] !== real[i] && real[i]) {
+                            if(!wrongChars.includes(real[i])) wrongChars.push(real[i]);
+                        }
+                    }
+                    
+                    if(!matchWpmErrs[wordWpm]) matchWpmErrs[wordWpm] = {};
+                    wrongChars.forEach(c => {
+                        matchCharErrs[c] = (matchCharErrs[c] || 0) + 1;
+                        matchWpmErrs[wordWpm][c] = (matchWpmErrs[wordWpm][c] || 0) + 1;
+                    });
+                }
+            });
+
+            // Recupera le statistiche attuali, sottrai gli errori della partita ed esegui l'aggiornamento
+            db.ref(`users/${myId}/stats`).once('value').then(snap => {
+                let stats = snap.val() || {};
+                let currentErrors = stats.charErrors || {};
+                let currentWpmErrs = stats.errorsByWpm || {};
+
+                // Sottrai charErrors globali
+                for (let c in matchCharErrs) {
+                    if (currentErrors[c]) {
+                        currentErrors[c] -= matchCharErrs[c];
+                        if (currentErrors[c] <= 0) delete currentErrors[c];
+                    }
+                }
+
+                // Sottrai errorsByWpm
+                for (let w in matchWpmErrs) {
+                    if (currentWpmErrs[w]) {
+                        for (let c in matchWpmErrs[w]) {
+                            if (currentWpmErrs[w][c]) {
+                                currentWpmErrs[w][c] -= matchWpmErrs[w][c];
+                                if (currentWpmErrs[w][c] <= 0) delete currentWpmErrs[w][c];
+                            }
+                        }
+                        // Se non ci sono più errori per questa velocità WPM, eliminala dal grafico
+                        if (Object.keys(currentWpmErrs[w]).length === 0) delete currentWpmErrs[w];
+                    }
+                }
+
+                // Esegue un aggiornamento simultaneo (Atomic Update): aggiorna stats e cancella la partita
+                let updates = {};
+                updates[`users/${myId}/stats/charErrors`] = currentErrors;
+                updates[`users/${myId}/stats/errorsByWpm`] = currentWpmErrs;
+                updates[`users/${myId}/history/${key}`] = null; // Rimuovere un nodo in Firebase
+
+                db.ref().update(updates).then(() => showProfileScreen());
+            });
+        } else {
+            // Fallback di sicurezza nel caso non trovi i dettagli
+            db.ref(`users/${myId}/history/${key}`).remove().then(() => showProfileScreen());
         }
+    }
+}
 
         /* ================= LEADERBOARD ================= */
         function showLeaderboardTab(tabId) {
