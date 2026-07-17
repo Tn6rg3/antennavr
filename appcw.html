@@ -426,8 +426,7 @@
         <button onclick="document.getElementById('matchDetailsModal').style.display='none'" style="margin-top:auto;">Chiudi</button>
     </div>
 
-    <script>
-        const BOT_USERNAME = "cwappgame_bot"; 
+    const BOT_USERNAME = "cwappgame_bot"; 
         const WEBAPP_NAME = "cwgame"; 
 
         window.Telegram.WebApp.ready();
@@ -438,6 +437,15 @@
         const tgUsername = tgUser?.username || ""; 
         const startParam = tg.initDataUnsafe?.start_param; 
 
+        // Funzione Globale Anti-XSS (Risolve gli avvisi CodeQL per innerHTML)
+        function escapeHTML(str) {
+            if (!str && str !== 0) return "";
+            return String(str).replace(/[&<>'"]/g, function (match) {
+                const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' };
+                return escapeMap[match];
+            });
+        }
+
         let myName, myId;
         let db, auth;
         let currentRoomListener = null, chatListener = null;
@@ -447,22 +455,17 @@
         let teamListener = null, allTeamsListener = null, bracketListener = null;
         let activeChatContext = null; 
 
-        // Dizionario Notevolmente Esteso con caratteri accentati
         const masterDictionary = [
             "abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero",
-            // NUOVE PAROLE & PAROLE ACCENTATE
             "città", "caffè", "perché", "novità", "virtù", "libertà", "albero", "bambino", "cane", "gatto", "scuola", "tavolo", "sedia", "libro", "penna", "matita", "gomma", "quaderno", "zaino", "computer", "tastiera", "schermo", "mouse", "cuffie", "orologio", "occhiali", "maglietta", "pantaloni", "scarpe", "calzini", "giacca", "cappotto", "sciarpa", "cappello", "guanti", "ombrello", "borsa", "portafoglio", "chiavi", "bicicletta", "treno", "aereo", "nave", "strada", "piazza", "ponte", "fiume", "lago", "mare", "collina", "pianura", "foresta", "fiore", "erba", "foglia", "sole", "luna", "stella", "cielo", "nuvola", "pioggia", "neve", "vento", "fuoco", "acqua", "terra", "sabbia", "sasso", "roccia", "animale", "uccello", "pesce", "insetto", "ragno", "serpente", "rana", "cavallo", "mucca", "maiale", "pecora", "capra", "pollo", "anatra", "oca", "topo", "coniglio", "lupo", "orso", "leone", "tigre", "scimmia", "delfino", "balena", "squalo", "verità", "onestà", "carità", "felicità"
         ];
         
-        // Codici Morse
         const morseDict = { 
             'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', 
             '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.','/': '-..-.',
-            // Accenti
             'À': '.--.-', 'È': '.-..-', 'É': '..-..', 'Ì': '.---.', 'Ò': '---.', 'Ù': '..---'
         };
 
-        // Variabili Partita
         let gameWords = [], currentWpm = 20, baseWpm = 20, currentTone = 600, totalScore = 0, currentStreak = 0, wordIndex = 0;
         let audioCtx, inputActive = false, gameRunning = false, activeTab = "room";
         let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
@@ -470,8 +473,10 @@
         let isFixedSpeed = false;
         let usedReplay = false;
         let matchDetailsArray = [];
-        let sessionCharErrors = {};
-        let sessionErrorsByWpm = {};
+        
+        // Fix Prototype Pollution: Object.create(null) assicura che non ci sia il prototipo di base Javascript
+        let sessionCharErrors = Object.create(null);
+        let sessionErrorsByWpm = Object.create(null);
 
         window.openTelegramProfile = function(username) {
             if (username) tg.openTelegramLink('https://t.me/' + username);
@@ -482,7 +487,7 @@
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = 'toast';
-            toast.textContent = message;
+            toast.innerHTML = escapeHTML(message);
             container.appendChild(toast);
             setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 4000);
         }
@@ -541,7 +546,6 @@
             checkGameTypeUI();
         }
 
-        /* ----- AUDIO E MORSE ----- */
         function playBeep(freq, duration) {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             try {
@@ -575,7 +579,6 @@
             }
         }
 
-        /* ----- CHAT ----- */
         let chatListenerRef = null; let isChatDrawerOpen = false; let lastChatTimestamp = Date.now();
 
         window.toggleChat = function() {
@@ -618,8 +621,9 @@
                         dateStr = `<small style="color:var(--hint-color); font-size:0.75em;">[${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}]</small> `;
                         if(msg.ts > maxTs) maxTs = msg.ts;
                     }
-                    let nHtml = `<b style="color:var(--link-color)">${msg.name}:</b>`;
-                    div.innerHTML = `${dateStr}${nHtml} ${msg.text}`; container.appendChild(div);
+                    // Fix XSS
+                    let nHtml = `<b style="color:var(--link-color)">${escapeHTML(msg.name)}:</b>`;
+                    div.innerHTML = `${dateStr}${nHtml} ${escapeHTML(msg.text)}`; container.appendChild(div);
 
                     if (!initialLoad && msg.ts && msg.ts > lastChatTimestamp && msg.name !== myName) { newMsgsCount++; latestMsg = msg; }
                 });
@@ -647,7 +651,6 @@
             }
         });
         
-        /* ----- GESTIONE GIOCO LIBERO E UI SETTINGS ----- */
         function checkGameTypeUI() {
             const isSingle = document.getElementById('gameTypeInput').value === 'single';
             document.getElementById('timeoutDiv').style.display = isSingle ? 'none' : 'block';
@@ -657,7 +660,7 @@
         }
         
         document.getElementById('gameModeInput').addEventListener('change', (e) => {
-            const isC = e.target.value === 'callsign'; // Disabilita WPM dinamico e conteggio fisso per Nominativi
+            const isC = e.target.value === 'callsign'; 
             ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => {
                 document.getElementById(id).disabled = isC;
                 if(isC && id!=='toneInput') document.getElementById(id).value = 25;
@@ -667,7 +670,6 @@
         });
         document.getElementById('gameTypeInput').addEventListener('change', checkGameTypeUI);
 
-        // GENERATORI
         function generateCallsign() {
             const prefixes = ["I", "IK", "IZ", "IN", "IT", "IS", "IU", "IW", "W", "K", "N", "A", "WA", "WB", "DL", "DJ", "DK", "DO", "EA", "EB", "EC", "F", "G", "M", "GW", "GM", "9A", "S5", "OK", "OM", "SP", "SQ", "UA", "UR", "EW", "ER", "YO", "YU", "HA", "LZ", "OE", "HB", "PA", "PB", "ON", "VE", "VK", "ZL", "JA", "PY", "LU", "CX"];
             const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -685,7 +687,6 @@
             return callsign;
         }
 
-        // GENERATORE PING PONG (Gruppi casuali di 5 caratteri)
         function generatePingPong() {
             const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
             let res = "";
@@ -711,8 +712,9 @@
                         wCount++; let pCount = room.players ? Object.keys(room.players).length : 0;
                         const li = document.createElement('li');
                         let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : room.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole';
-                        li.innerHTML = `<span><b>#${code} - ${modeIcon}</b><br><small>${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test</small></span>
-                                        <button class="action-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
+                        // Fix XSS
+                        li.innerHTML = `<span><b>#${escapeHTML(code)} - ${escapeHTML(modeIcon)}</b><br><small>${pCount} Gioc. | ${escapeHTML(room.wpm)} WPM | ${escapeHTML(room.wordCount)} Test</small></span>
+                                        <button class="action-btn-small" onclick="joinSpecificRoom('${escapeHTML(code)}')">Entra</button>`;
                         list.appendChild(li);
                     }
                 });
@@ -809,7 +811,10 @@
 
             Object.entries(playersData).forEach(([id, data]) => {
                 const isH = (id === hostId);
-                const nHtml = data.username ? `<span onclick="openTelegramProfile('${data.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">🟢 ${data.name}</span>` : `<span>🟢 ${data.name}</span>`;
+                // Fix XSS
+                const escName = escapeHTML(data.name);
+                const escUser = escapeHTML(data.username);
+                const nHtml = data.username ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">🟢 ${escName}</span>` : `<span>🟢 ${escName}</span>`;
                 const li = document.createElement('li'); li.innerHTML = `${nHtml} ${isH ? '<small>(HOST)</small>' : ''}`; list.appendChild(li);
             });
 
@@ -820,7 +825,6 @@
             document.getElementById('statusInfoText').textContent = amIHost ? `Sei l'Host della partita.` : "Sei un partecipante. Attendi il via.";
         }
 
-        /* ----- GIOCO IN GAME ----- */
         function getLevenshteinDistance(a, b) {
             const matrix = [];
             for (let i = 0; i <= b.length; i++) matrix[i] = [i];
@@ -840,15 +844,14 @@
             for(let i=0; i<max; i++) {
                 if(!real[i]) continue; 
                 if(!typed[i] || typed[i] !== real[i]) {
-                    res += `<span style="color:#d32f2f;">${real[i]}</span>`; 
+                    res += `<span style="color:#d32f2f;">${escapeHTML(real[i])}</span>`; 
                 } else {
-                    res += real[i];
+                    res += escapeHTML(real[i]);
                 }
             }
             return res;
         }
 
-        // Tasto Riascolta
         document.getElementById('replayWordBtn').addEventListener('click', () => {
             if (!gameRunning || !inputActive) return;
             usedReplay = true;
@@ -866,17 +869,19 @@
                 const currentWord = gameWords[wordIndex].toUpperCase();
                 let points = 0, scoreColor = "";
 
-                // Controllo Errori per Statistiche
                 if (userWord !== currentWord) {
                     let wrongChars = [];
                     const maxLen = Math.max(currentWord.length, userWord.length);
                     for(let i=0; i<maxLen; i++) {
                         if(userWord[i] !== currentWord[i] && currentWord[i]) {
-                            if(!wrongChars.includes(currentWord[i])) wrongChars.push(currentWord[i]);
+                            let char = currentWord[i];
+                            // Previene the Prototype Pollution
+                            if(char === '__proto__' || char === 'constructor' || char === 'prototype') continue;
+                            if(!wrongChars.includes(char)) wrongChars.push(char);
                         }
                     }
                     
-                    if(!sessionErrorsByWpm[currentWpm]) sessionErrorsByWpm[currentWpm] = {};
+                    if(!sessionErrorsByWpm[currentWpm]) sessionErrorsByWpm[currentWpm] = Object.create(null);
                     
                     wrongChars.forEach(c => { 
                         sessionCharErrors[c] = (sessionCharErrors[c] || 0) + 1; 
@@ -892,7 +897,6 @@
                         if (userWord === currentWord) { currentStreak++; points = (currentWpm * 2) + (currentStreak * 5); scoreColor = "#4caf50"; } 
                         else { currentStreak = 0; points = 0; scoreColor = "#d32f2f"; }
                     } else {
-                        // Vale sia per 'standard' che per 'pingpong'
                         const errors = getLevenshteinDistance(currentWord, userWord);
                         if (errors === 0) { points = 10; scoreColor = "#4caf50"; } 
                         else if (errors === 1) { points = 2; scoreColor = "#ff9800"; } 
@@ -900,19 +904,16 @@
                     }
                 }
 
-                // Modifica WPM (solo se non è Velocità Fissa)
                 if (!isFixedSpeed) {
                     if(currentMode === 'callsign') {
                         if (userWord === currentWord && !usedReplay) currentWpm += 2;
                         else if (userWord !== currentWord) currentWpm -= 1;
                     } else {
-                        // Standard e PingPong
                         const errs = getLevenshteinDistance(currentWord, userWord);
                         if (errs === 0 && !usedReplay) currentWpm += 2;
                         else if (errs === 1) currentWpm -= 1;
                         else if (errs > 1) currentWpm -= 2;
                     }
-                    // WPM floor non scende sotto la velocità iniziale scelta
                     currentWpm = Math.max(baseWpm, currentWpm);
                 }
 
@@ -921,7 +922,7 @@
                 matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm });
 
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}; font-weight:bold;">${usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points)}</td>`;
+                tr.innerHTML = `<td>${escapeHTML(userWord)}</td><td><b>${escapeHTML(currentWord)}</b></td><td style="color:${scoreColor}; font-weight:bold;">${usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points)}</td>`;
                 document.getElementById('tableBody').appendChild(tr);
                 
                 const tableWrapper = document.getElementById('tableWrapper'); tableWrapper.scrollTop = tableWrapper.scrollHeight;
@@ -951,7 +952,7 @@
             document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
             document.getElementById('scoreDisplay').textContent = `Punti: 0`;
             totalScore = 0; currentStreak = 0; wordIndex = 0; 
-            usedReplay = false; sessionCharErrors = {}; sessionErrorsByWpm = {}; matchDetailsArray = [];
+            usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
             document.getElementById('tableBody').innerHTML = ""; 
             
             showScreen('countdownScreen'); gameRunning = true;
@@ -980,7 +981,6 @@
                 myPlayerRef.update({ finished: true }); myPlayerRef.onDisconnect().cancel(); 
             }
             
-            // Salva Statistiche Globali (Leaderboard) se ci sono punti (esclude Replay infiniti)
             if (totalScore > 0 && !roomCode.startsWith("CHAMP_")) {
                 let dbPath = '';
                 if (currentMode === 'callsign') {
@@ -991,7 +991,6 @@
                     dbPath = `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                 }
 
-                // Aggiunge la voce al filtro a tendina se non esiste (per Parole Comuni e PingPong)
                 if (currentMode !== 'callsign') {
                     let select = document.getElementById('lbWordFilter');
                     if (!Array.from(select.options).some(opt => opt.value == requestedWordCount) && requestedWordCount !== 'all') {
@@ -1009,7 +1008,6 @@
                 });
             }
 
-            // Salva Nello Storico Utente Personale
             if (matchDetailsArray.length > 0) {
                 const historyRef = db.ref(`users/${myId}/history`).push();
                 historyRef.set({
@@ -1022,7 +1020,6 @@
                     details: matchDetailsArray
                 });
                 
-                // Aggiorna errori caratteri generali
                 if (Object.keys(sessionCharErrors).length > 0) {
                     const statsRef = db.ref(`users/${myId}/stats/charErrors`);
                     statsRef.once('value', snap => {
@@ -1034,7 +1031,6 @@
                     });
                 }
                 
-                // Aggiorna errori raggruppati per WPM
                 if (Object.keys(sessionErrorsByWpm).length > 0) {
                     const wpmStatsRef = db.ref(`users/${myId}/stats/errorsByWpm`);
                     wpmStatsRef.once('value', snap => {
@@ -1088,7 +1084,6 @@
             }
         });
 
-        /* ================= PROFILO E STATISTICHE ================= */
         let userMatchHistory = []; 
 
         window.showProfileScreen = function() {
@@ -1112,7 +1107,7 @@
                         let pct = (count / maxErr) * 100; 
                         let row = document.createElement('div');
                         row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.marginBottom = '4px';
-                        row.innerHTML = `<span style="width:20px; font-weight:bold;">${char}</span>
+                        row.innerHTML = `<span style="width:20px; font-weight:bold;">${escapeHTML(char)}</span>
                                          <div style="flex-grow:1; background:var(--bg-color); border:1px solid var(--hint-color); border-radius:4px; height:12px; margin: 0 5px; overflow:hidden;">
                                             <div style="width:${pct}%; background:#d32f2f; height:100%;"></div>
                                          </div><span style="width:25px; text-align:right; font-size:0.9em; font-weight:bold;">${count}</span>`;
@@ -1149,7 +1144,7 @@
                             <span>${wpm} WPM</span> <span>Tot: ${totalErrs} err</span>
                         </div>
                         <div style="font-size:0.85em; color:var(--text-color);">
-                            Peggior lettera: <b>${topChar[0]}</b> (${topChar[1]} volte)
+                            Peggior lettera: <b>${escapeHTML(topChar[0])}</b> (${topChar[1]} volte)
                         </div>
                     `;
                     container.appendChild(row);
@@ -1177,7 +1172,7 @@
                     
                     li.innerHTML = `
                         <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
-                            <span style="font-size:0.85em; font-weight:bold;">${modeIcon} (${match.type})</span>
+                            <span style="font-size:0.85em; font-weight:bold;">${escapeHTML(modeIcon)} (${escapeHTML(match.type)})</span>
                             <span style="font-size:0.8em; color:var(--hint-color);">${dateStr}</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
@@ -1190,7 +1185,7 @@
                     list.appendChild(li);
                 });
             }).catch(e => {
-                list.innerHTML = `<li style="justify-content:center; color:#d32f2f; font-weight:bold;">Errore Storico: ${e.message}</li>`;
+                list.innerHTML = `<li style="justify-content:center; color:#d32f2f; font-weight:bold;">Errore Storico: ${escapeHTML(e.message)}</li>`;
             });
         }
 
@@ -1207,7 +1202,7 @@
                 let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
                 let realHTML = generateDiffHTML(row.real, row.typed || '');
                 
-                tr.innerHTML = `<td>${row.typed || '-'}</td><td><b>${realHTML}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
+                tr.innerHTML = `<td>${escapeHTML(row.typed || '-')}</td><td><b>${realHTML}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
                 body.appendChild(tr);
             });
             document.getElementById('matchDetailsModal').style.display = 'flex';
@@ -1218,8 +1213,8 @@
                 const match = userMatchHistory.find(m => m.key === key);
                 
                 if (match) {
-                    let matchCharErrs = {};
-                    let matchWpmErrs = {};
+                    let matchCharErrs = Object.create(null);
+                    let matchWpmErrs = Object.create(null);
                     
                     (match.details || []).forEach(row => {
                         let real = row.real || "";
@@ -1231,11 +1226,12 @@
                             let maxLen = Math.max(real.length, typed.length);
                             for(let i=0; i<maxLen; i++) {
                                 if(typed[i] !== real[i] && real[i]) {
+                                    if(real[i] === '__proto__' || real[i] === 'constructor' || real[i] === 'prototype') continue;
                                     if(!wrongChars.includes(real[i])) wrongChars.push(real[i]);
                                 }
                             }
                             
-                            if(!matchWpmErrs[wordWpm]) matchWpmErrs[wordWpm] = {};
+                            if(!matchWpmErrs[wordWpm]) matchWpmErrs[wordWpm] = Object.create(null);
                             wrongChars.forEach(c => {
                                 matchCharErrs[c] = (matchCharErrs[c] || 0) + 1;
                                 matchWpmErrs[wordWpm][c] = (matchWpmErrs[wordWpm][c] || 0) + 1;
@@ -1280,7 +1276,6 @@
             }
         }
 
-        /* ================= LEADERBOARD ================= */
         function showLeaderboardTab(tabId) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
             document.getElementById(tabId).classList.add('active-tab');
@@ -1343,8 +1338,13 @@
             playersArray.sort((a, b) => b.score - a.score).forEach((player, index) => {
                 const row = document.createElement('div'); row.className = 'leaderboard-row';
                 let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                const nHtml = player.username ? `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${player.name}</span>` : `<span>${player.name}</span>`;
-                row.innerHTML = `<span>${medal} ${nHtml} <br><small style="color:var(--hint-color)">(${player.wpm || 0} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
+                
+                // Fix XSS
+                const escName = escapeHTML(player.name);
+                const escUser = escapeHTML(player.username);
+                const nHtml = player.username ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${escName}</span>` : `<span>${escName}</span>`;
+                
+                row.innerHTML = `<span>${medal} ${nHtml} <br><small style="color:var(--hint-color)">(${escapeHTML(player.wpm || 0)} WPM)</small></span> <span><b>${escapeHTML(player.score)} pt</b></span>`;
                 container.appendChild(row);
             });
         }
@@ -1358,10 +1358,9 @@
                     renderPlayersListHTML(players.reverse(), container, false);
                 });
             } else {
-                // Per Standard e Ping Pong
                 let isStandard = tabType.startsWith('standard');
                 let modePath = isStandard ? 'standard' : 'pingpong';
-                let subType = isStandard ? tabType.replace('standard_', '') : ''; // 'multi' o 'single' per standard
+                let subType = isStandard ? tabType.replace('standard_', '') : ''; 
                 
                 if (filterWordCount === 'all') {
                     db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
@@ -1377,7 +1376,6 @@
                 } else {
                     let dbQueryPath = isStandard ? `leaderboard/standard/${subType}_${filterWordCount}` : `leaderboard/pingpong/single_${filterWordCount}`;
                     
-                    // Nel caso del PingPong, recuperiamo sia single che multi per unirli (se necessario)
                     if(!isStandard) {
                          db.ref(`leaderboard/pingpong`).once('value', snapshot => {
                             let players = [];
@@ -1403,16 +1401,20 @@
             container.innerHTML = '';
             if (players.length === 0) { container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; return; }
             players.forEach((player, index) => {
-                let wcBadge = (showWordCount && player.wordCount) ? ` - ${player.wordCount} str.` : '';
+                let wcBadge = (showWordCount && player.wordCount) ? ` - ${escapeHTML(player.wordCount)} str.` : '';
                 const row = document.createElement('div'); row.className = 'leaderboard-row';
                 let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                const nHtml = player.username ? `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${player.name}</span>` : `<span>${player.name}</span>`;
-                row.innerHTML = `<span>${medalText} ${nHtml} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM${wcBadge})</small></span> <span><b>${player.score} pt</b></span>`;
+                
+                // Fix XSS
+                const escName = escapeHTML(player.name);
+                const escUser = escapeHTML(player.username);
+                const nHtml = player.username ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${escName}</span>` : `<span>${escName}</span>`;
+                
+                row.innerHTML = `<span>${medalText} ${nHtml} <br><small style="color:var(--hint-color); font-size:0.8em;">(${escapeHTML(player.date)} - ${escapeHTML(player.wpm)} WPM${wcBadge})</small></span> <span><b>${escapeHTML(player.score)} pt</b></span>`;
                 container.appendChild(row);
             });
         }
 
-        /* ================= SISTEMA SQUADRE ================= */
         document.getElementById('goToTeamsBtn').addEventListener('click', () => showScreen('teamsScreen'));
         function processTeamInvite(inviteTeamId) {
             db.ref(`teams/${inviteTeamId}`).once('value', snap => {
@@ -1445,8 +1447,12 @@
                 const listId = isAlreadyInTeam ? 'allTeamsList' : 'openTeamsList'; const list = document.getElementById(listId); list.innerHTML = '';
                 snap.forEach(child => {
                     const t = child.val(); const count = Object.keys(t.members || {}).length; const li = document.createElement('li');
-                    if (isAlreadyInTeam) li.innerHTML = `<span><b>${t.name}</b></span> <small>(${count} membri)</small>`;
-                    else if (t.status === 'open') li.innerHTML = `<span><b>${t.name}</b> <small>(${count} mem.)</small></span><button class="action-btn-small" onclick="joinTeam('${child.key}')">Unisciti</button>`;
+                    
+                    // Fix XSS
+                    const escTeam = escapeHTML(t.name);
+                    
+                    if (isAlreadyInTeam) li.innerHTML = `<span><b>${escTeam}</b></span> <small>(${count} membri)</small>`;
+                    else if (t.status === 'open') li.innerHTML = `<span><b>${escTeam}</b> <small>(${count} mem.)</small></span><button class="action-btn-small" onclick="joinTeam('${escapeHTML(child.key)}')">Unisciti</button>`;
                     if(li.innerHTML !== '') list.appendChild(li);
                 });
                 if(list.innerHTML === '') list.innerHTML = '<li style="color:var(--hint-color); justify-content:center; background:none; border:none;">Nessuna squadra.</li>';
@@ -1462,7 +1468,12 @@
                 const list = document.getElementById('myTeamMembersList'); list.innerHTML = '';
                 Object.entries(team.members || {}).forEach(([id, mem]) => {
                     const isC = (id === team.captainId);
-                    const nHtml = mem.username ? `<span onclick="openTelegramProfile('${mem.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${mem.name}</span>` : `<span>${mem.name}</span>`;
+                    
+                    // Fix XSS
+                    const escName = escapeHTML(mem.name);
+                    const escUser = escapeHTML(mem.username);
+                    const nHtml = mem.username ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${escName}</span>` : `<span>${escName}</span>`;
+                    
                     list.innerHTML += `<li>${nHtml} ${isC?'<b style="color:var(--hint-color)">(Capitano)</b>':''}</li>`;
                 });
                 document.getElementById('captainActions').style.display = isTeamCaptain ? 'block' : 'none';
@@ -1485,7 +1496,8 @@
                 document.getElementById('generateBracketBtn').style.display = isTeamCaptain ? 'block' : 'none';
                 if (!bracket.round1) { container.innerHTML = '<p style="color:var(--hint-color); margin: 5px 0;">Il torneo non è ancora iniziato.</p>'; return; }
                 Object.entries(bracket.round1).forEach(([matchId, match]) => {
-                    const card = document.createElement('div'); card.className = 'match-card'; card.innerHTML = `<span><b>${match.teamAName}</b></span> <span class="match-vs">VS</span> <span><b>${match.teamBName}</b></span>`;
+                    // Fix XSS
+                    const card = document.createElement('div'); card.className = 'match-card'; card.innerHTML = `<span><b>${escapeHTML(match.teamAName)}</b></span> <span class="match-vs">VS</span> <span><b>${escapeHTML(match.teamBName)}</b></span>`;
                     if (match.teamA === myTeamId || match.teamB === myTeamId) {
                         const btn = document.createElement('button'); btn.className = 'btn-champ'; btn.style.padding = '6px'; btn.style.fontSize = '0.9em'; btn.style.marginTop = '5px'; btn.textContent = "🥊 ENTRA NELLA SFIDA";
                         btn.onclick = () => startChampionshipMatch(matchId); card.appendChild(btn);
@@ -1512,6 +1524,5 @@
                 }
             });
         }
-    </script>
 </body>
 </html>
