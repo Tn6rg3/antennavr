@@ -190,7 +190,7 @@
                     <select id="gameModeInput">
                         <option value="standard">Parole Comuni</option>
                         <option value="callsign">Nominativi (CW Freak)</option>
-                        <option value="pingpong">Ping Pong (Gruppi Misti)</option>
+                        <option value="pingpong">Ping Pong</option>
                     </select>
                 </div>
             </div>
@@ -206,7 +206,7 @@
                 </div>
                 <div><label>Hz:</label> <input type="number" id="toneInput" value="600" min="300" max="1000" step="50"></div>
                 <div><label>Gruppi/Nom.:</label> <input type="number" id="wordCountInput" value="10" min="3" max="50"></div>
-                <div id="timeoutDiv"><label>Timeout (min):</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
+                <div id="timeoutDiv"><label>Scadenza Stanza (min):</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
             </div>
             <button id="createRoomBtn" disabled class="btn-success">Inizia Partita Libera</button>
         </div>
@@ -300,13 +300,20 @@
             <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
             <p style="margin-top: 5px;">Il gioco consiste nell'ascoltare sequenze in codice Morse e decifrare la parola o il nominativo corretto.</p>
             
-            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Parole Comuni & Ping Pong:</h4>
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Parole Comuni:</h4>
             <ul style="margin-top: 2px; padding-left: 20px;">
                 <li><b>Parola/Gruppo perfetto:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
                 <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
                 <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
                 <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata all'inizio.</li>
-                <li><i>Ping Pong:</i> Trasmette le parole digitate a turno dagli utenti all'interno della stanza.</li>
+            </ul>
+
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Ping Pong:</h4>
+            <ul style="margin-top: 2px; padding-left: 20px;">
+                <li>Sfida a turni <b>esclusivamente Multiplayer</b> (necessita di almeno un altro giocatore in stanza).</li>
+                <li>A turno, l'utente <b>A</b> pensa a una parola e la digita, l'utente <b>B</b> (o gli altri in stanza) la ascoltano in codice Morse e la devono decodificare.</li>
+                <li>I ruoli si invertono automaticamente per le stringhe successive.</li>
+                <li>Il calcolo di punti e penalità segue le regole delle <i>Parole Comuni</i> indicate sopra.</li>
             </ul>
 
             <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Nominativi (CW Freak):</h4>
@@ -320,6 +327,7 @@
             <ul style="margin-top: 2px; padding-left: 20px;">
                 <li><b>Tasto Riascolta:</b> Permette di riascoltare l'audio della parola corrente, ma la parola indovinata varrà <b>sempre 0 punti</b> e non aumenterà il WPM (penalità).</li>
                 <li><b>Velocità Fissa:</b> In Singleplayer puoi spuntare "Fissa" per bloccare il WPM senza farlo variare per errori o successi.</li>
+                <li><b>Scadenza Stanza:</b> Il timer in minuti indicato in fase di avvio stabilisce per quanto tempo la lobby rimane in attesa di giocatori. Una volta avviata la partita, la stanza dura per tutto il tempo necessario.</li>
                 <li><b>Caratteri Accentati:</b> Il dizionario comprende anche parole con <i>à, è, é, ì, ò, ù</i> tradotte nei rispettivi standard Morse.</li>
             </ul>
 
@@ -671,6 +679,17 @@
         
         document.getElementById('gameModeInput').addEventListener('change', (e) => {
             const isC = e.target.value === 'callsign'; 
+            const isPP = e.target.value === 'pingpong';
+
+            // Forza Multiplayer se si sceglie Ping Pong
+            if (isPP) {
+                document.getElementById('gameTypeInput').value = 'multi';
+                document.getElementById('gameTypeInput').disabled = true;
+                checkGameTypeUI();
+            } else {
+                document.getElementById('gameTypeInput').disabled = false;
+            }
+
             ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => {
                 document.getElementById(id).disabled = isC;
                 if(isC && id!=='toneInput') document.getElementById(id).value = 25;
@@ -695,13 +714,6 @@
                 callsign += modifiers[Math.floor(Math.random() * modifiers.length)];
             }
             return callsign;
-        }
-
-        function generatePingPong() {
-            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-            let res = "";
-            for(let i=0; i<5; i++) res += chars[Math.floor(Math.random() * chars.length)];
-            return res;
         }
         
         function getGameWords(num, mode) {
@@ -806,6 +818,8 @@
                                 if (diff <= 0) { clearInterval(lobbyTimerInterval); document.getElementById('lobbyTimerText').textContent = "Tempo scaduto!"; } 
                                 else { document.getElementById('lobbyTimerText').textContent = `Scade tra: ${Math.floor(diff/60000)}:${Math.floor((diff%60000)/1000).toString().padStart(2, '0')}`; }
                             }, 1000);
+                        } else {
+                            document.getElementById('lobbyTimerText').textContent = "";
                         }
                     }
                 });
@@ -1193,7 +1207,20 @@
         }
 
         document.getElementById('quitGameBtn').addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
-        document.getElementById('startMultiplayerBtn').addEventListener('click', () => db.ref(`rooms/${roomCode}/status`).set('countdown'));
+        
+        // Controllo per impedire l'avvio della modalità Ping Pong senza giocatori
+        document.getElementById('startMultiplayerBtn').addEventListener('click', () => {
+            db.ref(`rooms/${roomCode}/players`).once('value', snap => {
+                const playersCount = snap.exists() ? Object.keys(snap.val()).length : 0;
+                if (currentMode === 'pingpong' && playersCount < 2) {
+                    alert("La modalità Ping Pong è una sfida a turni e richiede almeno un altro giocatore in stanza per poter iniziare!");
+                    return;
+                }
+                // Rimuoviamo expiresAt per evitare che la stanza si autodistrugga mentre si gioca
+                db.ref(`rooms/${roomCode}`).update({ status: 'countdown', expiresAt: null });
+            });
+        });
+        
         document.getElementById('deleteRoomBtn').addEventListener('click', () => { if (confirm("Eliminare questa stanza?")) db.ref(`rooms/${roomCode}`).remove(); });
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
         window.goBackToMenu = function() { showScreen('setupScreen'); };
