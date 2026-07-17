@@ -452,7 +452,7 @@
         // Codici Morse Inclusi Accenti Internazionali Standard ITU
         const morseDict = { 
             'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', 
-            '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.',
+            '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.','/': '-..-.',
             // Accenti
             'À': '.--.-', 'È': '.-..-', 'É': '..-..', 'Ì': '.---.', 'Ò': '---.', 'Ù': '..---'
         };
@@ -663,12 +663,49 @@
         });
         document.getElementById('gameTypeInput').addEventListener('change', checkGameTypeUI);
 
-        function generateCallsign() {
-            const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "DL", "EA", "F"];
-            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            let s = ""; for(let i=0; i<(Math.floor(Math.random()*3)+1); i++) s += chars[Math.floor(Math.random()*chars.length)];
-            return prefixes[Math.floor(Math.random() * prefixes.length)] + Math.floor(Math.random() * 10) + s;
-        }
+
+function generateCallsign() {
+    // Vasto assortimento di prefissi reali (Europa, USA, Est Europa, resto del mondo)
+    const prefixes = [
+        "I", "IK", "IZ", "IN", "IT", "IS", "IU", "IW", // Italia
+        "W", "K", "N", "A", "WA", "WB", // USA
+        "DL", "DJ", "DK", "DO", // Germania
+        "EA", "EB", "EC", // Spagna
+        "F", "G", "M", "GW", "GM", // Francia e UK
+        "9A", "S5", "OK", "OM", "SP", "SQ", // Est Europa
+        "UA", "UR", "EW", "ER", // Russia e dintorni
+        "YO", "YU", "HA", "LZ", "OE", "HB", // Centro Europa/Balcani
+        "PA", "PB", "ON", // Benelux
+        "VE", "VK", "ZL", "JA", "PY", "LU", "CX" // Resto del mondo
+    ];
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    
+    // 1. Sceglie un prefisso e un numero (es. IN + 3 = IN3)
+    let prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+    let digit = Math.floor(Math.random() * 10);
+    
+    // 2. Determina la lunghezza del suffisso finale
+    // 70% di probabilità: 3 lettere (es. VVV, FRD)
+    // 20% di probabilità: 2 lettere (es. AB)
+    // 10% di probabilità: 1 lettera (es. D, per avere i famosi G5D)
+    let rand = Math.random();
+    let suffixLen = (rand > 0.9) ? 1 : (rand > 0.7) ? 2 : 3;
+    
+    let suffix = "";
+    for(let i = 0; i < suffixLen; i++) {
+        suffix += chars[Math.floor(Math.random() * chars.length)];
+    }
+    
+    let callsign = prefix + digit + suffix;
+    
+    // 3. Aggiunta casuale di un modificatore (circa 1 volta su 10)
+    if (Math.random() > 0.90) {
+        const modifiers = ["/QRP", "/P", "/M", "/AM", "/MM"];
+        callsign += modifiers[Math.floor(Math.random() * modifiers.length)];
+    }
+    
+    return callsign;
+}
         function getGameWords(num, mode) {
             if (mode === 'callsign') return Array.from({length: num}, generateCallsign);
             return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
