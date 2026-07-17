@@ -416,46 +416,83 @@
             }
         }
 
-        /* ----- CHAT ----- */
+          /* ----- CHAT ----- */
+        let chatListenerRef = null; // Variabile per memorizzare il collegamento alla chat corretta
+
         window.toggleChat = function() {
             const drawer = document.getElementById('chatDrawer');
             if (drawer.style.display === 'none') {
-                drawer.style.display = 'flex'; document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
-            } else { drawer.style.display = 'none'; }
+                drawer.style.display = 'flex'; 
+                document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+            } else { 
+                drawer.style.display = 'none'; 
+            }
         }
+
         function hideChat() {
-            document.getElementById('chatDrawer').style.display = 'none'; document.getElementById('globalChatBtn').style.display = 'none';
-            if (chatListener && activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).off();
+            document.getElementById('chatDrawer').style.display = 'none'; 
+            document.getElementById('globalChatBtn').style.display = 'none';
+            if (chatListenerRef) { 
+                chatListenerRef.off(); 
+                chatListenerRef = null; 
+            }
         }
         
         function listenToChat() {
             let chatRef;
             if (activeChatContext === 'room' && roomCode) {
-                chatRef = db.ref(`rooms/${roomCode}/chat`); document.getElementById('chatTitle').textContent = "💬 Chat Stanza"; document.getElementById('globalChatBtn').style.display = 'block';
+                chatRef = db.ref(`rooms/${roomCode}/chat`); 
+                document.getElementById('chatTitle').textContent = "💬 Chat Stanza"; 
+                document.getElementById('globalChatBtn').style.display = 'block';
             } else if (activeChatContext === 'team' && myTeamId) {
-                chatRef = db.ref(`teams/${myTeamId}/chat`); document.getElementById('chatTitle').textContent = "💬 Chat Squadra"; document.getElementById('globalChatBtn').style.display = 'block';
+                chatRef = db.ref(`teams/${myTeamId}/chat`); 
+                document.getElementById('chatTitle').textContent = "💬 Chat Squadra"; 
+                document.getElementById('globalChatBtn').style.display = 'block';
             } else { return; }
 
-            if (chatListener) db.ref().off('value', chatListener);
+            // Se stiamo già ascoltando questa esatta chat, non fare nulla (evita i crash)
+            if (chatListenerRef && chatListenerRef.toString() === chatRef.toString()) return; 
+
+            // Se c'era una vecchia chat aperta, chiudila prima di aprire la nuova
+            if (chatListenerRef) chatListenerRef.off(); 
+            chatListenerRef = chatRef; 
             
             chatRef.limitToLast(40).on('value', snapshot => {
-                chatListener = snapshot; const container = document.getElementById('chatMessages'); container.innerHTML = ''; 
+                const container = document.getElementById('chatMessages'); 
+                container.innerHTML = ''; 
                 snapshot.forEach(child => {
-                    const msg = child.val(); const div = document.createElement('div'); div.style.marginBottom = '6px';
+                    const msg = child.val(); 
+                    const div = document.createElement('div'); 
+                    div.style.marginBottom = '6px';
                     let nHtml = `<b style="color:var(--link-color)">${msg.name}:</b>`;
-                    div.innerHTML = `${nHtml} ${msg.text}`; container.appendChild(div);
+                    div.innerHTML = `${nHtml} ${msg.text}`; 
+                    container.appendChild(div);
                 });
                 container.scrollTop = container.scrollHeight;
             });
         }
 
+        // Funzione per inviare il messaggio
         document.getElementById('sendChatBtn').addEventListener('click', () => {
-            const input = document.getElementById('chatInput'); const txt = input.value.trim(); if (!txt) return;
-            if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
-            else if (activeChatContext === 'team' && myTeamId) db.ref(`teams/${myTeamId}/chat`).push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            const input = document.getElementById('chatInput'); 
+            const txt = input.value.trim(); 
+            if (!txt) return;
+
+            if (activeChatContext === 'room' && roomCode) {
+                db.ref(`rooms/${roomCode}/chat`).push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            } else if (activeChatContext === 'team' && myTeamId) {
+                db.ref(`teams/${myTeamId}/chat`).push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            }
             input.value = '';
         });
 
+        // NOVITÀ: Invia il messaggio premendo "Invio" sulla tastiera
+        document.getElementById('chatInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                document.getElementById('sendChatBtn').click();
+            }
+        });
+      
         /* ----- GESTIONE GIOCO LIBERO ----- */
         function generateCallsign() {
             const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "DL", "EA", "F"];
