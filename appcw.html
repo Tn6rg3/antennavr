@@ -71,10 +71,12 @@
         #loadingText { font-style: italic; color: #ff9800; margin-bottom: 10px; font-weight: bold; text-align:center; font-size: 0.9em;}
         
         .tab-buttons { display: flex; width: 100%; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; justify-content: space-between;}
-        .tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 8px; font-size: 0.8em; border-radius: 8px; flex: 1 1 45%; text-align: center; }
+        .tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 8px; font-size: 0.8em; border-radius: 8px; flex: 1 1 30%; text-align: center; }
         .tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); box-shadow: inset 0 0 5px rgba(0,0,0,0.2);}
         #tabGlobalCWFreakBtn.active-tab { background-color: #9c27b0; }
         #tabGlobalCWFreakBtn { background-color: #ce93d8; color: #fff;}
+        #tabGlobalPingPongBtn.active-tab { background-color: #f44336; }
+        #tabGlobalPingPongBtn { background-color: #ef9a9a; color: #fff;}
 
         .match-card { background: var(--bg-color); border: 1px solid var(--hint-color); border-radius: 8px; padding: 8px; margin-bottom: 5px; text-align: center; display: flex; flex-direction: column; align-items: center;}
         .match-vs { font-weight: bold; color: #ff9800; margin: 2px 0; }
@@ -187,6 +189,7 @@
                     <select id="gameModeInput">
                         <option value="standard">Parole Comuni</option>
                         <option value="callsign">Nominativi (CW Freak)</option>
+                        <option value="pingpong">Ping Pong (Gruppi Misti)</option>
                     </select>
                 </div>
             </div>
@@ -201,7 +204,7 @@
                     </div>
                 </div>
                 <div><label>Hz:</label> <input type="number" id="toneInput" value="600" min="300" max="1000" step="50"></div>
-                <div><label>Parole/Nom.:</label> <input type="number" id="wordCountInput" value="10" min="3" max="50"></div>
+                <div><label>Gruppi/Nom.:</label> <input type="number" id="wordCountInput" value="10" min="3" max="50"></div>
                 <div id="timeoutDiv"><label>Timeout (min):</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
             </div>
             <button id="createRoomBtn" disabled class="btn-success">Inizia Partita Libera</button>
@@ -296,12 +299,13 @@
             <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
             <p style="margin-top: 5px;">Il gioco consiste nell'ascoltare sequenze in codice Morse e decifrare la parola o il nominativo corretto.</p>
             
-            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Parole Comuni:</h4>
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Parole Comuni & Ping Pong:</h4>
             <ul style="margin-top: 2px; padding-left: 20px;">
-                <li><b>Parola perfetta:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
+                <li><b>Parola/Gruppo perfetto:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
                 <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
                 <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
-                <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata prima di avviare la partita.</li>
+                <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata all'inizio.</li>
+                <li><i>Ping Pong:</i> Trasmette sequenze casuali di 5 caratteri alfanumerici.</li>
             </ul>
 
             <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Nominativi (CW Freak):</h4>
@@ -387,19 +391,20 @@
 
         <div class="tab-buttons" id="leaderboardTabs">
             <button id="tabRoomBtn" class="tab-btn active-tab" style="width: 100%;">Questa Partita</button>
-            <button id="tabGlobalCWFreakBtn" class="tab-btn">Generale CW Freak</button>
+            <button id="tabGlobalCWFreakBtn" class="tab-btn">Nominativi</button>
+            <button id="tabGlobalPingPongBtn" class="tab-btn">Ping Pong</button>
             <button id="tabGlobalStandardMultiBtn" class="tab-btn">Parole (Multi)</button>
             <button id="tabGlobalStandardSingleBtn" class="tab-btn">Parole (Single)</button>
         </div>
 
         <div id="lbFilterArea" style="display:none; width:100%; text-align:center; margin-bottom:5px; flex-shrink: 0;">
-            <label style="font-size:0.9em; font-weight:bold;">Filtra per N° Parole: </label>
+            <label style="font-size:0.9em; font-weight:bold;">Filtra per Q.ta: </label>
             <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px; font-size: 0.9em;">
                 <option value="all">Tutte le categorie</option>
-                <option value="10">10 Parole</option>
-                <option value="20">20 Parole</option>
-                <option value="30">30 Parole</option>
-                <option value="50">50 Parole</option>
+                <option value="10">10 Stringhe</option>
+                <option value="20">20 Stringhe</option>
+                <option value="30">30 Stringhe</option>
+                <option value="50">50 Stringhe</option>
             </select>
         </div>
 
@@ -442,14 +447,14 @@
         let teamListener = null, allTeamsListener = null, bracketListener = null;
         let activeChatContext = null; 
 
-        // Dizionario Notevolmente Esteso con caratteri accentati (convertiti a monte dal sistema se servono)
+        // Dizionario Notevolmente Esteso con caratteri accentati
         const masterDictionary = [
             "abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero",
             // NUOVE PAROLE & PAROLE ACCENTATE
             "città", "caffè", "perché", "novità", "virtù", "libertà", "albero", "bambino", "cane", "gatto", "scuola", "tavolo", "sedia", "libro", "penna", "matita", "gomma", "quaderno", "zaino", "computer", "tastiera", "schermo", "mouse", "cuffie", "orologio", "occhiali", "maglietta", "pantaloni", "scarpe", "calzini", "giacca", "cappotto", "sciarpa", "cappello", "guanti", "ombrello", "borsa", "portafoglio", "chiavi", "bicicletta", "treno", "aereo", "nave", "strada", "piazza", "ponte", "fiume", "lago", "mare", "collina", "pianura", "foresta", "fiore", "erba", "foglia", "sole", "luna", "stella", "cielo", "nuvola", "pioggia", "neve", "vento", "fuoco", "acqua", "terra", "sabbia", "sasso", "roccia", "animale", "uccello", "pesce", "insetto", "ragno", "serpente", "rana", "cavallo", "mucca", "maiale", "pecora", "capra", "pollo", "anatra", "oca", "topo", "coniglio", "lupo", "orso", "leone", "tigre", "scimmia", "delfino", "balena", "squalo", "verità", "onestà", "carità", "felicità"
         ];
         
-        // Codici Morse Inclusi Accenti Internazionali Standard ITU
+        // Codici Morse
         const morseDict = { 
             'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', 
             '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.','/': '-..-.',
@@ -462,7 +467,6 @@
         let audioCtx, inputActive = false, gameRunning = false, activeTab = "room";
         let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
         
-        // Nuove Variabili per Stats & Feature
         let isFixedSpeed = false;
         let usedReplay = false;
         let matchDetailsArray = [];
@@ -653,7 +657,7 @@
         }
         
         document.getElementById('gameModeInput').addEventListener('change', (e) => {
-            const isC = e.target.value === 'callsign';
+            const isC = e.target.value === 'callsign'; // Disabilita WPM dinamico e conteggio fisso per Nominativi
             ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => {
                 document.getElementById(id).disabled = isC;
                 if(isC && id!=='toneInput') document.getElementById(id).value = 25;
@@ -663,54 +667,35 @@
         });
         document.getElementById('gameTypeInput').addEventListener('change', checkGameTypeUI);
 
-      
+        // GENERATORI
+        function generateCallsign() {
+            const prefixes = ["I", "IK", "IZ", "IN", "IT", "IS", "IU", "IW", "W", "K", "N", "A", "WA", "WB", "DL", "DJ", "DK", "DO", "EA", "EB", "EC", "F", "G", "M", "GW", "GM", "9A", "S5", "OK", "OM", "SP", "SQ", "UA", "UR", "EW", "ER", "YO", "YU", "HA", "LZ", "OE", "HB", "PA", "PB", "ON", "VE", "VK", "ZL", "JA", "PY", "LU", "CX"];
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            let prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+            let digit = Math.floor(Math.random() * 10);
+            let rand = Math.random();
+            let suffixLen = (rand > 0.9) ? 1 : (rand > 0.7) ? 2 : 3;
+            let suffix = "";
+            for(let i = 0; i < suffixLen; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+            let callsign = prefix + digit + suffix;
+            if (Math.random() > 0.90) {
+                const modifiers = ["/QRP", "/P", "/M", "/AM", "/MM"];
+                callsign += modifiers[Math.floor(Math.random() * modifiers.length)];
+            }
+            return callsign;
+        }
 
-function generateCallsign() {
-    // Vasto assortimento di prefissi reali (Europa, USA, Est Europa, resto del mondo)
-    const prefixes = [
-        "I", "IK", "IZ", "IN", "IT", "IS", "IU", "IW", // Italia
-        "W", "K", "N", "A", "WA", "WB", // USA
-        "DL", "DJ", "DK", "DO", // Germania
-        "EA", "EB", "EC", // Spagna
-        "F", "G", "M", "GW", "GM", // Francia e UK
-        "9A", "S5", "OK", "OM", "SP", "SQ", // Est Europa
-        "UA", "UR", "EW", "ER", // Russia e dintorni
-        "YO", "YU", "HA", "LZ", "OE", "HB", // Centro Europa/Balcani
-        "PA", "PB", "ON", // Benelux
-        "VE", "VK", "ZL", "JA", "PY", "LU", "CX" // Resto del mondo
-    ];
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    
-    // 1. Sceglie un prefisso e un numero (es. IN + 3 = IN3)
-    let prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-    let digit = Math.floor(Math.random() * 10);
-    
-    // 2. Determina la lunghezza del suffisso finale
-    // 70% di probabilità: 3 lettere (es. VVV, FRD)
-    // 20% di probabilità: 2 lettere (es. AB)
-    // 10% di probabilità: 1 lettera (es. D, per avere i famosi G5D)
-    let rand = Math.random();
-    let suffixLen = (rand > 0.9) ? 1 : (rand > 0.7) ? 2 : 3;
-    
-    let suffix = "";
-    for(let i = 0; i < suffixLen; i++) {
-        suffix += chars[Math.floor(Math.random() * chars.length)];
-    }
-    
-    let callsign = prefix + digit + suffix;
-    
-    // 3. Aggiunta casuale di un modificatore (circa 1 volta su 10)
-    if (Math.random() > 0.90) {
-        const modifiers = ["/QRP", "/P", "/M", "/AM", "/MM"];
-        callsign += modifiers[Math.floor(Math.random() * modifiers.length)];
-    }
-    
-    return callsign;
-}
-
+        // GENERATORE PING PONG (Gruppi casuali di 5 caratteri)
+        function generatePingPong() {
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            let res = "";
+            for(let i=0; i<5; i++) res += chars[Math.floor(Math.random() * chars.length)];
+            return res;
+        }
         
         function getGameWords(num, mode) {
             if (mode === 'callsign') return Array.from({length: num}, generateCallsign);
+            if (mode === 'pingpong') return Array.from({length: num}, generatePingPong);
             return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
         }
 
@@ -725,7 +710,8 @@ function generateCallsign() {
                     if (room.status === 'waiting' && room.type !== 'single') {
                         wCount++; let pCount = room.players ? Object.keys(room.players).length : 0;
                         const li = document.createElement('li');
-                        li.innerHTML = `<span><b>#${code} - ${room.mode==='callsign'?'🎙️ Nom.':'🔤 Parole'}</b><br><small>${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test</small></span>
+                        let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : room.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole';
+                        li.innerHTML = `<span><b>#${code} - ${modeIcon}</b><br><small>${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test</small></span>
                                         <button class="action-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
                         list.appendChild(li);
                     }
@@ -739,7 +725,7 @@ function generateCallsign() {
             currentMode = document.getElementById('gameModeInput').value;
             isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
             currentWpm = currentMode==='callsign' ? 25 : parseInt(document.getElementById('startWpmInput').value);
-            baseWpm = currentWpm; // Limite minimo fissato all'inizio
+            baseWpm = currentWpm; 
             requestedWordCount = currentMode==='callsign' ? 25 : Math.max(3, parseInt(document.getElementById('wordCountInput').value));
             currentTone = parseInt(document.getElementById('toneInput').value); 
             let timerMins = Math.max(1, parseInt(document.getElementById('roomTimerInput').value));
@@ -852,9 +838,9 @@ function generateCallsign() {
             let res = "";
             let max = Math.max(real.length, typed.length);
             for(let i=0; i<max; i++) {
-                if(!real[i]) continue; // Se typed è più lunga, ignora l'eccesso per l'evidenziazione in target
+                if(!real[i]) continue; 
                 if(!typed[i] || typed[i] !== real[i]) {
-                    res += `<span style="color:#d32f2f;">${real[i]}</span>`; // Rosso errore o mancante
+                    res += `<span style="color:#d32f2f;">${real[i]}</span>`; 
                 } else {
                     res += real[i];
                 }
@@ -880,7 +866,7 @@ function generateCallsign() {
                 const currentWord = gameWords[wordIndex].toUpperCase();
                 let points = 0, scoreColor = "";
 
-                // Controllo Errori per Statistiche Caratteri per WPM e Globale
+                // Controllo Errori per Statistiche
                 if (userWord !== currentWord) {
                     let wrongChars = [];
                     const maxLen = Math.max(currentWord.length, userWord.length);
@@ -899,14 +885,14 @@ function generateCallsign() {
                 }
 
                 if (usedReplay) {
-                    // Penalità Riascolto: 0 punti
                     points = 0; scoreColor = "#999999";
-                    if (currentMode === 'callsign' && userWord !== currentWord) currentStreak = 0; // se riascolta ma sbaglia, streak azzerata
+                    if (currentMode === 'callsign' && userWord !== currentWord) currentStreak = 0; 
                 } else {
                     if (currentMode === 'callsign') {
                         if (userWord === currentWord) { currentStreak++; points = (currentWpm * 2) + (currentStreak * 5); scoreColor = "#4caf50"; } 
                         else { currentStreak = 0; points = 0; scoreColor = "#d32f2f"; }
                     } else {
+                        // Vale sia per 'standard' che per 'pingpong'
                         const errors = getLevenshteinDistance(currentWord, userWord);
                         if (errors === 0) { points = 10; scoreColor = "#4caf50"; } 
                         else if (errors === 1) { points = 2; scoreColor = "#ff9800"; } 
@@ -920,6 +906,7 @@ function generateCallsign() {
                         if (userWord === currentWord && !usedReplay) currentWpm += 2;
                         else if (userWord !== currentWord) currentWpm -= 1;
                     } else {
+                        // Standard e PingPong
                         const errs = getLevenshteinDistance(currentWord, userWord);
                         if (errs === 0 && !usedReplay) currentWpm += 2;
                         else if (errs === 1) currentWpm -= 1;
@@ -931,9 +918,7 @@ function generateCallsign() {
 
                 totalScore += points;
                 
-                // Salva dettaglio per lo storico
-                
-matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm });
+                matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm });
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}; font-weight:bold;">${usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points)}</td>`;
@@ -997,14 +982,24 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
             
             // Salva Statistiche Globali (Leaderboard) se ci sono punti (esclude Replay infiniti)
             if (totalScore > 0 && !roomCode.startsWith("CHAMP_")) {
-                let dbPath = currentMode === 'callsign' ? `leaderboard/callsign/global/${myId}` : `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                let dbPath = '';
+                if (currentMode === 'callsign') {
+                    dbPath = `leaderboard/callsign/global/${myId}`;
+                } else if (currentMode === 'pingpong') {
+                    dbPath = `leaderboard/pingpong/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                } else {
+                    dbPath = `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                }
+
+                // Aggiunge la voce al filtro a tendina se non esiste (per Parole Comuni e PingPong)
                 if (currentMode !== 'callsign') {
                     let select = document.getElementById('lbWordFilter');
                     if (!Array.from(select.options).some(opt => opt.value == requestedWordCount) && requestedWordCount !== 'all') {
-                        let opt = document.createElement('option'); opt.value = requestedWordCount; opt.text = `${requestedWordCount} Parole`; select.add(opt);
+                        let opt = document.createElement('option'); opt.value = requestedWordCount; opt.text = `${requestedWordCount} Stringhe`; select.add(opt);
                     }
                     select.value = requestedWordCount;
                 }
+                
                 const globalUserRef = db.ref(dbPath);
                 globalUserRef.once('value', snapshot => {
                     let oldData = snapshot.val();
@@ -1056,6 +1051,7 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
             }
 
             if (isSinglePlayer && currentMode === 'callsign') { activeTab = "cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); } 
+            else if (isSinglePlayer && currentMode === 'pingpong') { activeTab = "pingpong"; showLeaderboardTab('tabGlobalPingPongBtn'); } 
             else if (isSinglePlayer) { activeTab = "std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); } 
             else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
         }
@@ -1085,7 +1081,7 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
                         else await db.ref(`teams/${myTeamId}/members/${myId}`).remove(); 
                     }
                     
-                    await db.ref(`users/${myId}`).remove(); // Elimina Profilo, Storia, Stats
+                    await db.ref(`users/${myId}`).remove();
 
                     alert("Dati eliminati definitivamente."); window.Telegram.WebApp.close(); 
                 } catch (e) { alert("Errore: " + e.message); }
@@ -1102,7 +1098,6 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
             const list = document.getElementById('matchHistoryList'); 
             list.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
 
-            // Load General Character Errors
             db.ref(`users/${myId}/stats/charErrors`).once('value').then(snap => {
                 const errors = snap.val() || {};
                 const container = document.getElementById('errorChartContainer'); 
@@ -1128,7 +1123,6 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
                 document.getElementById('errorChartContainer').innerHTML = `<p style="text-align:center; color:#d32f2f; font-weight:bold;">Errore DB</p>`;
             });
 
-            // Load Errors by WPM
             db.ref(`users/${myId}/stats/errorsByWpm`).once('value').then(snap => {
                 const wpmErrors = snap.val() || {};
                 const container = document.getElementById('wpmErrorChartContainer'); 
@@ -1139,14 +1133,11 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
                     return;
                 }
                 
-                // Ordina dal WPM più alto a quello più basso
                 let wpmSorted = Object.keys(wpmErrors).sort((a,b) => parseInt(b) - parseInt(a));
                 
                 wpmSorted.forEach(wpm => {
                     let charsAtWpm = wpmErrors[wpm];
-                    // Somma errori totali per questo WPM
                     let totalErrs = Object.values(charsAtWpm).reduce((acc, curr) => acc + curr, 0);
-                    // Trova il carattere più sbagliato a questo WPM
                     let topChar = Object.entries(charsAtWpm).sort((a,b) => b[1] - a[1])[0];
                     
                     let row = document.createElement('div');
@@ -1165,7 +1156,6 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
                 });
             });
 
-            // Load History
             db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(30).once('value').then(snap => {
                 list.innerHTML = ''; 
                 userMatchHistory = [];
@@ -1182,9 +1172,12 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
                     const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
                     const li = document.createElement('li'); 
                     li.style.flexDirection = 'column'; li.style.alignItems = 'flex-start';
+                    
+                    let modeIcon = match.mode === 'callsign' ? '🎙️ Nom.' : match.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole';
+                    
                     li.innerHTML = `
                         <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
-                            <span style="font-size:0.85em; font-weight:bold;">${match.mode === 'callsign' ? '🎙️ Nom.' : '🔤 Parole'} (${match.type})</span>
+                            <span style="font-size:0.85em; font-weight:bold;">${modeIcon} (${match.type})</span>
                             <span style="font-size:0.8em; color:var(--hint-color);">${dateStr}</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
@@ -1212,7 +1205,6 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
             details.forEach(row => {
                 const tr = document.createElement('tr');
                 let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
-                // Applica il Red Diff
                 let realHTML = generateDiffHTML(row.real, row.typed || '');
                 
                 tr.innerHTML = `<td>${row.typed || '-'}</td><td><b>${realHTML}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
@@ -1222,79 +1214,71 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
         }
 
         window.deleteHistoryItem = function(key) {
-    if(confirm("Eliminare questa partita dallo storico? Le statistiche verranno ricalcolate.")) {
-        const match = userMatchHistory.find(m => m.key === key);
-        
-        if (match) {
-            // Calcola gli errori generati esattamente in questa partita
-            let matchCharErrs = {};
-            let matchWpmErrs = {};
-            
-            (match.details || []).forEach(row => {
-                let real = row.real || "";
-                let typed = row.typed || "";
-                // Fallback al wpm finale della partita per le partite vecchie che non lo avevano salvato
-                let wordWpm = row.wpm || match.wpm || 20; 
+            if(confirm("Eliminare questa partita dallo storico? Le statistiche verranno ricalcolate.")) {
+                const match = userMatchHistory.find(m => m.key === key);
                 
-                if (real !== typed) {
-                    let wrongChars = [];
-                    let maxLen = Math.max(real.length, typed.length);
-                    for(let i=0; i<maxLen; i++) {
-                        if(typed[i] !== real[i] && real[i]) {
-                            if(!wrongChars.includes(real[i])) wrongChars.push(real[i]);
-                        }
-                    }
+                if (match) {
+                    let matchCharErrs = {};
+                    let matchWpmErrs = {};
                     
-                    if(!matchWpmErrs[wordWpm]) matchWpmErrs[wordWpm] = {};
-                    wrongChars.forEach(c => {
-                        matchCharErrs[c] = (matchCharErrs[c] || 0) + 1;
-                        matchWpmErrs[wordWpm][c] = (matchWpmErrs[wordWpm][c] || 0) + 1;
+                    (match.details || []).forEach(row => {
+                        let real = row.real || "";
+                        let typed = row.typed || "";
+                        let wordWpm = row.wpm || match.wpm || 20; 
+                        
+                        if (real !== typed) {
+                            let wrongChars = [];
+                            let maxLen = Math.max(real.length, typed.length);
+                            for(let i=0; i<maxLen; i++) {
+                                if(typed[i] !== real[i] && real[i]) {
+                                    if(!wrongChars.includes(real[i])) wrongChars.push(real[i]);
+                                }
+                            }
+                            
+                            if(!matchWpmErrs[wordWpm]) matchWpmErrs[wordWpm] = {};
+                            wrongChars.forEach(c => {
+                                matchCharErrs[c] = (matchCharErrs[c] || 0) + 1;
+                                matchWpmErrs[wordWpm][c] = (matchWpmErrs[wordWpm][c] || 0) + 1;
+                            });
+                        }
                     });
-                }
-            });
 
-            // Recupera le statistiche attuali, sottrai gli errori della partita ed esegui l'aggiornamento
-            db.ref(`users/${myId}/stats`).once('value').then(snap => {
-                let stats = snap.val() || {};
-                let currentErrors = stats.charErrors || {};
-                let currentWpmErrs = stats.errorsByWpm || {};
+                    db.ref(`users/${myId}/stats`).once('value').then(snap => {
+                        let stats = snap.val() || {};
+                        let currentErrors = stats.charErrors || {};
+                        let currentWpmErrs = stats.errorsByWpm || {};
 
-                // Sottrai charErrors globali
-                for (let c in matchCharErrs) {
-                    if (currentErrors[c]) {
-                        currentErrors[c] -= matchCharErrs[c];
-                        if (currentErrors[c] <= 0) delete currentErrors[c];
-                    }
-                }
-
-                // Sottrai errorsByWpm
-                for (let w in matchWpmErrs) {
-                    if (currentWpmErrs[w]) {
-                        for (let c in matchWpmErrs[w]) {
-                            if (currentWpmErrs[w][c]) {
-                                currentWpmErrs[w][c] -= matchWpmErrs[w][c];
-                                if (currentWpmErrs[w][c] <= 0) delete currentWpmErrs[w][c];
+                        for (let c in matchCharErrs) {
+                            if (currentErrors[c]) {
+                                currentErrors[c] -= matchCharErrs[c];
+                                if (currentErrors[c] <= 0) delete currentErrors[c];
                             }
                         }
-                        // Se non ci sono più errori per questa velocità WPM, eliminala dal grafico
-                        if (Object.keys(currentWpmErrs[w]).length === 0) delete currentWpmErrs[w];
-                    }
+
+                        for (let w in matchWpmErrs) {
+                            if (currentWpmErrs[w]) {
+                                for (let c in matchWpmErrs[w]) {
+                                    if (currentWpmErrs[w][c]) {
+                                        currentWpmErrs[w][c] -= matchWpmErrs[w][c];
+                                        if (currentWpmErrs[w][c] <= 0) delete currentWpmErrs[w][c];
+                                    }
+                                }
+                                if (Object.keys(currentWpmErrs[w]).length === 0) delete currentWpmErrs[w];
+                            }
+                        }
+
+                        let updates = {};
+                        updates[`users/${myId}/stats/charErrors`] = currentErrors;
+                        updates[`users/${myId}/stats/errorsByWpm`] = currentWpmErrs;
+                        updates[`users/${myId}/history/${key}`] = null; 
+
+                        db.ref().update(updates).then(() => showProfileScreen());
+                    });
+                } else {
+                    db.ref(`users/${myId}/history/${key}`).remove().then(() => showProfileScreen());
                 }
-
-                // Esegue un aggiornamento simultaneo (Atomic Update): aggiorna stats e cancella la partita
-                let updates = {};
-                updates[`users/${myId}/stats/charErrors`] = currentErrors;
-                updates[`users/${myId}/stats/errorsByWpm`] = currentWpmErrs;
-                updates[`users/${myId}/history/${key}`] = null; // Rimuovere un nodo in Firebase
-
-                db.ref().update(updates).then(() => showProfileScreen());
-            });
-        } else {
-            // Fallback di sicurezza nel caso non trovi i dettagli
-            db.ref(`users/${myId}/history/${key}`).remove().then(() => showProfileScreen());
+            }
         }
-    }
-}
 
         /* ================= LEADERBOARD ================= */
         function showLeaderboardTab(tabId) {
@@ -1309,19 +1293,28 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
             } else if (tabId === 'tabGlobalCWFreakBtn') {
                 filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
                 fetchAndRenderGlobalLeaderboard('callsign', null);
+            } else if (tabId === 'tabGlobalPingPongBtn') {
+                filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+                let wc = document.getElementById('lbWordFilter').value;
+                fetchAndRenderGlobalLeaderboard('pingpong', wc);
             } else {
                 filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
                 let type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
                 let wc = document.getElementById('lbWordFilter').value;
-                fetchAndRenderGlobalLeaderboard(type, wc);
+                fetchAndRenderGlobalLeaderboard('standard_' + type, wc);
             }
         }
         
         document.getElementById('tabRoomBtn').addEventListener('click', () => { activeTab="room"; showLeaderboardTab('tabRoomBtn'); });
         document.getElementById('tabGlobalCWFreakBtn').addEventListener('click', () => { activeTab="cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); });
+        document.getElementById('tabGlobalPingPongBtn').addEventListener('click', () => { activeTab="pingpong"; showLeaderboardTab('tabGlobalPingPongBtn'); });
         document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; showLeaderboardTab('tabGlobalStandardMultiBtn'); });
         document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { activeTab="std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); });
-        document.getElementById('lbWordFilter').addEventListener('change', () => { if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn'); else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn'); });
+        document.getElementById('lbWordFilter').addEventListener('change', () => { 
+            if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn'); 
+            else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn'); 
+            else if (activeTab === "pingpong") showLeaderboardTab('tabGlobalPingPongBtn');
+        });
 
         function listenToRoomLeaderboard() {
             if (!roomCode) return;
@@ -1358,26 +1351,50 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
 
         function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
             const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+            
             if (tabType === 'callsign') {
                 db.ref(`leaderboard/callsign/global`).orderByChild('score').limitToLast(50).once('value', snapshot => {
                     let players = []; snapshot.forEach(child => { players.push(child.val()); }); 
                     renderPlayersListHTML(players.reverse(), container, false);
                 });
             } else {
+                // Per Standard e Ping Pong
+                let isStandard = tabType.startsWith('standard');
+                let modePath = isStandard ? 'standard' : 'pingpong';
+                let subType = isStandard ? tabType.replace('standard_', '') : ''; // 'multi' o 'single' per standard
+                
                 if (filterWordCount === 'all') {
-                    db.ref(`leaderboard/standard`).once('value', snapshot => {
+                    db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
                         let players = [];
                         snapshot.forEach(wordCountNode => {
-                            if (wordCountNode.key.startsWith(tabType + "_")) { wordCountNode.forEach(userNode => { players.push(userNode.val()); }); }
+                            if (!isStandard || wordCountNode.key.startsWith(subType + "_")) { 
+                                wordCountNode.forEach(userNode => { players.push(userNode.val()); }); 
+                            }
                         });
                         players.sort((a, b) => b.score - a.score); players = players.slice(0, 100); 
                         renderPlayersListHTML(players, container, true);
                     });
                 } else {
-                    db.ref(`leaderboard/standard/${tabType}_${filterWordCount}`).orderByChild('score').limitToLast(50).once('value', snapshot => {
-                        let players = []; snapshot.forEach(child => { players.push(child.val()); }); 
-                        renderPlayersListHTML(players.reverse(), container, true);
-                    });
+                    let dbQueryPath = isStandard ? `leaderboard/standard/${subType}_${filterWordCount}` : `leaderboard/pingpong/single_${filterWordCount}`;
+                    
+                    // Nel caso del PingPong, recuperiamo sia single che multi per unirli (se necessario)
+                    if(!isStandard) {
+                         db.ref(`leaderboard/pingpong`).once('value', snapshot => {
+                            let players = [];
+                            snapshot.forEach(wordCountNode => {
+                                if (wordCountNode.key.endsWith("_" + filterWordCount)) { 
+                                    wordCountNode.forEach(userNode => { players.push(userNode.val()); }); 
+                                }
+                            });
+                            players.sort((a, b) => b.score - a.score); players = players.slice(0, 50); 
+                            renderPlayersListHTML(players, container, true);
+                        });
+                    } else {
+                        db.ref(dbQueryPath).orderByChild('score').limitToLast(50).once('value', snapshot => {
+                            let players = []; snapshot.forEach(child => { players.push(child.val()); }); 
+                            renderPlayersListHTML(players.reverse(), container, true);
+                        });
+                    }
                 }
             }
         }
@@ -1386,7 +1403,7 @@ matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm
             container.innerHTML = '';
             if (players.length === 0) { container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; return; }
             players.forEach((player, index) => {
-                let wcBadge = (showWordCount && player.wordCount) ? ` - ${player.wordCount} par.` : '';
+                let wcBadge = (showWordCount && player.wordCount) ? ` - ${player.wordCount} str.` : '';
                 const row = document.createElement('div'); row.className = 'leaderboard-row';
                 let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
                 const nHtml = player.username ? `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${player.name}</span>` : `<span>${player.name}</span>`;
