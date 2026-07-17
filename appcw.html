@@ -1224,53 +1224,57 @@
         document.getElementById('deleteRoomBtn').addEventListener('click', () => { if (confirm("Eliminare questa stanza?")) db.ref(`rooms/${roomCode}`).remove(); });
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
         window.goBackToMenu = function() { showScreen('setupScreen'); };
-        
-        document.getElementById('deleteDataBtn').addEventListener('click', async () => {
-            if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati, inclusa la tua squadra, classifiche e statistiche. Confermi?")) {
-                try {
-                    // 1. Rimuovi dai Leaderboard
-                    await db.ref(`leaderboard`).once('value', snapshot => { 
-                        snapshot.forEach(mode => { mode.forEach(type => { type.forEach(record => {
-                            if(record.key === myId || record.key.startsWith(myId + "_")) record.ref.remove();
-                        }); }); }); 
-                    });
-                    
-                    // 2. Esci o elimina la Squadra
-                    if (myTeamId) {
-                        const teamRef = db.ref(`teams/${myTeamId}`);
-                        const teamSnap = await teamRef.once('value');
-                        if (teamSnap.exists()) {
-                            const teamData = teamSnap.val();
-                            // Se sei il capitano e unico membro, elimina la squadra, altrimenti rimuoviti dai membri
-                            if (teamData.captainId === myId) {
-                                // Opzione: se vuoi che la squadra si sciolga solo se sei l'unico
-                                if (Object.keys(teamData.members || {}).length === 1) {
-                                    await teamRef.remove();
-                                } else {
-                                    // Nomina un nuovo capitano o semplicemente rimuoviti
-                                    await db.ref(`teams/${myTeamId}/members/${myId}`).remove();
-                                }
+       document.getElementById('deleteDataBtn').addEventListener('click', async () => {
+    if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati, inclusa l'appartenenza a qualsiasi squadra, classifiche e statistiche. Confermi?")) {
+        try {
+            // 1. Rimuovi dai Leaderboard
+            await db.ref(`leaderboard`).once('value', snapshot => { 
+                snapshot.forEach(mode => { mode.forEach(type => { type.forEach(record => {
+                    if(record.key === myId || record.key.startsWith(myId + "_")) record.ref.remove();
+                }); }); }); 
+            });
+            
+            // 2. Rimuovi da TUTTE le squadre (Scansione globale per sicurezza)
+            const teamsSnap = await db.ref('teams').once('value');
+            if (teamsSnap.exists()) {
+                const teams = teamsSnap.val();
+                for (let tId in teams) {
+                    if (teams[tId].members && teams[tId].members[myId]) {
+                        // Se sei il capitano
+                        if (teams[tId].captainId === myId) {
+                            // Se sei l'unico, elimina la squadra, altrimenti rimuovi te stesso e basta
+                            if (Object.keys(teams[tId].members).length === 1) {
+                                await db.ref(`teams/${tId}`).remove();
                             } else {
-                                await db.ref(`teams/${myTeamId}/members/${myId}`).remove();
+                                await db.ref(`teams/${tId}/members/${myId}`).remove();
                             }
+                        } else {
+                            // Se sei un semplice membro, rimuoviti
+                            await db.ref(`teams/${tId}/members/${myId}`).remove();
                         }
                     }
-                    
-                    // 3. Rimuovi dalla Stanza/Partita corrente
-                    if (roomCode) { 
-                        await db.ref(`rooms/${roomCode}/players/${myId}`).remove();
-                    }
-                    
-                    // 4. Elimina Profilo, Storia, Stats
-                    await db.ref(`users/${myId}`).remove();
-
-                    alert("Dati, squadra e statistiche eliminati definitivamente."); 
-                    window.Telegram.WebApp.close(); 
-                } catch (e) { 
-                    alert("Errore durante la cancellazione: " + e.message); 
                 }
             }
-        });
+            
+            // 3. Rimuovi da eventuali stanze di gioco attive
+            const roomsSnap = await db.ref('rooms').once('value');
+            roomsSnap.forEach(room => {
+                if (room.child('players').hasChild(myId)) {
+                    db.ref(`rooms/${room.key}/players/${myId}`).remove();
+                }
+            });
+            
+            // 4. Elimina Profilo, Storia, Stats personali
+            await db.ref(`users/${myId}`).remove();
+
+            alert("Dati, affiliazioni alle squadre e statistiche eliminati definitivamente."); 
+            window.Telegram.WebApp.close(); 
+        } catch (e) { 
+            alert("Errore durante la cancellazione: " + e.message); 
+            console.error(e);
+        }
+    }
+});
 
         let userMatchHistory = []; 
 
