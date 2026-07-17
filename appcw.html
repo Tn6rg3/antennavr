@@ -39,7 +39,6 @@
         .btn-champ { background-color: var(--champ-color); color: #fff; padding: 10px 15px; font-size: 1.1em; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(156, 39, 176, 0.4);}
         .btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 5px; font-size: 0.9em; margin-top: 5px; border: none; cursor: pointer; width: auto;}
         
-        /* Ridotti i padding e i margini per compattare verticalmente */
         input[type="number"], input[type="text"], select { padding: 6px; font-size: 0.95em; width: 100%; box-sizing: border-box; text-align: center; margin: 2px 0; border: 1px solid var(--hint-color); border-radius: 8px; background-color: var(--bg-color); color: var(--text-color); }
         
         .settings-row { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 2px; gap: 6px; flex-wrap: wrap;}
@@ -82,7 +81,6 @@
         
         hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0; width: 100%; opacity: 0.5; }
 
-        /* Stile Toast Notifica */
         #toastContainer {
             position: fixed;
             top: 20px;
@@ -148,7 +146,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 5px; gap: 5px;">
             <h2 style="margin: 0; text-align: left; flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 1.2em;">Ciao <span id="playerName">Giocatore</span>! 📻</h2>
             <div style="display: flex; gap: 5px; flex-shrink: 0;">
-                <button class="action-btn-small btn-secondary" onclick="showScreen('privacyScreen')">Info & privacy</button>
+                <button class="action-btn-small btn-secondary" onclick="showScreen('privacyScreen')">Info & Privacy</button>
                 <button class="action-btn-small" onclick="showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn');">🏆 Classifica</button>
             </div>
         </div>
@@ -192,7 +190,6 @@
             <button id="createRoomBtn" disabled class="btn-success">Inizia Partita Libera</button>
         </div>
 
-        <!-- Questa box occuperà lo spazio rimanente e scorrerà internamente -->
         <div class="box-panel" style="flex-grow: 1; min-height: 0; margin-bottom: 0;">
             <h3>Bacheca Sfide Libere ⏳</h3>
             <ul id="waitingRoomsList" class="data-list">
@@ -295,8 +292,9 @@
         </div>
 
         <button id="deleteDataBtn" class="btn-danger" style="margin-top: 8px; flex-shrink: 0;">🗑️ Elimina Definitivamente i miei Dati</button>
-    
-        <button onclick="goBackToMenu()" style="margin-top: 8px; flex-shrink: 0;">Torna al Menu</button>
+        
+        <!-- CORREZIONE: Bottone con l'onclick corretto che non va in conflitto -->
+        <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu</button>
     </div>
 
 
@@ -307,7 +305,6 @@
         
         <h3 style="margin-top: 5px; margin-bottom: 5px;">Giocatori presenti:</h3>
         
-        <!-- Contenitore scrollabile per la lista giocatori -->
         <ul id="playersList" class="data-list" style="width: 100%; border: 1px solid var(--hint-color); border-radius: 8px; padding: 5px; flex-grow: 1;"></ul>
         
         <button id="inviteFriendsBtn" class="btn-link" style="font-weight: bold; font-size: 1em; margin: 10px 0; text-align: center;">📢 Invita Amici su Telegram</button>
@@ -363,6 +360,7 @@
         <div id="lbFilterArea" style="display:none; width:100%; text-align:center; margin-bottom:5px; flex-shrink: 0;">
             <label style="font-size:0.9em; font-weight:bold;">Filtra per N° Parole: </label>
             <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px; font-size: 0.9em;">
+                <option value="all">Tutte le categorie</option>
                 <option value="10">10 Parole</option>
                 <option value="20">20 Parole</option>
                 <option value="30">30 Parole</option>
@@ -370,7 +368,6 @@
             </select>
         </div>
 
-        <!-- Box Classifica scrollabile -->
         <div id="leaderboardContainer" style="width: 100%; flex-grow: 1; overflow-y: auto; margin-top: 5px; border-top: 1px solid var(--hint-color); padding-top: 5px;"></div>
         
         <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu</button>
@@ -875,11 +872,12 @@
             
             if (totalScore > 0 && !roomCode.startsWith("CHAMP_")) {
                 let dbPath = currentMode === 'callsign' 
-                    ? `leaderboard/callsign/global/${myId}` : `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                    ? `leaderboard/callsign/global/${myId}` 
+                    : `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                     
                 if (currentMode !== 'callsign') {
                     let select = document.getElementById('lbWordFilter');
-                    if (!Array.from(select.options).some(opt => opt.value == requestedWordCount)) {
+                    if (!Array.from(select.options).some(opt => opt.value == requestedWordCount) && requestedWordCount !== 'all') {
                         let opt = document.createElement('option'); opt.value = requestedWordCount; opt.text = `${requestedWordCount} Parole`; select.add(opt);
                     }
                     select.value = requestedWordCount;
@@ -918,7 +916,16 @@
             if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati. Confermi?")) {
                 try {
                     await db.ref(`leaderboard`).once('value', snapshot => { 
-                        snapshot.forEach(mode => { mode.forEach(type => { if(type.hasChild(myId)) type.child(myId).ref.remove(); }); }); 
+                        snapshot.forEach(mode => { 
+                            mode.forEach(type => { 
+                                type.forEach(record => {
+                                    // Funziona sia con userId semplice che con i nuovi userId_parole
+                                    if(record.key === myId || record.key.startsWith(myId + "_")) {
+                                        record.ref.remove();
+                                    }
+                                });
+                            }); 
+                        }); 
                     });
                     
                     if (roomCode) { 
@@ -945,19 +952,22 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
             document.getElementById(tabId).classList.add('active-tab');
             const filterArea = document.getElementById('lbFilterArea'), roomWinnerBanner = document.getElementById('roomWinnerBanner'), waitingText = document.getElementById('waitingOthersText');
+            
             if (tabId === 'tabRoomBtn') {
                 filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'block'; document.getElementById('leaderboardContainer').innerHTML = ''; 
                 if (roomCode) db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
                 else { document.getElementById('leaderboardContainer').innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>"; waitingText.style.display = 'none'; }
             } else if (tabId === 'tabGlobalCWFreakBtn') {
                 filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
-                fetchAndRenderGlobalLeaderboard(`leaderboard/callsign/global`, `🏆 CW Freak (Assoluta)`);
+                fetchAndRenderGlobalLeaderboard('callsign', null);
             } else {
                 filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
-                let wc = document.getElementById('lbWordFilter').value, type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
-                fetchAndRenderGlobalLeaderboard(`leaderboard/standard/${type}_${wc}`, `🏆 Parole ${type === 'multi' ? 'Multiplayer' : 'Singleplayer'} (${wc} par.)`);
+                let type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
+                let wc = document.getElementById('lbWordFilter').value;
+                fetchAndRenderGlobalLeaderboard(type, wc);
             }
         }
+        
         document.getElementById('tabRoomBtn').addEventListener('click', () => { activeTab="room"; showLeaderboardTab('tabRoomBtn'); });
         document.getElementById('tabGlobalCWFreakBtn').addEventListener('click', () => { activeTab="cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); });
         document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; showLeaderboardTab('tabGlobalStandardMultiBtn'); });
@@ -991,19 +1001,49 @@
             });
         }
 
-        function fetchAndRenderGlobalLeaderboard(path, title) {
-            const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-            db.ref(path).orderByChild('score').limitToLast(50).once('value', snapshot => {
-                container.innerHTML = `<h3 style="text-align:center; font-size:1em; margin-bottom:5px;">${title}</h3>`;
-                let players = []; snapshot.forEach(child => { players.push(child.val()); }); players.reverse(); 
-                if (players.length === 0) { container.innerHTML += '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; return; }
-                players.forEach((player, index) => {
-                    const row = document.createElement('div'); row.className = 'leaderboard-row';
-                    let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                    const nHtml = player.username ? `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${player.name}</span>` : `<span>${player.name}</span>`;
-                    row.innerHTML = `<span>${medalText} ${nHtml} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM)</small></span> <span><b>${player.score} pt</b></span>`;
-                    container.appendChild(row);
+        function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
+            const container = document.getElementById('leaderboardContainer'); 
+            container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+            
+            if (tabType === 'callsign') {
+                db.ref(`leaderboard/callsign/global`).orderByChild('score').limitToLast(50).once('value', snapshot => {
+                    let players = []; snapshot.forEach(child => { players.push(child.val()); }); 
+                    renderPlayersListHTML(players.reverse(), container, false);
                 });
+            } else {
+                if (filterWordCount === 'all') {
+                    db.ref(`leaderboard/standard`).once('value', snapshot => {
+                        let players = [];
+                        snapshot.forEach(wordCountNode => {
+                            if (wordCountNode.key.startsWith(tabType + "_")) {
+                                wordCountNode.forEach(userNode => {
+                                    players.push(userNode.val());
+                                });
+                            }
+                        });
+                        players.sort((a, b) => b.score - a.score);
+                        players = players.slice(0, 100); // Limita a 100 per non intasare l'UI
+                        renderPlayersListHTML(players, container, true);
+                    });
+                } else {
+                    db.ref(`leaderboard/standard/${tabType}_${filterWordCount}`).orderByChild('score').limitToLast(50).once('value', snapshot => {
+                        let players = []; snapshot.forEach(child => { players.push(child.val()); }); 
+                        renderPlayersListHTML(players.reverse(), container, true);
+                    });
+                }
+            }
+        }
+
+        function renderPlayersListHTML(players, container, showWordCount) {
+            container.innerHTML = '';
+            if (players.length === 0) { container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; return; }
+            players.forEach((player, index) => {
+                let wcBadge = (showWordCount && player.wordCount) ? ` - ${player.wordCount} par.` : '';
+                const row = document.createElement('div'); row.className = 'leaderboard-row';
+                let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                const nHtml = player.username ? `<span onclick="openTelegramProfile('${player.username}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${player.name}</span>` : `<span>${player.name}</span>`;
+                row.innerHTML = `<span>${medalText} ${nHtml} <br><small style="color:var(--hint-color); font-size:0.8em;">(${player.date} - ${player.wpm} WPM${wcBadge})</small></span> <span><b>${player.score} pt</b></span>`;
+                container.appendChild(row);
             });
         }
 
