@@ -79,16 +79,50 @@
         .match-vs { font-weight: bold; color: #ff9800; margin: 5px 0; }
         
         hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 20px 0; width: 100%; opacity: 0.5; }
+
+        /* Stile Toast Notifica */
+        #toastContainer {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            animation: fadeInOut 4s forwards;
+            white-space: nowrap;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-10px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
+        }
     </style>
 </head>
 <body>
 
-    <button id="globalChatBtn" style="display:none; position:fixed; top:15px; right:15px; width:auto; z-index:1500; margin:0; padding:8px 15px; font-size:0.9em;" class="btn-secondary" onclick="toggleChat()">💬 Chat</button>
+    <div id="toastContainer"></div>
+
+    <button id="globalChatBtn" style="display:none; position:fixed; top:15px; right:15px; width:auto; z-index:1500; margin:0; padding:8px 15px; font-size:0.9em; transition: background-color 0.3s;" class="btn-secondary" onclick="toggleChat()">💬 Chat</button>
 
     <div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:45%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--hint-color); padding-bottom:5px; margin-bottom:5px;">
             <span id="chatTitle" style="font-weight:bold;">💬 Chat</span>
-            <button onclick="toggleChat()" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-danger">Chiudi</button>
+            <div style="display: flex; gap: 5px;">
+                <button id="clearChatBtn" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-danger">Cancella Chat</button>
+                <button onclick="toggleChat()" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-secondary">Chiudi</button>
+            </div>
         </div>
         <div id="chatMessages" style="flex-grow:1; overflow-y:auto; text-align:left; font-size:0.9em; margin-bottom:5px; padding:8px; background:var(--bg-color); border-radius:8px;"></div>
         <div style="display:flex; gap:5px;">
@@ -109,7 +143,14 @@
 
     <!-- MENU PRINCIPALE -->
     <div id="setupScreen" class="screen">
-        <h2>Ciao <span id="playerName">Giocatore</span>! 📻</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 15px;">
+            <h2 style="margin: 0; text-align: left; flex-grow: 1;">Ciao <span id="playerName">Giocatore</span>! 📻</h2>
+            <div style="display: flex; gap: 10px; font-size: 0.85em; align-items: center;">
+                <a href="#" onclick="showScreen('privacyScreen')" style="color: var(--link-color); text-decoration: none; font-weight: bold;">Regolamento & Privacy</a>
+                <a href="#" onclick="showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn');" style="color: var(--link-color); text-decoration: none; font-weight: bold;">Classifica</a>
+            </div>
+        </div>
+        
         <p id="loadingText">Connessione sicura in corso...</p>
 
         <!-- SEZIONE CAMPIONATO -->
@@ -156,8 +197,8 @@
             </ul>
         </div>
         
-        <button id="viewGlobalLeaderboardBtn" class="btn-link" style="font-weight: bold; font-size: 1.1em;">🏆 Classifiche Generali</button>
-        <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Dati & Regolamento</button>
+        <button id="viewGlobalLeaderboardBtn" class="btn-link" style="font-weight: bold; font-size: 1.1em; display: none;">🏆 Classifiche Generali</button>
+        <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0; display: none;">Privacy & Gestione Dati & Regolamento</button>
     </div>
 
     <!-- SCHERMATA SQUADRE E CAMPIONATO -->
@@ -366,6 +407,17 @@
             else tg.showAlert("Questo utente non ha impostato un Username pubblico su Telegram.");
         }
 
+        function showToast(message) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                if (toast.parentNode) toast.parentNode.removeChild(toast);
+            }, 4000);
+        }
+
         if (!tgUser) {
             document.getElementById('loadingScreen').classList.remove('active-screen');
             document.getElementById('errorScreen').classList.add('active-screen');
@@ -459,22 +511,28 @@
             }
         }
 
-          /* ----- CHAT ----- */
-        let chatListenerRef = null; // Variabile per memorizzare il collegamento alla chat corretta
+        /* ----- CHAT ----- */
+        let chatListenerRef = null; 
+        let isChatDrawerOpen = false;
+        let lastChatTimestamp = Date.now();
 
         window.toggleChat = function() {
             const drawer = document.getElementById('chatDrawer');
             if (drawer.style.display === 'none') {
                 drawer.style.display = 'flex'; 
+                isChatDrawerOpen = true;
                 document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+                document.getElementById('globalChatBtn').style.backgroundColor = 'var(--btn-secondary)'; // reset colore bottone
             } else { 
                 drawer.style.display = 'none'; 
+                isChatDrawerOpen = false;
             }
         }
 
         function hideChat() {
             document.getElementById('chatDrawer').style.display = 'none'; 
             document.getElementById('globalChatBtn').style.display = 'none';
+            isChatDrawerOpen = false;
             if (chatListenerRef) { 
                 chatListenerRef.off(); 
                 chatListenerRef = null; 
@@ -493,29 +551,56 @@
                 document.getElementById('globalChatBtn').style.display = 'block';
             } else { return; }
 
-            // Se stiamo già ascoltando questa esatta chat, non fare nulla (evita i crash)
             if (chatListenerRef && chatListenerRef.toString() === chatRef.toString()) return; 
 
-            // Se c'era una vecchia chat aperta, chiudila prima di aprire la nuova
             if (chatListenerRef) chatListenerRef.off(); 
             chatListenerRef = chatRef; 
             
+            let initialLoad = true;
+
             chatRef.limitToLast(40).on('value', snapshot => {
                 const container = document.getElementById('chatMessages'); 
                 container.innerHTML = ''; 
+                let newMsgsCount = 0;
+                let latestMsg = null;
+                let maxTs = lastChatTimestamp;
+
                 snapshot.forEach(child => {
                     const msg = child.val(); 
                     const div = document.createElement('div'); 
                     div.style.marginBottom = '6px';
+
+                    // Formattazione Data e Ora Message
+                    let dateStr = "";
+                    if(msg.ts) {
+                        const d = new Date(msg.ts);
+                        dateStr = `<small style="color:var(--hint-color); font-size:0.75em;">[${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}]</small> `;
+                        if(msg.ts > maxTs) maxTs = msg.ts;
+                    }
+
                     let nHtml = `<b style="color:var(--link-color)">${msg.name}:</b>`;
-                    div.innerHTML = `${nHtml} ${msg.text}`; 
+                    div.innerHTML = `${dateStr}${nHtml} ${msg.text}`; 
                     container.appendChild(div);
+
+                    if (!initialLoad && msg.ts && msg.ts > lastChatTimestamp && msg.name !== myName) {
+                        newMsgsCount++;
+                        latestMsg = msg;
+                    }
                 });
+
+                lastChatTimestamp = maxTs;
                 container.scrollTop = container.scrollHeight;
+
+                // Gestione della notifica in-game (Chat chiusa)
+                if (!initialLoad && newMsgsCount > 0 && !isChatDrawerOpen) {
+                    showToast(`💬 Nuovo messaggio da ${latestMsg.name}`);
+                    document.getElementById('globalChatBtn').style.backgroundColor = '#4caf50'; // Evidenzia il tasto chat
+                }
+
+                initialLoad = false;
             });
         }
 
-        // Funzione per inviare il messaggio
         document.getElementById('sendChatBtn').addEventListener('click', () => {
             const input = document.getElementById('chatInput'); 
             const txt = input.value.trim(); 
@@ -529,13 +614,21 @@
             input.value = '';
         });
 
-        // NOVITÀ: Invia il messaggio premendo "Invio" sulla tastiera
         document.getElementById('chatInput').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                document.getElementById('sendChatBtn').click();
+            if (e.key === 'Enter') { document.getElementById('sendChatBtn').click(); }
+        });
+
+        // Pulsante "Cancella Chat" Listener
+        document.getElementById('clearChatBtn').addEventListener('click', () => {
+            if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) {
+                if (activeChatContext === 'room' && roomCode) {
+                    db.ref(`rooms/${roomCode}/chat`).remove();
+                } else if (activeChatContext === 'team' && myTeamId) {
+                    db.ref(`teams/${myTeamId}/chat`).remove();
+                }
             }
         });
-      
+        
         /* ----- GESTIONE GIOCO LIBERO ----- */
         function generateCallsign() {
             const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "DL", "EA", "F"];
@@ -570,7 +663,6 @@
                     const room = child.val(); const code = child.key;
                     if (code.startsWith("CHAMP_")) return;
 
-                    // Eliminazione automatica alla scadenza del timer
                     if (room.expiresAt && Date.now() > room.expiresAt) { db.ref(`rooms/${code}`).remove(); return; }
                     
                     if (room.status === 'waiting' && room.type !== 'single') {
@@ -604,13 +696,11 @@
             }).then(() => joinRoomLogic(false));
         });
 
-        // FUNZIONE USCITA PULITA
         function exitRoomCleanly(roomWasDeletedByHost = false) {
             if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
             if (roomCode) {
                 const rc = roomCode; roomCode = ""; 
                 db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
-                // Eliminiamo il giocatore dalla stanza, ma la stanza rimane per gli altri finché non scade
                 if (!roomWasDeletedByHost) {
                     db.ref(`rooms/${rc}`).once('value', snap => {
                         if (snap.exists()) db.ref(`rooms/${rc}/players/${myId}`).remove();
@@ -638,7 +728,6 @@
                 
                 currentRoomListener = db.ref(`rooms/${roomCode}`);
                 currentRoomListener.on('value', roomSnap => {
-                    // SE LA STANZA VIENE ELIMINATA (dal timer o pulsante rosso Host)
                     if (!roomSnap.exists()) { exitRoomCleanly(true); return; }
                     
                     const roomData = roomSnap.val();
@@ -673,7 +762,10 @@
         function renderPlayersList(playersData, hostId) {
             const list = document.getElementById('playersList'); list.innerHTML = '';
             const count = Object.keys(playersData).length;
-            if (count > lastPlayerCount && lastPlayerCount > 0) { playBeep(500, 0.1); setTimeout(() => playBeep(700, 0.15), 150); }
+            if (count > lastPlayerCount && lastPlayerCount > 0) { 
+                playBeep(500, 0.1); setTimeout(() => playBeep(700, 0.15), 150); 
+                showToast("👤 Un nuovo giocatore è entrato nella Lobby!");
+            }
             lastPlayerCount = count;
 
             Object.entries(playersData).forEach(([id, data]) => {
@@ -682,7 +774,6 @@
                 const li = document.createElement('li'); li.innerHTML = `${nHtml} ${isH ? '<small>(HOST)</small>' : ''}`; list.appendChild(li);
             });
 
-            // GESTIONE DEI PULSANTI HOST
             const amIHost = (myId === hostId);
             document.getElementById('startMultiplayerBtn').style.display = amIHost ? 'block' : 'none';
             document.getElementById('deleteRoomBtn').style.display = amIHost ? 'block' : 'none';
@@ -809,18 +900,15 @@
             else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
         }
 
-        // AZIONI PULSANTI STANZA
         document.getElementById('quitGameBtn').addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
         document.getElementById('startMultiplayerBtn').addEventListener('click', () => db.ref(`rooms/${roomCode}/status`).set('countdown'));
         
-        // ELIMINA STANZA (Pulsante rosso per l'Host se vuole cancellarla volontariamente)
         document.getElementById('deleteRoomBtn').addEventListener('click', () => { 
             if (confirm("Vuoi eliminare definitivamente questa stanza?")) {
-                db.ref(`rooms/${roomCode}`).remove(); // Triggera !roomSnap.exists() per tutti
+                db.ref(`rooms/${roomCode}`).remove();
             }
         });
 
-        // ESCI DALLA LOBBY (La stanza rimane attiva finché non scade il tempo)
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => {
             exitRoomCleanly();
         });
@@ -831,7 +919,6 @@
         document.getElementById('showPrivacyBtn').addEventListener('click', () => showScreen('privacyScreen'));
         document.getElementById('closePrivacyBtn').addEventListener('click', () => showScreen('setupScreen'));
         
-        // ELIMINAZIONE ACCOUNT PROFONDA
         document.getElementById('deleteDataBtn').addEventListener('click', async () => {
             if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati. Confermi?")) {
                 try {
