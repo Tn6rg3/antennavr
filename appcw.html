@@ -192,7 +192,7 @@
             </div>
             <div class="settings-row">
                 <div style="display: flex; flex-direction: column; align-items: center;">
-                    <label>WPM:</label> 
+                    <label>WPM Minimi:</label> 
                     <div style="display: flex; align-items: center; gap: 5px; width: 100%;">
                         <input type="number" id="startWpmInput" value="20" min="5" max="50">
                         <label id="fixedSpeedContainer" style="display:none; font-size:0.8em; flex-shrink: 0; display:flex; align-items:center; gap:2px;">
@@ -219,14 +219,22 @@
     <div id="profileScreen" class="screen">
         <h2 style="color: var(--link-color); margin-bottom: 10px;">👤 Profilo e Statistiche</h2>
         
-        <div class="box-panel" style="flex-shrink: 0;">
-            <h3>📈 Caratteri più sbagliati</h3>
-            <div id="errorChartContainer" style="width:100%; max-height:150px; overflow-y:auto; padding-right:5px; font-size: 0.9em;">
-                <p style="text-align:center;color:var(--hint-color)">Caricamento...</p>
+        <div style="display: flex; gap: 5px; width: 100%; flex-shrink: 0; max-height: 200px;">
+            <div class="box-panel" style="flex: 1; overflow:hidden;">
+                <h3>📈 Caratteri più sbagliati</h3>
+                <div id="errorChartContainer" style="width:100%; height:100%; overflow-y:auto; padding-right:5px; font-size: 0.9em;">
+                    <p style="text-align:center;color:var(--hint-color)">Caricamento...</p>
+                </div>
+            </div>
+            <div class="box-panel" style="flex: 1; overflow:hidden;">
+                <h3>⚠️ Errori per WPM</h3>
+                <div id="wpmErrorChartContainer" style="width:100%; height:100%; overflow-y:auto; padding-right:5px; font-size: 0.9em;">
+                    <p style="text-align:center;color:var(--hint-color)">Caricamento...</p>
+                </div>
             </div>
         </div>
         
-        <div class="box-panel" style="flex-grow: 1; min-height:0; margin-bottom:0;">
+        <div class="box-panel" style="flex-grow: 1; min-height:0; margin-bottom:0; margin-top: 5px;">
             <h3>📜 Storico Partite</h3>
             <ul id="matchHistoryList" class="data-list"></ul>
         </div>
@@ -282,21 +290,43 @@
 
     <!-- INFO, REGOLE E PRIVACY -->
     <div id="privacyScreen" class="screen">
-        <h2 style="margin-bottom: 5px;">📜 Info e Regole</h2>
+        <h2 style="margin-bottom: 5px;">📜 Regolamento e Privacy</h2>
         
         <div class="box-panel" style="text-align: left; font-size: 0.9em; flex-grow: 1; overflow-y: auto; padding-right: 10px; margin-bottom: 0;">
-            <h3 style="color: var(--champ-color); font-size: 1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Come si gioca</h3>
-            <p style="margin-top: 5px;">Il gioco consiste nell'ascoltare una sequenza in codice Morse e digitare la parola o il nominativo corretto.</p>
+            <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
+            <p style="margin-top: 5px;">Il gioco consiste nell'ascoltare sequenze in codice Morse e decifrare la parola o il nominativo corretto.</p>
             
-            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 5px;">1. Modalità di Gioco</h4>
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Parole Comuni:</h4>
             <ul style="margin-top: 2px; padding-left: 20px;">
-                <li><b>Parole Comuni:</b> +10 pt e +2 WPM (perfetta). Errori tolgono punti e WPM.</li>
-                <li><b>Nominativi (CW Freak):</b> Punti bonus per le serie, +2 WPM. L'errore azzera tutto.</li>
-                <li><b>Novità:</b> Tasto <i>Riascolta</i> ti fa riascoltare l'audio ma dà 0 punti se indovini. In Singleplayer è possibile bloccare la velocità spuntando "Fissa".</li>
+                <li><b>Parola perfetta:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
+                <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
+                <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
+                <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata prima di avviare la partita.</li>
             </ul>
 
-            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 5px;">2. Privacy & Dati</h4>
-            <p style="margin-top: 2px;">Salviamo solo record, squadre, storico partite e username. Cancellazione istantanea in basso.</p>
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Nominativi (CW Freak):</h4>
+            <ul style="margin-top: 2px; padding-left: 20px;">
+                <li>Per ogni nominativo corretto ricevi un punteggio base calcolato come: <b>(WPM * 2)</b>.</li>
+                <li>Più ne indovini di fila, più il <b>Bonus Serie</b> aumenta (+5pt per ogni serie). La velocità sale di <b>+2 WPM</b>.</li>
+                <li>Al primo errore la serie si azzera, prendi <b>0 pt</b> e la velocità scende di <b>-1 WPM</b>.</li>
+            </ul>
+
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Funzionalità Aggiuntive:</h4>
+            <ul style="margin-top: 2px; padding-left: 20px;">
+                <li><b>Tasto Riascolta:</b> Permette di riascoltare l'audio della parola corrente, ma la parola indovinata varrà <b>sempre 0 punti</b> e non aumenterà il WPM (penalità).</li>
+                <li><b>Velocità Fissa:</b> In Singleplayer puoi spuntare "Fissa" per bloccare il WPM senza farlo variare per errori o successi.</li>
+                <li><b>Caratteri Accentati:</b> Il dizionario comprende anche parole con <i>à, è, é, ì, ò, ù</i> tradotte nei rispettivi standard Morse.</li>
+            </ul>
+
+            <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 15px 0;">
+
+            <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🔒 Privacy e Dati Personali</h3>
+            <p style="margin-top: 5px;">I tuoi dati sono protetti e usati <b>solo</b> ai fini del gioco.</p>
+            <ul style="margin-top: 2px; padding-left: 20px;">
+                <li><b>Cosa salviamo:</b> Il tuo ID Telegram, Nome, Username (se pubblico), storico delle partite giocate, statistiche degli errori e appartenenza alle squadre.</li>
+                <li><b>Trasparenza:</b> Gli altri utenti possono vedere il tuo Nome in classifica o nelle lobby, e possono cliccarci per visualizzare il tuo profilo Telegram pubblico.</li>
+                <li><b>Cancellazione Totale:</b> Tramite il pulsante rosso sottostante puoi cancellare in modo irreversibile <b>TUTTI</b> i dati legati al tuo account dal nostro database (storico, squadre, statistiche).</li>
+            </ul>
         </div>
 
         <button id="deleteDataBtn" class="btn-danger" style="margin-top: 8px; flex-shrink: 0;">🗑️ Elimina Definitivamente i miei Dati</button>
@@ -381,6 +411,7 @@
     <!-- MODALE DETTAGLI MATCH -->
     <div id="matchDetailsModal">
         <h3 style="margin-top:0; text-align: center; color: var(--link-color);">Dettagli Partita</h3>
+        <p style="text-align: center; font-size: 0.85em; color: var(--hint-color); margin-top: -10px;">I caratteri saltati o errati sono in <span style="color: #d32f2f; font-weight: bold;">rosso</span>.</p>
         <div class="table-wrapper" style="flex-grow:1; overflow-y:auto; margin-bottom: 10px;">
             <table id="matchDetailsTable">
                 <thead><tr><th>Scritto</th><th>Reale</th><th>Pt</th></tr></thead>
@@ -411,11 +442,23 @@
         let teamListener = null, allTeamsListener = null, bracketListener = null;
         let activeChatContext = null; 
 
-        const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
-        const morseDict = { 'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.' };
+        // Dizionario Notevolmente Esteso con caratteri accentati (convertiti a monte dal sistema se servono)
+        const masterDictionary = [
+            "abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero",
+            // NUOVE PAROLE & PAROLE ACCENTATE
+            "città", "caffè", "perché", "novità", "virtù", "libertà", "albero", "bambino", "cane", "gatto", "scuola", "tavolo", "sedia", "libro", "penna", "matita", "gomma", "quaderno", "zaino", "computer", "tastiera", "schermo", "mouse", "cuffie", "orologio", "occhiali", "maglietta", "pantaloni", "scarpe", "calzini", "giacca", "cappotto", "sciarpa", "cappello", "guanti", "ombrello", "borsa", "portafoglio", "chiavi", "bicicletta", "treno", "aereo", "nave", "strada", "piazza", "ponte", "fiume", "lago", "mare", "collina", "pianura", "foresta", "fiore", "erba", "foglia", "sole", "luna", "stella", "cielo", "nuvola", "pioggia", "neve", "vento", "fuoco", "acqua", "terra", "sabbia", "sasso", "roccia", "animale", "uccello", "pesce", "insetto", "ragno", "serpente", "rana", "cavallo", "mucca", "maiale", "pecora", "capra", "pollo", "anatra", "oca", "topo", "coniglio", "lupo", "orso", "leone", "tigre", "scimmia", "delfino", "balena", "squalo", "verità", "onestà", "carità", "felicità"
+        ];
+        
+        // Codici Morse Inclusi Accenti Internazionali Standard ITU
+        const morseDict = { 
+            'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', 
+            '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.',
+            // Accenti
+            'À': '.--.-', 'È': '.-..-', 'É': '..-..', 'Ì': '.---.', 'Ò': '---.', 'Ù': '..---'
+        };
 
         // Variabili Partita
-        let gameWords = [], currentWpm = 20, currentTone = 600, totalScore = 0, currentStreak = 0, wordIndex = 0;
+        let gameWords = [], currentWpm = 20, baseWpm = 20, currentTone = 600, totalScore = 0, currentStreak = 0, wordIndex = 0;
         let audioCtx, inputActive = false, gameRunning = false, activeTab = "room";
         let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
         
@@ -424,6 +467,7 @@
         let usedReplay = false;
         let matchDetailsArray = [];
         let sessionCharErrors = {};
+        let sessionErrorsByWpm = {};
 
         window.openTelegramProfile = function(username) {
             if (username) tg.openTelegramLink('https://t.me/' + username);
@@ -655,6 +699,7 @@
             currentMode = document.getElementById('gameModeInput').value;
             isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
             currentWpm = currentMode==='callsign' ? 25 : parseInt(document.getElementById('startWpmInput').value);
+            baseWpm = currentWpm; // Limite minimo fissato all'inizio
             requestedWordCount = currentMode==='callsign' ? 25 : Math.max(3, parseInt(document.getElementById('wordCountInput').value));
             currentTone = parseInt(document.getElementById('toneInput').value); 
             let timerMins = Math.max(1, parseInt(document.getElementById('roomTimerInput').value));
@@ -707,7 +752,7 @@
                     isFixedSpeed = roomData.fixedSpeed || false;
                     
                     if (roomData.status === 'countdown' && !gameRunning) {
-                        currentWpm = roomData.wpm; currentTone = roomData.tone; gameWords = roomData.words;
+                        currentWpm = roomData.wpm; baseWpm = roomData.wpm; currentTone = roomData.tone; gameWords = roomData.words;
                         startCountdownSequence(); return;
                     }
                     if (roomData.status === 'waiting') {
@@ -763,6 +808,20 @@
             return matrix[b.length][a.length];
         }
 
+        function generateDiffHTML(real, typed) {
+            let res = "";
+            let max = Math.max(real.length, typed.length);
+            for(let i=0; i<max; i++) {
+                if(!real[i]) continue; // Se typed è più lunga, ignora l'eccesso per l'evidenziazione in target
+                if(!typed[i] || typed[i] !== real[i]) {
+                    res += `<span style="color:#d32f2f;">${real[i]}</span>`; // Rosso errore o mancante
+                } else {
+                    res += real[i];
+                }
+            }
+            return res;
+        }
+
         // Tasto Riascolta
         document.getElementById('replayWordBtn').addEventListener('click', () => {
             if (!gameRunning || !inputActive) return;
@@ -781,7 +840,7 @@
                 const currentWord = gameWords[wordIndex].toUpperCase();
                 let points = 0, scoreColor = "";
 
-                // Controllo Errori per Statistiche Caratteri (Confronto posizionale o occorrenza base)
+                // Controllo Errori per Statistiche Caratteri per WPM e Globale
                 if (userWord !== currentWord) {
                     let wrongChars = [];
                     const maxLen = Math.max(currentWord.length, userWord.length);
@@ -790,7 +849,13 @@
                             if(!wrongChars.includes(currentWord[i])) wrongChars.push(currentWord[i]);
                         }
                     }
-                    wrongChars.forEach(c => { sessionCharErrors[c] = (sessionCharErrors[c] || 0) + 1; });
+                    
+                    if(!sessionErrorsByWpm[currentWpm]) sessionErrorsByWpm[currentWpm] = {};
+                    
+                    wrongChars.forEach(c => { 
+                        sessionCharErrors[c] = (sessionCharErrors[c] || 0) + 1; 
+                        sessionErrorsByWpm[currentWpm][c] = (sessionErrorsByWpm[currentWpm][c] || 0) + 1;
+                    });
                 }
 
                 if (usedReplay) {
@@ -820,7 +885,8 @@
                         else if (errs === 1) currentWpm -= 1;
                         else if (errs > 1) currentWpm -= 2;
                     }
-                    currentWpm = Math.max(5, currentWpm);
+                    // WPM floor non scende sotto la velocità iniziale scelta
+                    currentWpm = Math.max(baseWpm, currentWpm);
                 }
 
                 totalScore += points;
@@ -859,7 +925,7 @@
             document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
             document.getElementById('scoreDisplay').textContent = `Punti: 0`;
             totalScore = 0; currentStreak = 0; wordIndex = 0; 
-            usedReplay = false; sessionCharErrors = {}; matchDetailsArray = [];
+            usedReplay = false; sessionCharErrors = {}; sessionErrorsByWpm = {}; matchDetailsArray = [];
             document.getElementById('tableBody').innerHTML = ""; 
             
             showScreen('countdownScreen'); gameRunning = true;
@@ -920,7 +986,7 @@
                     details: matchDetailsArray
                 });
                 
-                // Aggiorna errori caratteri
+                // Aggiorna errori caratteri generali
                 if (Object.keys(sessionCharErrors).length > 0) {
                     const statsRef = db.ref(`users/${myId}/stats/charErrors`);
                     statsRef.once('value', snap => {
@@ -929,6 +995,21 @@
                             currentErrors[char] = (currentErrors[char] || 0) + sessionCharErrors[char];
                         }
                         statsRef.set(currentErrors);
+                    });
+                }
+                
+                // Aggiorna errori raggruppati per WPM
+                if (Object.keys(sessionErrorsByWpm).length > 0) {
+                    const wpmStatsRef = db.ref(`users/${myId}/stats/errorsByWpm`);
+                    wpmStatsRef.once('value', snap => {
+                        let currentWpmErrs = snap.val() || {};
+                        for (let w in sessionErrorsByWpm) {
+                            if(!currentWpmErrs[w]) currentWpmErrs[w] = {};
+                            for (let c in sessionErrorsByWpm[w]) {
+                                currentWpmErrs[w][c] = (currentWpmErrs[w][c] || 0) + sessionErrorsByWpm[w][c];
+                            }
+                        }
+                        wpmStatsRef.set(currentWpmErrs);
                     });
                 }
             }
@@ -976,10 +1057,11 @@
         window.showProfileScreen = function() {
             showScreen('profileScreen');
             document.getElementById('errorChartContainer').innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+            document.getElementById('wpmErrorChartContainer').innerHTML = '<p style="text-align:center;">Caricamento...</p>';
             const list = document.getElementById('matchHistoryList'); 
             list.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
 
-            // Load Errors
+            // Load General Character Errors
             db.ref(`users/${myId}/stats/charErrors`).once('value').then(snap => {
                 const errors = snap.val() || {};
                 const container = document.getElementById('errorChartContainer'); 
@@ -987,7 +1069,7 @@
                 const sorted = Object.entries(errors).sort((a,b) => b[1] - a[1]);
                 
                 if(sorted.length === 0) { 
-                    container.innerHTML = '<p style="text-align:center;color:var(--hint-color)">Nessun errore registrato.</p>'; 
+                    container.innerHTML = '<p style="text-align:center;color:var(--hint-color)">Nessun errore.</p>'; 
                 } else {
                     let maxErr = sorted[0][1];
                     sorted.forEach(([char, count]) => {
@@ -1002,8 +1084,44 @@
                     });
                 }
             }).catch(e => {
-                // Ora ti mostrerà il motivo esatto dell'errore (es. Permission Denied)
-                document.getElementById('errorChartContainer').innerHTML = `<p style="text-align:center; color:#d32f2f; font-weight:bold;">Errore DB: ${e.message}</p>`;
+                document.getElementById('errorChartContainer').innerHTML = `<p style="text-align:center; color:#d32f2f; font-weight:bold;">Errore DB</p>`;
+            });
+
+            // Load Errors by WPM
+            db.ref(`users/${myId}/stats/errorsByWpm`).once('value').then(snap => {
+                const wpmErrors = snap.val() || {};
+                const container = document.getElementById('wpmErrorChartContainer'); 
+                container.innerHTML = '';
+                
+                if(Object.keys(wpmErrors).length === 0) {
+                    container.innerHTML = '<p style="text-align:center;color:var(--hint-color)">Nessun errore per WPM.</p>';
+                    return;
+                }
+                
+                // Ordina dal WPM più alto a quello più basso
+                let wpmSorted = Object.keys(wpmErrors).sort((a,b) => parseInt(b) - parseInt(a));
+                
+                wpmSorted.forEach(wpm => {
+                    let charsAtWpm = wpmErrors[wpm];
+                    // Somma errori totali per questo WPM
+                    let totalErrs = Object.values(charsAtWpm).reduce((acc, curr) => acc + curr, 0);
+                    // Trova il carattere più sbagliato a questo WPM
+                    let topChar = Object.entries(charsAtWpm).sort((a,b) => b[1] - a[1])[0];
+                    
+                    let row = document.createElement('div');
+                    row.style.marginBottom = '8px';
+                    row.style.borderBottom = '1px solid var(--hint-color)';
+                    row.style.paddingBottom = '4px';
+                    row.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--link-color);">
+                            <span>${wpm} WPM</span> <span>Tot: ${totalErrs} err</span>
+                        </div>
+                        <div style="font-size:0.85em; color:var(--text-color);">
+                            Peggior lettera: <b>${topChar[0]}</b> (${topChar[1]} volte)
+                        </div>
+                    `;
+                    container.appendChild(row);
+                });
             });
 
             // Load History
@@ -1038,7 +1156,6 @@
                     list.appendChild(li);
                 });
             }).catch(e => {
-                // Stampa l'errore esatto dello storico
                 list.innerHTML = `<li style="justify-content:center; color:#d32f2f; font-weight:bold;">Errore Storico: ${e.message}</li>`;
             });
         }
@@ -1054,7 +1171,10 @@
             details.forEach(row => {
                 const tr = document.createElement('tr');
                 let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
-                tr.innerHTML = `<td>${row.typed || '-'}</td><td><b>${row.real}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
+                // Applica il Red Diff
+                let realHTML = generateDiffHTML(row.real, row.typed || '');
+                
+                tr.innerHTML = `<td>${row.typed || '-'}</td><td><b>${realHTML}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
                 body.appendChild(tr);
             });
             document.getElementById('matchDetailsModal').style.display = 'flex';
