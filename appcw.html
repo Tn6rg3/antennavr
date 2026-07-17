@@ -360,8 +360,7 @@
             <button id="startMultiplayerBtn" style="display:none;" class="btn-success">AVVIA PARTITA</button>
             <button id="deleteRoomBtn" style="display:none;" class="btn-danger">ELIMINA STANZA</button>
             <p id="waitingHostText" style="display:none; font-style: italic; text-align: center; font-size: 0.9em; margin-bottom: 5px;">In attesa che l'Host avvii...</p>
-                    <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">ESci dalla Stanza</button>
-
+            <button id="leaveLobbyBtn" class="btn-secondary" style="margin-top: 5px;">Esci dalla Stanza</button>
         </div>
     </div>
 
@@ -1631,7 +1630,6 @@
     });
     
     document.getElementById('deleteRoomBtn').addEventListener('click', () => { customConfirm("Eliminare questa stanza?", () => db.ref(`rooms/${roomCode}`).remove()); });
-    document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
     window.goBackToMenu = function() { showScreen('setupScreen'); };
 
     document.getElementById('deleteDataBtn').addEventListener('click', async () => {
