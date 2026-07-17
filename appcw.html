@@ -215,101 +215,24 @@
         </div>
     </div>
 
-   /* ================= PROFILO E STATISTICHE ================= */
-        let userMatchHistory = []; // Variabile globale per salvare la cronologia corrente
+    <!-- PROFILO E STATISTICHE -->
+    <div id="profileScreen" class="screen">
+        <h2 style="color: var(--link-color); margin-bottom: 10px;">👤 Profilo e Statistiche</h2>
+        
+        <div class="box-panel" style="flex-shrink: 0;">
+            <h3>📈 Caratteri più sbagliati</h3>
+            <div id="errorChartContainer" style="width:100%; max-height:150px; overflow-y:auto; padding-right:5px; font-size: 0.9em;">
+                <p style="text-align:center;color:var(--hint-color)">Caricamento...</p>
+            </div>
+        </div>
+        
+        <div class="box-panel" style="flex-grow: 1; min-height:0; margin-bottom:0;">
+            <h3>📜 Storico Partite</h3>
+            <ul id="matchHistoryList" class="data-list"></ul>
+        </div>
 
-        window.showProfileScreen = function() {
-            showScreen('profileScreen');
-            document.getElementById('errorChartContainer').innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-            const list = document.getElementById('matchHistoryList'); 
-            list.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-
-            // Load Errors
-            db.ref(`users/${myId}/stats/charErrors`).once('value').then(snap => {
-                const errors = snap.val() || {};
-                const container = document.getElementById('errorChartContainer'); 
-                container.innerHTML = '';
-                const sorted = Object.entries(errors).sort((a,b) => b[1] - a[1]);
-                
-                if(sorted.length === 0) { 
-                    container.innerHTML = '<p style="text-align:center;color:var(--hint-color)">Nessun errore registrato.</p>'; 
-                } else {
-                    let maxErr = sorted[0][1];
-                    sorted.forEach(([char, count]) => {
-                        let pct = (count / maxErr) * 100; 
-                        let row = document.createElement('div');
-                        row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.marginBottom = '4px';
-                        row.innerHTML = `<span style="width:20px; font-weight:bold;">${char}</span>
-                                         <div style="flex-grow:1; background:var(--bg-color); border:1px solid var(--hint-color); border-radius:4px; height:12px; margin: 0 5px; overflow:hidden;">
-                                            <div style="width:${pct}%; background:#d32f2f; height:100%;"></div>
-                                         </div><span style="width:25px; text-align:right; font-size:0.9em; font-weight:bold;">${count}</span>`;
-                        container.appendChild(row);
-                    });
-                }
-            }).catch(e => {
-                document.getElementById('errorChartContainer').innerHTML = '<p style="text-align:center; color:#d32f2f;">Errore di caricamento</p>';
-            });
-
-            // Load History
-            db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(30).once('value').then(snap => {
-                list.innerHTML = ''; 
-                userMatchHistory = [];
-                snap.forEach(child => { userMatchHistory.push({ key: child.key, ...child.val() }); }); 
-                userMatchHistory.reverse();
-
-                if (userMatchHistory.length === 0) { 
-                    list.innerHTML = '<li style="justify-content:center;color:var(--hint-color)">Nessuna partita giocata.</li>'; 
-                    return; 
-                }
-                
-                userMatchHistory.forEach(match => {
-                    const d = new Date(match.date || Date.now());
-                    const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
-                    const li = document.createElement('li'); 
-                    li.style.flexDirection = 'column'; li.style.alignItems = 'flex-start';
-                    li.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
-                            <span style="font-size:0.85em; font-weight:bold;">${match.mode === 'callsign' ? '🎙️ Nom.' : '🔤 Parole'} (${match.type})</span>
-                            <span style="font-size:0.8em; color:var(--hint-color);">${dateStr}</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                            <span><b>${match.score} pt</b> <small>(${match.wpm} WPM)</small></span>
-                            <div style="display:flex; gap:5px;">
-                                <!-- Modifica: passa la chiave (testo) e non l'oggetto JSON -->
-                                <button class="action-btn-small btn-secondary" onclick="openMatchDetails('${match.key}')">Vedi</button>
-                                <button class="action-btn-small btn-danger" onclick="deleteHistoryItem('${match.key}')">X</button>
-                            </div>
-                        </div>`;
-                    list.appendChild(li);
-                });
-            }).catch(e => {
-                list.innerHTML = '<li style="justify-content:center; color:#d32f2f;">Errore di caricamento storico.</li>';
-            });
-        }
-
-        window.openMatchDetails = function(matchKey) {
-            // Cerca i dettagli della partita in base alla chiave
-            const match = userMatchHistory.find(m => m.key === matchKey);
-            if(!match) return;
-            
-            const details = match.details || [];
-            const body = document.getElementById('matchDetailsBody'); 
-            body.innerHTML = '';
-            
-            details.forEach(row => {
-                const tr = document.createElement('tr');
-                let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
-                tr.innerHTML = `<td>${row.typed || '-'}</td><td><b>${row.real}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
-                body.appendChild(tr);
-            });
-            document.getElementById('matchDetailsModal').style.display = 'flex';
-        }
-
-        window.deleteHistoryItem = function(key) {
-            if(confirm("Eliminare questa partita dallo storico?")) {
-                db.ref(`users/${myId}/history/${key}`).remove().then(() => showProfileScreen());
-            }
-        }
+        <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu</button>
+    </div>
 
     <!-- SCHERMATA SQUADRE E CAMPIONATO -->
     <div id="teamsScreen" class="screen">
