@@ -56,8 +56,9 @@
         th, td { border-bottom: 1px solid var(--hint-color); padding: 8px 5px; text-align: center; }
         th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
         
-        #permanentGameInput { border: 2px solid var(--link-color); outline: none; margin: 0; font-weight: bold; text-transform: uppercase;}
-        #permanentGameInput:focus { background-color: var(--sec-bg-color); }
+        #permanentGameInput, #pingPongWordToSend { border: 2px solid var(--link-color); outline: none; margin: 0; font-weight: bold; text-transform: uppercase;}
+        #permanentGameInput:focus, #pingPongWordToSend:focus { background-color: var(--sec-bg-color); }
+        #pingPongWordToSend { border-color: #ff9800; }
         
         .box-panel { border: 1px solid var(--hint-color); padding: 10px; border-radius: 10px; width: 100%; margin-bottom: 8px; box-sizing: border-box; background: var(--sec-bg-color); display: flex; flex-direction: column;}
         .box-panel h3 { margin-top: 0; margin-bottom: 5px; font-size: 1em; text-align: center;}
@@ -305,7 +306,7 @@
                 <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
                 <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
                 <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata all'inizio.</li>
-                <li><i>Ping Pong:</i> Trasmette sequenze casuali di 5 caratteri alfanumerici.</li>
+                <li><i>Ping Pong:</i> Trasmette le parole digitate a turno dagli utenti all'interno della stanza.</li>
             </ul>
 
             <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Nominativi (CW Freak):</h4>
@@ -376,7 +377,13 @@
             </table>
         </div>
         
-        <div style="display: flex; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
+        <!-- NUOVA SEZIONE PING PONG (Per l'inserimento parola) -->
+        <div id="pingPongSendArea" style="display: none; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
+            <input type="text" id="pingPongWordToSend" placeholder="Scrivi la parola da inviare..." autocomplete="off" autocapitalize="none" style="flex-grow: 1; padding: 10px; font-size: 1.1em; margin: 0; border: 2px solid #ff9800;">
+            <button id="btnSendPingPong" class="btn-secondary" style="width: auto; margin: 0; padding: 10px;">Invia (Tu)</button>
+        </div>
+
+        <div id="gameInputArea" style="display: flex; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
             <input type="text" id="permanentGameInput" placeholder="Digita qui..." autocomplete="off" autocapitalize="none" style="flex-grow: 1; padding: 10px; font-size: 1.1em; margin: 0;">
             <button id="replayWordBtn" class="btn-secondary" style="width: auto; margin: 0; padding: 10px; font-size: 0.9em;">🔁 Riascolta</button>
         </div>
@@ -448,8 +455,8 @@
 
         let myName, myId;
         let db, auth;
-        let currentRoomListener = null, chatListener = null;
-        let roomCode = "", lastPlayerCount = 0, lobbyTimerInterval = null;
+        let currentRoomListener = null, chatListener = null, pingPongListener = null;
+        let roomCode = "", lastPlayerCount = 0, lobbyTimerInterval = null, roomHostId = null;
         
         let myTeamId = null, isTeamCaptain = false;
         let teamListener = null, allTeamsListener = null, bracketListener = null;
@@ -474,6 +481,9 @@
         let usedReplay = false;
         let matchDetailsArray = [];
         
+        window.lastPlayedWordId = 0;
+        window.lastSeenGuessId = 0;
+
         // Fix Prototype Pollution: Object.create(null) assicura che non ci sia il prototipo di base Javascript
         let sessionCharErrors = Object.create(null);
         let sessionErrorsByWpm = Object.create(null);
@@ -696,7 +706,7 @@
         
         function getGameWords(num, mode) {
             if (mode === 'callsign') return Array.from({length: num}, generateCallsign);
-            if (mode === 'pingpong') return Array.from({length: num}, generatePingPong);
+            if (mode === 'pingpong') return []; // In Ping Pong la parola è gestita dinamicamente da Firebase
             return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
         }
 
@@ -746,6 +756,8 @@
 
         function exitRoomCleanly(roomWasDeletedByHost = false) {
             if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
+            if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
+            
             if (roomCode) {
                 const rc = roomCode; roomCode = ""; 
                 db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
@@ -778,9 +790,11 @@
                     const roomData = roomSnap.val();
                     currentMode = roomData.mode; requestedWordCount = roomData.wordCount; isSinglePlayer = roomData.type === 'single';
                     isFixedSpeed = roomData.fixedSpeed || false;
+                    roomHostId = roomData.hostId;
                     
                     if (roomData.status === 'countdown' && !gameRunning) {
-                        currentWpm = roomData.wpm; baseWpm = roomData.wpm; currentTone = roomData.tone; gameWords = roomData.words;
+                        currentWpm = roomData.wpm; baseWpm = roomData.wpm; currentTone = roomData.tone; 
+                        if (roomData.words) gameWords = roomData.words;
                         startCountdownSequence(); return;
                     }
                     if (roomData.status === 'waiting') {
@@ -921,11 +935,12 @@
                 
                 matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm });
 
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${escapeHTML(userWord)}</td><td><b>${escapeHTML(currentWord)}</b></td><td style="color:${scoreColor}; font-weight:bold;">${usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points)}</td>`;
-                document.getElementById('tableBody').appendChild(tr);
-                
-                const tableWrapper = document.getElementById('tableWrapper'); tableWrapper.scrollTop = tableWrapper.scrollHeight;
+                if (currentMode !== 'pingpong') {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${escapeHTML(userWord)}</td><td><b>${escapeHTML(currentWord)}</b></td><td style="color:${scoreColor}; font-weight:bold;">${usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points)}</td>`;
+                    document.getElementById('tableBody').appendChild(tr);
+                    const tableWrapper = document.getElementById('tableWrapper'); tableWrapper.scrollTop = tableWrapper.scrollHeight;
+                }
 
                 document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
                 document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
@@ -933,13 +948,54 @@
                 if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm });
                 
                 usedReplay = false;
-                wordIndex++; setTimeout(playNextWord, 600); 
+                
+                if (currentMode === 'pingpong') {
+                    wordIndex++; // Tieniamo traccia localmente
+                    
+                    // Cedo il turno a me stesso per diventare Sender
+                    db.ref(`rooms/${roomCode}/pingpong`).transaction(currentData => {
+                        if (currentData) {
+                            currentData.senderId = myId;
+                            currentData.word = '';
+                            currentData.wordsPlayed = (currentData.wordsPlayed || 0) + 1;
+                            currentData.lastGuess = {
+                                id: Date.now(),
+                                real: currentWord,
+                                typed: userWord,
+                                points: points
+                            };
+                        }
+                        return currentData;
+                    });
+                } else {
+                    wordIndex++; setTimeout(playNextWord, 600); 
+                }
             }
+        });
+
+        // Gestione Invio Ping Pong
+        document.getElementById('btnSendPingPong').addEventListener('click', () => {
+            if (!gameRunning || currentMode !== 'pingpong') return;
+            let word = document.getElementById('pingPongWordToSend').value.trim().toUpperCase();
+            if (!word) return;
+            
+            db.ref(`rooms/${roomCode}/pingpong`).transaction(currentData => {
+                if (currentData) {
+                    currentData.word = word;
+                    currentData.wordId = (currentData.wordId || 0) + 1;
+                }
+                return currentData;
+            });
+        });
+        document.getElementById('pingPongWordToSend').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('btnSendPingPong').click();
         });
 
         function playNextWord() {
             if (!gameRunning) return;
-            if (wordIndex >= gameWords.length) { finishGame(); return; }
+            if (currentMode === 'pingpong') return; // Bypassato perché gestito dal Firebase listener
+
+            if (wordIndex >= requestedWordCount) { finishGame(); return; }
             if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400; 
             playMorseAudio(gameWords[wordIndex].toUpperCase(), currentWpm);
             inputActive = true; document.getElementById('permanentGameInput').focus();
@@ -955,6 +1011,23 @@
             usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
             document.getElementById('tableBody').innerHTML = ""; 
             
+            // Resetta Variabili Ping Pong
+            window.lastPlayedWordId = 0;
+            window.lastSeenGuessId = 0;
+            if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
+            document.getElementById('pingPongSendArea').style.display = 'none';
+            document.getElementById('gameInputArea').style.display = 'flex';
+
+            if (currentMode === 'pingpong' && myId === roomHostId) {
+                db.ref(`rooms/${roomCode}/pingpong`).set({
+                    senderId: myId,
+                    word: '',
+                    wordId: 0,
+                    wordsPlayed: 0,
+                    lastGuess: null
+                });
+            }
+            
             showScreen('countdownScreen'); gameRunning = true;
             let count = 3; document.getElementById('countdownNumber').textContent = count;
             
@@ -965,8 +1038,73 @@
                     setTimeout(() => {
                         if (!gameRunning) return;
                         showScreen('gameArea');
-                        setTimeout(() => document.getElementById('permanentGameInput').focus(), 200);
-                        setTimeout(() => { if (gameRunning) playNextWord(); }, 800); 
+                        
+                        if (currentMode === 'pingpong') {
+                            pingPongListener = db.ref(`rooms/${roomCode}/pingpong`).on('value', snap => {
+                                if (!gameRunning) return;
+                                const ppData = snap.val();
+                                if (!ppData) return;
+
+                                // Sincronizza tabellone se qualcuno ha indovinato l'ultima parola inviata
+                                if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
+                                    window.lastSeenGuessId = ppData.lastGuess.id;
+                                    const tr = document.createElement('tr');
+                                    let scoreColor = ppData.lastGuess.points > 0 ? "#4caf50" : (ppData.lastGuess.points === 0 && ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
+                                    let realHTML = generateDiffHTML(ppData.lastGuess.real, ppData.lastGuess.typed || '');
+                                    tr.innerHTML = `<td>${escapeHTML(ppData.lastGuess.typed)}</td><td><b>${realHTML}</b></td><td style="color:${scoreColor}; font-weight:bold;">${ppData.lastGuess.points}</td>`;
+                                    document.getElementById('tableBody').appendChild(tr);
+                                    const tableWrapper = document.getElementById('tableWrapper'); tableWrapper.scrollTop = tableWrapper.scrollHeight;
+                                }
+
+                                if (ppData.wordsPlayed >= requestedWordCount) {
+                                    finishGame();
+                                    return;
+                                }
+
+                                let amISender = (ppData.senderId === myId);
+
+                                if (amISender) {
+                                    if (!ppData.word) {
+                                        // È il mio turno di INVIARE una stringa
+                                        document.getElementById('pingPongSendArea').style.display = 'flex';
+                                        document.getElementById('gameInputArea').style.display = 'none';
+                                        document.getElementById('pingPongWordToSend').value = '';
+                                        setTimeout(() => document.getElementById('pingPongWordToSend').focus(), 100);
+                                    } else {
+                                        // Ho inviato, aspetto l'avversario
+                                        document.getElementById('pingPongSendArea').style.display = 'none';
+                                        document.getElementById('gameInputArea').style.display = 'flex';
+                                        document.getElementById('permanentGameInput').disabled = true;
+                                        document.getElementById('permanentGameInput').placeholder = "Avversario in decodifica...";
+                                        document.getElementById('permanentGameInput').value = "";
+                                    }
+                                } else {
+                                    // È il mio turno di RICEVERE E DECODIFICARE
+                                    document.getElementById('pingPongSendArea').style.display = 'none';
+                                    document.getElementById('gameInputArea').style.display = 'flex';
+
+                                    if (ppData.word && ppData.wordId > window.lastPlayedWordId) {
+                                        window.lastPlayedWordId = ppData.wordId;
+                                        gameWords[wordIndex] = ppData.word; 
+                                        
+                                        document.getElementById('permanentGameInput').disabled = false;
+                                        document.getElementById('permanentGameInput').placeholder = "Decodifica e scrivi...";
+                                        document.getElementById('permanentGameInput').value = "";
+                                        setTimeout(() => document.getElementById('permanentGameInput').focus(), 100);
+                                        inputActive = true;
+                                        setTimeout(() => playMorseAudio(ppData.word.toUpperCase(), currentWpm), 500);
+                                    } else if (!ppData.word) {
+                                        document.getElementById('permanentGameInput').disabled = true;
+                                        document.getElementById('permanentGameInput').placeholder = "In attesa dell'avversario...";
+                                        document.getElementById('permanentGameInput').value = "";
+                                        inputActive = false;
+                                    }
+                                }
+                            });
+                        } else {
+                            setTimeout(() => document.getElementById('permanentGameInput').focus(), 200);
+                            setTimeout(() => { if (gameRunning) playNextWord(); }, 800); 
+                        }
                     }, 500); 
                 }
             }, 1000);
@@ -974,6 +1112,8 @@
 
         function finishGame() {
             gameRunning = false; inputActive = false; document.getElementById('permanentGameInput').blur();
+            if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
+            
             showScreen('leaderboardScreen');
             
             if (roomCode) {
