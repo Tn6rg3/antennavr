@@ -58,7 +58,6 @@
         
         #permanentGameInput { border: 2px solid var(--link-color); outline: none; margin: 0; font-weight: bold; text-transform: uppercase;}
         #permanentGameInput:focus { background-color: var(--sec-bg-color); }
-        #permanentGameInput:disabled { background-color: var(--sec-bg-color); border-color: var(--hint-color); opacity: 0.7; }
         
         .box-panel { border: 1px solid var(--hint-color); padding: 10px; border-radius: 10px; width: 100%; margin-bottom: 8px; box-sizing: border-box; background: var(--sec-bg-color); display: flex; flex-direction: column;}
         .box-panel h3 { margin-top: 0; margin-bottom: 5px; font-size: 1em; text-align: center;}
@@ -188,13 +187,12 @@
                     <select id="gameModeInput">
                         <option value="standard">Parole Comuni</option>
                         <option value="callsign">Nominativi (CW Freak)</option>
-                        <option value="pingpong">Ping Pong (1v1 a Turni)</option>
                     </select>
                 </div>
             </div>
             <div class="settings-row">
                 <div style="display: flex; flex-direction: column; align-items: center;">
-                    <label>WPM Minimi:</label> 
+                    <label>WPM:</label> 
                     <div style="display: flex; align-items: center; gap: 5px; width: 100%;">
                         <input type="number" id="startWpmInput" value="20" min="5" max="50">
                         <label id="fixedSpeedContainer" style="display:none; font-size:0.8em; flex-shrink: 0; display:flex; align-items:center; gap:2px;">
@@ -221,22 +219,14 @@
     <div id="profileScreen" class="screen">
         <h2 style="color: var(--link-color); margin-bottom: 10px;">👤 Profilo e Statistiche</h2>
         
-        <div style="display: flex; gap: 5px; width: 100%; flex-shrink: 0; max-height: 200px;">
-            <div class="box-panel" style="flex: 1; overflow:hidden;">
-                <h3>📈 Caratteri più sbagliati</h3>
-                <div id="errorChartContainer" style="width:100%; height:100%; overflow-y:auto; padding-right:5px; font-size: 0.9em;">
-                    <p style="text-align:center;color:var(--hint-color)">Caricamento...</p>
-                </div>
-            </div>
-            <div class="box-panel" style="flex: 1; overflow:hidden;">
-                <h3>⚠️ Errori per WPM</h3>
-                <div id="wpmErrorChartContainer" style="width:100%; height:100%; overflow-y:auto; padding-right:5px; font-size: 0.9em;">
-                    <p style="text-align:center;color:var(--hint-color)">Caricamento...</p>
-                </div>
+        <div class="box-panel" style="flex-shrink: 0;">
+            <h3>📈 Caratteri più sbagliati</h3>
+            <div id="errorChartContainer" style="width:100%; max-height:150px; overflow-y:auto; padding-right:5px; font-size: 0.9em;">
+                <p style="text-align:center;color:var(--hint-color)">Caricamento...</p>
             </div>
         </div>
         
-        <div class="box-panel" style="flex-grow: 1; min-height:0; margin-bottom:0; margin-top: 5px;">
+        <div class="box-panel" style="flex-grow: 1; min-height:0; margin-bottom:0;">
             <h3>📜 Storico Partite</h3>
             <ul id="matchHistoryList" class="data-list"></ul>
         </div>
@@ -292,50 +282,21 @@
 
     <!-- INFO, REGOLE E PRIVACY -->
     <div id="privacyScreen" class="screen">
-        <h2 style="margin-bottom: 5px;">📜 Regolamento e Privacy</h2>
+        <h2 style="margin-bottom: 5px;">📜 Info e Regole</h2>
         
         <div class="box-panel" style="text-align: left; font-size: 0.9em; flex-grow: 1; overflow-y: auto; padding-right: 10px; margin-bottom: 0;">
-            <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
-            <p style="margin-top: 5px;">Il gioco consiste nell'ascoltare sequenze in codice Morse e decifrare la parola o il nominativo corretto.</p>
+            <h3 style="color: var(--champ-color); font-size: 1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Come si gioca</h3>
+            <p style="margin-top: 5px;">Il gioco consiste nell'ascoltare una sequenza in codice Morse e digitare la parola o il nominativo corretto.</p>
             
-            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Parole Comuni:</h4>
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 5px;">1. Modalità di Gioco</h4>
             <ul style="margin-top: 2px; padding-left: 20px;">
-                <li><b>Parola perfetta:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
-                <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
-                <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
-                <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata prima di avviare la partita.</li>
+                <li><b>Parole Comuni:</b> +10 pt e +2 WPM (perfetta). Errori tolgono punti e WPM.</li>
+                <li><b>Nominativi (CW Freak):</b> Punti bonus per le serie, +2 WPM. L'errore azzera tutto.</li>
+                <li><b>Novità:</b> Tasto <i>Riascolta</i> ti fa riascoltare l'audio ma dà 0 punti se indovini. In Singleplayer è possibile bloccare la velocità spuntando "Fissa".</li>
             </ul>
 
-            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Nominativi (CW Freak):</h4>
-            <ul style="margin-top: 2px; padding-left: 20px;">
-                <li>Per ogni nominativo corretto ricevi un punteggio base calcolato come: <b>(WPM * 2)</b>.</li>
-                <li>Più ne indovini di fila, più il <b>Bonus Serie</b> aumenta (+5pt per ogni serie). La velocità sale di <b>+2 WPM</b>.</li>
-                <li>Al primo errore la serie si azzera, prendi <b>0 pt</b> e la velocità scende di <b>-1 WPM</b>.</li>
-            </ul>
-            
-            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Ping Pong (1v1 a Turni):</h4>
-            <ul style="margin-top: 2px; padding-left: 20px;">
-                <li>Si gioca esclusivamente in 2 giocatori reali.</li>
-                <li>Il <b>Giocatore A</b> digita una parola personalizzata e la invia. Il <b>Giocatore B</b> la ascolta in Morse e deve indovinarla.</li>
-                <li>I ruoli si invertono ad ogni turno, finché non si raggiunge il limite totale di parole scelto.</li>
-            </ul>
-
-            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Funzionalità Aggiuntive:</h4>
-            <ul style="margin-top: 2px; padding-left: 20px;">
-                <li><b>Tasto Riascolta:</b> Permette di riascoltare l'audio della parola corrente, ma la parola indovinata varrà <b>sempre 0 punti</b> e non aumenterà il WPM (penalità).</li>
-                <li><b>Velocità Fissa:</b> In Singleplayer puoi spuntare "Fissa" per bloccare il WPM senza farlo variare per errori o successi.</li>
-                <li><b>Caratteri Accentati:</b> Il dizionario comprende anche parole con <i>à, è, é, ì, ò, ù</i> tradotte nei rispettivi standard Morse.</li>
-            </ul>
-
-            <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 15px 0;">
-
-            <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🔒 Privacy e Dati Personali</h3>
-            <p style="margin-top: 5px;">I tuoi dati sono protetti e usati <b>solo</b> ai fini del gioco.</p>
-            <ul style="margin-top: 2px; padding-left: 20px;">
-                <li><b>Cosa salviamo:</b> Il tuo ID Telegram, Nome, Username (se pubblico), storico delle partite giocate, statistiche degli errori e appartenenza alle squadre.</li>
-                <li><b>Trasparenza:</b> Gli altri utenti possono vedere il tuo Nome in classifica o nelle lobby, e possono cliccarci per visualizzare il tuo profilo Telegram pubblico.</li>
-                <li><b>Cancellazione Totale:</b> Tramite il pulsante rosso sottostante puoi cancellare in modo irreversibile <b>TUTTI</b> i dati legati al tuo account dal nostro database (storico, squadre, statistiche).</li>
-            </ul>
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 5px;">2. Privacy & Dati</h4>
+            <p style="margin-top: 2px;">Salviamo solo record, squadre, storico partite e username. Cancellazione istantanea in basso.</p>
         </div>
 
         <button id="deleteDataBtn" class="btn-danger" style="margin-top: 8px; flex-shrink: 0;">🗑️ Elimina Definitivamente i miei Dati</button>
@@ -417,6 +378,18 @@
         <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu</button>
     </div>
 
+    <!-- MODALE DETTAGLI MATCH -->
+    <div id="matchDetailsModal">
+        <h3 style="margin-top:0; text-align: center; color: var(--link-color);">Dettagli Partita</h3>
+        <div class="table-wrapper" style="flex-grow:1; overflow-y:auto; margin-bottom: 10px;">
+            <table id="matchDetailsTable">
+                <thead><tr><th>Scritto</th><th>Reale</th><th>Pt</th></tr></thead>
+                <tbody id="matchDetailsBody"></tbody>
+            </table>
+        </div>
+        <button onclick="document.getElementById('matchDetailsModal').style.display='none'" style="margin-top:auto;">Chiudi</button>
+    </div>
+
     <script>
         const BOT_USERNAME = "cwappgame_bot"; 
         const WEBAPP_NAME = "cwgame"; 
@@ -433,35 +406,24 @@
         let db, auth;
         let currentRoomListener = null, chatListener = null;
         let roomCode = "", lastPlayerCount = 0, lobbyTimerInterval = null;
-        let playersInRoomList = {};
         
         let myTeamId = null, isTeamCaptain = false;
         let teamListener = null, allTeamsListener = null, bracketListener = null;
         let activeChatContext = null; 
 
-        // Nuove variabili per la modalità Ping Pong
-        let pingPongListener = null;
+        const masterDictionary = ["abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero"];
+        const morseDict = { 'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.' };
 
-        const masterDictionary = [
-            "abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero",
-            "città", "caffè", "perché", "novità", "virtù", "libertà", "albero", "bambino", "cane", "gatto", "scuola", "tavolo", "sedia", "libro", "penna", "matita", "gomma", "quaderno", "zaino", "computer", "tastiera", "schermo", "mouse", "cuffie", "orologio", "occhiali", "maglietta", "pantaloni", "scarpe", "calzini", "giacca", "cappotto", "sciarpa", "cappello", "guanti", "ombrello", "borsa", "portafoglio", "chiavi", "bicicletta", "treno", "aereo", "nave", "strada", "piazza", "ponte", "fiume", "lago", "mare", "collina", "pianura", "foresta", "fiore", "erba", "foglia", "sole", "luna", "stella", "cielo", "nuvola", "pioggia", "neve", "vento", "fuoco", "acqua", "terra", "sabbia", "sasso", "roccia", "animale", "uccello", "pesce", "insetto", "ragno", "serpente", "rana", "cavallo", "mucca", "maiale", "pecora", "capra", "pollo", "anatra", "oca", "topo", "coniglio", "lupo", "orso", "leone", "tigre", "scimmia", "delfino", "balena", "squalo", "verità", "onestà", "carità", "felicità"
-        ];
-        
-        const morseDict = { 
-            'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..', 
-            '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.','/': '-..-.',
-            'À': '.--.-', 'È': '.-..-', 'É': '..-..', 'Ì': '.---.', 'Ò': '---.', 'Ù': '..---'
-        };
-
-        let gameWords = [], currentWpm = 20, baseWpm = 20, currentTone = 600, totalScore = 0, currentStreak = 0, wordIndex = 0;
+        // Variabili Partita
+        let gameWords = [], currentWpm = 20, currentTone = 600, totalScore = 0, currentStreak = 0, wordIndex = 0;
         let audioCtx, inputActive = false, gameRunning = false, activeTab = "room";
         let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
         
+        // Nuove Variabili per Stats & Feature
         let isFixedSpeed = false;
         let usedReplay = false;
         let matchDetailsArray = [];
         let sessionCharErrors = {};
-        let sessionErrorsByWpm = {};
 
         window.openTelegramProfile = function(username) {
             if (username) tg.openTelegramLink('https://t.me/' + username);
@@ -639,68 +601,31 @@
         
         /* ----- GESTIONE GIOCO LIBERO E UI SETTINGS ----- */
         function checkGameTypeUI() {
-            const type = document.getElementById('gameTypeInput').value;
-            const mode = document.getElementById('gameModeInput').value;
-            const isSingle = type === 'single';
-            
+            const isSingle = document.getElementById('gameTypeInput').value === 'single';
             document.getElementById('timeoutDiv').style.display = isSingle ? 'none' : 'block';
             document.getElementById('fixedSpeedContainer').style.display = isSingle ? 'flex' : 'none';
             if(!isSingle) document.getElementById('fixedSpeedCheckbox').checked = false;
-            
-            if (mode === 'pingpong') {
-                document.getElementById('createRoomBtn').textContent = "Crea Stanza Ping Pong";
-            } else {
-                document.getElementById('createRoomBtn').textContent = isSingle ? "Gioca Subito" : "Inizia Partita Libera";
-            }
+            document.getElementById('createRoomBtn').textContent = isSingle ? "Gioca Subito" : "Inizia Partita Libera";
         }
         
         document.getElementById('gameModeInput').addEventListener('change', (e) => {
-            const mode = e.target.value;
-            const isC = mode === 'callsign';
-            const isPP = mode === 'pingpong';
-
+            const isC = e.target.value === 'callsign';
             ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => {
                 document.getElementById(id).disabled = isC;
                 if(isC && id!=='toneInput') document.getElementById(id).value = 25;
             });
-            
-            if (isPP) {
-                document.getElementById('gameTypeInput').value = 'multi';
-                document.getElementById('gameTypeInput').disabled = true;
-            } else {
-                document.getElementById('gameTypeInput').disabled = false;
-            }
-
             document.getElementById('fixedSpeedCheckbox').disabled = isC;
             if(isC) document.getElementById('fixedSpeedCheckbox').checked = false;
-            
-            checkGameTypeUI();
         });
         document.getElementById('gameTypeInput').addEventListener('change', checkGameTypeUI);
 
-
         function generateCallsign() {
-            const prefixes = ["I", "IK", "IZ", "IN", "IT", "IS", "IU", "IW", "W", "K", "N", "A", "WA", "WB", "DL", "DJ", "DK", "DO", "EA", "EB", "EC", "F", "G", "M", "GW", "GM", "9A", "S5", "OK", "OM", "SP", "SQ", "UA", "UR", "EW", "ER", "YO", "YU", "HA", "LZ", "OE", "HB", "PA", "PB", "ON", "VE", "VK", "ZL", "JA", "PY", "LU", "CX"];
+            const prefixes = ["I", "IK", "IZ", "IN", "W", "K", "N", "DL", "EA", "F"];
             const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            let prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-            let digit = Math.floor(Math.random() * 10);
-            
-            let rand = Math.random();
-            let suffixLen = (rand > 0.9) ? 1 : (rand > 0.7) ? 2 : 3;
-            
-            let suffix = "";
-            for(let i = 0; i < suffixLen; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
-            let callsign = prefix + digit + suffix;
-            
-            if (Math.random() > 0.90) {
-                const modifiers = ["/QRP", "/P", "/M", "/AM", "/MM"];
-                callsign += modifiers[Math.floor(Math.random() * modifiers.length)];
-            }
-            return callsign;
+            let s = ""; for(let i=0; i<(Math.floor(Math.random()*3)+1); i++) s += chars[Math.floor(Math.random()*chars.length)];
+            return prefixes[Math.floor(Math.random() * prefixes.length)] + Math.floor(Math.random() * 10) + s;
         }
-
         function getGameWords(num, mode) {
-            if (mode === 'pingpong') return []; // Non pre-generati
             if (mode === 'callsign') return Array.from({length: num}, generateCallsign);
             return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
         }
@@ -715,9 +640,8 @@
                     
                     if (room.status === 'waiting' && room.type !== 'single') {
                         wCount++; let pCount = room.players ? Object.keys(room.players).length : 0;
-                        let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : (room.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole');
                         const li = document.createElement('li');
-                        li.innerHTML = `<span><b>#${code} - ${modeIcon}</b><br><small>${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test</small></span>
+                        li.innerHTML = `<span><b>#${code} - ${room.mode==='callsign'?'🎙️ Nom.':'🔤 Parole'}</b><br><small>${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test</small></span>
                                         <button class="action-btn-small" onclick="joinSpecificRoom('${code}')">Entra</button>`;
                         list.appendChild(li);
                     }
@@ -731,7 +655,6 @@
             currentMode = document.getElementById('gameModeInput').value;
             isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
             currentWpm = currentMode==='callsign' ? 25 : parseInt(document.getElementById('startWpmInput').value);
-            baseWpm = currentWpm; 
             requestedWordCount = currentMode==='callsign' ? 25 : Math.max(3, parseInt(document.getElementById('wordCountInput').value));
             currentTone = parseInt(document.getElementById('toneInput').value); 
             let timerMins = Math.max(1, parseInt(document.getElementById('roomTimerInput').value));
@@ -740,19 +663,16 @@
             roomCode = Math.floor(1000 + Math.random() * 9000).toString();
             gameWords = getGameWords(requestedWordCount, currentMode); 
 
-            let roomPayload = {
+            db.ref('rooms/' + roomCode).set({
                 status: isSinglePlayer ? 'countdown' : 'waiting', type: isSinglePlayer ? 'single' : 'multi',
                 mode: currentMode, wpm: currentWpm, tone: currentTone, wordCount: requestedWordCount, words: gameWords, 
                 fixedSpeed: setFixedSpeed, 
                 createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: isSinglePlayer ? null : Date.now() + (timerMins * 60000), hostId: myId
-            };
-
-            db.ref('rooms/' + roomCode).set(roomPayload).then(() => joinRoomLogic(false));
+            }).then(() => joinRoomLogic(false));
         });
 
         function exitRoomCleanly(roomWasDeletedByHost = false) {
             if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
-            if (pingPongListener) { pingPongListener.off(); pingPongListener = null; }
             if (roomCode) {
                 const rc = roomCode; roomCode = ""; 
                 db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
@@ -787,12 +707,11 @@
                     isFixedSpeed = roomData.fixedSpeed || false;
                     
                     if (roomData.status === 'countdown' && !gameRunning) {
-                        currentWpm = roomData.wpm; baseWpm = roomData.wpm; currentTone = roomData.tone; gameWords = roomData.words || [];
+                        currentWpm = roomData.wpm; currentTone = roomData.tone; gameWords = roomData.words;
                         startCountdownSequence(); return;
                     }
                     if (roomData.status === 'waiting') {
-                        playersInRoomList = roomData.players || {};
-                        renderPlayersList(playersInRoomList, roomData.hostId);
+                        renderPlayersList(roomData.players || {}, roomData.hostId);
                         if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
                         if (roomData.expiresAt && !isSinglePlayer) {
                             lobbyTimerInterval = setInterval(() => {
@@ -824,25 +743,10 @@
             });
 
             const amIHost = (myId === hostId);
-            const btnStart = document.getElementById('startMultiplayerBtn');
-            
-            if (currentMode === 'pingpong') {
-                if (count !== 2) {
-                    btnStart.disabled = true; btnStart.style.opacity = '0.5';
-                    if (amIHost) document.getElementById('statusInfoText').textContent = "Mod. Ping Pong: Servono esattamente 2 giocatori.";
-                } else {
-                    btnStart.disabled = false; btnStart.style.opacity = '1';
-                    if (amIHost) document.getElementById('statusInfoText').textContent = "Siete in 2. Puoi avviare la partita.";
-                }
-            } else {
-                btnStart.disabled = false; btnStart.style.opacity = '1';
-                document.getElementById('statusInfoText').textContent = amIHost ? `Sei l'Host della partita.` : "Sei un partecipante. Attendi il via.";
-            }
-
-            btnStart.style.display = amIHost ? 'block' : 'none';
+            document.getElementById('startMultiplayerBtn').style.display = amIHost ? 'block' : 'none';
             document.getElementById('deleteRoomBtn').style.display = amIHost ? 'block' : 'none';
             document.getElementById('waitingHostText').style.display = amIHost ? 'none' : 'block';
-            if (!amIHost) document.getElementById('statusInfoText').textContent = "Sei un partecipante. Attendi il via.";
+            document.getElementById('statusInfoText').textContent = amIHost ? `Sei l'Host della partita.` : "Sei un partecipante. Attendi il via.";
         }
 
         /* ----- GIOCO IN GAME ----- */
@@ -859,196 +763,89 @@
             return matrix[b.length][a.length];
         }
 
-        function generateDiffHTML(real, typed) {
-            let res = "";
-            let max = Math.max(real.length, typed.length);
-            for(let i=0; i<max; i++) {
-                if(!real[i]) continue; 
-                if(!typed[i] || typed[i] !== real[i]) {
-                    res += `<span style="color:#d32f2f;">${real[i]}</span>`;
-                } else { res += real[i]; }
-            }
-            return res;
-        }
-
         // Tasto Riascolta
         document.getElementById('replayWordBtn').addEventListener('click', () => {
             if (!gameRunning || !inputActive) return;
-            if (currentMode === 'pingpong') {
-                db.ref(`rooms/${roomCode}/pingpongState`).once('value', snap => {
-                    if (snap.exists() && snap.val().phase === 'guess') {
-                        usedReplay = true;
-                        playMorseAudio(snap.val().wordToGuess, currentWpm);
-                        document.getElementById('permanentGameInput').focus();
-                    }
-                });
-            } else {
-                usedReplay = true;
-                playMorseAudio(gameWords[wordIndex].toUpperCase(), currentWpm);
-                document.getElementById('permanentGameInput').focus();
-            }
+            usedReplay = true;
+            playMorseAudio(gameWords[wordIndex].toUpperCase(), currentWpm);
+            document.getElementById('permanentGameInput').focus();
         });
-
-        // Astrazione Calcolo Punteggio Unificato
-        function processWordGuess(userWord, currentWord) {
-            let points = 0, scoreColor = "";
-
-            if (userWord !== currentWord) {
-                let wrongChars = [];
-                const maxLen = Math.max(currentWord.length, userWord.length);
-                for(let i=0; i<maxLen; i++) {
-                    if(userWord[i] !== currentWord[i] && currentWord[i]) {
-                        if(!wrongChars.includes(currentWord[i])) wrongChars.push(currentWord[i]);
-                    }
-                }
-                if(!sessionErrorsByWpm[currentWpm]) sessionErrorsByWpm[currentWpm] = {};
-                wrongChars.forEach(c => { 
-                    sessionCharErrors[c] = (sessionCharErrors[c] || 0) + 1; 
-                    sessionErrorsByWpm[currentWpm][c] = (sessionErrorsByWpm[currentWpm][c] || 0) + 1;
-                });
-            }
-
-            if (usedReplay) {
-                points = 0; scoreColor = "#999999";
-                if (currentMode === 'callsign' && userWord !== currentWord) currentStreak = 0; 
-            } else {
-                if (currentMode === 'callsign') {
-                    if (userWord === currentWord) { currentStreak++; points = (currentWpm * 2) + (currentStreak * 5); scoreColor = "#4caf50"; } 
-                    else { currentStreak = 0; points = 0; scoreColor = "#d32f2f"; }
-                } else {
-                    const errors = getLevenshteinDistance(currentWord, userWord);
-                    if (errors === 0) { points = 10; scoreColor = "#4caf50"; } 
-                    else if (errors === 1) { points = 2; scoreColor = "#ff9800"; } 
-                    else { points = 0; scoreColor = "#d32f2f"; }
-                }
-            }
-
-            if (!isFixedSpeed) {
-                if(currentMode === 'callsign') {
-                    if (userWord === currentWord && !usedReplay) currentWpm += 2;
-                    else if (userWord !== currentWord) currentWpm -= 1;
-                } else {
-                    const errs = getLevenshteinDistance(currentWord, userWord);
-                    if (errs === 0 && !usedReplay) currentWpm += 2;
-                    else if (errs === 1) currentWpm -= 1;
-                    else if (errs > 1) currentWpm -= 2;
-                }
-                currentWpm = Math.max(baseWpm, currentWpm);
-            }
-
-            totalScore += points;
-            
-            matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm });
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}; font-weight:bold;">${usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points)}</td>`;
-            document.getElementById('tableBody').appendChild(tr);
-            
-            const tableWrapper = document.getElementById('tableWrapper'); tableWrapper.scrollTop = tableWrapper.scrollHeight;
-
-            document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
-            document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
-
-            if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm });
-            
-            usedReplay = false;
-        }
 
         const permInput = document.getElementById('permanentGameInput');
         permInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && inputActive && gameRunning) {
-                const userWordRaw = permInput.value.trim().toUpperCase();
-                if (userWordRaw === "") return;
-                
-                // Pulisci per essere sicuri che ci siano solo caratteri morse validi
-                let userWord = "";
-                for(let c of userWordRaw) if(morseDict[c] || c===' ') userWord+=c;
-                if(userWord === "") return;
-
+                const userWord = permInput.value.trim().toUpperCase();
+                if (userWord === "") return;
                 inputActive = false; permInput.value = ""; 
                 
-                if (currentMode === 'pingpong') {
-                    db.ref(`rooms/${roomCode}/pingpongState`).once('value', snap => {
-                        if(!snap.exists()) return;
-                        const ppState = snap.val();
-                        if(ppState.currentTurnId === myId) {
-                            if(ppState.phase === 'send') {
-                                // Ho scritto la parola da inviare all'avversario
-                                const opponentId = Object.keys(playersInRoomList).find(id => id !== myId);
-                                db.ref(`rooms/${roomCode}/pingpongState`).update({
-                                    currentTurnId: opponentId,
-                                    phase: 'guess',
-                                    wordToGuess: userWord,
-                                    justSent: true
-                                });
-                            } else if(ppState.phase === 'guess') {
-                                // Sto indovinando la parola dell'avversario
-                                processWordGuess(userWord, ppState.wordToGuess);
-                                wordIndex++;
-                                
-                                // Ora tocca a me inviare la prossima parola
-                                db.ref(`rooms/${roomCode}/pingpongState`).update({
-                                    currentTurnId: myId,
-                                    phase: 'send',
-                                    wordToGuess: '',
-                                    justSent: false,
-                                    roundsPlayed: ppState.roundsPlayed + 1
-                                });
-                            }
+                const currentWord = gameWords[wordIndex].toUpperCase();
+                let points = 0, scoreColor = "";
+
+                // Controllo Errori per Statistiche Caratteri (Confronto posizionale o occorrenza base)
+                if (userWord !== currentWord) {
+                    let wrongChars = [];
+                    const maxLen = Math.max(currentWord.length, userWord.length);
+                    for(let i=0; i<maxLen; i++) {
+                        if(userWord[i] !== currentWord[i] && currentWord[i]) {
+                            if(!wrongChars.includes(currentWord[i])) wrongChars.push(currentWord[i]);
                         }
-                    });
-                } else {
-                    const currentWord = gameWords[wordIndex].toUpperCase();
-                    processWordGuess(userWord, currentWord);
-                    wordIndex++; 
-                    setTimeout(playNextWord, 600); 
+                    }
+                    wrongChars.forEach(c => { sessionCharErrors[c] = (sessionCharErrors[c] || 0) + 1; });
                 }
+
+                if (usedReplay) {
+                    // Penalità Riascolto: 0 punti
+                    points = 0; scoreColor = "#999999";
+                    if (currentMode === 'callsign' && userWord !== currentWord) currentStreak = 0; // se riascolta ma sbaglia, streak azzerata
+                } else {
+                    if (currentMode === 'callsign') {
+                        if (userWord === currentWord) { currentStreak++; points = (currentWpm * 2) + (currentStreak * 5); scoreColor = "#4caf50"; } 
+                        else { currentStreak = 0; points = 0; scoreColor = "#d32f2f"; }
+                    } else {
+                        const errors = getLevenshteinDistance(currentWord, userWord);
+                        if (errors === 0) { points = 10; scoreColor = "#4caf50"; } 
+                        else if (errors === 1) { points = 2; scoreColor = "#ff9800"; } 
+                        else { points = 0; scoreColor = "#d32f2f"; }
+                    }
+                }
+
+                // Modifica WPM (solo se non è Velocità Fissa)
+                if (!isFixedSpeed) {
+                    if(currentMode === 'callsign') {
+                        if (userWord === currentWord && !usedReplay) currentWpm += 2;
+                        else if (userWord !== currentWord) currentWpm -= 1;
+                    } else {
+                        const errs = getLevenshteinDistance(currentWord, userWord);
+                        if (errs === 0 && !usedReplay) currentWpm += 2;
+                        else if (errs === 1) currentWpm -= 1;
+                        else if (errs > 1) currentWpm -= 2;
+                    }
+                    currentWpm = Math.max(5, currentWpm);
+                }
+
+                totalScore += points;
+                
+                // Salva dettaglio per lo storico
+                matchDetailsArray.push({ real: currentWord, typed: userWord, points: points });
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}; font-weight:bold;">${usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points)}</td>`;
+                document.getElementById('tableBody').appendChild(tr);
+                
+                const tableWrapper = document.getElementById('tableWrapper'); tableWrapper.scrollTop = tableWrapper.scrollHeight;
+
+                document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
+                document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
+
+                if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm });
+                
+                usedReplay = false;
+                wordIndex++; setTimeout(playNextWord, 600); 
             }
         });
 
-        function listenToPingPongState() {
-            if(pingPongListener) pingPongListener.off();
-            pingPongListener = db.ref(`rooms/${roomCode}/pingpongState`);
-            pingPongListener.on('value', snap => {
-                if(!snap.exists() || !gameRunning) return;
-                const ppState = snap.val();
-
-                if(ppState.roundsPlayed >= requestedWordCount) {
-                    finishGame(); return;
-                }
-
-                const inp = document.getElementById('permanentGameInput');
-                const btnRep = document.getElementById('replayWordBtn');
-
-                if (ppState.currentTurnId === myId) {
-                    inp.disabled = false; inputActive = true;
-                    if (ppState.phase === 'send') {
-                        inp.placeholder = "Scrivi la parola da inviare all'avversario...";
-                        btnRep.style.display = 'none';
-                        inp.focus();
-                    } else if (ppState.phase === 'guess') {
-                        inp.placeholder = "Traduci il codice Morse...";
-                        btnRep.style.display = 'inline-block';
-                        inp.focus();
-                        if (ppState.justSent) {
-                            db.ref(`rooms/${roomCode}/pingpongState/justSent`).set(false);
-                            gameWords[wordIndex] = ppState.wordToGuess; // Salvo per lo storico/replay
-                            setTimeout(() => { playMorseAudio(ppState.wordToGuess, currentWpm); }, 600);
-                        }
-                    }
-                } else {
-                    inp.disabled = true; inputActive = false; btnRep.style.display = 'none';
-                    if (ppState.phase === 'send') {
-                        inp.placeholder = "In attesa che l'avversario scriva...";
-                    } else if (ppState.phase === 'guess') {
-                        inp.placeholder = "L'avversario sta cercando di indovinare...";
-                    }
-                }
-            });
-        }
-
         function playNextWord() {
-            if (!gameRunning || currentMode === 'pingpong') return;
+            if (!gameRunning) return;
             if (wordIndex >= gameWords.length) { finishGame(); return; }
             if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400; 
             playMorseAudio(gameWords[wordIndex].toUpperCase(), currentWpm);
@@ -1062,7 +859,7 @@
             document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
             document.getElementById('scoreDisplay').textContent = `Punti: 0`;
             totalScore = 0; currentStreak = 0; wordIndex = 0; 
-            usedReplay = false; sessionCharErrors = {}; sessionErrorsByWpm = {}; matchDetailsArray = [];
+            usedReplay = false; sessionCharErrors = {}; matchDetailsArray = [];
             document.getElementById('tableBody').innerHTML = ""; 
             
             showScreen('countdownScreen'); gameRunning = true;
@@ -1075,12 +872,8 @@
                     setTimeout(() => {
                         if (!gameRunning) return;
                         showScreen('gameArea');
-                        if (currentMode === 'pingpong') {
-                            listenToPingPongState();
-                        } else {
-                            setTimeout(() => document.getElementById('permanentGameInput').focus(), 200);
-                            setTimeout(() => { if (gameRunning) playNextWord(); }, 800); 
-                        }
+                        setTimeout(() => document.getElementById('permanentGameInput').focus(), 200);
+                        setTimeout(() => { if (gameRunning) playNextWord(); }, 800); 
                     }, 500); 
                 }
             }, 1000);
@@ -1088,7 +881,6 @@
 
         function finishGame() {
             gameRunning = false; inputActive = false; document.getElementById('permanentGameInput').blur();
-            if(pingPongListener) { pingPongListener.off(); pingPongListener = null; }
             showScreen('leaderboardScreen');
             
             if (roomCode) {
@@ -1098,8 +890,7 @@
             
             // Salva Statistiche Globali (Leaderboard) se ci sono punti (esclude Replay infiniti)
             if (totalScore > 0 && !roomCode.startsWith("CHAMP_")) {
-                let tabKey = isSinglePlayer ? 'single' : (currentMode === 'pingpong' ? 'pingpong' : 'multi');
-                let dbPath = currentMode === 'callsign' ? `leaderboard/callsign/global/${myId}` : `leaderboard/standard/${tabKey}_${requestedWordCount}/${myId}`;
+                let dbPath = currentMode === 'callsign' ? `leaderboard/callsign/global/${myId}` : `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                 if (currentMode !== 'callsign') {
                     let select = document.getElementById('lbWordFilter');
                     if (!Array.from(select.options).some(opt => opt.value == requestedWordCount) && requestedWordCount !== 'all') {
@@ -1129,7 +920,7 @@
                     details: matchDetailsArray
                 });
                 
-                // Aggiorna errori caratteri generali
+                // Aggiorna errori caratteri
                 if (Object.keys(sessionCharErrors).length > 0) {
                     const statsRef = db.ref(`users/${myId}/stats/charErrors`);
                     statsRef.once('value', snap => {
@@ -1140,21 +931,6 @@
                         statsRef.set(currentErrors);
                     });
                 }
-                
-                // Aggiorna errori raggruppati per WPM
-                if (Object.keys(sessionErrorsByWpm).length > 0) {
-                    const wpmStatsRef = db.ref(`users/${myId}/stats/errorsByWpm`);
-                    wpmStatsRef.once('value', snap => {
-                        let currentWpmErrs = snap.val() || {};
-                        for (let w in sessionErrorsByWpm) {
-                            if(!currentWpmErrs[w]) currentWpmErrs[w] = {};
-                            for (let c in sessionErrorsByWpm[w]) {
-                                currentWpmErrs[w][c] = (currentWpmErrs[w][c] || 0) + sessionErrorsByWpm[w][c];
-                            }
-                        }
-                        wpmStatsRef.set(currentWpmErrs);
-                    });
-                }
             }
 
             if (isSinglePlayer && currentMode === 'callsign') { activeTab = "cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); } 
@@ -1163,20 +939,7 @@
         }
 
         document.getElementById('quitGameBtn').addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
-        
-        document.getElementById('startMultiplayerBtn').addEventListener('click', () => {
-            if(currentMode === 'pingpong') {
-                db.ref(`rooms/${roomCode}/pingpongState`).set({
-                    currentTurnId: myId,
-                    phase: 'send',
-                    wordToGuess: '',
-                    justSent: false,
-                    roundsPlayed: 0
-                });
-            }
-            db.ref(`rooms/${roomCode}/status`).set('countdown');
-        });
-
+        document.getElementById('startMultiplayerBtn').addEventListener('click', () => db.ref(`rooms/${roomCode}/status`).set('countdown'));
         document.getElementById('deleteRoomBtn').addEventListener('click', () => { if (confirm("Eliminare questa stanza?")) db.ref(`rooms/${roomCode}`).remove(); });
         document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
         window.goBackToMenu = function() { showScreen('setupScreen'); };
@@ -1213,11 +976,10 @@
         window.showProfileScreen = function() {
             showScreen('profileScreen');
             document.getElementById('errorChartContainer').innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-            document.getElementById('wpmErrorChartContainer').innerHTML = '<p style="text-align:center;">Caricamento...</p>';
             const list = document.getElementById('matchHistoryList'); 
             list.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
 
-            // Load General Character Errors
+            // Load Errors
             db.ref(`users/${myId}/stats/charErrors`).once('value').then(snap => {
                 const errors = snap.val() || {};
                 const container = document.getElementById('errorChartContainer'); 
@@ -1225,7 +987,7 @@
                 const sorted = Object.entries(errors).sort((a,b) => b[1] - a[1]);
                 
                 if(sorted.length === 0) { 
-                    container.innerHTML = '<p style="text-align:center;color:var(--hint-color)">Nessun errore.</p>'; 
+                    container.innerHTML = '<p style="text-align:center;color:var(--hint-color)">Nessun errore registrato.</p>'; 
                 } else {
                     let maxErr = sorted[0][1];
                     sorted.forEach(([char, count]) => {
@@ -1240,41 +1002,8 @@
                     });
                 }
             }).catch(e => {
-                document.getElementById('errorChartContainer').innerHTML = `<p style="text-align:center; color:#d32f2f; font-weight:bold;">Errore DB</p>`;
-            });
-
-            // Load Errors by WPM
-            db.ref(`users/${myId}/stats/errorsByWpm`).once('value').then(snap => {
-                const wpmErrors = snap.val() || {};
-                const container = document.getElementById('wpmErrorChartContainer'); 
-                container.innerHTML = '';
-                
-                if(Object.keys(wpmErrors).length === 0) {
-                    container.innerHTML = '<p style="text-align:center;color:var(--hint-color)">Nessun errore per WPM.</p>';
-                    return;
-                }
-                
-                let wpmSorted = Object.keys(wpmErrors).sort((a,b) => parseInt(b) - parseInt(a));
-                
-                wpmSorted.forEach(wpm => {
-                    let charsAtWpm = wpmErrors[wpm];
-                    let totalErrs = Object.values(charsAtWpm).reduce((acc, curr) => acc + curr, 0);
-                    let topChar = Object.entries(charsAtWpm).sort((a,b) => b[1] - a[1])[0];
-                    
-                    let row = document.createElement('div');
-                    row.style.marginBottom = '8px';
-                    row.style.borderBottom = '1px solid var(--hint-color)';
-                    row.style.paddingBottom = '4px';
-                    row.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--link-color);">
-                            <span>${wpm} WPM</span> <span>Tot: ${totalErrs} err</span>
-                        </div>
-                        <div style="font-size:0.85em; color:var(--text-color);">
-                            Peggior lettera: <b>${topChar[0]}</b> (${topChar[1]} volte)
-                        </div>
-                    `;
-                    container.appendChild(row);
-                });
+                // Ora ti mostrerà il motivo esatto dell'errore (es. Permission Denied)
+                document.getElementById('errorChartContainer').innerHTML = `<p style="text-align:center; color:#d32f2f; font-weight:bold;">Errore DB: ${e.message}</p>`;
             });
 
             // Load History
@@ -1292,12 +1021,11 @@
                 userMatchHistory.forEach(match => {
                     const d = new Date(match.date || Date.now());
                     const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
-                    let modeIcon = match.mode === 'callsign' ? '🎙️ Nom.' : (match.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole');
                     const li = document.createElement('li'); 
                     li.style.flexDirection = 'column'; li.style.alignItems = 'flex-start';
                     li.innerHTML = `
                         <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
-                            <span style="font-size:0.85em; font-weight:bold;">${modeIcon} (${match.type})</span>
+                            <span style="font-size:0.85em; font-weight:bold;">${match.mode === 'callsign' ? '🎙️ Nom.' : '🔤 Parole'} (${match.type})</span>
                             <span style="font-size:0.8em; color:var(--hint-color);">${dateStr}</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
@@ -1310,6 +1038,7 @@
                     list.appendChild(li);
                 });
             }).catch(e => {
+                // Stampa l'errore esatto dello storico
                 list.innerHTML = `<li style="justify-content:center; color:#d32f2f; font-weight:bold;">Errore Storico: ${e.message}</li>`;
             });
         }
@@ -1325,78 +1054,15 @@
             details.forEach(row => {
                 const tr = document.createElement('tr');
                 let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
-                let realHTML = generateDiffHTML(row.real, row.typed || '');
-                
-                tr.innerHTML = `<td>${row.typed || '-'}</td><td><b>${realHTML}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
+                tr.innerHTML = `<td>${row.typed || '-'}</td><td><b>${row.real}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
                 body.appendChild(tr);
             });
             document.getElementById('matchDetailsModal').style.display = 'flex';
         }
 
         window.deleteHistoryItem = function(key) {
-            if(confirm("Eliminare questa partita dallo storico? Le statistiche verranno ricalcolate.")) {
-                const match = userMatchHistory.find(m => m.key === key);
-                
-                if (match) {
-                    let matchCharErrs = {};
-                    let matchWpmErrs = {};
-                    
-                    (match.details || []).forEach(row => {
-                        let real = row.real || "";
-                        let typed = row.typed || "";
-                        let wordWpm = row.wpm || match.wpm || 20; 
-                        
-                        if (real !== typed) {
-                            let wrongChars = [];
-                            let maxLen = Math.max(real.length, typed.length);
-                            for(let i=0; i<maxLen; i++) {
-                                if(typed[i] !== real[i] && real[i]) {
-                                    if(!wrongChars.includes(real[i])) wrongChars.push(real[i]);
-                                }
-                            }
-                            
-                            if(!matchWpmErrs[wordWpm]) matchWpmErrs[wordWpm] = {};
-                            wrongChars.forEach(c => {
-                                matchCharErrs[c] = (matchCharErrs[c] || 0) + 1;
-                                matchWpmErrs[wordWpm][c] = (matchWpmErrs[wordWpm][c] || 0) + 1;
-                            });
-                        }
-                    });
-
-                    db.ref(`users/${myId}/stats`).once('value').then(snap => {
-                        let stats = snap.val() || {};
-                        let currentErrors = stats.charErrors || {};
-                        let currentWpmErrs = stats.errorsByWpm || {};
-
-                        for (let c in matchCharErrs) {
-                            if (currentErrors[c]) {
-                                currentErrors[c] -= matchCharErrs[c];
-                                if (currentErrors[c] <= 0) delete currentErrors[c];
-                            }
-                        }
-
-                        for (let w in matchWpmErrs) {
-                            if (currentWpmErrs[w]) {
-                                for (let c in matchWpmErrs[w]) {
-                                    if (currentWpmErrs[w][c]) {
-                                        currentWpmErrs[w][c] -= matchWpmErrs[w][c];
-                                        if (currentWpmErrs[w][c] <= 0) delete currentWpmErrs[w][c];
-                                    }
-                                }
-                                if (Object.keys(currentWpmErrs[w]).length === 0) delete currentWpmErrs[w];
-                            }
-                        }
-
-                        let updates = {};
-                        updates[`users/${myId}/stats/charErrors`] = currentErrors;
-                        updates[`users/${myId}/stats/errorsByWpm`] = currentWpmErrs;
-                        updates[`users/${myId}/history/${key}`] = null; 
-
-                        db.ref().update(updates).then(() => showProfileScreen());
-                    });
-                } else {
-                    db.ref(`users/${myId}/history/${key}`).remove().then(() => showProfileScreen());
-                }
+            if(confirm("Eliminare questa partita dallo storico?")) {
+                db.ref(`users/${myId}/history/${key}`).remove().then(() => showProfileScreen());
             }
         }
 
