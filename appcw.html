@@ -157,7 +157,7 @@
         </div>
         
         <button id="viewGlobalLeaderboardBtn" class="btn-link" style="font-weight: bold; font-size: 1.1em;">🏆 Classifiche Generali</button>
-        <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Dati</button>
+        <button id="showPrivacyBtn" class="btn-link" style="padding-bottom: 0;">Privacy & Gestione Dati & Regolamento</button>
     </div>
 
     <!-- SCHERMATA SQUADRE E CAMPIONATO -->
@@ -208,30 +208,52 @@
         <button onclick="goBackToMenu()" style="margin-top: auto;">Torna al Menu Principale</button>
     </div>
 
-       <!-- PRIVACY E GESTIONE DATI -->
+      <!-- INFO, REGOLE E PRIVACY -->
     <div id="privacyScreen" class="screen">
-        <h2 style="margin-bottom: 15px;">Privacy & Gestione Dati 🛡️</h2>
+        <h2 style="margin-bottom: 10px;">📜 Info e Regole</h2>
         
-        <div class="box-panel" style="text-align: left; font-size: 0.9em; flex-grow: 1; overflow-y: auto;">
-            <p style="margin-top: 0;">Questa Web App è progettata per rispettare la tua privacy. Ecco tutto ciò che devi sapere sui dati che gestiamo.</p>
+        <div class="box-panel" style="text-align: left; font-size: 0.9em; flex-grow: 1; overflow-y: auto; padding-right: 10px;">
             
-            <h3 style="color: var(--link-color); font-size: 1.05em; margin-bottom: 5px;">1. Quali dati raccogliamo?</h3>
+            <!-- SEZIONE REGOLAMENTO -->
+            <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Come si gioca</h3>
+            <p>Il gioco consiste nell'ascoltare una sequenza in codice Morse e digitare la parola o il nominativo corretto il più velocemente possibile.</p>
+            
+            <h4 style="color: var(--link-color); margin-bottom: 5px;">1. Modalità di Gioco</h4>
+            <ul style="margin-top: 0; padding-left: 20px;">
+                <li><b>Parole Comuni:</b> Ascolta e digita parole in italiano. Sono ammessi piccoli errori di battitura (viene calcolata la distanza di Levenshtein).
+                    <ul>
+                        <li><i>Parola perfetta:</i> +10 Punti e +2 WPM di velocità per la parola successiva.</li>
+                        <li><i>1 Errore minore:</i> +2 Punti e -1 WPM.</li>
+                        <li><i>Più errori:</i> 0 Punti e -2 WPM.</li>
+                    </ul>
+                </li>
+                <li><b>Nominativi (Stile CW Freak):</b> Ascolta e digita nominativi radioamatoriali casuali. Il suono cambia tonalità a ogni nominativo.
+                    <ul>
+                        <li><i>Corretto:</i> Più ne indovini di fila (streak), più punti bonus ottieni. La velocità aumenta di +2 WPM.</li>
+                        <li><i>Sbagliato:</i> La serie si azzera, 0 Punti, la velocità scende di -1 WPM. È richiesta precisione assoluta!</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <h4 style="color: var(--link-color); margin-bottom: 5px;">2. Sfida Libera vs Campionato</h4>
+            <ul style="margin-top: 0; padding-left: 20px;">
+                <li><b>Sfida Libera:</b> Gioca da solo per scalare le classifiche globali (Singleplayer) o crea una Lobby per invitare i tuoi amici in tempo reale (Multiplayer). L'Host decide le regole e avvia la partita.</li>
+                <li><b>Campionato Squadre:</b> Crea un Team o unisciti a uno esistente. Il Capitano della squadra può generare il tabellone degli scontri (servono almeno 2 squadre iscritte) per dare il via al torneo!</li>
+            </ul>
+
+            <br>
+            
+            <!-- SEZIONE PRIVACY -->
+            <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 10px; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🛡️ Privacy & Dati</h3>
+            <p>Questa Web App è progettata per rispettare la tua privacy.</p>
+            
             <ul style="margin-top: 5px; padding-left: 20px;">
-                <li><b>Profilo Telegram:</b> Raccogliamo in automatico il tuo <i>Nome</i>, <i>ID Numerico</i> ed eventuale <i>Username pubblico</i> per identificarti nel gioco. Non abbiamo accesso al tuo numero di telefono.</li>
-                <li><b>Dati di Gioco:</b> Salviamo i tuoi punteggi, WPM, messaggi inviati nelle chat interne, la tua appartenenza a stanze e squadre.</li>
+                <li><b>Quali dati raccogliamo:</b> Raccogliamo in automatico da Telegram il tuo <i>Nome</i>, <i>ID Numerico</i> ed eventuale <i>Username pubblico</i>. Non abbiamo alcun accesso al tuo numero di telefono. Salviamo solo i tuoi record di gioco, le squadre a cui partecipi e i messaggi nella chat interna.</li>
+                <li><b>Come usiamo i dati:</b> I dati sono usati esclusivamente per le classifiche e il funzionamento del gioco, ospitati in sicurezza su server Google (Firebase). Non cediamo o vendiamo dati a terzi.</li>
             </ul>
 
-            <h3 style="color: var(--link-color); font-size: 1.05em; margin-bottom: 5px;">2. Come usiamo e salviamo i dati?</h3>
-            <p style="margin-top: 5px;">I tuoi dati vengono utilizzati esclusivamente per il funzionamento del gioco (creazione classifiche, gestione dei tornei e chat). Sono ospitati su server cloud sicuri (Google Firebase). Non cediamo, vendiamo o utilizziamo i tuoi dati per fini pubblicitari.</p>
-
-            <h3 style="color: #d32f2f; font-size: 1.05em; margin-bottom: 5px;">3. Diritto all'oblio (Cancellazione)</h3>
-            <p style="margin-top: 5px; margin-bottom: 0;">Hai il controllo totale. Utilizzando il pulsante qui sotto, revocherai l'accesso e cancellerai istantaneamente dal nostro database:</p>
-            <ul style="margin-top: 5px; padding-left: 20px; color: #d32f2f;">
-                <li>Tutti i record e punteggi storici nelle classifiche.</li>
-                <li>L'appartenenza a qualsiasi squadra o stanza.</li>
-                <li>Il tuo profilo giocatore (ID, Nome, Username).</li>
-            </ul>
-            <p style="font-weight: bold; font-style: italic; text-align: center; margin-top: 10px;">L'operazione è immediata e irreversibile.</p>
+            <h4 style="color: #d32f2f; margin-bottom: 5px;">Diritto all'oblio (Cancellazione)</h4>
+            <p style="margin-top: 0;">Hai il controllo totale. Utilizzando il pulsante qui sotto, cancellerai istantaneamente e irreversibilmente dal nostro database tutti i tuoi record, la tua presenza nelle squadre e il tuo profilo giocatore.</p>
         </div>
 
         <button id="deleteDataBtn" class="btn-danger" style="margin-top: 10px;">🗑️ Elimina Definitivamente i miei Dati</button>
