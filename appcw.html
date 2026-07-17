@@ -971,7 +971,7 @@
         });
 
         /* ================= PROFILO E STATISTICHE ================= */
-        let userMatchHistory = []; // Variabile globale per salvare la cronologia corrente
+        let userMatchHistory = []; 
 
         window.showProfileScreen = function() {
             showScreen('profileScreen');
@@ -1002,7 +1002,8 @@
                     });
                 }
             }).catch(e => {
-                document.getElementById('errorChartContainer').innerHTML = '<p style="text-align:center; color:#d32f2f;">Errore di caricamento</p>';
+                // Ora ti mostrerà il motivo esatto dell'errore (es. Permission Denied)
+                document.getElementById('errorChartContainer').innerHTML = `<p style="text-align:center; color:#d32f2f; font-weight:bold;">Errore DB: ${e.message}</p>`;
             });
 
             // Load History
@@ -1030,7 +1031,6 @@
                         <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
                             <span><b>${match.score} pt</b> <small>(${match.wpm} WPM)</small></span>
                             <div style="display:flex; gap:5px;">
-                                <!-- Modifica: passa la chiave (testo) e non l'oggetto JSON -->
                                 <button class="action-btn-small btn-secondary" onclick="openMatchDetails('${match.key}')">Vedi</button>
                                 <button class="action-btn-small btn-danger" onclick="deleteHistoryItem('${match.key}')">X</button>
                             </div>
@@ -1038,12 +1038,12 @@
                     list.appendChild(li);
                 });
             }).catch(e => {
-                list.innerHTML = '<li style="justify-content:center; color:#d32f2f;">Errore di caricamento storico.</li>';
+                // Stampa l'errore esatto dello storico
+                list.innerHTML = `<li style="justify-content:center; color:#d32f2f; font-weight:bold;">Errore Storico: ${e.message}</li>`;
             });
         }
 
         window.openMatchDetails = function(matchKey) {
-            // Cerca i dettagli della partita in base alla chiave
             const match = userMatchHistory.find(m => m.key === matchKey);
             if(!match) return;
             
