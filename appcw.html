@@ -470,6 +470,7 @@
 
     <div class="tab-buttons" id="leaderboardTabs">
         <button id="tabRoomBtn" class="tab-btn active-tab" style="width: 100%;">Questa Partita</button>
+        <button id="tabGlobalTournamentBtn" class="tab-btn">Classifica Tornei</button>
         <button id="tabGlobalCWFreakBtn" class="tab-btn">Nominativi</button>
         <button id="tabGlobalPingPongBtn" class="tab-btn">Ping Pong</button>
         <button id="tabGlobalStandardMultiBtn" class="tab-btn">Parole (Multi)</button>
@@ -1346,8 +1347,10 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                         if (teams[tId].members && teams[tId].members[myId]) {
                             if (teams[tId].captainId === myId) {
                                 let others = Object.keys(teams[tId].members).filter(k => k !== myId);
-                                if (others.length === 0) await db.ref(`teams/${tId}/status`).set('retired');
-                                else {
+                                if (others.length === 0) {
+                                    await db.ref(`teams/${tId}/status`).set('retired');
+                                    await db.ref(`teams/${tId}/members/${myId}`).remove();
+                                } else {
                                     await db.ref(`teams/${tId}/captainId`).set(others[0]);
                                     await db.ref(`teams/${tId}/members/${myId}`).remove();
                                 }
@@ -1357,6 +1360,22 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                         }
                     }
                 }
+
+                const trnsSnap = await db.ref('tournaments').once('value');
+                if (trnsSnap.exists()) {
+                    const trns = trnsSnap.val();
+                    for (let trnId in trns) {
+                        const trn = trns[trnId];
+                        if (trn.matches) {
+                            for (let mId in trn.matches) {
+                                const m = trn.matches[mId];
+                                if (m.playerA && m.playerA.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerA`).remove();
+                                if (m.playerB && m.playerB.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerB`).remove();
+                            }
+                        }
+                    }
+                }
+
                 await db.ref(`users/${myId}`).remove();
                 alert("Dati, affiliazioni alle squadre e statistiche eliminati definitivamente.");
                 window.Telegram.WebApp.close();
@@ -1458,9 +1477,10 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'block'; document.getElementById('leaderboardContainer').innerHTML = '';
             if (roomCode) db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
             else { document.getElementById('leaderboardContainer').innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>"; waitingText.style.display = 'none'; }
-        } else if (tabId === 'tabGlobalCWFreakBtn') {
+        } else if (tabId === 'tabGlobalTournamentBtn') {
             filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
-            fetchAndRenderGlobalLeaderboard('callsign', null);
+            fetchAndRenderGlobalLeaderboard('tournaments', null);
+        } else if (tabId === 'tabGlobalCWFreakBtn') {
         } else if (tabId === 'tabGlobalPingPongBtn') {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
             let wc = document.getElementById('lbWordFilter').value;
@@ -1474,6 +1494,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     }
 
     document.getElementById('tabRoomBtn').addEventListener('click', () => { activeTab="room"; showLeaderboardTab('tabRoomBtn'); });
+    document.getElementById('tabGlobalTournamentBtn').addEventListener('click', () => { activeTab="trn_global"; showLeaderboardTab('tabGlobalTournamentBtn'); });
     document.getElementById('tabGlobalCWFreakBtn').addEventListener('click', () => { activeTab="cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); });
     document.getElementById('tabGlobalPingPongBtn').addEventListener('click', () => { activeTab="pingpong"; showLeaderboardTab('tabGlobalPingPongBtn'); });
     document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; showLeaderboardTab('tabGlobalStandardMultiBtn'); });
@@ -1546,6 +1567,20 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             if (allMatchesFinished) {
                 db.ref(`tournaments/${trnId}/status`).set('finished');
                 showToast("Torneo completato! Spostato in archivio.");
+
+                // Aggiorna classifica globale tornei (per squadra)
+                if (trn.standings) {
+                    Object.entries(trn.standings).forEach(([tId, data]) => {
+                        if (data.points > 0) {
+                            db.ref(`leaderboard/tournaments/${tId}`).transaction(currentG => {
+                                if (!currentG) return { name: data.name, score: data.points, date: new Date().toLocaleDateString('it-IT') };
+                                currentG.score = (currentG.score || 0) + data.points;
+                                currentG.date = new Date().toLocaleDateString('it-IT');
+                                return currentG;
+                            });
+                        }
+                    });
+                }
             }
         });
     }
@@ -1582,6 +1617,11 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             db.ref(`leaderboard/callsign/global`).orderByChild('score').limitToLast(50).once('value', snapshot => {
                 let players = []; snapshot.forEach(child => { players.push(child.val()); });
                 renderPlayersListHTML(players.reverse(), container, false);
+            });
+        } else if (tabType === 'tournaments') {
+            db.ref(`leaderboard/tournaments`).orderByChild('score').limitToLast(50).once('value', snapshot => {
+                let teams = []; snapshot.forEach(child => { teams.push(child.val()); });
+                renderPlayersListHTML(teams.reverse(), container, false, true);
             });
         } else {
             let isStandard = tabType.startsWith('standard'); let modePath = isStandard ? 'standard' : 'pingpong';
@@ -1620,7 +1660,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         }
     }
 
-    function renderPlayersListHTML(players, container, showWordCount) {
+    function renderPlayersListHTML(players, container, showWordCount, isTeam = false) {
         container.innerHTML = '';
         if (players.length === 0) { container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; return; }
         players.forEach((player, index) => {
@@ -1628,8 +1668,9 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             const row = document.createElement('div'); row.className = 'leaderboard-row';
             let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
             const escName = escapeHTML(player.name); const escUser = escapeHTML(player.username);
-            const nHtml = player.username ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${escName}</span>` : `<span>${escName}</span>`;
-            row.innerHTML = `<span>${medalText} ${nHtml} <br><small style="color:var(--hint-color); font-size:0.8em;">(${escapeHTML(player.date)} - ${escapeHTML(player.wpm)} WPM${wcBadge})</small></span> <span><b>${escapeHTML(player.score)} pt</b></span>`;
+            const nHtml = (player.username && !isTeam) ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${escName}</span>` : `<span>${escName}</span>`;
+            let wpmInfo = (!isTeam && player.wpm) ? ` - ${escapeHTML(player.wpm)} WPM` : '';
+            row.innerHTML = `<span>${medalText} ${nHtml} <br><small style="color:var(--hint-color); font-size:0.8em;">(${escapeHTML(player.date)}${wpmInfo}${wcBadge})</small></span> <span><b>${escapeHTML(player.score)} pt</b></span>`;
             container.appendChild(row);
         });
     }
@@ -1712,7 +1753,9 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             if(allList) allList.innerHTML = '';
 
             snap.forEach(child => {
-                const t = child.val(); const count = Object.keys(t.members || {}).length;
+                const t = child.val();
+                if (t.status === 'retired') return;
+                const count = Object.keys(t.members || {}).length;
                 const teamId = child.key;
                 const escTeam = escapeHTML(t.name);
 
