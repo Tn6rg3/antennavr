@@ -311,6 +311,10 @@
                 <h3>Tornei Aperti (All'italiana)</h3>
                 <ul id="openTournamentsList" class="data-list"></ul>
             </div>
+            <div class="box-panel" style="flex-grow:1; min-height:0;">
+                <h3>Tornei Conclusi</h3>
+                <ul id="pastTournamentsList" class="data-list"></ul>
+            </div>
         </div>
 
         <div id="trnActiveArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
@@ -1778,7 +1782,9 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         trnListener = db.ref('tournaments').on('value', snap => {
             activeTrnId = null;
             const openList = document.getElementById('openTournamentsList');
+            const pastList = document.getElementById('pastTournamentsList');
             if (openList) openList.innerHTML = '';
+            if (pastList) pastList.innerHTML = '';
 
             const createTrnPanel = document.getElementById('createTrnPanel');
             if (createTrnPanel) createTrnPanel.style.display = isTeamCaptain ? 'flex' : 'none';
@@ -1790,8 +1796,8 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 const isMember = trn.teams && trn.teams[myTeamId];
                 const isHost = trn.hostId === myId;
 
-                if (isMember || isHost) {
-                    // Priorità: Torneo in corso > Torneo aperto > Torneo finito
+                if ((isMember || isHost) && trn.status !== 'finished') {
+                    // Priorità: Torneo in corso > Torneo aperto
                     if (!foundActive) {
                         foundActive = child;
                     } else {
@@ -1799,10 +1805,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                         if (trn.status === 'playing' && currentActiveStatus !== 'playing') {
                             foundActive = child;
                         } else if (trn.status === 'open' && (currentActiveStatus === 'finished' || currentActiveStatus === 'playing' && trn.status === 'playing')) {
-                            // Se entrambi sono playing o open, teniamo l'ultimo o quello con hostId corrispondente
                             if (isHost && foundActive.val().hostId !== myId) foundActive = child;
-                        } else if (trn.status === 'open' && currentActiveStatus === 'finished') {
-                            foundActive = child;
                         }
                     }
                 } else if (trn.status === 'open') {
@@ -1811,6 +1814,11 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                     li.innerHTML = `<span><b>${escapeHTML(trn.name)}</b> <small>(${teamCount} sq.)</small></span>
                                     ${isTeamCaptain ? `<button class="action-btn-small btn-champ" onclick="joinTournament('${child.key}')">Iscrivi</button>` : ''}`;
                     if (openList) openList.appendChild(li);
+                } else if (trn.status === 'finished') {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span><b>${escapeHTML(trn.name)}</b> <small>(Concluso)</small></span>
+                                    <button class="action-btn-small btn-secondary" onclick="viewTournament('${child.key}')">Vedi Risultati</button>`;
+                    if (pastList) pastList.appendChild(li);
                 }
             });
 
@@ -1821,6 +1829,18 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 document.getElementById('trnLobbyArea').style.display = 'flex';
                 document.getElementById('trnActiveArea').style.display = 'none';
                 if(openList && openList.innerHTML === '') openList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; border:none; background:none;">Nessun torneo aperto.</li>';
+                if(pastList && pastList.innerHTML === '') pastList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; border:none; background:none;">Nessun torneo concluso.</li>';
+            }
+        });
+    }
+
+    window.viewTournament = function(tId) {
+        db.ref(`tournaments/${tId}`).once('value', snap => {
+            if(snap.exists()) {
+                activeTrnId = tId;
+                renderActiveTournament(snap);
+                document.getElementById('trnLobbyArea').style.display = 'none';
+                document.getElementById('trnActiveArea').style.display = 'flex';
             }
         });
     }
@@ -1846,11 +1866,12 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     document.getElementById('trnActiveArea').style.display = 'flex';
 
     const trn = trnSnap.val();
-    document.getElementById('activeTrnTitle').textContent = trn.name;
+    const isFinished = trn.status === 'finished';
+    document.getElementById('activeTrnTitle').textContent = trn.name + (isFinished ? " (Concluso)" : "");
 
     const amIHost = (trn.hostId === myId);
-    document.getElementById('editTrnNameBtn').style.display = amIHost ? 'block' : 'none';
-    document.getElementById('leaveTrnBtn').style.display = isTeamCaptain ? 'block' : 'none';
+    document.getElementById('editTrnNameBtn').style.display = (amIHost && !isFinished) ? 'block' : 'none';
+    document.getElementById('leaveTrnBtn').style.display = (isTeamCaptain && !isFinished) ? 'block' : 'none';
 
     // Classifica
     const stdBody = document.getElementById('trnStandingsBody');
@@ -1864,7 +1885,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         stdBody.appendChild(tr);
     });
 
-    document.getElementById('trnHostControls').style.display = amIHost ? 'block' : 'none';
+    document.getElementById('trnHostControls').style.display = (amIHost && !isFinished) ? 'block' : 'none';
     const teamCount = trn.teams ? Object.keys(trn.teams).length : 0;
     document.getElementById('trnTeamCountTxt').textContent = `Squadre Iscritte: ${teamCount}`;
 
