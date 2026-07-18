@@ -67,7 +67,7 @@
         .data-list li { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 4px; border-radius: 6px; font-size: 0.9em;}
         .action-btn-small { width: auto; padding: 6px 12px; font-size: 0.85em; margin: 0; }
 
-        .leaderboard-row { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--hint-color); width: 100%; align-items: center; box-sizing: border-box; background: var(--sec-bg-color); margin-bottom: 5px; border-radius: 8px;}
+        .leaderboard-row { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--hint-color); width: 100%; align-items: center; box-sizing: border-box; background: var(--bg-color); margin-bottom: 4px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);}
 
         #loadingText { font-style: italic; color: #ff9800; margin-bottom: 10px; font-weight: bold; text-align:center; font-size: 0.9em;}
 
@@ -215,7 +215,16 @@
 <div id="profileScreen" class="screen">
     <h2 style="color: var(--link-color); margin-bottom: 10px;">👤 Profilo e Statistiche</h2>
 
-    <div style="display: flex; gap: 5px; width: 100%; flex-shrink: 0; max-height: 200px;">
+    <div class="box-panel" style="margin-bottom:8px; flex-shrink:0;">
+        <h3 style="color:var(--link-color); margin-bottom:5px;">🏷️ Il tuo Alias</h3>
+        <div style="display:flex; gap:5px;">
+            <input type="text" id="userAliasInput" placeholder="Scegli un alias..." maxlength="15" style="margin:0; padding:8px;">
+            <button id="saveAliasBtn" class="action-btn-small btn-success" style="width:auto; margin:0;">Salva</button>
+        </div>
+        <p style="font-size:0.75em; color:var(--hint-color); margin-top:3px;">L'alias sostituirà il tuo nome Telegram nelle classifiche e nelle squadre.</p>
+    </div>
+
+    <div style="display: flex; gap: 5px; width: 100%; flex-shrink: 0; max-height: 180px;">
         <div class="box-panel" style="flex: 1; overflow:hidden;">
             <h3>📈 Caratteri più sbagliati</h3>
             <div id="errorChartContainer" style="width:100%; height:100%; overflow-y:auto; padding-right:5px; font-size: 0.9em;">
@@ -401,6 +410,10 @@
             <li><b>Trasparenza:</b> Gli altri utenti possono vedere il tuo Nome in classifica o nelle lobby, e possono cliccarci per visualizzare il tuo profilo Telegram pubblico.</li>
             <li><b>Cancellazione Totale:</b> Tramite il pulsante rosso sottostante puoi cancellare in modo irreversibile <b>TUTTI</b> i dati legati al tuo account dal nostro database (storico, squadre, statistiche).</li>
         </ul>
+        <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 10px 0;">
+        <h3 style="color: var(--champ-color); font-size: 1.1em; margin-bottom: 5px;">💡 Suggerimenti</h3>
+        <p style="font-size: 0.9em; margin-bottom: 5px;">Hai un'idea per migliorare l'app? Inviaci un messaggio!</p>
+        <button id="sendFeedbackBtn" class="btn-link" style="margin:0; padding:5px; font-weight:bold; text-align:center; width:100%;">📬 Invia un Suggerimento al Creatore</button>
     </div>
 
     <button id="deleteDataBtn" class="btn-danger" style="margin-top: 8px; flex-shrink: 0;">🗑️ Elimina Definitivamente i miei Dati</button>
@@ -618,9 +631,17 @@
         db = firebase.database(); auth = firebase.auth();
 
         auth.signInAnonymously().then(() => {
+            // Caricamento Alias
+            db.ref(`users/${myId}/alias`).once('value', snap => {
+                if (snap.exists()) {
+                    myName = snap.val();
+                }
+                document.getElementById('playerName').textContent = myName;
+                document.getElementById('userAliasInput').value = (myName !== tgUser.first_name) ? myName : "";
+            });
+
             document.getElementById('loadingText').style.display = 'none';
             document.getElementById('createRoomBtn').disabled = false;
-            document.getElementById('playerName').textContent = myName;
 
             db.ref('.info/connected').on('value', (snap) => {
                 if (snap.val() === false) return;
@@ -1388,6 +1409,53 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         }
     });
 
+    document.getElementById('saveAliasBtn').addEventListener('click', () => {
+        const alias = document.getElementById('userAliasInput').value.trim();
+        if (alias.length > 15) return alert("Alias troppo lungo (max 15 caratteri).");
+
+        const newName = alias || tgUser.first_name;
+        db.ref(`users/${myId}/alias`).set(alias || null).then(() => {
+            myName = newName;
+            document.getElementById('playerName').textContent = myName;
+            showToast("Alias salvato con successo!");
+
+            // Aggiorna anche nelle squadre se presente
+            if (myTeamId) {
+                db.ref(`teams/${myTeamId}/members/${myId}/name`).set(myName);
+            }
+        });
+    });
+
+    document.getElementById('sendFeedbackBtn').addEventListener('click', () => {
+        tg.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=feedback`);
+    });
+                            }
+                        }
+                    }
+                }
+
+                const trnsSnap = await db.ref('tournaments').once('value');
+                if (trnsSnap.exists()) {
+                    const trns = trnsSnap.val();
+                    for (let trnId in trns) {
+                        const trn = trns[trnId];
+                        if (trn.matches) {
+                            for (let mId in trn.matches) {
+                                const m = trn.matches[mId];
+                                if (m.playerA && m.playerA.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerA`).remove();
+                                if (m.playerB && m.playerB.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerB`).remove();
+                            }
+                        }
+                    }
+                }
+
+                await db.ref(`users/${myId}`).remove();
+                alert("Dati, affiliazioni alle squadre e statistiche eliminati definitivamente.");
+                window.Telegram.WebApp.close();
+            } catch (e) { alert("Errore: " + e.message); console.error(e); }
+        }
+    });
+
     let userMatchHistory = [];
 
     window.showProfileScreen = function() {
@@ -1498,11 +1566,13 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             fetchAndRenderGlobalLeaderboard('callsign', null);
         } else if (tabId === 'tabGlobalPingPongBtn') {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+            populateDynamicFilters('pingpong');
             let wc = document.getElementById('lbWordFilter').value;
             fetchAndRenderGlobalLeaderboard('pingpong', wc);
         } else {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
             let type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
+            populateDynamicFilters('standard', type);
             let wc = document.getElementById('lbWordFilter').value;
             fetchAndRenderGlobalLeaderboard('standard_' + type, wc);
         }
@@ -1531,6 +1601,27 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn');
         else if (activeTab === "pingpong") showLeaderboardTab('tabGlobalPingPongBtn');
     });
+
+    function populateDynamicFilters(modePath, subTypeFilter = "") {
+        const select = document.getElementById('lbWordFilter');
+        const currentValue = select.value;
+        db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
+            let options = ['<option value="all">Tutte le categorie</option>'];
+            let counts = [];
+            snapshot.forEach(wordCountNode => {
+                const key = wordCountNode.key;
+                if (!subTypeFilter || key.startsWith(subTypeFilter + "_")) {
+                    const count = key.split('_').pop();
+                    if (!counts.includes(count)) counts.push(count);
+                }
+            });
+            counts.sort((a,b) => parseInt(a) - parseInt(b)).forEach(c => {
+                options.push(`<option value="${c}">${c} Stringhe</option>`);
+            });
+            select.innerHTML = options.join('');
+            if (counts.includes(currentValue) || currentValue === 'all') select.value = currentValue;
+        });
+    }
 
     // Ascoltatore che decreta il vincitore e segna 1 o 0 al torneo
     function listenToRoomLeaderboard() {
@@ -1666,53 +1757,64 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 });
             }
         } else {
-            let isStandard = tabType.startsWith('standard'); let modePath = isStandard ? 'standard' : 'pingpong';
+            let isStandard = tabType.startsWith('standard');
+            let modePath = isStandard ? 'standard' : 'pingpong';
             let subType = isStandard ? tabType.replace('standard_', '') : '';
-            if (filterWordCount === 'all') {
-                db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
-                    let players = [];
-                    snapshot.forEach(wordCountNode => {
-                        if (!isStandard || wordCountNode.key.startsWith(subType + "_")) {
-                            wordCountNode.forEach(userNode => { players.push(userNode.val()); });
-                        }
+
+            db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
+                let players = [];
+                snapshot.forEach(wordCountNode => {
+                    const key = wordCountNode.key;
+                    // Filtro per sottotipo (es. "single" o "multi")
+                    if (isStandard && !key.startsWith(subType + "_")) return;
+
+                    // Filtro per numero parole
+                    if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
+
+                    wordCountNode.forEach(userNode => {
+                        players.push(userNode.val());
                     });
-                    players.sort((a, b) => b.score - a.score); players = players.slice(0, 100);
-                    renderPlayersListHTML(players, container, true);
                 });
-            } else {
-                let dbQueryPath = isStandard ? `leaderboard/standard/${subType}_${filterWordCount}` : `leaderboard/pingpong/single_${filterWordCount}`;
-                if(!isStandard) {
-                     db.ref(`leaderboard/pingpong`).once('value', snapshot => {
-                        let players = [];
-                        snapshot.forEach(wordCountNode => {
-                            if (wordCountNode.key.endsWith("_" + filterWordCount)) {
-                                wordCountNode.forEach(userNode => { players.push(userNode.val()); });
-                            }
-                        });
-                        players.sort((a, b) => b.score - a.score); players = players.slice(0, 50);
-                        renderPlayersListHTML(players, container, true);
-                    });
-                } else {
-                    db.ref(dbQueryPath).orderByChild('score').limitToLast(50).once('value', snapshot => {
-                        let players = []; snapshot.forEach(child => { players.push(child.val()); });
-                        renderPlayersListHTML(players.reverse(), container, true);
-                    });
-                }
-            }
+
+                players.sort((a, b) => b.score - a.score);
+                players = players.slice(0, 100);
+                renderPlayersListHTML(players, container, true);
+            });
         }
     }
 
     function renderPlayersListHTML(players, container, showWordCount, isTeam = false) {
         container.innerHTML = '';
-        if (players.length === 0) { container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Nessun record.</p>'; return; }
+        if (players.length === 0) { container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Nessun record trovato per questa categoria.</p>'; return; }
+
         players.forEach((player, index) => {
-            let wcBadge = (showWordCount && player.wordCount) ? ` - ${escapeHTML(player.wordCount)} str.` : '';
-            const row = document.createElement('div'); row.className = 'leaderboard-row';
-            let medalText = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+            let wcBadge = (showWordCount && player.wordCount) ? `<span style="background:var(--hint-color); color:var(--bg-color); padding:1px 4px; border-radius:3px; font-size:0.8em; margin-left:4px;">${escapeHTML(player.wordCount)} str.</span>` : '';
+            const row = document.createElement('div');
+            row.className = 'leaderboard-row';
+            row.style.padding = "8px 10px";
+            row.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+
+            let medalIcon = "";
+            if (index === 0) medalIcon = "🥇";
+            else if (index === 1) medalIcon = "🥈";
+            else if (index === 2) medalIcon = "🥉";
+            else medalIcon = `<span style="color:var(--hint-color); font-size:0.8em; width:1.5em; display:inline-block;">${index + 1}.</span>`;
+
             const escName = escapeHTML(player.name); const escUser = escapeHTML(player.username);
-            const nHtml = (player.username && !isTeam) ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${escName}</span>` : `<span>${escName}</span>`;
-            let wpmInfo = (!isTeam && player.wpm) ? ` - ${escapeHTML(player.wpm)} WPM` : '';
-            row.innerHTML = `<span>${medalText} ${nHtml} <br><small style="color:var(--hint-color); font-size:0.8em;">(${escapeHTML(player.date)}${wpmInfo}${wcBadge})</small></span> <span><b>${escapeHTML(player.score)} pt</b></span>`;
+            const nHtml = (player.username && !isTeam) ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;font-weight:bold;">${escName}</span>` : `<span style="font-weight:bold;">${escName}</span>`;
+            let wpmInfo = (!isTeam && player.wpm) ? `<span style="color:var(--champ-color); font-weight:bold;">${escapeHTML(player.wpm)} WPM</span>` : '';
+
+            row.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px; flex-grow:1;">
+                    <div style="font-size:1.2em; min-width:1.5em; text-align:center;">${medalIcon}</div>
+                    <div style="display:flex; flex-direction:column;">
+                        <div style="display:flex; align-items:center;">${nHtml}${wcBadge}</div>
+                        <div style="font-size:0.75em; color:var(--hint-color);">${escapeHTML(player.date)} ${wpmInfo}</div>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <b style="font-size:1.1em; color:var(--link-color);">${escapeHTML(player.score)}</b><span style="font-size:0.7em; color:var(--hint-color); margin-left:2px;">pt</span>
+                </div>`;
             container.appendChild(row);
         });
     }
