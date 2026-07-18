@@ -1549,6 +1549,8 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             }
         });
     }
+
+    function renderRoomLeaderboard(players) {
         const container = document.getElementById('leaderboardContainer'); container.innerHTML = '';
         const waitingText = document.getElementById('waitingOthersText'); let allFinished = true;
 
