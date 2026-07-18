@@ -337,6 +337,7 @@
                 <p style="margin:0 0 5px 0; font-size:0.85em;">Sei l'organizzatore.</p>
                 <p id="trnTeamCountTxt" style="font-size:0.8em; font-weight:bold; color:var(--hint-color); margin:0 0 5px 0;"></p>
                 <button id="startTrnBtn" class="btn-success action-btn-small" disabled>Genera Tabellone e Avvia</button>
+                <button id="finishTrnBtn" class="btn-champ action-btn-small" style="display:none; margin-top:5px;">Concludi Torneo</button>
                 <button id="deleteTrnBtn" class="btn-danger action-btn-small">Elimina Torneo</button>
             </div>
 
@@ -1510,7 +1511,9 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                     });
 
                     if (winnerTeamId && winnerTeamId !== "tie" && activeTrnId) {
-                        db.ref(`tournaments/${activeTrnId}/matches/${matchId}`).update({ status: 'finished', winnerTeamId: winnerTeamId });
+                        db.ref(`tournaments/${activeTrnId}/matches/${matchId}`).update({ status: 'finished', winnerTeamId: winnerTeamId }).then(() => {
+                            checkTournamentCompletion(activeTrnId);
+                        });
                         // +1 punto a chi vince
                         db.ref(`tournaments/${activeTrnId}/standings/${winnerTeamId}`).transaction(teamStanding => {
                             if (teamStanding) teamStanding.points = (teamStanding.points || 0) + 1;
@@ -1518,7 +1521,9 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                         });
                     } else if (winnerTeamId === "tie" && activeTrnId) {
                         // Pareggio, nessun punto (+0)
-                        db.ref(`tournaments/${activeTrnId}/matches/${matchId}`).update({ status: 'finished', winnerTeamId: 'tie' });
+                        db.ref(`tournaments/${activeTrnId}/matches/${matchId}`).update({ status: 'finished', winnerTeamId: 'tie' }).then(() => {
+                            checkTournamentCompletion(activeTrnId);
+                        });
                     }
                     setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 15000);
                 } else if (roomData.hostId === myId) {
@@ -1528,7 +1533,22 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         });
     }
 
-    function renderRoomLeaderboard(players) {
+    function checkTournamentCompletion(trnId) {
+        db.ref(`tournaments/${trnId}`).once('value', snap => {
+            const trn = snap.val();
+            if (!trn || trn.status === 'finished' || !trn.matches) return;
+
+            let allMatchesFinished = true;
+            Object.values(trn.matches).forEach(m => {
+                if (m.status !== 'finished') allMatchesFinished = false;
+            });
+
+            if (allMatchesFinished) {
+                db.ref(`tournaments/${trnId}/status`).set('finished');
+                showToast("Torneo completato! Spostato in archivio.");
+            }
+        });
+    }
         const container = document.getElementById('leaderboardContainer'); container.innerHTML = '';
         const waitingText = document.getElementById('waitingOthersText'); let allFinished = true;
 
@@ -1886,6 +1906,15 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     });
 
     document.getElementById('trnHostControls').style.display = (amIHost && !isFinished) ? 'block' : 'none';
+    const finishBtn = document.getElementById('finishTrnBtn');
+    if (finishBtn) {
+        finishBtn.style.display = (amIHost && trn.status === 'playing') ? 'block' : 'none';
+        finishBtn.onclick = () => {
+            if(confirm("Vuoi concludere manualmente il torneo e spostarlo in archivio?")) {
+                db.ref(`tournaments/${activeTrnId}/status`).set('finished');
+            }
+        };
+    }
     const teamCount = trn.teams ? Object.keys(trn.teams).length : 0;
     document.getElementById('trnTeamCountTxt').textContent = `Squadre Iscritte: ${teamCount}`;
 
