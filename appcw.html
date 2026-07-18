@@ -970,6 +970,18 @@
         }
         return matrix[b.length][a.length];
     }
+    function renderDiffSecure(container, real, typed) {
+    const max = Math.max(real.length, typed.length);
+    for (let i = 0; i < max; i++) {
+        if (!real[i]) continue;
+        const span = document.createElement('span');
+        if (!typed[i] || typed[i] !== real[i]) {
+            span.style.color = "#d32f2f"; // Rosso per errore
+        }
+        span.textContent = real[i];
+        container.appendChild(span);
+    }
+}
 
     function generateDiffHTML(real, typed) {
         let res = "";
@@ -1142,15 +1154,35 @@
                             if (!gameRunning) return;
                             const ppData = snap.val(); if (!ppData) return;
 
-                            if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
-                                window.lastSeenGuessId = ppData.lastGuess.id;
-                                const tr = document.createElement('tr');
-                                let scoreColor = ppData.lastGuess.points > 0 ? "#4caf50" : (ppData.lastGuess.points === 0 && ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
-                                let realHTML = generateDiffHTML(ppData.lastGuess.real, ppData.lastGuess.typed || '');
-                                tr.innerHTML = `<td>${escapeHTML(ppData.lastGuess.typed)}</td><td><b>${realHTML}</b></td><td style="color:${scoreColor}; font-weight:bold;">${ppData.lastGuess.points}</td>`;
-                                document.getElementById('tableBody').appendChild(tr);
-                                const tableWrapper = document.getElementById('tableWrapper'); tableWrapper.scrollTop = tableWrapper.scrollHeight;
-                            }
+                            // ... dentro il listener di pingpong ...
+if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
+    window.lastSeenGuessId = ppData.lastGuess.id;
+    
+    const tr = document.createElement('tr');
+    
+    // Creiamo le celle come nodi separati (più sicuro e pulito)
+    const tdTyped = document.createElement('td');
+    tdTyped.textContent = ppData.lastGuess.typed || '';
+    
+    const tdReal = document.createElement('td');
+    // Se vuoi mantenere l'effetto "rosso" per gli errori, usiamo un metodo sicuro
+    // Invece di iniettare HTML, creiamo elementi span figli
+    renderDiffSecure(tdReal, ppData.lastGuess.real, ppData.lastGuess.typed || '');
+    
+    const tdPoints = document.createElement('td');
+    tdPoints.style.fontWeight = 'bold';
+    tdPoints.style.color = ppData.lastGuess.points > 0 ? "#4caf50" : 
+                           (ppData.lastGuess.points === 0 && ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
+    tdPoints.textContent = ppData.lastGuess.points;
+
+    tr.appendChild(tdTyped);
+    tr.appendChild(tdReal);
+    tr.appendChild(tdPoints);
+
+    document.getElementById('tableBody').appendChild(tr);
+    const tableWrapper = document.getElementById('tableWrapper'); 
+    tableWrapper.scrollTop = tableWrapper.scrollHeight;
+}
 
                             if (ppData.wordsPlayed >= requestedWordCount) { finishGame(); return; }
 
