@@ -477,6 +477,11 @@
         <button id="tabGlobalStandardSingleBtn" class="tab-btn">Parole (Single)</button>
     </div>
 
+    <div id="trnSubTabs" style="display:none; width:100%; gap:5px; margin-top:5px; flex-shrink: 0;">
+        <button id="btnTrnGlobalLB" class="tab-btn active-tab" style="font-size:0.75em; padding:6px;">🏆 Globale</button>
+        <button id="btnTrnActiveLB" class="tab-btn" style="font-size:0.75em; padding:6px;">🥊 In Corso</button>
+    </div>
+
     <div id="lbFilterArea" style="display:none; width:100%; text-align:center; margin-bottom:5px; flex-shrink: 0;">
         <label style="font-size:0.9em; font-weight:bold;">Filtra per Q.ta: </label>
         <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px; font-size: 0.9em;">
@@ -1469,9 +1474,14 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     }
 
     function showLeaderboardTab(tabId) {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
+        document.querySelectorAll('#leaderboardTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
         document.getElementById(tabId).classList.add('active-tab');
-        const filterArea = document.getElementById('lbFilterArea'), roomWinnerBanner = document.getElementById('roomWinnerBanner'), waitingText = document.getElementById('waitingOthersText');
+        const filterArea = document.getElementById('lbFilterArea'),
+              roomWinnerBanner = document.getElementById('roomWinnerBanner'),
+              waitingText = document.getElementById('waitingOthersText'),
+              trnSubTabs = document.getElementById('trnSubTabs');
+
+        trnSubTabs.style.display = 'none';
 
         if (tabId === 'tabRoomBtn') {
             filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'block'; document.getElementById('leaderboardContainer').innerHTML = '';
@@ -1479,8 +1489,13 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             else { document.getElementById('leaderboardContainer').innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>"; waitingText.style.display = 'none'; }
         } else if (tabId === 'tabGlobalTournamentBtn') {
             filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+            trnSubTabs.style.display = 'flex';
+            document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
+            document.getElementById('btnTrnGlobalLB').classList.add('active-tab');
             fetchAndRenderGlobalLeaderboard('tournaments', null);
         } else if (tabId === 'tabGlobalCWFreakBtn') {
+            filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+            fetchAndRenderGlobalLeaderboard('callsign', null);
         } else if (tabId === 'tabGlobalPingPongBtn') {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
             let wc = document.getElementById('lbWordFilter').value;
@@ -1499,6 +1514,18 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     document.getElementById('tabGlobalPingPongBtn').addEventListener('click', () => { activeTab="pingpong"; showLeaderboardTab('tabGlobalPingPongBtn'); });
     document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; showLeaderboardTab('tabGlobalStandardMultiBtn'); });
     document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { activeTab="std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); });
+
+    document.getElementById('btnTrnGlobalLB').addEventListener('click', () => {
+        document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
+        document.getElementById('btnTrnGlobalLB').classList.add('active-tab');
+        fetchAndRenderGlobalLeaderboard('tournaments', null);
+    });
+    document.getElementById('btnTrnActiveLB').addEventListener('click', () => {
+        document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
+        document.getElementById('btnTrnActiveLB').classList.add('active-tab');
+        fetchAndRenderGlobalLeaderboard('active_tournament', null);
+    });
+
     document.getElementById('lbWordFilter').addEventListener('change', () => {
         if (activeTab === "std_multi") showLeaderboardTab('tabGlobalStandardMultiBtn');
         else if (activeTab === "std_single") showLeaderboardTab('tabGlobalStandardSingleBtn');
@@ -1623,6 +1650,21 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 let teams = []; snapshot.forEach(child => { teams.push(child.val()); });
                 renderPlayersListHTML(teams.reverse(), container, false, true);
             });
+        } else if (tabType === 'active_tournament') {
+            if (!activeTrnId) {
+                container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Non sei iscritto a nessun torneo attivo.</p>';
+            } else {
+                db.ref(`tournaments/${activeTrnId}`).once('value', snap => {
+                    const trn = snap.val();
+                    if (trn && trn.standings) {
+                        let standings = Object.entries(trn.standings).map(([id, data]) => ({ name: data.name, score: data.points, date: "In corso" }));
+                        standings.sort((a,b) => b.score - a.score);
+                        renderPlayersListHTML(standings, container, false, true);
+                    } else {
+                        container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Dati torneo non disponibili.</p>';
+                    }
+                });
+            }
         } else {
             let isStandard = tabType.startsWith('standard'); let modePath = isStandard ? 'standard' : 'pingpong';
             let subType = isStandard ? tabType.replace('standard_', '') : '';
@@ -1767,9 +1809,10 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                     membersHTML += `<span style="display:inline-block; margin-right:5px; font-size:0.85em; color:var(--hint-color);">- ${escapeHTML(m.name)}</span>`;
                 });
 
-                liAll.innerHTML = `<div style="width:100%; display:flex; justify-content:space-between;">
+                liAll.innerHTML = `<div style="width:100%; display:flex; justify-content:space-between; cursor:${(!isAlreadyInTeam && t.status === 'open') ? 'pointer' : 'default'};"
+                                      ${(!isAlreadyInTeam && t.status === 'open') ? `onclick="joinTeam('${escapeHTML(teamId)}')"` : ''}>
                                       <span><b>${escTeam}</b> <small>(${count} mem.)</small></span>
-                                      ${(!isAlreadyInTeam && t.status === 'open') ? `<button class="action-btn-small" onclick="joinTeam('${escapeHTML(teamId)}')">Unisciti</button>` : ''}
+                                      ${(!isAlreadyInTeam && t.status === 'open') ? `<span style="color:var(--link-color); font-size:0.8em; font-weight:bold;">+ Unisciti</span>` : ''}
                                    </div>
                                    <div style="margin-top:3px; padding-left:5px; border-left:2px solid var(--link-color);">
                                       ${membersHTML}
@@ -1778,7 +1821,9 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
 
                 if (!isAlreadyInTeam && t.status === 'open') {
                     const liOpen = document.createElement('li');
-                    liOpen.innerHTML = `<span><b>${escTeam}</b> <small>(${count} mem.)</small></span><button class="action-btn-small" onclick="joinTeam('${escapeHTML(teamId)}')">Unisciti</button>`;
+                    liOpen.style.cursor = 'pointer';
+                    liOpen.onclick = () => joinTeam(teamId);
+                    liOpen.innerHTML = `<span><b>${escTeam}</b> <small>(${count} mem.)</small></span><span style="color:var(--link-color); font-weight:bold;">+ Unisciti</span>`;
                     if(openList) openList.appendChild(liOpen);
                 }
             });
