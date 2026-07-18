@@ -1467,20 +1467,13 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     });
 
     document.getElementById('sendFeedbackBtn').onclick = function() {
-        console.log("Feedback button clicked");
-        const botUrl = `https://t.me/${BOT_USERNAME}?start=feedback`;
+        const text = encodeURIComponent("💡 Suggerimento per Sfida Telegrafia: \n\n[Scrivi qui il tuo messaggio...]");
+        const shareUrl = `https://t.me/share/url?text=${text}`;
 
-        try {
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
-                console.log("Opening via Telegram WebApp API");
-                window.Telegram.WebApp.openTelegramLink(botUrl);
-            } else {
-                console.log("Opening via window.open fallback");
-                window.open(botUrl, '_blank');
-            }
-        } catch (e) {
-            console.error("Error opening feedback link:", e);
-            alert("Per inviare un suggerimento, scrivi al bot: @" + BOT_USERNAME);
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
+            window.Telegram.WebApp.openTelegramLink(shareUrl);
+        } else {
+            window.open(shareUrl, '_blank');
         }
     };
 
