@@ -1786,7 +1786,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         playersArray.forEach(p => { if (!p.finished) allFinished = false; });
         waitingText.style.display = allFinished ? 'none' : 'block';
 
-        playersArray.sort((a, b) => b.score - a.score).forEach((player, index) => {
+        playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm)).forEach((player, index) => {
             const row = document.createElement('div'); row.className = 'leaderboard-row';
             let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
             const escName = escapeHTML(player.name);
@@ -1848,7 +1848,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                     });
                 });
 
-                players.sort((a, b) => b.score - a.score);
+                players.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
                 players = players.slice(0, 100);
                 renderPlayersListHTML(players, container, true);
             });
@@ -2389,16 +2389,16 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             };
 
             // GIORNALIERE
-            if (check(dData.games, 5, `d_bronze_${dKey}`, "Bronzo Giornaliero", "Hai giocato 5 partite oggi!", "🥉")) return;
-            if (check(dData.games, 15, `d_silver_${dKey}`, "Argento Giornaliero", "Sei un veterano! 15 partite oggi!", "🥈")) return;
-            if (check(dData.games, 30, `d_gold_${dKey}`, "Oro Giornaliero", "Incredibile! 30 partite in un giorno!", "🥇")) return;
+            if (check(dData.games, 3, `d_bronze_${dKey}`, "Bronzo Giornaliero", "Hai giocato 3 partite oggi!", "🥉")) return;
+            if (check(dData.games, 7, `d_silver_${dKey}`, "Argento Giornaliero", "Sei un veterano! 7 partite oggi!", "🥈")) return;
+            if (check(dData.games, 15, `d_gold_${dKey}`, "Oro Giornaliero", "Incredibile! 15 partite in un giorno!", "🥇")) return;
 
             // SETTIMANALI
-            if (check(wData.games, 25, `w_active_${wKey}`, "Stakanovista Settimanale", "25 partite questa settimana!", "🎖️")) return;
-            if (check(wData.games, 100, `w_pro_${wKey}`, "Campione Settimanale", "100 partite! Una leggenda questa settimana!", "🏆")) return;
+            if (check(wData.games, 20, `w_active_${wKey}`, "Stakanovista Settimanale", "20 partite questa settimana!", "🎖️")) return;
+            if (check(wData.games, 50, `w_pro_${wKey}`, "Campione Settimanale", "50 partite! Una leggenda questa settimana!", "🏆")) return;
 
             // MENSILI
-            if (check(mData.games, 300, `m_legend_${mKey}`, "Titano del Mese", "300 partite! Il gioco non ha segreti per te.", "💎")) return;
+            if (check(mData.games, 150, `m_legend_${mKey}`, "Titano del Mese", "150 partite! Il gioco non ha segreti per te.", "💎")) return;
 
         } catch(e) { console.error("Errore check medaglie:", e); }
 
@@ -2504,4 +2504,3 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
 
 </script>
 </body>
-</html>
