@@ -545,6 +545,18 @@
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
+<div id="matchDetailsModal" style="display: none; position: fixed; top: 10%; left: 5%; width: 90%; height: 80%; background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color); border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+    <h3 style="margin-top:0; text-align: center; color: var(--link-color);">Dettagli Partita</h3>
+    <p style="text-align: center; font-size: 0.85em; color: var(--hint-color); margin-top: -10px;">I caratteri saltati o errati sono in <span style="color: #d32f2f; font-weight: bold;">rosso</span>.</p>
+    <div class="table-wrapper" style="flex-grow:1; overflow-y:auto; margin-bottom: 10px;">
+        <table id="matchDetailsTable">
+            <thead><tr><th>Scritto</th><th>Reale</th><th>Pt</th></tr></thead>
+            <tbody id="matchDetailsBody"></tbody>
+        </table>
+    </div>
+    <button onclick="document.getElementById('matchDetailsModal').style.display='none'" style="margin-top:auto;">Chiudi</button>
+</div>
+
 <div id="medalOverlay" class="medal-overlay" onclick="this.style.display='none'">
     <div class="medal-box">
         <span class="medal-icon" id="overlayMedalIcon">🥇</span>
@@ -1558,6 +1570,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             });
         });
         db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(30).once('value').then(snap => {
+            const list = document.getElementById('matchHistoryList');
             list.innerHTML = ''; userMatchHistory = [];
             snap.forEach(child => { userMatchHistory.push({ key: child.key, ...child.val() }); }); userMatchHistory.reverse();
             if (userMatchHistory.length === 0) { list.innerHTML = '<li style="justify-content:center;color:var(--hint-color)">Nessuna partita giocata.</li>'; return; }
