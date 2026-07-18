@@ -1787,7 +1787,10 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
 
             snap.forEach(child => {
                 const trn = child.val();
-                if (trn.teams && trn.teams[myTeamId]) {
+                const isMember = trn.teams && trn.teams[myTeamId];
+                const isHost = trn.hostId === myId;
+
+                if (isMember || isHost) {
                     // Priorità: Torneo in corso > Torneo aperto > Torneo finito
                     if (!foundActive) {
                         foundActive = child;
@@ -1795,6 +1798,9 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                         const currentActiveStatus = foundActive.val().status;
                         if (trn.status === 'playing' && currentActiveStatus !== 'playing') {
                             foundActive = child;
+                        } else if (trn.status === 'open' && (currentActiveStatus === 'finished' || currentActiveStatus === 'playing' && trn.status === 'playing')) {
+                            // Se entrambi sono playing o open, teniamo l'ultimo o quello con hostId corrispondente
+                            if (isHost && foundActive.val().hostId !== myId) foundActive = child;
                         } else if (trn.status === 'open' && currentActiveStatus === 'finished') {
                             foundActive = child;
                         }
@@ -1863,7 +1869,12 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     document.getElementById('trnTeamCountTxt').textContent = `Squadre Iscritte: ${teamCount}`;
 
     const startBtn = document.getElementById('startTrnBtn');
-    startBtn.disabled = teamCount < 2 || trn.status !== 'open';
+    if (startBtn) {
+        // Se siamo l'host, permettiamo l'avvio anche se non siamo "playing" ancora
+        startBtn.disabled = teamCount < 2 || (trn.status !== 'open' && trn.status !== 'playing');
+        if (trn.status === 'playing') startBtn.textContent = "Rigenera Tabellone (Attenzione!)";
+        else startBtn.textContent = "Genera Tabellone e Avvia";
+    }
 
     const bracketCont = document.getElementById('trnBracketContainer');
     bracketCont.innerHTML = '';
@@ -1934,11 +1945,19 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     });
 
    document.getElementById('startTrnBtn').addEventListener('click', () => {
+    console.log("Start button clicked. activeTrnId:", activeTrnId);
     if (!activeTrnId) return;
     db.ref(`tournaments/${activeTrnId}/teams`).once('value', snap => {
-        let teams = []; snap.forEach(child => teams.push({ id: child.key, name: child.val().name }));
+        let teams = [];
+        snap.forEach(child => {
+            teams.push({ id: child.key, name: child.val().name });
+        });
+        console.log("Teams found:", teams);
 
-        if (teams.length < 2) return;
+        if (teams.length < 2) {
+            alert("Servono almeno 2 squadre per iniziare!");
+            return;
+        }
 
         let matches = {}; let matchIndex = 1;
         // Generazione Round-Robin
@@ -1951,10 +1970,16 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 };
             }
         }
+        console.log("Matches generated:", matches);
 
         db.ref(`tournaments/${activeTrnId}`).update({ status: 'playing', matches: matches })
         .then(() => {
+            console.log("Firebase updated successfully!");
             showToast("Tabellone generato con successo!");
+        })
+        .catch(err => {
+            console.error("Firebase update failed:", err);
+            alert("Errore durante l'avvio del torneo: " + err.message);
         });
     });
 });
