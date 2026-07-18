@@ -2482,16 +2482,21 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         const list = document.getElementById('activityRankList');
         list.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Caricamento...</li>';
 
-        // Usiamo una fetch semplice e ordiniamo lato client per evitare problemi di indici mancanti
-        db.ref(`activity/${period}/${key}`).once('value', snap => {
+        // Usiamo una fetch semplice senza ordinamento Firebase per evitare errori di indicizzazione
+        db.ref(`activity/${period}/${key}`).once('value').then(snap => {
             list.innerHTML = '';
             let users = [];
-            snap.forEach(child => {
-                const u = child.val();
-                users.push({ id: child.key, ...u });
-            });
 
-            // Ordinamento decrescente per numero partite
+            if (snap.exists()) {
+                snap.forEach(child => {
+                    const u = child.val();
+                    if (u && typeof u === 'object') {
+                        users.push({ id: child.key, ...u });
+                    }
+                });
+            }
+
+            // Ordinamento lato client (molto più sicuro)
             users.sort((a, b) => (b.games || 0) - (a.games || 0));
             users = users.slice(0, 50);
 
@@ -2508,8 +2513,11 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 list.appendChild(li);
             });
         }).catch(err => {
-            console.error("Errore caricamento classifiche attività:", err);
-            list.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Errore nel caricamento dei dati.</li>';
+            console.error("Errore fetch attività:", err);
+            list.innerHTML = `<li style="justify-content:center; color:var(--hint-color); flex-direction:column; text-align:center;">
+                                <span>Errore nel caricamento.</span>
+                                <small style="font-size:0.7em; opacity:0.7;">Firebase: ${err.code || err.message}</small>
+                              </li>`;
         });
     }
 
