@@ -685,9 +685,6 @@
             document.getElementById('playerName').textContent = myName;
             document.getElementById('userAliasInput').value = (myName !== tgUser.first_name) ? myName : "";
 
-            // Controlla attività e premia medaglie all'accesso
-            checkActivityAndAwardMedals();
-
             document.getElementById('loadingText').style.display = 'none';
             document.getElementById('createRoomBtn').disabled = false;
 
@@ -700,6 +697,9 @@
                 if (startParam.startsWith('team_')) { processTeamInvite(startParam.replace('team_', '')); }
                 else if (startParam.startsWith('room_')) { window.joinSpecificRoom(startParam.replace('room_', '')); }
             } else { showScreen('setupScreen'); }
+
+            // Controlla attività e premia medaglie DOPO aver mostrato il menu
+            checkActivityAndAwardMedals();
 
             listenToRooms();
         }).catch(e => {
@@ -2146,12 +2146,13 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     }
 
     function renderActiveTournament(trnSnap) {
-    document.getElementById('trnLobbyArea').style.display = 'none';
-    document.getElementById('trnActiveArea').style.display = 'flex';
+        document.getElementById('trnLobbyArea').style.display = 'none';
+        document.getElementById('trnActiveArea').style.display = 'flex';
 
-    const trn = trnSnap.val();
-    const isFinished = trn.status === 'finished';
-    document.getElementById('activeTrnTitle').textContent = trn.name + (isFinished ? " (Concluso)" : "");
+        const trn = trnSnap.val();
+        if (!trn) return;
+        const isFinished = trn.status === 'finished';
+        document.getElementById('activeTrnTitle').textContent = trn.name + (isFinished ? " (Concluso)" : "");
 
     const amIHost = (trn.hostId === myId);
     document.getElementById('editTrnNameBtn').style.display = (amIHost && !isFinished) ? 'block' : 'none';
@@ -2388,17 +2389,17 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 return false;
             };
 
-            // GIORNALIERE
-            if (check(dData.games, 3, `d_bronze_${dKey}`, "Bronzo Giornaliero", "Hai giocato 3 partite oggi!", "🥉")) return;
-            if (check(dData.games, 7, `d_silver_${dKey}`, "Argento Giornaliero", "Sei un veterano! 7 partite oggi!", "🥈")) return;
-            if (check(dData.games, 15, `d_gold_${dKey}`, "Oro Giornaliero", "Incredibile! 15 partite in un giorno!", "🥇")) return;
+            // GIORNALIERE (Controlla tutte, non fermarti al primo)
+            check(dData.games, 3, `d_bronze_${dKey}`, "Bronzo Giornaliero", "Hai giocato 3 partite oggi!", "🥉");
+            check(dData.games, 7, `d_silver_${dKey}`, "Argento Giornaliero", "Sei un veterano! 7 partite oggi!", "🥈");
+            check(dData.games, 15, `d_gold_${dKey}`, "Oro Giornaliero", "Incredibile! 15 partite in un giorno!", "🥇");
 
             // SETTIMANALI
-            if (check(wData.games, 20, `w_active_${wKey}`, "Stakanovista Settimanale", "20 partite questa settimana!", "🎖️")) return;
-            if (check(wData.games, 50, `w_pro_${wKey}`, "Campione Settimanale", "50 partite! Una leggenda questa settimana!", "🏆")) return;
+            check(wData.games, 20, `w_active_${wKey}`, "Stakanovista Settimanale", "20 partite questa settimana!", "🎖️");
+            check(wData.games, 50, `w_pro_${wKey}`, "Campione Settimanale", "50 partite! Una leggenda questa settimana!", "🏆");
 
             // MENSILI
-            if (check(mData.games, 150, `m_legend_${mKey}`, "Titano del Mese", "150 partite! Il gioco non ha segreti per te.", "💎")) return;
+            check(mData.games, 150, `m_legend_${mKey}`, "Titano del Mese", "150 partite! Il gioco non ha segreti per te.", "💎");
 
         } catch(e) { console.error("Errore check medaglie:", e); }
 
@@ -2481,11 +2482,18 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         const list = document.getElementById('activityRankList');
         list.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Caricamento...</li>';
 
-        db.ref(`activity/${period}/${key}`).orderByChild('games').limitToLast(50).once('value', snap => {
+        // Usiamo una fetch semplice e ordiniamo lato client per evitare problemi di indici mancanti
+        db.ref(`activity/${period}/${key}`).once('value', snap => {
             list.innerHTML = '';
             let users = [];
-            snap.forEach(child => { users.push({ id: child.key, ...child.val() }); });
-            users.reverse();
+            snap.forEach(child => {
+                const u = child.val();
+                users.push({ id: child.key, ...u });
+            });
+
+            // Ordinamento decrescente per numero partite
+            users.sort((a, b) => (b.games || 0) - (a.games || 0));
+            users = users.slice(0, 50);
 
             if (users.length === 0) {
                 list.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna attività registrata.</li>';
@@ -2496,11 +2504,15 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 const li = document.createElement('li');
                 let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
                 li.innerHTML = `<span>${medal} <b>${escapeHTML(u.name || "Anonimo")}</b></span>
-                                <span><b>${u.games}</b> <small>part.</small> <small style="color:#4caf50;">(${u.wins} v.)</small></span>`;
+                                <span><b>${u.games || 0}</b> <small>part.</small> <small style="color:#4caf50;">(${u.wins || 0} v.)</small></span>`;
                 list.appendChild(li);
             });
+        }).catch(err => {
+            console.error("Errore caricamento classifiche attività:", err);
+            list.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Errore nel caricamento dei dati.</li>';
         });
     }
 
 </script>
 </body>
+</html>
