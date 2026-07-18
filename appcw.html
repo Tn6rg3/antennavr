@@ -1429,32 +1429,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     document.getElementById('sendFeedbackBtn').addEventListener('click', () => {
         tg.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=feedback`);
     });
-                            }
-                        }
-                    }
-                }
 
-                const trnsSnap = await db.ref('tournaments').once('value');
-                if (trnsSnap.exists()) {
-                    const trns = trnsSnap.val();
-                    for (let trnId in trns) {
-                        const trn = trns[trnId];
-                        if (trn.matches) {
-                            for (let mId in trn.matches) {
-                                const m = trn.matches[mId];
-                                if (m.playerA && m.playerA.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerA`).remove();
-                                if (m.playerB && m.playerB.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerB`).remove();
-                            }
-                        }
-                    }
-                }
-
-                await db.ref(`users/${myId}`).remove();
-                alert("Dati, affiliazioni alle squadre e statistiche eliminati definitivamente.");
-                window.Telegram.WebApp.close();
-            } catch (e) { alert("Errore: " + e.message); console.error(e); }
-        }
-    });
 
     let userMatchHistory = [];
 
