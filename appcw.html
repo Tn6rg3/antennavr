@@ -825,16 +825,23 @@
         if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
         
+        let targetScreen = 'setupScreen';
         if (roomCode) {
-            const rc = roomCode; roomCode = ""; 
+            if (roomCode.startsWith("TRN_")) {
+                targetScreen = 'teamsScreen';
+            }
+            const rc = roomCode; 
+            roomCode = ""; 
+            
             db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
             if (!roomWasDeletedByHost) {
-                db.ref(`rooms/${rc}`).once('value', snap => { if (snap.exists()) db.ref(`rooms/${rc}/players/${myId}`).remove(); });
+                db.ref(`rooms/${rc}`).once('value', snap => { 
+                    if (snap.exists()) db.ref(`rooms/${rc}/players/${myId}`).remove(); 
+                });
             }
         }
         hideChat(); 
-        if (rc && rc.startsWith("TRN_")) showScreen('teamsScreen'); 
-        else showScreen('setupScreen');
+        showScreen(targetScreen);
     }
 
     function joinRoomLogic(isReconnect = false) {
@@ -854,7 +861,10 @@
             
             currentRoomListener = db.ref(`rooms/${roomCode}`);
             currentRoomListener.on('value', roomSnap => {
-                if (!roomSnap.exists()) { exitRoomCleanly(true); return; }
+                if (!roomSnap.exists()) { 
+                    exitRoomCleanly(true); 
+                    return; 
+                }
                 
                 const roomData = roomSnap.val();
                 currentMode = roomData.mode; requestedWordCount = roomData.wordCount; isSinglePlayer = roomData.type === 'single';
@@ -1230,8 +1240,20 @@
         });
     });
     
-    document.getElementById('deleteRoomBtn').addEventListener('click', () => { if (confirm("Eliminare questa stanza?")) db.ref(`rooms/${roomCode}`).remove(); });
-    document.getElementById('leaveLobbyBtn').addEventListener('click', () => { exitRoomCleanly(); });
+    // Tasto "Elimina Stanza" corretto per rimandare subito al Menu Principale
+    document.getElementById('deleteRoomBtn').addEventListener('click', () => { 
+        if (confirm("Eliminare questa stanza?")) {
+            const rc = roomCode;
+            db.ref(`rooms/${rc}`).remove().then(() => {
+                exitRoomCleanly(true);
+            });
+        }
+    });
+
+    // Tasto "Esci dalla Stanza" corretto
+    document.getElementById('leaveLobbyBtn').addEventListener('click', () => { 
+        exitRoomCleanly(); 
+    });
     
     document.getElementById('deleteDataBtn').addEventListener('click', async () => {
         if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati, inclusa l'appartenenza a squadre, classifiche e statistiche. Confermi?")) {
@@ -1729,8 +1751,8 @@
         const trn = trnSnap.val();
         document.getElementById('activeTrnTitle').textContent = trn.name;
 
-        // Visualizzazione pulsanti Modifica e Ritira
         const amIHost = (trn.hostId === myId);
+        // Tasto per modificare il nome solo per l'host e a torneo aperto/in corso
         document.getElementById('editTrnNameBtn').style.display = amIHost ? 'block' : 'none';
         document.getElementById('leaveTrnBtn').style.display = isTeamCaptain ? 'block' : 'none';
 
@@ -1751,14 +1773,14 @@
         document.getElementById('trnTeamCountTxt').textContent = `Squadre Iscritte: ${teamCount}`;
         
         const startBtn = document.getElementById('startTrnBtn');
-        startBtn.disabled = teamCount < 6 || trn.status !== 'open';
+        // Ora il limite minimo è di 2 squadre
+        startBtn.disabled = teamCount < 2 || trn.status !== 'open';
         
         const bracketCont = document.getElementById('trnBracketContainer'); bracketCont.innerHTML = '';
         
         if (trn.status === 'open') {
             bracketCont.innerHTML = '<p style="text-align:center; color:var(--hint-color); font-size:0.9em;">Il torneo deve ancora iniziare.</p>';
         } else {
-            // Render Matches
             if(trn.matches) {
                 Object.entries(trn.matches).forEach(([mId, m]) => {
                     const isMyMatch = (m.teamA === myTeamId || m.teamB === myTeamId);
@@ -1776,7 +1798,6 @@
                         </div>`;
 
                     if (m.status !== 'finished') {
-                        // Slot Giocatori
                         let slotAHTML = `<button class="slot-btn ${m.playerA ? (m.playerA.id === myId ? 'filled-me' : 'filled') : ''}" 
                             ${(m.teamA === myTeamId || m.playerA?.id === myId) ? `onclick="toggleTrnSlot('${mId}', 'A', '${m.playerA?.id || ''}')"` : 'disabled'}>
                             ${m.playerA ? escapeHTML(m.playerA.name) : 'Libero (Clicca)'}</button>`;
