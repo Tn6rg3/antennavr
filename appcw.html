@@ -93,11 +93,20 @@
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 3000;
             display: flex; flex-direction: column; gap: 10px; pointer-events: none;
         }
-        .toast {
-            background-color: rgba(0, 0, 0, 0.8); color: white; padding: 10px 20px;
-            border-radius: 20px; font-size: 0.9em; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            animation: fadeInOut 4s forwards; white-space: nowrap;
+        .medal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 5000;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; color: white; animation: fadeIn 0.5s;
         }
+        .medal-box {
+            transform: scale(0); animation: zoomIn 0.6s 0.3s forwards;
+            background: var(--sec-bg-color); padding: 20px; border-radius: 20px;
+            border: 3px solid var(--champ-color); box-shadow: 0 0 20px var(--champ-color);
+            color: var(--text-color); max-width: 80%;
+        }
+        @keyframes zoomIn { to { transform: scale(1); } }
+        .medal-icon { font-size: 5em; margin-bottom: 10px; display: block; }
         @keyframes fadeInOut {
             0% { opacity: 0; transform: translateY(-10px); }
             10% { opacity: 1; transform: translateY(0); }
@@ -150,6 +159,7 @@
         <h2 style="margin: 0; text-align: left; flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 1.2em;">Ciao <span id="playerName">Giocatore</span>!</h2>
         <div style="display: flex; gap: 5px; flex-shrink: 0;">
             <button class="action-btn-small btn-secondary" onclick="showScreen('privacyScreen')">Info</button>
+            <button class="action-btn-small" style="background:#4caf50; color:#fff" onclick="showScreen('participationScreen'); switchActTab('daily');">🏅 Attività</button>
             <button class="action-btn-small" onclick="showProfileScreen()">👤 Profilo</button>
             <button class="action-btn-small" onclick="showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn');">🏆 Classifica</button>
         </div>
@@ -511,17 +521,37 @@
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
-<!-- MODALE DETTAGLI MATCH -->
-<div id="matchDetailsModal">
-    <h3 style="margin-top:0; text-align: center; color: var(--link-color);">Dettagli Partita</h3>
-    <p style="text-align: center; font-size: 0.85em; color: var(--hint-color); margin-top: -10px;">I caratteri saltati o errati sono in <span style="color: #d32f2f; font-weight: bold;">rosso</span>.</p>
-    <div class="table-wrapper" style="flex-grow:1; overflow-y:auto; margin-bottom: 10px;">
-        <table id="matchDetailsTable">
-            <thead><tr><th>Scritto</th><th>Reale</th><th>Pt</th></tr></thead>
-            <tbody id="matchDetailsBody"></tbody>
-        </table>
+<div id="participationScreen" class="screen">
+    <h2 style="color: var(--champ-color); margin-bottom: 10px;">🏅 Partecipazione e Attività</h2>
+
+    <div class="tab-buttons" style="margin-bottom: 10px;">
+        <button id="tabDailyAct" class="tab-btn active-tab" onclick="switchActTab('daily')">Oggi</button>
+        <button id="tabWeeklyAct" class="tab-btn" onclick="switchActTab('weekly')">Settimana</button>
+        <button id="tabMonthlyAct" class="tab-btn" onclick="switchActTab('monthly')">Mese</button>
     </div>
-    <button onclick="document.getElementById('matchDetailsModal').style.display='none'" style="margin-top:auto;">Chiudi</button>
+
+    <div class="box-panel" style="flex-grow: 1; min-height:0; overflow-y:auto; padding:5px;">
+        <h3 id="actListTitle">Classifica Attività</h3>
+        <ul id="activityRankList" class="data-list"></ul>
+    </div>
+
+    <div class="box-panel" style="flex-shrink:0; margin-top:5px; padding:8px;">
+        <h3 style="font-size:0.9em; margin-bottom:5px;">🎖️ Le Mie Medaglie</h3>
+        <div id="myMedalsContainer" style="display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:1.5em;">
+            <span style="font-size:0.6em; color:var(--hint-color);">Nessuna medaglia ancora.</span>
+        </div>
+    </div>
+
+    <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
+</div>
+
+<div id="medalOverlay" class="medal-overlay" onclick="this.style.display='none'">
+    <div class="medal-box">
+        <span class="medal-icon" id="overlayMedalIcon">🥇</span>
+        <h2 id="overlayMedalTitle" style="margin-bottom:10px;">Nuova Medaglia!</h2>
+        <p id="overlayMedalDesc">Hai sbloccato un nuovo riconoscimento per la tua attività.</p>
+        <button class="btn-champ" style="margin-top:20px;">FANTASTICO!</button>
+    </div>
 </div>
 
 <script>
@@ -609,6 +639,7 @@
 
         if(screenId === 'teamsScreen') { activeChatContext = 'team'; checkMyTeamStatus(); }
         else if (screenId === 'lobbyScreen' || screenId === 'gameArea') { activeChatContext = 'room'; }
+        else if (screenId === 'participationScreen') { switchActTab('daily'); activeChatContext = null; }
         else { activeChatContext = null; }
     }
 
@@ -641,6 +672,9 @@
 
             document.getElementById('playerName').textContent = myName;
             document.getElementById('userAliasInput').value = (myName !== tgUser.first_name) ? myName : "";
+
+            // Controlla attività e premia medaglie all'accesso
+            checkActivityAndAwardMedals();
 
             document.getElementById('loadingText').style.display = 'none';
             document.getElementById('createRoomBtn').disabled = false;
@@ -1304,6 +1338,9 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         if (matchDetailsArray.length > 0) {
             const historyRef = db.ref(`users/${myId}/history`).push();
             historyRef.set({ date: firebase.database.ServerValue.TIMESTAMP, mode: currentMode, score: totalScore, wpm: currentWpm, type: isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
+
+            // Aggiorna Attività e Medaglie
+            updateActivity(totalScore > 0);
 
             if (Object.keys(sessionCharErrors).length > 0) {
                 const statsRef = db.ref(`users/${myId}/stats/charErrors`);
@@ -2277,6 +2314,178 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                     expiresAt: Date.now() + (30 * 60000), hostId: myId
                 }).then(() => { window.joinSpecificRoom(specificRoomCode); });
             }
+        });
+    }
+
+    // --- LOGICA ATTIVITÀ E MEDAGLIE ---
+    function getWeekNumber(d) {
+        d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+        var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+        var weekNo = Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
+        return d.getUTCFullYear() + "-W" + (weekNo < 10 ? '0'+weekNo : weekNo);
+    }
+
+    function updateActivity(won = false) {
+        const now = new Date();
+        const dailyKey = now.toISOString().split('T')[0];
+        const weeklyKey = getWeekNumber(now);
+        const monthlyKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+
+        const updates = ['daily/'+dailyKey, 'weekly/'+weeklyKey, 'monthly/'+monthlyKey];
+        updates.forEach(path => {
+            db.ref(`activity/${path}/${myId}`).transaction(data => {
+                if (!data) return { name: myName, games: 1, wins: won ? 1 : 0, lastPlayed: firebase.database.ServerValue.TIMESTAMP };
+                data.games = (data.games || 0) + 1;
+                if (won) data.wins = (data.wins || 0) + 1;
+                data.name = myName;
+                data.lastPlayed = firebase.database.ServerValue.TIMESTAMP;
+                return data;
+            }).then(() => {
+                if (path.startsWith('daily')) checkActivityAndAwardMedals();
+            });
+        });
+    }
+
+    async function checkActivityAndAwardMedals() {
+        const now = new Date();
+        const dKey = now.toISOString().split('T')[0];
+        const wKey = getWeekNumber(now);
+        const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+
+        try {
+            const [dSnap, wSnap, mSnap, userMedalsSnap] = await Promise.all([
+                db.ref(`activity/daily/${dKey}/${myId}`).once('value'),
+                db.ref(`activity/weekly/${wKey}/${myId}`).once('value'),
+                db.ref(`activity/monthly/${mKey}/${myId}`).once('value'),
+                db.ref(`users/${myId}/medals`).once('value')
+            ]);
+
+            const dData = dSnap.val() || { games: 0 };
+            const wData = wSnap.val() || { games: 0 };
+            const mData = mSnap.val() || { games: 0 };
+            const myMedals = userMedalsSnap.val() || {};
+
+            // Soglie Medaglie
+            const check = (count, threshold, id, title, desc, icon) => {
+                if (count >= threshold && !myMedals[id]) {
+                    awardMedal(id, title, desc, icon);
+                    return true;
+                }
+                return false;
+            };
+
+            // GIORNALIERE
+            if (check(dData.games, 5, `d_bronze_${dKey}`, "Bronzo Giornaliero", "Hai giocato 5 partite oggi!", "🥉")) return;
+            if (check(dData.games, 15, `d_silver_${dKey}`, "Argento Giornaliero", "Sei un veterano! 15 partite oggi!", "🥈")) return;
+            if (check(dData.games, 30, `d_gold_${dKey}`, "Oro Giornaliero", "Incredibile! 30 partite in un giorno!", "🥇")) return;
+
+            // SETTIMANALI
+            if (check(wData.games, 25, `w_active_${wKey}`, "Stakanovista Settimanale", "25 partite questa settimana!", "🎖️")) return;
+            if (check(wData.games, 100, `w_pro_${wKey}`, "Campione Settimanale", "100 partite! Una leggenda questa settimana!", "🏆")) return;
+
+            // MENSILI
+            if (check(mData.games, 300, `m_legend_${mKey}`, "Titano del Mese", "300 partite! Il gioco non ha segreti per te.", "💎")) return;
+
+        } catch(e) { console.error("Errore check medaglie:", e); }
+
+        updateMedalGallery();
+    }
+
+    function awardMedal(id, title, desc, icon) {
+        db.ref(`users/${myId}/medals/${id}`).set({ title, date: new Date().toLocaleDateString('it-IT'), icon });
+
+        // Visualizza Overlay
+        document.getElementById('overlayMedalIcon').textContent = icon;
+        document.getElementById('overlayMedalTitle').textContent = title;
+        document.getElementById('overlayMedalDesc').textContent = desc;
+        document.getElementById('medalOverlay').style.display = 'flex';
+
+        playMedalSound();
+        updateMedalGallery();
+    }
+
+    function playMedalSound() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.type = 'triangle';
+        const now = audioCtx.currentTime;
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.5); // C6
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+
+        osc.start(now);
+        osc.stop(now + 0.8);
+    }
+
+    function updateMedalGallery() {
+        const cont = document.getElementById('myMedalsContainer');
+        if (!cont) return;
+        db.ref(`users/${myId}/medals`).once('value', snap => {
+            if (!snap.exists()) {
+                cont.innerHTML = '<span style="font-size:0.6em; color:var(--hint-color);">Nessuna medaglia ancora.</span>';
+                return;
+            }
+            cont.innerHTML = '';
+            Object.values(snap.val()).forEach(m => {
+                const span = document.createElement('span');
+                span.textContent = m.icon;
+                span.title = `${m.title} (${m.date})`;
+                span.onclick = () => showToast(`${m.title} - Sbloccata il ${m.date}`);
+                span.style.cursor = "pointer";
+                cont.appendChild(span);
+            });
+        });
+    }
+
+    window.switchActTab = function(period) {
+        document.querySelectorAll('#participationScreen .tab-btn').forEach(b => b.classList.remove('active-tab'));
+        document.getElementById(`tab${period.charAt(0).toUpperCase() + period.slice(1)}Act`).classList.add('active-tab');
+
+        const now = new Date();
+        let key = "";
+        if (period === 'daily') {
+            key = now.toISOString().split('T')[0];
+            document.getElementById('actListTitle').textContent = "I più attivi di Oggi";
+        } else if (period === 'weekly') {
+            key = getWeekNumber(now);
+            document.getElementById('actListTitle').textContent = "I più attivi della Settimana";
+        } else {
+            key = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+            document.getElementById('actListTitle').textContent = "I più attivi del Mese";
+        }
+
+        renderActivityRankings(period, key);
+        updateMedalGallery();
+    }
+
+    function renderActivityRankings(period, key) {
+        const list = document.getElementById('activityRankList');
+        list.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Caricamento...</li>';
+
+        db.ref(`activity/${period}/${key}`).orderByChild('games').limitToLast(50).once('value', snap => {
+            list.innerHTML = '';
+            let users = [];
+            snap.forEach(child => { users.push({ id: child.key, ...child.val() }); });
+            users.reverse();
+
+            if (users.length === 0) {
+                list.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna attività registrata.</li>';
+                return;
+            }
+
+            users.forEach((u, idx) => {
+                const li = document.createElement('li');
+                let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
+                li.innerHTML = `<span>${medal} <b>${escapeHTML(u.name || "Anonimo")}</b></span>
+                                <span><b>${u.games}</b> <small>part.</small> <small style="color:#4caf50;">(${u.wins} v.)</small></span>`;
+                list.appendChild(li);
+            });
         });
     }
 
