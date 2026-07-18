@@ -1790,85 +1790,83 @@
     }
 
     function renderActiveTournament(trnSnap) {
-        document.getElementById('trnLobbyArea').style.display = 'none';
-        document.getElementById('trnActiveArea').style.display = 'flex';
-        
-        const trn = trnSnap.val();
-        document.getElementById('activeTrnTitle').textContent = trn.name;
+    document.getElementById('trnLobbyArea').style.display = 'none';
+    document.getElementById('trnActiveArea').style.display = 'flex';
+    
+    const trn = trnSnap.val();
+    document.getElementById('activeTrnTitle').textContent = trn.name;
 
-        const amIHost = (trn.hostId === myId);
-        document.getElementById('editTrnNameBtn').style.display = amIHost ? 'block' : 'none';
-        document.getElementById('leaveTrnBtn').style.display = isTeamCaptain ? 'block' : 'none';
+    const amIHost = (trn.hostId === myId);
+    document.getElementById('editTrnNameBtn').style.display = amIHost ? 'block' : 'none';
+    document.getElementById('leaveTrnBtn').style.display = isTeamCaptain ? 'block' : 'none';
 
-        // Classifica
-        const stdBody = document.getElementById('trnStandingsBody'); stdBody.innerHTML = '';
-        let standings = Object.entries(trn.standings || {}).map(([id, data]) => ({ id, ...data }));
-        standings.sort((a,b) => b.points - a.points);
-        standings.forEach((s, idx) => {
-            const tr = document.createElement('tr');
-            let med = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
-            tr.innerHTML = `<td>${med}</td><td><b>${escapeHTML(s.name)}</b> ${s.id===myTeamId?'(Voi)':''}</td><td><b>${s.points}</b></td>`;
-            stdBody.appendChild(tr);
-        });
+    // Classifica
+    const stdBody = document.getElementById('trnStandingsBody'); 
+    stdBody.innerHTML = '';
+    let standings = Object.entries(trn.standings || {}).map(([id, data]) => ({ id, ...data }));
+    standings.sort((a,b) => b.points - a.points);
+    standings.forEach((s, idx) => {
+        const tr = document.createElement('tr');
+        let med = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
+        tr.innerHTML = `<td>${med}</td><td><b>${escapeHTML(s.name)}</b> ${s.id===myTeamId?'(Voi)':''}</td><td><b>${s.points}</b></td>`;
+        stdBody.appendChild(tr);
+    });
 
-        document.getElementById('trnHostControls').style.display = amIHost ? 'block' : 'none';
-        
-        const teamCount = trn.teams ? Object.keys(trn.teams).length : 0;
-        document.getElementById('trnTeamCountTxt').textContent = `Squadre Iscritte: ${teamCount}`;
-        
-        const startBtn = document.getElementById('startTrnBtn');
-        startBtn.disabled = teamCount < 2 || trn.status !== 'open';
-        
-        const bracketCont = document.getElementById('trnBracketContainer'); bracketCont.innerHTML = '';
-        
-        if (trn.status === 'open') {
-            bracketCont.innerHTML = '<p style="text-align:center; color:var(--hint-color); font-size:0.9em;">Il torneo deve ancora iniziare.</p>';
-        } else {
-            if(trn.matches) {
-                Object.entries(trn.matches).forEach(([mId, m]) => {
-                    const isMyMatch = (m.teamA === myTeamId || m.teamB === myTeamId);
-                    const card = document.createElement('div'); card.className = 'match-card';
-                    if (isMyMatch) card.style.borderColor = "var(--champ-color)";
+    document.getElementById('trnHostControls').style.display = amIHost ? 'block' : 'none';
+    const teamCount = trn.teams ? Object.keys(trn.teams).length : 0;
+    document.getElementById('trnTeamCountTxt').textContent = `Squadre Iscritte: ${teamCount}`;
+    
+    const startBtn = document.getElementById('startTrnBtn');
+    startBtn.disabled = teamCount < 2 || trn.status !== 'open';
+    
+    const bracketCont = document.getElementById('trnBracketContainer'); 
+    bracketCont.innerHTML = '';
+    
+    if (trn.status === 'open') {
+        bracketCont.innerHTML = '<p style="text-align:center; color:var(--hint-color); font-size:0.9em;">Il torneo è aperto, attendi l\'avvio dall\'organizzatore.</p>';
+    } else if (trn.matches) {
+        Object.entries(trn.matches).forEach(([mId, m]) => {
+            const isMyMatch = (m.teamA === myTeamId || m.teamB === myTeamId);
+            const card = document.createElement('div'); 
+            card.className = 'match-card';
+            if (isMyMatch) card.style.borderColor = "var(--champ-color)";
+            card.style.borderWidth = "2px";
 
-                    let aColor = m.winnerTeamId === m.teamA ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)");
-                    let bColor = m.winnerTeamId === m.teamB ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)");
+            let aColor = m.winnerTeamId === m.teamA ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)");
+            let bColor = m.winnerTeamId === m.teamB ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)");
 
-                    card.innerHTML = `
-                        <div class="match-card-teams">
-                            <div style="color:${aColor}"><b>${escapeHTML(m.teamAName)}</b></div>
-                            <div class="match-vs">VS</div>
-                            <div style="color:${bColor}"><b>${escapeHTML(m.teamBName)}</b></div>
-                        </div>`;
+            card.innerHTML = `
+                <div class="match-card-teams">
+                    <div style="color:${aColor}"><b>${escapeHTML(m.teamAName)}</b></div>
+                    <div class="match-vs">VS</div>
+                    <div style="color:${bColor}"><b>${escapeHTML(m.teamBName)}</b></div>
+                </div>`;
 
-                    if (m.status !== 'finished') {
-                        let slotAHTML = `<button class="slot-btn ${m.playerA ? (m.playerA.id === myId ? 'filled-me' : 'filled') : ''}" 
-                            ${(m.teamA === myTeamId || m.playerA?.id === myId) ? `onclick="toggleTrnSlot('${mId}', 'A', '${m.playerA?.id || ''}')"` : 'disabled'}>
-                            ${m.playerA ? escapeHTML(m.playerA.name) : 'Libero (Clicca)'}</button>`;
-                            
-                        let slotBHTML = `<button class="slot-btn ${m.playerB ? (m.playerB.id === myId ? 'filled-me' : 'filled') : ''}" 
-                            ${(m.teamB === myTeamId || m.playerB?.id === myId) ? `onclick="toggleTrnSlot('${mId}', 'B', '${m.playerB?.id || ''}')"` : 'disabled'}>
-                            ${m.playerB ? escapeHTML(m.playerB.name) : 'Libero (Clicca)'}</button>`;
+            if (m.status !== 'finished') {
+                // I tasti slot ora chiamano toggleTrnSlot passando l'ID incontro e il lato (A o B)
+                let slotAHTML = `<button class="slot-btn ${m.playerA ? 'filled' : ''}" 
+                    onclick="toggleTrnSlot('${mId}', 'A', '${m.teamA}')">
+                    ${m.playerA ? escapeHTML(m.playerA.name) : 'A: Libero'}</button>`;
+                    
+                let slotBHTML = `<button class="slot-btn ${m.playerB ? 'filled' : ''}" 
+                    onclick="toggleTrnSlot('${mId}', 'B', '${m.teamB}')">
+                    ${m.playerB ? escapeHTML(m.playerB.name) : 'B: Libero'}</button>`;
 
-                        card.innerHTML += `<div style="display:flex; width:100%; gap:10px;">
-                            <div style="flex:1;">${slotAHTML}</div>
-                            <div style="flex:1;">${slotBHTML}</div>
-                        </div>`;
+                card.innerHTML += `<div style="display:flex; width:100%; gap:10px;">${slotAHTML}${slotBHTML}</div>`;
 
-                        if (m.playerA?.id === myId || m.playerB?.id === myId) {
-                            if (m.playerA && m.playerB) {
-                                card.innerHTML += `<button class="btn-success" style="font-size:0.85em; padding:6px; margin-top:8px;" onclick="startTrnMatch('${mId}')">ENTRA NELLA SFIDA</button>`;
-                            } else {
-                                card.innerHTML += `<p style="font-size:0.8em; color:var(--hint-color); margin:5px 0 0 0;">In attesa dell'avversario...</p>`;
-                            }
-                        }
-                    } else {
-                        card.innerHTML += `<div style="font-size:0.85em; color:var(--hint-color); margin-top:5px;">Concluso</div>`;
+                // Pulsante AVVIA solo se entrambi gli slot sono pieni e sono uno dei giocatori
+                if (m.playerA && m.playerB) {
+                    if (m.playerA.id === myId || m.playerB.id === myId) {
+                        card.innerHTML += `<button class="btn-success" style="font-size:0.85em; padding:6px; margin-top:8px;" onclick="startTrnMatch('${mId}')">ENTRA NELLA SFIDA</button>`;
                     }
-                    bracketCont.appendChild(card);
-                });
+                }
+            } else {
+                card.innerHTML += `<div style="font-size:0.85em; color:#4caf50; font-weight:bold; margin-top:5px;">Concluso</div>`;
             }
-        }
+            bracketCont.appendChild(card);
+        });
     }
+}
 
     document.getElementById('editTrnNameBtn').addEventListener('click', () => {
         let newName = prompt("Inserisci il nuovo nome del torneo:");
@@ -1915,12 +1913,22 @@
     });
 });
 
-    window.toggleTrnSlot = function(matchId, side, currentOccupantId) {
-        if (currentOccupantId && currentOccupantId !== myId) return; 
-        let val = null;
-        if (!currentOccupantId) val = { id: myId, name: myName }; 
-        db.ref(`tournaments/${activeTrnId}/matches/${matchId}/player${side}`).set(val);
+    window.toggleTrnSlot = function(matchId, side, teamId) {
+    if (teamId !== myTeamId) {
+        alert("Non appartieni a questa squadra!");
+        return;
     }
+    const slotRef = db.ref(`tournaments/${activeTrnId}/matches/${matchId}/player${side}`);
+    slotRef.once('value', snap => {
+        if (!snap.exists()) {
+            slotRef.set({ id: myId, name: myName });
+        } else if (snap.val().id === myId) {
+            slotRef.remove();
+        } else {
+            alert("Questo posto è già occupato da " + snap.val().name);
+        }
+    });
+}
 
     window.startTrnMatch = function(matchId) {
         const specificRoomCode = "TRN_" + matchId;
