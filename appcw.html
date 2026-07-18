@@ -117,7 +117,6 @@
 
     <div id="toastContainer"></div>
 
-    <!-- Modale globale chat standard (Lobby/Libera) -->
     <button id="globalChatBtn" style="display:none; position:fixed; top:15px; right:15px; width:auto; z-index:1500; margin:0; padding:8px 15px; font-size:0.9em; transition: background-color 0.3s;" class="btn-secondary" onclick="toggleChat()">💬 Chat</button>
 
     <div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:45%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
@@ -243,7 +242,13 @@
     <div id="teamsScreen" class="screen">
         <h2 style="color: var(--champ-color); margin-bottom: 5px;">🏆 Area Tornei</h2>
 
-        <!-- VISTA: L'utente NON ha una squadra -->
+        <div class="tab-buttons" style="margin-bottom: 5px;">
+            <button id="tabTeamGestBtn" class="tab-btn active-tab" onclick="switchTeamTab('gest')">La mia Squadra</button>
+            <button id="tabAllTeamsBtn" class="tab-btn" onclick="switchTeamTab('allteams')">Tutte le Squadre</button>
+            <button id="tabTournamentsBtn" class="tab-btn" onclick="switchTeamTab('tournaments')">I Tornei</button>
+        </div>
+
+        <!-- VISTA: L'utente NON ha una squadra (si trova nel tab "La mia Squadra") -->
         <div id="noTeamView" style="width: 100%; display: none; flex-direction: column; flex-grow: 1; min-height: 0;">
             <p style="text-align:center; font-size:0.9em; margin-top:0;">Per partecipare ai tornei devi essere in una squadra.</p>
             <div class="box-panel" style="flex-shrink: 0;">
@@ -257,15 +262,8 @@
             </div>
         </div>
 
-        <!-- VISTA: L'utente HA una squadra -->
+        <!-- VISTA: L'utente HA una squadra (tab "La mia Squadra") -->
         <div id="myTeamView" style="width: 100%; display: none; flex-grow:1; flex-direction:column; min-height: 0;">
-            
-            <div class="tab-buttons" style="margin-bottom: 5px;">
-                <button id="tabTeamGestBtn" class="tab-btn active-tab" onclick="switchTeamTab('gest')">La mia Squadra</button>
-                <button id="tabTournamentsBtn" class="tab-btn" onclick="switchTeamTab('tournaments')">I Tornei</button>
-            </div>
-
-            <!-- TAB 1: Gestione Squadra e Chat -->
             <div id="teamGestArea" style="display:flex; flex-direction:column; flex-grow:1; min-height:0;">
                 <div class="box-panel" style="flex-shrink: 0;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -281,7 +279,6 @@
                     <ul id="myTeamMembersList" class="data-list" style="max-height: 80px; flex-grow: 0;"></ul>
                 </div>
                 
-                <!-- Chat Fissa di Squadra -->
                 <div class="box-panel" style="flex-grow:1; min-height:0; display:flex; flex-direction:column; padding:5px;">
                     <h3 style="margin-bottom:2px; font-size:0.9em; color:var(--hint-color);">💬 Chat di Squadra</h3>
                     <div id="teamChatMessages" style="flex-grow:1; overflow-y:auto; font-size:0.85em; padding:5px; background:var(--bg-color); border-radius:6px; margin-bottom:5px;"></div>
@@ -291,50 +288,58 @@
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- TAB 2: Tornei (Lista, Creazione, Tabellone) -->
-            <div id="tournamentsArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
+        <!-- TAB 2: Tutte le Squadre -->
+        <div id="allTeamsArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
+            <div class="box-panel" style="flex-grow:1; min-height:0; overflow-y:auto;">
+                <h3 style="margin-top:0;">Elenco Globale Squadre</h3>
+                <ul id="globalAllTeamsList" class="data-list"></ul>
+            </div>
+        </div>
+
+        <!-- TAB 3: Tornei (Lista, Creazione, Tabellone) -->
+        <div id="tournamentsArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
+            
+            <div id="trnLobbyArea" style="display:flex; flex-direction:column; flex-grow:1; min-height:0;">
+                <div class="box-panel" id="createTrnPanel" style="flex-shrink:0; display:none;">
+                    <h3>Organizza un Torneo</h3>
+                    <input type="text" id="newTrnName" placeholder="Nome del torneo...">
+                    <button id="createTrnBtn" class="btn-champ">Crea Torneo</button>
+                </div>
+                <div class="box-panel" style="flex-grow:1; min-height:0;">
+                    <h3>Tornei Aperti (All'italiana)</h3>
+                    <ul id="openTournamentsList" class="data-list"></ul>
+                </div>
+            </div>
+
+            <div id="trnActiveArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
+                <h3 id="activeTrnTitle" style="color:var(--champ-color); text-align:center; margin: 0 0 5px 0;">Nome Torneo</h3>
                 
-                <!-- Se NON si è iscritti a un torneo attivo -->
-                <div id="trnLobbyArea" style="display:flex; flex-direction:column; flex-grow:1; min-height:0;">
-                    <div class="box-panel" id="createTrnPanel" style="flex-shrink:0; display:none;">
-                        <h3>Organizza un Torneo</h3>
-                        <input type="text" id="newTrnName" placeholder="Nome del torneo...">
-                        <button id="createTrnBtn" class="btn-champ">Crea Torneo</button>
-                    </div>
-                    <div class="box-panel" style="flex-grow:1; min-height:0;">
-                        <h3>Tornei Aperti (All'italiana)</h3>
-                        <ul id="openTournamentsList" class="data-list"></ul>
-                    </div>
+                <div style="display:flex; justify-content:center; gap:10px; margin-bottom:5px;">
+                    <button id="editTrnNameBtn" class="action-btn-small btn-secondary" style="display:none; margin:0;">✏️ Modifica Nome</button>
+                    <button id="leaveTrnBtn" class="action-btn-small btn-danger" style="display:none; margin:0;">🏃 Ritira Squadra</button>
                 </div>
 
-                <!-- Se si E' iscritti a un torneo -->
-                <div id="trnActiveArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
-                    <h3 id="activeTrnTitle" style="color:var(--champ-color); text-align:center; margin: 0 0 5px 0;">Nome Torneo</h3>
-                    
-                    <!-- Classifica Torneo -->
-                    <div class="box-panel" style="flex-shrink:0; max-height:130px; overflow-y:auto; padding:5px;">
-                        <h3 style="margin-bottom:2px; font-size:0.9em;">Classifica (Parziale/Finale)</h3>
-                        <table style="font-size:0.85em;">
-                            <thead><tr><th>Pos</th><th>Squadra</th><th>Pt</th></tr></thead>
-                            <tbody id="trnStandingsBody"></tbody>
-                        </table>
-                    </div>
+                <div class="box-panel" style="flex-shrink:0; max-height:130px; overflow-y:auto; padding:5px;">
+                    <h3 style="margin-bottom:2px; font-size:0.9em;">Classifica (Parziale/Finale)</h3>
+                    <table style="font-size:0.85em;">
+                        <thead><tr><th>Pos</th><th>Squadra</th><th>Pt</th></tr></thead>
+                        <tbody id="trnStandingsBody"></tbody>
+                    </table>
+                </div>
 
-                    <!-- Host Controls -->
-                    <div id="trnHostControls" class="box-panel" style="display:none; flex-shrink:0; text-align:center; border-color:var(--champ-color);">
-                        <p style="margin:0 0 5px 0; font-size:0.85em;">Sei l'organizzatore.</p>
-                        <p id="trnTeamCountTxt" style="font-size:0.8em; font-weight:bold; color:var(--hint-color); margin:0 0 5px 0;"></p>
-                        <button id="startTrnBtn" class="btn-success action-btn-small" disabled>Genera Tabellone e Avvia</button>
-                        <button id="deleteTrnBtn" class="btn-danger action-btn-small">Elimina Torneo</button>
-                    </div>
+                <div id="trnHostControls" class="box-panel" style="display:none; flex-shrink:0; text-align:center; border-color:var(--champ-color);">
+                    <p style="margin:0 0 5px 0; font-size:0.85em;">Sei l'organizzatore.</p>
+                    <p id="trnTeamCountTxt" style="font-size:0.8em; font-weight:bold; color:var(--hint-color); margin:0 0 5px 0;"></p>
+                    <button id="startTrnBtn" class="btn-success action-btn-small" disabled>Genera Tabellone e Avvia</button>
+                    <button id="deleteTrnBtn" class="btn-danger action-btn-small">Elimina Torneo</button>
+                </div>
 
-                    <!-- Tabellone Incontri -->
-                    <div class="box-panel" style="flex-grow:1; min-height:0; overflow-y:auto; padding:5px;">
-                        <h3 style="margin-bottom:5px; color:var(--champ-color);">🥊 Tabellone Incontri</h3>
-                        <div id="trnBracketContainer" style="display:flex; flex-direction:column; gap:8px;">
-                            <p style="text-align:center; color:var(--hint-color); font-size:0.9em;">In attesa dell'avvio...</p>
-                        </div>
+                <div class="box-panel" style="flex-grow:1; min-height:0; overflow-y:auto; padding:5px;">
+                    <h3 style="margin-bottom:5px; color:var(--champ-color);">🥊 Tabellone Incontri</h3>
+                    <div id="trnBracketContainer" style="display:flex; flex-direction:column; gap:8px;">
+                        <p style="text-align:center; color:var(--hint-color); font-size:0.9em;">In attesa dell'avvio...</p>
                     </div>
                 </div>
             </div>
@@ -343,7 +348,7 @@
         <button onclick="goBackToMenu()" style="margin-top: 5px; flex-shrink: 0;">Torna al Menu Principale</button>
     </div>
 
-    <!-- INFO, REGOLE E PRIVACY -->
+    <!-- INFO, REGOLE E PRIVACY (Ripristinata) -->
     <div id="privacyScreen" class="screen">
         <h2 style="margin-bottom: 5px;">📜 Regolamento e Privacy</h2>
         
@@ -351,14 +356,46 @@
             <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
             <p style="margin-top: 5px;">Il gioco consiste nell'ascoltare sequenze in codice Morse e decifrare la parola o il nominativo corretto.</p>
             
-            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Ping Pong e Tornei:</h4>
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Parole Comuni:</h4>
             <ul style="margin-top: 2px; padding-left: 20px;">
-                <li>Sfida a turni in cui i giocatori inviano e ricevono alternativamente le parole in Morse.</li>
-                <li>Nei <b>Tornei</b>: 20 WPM di partenza fissi. Si giocano 20 parole (10 inviate, 10 ricevute). Al primo errore si perde 1 WPM, per ogni parola perfetta si guadagnano 2 WPM. Al termine, chi ha il punteggio più alto fa vincere <b>1 punto</b> alla propria squadra.</li>
+                <li><b>Parola/Gruppo perfetto:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
+                <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
+                <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
+                <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata all'inizio.</li>
             </ul>
 
-            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Privacy e Dati Personali:</h4>
-            <p style="margin-top: 2px;">I tuoi dati (ID, Nome, Username Telegram, storico) sono protetti e usati solo per il gioco.</p>
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Ping Pong:</h4>
+            <ul style="margin-top: 2px; padding-left: 20px;">
+                <li>Sfida a turni <b>esclusivamente Multiplayer</b> (necessita di almeno un altro giocatore in stanza).</li>
+                <li>A turno, l'utente <b>A</b> pensa a una parola e la digita, l'utente <b>B</b> (o gli altri in stanza) la ascoltano in codice Morse e la devono decodificare.</li>
+                <li>I ruoli si invertono automaticamente per le stringhe successive.</li>
+                <li>Il calcolo di punti e penalità segue le regole delle <i>Parole Comuni</i> indicate sopra. <i>Nei tornei la velocità di partenza è fissata a 20 WPM.</i></li>
+            </ul>
+
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Nominativi (CW Freak):</h4>
+            <ul style="margin-top: 2px; padding-left: 20px;">
+                <li>Per ogni nominativo corretto ricevi un punteggio base calcolato come: <b>(WPM * 2)</b>.</li>
+                <li>Più ne indovini di fila, più il <b>Bonus Serie</b> aumenta (+5pt per ogni serie). La velocità sale di <b>+2 WPM</b>.</li>
+                <li>Al primo errore la serie si azzera, prendi <b>0 pt</b> e la velocità scende di <b>-1 WPM</b>.</li>
+            </ul>
+
+            <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Funzionalità Aggiuntive:</h4>
+            <ul style="margin-top: 2px; padding-left: 20px;">
+                <li><b>Tasto Riascolta:</b> Permette di riascoltare l'audio della parola corrente, ma la parola indovinata varrà <b>sempre 0 punti</b> e non aumenterà il WPM (penalità).</li>
+                <li><b>Velocità Fissa:</b> In Singleplayer puoi spuntare "Fissa" per bloccare il WPM senza farlo variare per errori o successi.</li>
+                <li><b>Scadenza Stanza:</b> Il timer in minuti indicato in fase di avvio stabilisce per quanto tempo la lobby rimane in attesa di giocatori. Una volta avviata la partita, la stanza dura per tutto il tempo necessario.</li>
+                <li><b>Caratteri Accentati:</b> Il dizionario comprende anche parole con <i>à, è, é, ì, ò, ù</i> tradotte nei rispettivi standard Morse.</li>
+            </ul>
+
+            <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 15px 0;">
+
+            <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🔒 Privacy e Dati Personali</h3>
+            <p style="margin-top: 5px;">I tuoi dati sono protetti e usati <b>solo</b> ai fini del gioco.</p>
+            <ul style="margin-top: 2px; padding-left: 20px;">
+                <li><b>Cosa salviamo:</b> Il tuo ID Telegram, Nome, Username (se pubblico), storico delle partite giocate, statistiche degli errori e appartenenza alle squadre.</li>
+                <li><b>Trasparenza:</b> Gli altri utenti possono vedere il tuo Nome in classifica o nelle lobby, e possono cliccarci per visualizzare il tuo profilo Telegram pubblico.</li>
+                <li><b>Cancellazione Totale:</b> Tramite il pulsante rosso sottostante puoi cancellare in modo irreversibile <b>TUTTI</b> i dati legati al tuo account dal nostro database (storico, squadre, statistiche).</li>
+            </ul>
         </div>
 
         <button id="deleteDataBtn" class="btn-danger" style="margin-top: 8px; flex-shrink: 0;">🗑️ Elimina Definitivamente i miei Dati</button>
@@ -549,7 +586,6 @@
     }
 
     window.goBackToMenu = function() {
-        // Pulisce listener dei tornei se si esce dalla pagina
         if(activeChatContext !== 'team') hideChat();
         showScreen('setupScreen');
     }
@@ -623,7 +659,6 @@
         }
     }
 
-    // --- CHAT GLOBALE / STANZA ---
     let chatListenerRef = null; let isChatDrawerOpen = false; let lastChatTimestamp = Date.now();
 
     window.toggleChat = function() {
@@ -647,7 +682,6 @@
         }
     }
 
-    // Gestore generico chat per usarlo anche nel team fissa
     function setupChat(chatRef, containerId, alertBtnId) {
         if (chatListenerRef && chatListenerRef.toString() === chatRef.toString()) return; 
         if (chatListenerRef) chatListenerRef.off(); chatListenerRef = chatRef; 
@@ -749,7 +783,7 @@
             const list = document.getElementById('waitingRoomsList'); list.innerHTML = ''; let wCount = 0;
             snapshot.forEach(child => {
                 const room = child.val(); const code = child.key;
-                if (code.startsWith("TRN_")) return; // Nascondi stanze torneo dalla bacheca libera
+                if (code.startsWith("TRN_")) return; 
                 if (room.expiresAt && Date.now() > room.expiresAt) { db.ref(`rooms/${code}`).remove(); return; }
                 
                 if (room.status === 'waiting' && room.type !== 'single') {
@@ -799,7 +833,7 @@
             }
         }
         hideChat(); 
-        if (rc && rc.startsWith("TRN_")) showScreen('teamsScreen'); // Ritorna al tabellone
+        if (rc && rc.startsWith("TRN_")) showScreen('teamsScreen'); 
         else showScreen('setupScreen');
     }
 
@@ -868,7 +902,7 @@
             const li = document.createElement('li'); li.innerHTML = `${nHtml} ${isH ? '<small>(HOST)</small>' : ''}`; list.appendChild(li);
         });
 
-        const amIHost = (myId === hostId) || roomCode.startsWith("TRN_"); // In torneo, chiunque entra può avviare se ci sono 2
+        const amIHost = (myId === hostId) || roomCode.startsWith("TRN_"); 
         document.getElementById('startMultiplayerBtn').style.display = amIHost ? 'block' : 'none';
         document.getElementById('deleteRoomBtn').style.display = (myId === hostId && !roomCode.startsWith("TRN_")) ? 'block' : 'none';
         document.getElementById('waitingHostText').style.display = amIHost ? 'none' : 'block';
@@ -1035,7 +1069,6 @@
         document.getElementById('pingPongSendArea').style.display = 'none';
         document.getElementById('gameInputArea').style.display = 'flex';
 
-        // Nei tornei il primo che scrive è chi è entrato per primo
         if (currentMode === 'pingpong' && (myId === roomHostId || roomCode.startsWith("TRN_"))) {
             db.ref(`rooms/${roomCode}/pingpong`).once('value', s => {
                 if(!s.exists()) {
@@ -1152,7 +1185,6 @@
             });
         }
 
-        // Salvataggio statistiche locali
         if (matchDetailsArray.length > 0) {
             const historyRef = db.ref(`users/${myId}/history`).push();
             historyRef.set({ date: firebase.database.ServerValue.TIMESTAMP, mode: currentMode, score: totalScore, wpm: currentWpm, type: isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
@@ -1217,7 +1249,7 @@
                         if (teams[tId].members && teams[tId].members[myId]) {
                             if (teams[tId].captainId === myId) {
                                 let others = Object.keys(teams[tId].members).filter(k => k !== myId);
-                                if (others.length === 0) await db.ref(`teams/${tId}/status`).set('retired'); // Mantieni ritirata per tornei
+                                if (others.length === 0) await db.ref(`teams/${tId}/status`).set('retired'); 
                                 else {
                                     await db.ref(`teams/${tId}/captainId`).set(others[0]);
                                     await db.ref(`teams/${tId}/members/${myId}`).remove();
@@ -1367,7 +1399,6 @@
             if (allFinished && roomData.status !== 'finished' && Object.keys(players).length > 0) {
                 db.ref(`rooms/${roomCode}/status`).set('finished');
                 
-                // Valutazione per il torneo
                 if (roomCode.startsWith("TRN_")) {
                     const matchId = roomCode.replace("TRN_", "");
                     let highestScore = -1, winnerTeamId = null;
@@ -1382,7 +1413,7 @@
                             return teamStanding;
                         });
                     }
-                    setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 15000); // 15 secondi per leggere
+                    setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 15000); 
                 } else if (roomData.hostId === myId) {
                     setTimeout(() => { if (roomCode) db.ref(`rooms/${roomCode}`).remove(); }, 30000); 
                 }
@@ -1499,25 +1530,40 @@
                 } 
             });
             if (myTeamId) {
-                document.getElementById('noTeamView').style.display = 'none'; document.getElementById('myTeamView').style.display = 'flex';
+                document.getElementById('noTeamView').style.display = 'none'; 
+                document.getElementById('myTeamView').style.display = 'flex';
                 listenToMyTeam(); listenToTournaments(); listenToAllTeams(true); 
                 switchTeamTab('gest');
             } else {
-                document.getElementById('myTeamView').style.display = 'none'; document.getElementById('noTeamView').style.display = 'flex';
+                document.getElementById('myTeamView').style.display = 'none'; 
+                document.getElementById('noTeamView').style.display = 'flex';
                 listenToAllTeams(false);
+                switchTeamTab('gest'); // Reset the state to show the initial screen
             }
         });
     }
 
     window.switchTeamTab = function(tab) {
         document.getElementById('tabTeamGestBtn').classList.remove('active-tab');
+        document.getElementById('tabAllTeamsBtn').classList.remove('active-tab');
         document.getElementById('tabTournamentsBtn').classList.remove('active-tab');
-        document.getElementById('teamGestArea').style.display = 'none';
+        
+        // Se si è senza team, ci sono solo 2 views fisiche logiche, le disattiviamo
+        if(document.getElementById('noTeamView').style.display !== 'none') {
+            document.getElementById('noTeamView').style.display = 'none';
+        } else {
+            document.getElementById('teamGestArea').style.display = 'none';
+        }
+        document.getElementById('allTeamsArea').style.display = 'none';
         document.getElementById('tournamentsArea').style.display = 'none';
 
         if (tab === 'gest') {
             document.getElementById('tabTeamGestBtn').classList.add('active-tab');
-            document.getElementById('teamGestArea').style.display = 'flex';
+            if(myTeamId) document.getElementById('teamGestArea').style.display = 'flex';
+            else document.getElementById('noTeamView').style.display = 'flex';
+        } else if (tab === 'allteams') {
+            document.getElementById('tabAllTeamsBtn').classList.add('active-tab');
+            document.getElementById('allTeamsArea').style.display = 'flex';
         } else {
             document.getElementById('tabTournamentsBtn').classList.add('active-tab');
             document.getElementById('tournamentsArea').style.display = 'flex';
@@ -1532,18 +1578,44 @@
     function listenToAllTeams(isAlreadyInTeam) {
         if (allTeamsListener) db.ref('teams').off('value', allTeamsListener);
         allTeamsListener = db.ref('teams').on('value', snap => {
-            const listId = isAlreadyInTeam ? 'allTeamsList' : 'openTeamsList'; const list = document.getElementById(listId); 
-            if(list) list.innerHTML = '';
+            const openList = document.getElementById('openTeamsList'); 
+            const allList = document.getElementById('globalAllTeamsList');
+            if(openList) openList.innerHTML = '';
+            if(allList) allList.innerHTML = '';
+            
             snap.forEach(child => {
-                const t = child.val(); const count = Object.keys(t.members || {}).length; const li = document.createElement('li');
+                const t = child.val(); const count = Object.keys(t.members || {}).length; 
+                const teamId = child.key;
                 const escTeam = escapeHTML(t.name);
-                if (isAlreadyInTeam) {} // Non mostriamo più tutte le squadre nella view con team
-                else if (t.status === 'open') {
-                    li.innerHTML = `<span><b>${escTeam}</b> <small>(${count} mem.)</small></span><button class="action-btn-small" onclick="joinTeam('${escapeHTML(child.key)}')">Unisciti</button>`;
-                    list.appendChild(li);
+                
+                // --- Tab "Tutte le Squadre" ---
+                const liAll = document.createElement('li');
+                liAll.style.flexDirection = 'column'; liAll.style.alignItems = 'flex-start';
+                
+                let membersHTML = '';
+                Object.values(t.members || {}).forEach(m => {
+                    membersHTML += `<span style="display:inline-block; margin-right:5px; font-size:0.85em; color:var(--hint-color);">- ${escapeHTML(m.name)}</span>`;
+                });
+
+                liAll.innerHTML = `<div style="width:100%; display:flex; justify-content:space-between;">
+                                      <span><b>${escTeam}</b> <small>(${count} mem.)</small></span>
+                                      ${(!isAlreadyInTeam && t.status === 'open') ? `<button class="action-btn-small" onclick="joinTeam('${escapeHTML(teamId)}')">Unisciti</button>` : ''}
+                                   </div>
+                                   <div style="margin-top:3px; padding-left:5px; border-left:2px solid var(--link-color);">
+                                      ${membersHTML}
+                                   </div>`;
+                if(allList) allList.appendChild(liAll);
+
+                // --- Tab "La mia Squadra" -> Sezione "Iscrizioni Aperte" ---
+                if (!isAlreadyInTeam && t.status === 'open') {
+                    const liOpen = document.createElement('li');
+                    liOpen.innerHTML = `<span><b>${escTeam}</b> <small>(${count} mem.)</small></span><button class="action-btn-small" onclick="joinTeam('${escapeHTML(teamId)}')">Unisciti</button>`;
+                    if(openList) openList.appendChild(liOpen);
                 }
             });
-            if(list && list.innerHTML === '') list.innerHTML = '<li style="color:var(--hint-color); justify-content:center; background:none; border:none;">Nessuna squadra aperta.</li>';
+            
+            if(openList && openList.innerHTML === '') openList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; background:none; border:none;">Nessuna squadra aperta.</li>';
+            if(allList && allList.innerHTML === '') allList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; background:none; border:none;">Nessuna squadra creata.</li>';
         });
     }
 
@@ -1567,7 +1639,6 @@
             btnLock.onclick = () => db.ref(`teams/${myTeamId}/status`).set(team.status === 'open' ? 'closed' : 'open');
             document.getElementById('inviteTeamBtn').onclick = () => { tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=team_${myTeamId}`)}&text=${encodeURIComponent(`Unisciti alla mia squadra di Telegrafia: ${team.name}!`)}`); }
             
-            // Attiva chat di squadra
             setupChat(db.ref(`teams/${myTeamId}/chat`), 'teamChatMessages', null);
         });
     }
@@ -1590,7 +1661,6 @@
                             db.ref(`teams/${myTeamId}/members/${myId}`).remove().then(() => checkMyTeamStatus());
                         });
                     } else {
-                        // Nessun altro. Ritira.
                         db.ref(`teams/${myTeamId}/status`).set('retired').then(() => {
                             db.ref(`teams/${myTeamId}/members/${myId}`).remove().then(() => checkMyTeamStatus());
                         });
@@ -1659,6 +1729,11 @@
         const trn = trnSnap.val();
         document.getElementById('activeTrnTitle').textContent = trn.name;
 
+        // Visualizzazione pulsanti Modifica e Ritira
+        const amIHost = (trn.hostId === myId);
+        document.getElementById('editTrnNameBtn').style.display = amIHost ? 'block' : 'none';
+        document.getElementById('leaveTrnBtn').style.display = isTeamCaptain ? 'block' : 'none';
+
         // Classifica
         const stdBody = document.getElementById('trnStandingsBody'); stdBody.innerHTML = '';
         let standings = Object.entries(trn.standings || {}).map(([id, data]) => ({ id, ...data }));
@@ -1670,7 +1745,6 @@
             stdBody.appendChild(tr);
         });
 
-        const amIHost = (trn.hostId === myId);
         document.getElementById('trnHostControls').style.display = amIHost ? 'block' : 'none';
         
         const teamCount = trn.teams ? Object.keys(trn.teams).length : 0;
@@ -1716,7 +1790,6 @@
                             <div style="flex:1;">${slotBHTML}</div>
                         </div>`;
 
-                        // Start Match Button se io sono uno dei due
                         if (m.playerA?.id === myId || m.playerB?.id === myId) {
                             if (m.playerA && m.playerB) {
                                 card.innerHTML += `<button class="btn-success" style="font-size:0.85em; padding:6px; margin-top:8px;" onclick="startTrnMatch('${mId}')">ENTRA NELLA SFIDA</button>`;
@@ -1733,6 +1806,21 @@
         }
     }
 
+    document.getElementById('editTrnNameBtn').addEventListener('click', () => {
+        let newName = prompt("Inserisci il nuovo nome del torneo:");
+        if (newName && newName.trim() !== "") {
+            db.ref(`tournaments/${activeTrnId}/name`).set(newName.trim());
+        }
+    });
+
+    document.getElementById('leaveTrnBtn').addEventListener('click', () => {
+        if (!isTeamCaptain) return;
+        if (confirm("Sei sicuro di voler ritirare la tua squadra da questo torneo?")) {
+            db.ref(`tournaments/${activeTrnId}/teams/${myTeamId}`).remove();
+            db.ref(`tournaments/${activeTrnId}/standings/${myTeamId}`).remove();
+        }
+    });
+
     document.getElementById('deleteTrnBtn').addEventListener('click', () => {
         if(confirm("Eliminare definitivamente il torneo?")) db.ref(`tournaments/${activeTrnId}`).remove();
     });
@@ -1741,7 +1829,6 @@
         db.ref(`tournaments/${activeTrnId}/teams`).once('value', snap => {
             let teams = []; snap.forEach(child => teams.push({ id: child.key, name: child.val().name }));
             
-            // Round-robin (all'italiana) generator
             let matches = {}; let matchIndex = 1;
             if (teams.length % 2 !== 0) teams.push({ id: null, name: 'Bye' });
             let numRounds = teams.length - 1; let half = teams.length / 2;
@@ -1762,9 +1849,9 @@
     });
 
     window.toggleTrnSlot = function(matchId, side, currentOccupantId) {
-        if (currentOccupantId && currentOccupantId !== myId) return; // Occupato da un altro
+        if (currentOccupantId && currentOccupantId !== myId) return; 
         let val = null;
-        if (!currentOccupantId) val = { id: myId, name: myName }; // Mi iscrivo
+        if (!currentOccupantId) val = { id: myId, name: myName }; 
         db.ref(`tournaments/${activeTrnId}/matches/${matchId}/player${side}`).set(val);
     }
 
@@ -1773,7 +1860,6 @@
         db.ref(`rooms/${specificRoomCode}`).once('value', snapshot => {
             if (snapshot.exists()) { window.joinSpecificRoom(specificRoomCode); } 
             else {
-                // Impostiamo stanza Ping Pong speciale per Tornei: 20 stringhe fisse (10 cad.), wpm 20.
                 db.ref('rooms/' + specificRoomCode).set({ 
                     status: 'waiting', type: 'multi', mode: 'pingpong', 
                     wpm: 20, tone: 600, wordCount: 20, fixedSpeed: false, 
