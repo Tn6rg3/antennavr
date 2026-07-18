@@ -630,15 +630,17 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         db = firebase.database(); auth = firebase.auth();
 
-        auth.signInAnonymously().then(() => {
-            // Caricamento Alias
-            db.ref(`users/${myId}/alias`).once('value', snap => {
-                if (snap.exists()) {
-                    myName = snap.val();
+        auth.signInAnonymously().then(async () => {
+            // Caricamento Alias in modo bloccante per l'avvio
+            try {
+                const aliasSnap = await db.ref(`users/${myId}/alias`).once('value');
+                if (aliasSnap.exists()) {
+                    myName = aliasSnap.val();
                 }
-                document.getElementById('playerName').textContent = myName;
-                document.getElementById('userAliasInput').value = (myName !== tgUser.first_name) ? myName : "";
-            });
+            } catch(e) { console.error("Errore caricamento alias:", e); }
+
+            document.getElementById('playerName').textContent = myName;
+            document.getElementById('userAliasInput').value = (myName !== tgUser.first_name) ? myName : "";
 
             document.getElementById('loadingText').style.display = 'none';
             document.getElementById('createRoomBtn').disabled = false;
@@ -1409,26 +1411,69 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         }
     });
 
-    document.getElementById('saveAliasBtn').addEventListener('click', () => {
+    document.getElementById('saveAliasBtn').addEventListener('click', async () => {
         const alias = document.getElementById('userAliasInput').value.trim();
         if (alias.length > 15) return alert("Alias troppo lungo (max 15 caratteri).");
 
         const newName = alias || tgUser.first_name;
-        db.ref(`users/${myId}/alias`).set(alias || null).then(() => {
+        try {
+            await db.ref(`users/${myId}/alias`).set(alias || null);
             myName = newName;
             document.getElementById('playerName').textContent = myName;
             showToast("Alias salvato con successo!");
 
-            // Aggiorna anche nelle squadre se presente
+            // 1. Aggiorna nelle squadre se presente
             if (myTeamId) {
-                db.ref(`teams/${myTeamId}/members/${myId}/name`).set(myName);
+                await db.ref(`teams/${myTeamId}/members/${myId}/name`).set(myName);
             }
-        });
+
+            // 2. Aggiorna nei match dei tornei attivi
+            const trnsSnap = await db.ref('tournaments').once('value');
+            if (trnsSnap.exists()) {
+                const trns = trnsSnap.val();
+                for (let trnId in trns) {
+                    const trn = trns[trnId];
+                    if (trn.status !== 'finished' && trn.matches) {
+                        for (let mId in trn.matches) {
+                            const m = trn.matches[mId];
+                            if (m.playerA && m.playerA.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerA/name`).set(myName);
+                            if (m.playerB && m.playerB.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerB/name`).set(myName);
+                        }
+                    }
+                }
+            }
+
+            // 3. Aggiorna retroattivamente nelle classifiche
+            const lbPaths = ['callsign/global', 'standard', 'pingpong'];
+            for (const path of lbPaths) {
+                const ref = db.ref(`leaderboard/${path}`);
+                const snap = await ref.once('value');
+                if (snap.exists()) {
+                    snap.forEach(subNode => {
+                        if (path === 'callsign/global') {
+                            if (subNode.key === myId) subNode.ref.update({ name: myName });
+                        } else {
+                            subNode.forEach(userRecord => {
+                                if (userRecord.key === myId) userRecord.ref.update({ name: myName });
+                            });
+                        }
+                    });
+                }
+            }
+        } catch(e) {
+            console.error("Errore salvataggio alias:", e);
+            alert("Errore durante il salvataggio.");
+        }
     });
 
-    document.getElementById('sendFeedbackBtn').addEventListener('click', () => {
-        tg.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=feedback`);
-    });
+    document.getElementById('sendFeedbackBtn').onclick = function() {
+        const botUrl = `https://t.me/${BOT_USERNAME}?start=feedback`;
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
+            window.Telegram.WebApp.openTelegramLink(botUrl);
+        } else {
+            window.open(botUrl, '_blank');
+        }
+    };
 
 
     let userMatchHistory = [];
