@@ -1889,27 +1889,31 @@
         if(confirm("Eliminare definitivamente il torneo?")) db.ref(`tournaments/${activeTrnId}`).remove();
     });
 
-    // Generazione sicura del Tabellone per 2 o più squadre
-    document.getElementById('startTrnBtn').addEventListener('click', () => {
-        db.ref(`tournaments/${activeTrnId}/teams`).once('value', snap => {
-            let teams = []; snap.forEach(child => teams.push({ id: child.key, name: child.val().name }));
-            
-            let matches = {}; let matchIndex = 1;
-            
-            // Formula All'Italiana Sicura: ogni squadra scontra esattamente una volta tutte le altre
-            for(let i=0; i<teams.length; i++) {
-                for(let j=i+1; j<teams.length; j++) {
-                    matches[`m${matchIndex++}`] = {
-                        teamA: teams[i].id, teamAName: teams[i].name,
-                        teamB: teams[j].id, teamBName: teams[j].name,
-                        status: 'waiting'
-                    };
-                }
+   document.getElementById('startTrnBtn').addEventListener('click', () => {
+    db.ref(`tournaments/${activeTrnId}/teams`).once('value', snap => {
+        let teams = []; snap.forEach(child => teams.push({ id: child.key, name: child.val().name }));
+        
+        let matches = {}; let matchIndex = 1;
+        // Generazione Round-Robin corretta
+        for(let i=0; i<teams.length; i++) {
+            for(let j=i+1; j<teams.length; j++) {
+                matches[`m${matchIndex++}`] = {
+                    teamA: teams[i].id, teamAName: teams[i].name,
+                    teamB: teams[j].id, teamBName: teams[j].name,
+                    status: 'waiting'
+                };
             }
+        }
 
-            db.ref(`tournaments/${activeTrnId}`).update({ status: 'playing', matches: matches });
+        // SCRITTURA E AGGIORNAMENTO FORZATO
+        db.ref(`tournaments/${activeTrnId}`).update({ status: 'playing', matches: matches })
+        .then(() => {
+            showToast("Tabellone generato con successo!");
+            // Ricarica manualmente per mostrare i cambiamenti
+            listenToTournaments(); 
         });
     });
+});
 
     window.toggleTrnSlot = function(matchId, side, currentOccupantId) {
         if (currentOccupantId && currentOccupantId !== myId) return; 
