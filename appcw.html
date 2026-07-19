@@ -11,6 +11,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
     <style>
+        input[type="checkbox"] { transform: scale(1.2); }
         :root {
             --bg-color: var(--tg-theme-bg-color, #ffffff);
             --text-color: var(--tg-theme-text-color, #000000);
@@ -244,6 +245,12 @@
             <button id="saveAliasBtn" class="action-btn-small btn-success" style="width:auto; margin:0;">Salva</button>
         </div>
         <p style="font-size:0.75em; color:var(--hint-color); margin-top:3px;">L'alias sostituirà il tuo nome Telegram nelle classifiche e nelle squadre.</p>
+
+        <div style="display:flex; align-items:center; gap:10px; margin-top:10px; background:rgba(0,0,0,0.05); padding:8px; border-radius:8px;">
+            <input type="checkbox" id="privacyUsernameCheckbox" style="width:20px; height:20px; cursor:pointer;">
+            <label for="privacyUsernameCheckbox" style="font-size:0.85em; cursor:pointer; font-weight:bold;">Nascondi mio username Telegram</label>
+        </div>
+        <p style="font-size:0.7em; color:var(--hint-color); margin-top:5px; font-style:italic;">Se attivo, nessuno potrà cliccare sul tuo nome per vedere il tuo profilo. L'Alias diventa obbligatorio.</p>
     </div>
 
     <div style="display: flex; gap: 5px; width: 100%; flex-shrink: 0; max-height: 180px;">
@@ -652,7 +659,7 @@
         });
     }
 
-    let myName, myId;
+    let myName, myId, myPrivacy = false;
     let db, auth;
     let currentRoomListener = null, chatListener = null, pingPongListener = null;
     let presenceListener = null, invitesListener = null, inviteAcceptedListener = null, outgoingInviteListener = null;
@@ -762,13 +769,15 @@
         db = firebase.database(); auth = firebase.auth();
 
         auth.signInAnonymously().then(async () => {
-            // Caricamento Alias in modo bloccante per l'avvio
+            // Caricamento Alias e Privacy
             try {
-                const aliasSnap = await db.ref(`users/${myId}/alias`).once('value');
-                if (aliasSnap.exists()) {
-                    myName = aliasSnap.val();
-                }
-            } catch(e) { console.error("Errore caricamento alias:", e); }
+                const userSnap = await db.ref(`users/${myId}`).once('value');
+                const userData = userSnap.val() || {};
+                if (userData.alias) myName = userData.alias;
+                myPrivacy = userData.privacyUsername || false;
+
+                document.getElementById('privacyUsernameCheckbox').checked = myPrivacy;
+            } catch(e) { console.error("Errore caricamento dati utente:", e); }
 
             document.getElementById('playerName').textContent = myName;
             document.getElementById('userAliasInput').value = (myName !== tgUser.first_name) ? myName : "";
@@ -1795,21 +1804,38 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
 
     document.getElementById('saveAliasBtn').addEventListener('click', async () => {
         const alias = document.getElementById('userAliasInput').value.trim();
+        const privacy = document.getElementById('privacyUsernameCheckbox').checked;
+
+        if (privacy && !alias) {
+            alert("L'Alias è obbligatorio se nascondi lo username Telegram!");
+            return;
+        }
+
         if (alias.length > 15) return alert("Alias troppo lungo (max 15 caratteri).");
 
         const newName = alias || tgUser.first_name;
-        try {
-            await db.ref(`users/${myId}/alias`).set(alias || null);
-            myName = newName;
-            document.getElementById('playerName').textContent = myName;
-            showToast("Alias salvato con successo!");
+        const currentUsername = privacy ? "" : tgUsername;
 
-            // 1. Aggiorna nelle squadre se presente
+        try {
+            await db.ref(`users/${myId}`).update({
+                alias: alias || null,
+                privacyUsername: privacy
+            });
+
+            myName = newName;
+            myPrivacy = privacy;
+            document.getElementById('playerName').textContent = myName;
+            showToast("Profilo aggiornato!");
+
+            // 1. Aggiorna nelle squadre
             if (myTeamId) {
-                await db.ref(`teams/${myTeamId}/members/${myId}/name`).set(myName);
+                await db.ref(`teams/${myTeamId}/members/${myId}`).update({
+                    name: myName,
+                    username: currentUsername
+                });
             }
 
-            // 2. Aggiorna nei match dei tornei attivi
+            // 2. Aggiorna nei match attivi
             const trnsSnap = await db.ref('tournaments').once('value');
             if (trnsSnap.exists()) {
                 const trns = trnsSnap.val();
@@ -1818,14 +1844,14 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                     if (trn.status !== 'finished' && trn.matches) {
                         for (let mId in trn.matches) {
                             const m = trn.matches[mId];
-                            if (m.playerA && m.playerA.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerA/name`).set(myName);
-                            if (m.playerB && m.playerB.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerB/name`).set(myName);
+                            if (m.playerA && m.playerA.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerA`).update({ name: myName, username: currentUsername });
+                            if (m.playerB && m.playerB.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerB`).update({ name: myName, username: currentUsername });
                         }
                     }
                 }
             }
 
-            // 3. Aggiorna retroattivamente nelle classifiche
+            // 3. Aggiorna classifiche
             const lbPaths = ['callsign/global', 'standard', 'pingpong'];
             for (const path of lbPaths) {
                 const ref = db.ref(`leaderboard/${path}`);
@@ -1833,17 +1859,17 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 if (snap.exists()) {
                     snap.forEach(subNode => {
                         if (path === 'callsign/global') {
-                            if (subNode.key === myId) subNode.ref.update({ name: myName });
+                            if (subNode.key === myId) subNode.ref.update({ name: myName, username: currentUsername });
                         } else {
                             subNode.forEach(userRecord => {
-                                if (userRecord.key === myId) userRecord.ref.update({ name: myName });
+                                if (userRecord.key === myId) userRecord.ref.update({ name: myName, username: currentUsername });
                             });
                         }
                     });
                 }
             }
         } catch(e) {
-            console.error("Errore salvataggio alias:", e);
+            console.error("Errore salvataggio profilo:", e);
             alert("Errore durante il salvataggio.");
         }
     });
