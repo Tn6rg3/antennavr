@@ -783,6 +783,9 @@
             listenToOnlineUsers();
             listenToInvites();
             listenToInviteAccepted();
+
+            // LOG DI DEBUG PER IL CREATORE
+            console.log("Gioco Inizializzato. Mio ID:", myId, "Mio Nome:", myName);
         }).catch(e => {
             document.getElementById('loadingText').innerHTML = "<b style='color:red'>Errore di Connessione.</b>";
         });
@@ -1184,7 +1187,15 @@
                     startCountdownSequence(); return;
                 }
                 if (roomData.status === 'waiting') {
-                    renderPlayersList(roomData.players || {}, roomData.hostId);
+                    const playersData = roomData.players || {};
+                    renderPlayersList(playersData, roomData.hostId);
+
+                    // Notifica Host quando entra qualcuno
+                    const pCount = Object.keys(playersData).length;
+                    if (myId === roomData.hostId && pCount > lastPlayerCount && activeChatContext !== 'room') {
+                         showToast("👤 Qualcuno è entrato nella tua stanza!");
+                    }
+                    lastPlayerCount = pCount;
                     if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
                     if (roomData.expiresAt && !isSinglePlayer) {
                         lobbyTimerInterval = setInterval(() => {
