@@ -506,7 +506,11 @@
         <input type="text" id="permanentGameInput" placeholder="Digita qui..." autocomplete="off" autocapitalize="none" style="flex-grow: 1; padding: 10px; font-size: 1.1em; margin: 0;">
         <button id="replayWordBtn" class="btn-secondary" style="width: auto; margin: 0; padding: 10px; font-size: 0.9em;">🔁 Riascolta</button>
     </div>
-    <button id="quitGameBtn" class="btn-danger" style="margin-top: 0; flex-shrink: 0;">Abbandona</button>
+
+    <div style="display:flex; gap:5px; width:100%;">
+        <button onclick="toggleChat()" class="btn-secondary" style="margin-top: 0; flex:1;">💬 Chat</button>
+        <button id="quitGameBtn" class="btn-danger" style="margin-top: 0; flex:1;">Abbandona</button>
+    </div>
 </div>
 
 <!-- LEADERBOARD -->
@@ -863,8 +867,10 @@
             document.getElementById('chatTitle').textContent = "💬 Chat Stanza";
 
             if (document.getElementById('gameArea').classList.contains('active-screen')) {
+                // Di default la chat è chiusa in partita per non coprire l'input
                 const drawer = document.getElementById('chatDrawer');
-                if (drawer.style.display === 'none') toggleChat();
+                drawer.style.display = 'none';
+                isChatDrawerOpen = false;
             }
         } else {
             // Chat Globale
