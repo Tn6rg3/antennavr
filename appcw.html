@@ -223,7 +223,10 @@
             </ul>
         </div>
         <div class="box-panel" style="flex: 1; min-height: 0;">
-            <h3>Utenti Online 🟢</h3>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <h3 style="margin:0;">Utenti Online 🟢</h3>
+                <button onclick="openGlobalChat()" class="action-btn-small btn-secondary" style="width:auto; margin:0; padding:4px 8px; font-size:0.8em;">💬 Chat</button>
+            </div>
             <ul id="onlineUsersList" class="data-list">
                 <li style="justify-content: center; color: var(--hint-color); background: none; border: none;">Sei solo.</li>
             </ul>
@@ -728,9 +731,12 @@
         document.getElementById('matchDetailsModal').style.display = 'none';
 
         if(screenId === 'teamsScreen') { activeChatContext = 'team'; checkMyTeamStatus(); }
-        else if (screenId === 'lobbyScreen' || screenId === 'gameArea') { activeChatContext = 'room'; }
+        else if (screenId === 'lobbyScreen' || screenId === 'gameArea') { activeChatContext = 'room'; listenToChat(); }
         else if (screenId === 'participationScreen') { switchActTab('daily'); activeChatContext = null; }
-        else { activeChatContext = null; }
+        else {
+            activeChatContext = 'global';
+            listenToChat();
+        }
     }
 
     window.goBackToMenu = function() {
@@ -867,7 +873,25 @@
                 document.getElementById('globalChatBtn').style.display = 'none';
                 document.getElementById('chatDrawer').style.display = 'none';
             }
+        } else {
+            // Chat Globale
+            setupChat(db.ref('globalChat'), 'chatMessages', 'globalChatBtn');
+            document.getElementById('chatTitle').textContent = "🌎 Chat Globale";
+
+            // Mostriamo il tasto chat se siamo nel menu principale o profilo
+            const currentScreen = document.querySelector('.active-screen')?.id;
+            if (currentScreen === 'setupScreen' || currentScreen === 'profileScreen' || currentScreen === 'leaderboardScreen' || currentScreen === 'participationScreen') {
+                document.getElementById('globalChatBtn').style.display = 'block';
+            } else {
+                document.getElementById('globalChatBtn').style.display = 'none';
+            }
         }
+    }
+
+    window.openGlobalChat = function() {
+        activeChatContext = 'global';
+        listenToChat();
+        toggleChat();
     }
 
     document.getElementById('sendLobbyChatBtn').addEventListener('click', () => {
@@ -905,9 +929,13 @@
             if (!initialLoad && newMsgsCount > 0 && alertBtnId && !isChatDrawerOpen) {
                 showToast(`💬 Nuovo messaggio da ${latestMsg.name}`); document.getElementById(alertBtnId).style.backgroundColor = '#4caf50';
             }
-            // Notifica globale se siamo l'host e non siamo in stanza
-            if (!initialLoad && newMsgsCount > 0 && roomHostId === myId && activeChatContext !== 'room') {
+            // Notifica globale per messaggi in stanza se siamo l'host e siamo fuori
+            if (!initialLoad && newMsgsCount > 0 && roomHostId === myId && activeChatContext !== 'room' && chatRef.key !== 'globalChat') {
                 if (latestMsg) showToast(`📢 (Stanza) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
+            }
+            // Notifica per messaggi globali se siamo in una stanza
+            if (!initialLoad && newMsgsCount > 0 && activeChatContext === 'room' && chatRef.key === 'globalChat') {
+                if (latestMsg) showToast(`🌎 (Global) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
             }
             initialLoad = false;
         });
@@ -915,7 +943,11 @@
 
     document.getElementById('sendChatBtn').addEventListener('click', () => {
         const txt = document.getElementById('chatInput').value.trim(); if (!txt) return;
-        if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+        if (activeChatContext === 'room' && roomCode) {
+            db.ref(`rooms/${roomCode}/chat`).push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+        } else {
+            db.ref('globalChat').push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+        }
         document.getElementById('chatInput').value = '';
     });
     document.getElementById('chatInput').addEventListener('keypress', function (e) { if (e.key === 'Enter') document.getElementById('sendChatBtn').click(); });
@@ -923,6 +955,7 @@
     document.getElementById('clearChatBtn').addEventListener('click', () => {
         if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) {
             if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).remove();
+            else db.ref('globalChat').remove();
         }
     });
 
