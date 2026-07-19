@@ -1037,7 +1037,12 @@
             lobby_players: "Giocatori presenti:", lobby_chat: "💬 Chat di Stanza", lobby_invite: "📢 Invita Amici su Telegram",
             act_title: "Classifica Attività", act_loading: "Caricamento...", act_no_data: "Nessuna attività registrata.",
             prepare: "Preparati!", start_via: "VIA!", game_chat: "💬 Chat", quit_game: "Abbandona",
-            input_placeholder: "Digita qui...", replay: "🔁 Riascolta", th_typed: "Scritto", th_real: "Reale", th_pts: "Punti"
+            input_placeholder: "Digita qui...", replay: "🔁 Riascolta", th_typed: "Scritto", th_real: "Reale", th_pts: "Punti",
+            teams_btn: "🏆 TORNEI A SQUADRE", delete_data: "🗑️ Elimina Definitivamente i miei Dati",
+            tab_this_match: "Questa Partita", tab_trn_lb: "Classifica Tornei", tab_callsigns: "Nominativi", tab_pingpong: "Ping Pong", tab_std_multi: "Parole (Multi)", tab_std_single: "Parole (Single)",
+            btn_start_match: "AVVIA PARTITA", btn_delete_room: "ELIMINA STANZA", btn_leave_lobby: "Esci dalla Stanza",
+            status_host: "Sei l'Host della partita.", status_guest: "Sei un partecipante. Attendi il via.", lobby_free: "Lobby Stanza Libera", lobby_trn: "Lobby Incontro Torneo 🥊",
+            ready_btn: "SONO PRONTO ✅", waiting_host: "In attesa che l'Host avvii..."
         },
         en: {
             hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", conn_secure: "Secure connection in progress...",
@@ -1058,7 +1063,12 @@
             lobby_players: "Players present:", lobby_chat: "💬 Room Chat", lobby_invite: "📢 Invite Friends on Telegram",
             act_title: "Activity Rankings", act_loading: "Loading...", act_no_data: "No activity recorded.",
             prepare: "Get Ready!", start_via: "GO!", game_chat: "💬 Chat", quit_game: "Quit",
-            input_placeholder: "Type here...", replay: "🔁 Replay", th_typed: "Typed", th_real: "Real", th_pts: "Points"
+            input_placeholder: "Type here...", replay: "🔁 Replay", th_typed: "Typed", th_real: "Real", th_pts: "Points",
+            teams_btn: "🏆 TEAM TOURNAMENTS", delete_data: "🗑️ Permanently Delete My Data",
+            tab_this_match: "This Match", tab_trn_lb: "Tournament Leaderboard", tab_callsigns: "Callsigns", tab_pingpong: "Ping Pong", tab_std_multi: "Words (Multi)", tab_std_single: "Words (Single)",
+            btn_start_match: "START MATCH", btn_delete_room: "DELETE ROOM", btn_leave_lobby: "Leave Lobby",
+            status_host: "You are the Match Host.", status_guest: "You are a participant. Wait for the start.", lobby_free: "Free Room Lobby", lobby_trn: "Tournament Match Lobby 🥊",
+            ready_btn: "I AM READY ✅", waiting_host: "Waiting for Host to start..."
         }
     };
 
@@ -1138,6 +1148,22 @@
         document.getElementById('tabWeeklyAct').textContent = t.weekly;
         document.getElementById('tabMonthlyAct').textContent = t.monthly;
         document.getElementById('actListTitle').textContent = t.act_title;
+
+        // Extra elements
+        document.getElementById('goToTeamsBtn').textContent = t.teams_btn;
+        document.getElementById('deleteDataBtn').textContent = t.delete_data;
+        document.getElementById('tabRoomBtn').textContent = t.tab_this_match;
+        document.getElementById('tabGlobalTournamentBtn').textContent = t.tab_trn_lb;
+        document.getElementById('tabGlobalCWFreakBtn').textContent = t.tab_callsigns;
+        document.getElementById('tabGlobalPingPongBtn').textContent = t.tab_pingpong;
+        document.getElementById('tabGlobalStandardMultiBtn').textContent = t.tab_std_multi;
+        document.getElementById('tabGlobalStandardSingleBtn').textContent = t.tab_std_single;
+
+        // Lobby elements
+        document.getElementById('startMultiplayerBtn').textContent = t.btn_start_match;
+        document.getElementById('deleteRoomBtn').textContent = t.btn_delete_room;
+        document.getElementById('leaveLobbyBtn').textContent = t.btn_leave_lobby;
+        document.getElementById('readyBtn').textContent = t.ready_btn;
 
         const loadingStats = document.getElementById('txt_loading_stats');
         if(loadingStats) loadingStats.textContent = t.loading;
@@ -1473,7 +1499,7 @@
             if (snapshot.val()?.finished) { showScreen('leaderboardScreen'); activeTab="room"; showLeaderboardTab('tabRoomBtn'); return; }
 
             showScreen('lobbyScreen');
-            document.getElementById('lobbyTitleText').textContent = roomCode.startsWith("TRN_") ? "Lobby Incontro Torneo 🥊" : "Lobby Stanza Libera";
+            document.getElementById('lobbyTitleText').textContent = roomCode.startsWith("TRN_") ? i18n[currentLang].lobby_trn : i18n[currentLang].lobby_free;
             document.getElementById('permanentGameInput').blur();
 
             playerRef.onDisconnect().remove();
@@ -1564,14 +1590,15 @@
         // Tasto Pronto visibile se non siamo ancora pronti e se siamo in PingPong / Torneo
         document.getElementById('readyBtn').style.display = (isTrnOrPP && !amIReady) ? 'block' : 'none';
 
+        const t = i18n[currentLang];
         if (isTrnOrPP) {
             document.getElementById('waitingHostText').style.display = amIReady ? 'block' : 'none';
-            document.getElementById('waitingHostText').textContent = "In attesa dell'avversario...";
-            document.getElementById('statusInfoText').textContent = amIReady ? "Sei pronto!" : "Conferma di essere pronto per iniziare.";
+            document.getElementById('waitingHostText').textContent = t.waiting_host;
+            document.getElementById('statusInfoText').textContent = amIReady ? t.ready_btn : t.conn_secure; // Reuse or add better key
         } else {
             document.getElementById('waitingHostText').style.display = amIHost ? 'none' : 'block';
-            document.getElementById('waitingHostText').textContent = "In attesa che l'Host avvii...";
-            document.getElementById('statusInfoText').textContent = amIHost ? `Sei l'Host della partita.` : "Sei un partecipante. Attendi il via.";
+            document.getElementById('waitingHostText').textContent = t.waiting_host;
+            document.getElementById('statusInfoText').textContent = amIHost ? t.status_host : t.status_guest;
         }
 
         // Avvio automatico per tornei/pingpong quando TUTTI sono pronti (chiesto al primo della lista per evitare update doppi)
