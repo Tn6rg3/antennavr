@@ -810,8 +810,9 @@
 
                 // Sistema di Presenza
                 const pRef = db.ref(`presence/${myId}`);
+                const currentUsername = myPrivacy ? "" : tgUsername;
                 pRef.onDisconnect().remove();
-                pRef.set({ name: myName, username: tgUsername, status: 'online', ts: firebase.database.ServerValue.TIMESTAMP });
+                pRef.set({ name: myName, username: currentUsername, status: 'online', ts: firebase.database.ServerValue.TIMESTAMP });
 
                 if (roomCode) joinRoomLogic(true);
             });
@@ -965,10 +966,11 @@
 
     document.getElementById('sendChatBtn').addEventListener('click', () => {
         const txt = document.getElementById('chatInput').value.trim(); if (!txt) return;
+        const currentUsername = myPrivacy ? "" : tgUsername;
         if (activeChatContext === 'room' && roomCode) {
-            db.ref(`rooms/${roomCode}/chat`).push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            db.ref(`rooms/${roomCode}/chat`).push({ name: myName, username: currentUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         } else {
-            db.ref('globalChat').push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            db.ref('globalChat').push({ name: myName, username: currentUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         }
         document.getElementById('chatInput').value = '';
     });
@@ -1320,7 +1322,8 @@
             playerRef.onDisconnect().remove();
 
             // Inseriamo anche ready: false di default
-            if (!snapshot.val()) playerRef.set({ name: myName, username: tgUsername, score: 0, wpm: 0, finished: false, teamId: myTeamId, ready: false });
+            const currentUsername = myPrivacy ? "" : tgUsername;
+            if (!snapshot.val()) playerRef.set({ name: myName, username: currentUsername, score: 0, wpm: 0, finished: false, teamId: myTeamId, ready: false });
 
             listenToChat();
             if (currentRoomListener && !isReconnect) currentRoomListener.off();
@@ -1729,7 +1732,8 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             globalUserRef.once('value', snapshot => {
                 let oldData = snapshot.val();
                 if (!oldData || totalScore > oldData.score) {
-                    globalUserRef.set({ name: myName, username: tgUsername, score: totalScore, wpm: currentWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') });
+                    const currentUsername = myPrivacy ? "" : tgUsername;
+                    globalUserRef.set({ name: myName, username: currentUsername, score: totalScore, wpm: currentWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') });
                 }
             });
         }
@@ -1872,7 +1876,28 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             document.getElementById('playerName').textContent = myName;
             showToast("Profilo aggiornato!");
 
-            // 1. Aggiorna nelle squadre
+            // 1. Aggiorna Presenza (Online)
+            await db.ref(`presence/${myId}`).update({
+                name: myName,
+                username: currentUsername
+            });
+
+            // 2. Aggiorna Attività (Classifiche di partecipazione attuali)
+            const now = new Date();
+            const dKey = now.toISOString().split('T')[0];
+            const wKey = getWeekNumber(now);
+            const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+
+            const actPaths = [`activity/daily/${dKey}`, `activity/weekly/${wKey}`, `activity/monthly/${mKey}`];
+            for (const path of actPaths) {
+                const actRef = db.ref(`${path}/${myId}`);
+                const actSnap = await actRef.once('value');
+                if (actSnap.exists()) {
+                    await actRef.update({ name: myName });
+                }
+            }
+
+            // 3. Aggiorna nelle squadre
             if (myTeamId) {
                 await db.ref(`teams/${myTeamId}/members/${myId}`).update({
                     name: myName,
@@ -1880,7 +1905,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 });
             }
 
-            // 2. Aggiorna nei match attivi
+            // 4. Aggiorna nei match attivi
             const trnsSnap = await db.ref('tournaments').once('value');
             if (trnsSnap.exists()) {
                 const trns = trnsSnap.val();
@@ -1896,7 +1921,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 }
             }
 
-            // 3. Aggiorna classifiche
+            // 5. Aggiorna classifiche record
             const lbPaths = ['callsign/global', 'standard', 'pingpong'];
             for (const path of lbPaths) {
                 const ref = db.ref(`leaderboard/${path}`);
@@ -2319,7 +2344,8 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     function processTeamInvite(inviteTeamId) {
         db.ref(`teams/${inviteTeamId}`).once('value', snap => {
             if(snap.exists() && snap.val().status === 'open') {
-                db.ref(`teams/${inviteTeamId}/members/${myId}`).set({ name: myName, username: tgUsername });
+                const currentUsername = myPrivacy ? "" : tgUsername;
+                db.ref(`teams/${inviteTeamId}/members/${myId}`).set({ name: myName, username: currentUsername });
                 tg.showAlert(`Sei entrato nella squadra ${snap.val().name}!`); showScreen('teamsScreen');
             } else { tg.showAlert("La squadra non esiste o le iscrizioni sono chiuse."); showScreen('setupScreen'); }
         });
@@ -2377,7 +2403,8 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
 
     document.getElementById('createTeamBtn').addEventListener('click', () => {
         const tName = document.getElementById('newTeamName').value.trim(); if(!tName) return;
-        db.ref('teams').push().set({ name: tName, captainId: myId, status: 'open', members: { [myId]: { name: myName, username: tgUsername } } }).then(() => checkMyTeamStatus());
+        const currentUsername = myPrivacy ? "" : tgUsername;
+        db.ref('teams').push().set({ name: tName, captainId: myId, status: 'open', members: { [myId]: { name: myName, username: currentUsername } } }).then(() => checkMyTeamStatus());
     });
 
     function listenToAllTeams(isAlreadyInTeam) {
@@ -2427,7 +2454,10 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         });
     }
 
-    window.joinTeam = function(tId) { db.ref(`teams/${tId}/members/${myId}`).set({ name: myName, username: tgUsername }).then(() => checkMyTeamStatus()); }
+    window.joinTeam = function(tId) {
+        const currentUsername = myPrivacy ? "" : tgUsername;
+        db.ref(`teams/${tId}/members/${myId}`).set({ name: myName, username: currentUsername }).then(() => checkMyTeamStatus());
+    }
 
     function listenToMyTeam() {
         if (teamListener) db.ref(`teams/${myTeamId}`).off('value', teamListener);
@@ -2453,7 +2483,8 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
 
     document.getElementById('sendTeamChatBtn').addEventListener('click', () => {
         const txt = document.getElementById('teamChatInput').value.trim(); if (!txt || !myTeamId) return;
-        db.ref(`teams/${myTeamId}/chat`).push({ name: myName, username: tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+        const currentUsername = myPrivacy ? "" : tgUsername;
+        db.ref(`teams/${myTeamId}/chat`).push({ name: myName, username: currentUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         document.getElementById('teamChatInput').value = '';
     });
     document.getElementById('teamChatInput').addEventListener('keypress', function (e) { if (e.key === 'Enter') document.getElementById('sendTeamChatBtn').click(); });
