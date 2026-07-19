@@ -108,20 +108,26 @@
         }
         @keyframes zoomIn { to { transform: scale(1); } }
         .medal-icon { font-size: 5em; margin-bottom: 10px; display: block; }
+        .toast {
+            background-color: rgba(0, 0, 0, 0.85); color: white; padding: 10px 20px;
+            border-radius: 20px; font-size: 0.95em; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            animation: fadeInOut 4s forwards; white-space: nowrap;
+            pointer-events: none; border: 1px solid rgba(255,255,255,0.1);
+        }
         @keyframes fadeInOut {
             0% { opacity: 0; transform: translateY(-10px); }
-            10% { opacity: 1; transform: translateY(0); }
-            90% { opacity: 1; transform: translateY(0); }
+            15% { opacity: 1; transform: translateY(0); }
+            85% { opacity: 1; transform: translateY(0); }
             100% { opacity: 0; transform: translateY(-10px); }
         }
 
-        #matchDetailsModal, #inviteModal, #roomEventModal {
+        #matchDetailsModal, #inviteModal, #roomEventModal, #tournamentWelcomeModal {
             display: none; position: fixed; top: 10%; left: 5%; width: 90%; height: 80%;
             background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color);
             border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        #inviteModal, #roomEventModal { height: auto; top: 20%; }
+        #inviteModal, #roomEventModal, #tournamentWelcomeModal { height: auto; top: 20%; }
         .event-modal-icon { font-size: 4em; display: block; margin-bottom: 10px; }
     </style>
 </head>
@@ -639,6 +645,20 @@
     <button onclick="document.getElementById('roomEventModal').style.display='none'" class="btn-secondary" style="margin-top: 10px;">CHIUDI</button>
 </div>
 
+<div id="tournamentWelcomeModal" style="text-align: center;">
+    <span class="event-modal-icon">🏆</span>
+    <h3 style="color:var(--champ-color); margin-bottom:10px;">Partecipa ai Tornei!</h3>
+    <p style="font-size:0.95em; margin-bottom:15px;">Fonda una squadra o unisciti a una esistente per scalare la classifica mondiale e vincere medaglie!</p>
+    <button onclick="goToTournamentsFromPopup()" class="btn-champ">SCOPRI L'AREA TORNEI</button>
+
+    <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:15px;">
+        <input type="checkbox" id="stopShowingTrnPopup" style="width:16px; height:16px; cursor:pointer;">
+        <label for="stopShowingTrnPopup" style="font-size:0.8em; cursor:pointer; color:var(--hint-color);">Non mostrare più all'avvio</label>
+    </div>
+
+    <button onclick="closeTrnWelcomeModal()" class="btn-secondary" style="margin-top: 15px; padding:8px; font-size:0.9em; width:auto;">Più tardi</button>
+</div>
+
 <script>
     const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
@@ -807,13 +827,13 @@
             // Controlla attività e premia medaglie DOPO aver mostrato il menu
             checkActivityAndAwardMedals();
 
+            // Mostra il pop-up dei tornei se non disattivato
+            checkTournamentPopup();
+
             listenToRooms();
             listenToOnlineUsers();
             listenToInvites();
             listenToInviteAccepted();
-
-            // LOG DI DEBUG PER IL CREATORE
-            console.log("Gioco Inizializzato. Mio ID:", myId, "Mio Nome:", myName);
         }).catch(e => {
             document.getElementById('loadingText').innerHTML = "<b style='color:red'>Errore di Connessione.</b>";
         });
@@ -1024,6 +1044,31 @@
         document.getElementById('roomEventModal').style.display = 'none';
         if (roomCode) joinRoomLogic(false);
     });
+
+    window.checkTournamentPopup = function() {
+        const hideTrnPopup = localStorage.getItem('hideTrnWelcomePopup');
+        if (hideTrnPopup === 'true') return;
+
+        // Se l'utente ha già una squadra, probabilmente conosce già l'area tornei
+        if (myTeamId) return;
+
+        setTimeout(() => {
+            document.getElementById('tournamentWelcomeModal').style.display = 'flex';
+        }, 1500);
+    }
+
+    window.closeTrnWelcomeModal = function() {
+        const stopShowing = document.getElementById('stopShowingTrnPopup').checked;
+        if (stopShowing) {
+            localStorage.setItem('hideTrnWelcomePopup', 'true');
+        }
+        document.getElementById('tournamentWelcomeModal').style.display = 'none';
+    }
+
+    window.goToTournamentsFromPopup = function() {
+        closeTrnWelcomeModal();
+        showScreen('teamsScreen');
+    }
 
     let lastOnlineUsersSnap = null;
     function listenToOnlineUsers() {
@@ -1244,7 +1289,7 @@
             // Se sono l'host, NON mi rimuovo dai players per rimanere visibile in bacheca
             // e NON spengo il listener per continuare a ricevere notifiche
             if (!roomWasDeletedByHost && amIHost && !rc.startsWith("TRN_")) {
-                console.log("Host rimane in ascolto della stanza in background:", rc);
+                // Host rimane in ascolto
             } else {
                 if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
                 if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
