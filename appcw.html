@@ -114,13 +114,14 @@
             100% { opacity: 0; transform: translateY(-10px); }
         }
 
-        #matchDetailsModal, #inviteModal {
+        #matchDetailsModal, #inviteModal, #roomEventModal {
             display: none; position: fixed; top: 10%; left: 5%; width: 90%; height: 80%;
             background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color);
             border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        #inviteModal { height: auto; top: 20%; }
+        #inviteModal, #roomEventModal { height: auto; top: 20%; }
+        .event-modal-icon { font-size: 4em; display: block; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -617,6 +618,14 @@
     </div>
 </div>
 
+<div id="roomEventModal" style="text-align: center;">
+    <span class="event-modal-icon">👤</span>
+    <h3 id="roomEventTitle">Qualcuno è entrato!</h3>
+    <p id="roomEventText" style="margin-bottom: 20px;">Un giocatore sta aspettando nella tua stanza.</p>
+    <button id="goToRoomBtn" class="btn-success">ENTRA NELLA STANZA 🚪</button>
+    <button onclick="document.getElementById('roomEventModal').style.display='none'" class="btn-secondary" style="margin-top: 10px;">CHIUDI</button>
+</div>
+
 <script>
     const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
@@ -969,6 +978,18 @@
         return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
     }
 
+    window.showRoomEventModal = function(title, text) {
+        document.getElementById('roomEventTitle').textContent = title;
+        document.getElementById('roomEventText').textContent = text;
+        document.getElementById('roomEventModal').style.display = 'flex';
+        playBeep(600, 0.2); setTimeout(() => playBeep(800, 0.3), 200);
+    }
+
+    document.getElementById('goToRoomBtn').addEventListener('click', () => {
+        document.getElementById('roomEventModal').style.display = 'none';
+        if (roomCode) joinRoomLogic(false);
+    });
+
     function listenToOnlineUsers() {
         db.ref('presence').on('value', snap => {
             const list = document.getElementById('onlineUsersList'); list.innerHTML = '';
@@ -1048,6 +1069,7 @@
     document.getElementById('acceptInviteBtn').addEventListener('click', () => {
         const inv = window.lastIncomingInvite;
         db.ref(`invites/${myId}`).remove();
+        closeInviteModal();
 
         // Creazione stanza concordata
         const rCode = Math.floor(1000 + Math.random() * 9000).toString();
@@ -1073,6 +1095,7 @@
             const data = snap.val();
             if (data && data.roomCode) {
                 db.ref(`invite_accepted/${myId}`).remove();
+                closeInviteModal();
                 roomCode = data.roomCode;
                 joinRoomLogic(false);
             }
@@ -1196,7 +1219,7 @@
                     // Notifica Host quando entra qualcuno
                     const pCount = Object.keys(playersData).length;
                     if (myId === roomData.hostId && pCount > lastPlayerCount && activeChatContext !== 'room') {
-                         showToast("👤 Qualcuno è entrato nella tua stanza!");
+                         showRoomEventModal("Qualcuno è entrato!", "Un nuovo giocatore è appena entrato nella tua stanza.");
                     }
                     lastPlayerCount = pCount;
                     if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
