@@ -435,20 +435,32 @@
     <h2 id="lobbyTitleText">Lobby Stanza</h2>
     <p id="lobbyTimerText" style="text-align: center; font-weight: bold; color: #ff9800; margin-top: 2px; margin-bottom: 5px;"></p>
 
-    <h3 style="margin-top: 5px; margin-bottom: 5px;">Giocatori presenti:</h3>
-    <ul id="playersList" class="data-list" style="width: 100%; border: 1px solid var(--hint-color); border-radius: 8px; padding: 5px; flex-grow: 1;"></ul>
+    <div class="box-panel" style="flex-shrink:0; margin-bottom:5px;">
+        <h3 style="margin:0 0 5px 0; font-size:0.9em;">Giocatori presenti:</h3>
+        <ul id="playersList" class="data-list" style="max-height: 80px;"></ul>
+    </div>
 
-    <button id="inviteFriendsBtn" class="btn-link" style="font-weight: bold; font-size: 1em; margin: 10px 0; text-align: center;">📢 Invita Amici su Telegram</button>
+    <button id="inviteFriendsBtn" class="btn-link" style="font-weight: bold; font-size: 0.9em; margin: 2px 0; text-align: center;">📢 Invita Amici su Telegram</button>
+
+    <!-- CHAT INTEGRATA NELLA LOBBY -->
+    <div class="box-panel" style="flex-grow:1; min-height:0; display:flex; flex-direction:column; padding:5px; margin-bottom:5px;">
+        <h3 style="margin-bottom:2px; font-size:0.9em; color:var(--hint-color);">💬 Chat di Stanza</h3>
+        <div id="lobbyChatMessages" style="flex-grow:1; overflow-y:auto; font-size:0.85em; padding:5px; background:var(--bg-color); border-radius:6px; margin-bottom:5px;"></div>
+        <div style="display:flex; gap:5px;">
+            <input type="text" id="lobbyChatInput" placeholder="Messaggio..." style="padding:8px; margin:0;">
+            <button id="sendLobbyChatBtn" style="width:auto; padding:8px 12px; margin:0;">Invia</button>
+        </div>
+    </div>
 
     <div style="margin-top: 0; width: 100%; flex-shrink: 0;">
-        <p id="statusInfoText" style="text-align: center; color: var(--hint-color); font-style: italic; margin-bottom: 5px; font-size: 0.9em;">Verifica ruolo...</p>
+        <p id="statusInfoText" style="text-align: center; color: var(--hint-color); font-style: italic; margin-bottom: 5px; font-size: 0.85em;">Verifica ruolo...</p>
 
         <button id="readyBtn" style="display:none;" class="btn-success">SONO PRONTO ✅</button>
         <button id="startMultiplayerBtn" style="display:none;" class="btn-success">AVVIA PARTITA</button>
-        <button id="deleteRoomBtn" style="display:none;" class="btn-danger">ELIMINA STANZA</button>
+        <button id="deleteRoomBtn" style="display:none; padding:8px; font-size:0.85em;" class="btn-danger">ELIMINA STANZA</button>
 
-        <p id="waitingHostText" style="display:none; font-style: italic; text-align: center; font-size: 0.9em; margin-bottom: 5px;">In attesa che l'Host avvii...</p>
-        <button id="leaveLobbyBtn" class="btn-secondary" style="margin-top: 5px;">Esci dalla Stanza</button>
+        <p id="waitingHostText" style="display:none; font-style: italic; text-align: center; font-size: 0.85em; margin-bottom: 5px;">In attesa che l'Host avvii...</p>
+        <button id="leaveLobbyBtn" class="btn-secondary" style="margin-top: 5px; padding:8px;">Esci dalla Stanza</button>
     </div>
 </div>
 
@@ -598,10 +610,26 @@
     let activeTrnId = null, trnListener = null;
     let myTeamName = "";
 
-    const masterDictionary = [
+    let masterDictionary = [
         "abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero",
         "città", "caffè", "perché", "novità", "virtù", "libertà", "albero", "bambino", "cane", "gatto", "scuola", "tavolo", "sedia", "libro", "penna", "matita", "gomma", "quaderno", "zaino", "computer", "tastiera", "schermo", "mouse", "cuffie", "orologio", "occhiali", "maglietta", "pantaloni", "scarpe", "calzini", "giacca", "cappotto", "sciarpa", "cappello", "guanti", "ombrello", "borsa", "portafoglio", "chiavi", "bicicletta", "treno", "aereo", "nave", "strada", "piazza", "ponte", "fiume", "lago", "mare", "collina", "pianura", "foresta", "fiore", "erba", "foglia", "sole", "luna", "stella", "cielo", "nuvola", "pioggia", "neve", "vento", "fuoco", "acqua", "terra", "sabbia", "sasso", "roccia", "animale", "uccello", "pesce", "insetto", "ragno", "serpente", "rana", "cavallo", "mucca", "maiale", "pecora", "capra", "pollo", "anatra", "oca", "topo", "coniglio", "lupo", "orso", "leone", "tigre", "scimmia", "delfino", "balena", "squalo", "verità", "onestà", "carità", "felicità"
     ];
+
+    async function fetchExternalDictionary() {
+        const url = "https://raw.githubusercontent.com/Tn6rg3/antennavr/refs/heads/main/parole.txt";
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error("GitHub offline");
+            const text = await resp.text();
+            const lines = text.split('\n').map(l => l.trim().toLowerCase()).filter(l => l.length > 2);
+            if (lines.length > 0) {
+                masterDictionary = lines;
+                console.log("Dizionario caricato da GitHub:", masterDictionary.length, "parole.");
+            }
+        } catch(e) {
+            console.warn("Uso dizionario di backup interno:", e.message);
+        }
+    }
 
     const morseDict = {
         'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..',
@@ -698,6 +726,9 @@
                 else if (startParam.startsWith('room_')) { window.joinSpecificRoom(startParam.replace('room_', '')); }
             } else { showScreen('setupScreen'); }
 
+            // Caricamento dizionario esterno
+            fetchExternalDictionary();
+
             // Controlla attività e premia medaglie DOPO aver mostrato il menu
             checkActivityAndAwardMedals();
 
@@ -760,10 +791,30 @@
 
     function listenToChat() {
         if (activeChatContext === 'room' && roomCode) {
+            // Chat integrata nella lobby (lobbyChatMessages) e chat drawer per partita (chatMessages)
+            setupChat(db.ref(`rooms/${roomCode}/chat`), 'lobbyChatMessages', null);
             setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', 'globalChatBtn');
-            document.getElementById('chatTitle').textContent = "💬 Chat Stanza"; document.getElementById('globalChatBtn').style.display = 'block';
+            document.getElementById('chatTitle').textContent = "💬 Chat Stanza";
+
+            // In partita mostriamo il tasto e apriamo la chat di default
+            if (document.getElementById('gameArea').classList.contains('active-screen')) {
+                document.getElementById('globalChatBtn').style.display = 'block';
+                const drawer = document.getElementById('chatDrawer');
+                if (drawer.style.display === 'none') toggleChat();
+            } else {
+                document.getElementById('globalChatBtn').style.display = 'none';
+                document.getElementById('chatDrawer').style.display = 'none';
+            }
         }
     }
+
+    document.getElementById('sendLobbyChatBtn').addEventListener('click', () => {
+        const input = document.getElementById('lobbyChatInput');
+        const txt = input.value.trim(); if (!txt || !roomCode) return;
+        db.ref(`rooms/${roomCode}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+        input.value = '';
+    });
+    document.getElementById('lobbyChatInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('sendLobbyChatBtn').click(); });
 
     function setupChat(chatRef, containerId, alertBtnId) {
         if (chatListenerRef && chatListenerRef.toString() === chatRef.toString()) return;
@@ -791,6 +842,10 @@
             lastChatTimestamp = maxTs; container.scrollTop = container.scrollHeight;
             if (!initialLoad && newMsgsCount > 0 && alertBtnId && !isChatDrawerOpen) {
                 showToast(`💬 Nuovo messaggio da ${latestMsg.name}`); document.getElementById(alertBtnId).style.backgroundColor = '#4caf50';
+            }
+            // Notifica globale se siamo l'host e non siamo in stanza
+            if (!initialLoad && newMsgsCount > 0 && roomHostId === myId && activeChatContext !== 'room') {
+                if (latestMsg) showToast(`📢 (Stanza) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
             }
             initialLoad = false;
         });
@@ -916,13 +971,18 @@
                 targetScreen = 'teamsScreen';
             }
             const rc = roomCode;
-            roomCode = "";
+            const amIHost = (myId === roomHostId);
 
-            db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
-            if (!roomWasDeletedByHost) {
+            // Se sono l'host, NON mi rimuovo dai players per rimanere visibile in bacheca
+            // tranne se la stanza viene eliminata o se è un torneo
+            if (!roomWasDeletedByHost && amIHost && !rc.startsWith("TRN_")) {
+                console.log("Host rimane virtualmente presente nella stanza:", rc);
+            } else {
+                db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
                 db.ref(`rooms/${rc}`).once('value', snap => {
                     if (snap.exists()) db.ref(`rooms/${rc}/players/${myId}`).remove();
                 });
+                roomCode = "";
             }
         }
         hideChat();
