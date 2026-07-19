@@ -128,6 +128,7 @@
 
 <div id="toastContainer"></div>
 
+<button id="globalChatBtn" style="display:none; position:fixed; top:15px; right:15px; width:auto; z-index:1500; margin:0; padding:8px 15px; font-size:0.9em; transition: background-color 0.3s;" class="btn-secondary" onclick="toggleChat()">💬 Chat</button>
 
 <div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:45%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--hint-color); padding-bottom:5px; margin-bottom:5px;">
@@ -651,11 +652,10 @@
     let myName, myId;
     let db, auth;
     let currentRoomListener = null, chatListener = null, pingPongListener = null;
-    let presenceListener = null, invitesListener = null, inviteAcceptedListener = null, outgoingInviteListener = null;
+    let presenceListener = null, invitesListener = null;
     let roomCode = "", lastPlayerCount = 0, lobbyTimerInterval = null, roomHostId = null;
     let activeChatContext = null;
     let currentInviterId = null;
-    let isChallenging = false;
 
     // --- VARIABILI SQUADRE E TORNEI ---
     let myTeamId = null, isTeamCaptain = false;
@@ -859,18 +859,32 @@
 
     function listenToChat() {
         if (activeChatContext === 'room' && roomCode) {
+            // Chat integrata nella lobby (lobbyChatMessages) e chat drawer per partita (chatMessages)
             setupChat(db.ref(`rooms/${roomCode}/chat`), 'lobbyChatMessages', null);
-            setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', null);
+            setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', 'globalChatBtn');
             document.getElementById('chatTitle').textContent = "💬 Chat Stanza";
 
+            // In partita mostriamo il tasto e apriamo la chat di default
             if (document.getElementById('gameArea').classList.contains('active-screen')) {
+                document.getElementById('globalChatBtn').style.display = 'block';
                 const drawer = document.getElementById('chatDrawer');
                 if (drawer.style.display === 'none') toggleChat();
+            } else {
+                document.getElementById('globalChatBtn').style.display = 'none';
+                document.getElementById('chatDrawer').style.display = 'none';
             }
         } else {
             // Chat Globale
-            setupChat(db.ref('globalChat'), 'chatMessages', null);
+            setupChat(db.ref('globalChat'), 'chatMessages', 'globalChatBtn');
             document.getElementById('chatTitle').textContent = "🌎 Chat Globale";
+
+            // Mostriamo il tasto chat se siamo nel menu principale o profilo
+            const currentScreen = document.querySelector('.active-screen')?.id;
+            if (currentScreen === 'setupScreen' || currentScreen === 'profileScreen' || currentScreen === 'leaderboardScreen' || currentScreen === 'participationScreen') {
+                document.getElementById('globalChatBtn').style.display = 'block';
+            } else {
+                document.getElementById('globalChatBtn').style.display = 'none';
+            }
         }
     }
 
@@ -913,9 +927,7 @@
 
             lastChatTimestamp = maxTs; container.scrollTop = container.scrollHeight;
             if (!initialLoad && newMsgsCount > 0 && alertBtnId && !isChatDrawerOpen) {
-                showToast(`💬 Nuovo messaggio da ${latestMsg.name}`);
-                const btn = document.getElementById(alertBtnId);
-                if (btn) btn.style.backgroundColor = '#4caf50';
+                showToast(`💬 Nuovo messaggio da ${latestMsg.name}`); document.getElementById(alertBtnId).style.backgroundColor = '#4caf50';
             }
             // Notifica globale per messaggi in stanza se siamo l'host e siamo fuori
             if (!initialLoad && newMsgsCount > 0 && roomHostId === myId && activeChatContext !== 'room' && chatRef.key !== 'globalChat') {
@@ -1019,13 +1031,8 @@
                 const u = child.val(); if (child.key === myId) return;
                 count++;
                 const li = document.createElement('li');
-                const isThisOneWaiting = (isChallenging && currentInviterId === child.key);
-
                 li.innerHTML = `<span><b>${escapeHTML(u.name)}</b><br><small>🟢 Online</small></span>
-                                <button class="action-btn-small ${isThisOneWaiting ? 'btn-danger' : 'btn-success'}"
-                                        ${isChallenging ? 'disabled' : ''}
-                                        onclick="openInviteModal('${child.key}', '${escapeHTML(u.name)}')">
-                                        ${isThisOneWaiting ? 'In Attesa...' : 'Sfida'}</button>`;
+                                <button class="action-btn-small btn-success" onclick="openInviteModal('${child.key}', '${escapeHTML(u.name)}')">Sfida</button>`;
                 list.appendChild(li);
             });
             if (count === 0) list.innerHTML = '<li style="justify-content:center;color:var(--hint-color); background:none; border:none;">Sei solo.</li>';
@@ -1048,8 +1055,6 @@
     }
 
     document.getElementById('sendInviteBtn').addEventListener('click', () => {
-        if (isChallenging) return;
-
         const mode = document.getElementById('inviteModeInput').value;
         const wpm = parseInt(document.getElementById('inviteWpmInput').value);
         const wc = parseInt(document.getElementById('inviteWordCountInput').value);
@@ -1060,36 +1065,12 @@
             mode: mode,
             wpm: wpm,
             wordCount: wc,
-            ts: firebase.database.ServerValue.TIMESTAMP,
-            status: 'pending'
+            ts: firebase.database.ServerValue.TIMESTAMP
         };
 
-        const targetId = currentInviterId;
-        isChallenging = true;
-
-        db.ref(`invites/${targetId}`).set(inviteData).then(() => {
+        db.ref(`invites/${currentInviterId}`).set(inviteData).then(() => {
             showToast("Invito inviato! In attesa...");
             closeInviteModal();
-
-            // Monitoriamo se l'invito viene rifiutato o scade
-            if (outgoingInviteListener) db.ref(`invites/${targetId}`).off('value', outgoingInviteListener);
-            outgoingInviteListener = db.ref(`invites/${targetId}`).on('value', invSnap => {
-                if (!invSnap.exists() && isChallenging) {
-                    // Se l'invito sparisce ma non è stato accettato (isChallenging è ancora true)
-                    // Allora è stato rifiutato o è scaduto
-                    setTimeout(() => {
-                        if (isChallenging) {
-                            showToast("L'utente ha rifiutato l'invito o la sfida è scaduta.");
-                            isChallenging = false;
-                            currentInviterId = null;
-                            if (outgoingInviteListener) {
-                                db.ref(`invites/${targetId}`).off('value', outgoingInviteListener);
-                                outgoingInviteListener = null;
-                            }
-                        }
-                    }, 1000);
-                }
-            });
         });
     });
 
@@ -1143,20 +1124,10 @@
 
     // Listener per il mittente (chi ha inviato l'invito)
     function listenToInviteAccepted() {
-        if (inviteAcceptedListener) db.ref(`invite_accepted/${myId}`).off('value', inviteAcceptedListener);
-        inviteAcceptedListener = db.ref(`invite_accepted/${myId}`).on('value', snap => {
+        db.ref(`invite_accepted/${myId}`).on('value', snap => {
             const data = snap.val();
             if (data && data.roomCode) {
                 db.ref(`invite_accepted/${myId}`).remove();
-
-                // Sfida accettata! Resettiamo lo stato di sfida
-                isChallenging = false;
-                if (outgoingInviteListener) {
-                    // Pulizia listener monitoraggio rifiuto
-                    // Nota: targetId non è disponibile qui direttamente se non salvato
-                    // Ma isChallenging = false bloccherà il toast del rifiuto
-                }
-
                 closeInviteModal();
                 roomCode = data.roomCode;
                 joinRoomLogic(false);
