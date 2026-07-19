@@ -2077,9 +2077,25 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                 db.ref(`tournaments/${activeTrnId}`).once('value', snap => {
                     const trn = snap.val();
                     if (trn && trn.standings) {
+                        // Aggiungiamo il nome del torneo come intestazione nella classifica
+                        const header = document.createElement('div');
+                        header.style.textAlign = 'center';
+                        header.style.marginBottom = '10px';
+                        header.style.padding = '5px';
+                        header.style.background = 'var(--sec-bg-color)';
+                        header.style.borderRadius = '8px';
+                        header.innerHTML = `<small style="color:var(--hint-color)">Torneo Attivo:</small><br><b style="color:var(--champ-color); font-size:1.1em;">${escapeHTML(trn.name)}</b>`;
+
                         let standings = Object.entries(trn.standings).map(([id, data]) => ({ name: data.name, score: data.points, date: "In corso" }));
                         standings.sort((a,b) => b.score - a.score);
-                        renderPlayersListHTML(standings, container, false, true);
+
+                        container.innerHTML = '';
+                        container.appendChild(header);
+
+                        // Creiamo un mini-container per la lista per non sovrascrivere l'header
+                        const listCont = document.createElement('div');
+                        renderPlayersListHTML(standings, listCont, false, true);
+                        container.appendChild(listCont);
                     } else {
                         container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Dati torneo non disponibili.</p>';
                     }
