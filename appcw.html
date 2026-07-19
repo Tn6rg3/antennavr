@@ -1010,25 +1010,32 @@
         if (roomCode) joinRoomLogic(false);
     });
 
+    let lastOnlineUsersSnap = null;
     function listenToOnlineUsers() {
         db.ref('presence').on('value', snap => {
-            const list = document.getElementById('onlineUsersList'); list.innerHTML = '';
-            let count = 0;
-            snap.forEach(child => {
-                const u = child.val(); if (child.key === myId) return;
-                count++;
-                const li = document.createElement('li');
-                const isThisOneWaiting = (isChallenging && currentInviterId === child.key);
-
-                li.innerHTML = `<span><b>${escapeHTML(u.name)}</b><br><small>🟢 Online</small></span>
-                                <button class="action-btn-small ${isThisOneWaiting ? 'btn-danger' : 'btn-success'}"
-                                        ${isChallenging ? 'disabled' : ''}
-                                        onclick="openInviteModal('${child.key}', '${escapeHTML(u.name)}')">
-                                        ${isThisOneWaiting ? 'In Attesa...' : 'Sfida'}</button>`;
-                list.appendChild(li);
-            });
-            if (count === 0) list.innerHTML = '<li style="justify-content: center; color: var(--hint-color); background: none; border: none;">Sei solo.</li>';
+            lastOnlineUsersSnap = snap;
+            renderOnlineUsers();
         });
+    }
+
+    function renderOnlineUsers() {
+        if (!lastOnlineUsersSnap) return;
+        const list = document.getElementById('onlineUsersList'); list.innerHTML = '';
+        let count = 0;
+        lastOnlineUsersSnap.forEach(child => {
+            const u = child.val(); if (child.key === myId) return;
+            count++;
+            const li = document.createElement('li');
+            const isThisOneWaiting = (isChallenging && currentInviterId === child.key);
+
+            li.innerHTML = `<span><b>${escapeHTML(u.name)}</b><br><small>🟢 Online</small></span>
+                            <button class="action-btn-small ${isThisOneWaiting ? 'btn-danger' : 'btn-success'}"
+                                    ${isChallenging && !isThisOneWaiting ? 'disabled' : ''}
+                                    onclick="openInviteModal('${child.key}', '${escapeHTML(u.name)}')">
+                                    ${isThisOneWaiting ? 'In Attesa...' : 'Sfida'}</button>`;
+            list.appendChild(li);
+        });
+        if (count === 0) list.innerHTML = '<li style="justify-content: center; color: var(--hint-color); background: none; border: none;">Sei solo.</li>';
     }
 
     window.openInviteModal = function(targetId, targetName) {
@@ -1065,6 +1072,7 @@
 
         const targetId = currentInviterId;
         isChallenging = true;
+        renderOnlineUsers(); // Forza aggiornamento immediato pulsante rosso
 
         db.ref(`invites/${targetId}`).set(inviteData).then(() => {
             showToast("Invito inviato! In attesa...");
@@ -1081,6 +1089,7 @@
                             showToast("L'utente ha rifiutato l'invito o la sfida è scaduta.");
                             isChallenging = false;
                             currentInviterId = null;
+                            renderOnlineUsers(); // Torna verde
                             if (outgoingInviteListener) {
                                 db.ref(`invites/${targetId}`).off('value', outgoingInviteListener);
                                 outgoingInviteListener = null;
