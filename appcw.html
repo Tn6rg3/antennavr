@@ -114,12 +114,13 @@
             100% { opacity: 0; transform: translateY(-10px); }
         }
 
-        #matchDetailsModal {
+        #matchDetailsModal, #inviteModal {
             display: none; position: fixed; top: 10%; left: 5%; width: 90%; height: 80%;
             background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color);
             border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
+        #inviteModal { height: auto; top: 20%; }
     </style>
 </head>
 <body>
@@ -213,11 +214,19 @@
         <button id="createRoomBtn" disabled class="btn-success">Inizia Partita Libera</button>
     </div>
 
-    <div class="box-panel" style="flex-grow: 1; min-height: 0; margin-bottom: 0;">
-        <h3>Bacheca Sfide Libere ⏳</h3>
-        <ul id="waitingRoomsList" class="data-list">
-            <li style="justify-content: center; color: var(--hint-color); background: none; border: none;">Nessuna sfida attiva.</li>
-        </ul>
+    <div style="display: flex; gap: 8px; flex-grow: 1; min-height: 0; margin-bottom: 0;">
+        <div class="box-panel" style="flex: 1; min-height: 0;">
+            <h3>Bacheca Sfide ⏳</h3>
+            <ul id="waitingRoomsList" class="data-list">
+                <li style="justify-content: center; color: var(--hint-color); background: none; border: none;">Nessuna sfida.</li>
+            </ul>
+        </div>
+        <div class="box-panel" style="flex: 1; min-height: 0;">
+            <h3>Utenti Online 🟢</h3>
+            <ul id="onlineUsersList" class="data-list">
+                <li style="justify-content: center; color: var(--hint-color); background: none; border: none;">Sei solo.</li>
+            </ul>
+        </div>
     </div>
 </div>
 
@@ -578,6 +587,36 @@
     </div>
 </div>
 
+<div id="inviteModal">
+    <h3 id="inviteModalTitle">Invia Invito</h3>
+    <p id="inviteModalText" style="text-align: center; font-size: 0.9em;"></p>
+    <div id="inviteSettings" class="box-panel">
+        <h4 style="margin: 0 0 5px 0;">Configura Match:</h4>
+        <!-- Riutilizziamo le stesse impostazioni o una versione ridotta -->
+        <div class="settings-row full-width">
+            <div><label>Modalità:</label>
+                <select id="inviteModeInput">
+                    <option value="standard">Parole Comuni</option>
+                    <option value="callsign">Nominativi (CW Freak)</option>
+                    <option value="pingpong">Ping Pong</option>
+                </select>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div><label>WPM:</label> <input type="number" id="inviteWpmInput" value="20" min="5" max="50"></div>
+            <div><label>Test:</label> <input type="number" id="inviteWordCountInput" value="10" min="3" max="50"></div>
+        </div>
+    </div>
+    <div id="incomingInviteArea" style="display:none; text-align:center;">
+        <button id="acceptInviteBtn" class="btn-success">ACCETTA ✅</button>
+        <button id="declineInviteBtn" class="btn-danger" style="margin-top:5px;">RIFIUTA ❌</button>
+    </div>
+    <div id="outgoingInviteArea" style="display:block; text-align:center;">
+        <button id="sendInviteBtn" class="btn-success">INVIA INVITO 🚀</button>
+        <button onclick="closeInviteModal()" class="btn-secondary" style="margin-top:5px;">ANNULLA</button>
+    </div>
+</div>
+
 <script>
     const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
@@ -601,8 +640,10 @@
     let myName, myId;
     let db, auth;
     let currentRoomListener = null, chatListener = null, pingPongListener = null;
+    let presenceListener = null, invitesListener = null;
     let roomCode = "", lastPlayerCount = 0, lobbyTimerInterval = null, roomHostId = null;
     let activeChatContext = null;
+    let currentInviterId = null;
 
     // --- VARIABILI SQUADRE E TORNEI ---
     let myTeamId = null, isTeamCaptain = false;
@@ -718,6 +759,12 @@
 
             db.ref('.info/connected').on('value', (snap) => {
                 if (snap.val() === false) return;
+
+                // Sistema di Presenza
+                const pRef = db.ref(`presence/${myId}`);
+                pRef.onDisconnect().remove();
+                pRef.set({ name: myName, username: tgUsername, status: 'online', ts: firebase.database.ServerValue.TIMESTAMP });
+
                 if (roomCode) joinRoomLogic(true);
             });
 
@@ -733,6 +780,9 @@
             checkActivityAndAwardMedals();
 
             listenToRooms();
+            listenToOnlineUsers();
+            listenToInvites();
+            listenToInviteAccepted();
         }).catch(e => {
             document.getElementById('loadingText').innerHTML = "<b style='color:red'>Errore di Connessione.</b>";
         });
@@ -914,6 +964,116 @@
         if (mode === 'callsign') return Array.from({length: num}, generateCallsign);
         if (mode === 'pingpong') return [];
         return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
+    }
+
+    function listenToOnlineUsers() {
+        db.ref('presence').on('value', snap => {
+            const list = document.getElementById('onlineUsersList'); list.innerHTML = '';
+            let count = 0;
+            snap.forEach(child => {
+                const u = child.val(); if (child.key === myId) return;
+                count++;
+                const li = document.createElement('li');
+                li.innerHTML = `<span><b>${escapeHTML(u.name)}</b><br><small>🟢 Online</small></span>
+                                <button class="action-btn-small btn-success" onclick="openInviteModal('${child.key}', '${escapeHTML(u.name)}')">Sfida</button>`;
+                list.appendChild(li);
+            });
+            if (count === 0) list.innerHTML = '<li style="justify-content:center;color:var(--hint-color); background:none; border:none;">Sei solo.</li>';
+        });
+    }
+
+    window.openInviteModal = function(targetId, targetName) {
+        currentInviterId = targetId;
+        document.getElementById('inviteModalTitle').textContent = "Sfida " + targetName;
+        document.getElementById('inviteModalText').textContent = "Scegli le impostazioni per la sfida:";
+        document.getElementById('inviteSettings').style.display = 'block';
+        document.getElementById('incomingInviteArea').style.display = 'none';
+        document.getElementById('outgoingInviteArea').style.display = 'block';
+        document.getElementById('inviteModal').style.display = 'flex';
+    }
+
+    window.closeInviteModal = function() {
+        document.getElementById('inviteModal').style.display = 'none';
+        currentInviterId = null;
+    }
+
+    document.getElementById('sendInviteBtn').addEventListener('click', () => {
+        const mode = document.getElementById('inviteModeInput').value;
+        const wpm = parseInt(document.getElementById('inviteWpmInput').value);
+        const wc = parseInt(document.getElementById('inviteWordCountInput').value);
+
+        const inviteData = {
+            fromId: myId,
+            fromName: myName,
+            mode: mode,
+            wpm: wpm,
+            wordCount: wc,
+            ts: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        db.ref(`invites/${currentInviterId}`).set(inviteData).then(() => {
+            showToast("Invito inviato! In attesa...");
+            closeInviteModal();
+        });
+    });
+
+    function listenToInvites() {
+        db.ref(`invites/${myId}`).on('value', snap => {
+            const inv = snap.val();
+            if (!inv) return;
+
+            // Se l'invito è vecchio (più di 1 min), ignoralo
+            if (Date.now() - inv.ts > 60000) { db.ref(`invites/${myId}`).remove(); return; }
+
+            document.getElementById('inviteModalTitle').textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
+            document.getElementById('inviteModalText').innerHTML = `Ti ha invitato a giocare:<br><b>${inv.mode.toUpperCase()}</b> a <b>${inv.wpm} WPM</b> (${inv.wordCount} test).`;
+            document.getElementById('inviteSettings').style.display = 'none';
+            document.getElementById('incomingInviteArea').style.display = 'block';
+            document.getElementById('outgoingInviteArea').style.display = 'none';
+            document.getElementById('inviteModal').style.display = 'flex';
+
+            currentInviterId = inv.fromId;
+            window.lastIncomingInvite = inv;
+        });
+    }
+
+    document.getElementById('declineInviteBtn').addEventListener('click', () => {
+        db.ref(`invites/${myId}`).remove();
+        closeInviteModal();
+    });
+
+    document.getElementById('acceptInviteBtn').addEventListener('click', () => {
+        const inv = window.lastIncomingInvite;
+        db.ref(`invites/${myId}`).remove();
+
+        // Creazione stanza concordata
+        const rCode = Math.floor(1000 + Math.random() * 9000).toString();
+        const words = getGameWords(inv.wordCount, inv.mode);
+
+        const roomData = {
+            status: 'waiting', type: 'multi',
+            mode: inv.mode, wpm: inv.wpm, tone: 600, wordCount: inv.wordCount, words: words,
+            createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + (10 * 60000), hostId: inv.fromId
+        };
+
+        db.ref(`rooms/${rCode}`).set(roomData).then(() => {
+            // Comunichiamo il codice al mittente
+            db.ref(`invite_accepted/${inv.fromId}`).set({ roomCode: rCode });
+            roomCode = rCode;
+            joinRoomLogic(false);
+        });
+    });
+
+    // Listener per il mittente (chi ha inviato l'invito)
+    function listenToInviteAccepted() {
+        db.ref(`invite_accepted/${myId}`).on('value', snap => {
+            const data = snap.val();
+            if (data && data.roomCode) {
+                db.ref(`invite_accepted/${myId}`).remove();
+                roomCode = data.roomCode;
+                joinRoomLogic(false);
+            }
+        });
     }
 
     function listenToRooms() {
