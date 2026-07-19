@@ -1052,6 +1052,13 @@
         }
     };
 
+    window.toggleLanguage = function() {
+        const newLang = currentLang === 'it' ? 'en' : 'it';
+        setLanguage(newLang);
+        updateDictionary();
+        showToast(newLang === 'it' ? "Lingua: Italiano" : "Language: English");
+    }
+
     function setLanguage(lang) {
         currentLang = lang;
         localStorage.setItem('gameLang', lang);
