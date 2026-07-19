@@ -141,7 +141,7 @@
         <span id="chatTitle" style="font-weight:bold;">💬 Chat</span>
         <div style="display: flex; gap: 5px;">
             <button id="clearChatBtn" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-danger">Cancella</button>
-            <button onclick="toggleChat()" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-secondary">Chiudi</button>
+            <button id="closeChatBtn" onclick="toggleChat()" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-secondary">Chiudi</button>
         </div>
     </div>
     <div id="chatMessages" style="flex-grow:1; overflow-y:auto; text-align:left; font-size:0.9em; margin-bottom:5px; padding:8px; background:var(--bg-color); border-radius:8px;"></div>
@@ -467,7 +467,7 @@
     <p id="lobbyTimerText" style="text-align: center; font-weight: bold; color: #ff9800; margin-top: 2px; margin-bottom: 5px;"></p>
 
     <div class="box-panel" style="flex-shrink:0; margin-bottom:5px;">
-        <h3 style="margin:0 0 5px 0; font-size:0.9em;">Giocatori presenti:</h3>
+        <h3 id="txt_lobby_players" style="margin:0 0 5px 0; font-size:0.9em;">Giocatori presenti:</h3>
         <ul id="playersList" class="data-list" style="max-height: 80px;"></ul>
     </div>
 
@@ -475,7 +475,7 @@
 
     <!-- CHAT INTEGRATA NELLA LOBBY -->
     <div class="box-panel" style="flex-grow:1; min-height:0; display:flex; flex-direction:column; padding:5px; margin-bottom:5px;">
-        <h3 style="margin-bottom:2px; font-size:0.9em; color:var(--hint-color);">💬 Chat di Stanza</h3>
+        <h3 id="txt_lobby_chat_title" style="margin-bottom:2px; font-size:0.9em; color:var(--hint-color);">💬 Chat di Stanza</h3>
         <div id="lobbyChatMessages" style="flex-grow:1; overflow-y:auto; font-size:0.85em; padding:5px; background:var(--bg-color); border-radius:6px; margin-bottom:5px;"></div>
         <div style="display:flex; gap:5px;">
             <input type="text" id="lobbyChatInput" placeholder="Messaggio..." style="padding:8px; margin:0;">
@@ -496,7 +496,7 @@
 </div>
 
 <div id="countdownScreen" class="screen">
-    <h2 style="margin-top: auto;">Preparati!</h2>
+    <h2 id="txt_prepare" style="margin-top: auto;">Preparati!</h2>
     <div id="countdownNumber">3</div>
     <div style="margin-top: auto;"></div>
 </div>
@@ -510,7 +510,7 @@
 
     <div class="table-wrapper" id="tableWrapper">
         <table id="gameTable">
-            <thead><tr><th>Scritto</th><th>Reale</th><th>Punti</th></tr></thead>
+            <thead><tr><th id="txt_th_typed">Scritto</th><th id="txt_th_real">Reale</th><th id="txt_th_pts">Punti</th></tr></thead>
             <tbody id="tableBody"></tbody>
         </table>
     </div>
@@ -530,7 +530,7 @@
     </div>
 
     <div style="display:flex; gap:5px; width:100%;">
-        <button onclick="toggleChat()" class="btn-secondary" style="margin-top: 0; flex:1;">💬 Chat</button>
+        <button onclick="toggleChat()" class="btn-secondary" style="margin-top: 0; flex:1;" id="txt_game_chat_btn">💬 Chat</button>
         <button id="quitGameBtn" class="btn-danger" style="margin-top: 0; flex:1;">Abbandona</button>
     </div>
 </div>
@@ -1032,7 +1032,12 @@
             wrong_chars: "📈 Caratteri più sbagliati", wpm_error: "⚠️ Errori per WPM", match_history: "📜 Storico Partite", loading: "Caricamento...",
             back_to_menu: "Torna al Menu Principale",
             daily: "Oggi", weekly: "Settimana", monthly: "Mese", medals: "Le Mie Medaglie",
-            finished: "Concluso", winner: "Vincitore", points: "Punti", history: "Storico Partite"
+            finished: "Concluso", winner: "Vincitore", points: "Punti", history: "Storico Partite",
+            chat_title: "💬 Chat", chat_clear: "Cancella", chat_close: "Chiudi", chat_send: "Invia", chat_placeholder: "Scrivi un messaggio...",
+            lobby_players: "Giocatori presenti:", lobby_chat: "💬 Chat di Stanza", lobby_invite: "📢 Invita Amici su Telegram",
+            act_title: "Classifica Attività", act_loading: "Caricamento...", act_no_data: "Nessuna attività registrata.",
+            prepare: "Preparati!", start_via: "VIA!", game_chat: "💬 Chat", quit_game: "Abbandona",
+            input_placeholder: "Digita qui...", replay: "🔁 Riascolta", th_typed: "Scritto", th_real: "Reale", th_pts: "Punti"
         },
         en: {
             hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", conn_secure: "Secure connection in progress...",
@@ -1048,16 +1053,14 @@
             wrong_chars: "📈 Most Mistaken Characters", wpm_error: "⚠️ Errors per WPM", match_history: "📜 Match History", loading: "Loading...",
             back_to_menu: "Back to Main Menu",
             daily: "Today", weekly: "Week", monthly: "Month", medals: "My Medals",
-            finished: "Finished", winner: "Winner", points: "Points", history: "Match History"
+            finished: "Finished", winner: "Winner", points: "Points", history: "Match History",
+            chat_title: "💬 Chat", chat_clear: "Clear", chat_close: "Close", chat_send: "Send", chat_placeholder: "Type a message...",
+            lobby_players: "Players present:", lobby_chat: "💬 Room Chat", lobby_invite: "📢 Invite Friends on Telegram",
+            act_title: "Activity Rankings", act_loading: "Loading...", act_no_data: "No activity recorded.",
+            prepare: "Get Ready!", start_via: "GO!", game_chat: "💬 Chat", quit_game: "Quit",
+            input_placeholder: "Type here...", replay: "🔁 Replay", th_typed: "Typed", th_real: "Real", th_pts: "Points"
         }
     };
-
-    window.toggleLanguage = function() {
-        const newLang = currentLang === 'it' ? 'en' : 'it';
-        setLanguage(newLang);
-        updateDictionary();
-        showToast(newLang === 'it' ? "Lingua: Italiano" : "Language: English");
-    }
 
     function setLanguage(lang) {
         currentLang = lang;
@@ -1094,6 +1097,30 @@
         document.getElementById('txt_global_chat_btn').textContent = t.global_chat;
         document.getElementById('txt_you_are_alone').textContent = t.you_are_alone;
 
+        // Chat
+        document.getElementById('chatTitle').textContent = t.chat_title;
+        document.getElementById('clearChatBtn').textContent = t.chat_clear;
+        document.getElementById('closeChatBtn').textContent = t.chat_close;
+        document.getElementById('sendChatBtn').textContent = t.chat_send;
+        document.getElementById('chatInput').placeholder = t.chat_placeholder;
+
+        // Lobby
+        document.getElementById('txt_lobby_players').textContent = t.lobby_players;
+        document.getElementById('txt_lobby_chat_title').textContent = t.lobby_chat;
+        document.getElementById('sendLobbyChatBtn').textContent = t.chat_send;
+        document.getElementById('lobbyChatInput').placeholder = t.chat_placeholder;
+        document.getElementById('inviteFriendsBtn').textContent = t.lobby_invite;
+
+        // Game Area
+        document.getElementById('txt_prepare').textContent = t.prepare;
+        document.getElementById('txt_th_typed').textContent = t.th_typed;
+        document.getElementById('txt_th_real').textContent = t.th_real;
+        document.getElementById('txt_th_pts').textContent = t.th_pts;
+        document.getElementById('permanentGameInput').placeholder = t.input_placeholder;
+        document.getElementById('replayWordBtn').textContent = t.replay;
+        document.getElementById('txt_game_chat_btn').textContent = t.game_chat;
+        document.getElementById('quitGameBtn').textContent = t.quit_game;
+
         // Profile Screen
         document.getElementById('txt_profile_title').textContent = t.profile_title;
         document.getElementById('txt_alias_title').textContent = t.alias_label;
@@ -1105,6 +1132,12 @@
         document.getElementById('txt_wpm_error_title').textContent = t.wpm_error;
         document.getElementById('txt_match_history_title').textContent = t.match_history;
         document.getElementById('txt_back_btn').textContent = t.back_to_menu;
+
+        // Participation Screen
+        document.getElementById('tabDailyAct').textContent = t.daily;
+        document.getElementById('tabWeeklyAct').textContent = t.weekly;
+        document.getElementById('tabMonthlyAct').textContent = t.monthly;
+        document.getElementById('actListTitle').textContent = t.act_title;
 
         const loadingStats = document.getElementById('txt_loading_stats');
         if(loadingStats) loadingStats.textContent = t.loading;
@@ -1753,7 +1786,9 @@
         const interval = setInterval(() => {
             if (count > 1) { count--; document.getElementById('countdownNumber').textContent = count; playBeep(600, 0.1); }
             else {
-                clearInterval(interval); document.getElementById('countdownNumber').textContent = "VIA!"; playBeep(800, 0.3);
+                clearInterval(interval);
+                document.getElementById('countdownNumber').textContent = (currentLang === 'en' ? 'GO!' : 'VIA!');
+                playBeep(800, 0.3);
                 setTimeout(() => {
                     if (!gameRunning) return;
                     showScreen('gameArea');
