@@ -1124,30 +1124,33 @@
 
     // Funzione sicura per uscire dalle stanze
     function exitRoomCleanly(roomWasDeletedByHost = false) {
-        if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
-        if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
-
         let targetScreen = 'setupScreen';
+        const amIHost = (myId === roomHostId);
 
         if (roomCode) {
             if (roomCode.startsWith("TRN_")) {
                 targetScreen = 'teamsScreen';
             }
             const rc = roomCode;
-            const amIHost = (myId === roomHostId);
 
             // Se sono l'host, NON mi rimuovo dai players per rimanere visibile in bacheca
-            // tranne se la stanza viene eliminata o se è un torneo
+            // e NON spengo il listener per continuare a ricevere notifiche
             if (!roomWasDeletedByHost && amIHost && !rc.startsWith("TRN_")) {
-                console.log("Host rimane virtualmente presente nella stanza:", rc);
+                console.log("Host rimane in ascolto della stanza in background:", rc);
             } else {
+                if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
+                if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
+
                 db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
                 db.ref(`rooms/${rc}`).once('value', snap => {
                     if (snap.exists()) db.ref(`rooms/${rc}/players/${myId}`).remove();
                 });
                 roomCode = "";
             }
+        } else {
+            if (currentRoomListener) { currentRoomListener.off(); currentRoomListener = null; }
         }
+
         hideChat();
         showScreen(targetScreen);
     }
