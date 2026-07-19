@@ -164,16 +164,17 @@
 <!-- MENU PRINCIPALE -->
 <div id="setupScreen" class="screen">
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 5px; gap: 5px;">
-        <h2 style="margin: 0; text-align: left; flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 1.2em;">Ciao <span id="playerName">Giocatore</span>!</h2>
-        <div style="display: flex; gap: 5px; flex-shrink: 0;">
-            <button class="action-btn-small btn-secondary" onclick="showScreen('privacyScreen')">Info</button>
-            <button class="action-btn-small" style="background:#4caf50; color:#fff" onclick="showScreen('participationScreen'); switchActTab('daily');">🏅 Attività</button>
-            <button class="action-btn-small" onclick="showProfileScreen()">👤 Profilo</button>
-            <button class="action-btn-small" onclick="showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn');">🏆 Classifica</button>
+        <h2 style="margin: 0; text-align: left; flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 1.2em;"><span id="txt_hello">Ciao</span> <span id="playerName">Giocatore</span>!</h2>
+        <div style="display: flex; gap: 5px; flex-shrink: 0; align-items:center;">
+            <button onclick="toggleLanguage()" class="action-btn-small btn-secondary" style="width:40px; padding:6px 0;" id="langBtn">IT</button>
+            <button class="action-btn-small btn-secondary" onclick="showScreen('privacyScreen')" id="txt_info_btn">Info</button>
+            <button class="action-btn-small" style="background:#4caf50; color:#fff" onclick="showScreen('participationScreen'); switchActTab('daily');" id="txt_act_btn">🏅 Attività</button>
+            <button class="action-btn-small" onclick="showProfileScreen()" id="txt_profile_btn">👤 Profilo</button>
+            <button class="action-btn-small" onclick="showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn');" id="txt_lb_btn">🏆 Classifica</button>
         </div>
     </div>
 
-    <p id="loadingText" style="margin-bottom: 5px;">Connessione sicura in corso...</p>
+    <p id="loadingText" style="margin-bottom: 5px;" data-i18n="conn_secure">Connessione sicura in corso...</p>
 
     <!-- SEZIONE TORNEI -->
     <div style="width: 100%; text-align: center; margin-bottom: 0;">
@@ -205,18 +206,23 @@
             </div>
         </div>
         <div class="settings-row">
-            <div style="display: flex; flex-direction: column; align-items: center;">
-                <label>WPM Minimi:</label>
-                <div style="display: flex; align-items: center; gap: 5px; width: 100%;">
-                    <input type="number" id="startWpmInput" value="20" min="5" max="50">
-                    <label id="fixedSpeedContainer" style="display:none; font-size:0.8em; flex-shrink: 0; display:flex; align-items:center; gap:2px;">
-                        <input type="checkbox" id="fixedSpeedCheckbox"> Fissa
-                    </label>
-                </div>
-            </div>
-            <div><label>Hz:</label> <input type="number" id="toneInput" value="600" min="300" max="1000" step="50"></div>
-            <div><label>Gruppi/Nom.:</label> <input type="number" id="wordCountInput" value="10" min="3" max="50"></div>
-            <div id="timeoutDiv"><label>Scadenza Stanza (min):</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
+            <div style="width:31%"><label id="txt_wpm_label">WPM:</label> <input type="number" id="startWpmInput" value="20" min="5" max="50"></div>
+            <div style="width:31%"><label id="txt_words_label">Test:</label> <input type="number" id="wordCountInput" value="10" min="3" max="100"></div>
+            <div style="width:31%"><label id="txt_tone_label">Tono:</label> <input type="number" id="toneInput" value="600" min="400" max="1000" step="50"></div>
+        </div>
+
+        <div style="display:flex; justify-content:center; gap:15px; margin-top:5px;">
+            <label id="fixedSpeedContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: var(--hint-color); cursor: pointer;">
+                <input type="checkbox" id="fixedSpeedCheckbox"> <span id="txt_fixed_speed">Fissa</span>
+            </label>
+            <label id="easyModeContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: var(--champ-color); cursor: pointer;">
+                <input type="checkbox" id="easyModeCheckbox"> <span id="txt_easy_mode">Semplice</span>
+            </label>
+        </div>
+
+        <div id="timeoutDiv" style="margin-top: 5px; display: none;">
+            <label id="txt_room_timeout">Scadenza Stanza (min):</label>
+            <input type="number" id="roomTimerInput" value="5" min="1" max="60">
         </div>
         <button id="createRoomBtn" disabled class="btn-success">Inizia Partita Libera</button>
     </div>
@@ -515,9 +521,12 @@
         <button id="btnSendPingPong" class="btn-secondary" style="width: auto; margin: 0; padding: 10px;">Invia (Tu)</button>
     </div>
 
-    <div id="gameInputArea" style="display: flex; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
-        <input type="text" id="permanentGameInput" placeholder="Digita qui..." autocomplete="off" autocapitalize="none" style="flex-grow: 1; padding: 10px; font-size: 1.1em; margin: 0;">
-        <button id="replayWordBtn" class="btn-secondary" style="width: auto; margin: 0; padding: 10px; font-size: 0.9em;">🔁 Riascolta</button>
+    <div id="gameInputArea" style="display: flex; flex-direction:column; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
+        <div id="easyModeHint" style="display:none; text-align:center; font-size:1.4em; font-weight:bold; color:var(--champ-color); background:var(--sec-bg-color); padding:5px; border-radius:8px; letter-spacing: 2px;"></div>
+        <div style="display:flex; gap:5px; width:100%;">
+            <input type="text" id="permanentGameInput" placeholder="Digita qui..." autocomplete="off" autocapitalize="none" style="flex-grow: 1; padding: 10px; font-size: 1.1em; margin: 0;">
+            <button id="replayWordBtn" class="btn-secondary" style="width: auto; margin: 0; padding: 10px; font-size: 0.9em;">🔁 Riascolta</button>
+        </div>
     </div>
 
     <div style="display:flex; gap:5px; width:100%;">
@@ -694,25 +703,35 @@
     let activeTrnId = null, trnListener = null;
     let myTeamName = "";
 
-    let masterDictionary = [
-        "abbandono", "abbaglio", "accademia", "accordo", "amicizia", "antenna", "avventura", "battaglia", "bellezza", "biscotto", "bottiglia", "calcolo", "campagna", "cancello", "canzone", "capitale", "carattere", "cellulare", "centrale", "certezza", "chitarra", "circuito", "clinica", "comando", "commercio", "compagno", "complesso", "concerto", "conferma", "consiglio", "contatto", "contesto", "continuo", "controllo", "coraggio", "corrente", "costante", "creazione", "cultura", "decisione", "deserto", "destino", "dialogo", "difficile", "direzione", "discorso", "disegno", "distanza", "domanda", "economia", "elefante", "elegante", "elemento", "energia", "episodio", "equilibrio", "esercizio", "fabbrica", "famiglia", "fantasia", "fenomeno", "ferrovia", "fiducia", "finestra", "formula", "fortuna", "fotografia", "funzione", "galleria", "generale", "genitore", "geografia", "gestione", "giardino", "giornale", "giovane", "giudizio", "giustizia", "governo", "graduale", "grafico", "grandezza", "gravità", "identità", "illusione", "immagine", "impianto", "incontro", "industria", "infanzia", "infinito", "ingresso", "interesse", "inverno", "istituto", "laboratorio", "linguaggio", "macchina", "maestro", "maggiore", "malattia", "manuale", "marconi", "margine", "materia", "mattina", "meccanica", "medicina", "memoria", "meraviglia", "messaggio", "metallo", "metodo", "miniera", "miracolo", "mistero", "modello", "moderno", "momento", "montagna", "movimento", "musica", "naturale", "navigare", "necessario", "notizia", "obiettivo", "orizzonte", "ospedale", "ottenere", "paesaggio", "palazzo", "panorama", "paradosso", "passaggio", "passione", "pazienza", "pensiero", "percorso", "pericolo", "periodo", "persona", "pianeta", "politica", "posizione", "possibile", "pressione", "principio", "problema", "processo", "prodotto", "progetto", "programma", "pubblico", "quartiere", "questione", "racconto", "ragione", "rapporto", "realtà", "regione", "relazione", "religione", "risorsa", "rispetto", "risposta", "risultato", "ritardo", "scatola", "scegliere", "scienza", "scoperta", "scrivere", "semplice", "servizio", "sistema", "società", "soluzione", "sorpresa", "sostanza", "spettacolo", "squadra", "stagione", "stazione", "storia", "strumento", "studiare", "successo", "telefono", "tempesta", "tendenza", "territorio", "tradizione", "traffico", "universo", "velocità", "verità", "vestito", "viaggio", "vittoria", "volontà", "zucchero",
-        "città", "caffè", "perché", "novità", "virtù", "libertà", "albero", "bambino", "cane", "gatto", "scuola", "tavolo", "sedia", "libro", "penna", "matita", "gomma", "quaderno", "zaino", "computer", "tastiera", "schermo", "mouse", "cuffie", "orologio", "occhiali", "maglietta", "pantaloni", "scarpe", "calzini", "giacca", "cappotto", "sciarpa", "cappello", "guanti", "ombrello", "borsa", "portafoglio", "chiavi", "bicicletta", "treno", "aereo", "nave", "strada", "piazza", "ponte", "fiume", "lago", "mare", "collina", "pianura", "foresta", "fiore", "erba", "foglia", "sole", "luna", "stella", "cielo", "nuvola", "pioggia", "neve", "vento", "fuoco", "acqua", "terra", "sabbia", "sasso", "roccia", "animale", "uccello", "pesce", "insetto", "ragno", "serpente", "rana", "cavallo", "mucca", "maiale", "pecora", "capra", "pollo", "anatra", "oca", "topo", "coniglio", "lupo", "orso", "leone", "tigre", "scimmia", "delfino", "balena", "squalo", "verità", "onestà", "carità", "felicità"
-    ];
+    let masterDictionary = [];
+    let itDictionary = [], enDictionary = [];
 
-    async function fetchExternalDictionary() {
-        const url = "https://raw.githubusercontent.com/Tn6rg3/antennavr/refs/heads/main/parole.txt";
+    async function loadDictionaries() {
+        await Promise.all([
+            fetchDictionary("https://raw.githubusercontent.com/Tn6rg3/antennavr/refs/heads/main/parole.txt", 'it'),
+            fetchDictionary("https://raw.githubusercontent.com/Tn6rg3/antennavr/refs/heads/main/words.txt", 'en')
+        ]);
+        updateDictionary();
+    }
+
+    async function fetchDictionary(url, lang) {
         try {
             const resp = await fetch(url);
             if (!resp.ok) throw new Error("GitHub offline");
             const text = await resp.text();
             const lines = text.split('\n').map(l => l.trim().toLowerCase()).filter(l => l.length > 2);
-            if (lines.length > 0) {
-                masterDictionary = lines;
-                console.log("Dizionario caricato da GitHub:", masterDictionary.length, "parole.");
-            }
+            if (lang === 'it') itDictionary = lines;
+            else enDictionary = lines;
         } catch(e) {
-            console.warn("Uso dizionario di backup interno:", e.message);
+            console.warn(`Errore dizionario ${lang}:`, e.message);
+            // Backup statico se fallisce
+            if (lang === 'it') itDictionary = ["abbandono", "amicizia", "antenna", "battaglia", "bellezza", "calcolo", "canzone", "coraggio", "destino", "energia", "fiducia", "geografia", "illusione", "linguaggio", "mistero", "natura", "obiettivo", "passione", "rispetto", "scienza", "universo", "viaggio", "vittoria"];
+            else enDictionary = ["abandon", "friendship", "antenna", "battle", "beauty", "calculation", "song", "courage", "destiny", "energy", "trust", "geography", "illusion", "language", "mystery", "nature", "objective", "passion", "respect", "science", "universe", "journey", "victory"];
         }
+    }
+
+    function updateDictionary() {
+        masterDictionary = (currentLang === 'en' && enDictionary.length > 0) ? enDictionary : itDictionary;
     }
 
     const morseDict = {
@@ -724,9 +743,10 @@
     let gameWords = [], currentWpm = 20, baseWpm = 20, currentTone = 600, totalScore = 0, currentStreak = 0, wordIndex = 0;
     let audioCtx, inputActive = false, gameRunning = false, activeTab = "room";
     let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
-    let isFixedSpeed = false;
+    let isFixedSpeed = false, isEasyMode = false;
     let usedReplay = false;
     let matchDetailsArray = [];
+    let currentLang = 'it';
 
     window.lastPlayedWordId = 0;
     window.lastSeenGuessId = 0;
@@ -822,8 +842,10 @@
                 else if (startParam.startsWith('room_')) { window.joinSpecificRoom(startParam.replace('room_', '')); }
             } else { showScreen('setupScreen'); }
 
-            // Caricamento dizionario esterno
-            fetchExternalDictionary();
+            // Caricamento dizionari e lingua
+            const savedLang = localStorage.getItem('gameLang');
+            if (savedLang) setLanguage(savedLang);
+            loadDictionaries();
 
             // Controlla attività e premia medaglie DOPO aver mostrato il menu
             checkActivityAndAwardMedals();
@@ -987,8 +1009,67 @@
         const isSingle = document.getElementById('gameTypeInput').value === 'single';
         document.getElementById('timeoutDiv').style.display = isSingle ? 'none' : 'block';
         document.getElementById('fixedSpeedContainer').style.display = isSingle ? 'flex' : 'none';
-        if(!isSingle) document.getElementById('fixedSpeedCheckbox').checked = false;
-        document.getElementById('createRoomBtn').textContent = isSingle ? "Gioca Subito" : "Inizia Partita Libera";
+        document.getElementById('easyModeContainer').style.display = isSingle ? 'flex' : 'none';
+        if(!isSingle) {
+            document.getElementById('fixedSpeedCheckbox').checked = false;
+            document.getElementById('easyModeCheckbox').checked = false;
+        }
+        document.getElementById('createRoomBtn').textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
+    }
+
+    const i18n = {
+        it: {
+            hello: "Ciao", lb: "Classifica", profile: "Profilo", activity: "Attività", conn_secure: "Connessione sicura in corso...",
+            game_type: "Tipo di Gioco:", mode: "Modalità:", wpm: "WPM Minimi:", words: "Gruppi/Nom.:", tone: "Hz:", timeout: "Scadenza Stanza (min):",
+            fixed: "Fissa", easy: "Semplice", create_team: "Fonda la tua Squadra", join: "Unisciti", leave: "Abbandona",
+            online_users: "Utenti Online", active_challenges: "Bacheca Sfide", global_chat: "Chat Globale",
+            standard: "Parole Comuni", callsign: "Nominativi (CW Freak)", pingpong: "Ping Pong",
+            privacy_hide: "Nascondi mio username Telegram", alias_label: "Il tuo Alias", save: "Salva",
+            rules_title: "Regolamento e Privacy", feedback: "Invia un Suggerimento",
+            daily: "Oggi", weekly: "Settimana", monthly: "Mese", medals: "Le Mie Medaglie",
+            finished: "Concluso", winner: "Vincitore", points: "Punti", history: "Storico Partite"
+        },
+        en: {
+            hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", conn_secure: "Secure connection in progress...",
+            game_type: "Game Type:", mode: "Mode:", wpm: "Minimum WPM:", words: "Groups/Call:", tone: "Tone:", timeout: "Room Timeout (min):",
+            fixed: "Fixed", easy: "Easy", create_team: "Found your Team", join: "Join", leave: "Leave",
+            online_users: "Online Users", active_challenges: "Challenge Board", global_chat: "Global Chat",
+            standard: "Common Words", callsign: "Callsigns (CW Freak)", pingpong: "Ping Pong",
+            privacy_hide: "Hide my Telegram username", alias_label: "Your Alias", save: "Save",
+            rules_title: "Rules and Privacy", feedback: "Send a Suggestion",
+            daily: "Today", weekly: "Week", monthly: "Month", medals: "My Medals",
+            finished: "Finished", winner: "Winner", points: "Points", history: "Match History"
+        }
+    };
+
+    window.toggleLanguage = function() {
+        const newLang = currentLang === 'it' ? 'en' : 'it';
+        setLanguage(newLang);
+        updateDictionary();
+        showToast(newLang === 'it' ? "Lingua: Italiano" : "Language: English");
+    }
+
+    function setLanguage(lang) {
+        currentLang = lang;
+        localStorage.setItem('gameLang', lang);
+        const t = i18n[lang];
+        document.getElementById('langBtn').textContent = lang.toUpperCase();
+
+        // Setup Screen
+        document.getElementById('txt_hello').textContent = t.hello;
+        document.getElementById('txt_lb_btn').textContent = "🏆 " + t.lb;
+        document.getElementById('txt_profile_btn').textContent = "👤 " + t.profile;
+        document.getElementById('txt_act_btn').textContent = "🏅 " + t.activity;
+
+        // Settings labels (placeholder approach or direct)
+        document.getElementById('txt_wpm_label').textContent = t.wpm;
+        document.getElementById('txt_words_label').textContent = t.words;
+        document.getElementById('txt_tone_label').textContent = t.tone;
+        document.getElementById('txt_fixed_speed').textContent = t.fixed;
+        document.getElementById('txt_easy_mode').textContent = t.easy;
+        document.getElementById('txt_room_timeout').textContent = t.timeout;
+
+        checkGameTypeUI();
     }
 
     document.getElementById('gameModeInput').addEventListener('change', (e) => {
@@ -1265,6 +1346,7 @@
         currentTone = parseInt(document.getElementById('toneInput').value);
         let timerMins = Math.max(1, parseInt(document.getElementById('roomTimerInput').value));
         let setFixedSpeed = document.getElementById('fixedSpeedCheckbox').checked;
+        isEasyMode = document.getElementById('easyModeCheckbox').checked;
 
         roomCode = Math.floor(1000 + Math.random() * 9000).toString();
         gameWords = getGameWords(requestedWordCount, currentMode);
@@ -1582,8 +1664,22 @@
         if (currentMode === 'pingpong') return;
         if (wordIndex >= requestedWordCount) { finishGame(); return; }
         if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
-        playMorseAudio(gameWords[wordIndex].toUpperCase(), currentWpm);
-        inputActive = true; document.getElementById('permanentGameInput').focus();
+
+        inputActive = true; usedReplay = false;
+        const currentWord = gameWords[wordIndex].toUpperCase();
+
+        // Modalità Facilitata: Caratteri in ordine sparso
+        const hintEl = document.getElementById('easyModeHint');
+        if (isEasyMode && isSinglePlayer) {
+            const shuffled = currentWord.split('').sort(() => 0.5 - Math.random()).join(' ');
+            hintEl.textContent = shuffled;
+            hintEl.style.display = 'block';
+        } else {
+            hintEl.style.display = 'none';
+        }
+
+        playMorseAudio(currentWord, currentWpm);
+        document.getElementById('permanentGameInput').focus();
     }
 
     function startCountdownSequence() {
