@@ -304,7 +304,11 @@ async function loadRegolamento() {
     document.getElementById('sendLobbyChatBtn').addEventListener('click', () => {
         const input = document.getElementById('lobbyChatInput');
         const txt = input.value.trim(); if (!txt || !roomCode) return;
-        db.ref(`rooms/${roomCode}/chat`).push({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+        
+        const msgRef = db.ref(`rooms/${roomCode}/chat`).push();
+        msgRef.onDisconnect().remove(); // Cancella automaticamente alla disconnessione
+        
+        msgRef.set({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         input.value = '';
     });
     document.getElementById('lobbyChatInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('sendLobbyChatBtn').click(); });
@@ -375,11 +379,17 @@ async function loadRegolamento() {
     document.getElementById('sendChatBtn').addEventListener('click', () => {
         const txt = document.getElementById('chatInput').value.trim(); if (!txt) return;
         const currentUsername = myPrivacy ? "" : tgUsername;
+        
+        let msgRef;
         if (activeChatContext === 'room' && roomCode) {
-            db.ref(`rooms/${roomCode}/chat`).push({ name: myName, username: currentUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            msgRef = db.ref(`rooms/${roomCode}/chat`).push();
         } else {
-            db.ref('globalChat').push({ name: myName, username: currentUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+            msgRef = db.ref('globalChat').push();
         }
+
+        msgRef.onDisconnect().remove(); // Cancella automaticamente alla disconnessione
+        
+        msgRef.set({ name: myName, username: currentUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         document.getElementById('chatInput').value = '';
     });
     document.getElementById('chatInput').addEventListener('keypress', function (e) { if (e.key === 'Enter') document.getElementById('sendChatBtn').click(); });
