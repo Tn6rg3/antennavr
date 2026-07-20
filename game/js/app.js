@@ -378,7 +378,7 @@
         it: {
             hello: "Ciao", lb: "Classifica", profile: "Profilo", activity: "Attività", conn_secure: "Connessione sicura in corso...",
             free_challenge: "⚡ Sfida Libera", play_solo: "Gioca da Solo o Sfida un Amico",
-            game_type: "Tipo di Gioco:", mode: "Modalità:", wpm: "WPM:", words: "Test:", tone: "Tono:", timeout: "Scadenza Stanza (min):",
+            game_type: "Tipo di Gioco:", mode: "Modalità:", wpm: "WPM:", words: "Parole:", tone: "Tono:", timeout: "Scadenza Stanza (min):",
             opt_multi: "Multiplayer (con Lobby)", opt_single: "Singleplayer (Immediata)",
             opt_std: "Parole Comuni", opt_call: "Nominativi (CW Freak)", opt_pp: "Ping Pong",
             fixed: "Fissa", easy: "Semplice", create_room: "Inizia Partita Libera", play_now: "Gioca Subito",
@@ -405,7 +405,7 @@
         en: {
             hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", conn_secure: "Secure connection in progress...",
             free_challenge: "⚡ Free Challenge", play_solo: "Play Solo or Challenge a Friend",
-            game_type: "Game Type:", mode: "Mode:", wpm: "WPM:", words: "Test:", tone: "Tone:", timeout: "Room Timeout (min):",
+            game_type: "Game Type:", mode: "Mode:", wpm: "WPM:", words: "Words:", tone: "Tone:", timeout: "Room Timeout (min):",
             opt_multi: "Multiplayer (Lobby)", opt_single: "Singleplayer (Immediate)",
             opt_std: "Common Words", opt_call: "Callsigns (CW Freak)", opt_pp: "Ping Pong",
             fixed: "Fixed", easy: "Easy", create_room: "Start Free Match", play_now: "Play Now",
