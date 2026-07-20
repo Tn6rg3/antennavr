@@ -36,12 +36,12 @@
     let itDictionary = [], enDictionary = [];
 
     async function loadDictionaries() {
-        await Promise.all([
-            fetchDictionary("https://raw.githubusercontent.com/Tn6rg3/antennavr/refs/heads/main/parole.txt", 'it'),
-            fetchDictionary("https://raw.githubusercontent.com/Tn6rg3/antennavr/refs/heads/main/words.txt", 'en')
-        ]);
-        updateDictionary();
-    }
+    await Promise.all([
+        fetchDictionary("parole.txt", 'it'),
+        fetchDictionary("words.txt", 'en')
+    ]);
+    updateDictionary();
+}
 
     async function fetchDictionary(url, lang) {
         try {
