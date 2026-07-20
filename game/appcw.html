@@ -71,27 +71,30 @@
 
     <div class="box-panel">
         <h3 id="txt_play_solo_title">Gioca da Solo o Sfida un Amico</h3>
-        <div class="settings-row full-width">
+
+        <div class="settings-row">
             <div>
-                <label id="txt_game_type_label">Tipo di Gioco:</label>
+                <label id="txt_game_type_label">Tipo:</label>
                 <select id="gameTypeInput">
-                    <option value="multi" id="txt_opt_multi">Multiplayer (con Lobby)</option>
-                    <option value="single" id="txt_opt_single">Singleplayer (Immediata)</option>
+                    <option value="multi" id="txt_opt_multi">Multi</option>
+                    <option value="single" id="txt_opt_single">Solo</option>
                 </select>
             </div>
             <div>
-                <label id="txt_mode_label">Modalità:</label>
+                <label id="txt_mode_label">Modo:</label>
                 <select id="gameModeInput">
-                    <option value="standard" id="txt_opt_std">Parole Comuni</option>
-                    <option value="callsign" id="txt_opt_call">Nominativi (CW Freak)</option>
-                    <option value="pingpong" id="txt_opt_pp">Ping Pong</option>
+                    <option value="standard" id="txt_opt_std">Parole</option>
+                    <option value="callsign" id="txt_opt_call">Nom.</option>
+                    <option value="pingpong" id="txt_opt_pp">P.Pong</option>
                 </select>
             </div>
         </div>
+
         <div class="settings-row">
-            <div style="width:31%"><label id="txt_wpm_label">WPM:</label> <input type="number" id="startWpmInput" value="20" min="5" max="50"></div>
-            <div style="width:31%"><label id="txt_words_label">Test:</label> <input type="number" id="wordCountInput" value="10" min="3" max="100"></div>
-            <div style="width:31%"><label id="txt_tone_label">Tono:</label> <input type="number" id="toneInput" value="600" min="400" max="1000" step="50"></div>
+            <div><label id="txt_wpm_label">WPM</label> <input type="number" id="startWpmInput" value="20" min="5" max="50"></div>
+            <div><label id="txt_words_label">Test</label> <input type="number" id="wordCountInput" value="10" min="3" max="100"></div>
+            <div><label id="txt_tone_label">Tono</label> <input type="number" id="toneInput" value="600" min="400" max="1000" step="50"></div>
+            <div id="timeoutDiv" style="display: none;"><label id="txt_room_timeout">Scad.</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
         </div>
 
         <div style="display:flex; justify-content:center; gap:15px; margin-top:5px;">
@@ -103,10 +106,6 @@
             </label>
         </div>
 
-        <div id="timeoutDiv" style="margin-top: 5px; display: none;">
-            <label id="txt_room_timeout">Scadenza Stanza (min):</label>
-            <input type="number" id="roomTimerInput" value="5" min="1" max="60">
-        </div>
         <button id="createRoomBtn" disabled class="btn-success">Inizia Partita Libera</button>
     </div>
 
