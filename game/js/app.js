@@ -43,6 +43,31 @@
     updateDictionary();
 }
 
+async function loadRegolamento() {
+    try {
+        const response = await fetch('regolamento.html');
+        if (!response.ok) throw new Error("Errore nel caricamento del file");
+        const htmlTesto = await response.text();
+        document.getElementById('regolamentoContainer').innerHTML = htmlTesto;
+        
+        // Ricolleghiamo il bottone feedback che ora è nel file esterno
+        const btnFeedback = document.getElementById('sendFeedbackBtn');
+        if (btnFeedback) {
+            btnFeedback.onclick = function() {
+                const text = encodeURIComponent("💡 Suggerimento per Sfida Telegrafia: \n\n[Scrivi qui il tuo messaggio...]");
+                const shareUrl = `https://t.me/share/url?text=${text}`;
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
+                    window.Telegram.WebApp.openTelegramLink(shareUrl);
+                } else {
+                    window.open(shareUrl, '_blank');
+                }
+            };
+        }
+    } catch (e) {
+        document.getElementById('regolamentoContainer').innerHTML = "<p style='color:red; text-align:center;'>Impossibile caricare il regolamento.</p>";
+        console.warn("Errore caricamento regolamento:", e);
+    }
+}
     async function fetchDictionary(url, lang) {
         try {
             const resp = await fetch(url);
@@ -186,6 +211,10 @@
             listenToOnlineUsers();
             listenToInvites();
             listenToInviteAccepted();
+          
+            // CARICA IL REGOLAMENTO
+            loadRegolamento();
+            
         }).catch(e => {
             document.getElementById('loadingText').innerHTML = "<b style='color:red'>Errore di Connessione.</b>";
         });
