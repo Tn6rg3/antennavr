@@ -1,4 +1,4 @@
- const BOT_USERNAME = "cwappgame_bot";
+const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
 
     window.Telegram.WebApp.ready();
@@ -2166,15 +2166,26 @@ async function loadRegolamento() {
             statsDiv.appendChild(speedRow);
             card.appendChild(statsDiv);
 
+            const isMe = (p.id === myId);
             const hintDiv = document.createElement('div');
             hintDiv.className = 'h2h-hint';
-            hintDiv.textContent = currentLang === 'it' ? 'Clicca per dettagli' : 'Click for details';
+            if (isMe) {
+                hintDiv.textContent = currentLang === 'it' ? 'Clicca per dettagli' : 'Click for details';
+            } else {
+                hintDiv.textContent = currentLang === 'it' ? 'Dettagli privati' : 'Details are private';
+                hintDiv.style.opacity = "0.5";
+            }
             card.appendChild(hintDiv);
 
             card.onclick = () => {
+                if (!isMe) {
+                    showToast(currentLang === 'it' ? "Puoi vedere solo i tuoi dettagli." : "You can only view your own details.");
+                    return;
+                }
+
                 if (p.matchDetails && p.matchDetails.length > 0) {
                     showPlayerDetailsModal(p.name, p.matchDetails);
-                } else if (p.id === myId && matchDetailsArray.length > 0) {
+                } else if (isMe && matchDetailsArray.length > 0) {
                     showPlayerDetailsModal(p.name, matchDetailsArray);
                 } else {
                     showToast(currentLang === 'it' ? "Dettagli non disponibili" : "Details not available");
