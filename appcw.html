@@ -1515,6 +1515,7 @@
     }
 
     function joinRoomLogic(isReconnect = false) {
+        gameRunning = false; // <-- AGGIUNGI QUESTA RIGA PER SBLOCCARE LE PARTITE
         const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
         playerRef.once('value', snapshot => {
             if (snapshot.val()?.finished) { showScreen('leaderboardScreen'); activeTab="room"; showLeaderboardTab('tabRoomBtn'); return; }
@@ -1623,9 +1624,10 @@
         }
 
         // Avvio automatico per tornei/pingpong quando TUTTI sono pronti (chiesto al primo della lista per evitare update doppi)
-        if (allReady && isTrnOrPP && pKeys[0] === myId) {
-            db.ref(`rooms/${roomCode}`).update({ status: 'countdown', expiresAt: null });
-        }
+        // Avvio automatico per tornei/pingpong quando TUTTI sono pronti
+if (allReady && isTrnOrPP && (pKeys[0] === myId || amIHost)) {
+    db.ref(`rooms/${roomCode}`).update({ status: 'countdown', expiresAt: null });
+}
     }
 
     // Tasto "Sono Pronto"
