@@ -1883,6 +1883,11 @@ async function loadRegolamento() {
             if (allFinished && roomData.status !== 'finished' && Object.keys(players).length > 0) {
                 db.ref(`rooms/${roomCode}/status`).set('finished');
 
+                // Salva il match nel database globale se è Multiplayer o PingPong
+                if (roomData.type === 'multi' || currentMode === 'pingpong') {
+                    saveMatchToGlobalHistory(players, roomData);
+                }
+
                 if (roomCode.startsWith("TRN_")) {
                     const matchId = roomCode.replace("TRN_", "");
                     let highestScore = -1, winnerTeamId = null;
@@ -2052,8 +2057,56 @@ async function loadRegolamento() {
         modal.style.display = 'flex';
     }
 
+    function saveMatchToGlobalHistory(players, roomData) {
+        // Solo l'host salva per evitare duplicati
+        if (myId !== roomData.hostId) return;
+
+        const matchId = Date.now().toString();
+        const modePath = currentMode === 'pingpong' ? 'pingpong' : 'standard_multi';
+        const subPath = roomData.wordCount || 'unknown';
+
+        const matchData = {
+            players: Object.entries(players).map(([id, data]) => ({
+                id,
+                name: data.name,
+                username: data.username || "",
+                score: data.score || 0,
+                wpm: data.wpm || 0,
+                matchDetails: data.matchDetails || []
+            })),
+            mode: currentMode,
+            wordCount: roomData.wordCount,
+            date: new Date().toLocaleDateString('it-IT'),
+            ts: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        db.ref(`leaderboard/recent_matches/${modePath}/${subPath}/${matchId}`).set(matchData);
+    }
+
     function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+
+        // Per Ping Pong e Multiplayer Standard, mostriamo le SFIDE RECENTI se richiesto (o di default)
+        if (tabType === 'pingpong' || tabType === 'standard_multi') {
+            const modePath = tabType === 'pingpong' ? 'pingpong' : 'standard_multi';
+            db.ref(`leaderboard/recent_matches/${modePath}`).once('value', snapshot => {
+                let matches = [];
+                snapshot.forEach(wordCountNode => {
+                    const wc = wordCountNode.key;
+                    if (filterWordCount !== 'all' && wc !== filterWordCount) return;
+
+                    wordCountNode.forEach(matchNode => {
+                        matches.push(matchNode.val());
+                    });
+                });
+
+                // Ordina per data (più recenti prima)
+                matches.sort((a,b) => (b.ts || 0) - (a.ts || 0));
+                renderMatchesHistoryHTML(matches.slice(0, 30), container);
+            });
+            return;
+        }
+
         if (tabType === 'callsign') {
             db.ref(`leaderboard/callsign/global`).orderByChild('score').limitToLast(50).once('value', snapshot => {
                 let players = []; snapshot.forEach(child => { players.push(child.val()); });
@@ -2120,6 +2173,73 @@ async function loadRegolamento() {
                 renderPlayersListHTML(players, container, true);
             });
         }
+    }
+
+    function renderMatchesHistoryHTML(matches, container) {
+        container.innerHTML = '';
+        if (matches.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Nessuna sfida recente trovata.</p>';
+            return;
+        }
+
+        matches.forEach(match => {
+            const matchWrapper = document.createElement('div');
+            matchWrapper.style.marginBottom = "25px";
+            matchWrapper.style.borderBottom = "1px dashed var(--hint-color)";
+            matchWrapper.style.paddingBottom = "15px";
+
+            const info = document.createElement('div');
+            info.style.textAlign = 'center';
+            info.style.fontSize = '0.8em';
+            info.style.color = 'var(--hint-color)';
+            info.style.marginBottom = '8px';
+            info.innerHTML = `📅 ${match.date} - ${match.wordCount} Stringhe`;
+            matchWrapper.appendChild(info);
+
+            const h2h = document.createElement('div');
+            h2h.className = 'h2h-container';
+
+            // Ordiniamo per punteggio decrescente per trovare il vincitore
+            const players = [...match.players].sort((a,b) => b.score - a.score);
+            const maxScore = players[0].score;
+
+            match.players.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'h2h-card' + (p.score === maxScore && maxScore > 0 ? ' winner' : '');
+
+                const escName = escapeHTML(p.name);
+                const isMe = (p.id === myId);
+                const meLabel = isMe ? ` <small>(${currentLang==='it'?'Tu':'You'})</small>` : '';
+
+                card.innerHTML = `
+                    <div class="h2h-name">${escName}${meLabel}</div>
+                    <div class="h2h-stats">
+                        <div class="h2h-stat-row">
+                            <span>Punti:</span>
+                            <span class="h2h-val" style="color:#4caf50;">${p.score}</span>
+                        </div>
+                        <div class="h2h-stat-row">
+                            <span>Velocità:</span>
+                            <span class="h2h-val" style="color:var(--link-color);">${p.wpm} WPM</span>
+                        </div>
+                    </div>
+                    <div class="h2h-hint">${currentLang==='it'?'Clicca per dettagli':'Click for details'}</div>
+                `;
+
+                card.onclick = () => {
+                    if (p.matchDetails && p.matchDetails.length > 0) {
+                        showPlayerDetailsModal(p.name, p.matchDetails);
+                    } else {
+                        showToast(currentLang==='it'?"Dettagli non disponibili":"Details not available");
+                    }
+                };
+
+                h2h.appendChild(card);
+            });
+
+            matchWrapper.appendChild(h2h);
+            container.appendChild(matchWrapper);
+        });
     }
 
     function renderPlayersListHTML(players, container, showWordCount, isTeam = false) {
