@@ -1,4 +1,4 @@
-    const BOT_USERNAME = "cwappgame_bot";
+const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
 
     window.Telegram.WebApp.ready();
@@ -25,6 +25,9 @@
     let activeChatContext = null;
     let currentInviterId = null;
     let isChallenging = false;
+    let isRejoining = false;
+
+    const STORAGE_ROOM_KEY = "cwgame_last_room";
 
     // --- VARIABILI SQUADRE E TORNEI ---
     let myTeamId = null, isTeamCaptain = false;
@@ -194,7 +197,23 @@ async function loadRegolamento() {
             if (startParam) {
                 if (startParam.startsWith('team_')) { processTeamInvite(startParam.replace('team_', '')); }
                 else if (startParam.startsWith('room_')) { window.joinSpecificRoom(startParam.replace('room_', '')); }
-            } else { showScreen('setupScreen'); }
+            } else {
+                const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
+                if (lastRoom) {
+                    db.ref(`rooms/${lastRoom}`).once('value', snap => {
+                        if (snap.exists() && snap.val().status !== 'finished') {
+                            roomCode = lastRoom;
+                            isRejoining = true;
+                            joinRoomLogic(false);
+                        } else {
+                            localStorage.removeItem(STORAGE_ROOM_KEY);
+                            showScreen('setupScreen');
+                        }
+                    });
+                } else {
+                    showScreen('setupScreen');
+                }
+            }
 
             // Caricamento dizionari e lingua
             const savedLang = localStorage.getItem('gameLang');
@@ -886,6 +905,9 @@ async function loadRegolamento() {
         let targetScreen = 'setupScreen';
         const amIHost = (myId === roomHostId);
 
+        localStorage.removeItem(STORAGE_ROOM_KEY);
+        isRejoining = false;
+
         // Riporta lo stato utente online (esce dalla partita)
         db.ref(`presence/${myId}`).update({ status: 'online' });
 
@@ -924,23 +946,41 @@ async function loadRegolamento() {
 
     function joinRoomLogic(isReconnect = false) {
         gameRunning = false;
+        localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
 
         // Imposta stato giocatore come in partita (occupato)
         db.ref(`presence/${myId}`).update({ status: 'playing' });
 
         const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
         playerRef.once('value', snapshot => {
-            if (snapshot.val()?.finished) { showScreen('leaderboardScreen'); activeTab="room"; showLeaderboardTab('tabRoomBtn'); return; }
+            const playerData = snapshot.val();
+            if (playerData?.finished) {
+                showScreen('leaderboardScreen'); activeTab="room";
+                showLeaderboardTab('tabRoomBtn');
+                localStorage.removeItem(STORAGE_ROOM_KEY);
+                return;
+            }
+
+            if (isRejoining && playerData) {
+                totalScore = playerData.score || 0;
+                wordIndex = playerData.wordIndex || 0;
+                matchDetailsArray = playerData.matchDetails || [];
+                // Ricostruisci tabella se necessario (verrà fatto in gameArea)
+            }
 
             showScreen('lobbyScreen');
             document.getElementById('lobbyTitleText').textContent = roomCode.startsWith("TRN_") ? i18n[currentLang].lobby_trn : i18n[currentLang].lobby_free;
             document.getElementById('permanentGameInput').blur();
 
-            playerRef.onDisconnect().remove();
+            playerRef.onDisconnect().update({ online: false });
 
             // Inseriamo anche ready: false di default
             const currentUsername = myPrivacy ? "" : tgUsername;
-            if (!snapshot.val()) playerRef.set({ name: myName, username: currentUsername, score: 0, wpm: 0, finished: false, teamId: myTeamId, ready: false });
+            if (!playerData) {
+                playerRef.set({ name: myName, username: currentUsername, score: 0, wpm: 0, finished: false, teamId: myTeamId, ready: false, online: true });
+            } else {
+                playerRef.update({ online: true });
+            }
 
             listenToChat();
             if (currentRoomListener && !isReconnect) currentRoomListener.off();
@@ -956,6 +996,12 @@ async function loadRegolamento() {
                 currentMode = roomData.mode; requestedWordCount = roomData.wordCount; isSinglePlayer = roomData.type === 'single';
                 isFixedSpeed = roomData.fixedSpeed || false;
                 roomHostId = roomData.hostId;
+
+                if (roomData.status === 'playing' && isRejoining && !gameRunning) {
+                    currentWpm = roomData.wpm; baseWpm = roomData.wpm; currentTone = roomData.tone;
+                    if (roomData.words) gameWords = roomData.words;
+                    resumeGameSequence(); return;
+                }
 
                 if (roomData.status === 'countdown' && !gameRunning) {
                     currentWpm = roomData.wpm; baseWpm = roomData.wpm; currentTone = roomData.tone;
@@ -1160,7 +1206,14 @@ async function loadRegolamento() {
             document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
             document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
 
-            if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm });
+            if (roomCode) {
+                db.ref(`rooms/${roomCode}/players/${myId}`).update({
+                    score: totalScore,
+                    wpm: currentWpm,
+                    wordIndex: wordIndex + 1,
+                    matchDetails: matchDetailsArray
+                });
+            }
             usedReplay = false;
 
             if (currentMode === 'pingpong') {
@@ -1221,6 +1274,11 @@ async function loadRegolamento() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (currentRoomListener) currentRoomListener.off();
 
+        // Host aggiorna lo status a 'playing' dopo il countdown
+        if (myId === roomHostId) {
+            // Lo faremo alla fine del countdown per permettere il rejoining
+        }
+
         // LOGICA ABBANDONO: Monitora se i giocatori in partita diminuiscono
         if (!isSinglePlayer) {
             db.ref(`rooms/${roomCode}/players`).once('value', snap => {
@@ -1229,11 +1287,22 @@ async function loadRegolamento() {
                 if (gamePlayersListener) db.ref(`rooms/${roomCode}/players`).off('value', gamePlayersListener);
                 gamePlayersListener = db.ref(`rooms/${roomCode}/players`).on('value', playersSnap => {
                     if (!gameRunning) return;
-                    const currentPCount = playersSnap.exists() ? Object.keys(playersSnap.val()).length : 0;
+                    const players = playersSnap.val() || {};
+                    const currentPCount = Object.keys(players).length;
+
+                    // Controlliamo quanti sono REALMENTE usciti (non solo offline)
+                    // Se un giocatore viene rimosso del tutto dalla stanza, allora è abbandono
                     if (gameStartPlayerCount > 0 && currentPCount < gameStartPlayerCount) {
-                        alert("Un giocatore ha abbandonato la partita. Ritorno al menu principale.");
-                        gameRunning = false;
-                        exitRoomCleanly(false);
+                         // Aspettiamo un attimo per vedere se è una rimozione definitiva
+                         setTimeout(() => {
+                            db.ref(`rooms/${roomCode}/players`).once('value', s => {
+                                if (gameRunning && Object.keys(s.val() || {}).length < gameStartPlayerCount) {
+                                    alert("Un giocatore ha abbandonato la partita definitivamente. Ritorno al menu principale.");
+                                    gameRunning = false;
+                                    exitRoomCleanly(false);
+                                }
+                            });
+                         }, 5000);
                     }
                 });
             });
@@ -1265,6 +1334,11 @@ async function loadRegolamento() {
             if (count > 1) { count--; document.getElementById('countdownNumber').textContent = count; playBeep(600, 0.1); }
             else {
                 clearInterval(interval);
+
+                if (myId === roomHostId) {
+                    db.ref(`rooms/${roomCode}`).update({ status: 'playing' });
+                }
+
                 document.getElementById('countdownNumber').textContent = (currentLang === 'en' ? 'GO!' : 'VIA!');
                 playBeep(800, 0.3);
                 setTimeout(() => {
@@ -1272,75 +1346,7 @@ async function loadRegolamento() {
                     showScreen('gameArea');
 
                     if (currentMode === 'pingpong') {
-                        pingPongListener = db.ref(`rooms/${roomCode}/pingpong`).on('value', snap => {
-                            if (!gameRunning) return;
-                            const ppData = snap.val(); if (!ppData) return;
-
-                            if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
-                                window.lastSeenGuessId = ppData.lastGuess.id;
-
-                                const tr = document.createElement('tr');
-
-                                const tdTyped = document.createElement('td');
-                                tdTyped.textContent = ppData.lastGuess.typed || '';
-
-                                const tdReal = document.createElement('td');
-                                renderDiffSecure(tdReal, ppData.lastGuess.real, ppData.lastGuess.typed || '');
-
-                                const tdPoints = document.createElement('td');
-                                tdPoints.style.fontWeight = 'bold';
-                                tdPoints.style.color = ppData.lastGuess.points > 0 ? "#4caf50" :
-                                                       (ppData.lastGuess.points === 0 && ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
-                                tdPoints.textContent = ppData.lastGuess.points;
-
-                                tr.appendChild(tdTyped);
-                                tr.appendChild(tdReal);
-                                tr.appendChild(tdPoints);
-
-                                document.getElementById('tableBody').appendChild(tr);
-                                const tableWrapper = document.getElementById('tableWrapper');
-                                tableWrapper.scrollTop = tableWrapper.scrollHeight;
-                            }
-
-                            if (ppData.wordsPlayed >= requestedWordCount) { finishGame(); return; }
-
-                            let amISender = (ppData.senderId === myId);
-
-                            if (amISender) {
-                                if (!ppData.word) {
-                                    document.getElementById('pingPongSendArea').style.display = 'flex';
-                                    document.getElementById('gameInputArea').style.display = 'none';
-                                    document.getElementById('pingPongWordToSend').value = '';
-                                    setTimeout(() => document.getElementById('pingPongWordToSend').focus(), 100);
-                                } else {
-                                    document.getElementById('pingPongSendArea').style.display = 'none';
-                                    document.getElementById('gameInputArea').style.display = 'flex';
-                                    document.getElementById('permanentGameInput').disabled = true;
-                                    document.getElementById('permanentGameInput').placeholder = "Avversario in decodifica...";
-                                    document.getElementById('permanentGameInput').value = "";
-                                }
-                            } else {
-                                document.getElementById('pingPongSendArea').style.display = 'none';
-                                document.getElementById('gameInputArea').style.display = 'flex';
-
-                                if (ppData.word && ppData.wordId > window.lastPlayedWordId) {
-                                    window.lastPlayedWordId = ppData.wordId;
-                                    gameWords[wordIndex] = ppData.word;
-
-                                    document.getElementById('permanentGameInput').disabled = false;
-                                    document.getElementById('permanentGameInput').placeholder = "Decodifica e scrivi...";
-                                    document.getElementById('permanentGameInput').value = "";
-                                    setTimeout(() => document.getElementById('permanentGameInput').focus(), 100);
-                                    inputActive = true;
-                                    setTimeout(() => playMorseAudio(ppData.word.toUpperCase(), currentWpm), 500);
-                                } else if (!ppData.word) {
-                                    document.getElementById('permanentGameInput').disabled = true;
-                                    document.getElementById('permanentGameInput').placeholder = "In attesa dell'avversario...";
-                                    document.getElementById('permanentGameInput').value = "";
-                                    inputActive = false;
-                                }
-                            }
-                        });
+                        setupPingPongListener();
                     } else {
                         setTimeout(() => document.getElementById('permanentGameInput').focus(), 200);
                         setTimeout(() => { if (gameRunning) playNextWord(); }, 800);
@@ -1350,9 +1356,111 @@ async function loadRegolamento() {
         }, 1000);
     }
 
+    function resumeGameSequence() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        gameRunning = true;
+        isRejoining = false; // Reset flag after use
+
+        document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
+        document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
+
+        // Ricostruisci tabella
+        const body = document.getElementById('tableBody');
+        body.innerHTML = "";
+        matchDetailsArray.forEach(row => {
+            const tr = document.createElement('tr');
+            let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
+            tr.innerHTML = `<td>${escapeHTML(row.typed)}</td><td><b>${escapeHTML(row.real)}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
+            body.appendChild(tr);
+        });
+
+        showScreen('gameArea');
+        if (currentMode === 'pingpong') {
+            setupPingPongListener();
+        } else {
+            setTimeout(() => document.getElementById('permanentGameInput').focus(), 200);
+            setTimeout(() => { if (gameRunning) playNextWord(); }, 800);
+        }
+    }
+
+    function setupPingPongListener() {
+        if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); }
+        pingPongListener = db.ref(`rooms/${roomCode}/pingpong`).on('value', snap => {
+            if (!gameRunning) return;
+            const ppData = snap.val(); if (!ppData) return;
+
+            if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
+                window.lastSeenGuessId = ppData.lastGuess.id;
+
+                const tr = document.createElement('tr');
+                const tdTyped = document.createElement('td');
+                tdTyped.textContent = ppData.lastGuess.typed || '';
+
+                const tdReal = document.createElement('td');
+                renderDiffSecure(tdReal, ppData.lastGuess.real, ppData.lastGuess.typed || '');
+
+                const tdPoints = document.createElement('td');
+                tdPoints.style.fontWeight = 'bold';
+                tdPoints.style.color = ppData.lastGuess.points > 0 ? "#4caf50" :
+                                       (ppData.lastGuess.points === 0 && ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
+                tdPoints.textContent = ppData.lastGuess.points;
+
+                tr.appendChild(tdTyped);
+                tr.appendChild(tdReal);
+                tr.appendChild(tdPoints);
+
+                document.getElementById('tableBody').appendChild(tr);
+                const tableWrapper = document.getElementById('tableWrapper');
+                tableWrapper.scrollTop = tableWrapper.scrollHeight;
+            }
+
+            if (ppData.wordsPlayed >= requestedWordCount) { finishGame(); return; }
+
+            let amISender = (ppData.senderId === myId);
+
+            if (amISender) {
+                if (!ppData.word) {
+                    document.getElementById('pingPongSendArea').style.display = 'flex';
+                    document.getElementById('gameInputArea').style.display = 'none';
+                    document.getElementById('pingPongWordToSend').value = '';
+                    setTimeout(() => document.getElementById('pingPongWordToSend').focus(), 100);
+                } else {
+                    document.getElementById('pingPongSendArea').style.display = 'none';
+                    document.getElementById('gameInputArea').style.display = 'flex';
+                    document.getElementById('permanentGameInput').disabled = true;
+                    document.getElementById('permanentGameInput').placeholder = "Avversario in decodifica...";
+                    document.getElementById('permanentGameInput').value = "";
+                }
+            } else {
+                document.getElementById('pingPongSendArea').style.display = 'none';
+                document.getElementById('gameInputArea').style.display = 'flex';
+
+                if (ppData.word && ppData.wordId > window.lastPlayedWordId) {
+                    window.lastPlayedWordId = ppData.wordId;
+                    gameWords[wordIndex] = ppData.word;
+
+                    document.getElementById('permanentGameInput').disabled = false;
+                    document.getElementById('permanentGameInput').placeholder = "Decodifica e scrivi...";
+                    document.getElementById('permanentGameInput').value = "";
+                    setTimeout(() => document.getElementById('permanentGameInput').focus(), 100);
+                    inputActive = true;
+                    setTimeout(() => playMorseAudio(ppData.word.toUpperCase(), currentWpm), 500);
+                } else if (!ppData.word) {
+                    document.getElementById('permanentGameInput').disabled = true;
+                    document.getElementById('permanentGameInput').placeholder = "In attesa dell'avversario...";
+                    document.getElementById('permanentGameInput').value = "";
+                    inputActive = false;
+                }
+            }
+        });
+    }
+
     function finishGame() {
         gameRunning = false; inputActive = false; document.getElementById('permanentGameInput').blur();
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
+
+        localStorage.removeItem(STORAGE_ROOM_KEY);
+        isRejoining = false;
 
         showScreen('leaderboardScreen');
 
