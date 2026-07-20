@@ -174,7 +174,7 @@
         </div>
     </div>
 
-    <p id="loadingText" style="margin-bottom: 5px;" data-i18n="conn_secure">Connessione sicura in corso...</p>
+    <p id="loadingText" style="margin-bottom: 5px;">Connessione sicura in corso...</p>
 
     <!-- SEZIONE TORNEI -->
     <div style="width: 100%; text-align: center; margin-bottom: 0;">
@@ -300,14 +300,14 @@
 
     <!-- VISTA: L'utente NON ha una squadra (si trova nel tab "La mia Squadra") -->
     <div id="noTeamView" style="width: 100%; display: none; flex-direction: column; flex-grow: 1; min-height: 0;">
-        <p style="text-align:center; font-size:0.9em; margin-top:0;">Per partecipare ai tornei devi essere in una squadra.</p>
+        <p style="text-align:center; font-size:0.9em; margin-top:0;" id="txt_must_be_in_team">Per partecipare ai tornei devi essere in una squadra.</p>
         <div class="box-panel" style="flex-shrink: 0;">
-            <h3>Fonda la tua Squadra</h3>
+            <h3 id="txt_found_team_title">Fonda la tua Squadra</h3>
             <input type="text" id="newTeamName" placeholder="Scegli un nome..." maxlength="20">
             <button id="createTeamBtn" class="btn-champ">Crea Squadra</button>
         </div>
         <div class="box-panel" style="flex-grow: 1; min-height: 0;">
-            <h3>Squadre con iscrizioni aperte</h3>
+            <h3 id="txt_open_teams_title">Squadre con iscrizioni aperte</h3>
             <ul id="openTeamsList" class="data-list"></ul>
         </div>
     </div>
@@ -343,7 +343,7 @@
     <!-- TAB 2: Tutte le Squadre -->
     <div id="allTeamsArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
         <div class="box-panel" style="flex-grow:1; min-height:0; overflow-y:auto;">
-            <h3 style="margin-top:0;">Elenco Globale Squadre</h3>
+            <h3 style="margin-top:0;" id="txt_global_teams_title">Elenco Globale Squadre</h3>
             <ul id="globalAllTeamsList" class="data-list"></ul>
         </div>
     </div>
@@ -353,16 +353,16 @@
 
         <div id="trnLobbyArea" style="display:flex; flex-direction:column; flex-grow:1; min-height:0;">
             <div class="box-panel" id="createTrnPanel" style="flex-shrink:0; display:none;">
-                <h3>Organizza un Torneo</h3>
+                <h3 id="txt_organize_trn_title">Organizza un Torneo</h3>
                 <input type="text" id="newTrnName" placeholder="Nome del torneo...">
                 <button id="createTrnBtn" class="btn-champ">Crea Torneo</button>
             </div>
             <div class="box-panel" style="flex-grow:1; min-height:0;">
-                <h3>Tornei Aperti (All'italiana)</h3>
+                <h3 id="txt_open_trns_title">Tornei Aperti (All'italiana)</h3>
                 <ul id="openTournamentsList" class="data-list"></ul>
             </div>
             <div class="box-panel" style="flex-grow:1; min-height:0;">
-                <h3>Tornei Conclusi</h3>
+                <h3 id="txt_past_trns_title">Tornei Conclusi</h3>
                 <ul id="pastTournamentsList" class="data-list"></ul>
             </div>
         </div>
@@ -405,60 +405,14 @@
 
 <!-- INFO, REGOLE E PRIVACY -->
 <div id="privacyScreen" class="screen">
-    <h2 style="margin-bottom: 5px;">📜 Regolamento e Privacy</h2>
+    <h2 id="txt_rules_privacy_title" style="margin-bottom: 5px;">📜 Regolamento e Privacy</h2>
 
-    <div class="box-panel" style="text-align: left; font-size: 0.9em; flex-grow: 1; overflow-y: auto; padding-right: 10px; margin-bottom: 0;">
-        <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
-        <p style="margin-top: 5px;">Il gioco consiste nell'ascoltare sequenze in codice Morse e decifrare la parola o il nominativo corretto.</p>
-
-        <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Parole Comuni:</h4>
-        <ul style="margin-top: 2px; padding-left: 20px;">
-            <li><b>Parola/Gruppo perfetto:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
-            <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
-            <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
-            <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata all'inizio.</li>
-        </ul>
-
-        <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Ping Pong:</h4>
-        <ul style="margin-top: 2px; padding-left: 20px;">
-            <li>Sfida a turni <b>esclusivamente Multiplayer</b> (necessita di almeno un altro giocatore in stanza).</li>
-            <li>A turno, l'utente <b>A</b> pensa a una parola e la digita, l'utente <b>B</b> (o gli altri in stanza) la ascoltano in codice Morse e la devono decodificare.</li>
-            <li>I ruoli si invertono automaticamente per le stringhe successive.</li>
-            <li>Il calcolo di punti e penalità segue le regole delle <i>Parole Comuni</i> indicate sopra. <i>Nei tornei la velocità di partenza è fissata a 20 WPM.</i></li>
-        </ul>
-
-        <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Nominativi (CW Freak):</h4>
-        <ul style="margin-top: 2px; padding-left: 20px;">
-            <li>Per ogni nominativo corretto ricevi un punteggio base calcolato come: <b>(WPM * 2)</b>.</li>
-            <li>Più ne indovini di fila, più il <b>Bonus Serie</b> aumenta (+5pt per ogni serie). La velocità sale di <b>+2 WPM</b>.</li>
-            <li>Al primo errore la serie si azzera, prendi <b>0 pt</b> e la velocità scende di <b>-1 WPM</b>.</li>
-        </ul>
-
-        <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Funzionalità Aggiuntive:</h4>
-        <ul style="margin-top: 2px; padding-left: 20px;">
-            <li><b>Tasto Riascolta:</b> Permette di riascoltare l'audio della parola corrente, ma la parola indovinata varrà <b>sempre 0 punti</b> e non aumenterà il WPM (penalità).</li>
-            <li><b>Velocità Fissa:</b> In Singleplayer puoi spuntare "Fissa" per bloccare il WPM senza farlo variare per errori o successi.</li>
-            <li><b>Scadenza Stanza:</b> Il timer in minuti indicato in fase di avvio stabilisce per quanto tempo la lobby rimane in attesa di giocatori. Una volta avviata la partita, la stanza dura per tutto il tempo necessario.</li>
-            <li><b>Caratteri Accentati:</b> Il dizionario comprende anche parole con <i>à, è, é, ì, ò, ù</i> tradotte nei rispettivi standard Morse.</li>
-        </ul>
-
-        <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 15px 0;">
-
-        <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🔒 Privacy e Dati Personali</h3>
-        <p style="margin-top: 5px;">I tuoi dati sono protetti e usati <b>solo</b> ai fini del gioco.</p>
-        <ul style="margin-top: 2px; padding-left: 20px;">
-            <li><b>Cosa salviamo:</b> Il tuo ID Telegram, Nome, Username (se pubblico), storico delle partite giocate, statistiche degli errori e appartenenza alle squadre.</li>
-            <li><b>Trasparenza:</b> Gli altri utenti possono vedere il tuo Nome in classifica o nelle lobby, e possono cliccarci per visualizzare il tuo profilo Telegram pubblico.</li>
-            <li><b>Cancellazione Totale:</b> Tramite il pulsante rosso sottostante puoi cancellare in modo irreversibile <b>TUTTI</b> i dati legati al tuo account dal nostro database (storico, squadre, statistiche).</li>
-        </ul>
-        <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 10px 0;">
-        <h3 style="color: var(--champ-color); font-size: 1.1em; margin-bottom: 5px;">💡 Suggerimenti</h3>
-        <p style="font-size: 0.9em; margin-bottom: 5px;">Hai un'idea per migliorare l'app? Inviaci un messaggio!</p>
-        <button id="sendFeedbackBtn" class="btn-link" style="margin:0; padding:5px; font-weight:bold; text-align:center; width:100%;">📬 Invia un Suggerimento al Creatore</button>
+    <div id="rulesContent" class="box-panel" style="text-align: left; font-size: 0.9em; flex-grow: 1; overflow-y: auto; padding-right: 10px; margin-bottom: 0;">
+        <!-- Content will be injected by setLanguage -->
     </div>
 
     <button id="deleteDataBtn" class="btn-danger" style="margin-top: 8px; flex-shrink: 0;">🗑️ Elimina Definitivamente i miei Dati</button>
-    <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
+    <button onclick="goBackToMenu()" id="txt_back_btn_rules" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
 <!-- LOBBY GIOCO LIBERO -->
@@ -1042,7 +996,76 @@
             tab_this_match: "Questa Partita", tab_trn_lb: "Classifica Tornei", tab_callsigns: "Nominativi", tab_pingpong: "Ping Pong", tab_std_multi: "Parole (Multi)", tab_std_single: "Parole (Single)",
             btn_start_match: "AVVIA PARTITA", btn_delete_room: "ELIMINA STANZA", btn_leave_lobby: "Esci dalla Stanza",
             status_host: "Sei l'Host della partita.", status_guest: "Sei un partecipante. Attendi il via.", lobby_free: "Lobby Stanza Libera", lobby_trn: "Lobby Incontro Torneo 🥊",
-            ready_btn: "SONO PRONTO ✅", waiting_host: "In attesa che l'Host avvii..."
+            ready_btn: "SONO PRONTO ✅", waiting_host: "In attesa che l'Host avvii...",
+            rules_privacy_title: "📜 Regolamento e Privacy",
+            rules_html: `
+                <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
+                <p style="margin-top: 5px;">Il gioco consiste nell'ascoltare sequenze in codice Morse e decifrare la parola o il nominativo corretto.</p>
+
+                <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Parole Comuni:</h4>
+                <ul style="margin-top: 2px; padding-left: 20px;">
+                    <li><b>Parola/Gruppo perfetto:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
+                    <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
+                    <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
+                    <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata all'inizio.</li>
+                </ul>
+
+                <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Ping Pong:</h4>
+                <ul style="margin-top: 2px; padding-left: 20px;">
+                    <li>Sfida a turni <b>esclusivamente Multiplayer</b> (necessita di almeno un altro giocatore in stanza).</li>
+                    <li>A turno, l'utente <b>A</b> pensa a una parola e la digita, l'utente <b>B</b> (o gli altri in stanza) la ascoltano in codice Morse e la devono decodificare.</li>
+                    <li>I ruoli si invertono automaticamente per le stringhe successive.</li>
+                    <li>Il calcolo di punti e penalità segue le regole delle <i>Parole Comuni</i> indicate sopra. <i>Nei tornei la velocità di partenza è fissata a 20 WPM.</i></li>
+                </ul>
+
+                <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Nominativi (CW Freak):</h4>
+                <ul style="margin-top: 2px; padding-left: 20px;">
+                    <li>Per ogni nominativo corretto ricevi un punteggio base calcolato come: <b>(WPM * 2)</b>.</li>
+                    <li>Più ne indovini di fila, più il <b>Bonus Serie</b> aumenta (+5pt per ogni serie). La velocità sale di <b>+2 WPM</b>.</li>
+                    <li>Al primo errore la serie si azzera, prendi <b>0 pt</b> e la velocità scende di <b>-1 WPM</b>.</li>
+                </ul>
+
+                <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Funzionalità Aggiuntive:</h4>
+                <ul style="margin-top: 2px; padding-left: 20px;">
+                    <li><b>Tasto Riascolta:</b> Permette di riascoltare l'audio della parola corrente, ma la parola indovinata varrà <b>sempre 0 punti</b> e non aumenterà il WPM (penalità).</li>
+                    <li><b>Velocità Fissa:</b> In Singleplayer puoi spuntare "Fissa" per bloccare il WPM senza farlo variare per errori o successi.</li>
+                    <li><b>Scadenza Stanza:</b> Il timer in minuti indicato in fase di avvio stabilisce per quanto tempo la lobby rimane in attesa di giocatori. Una volta avviata la partita, la stanza dura per tutto il tempo necessario.</li>
+                    <li><b>Caratteri Accentati:</b> Il dizionario comprende anche parole con <i>à, è, é, ì, ò, ù</i> tradotte nei rispettivi standard Morse.</li>
+                </ul>
+
+                <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 15px 0;">
+
+                <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🔒 Privacy e Dati Personali</h3>
+                <p style="margin-top: 5px;">I tuoi dati sono protetti e usati <b>solo</b> ai fini del gioco.</p>
+                <ul style="margin-top: 2px; padding-left: 20px;">
+                    <li><b>Cosa salviamo:</b> Il tuo ID Telegram, Nome, Username (se pubblico), storico delle partite giocate, statistiche degli errori e appartenenza alle squadre.</li>
+                    <li><b>Trasparenza:</b> Gli altri utenti possono vedere il tuo Nome in classifica o nelle lobby, e possono cliccarci per visualizzare il tuo profilo Telegram pubblico.</li>
+                    <li><b>Cancellazione Totale:</b> Tramite il pulsante rosso sottostante puoi cancellare in modo irreversibile <b>TUTTI</b> i dati legati al tuo account dal nostro database (storico, squadre, statistiche).</li>
+                </ul>
+                <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 10px 0;">
+                <h3 style="color: var(--champ-color); font-size: 1.1em; margin-bottom: 5px;">💡 Suggerimenti</h3>
+                <p style="font-size: 0.9em; margin-bottom: 5px;">Hai un'idea per migliorare l'app? Inviaci un messaggio!</p>
+                <button id="sendFeedbackBtn" class="btn-link" style="margin:0; padding:5px; font-weight:bold; text-align:center; width:100%;">📬 Invia un Suggerimento al Creatore</button>
+            `,
+            tab_team_gest: "La mia Squadra", tab_all_teams: "Tutte le Squadre", tab_tournaments: "I Tornei",
+            must_be_in_team: "Per partecipare ai tornei devi essere in una squadra.",
+            found_team_title: "Fonda la tua Squadra", team_name_placeholder: "Scegli un nome...",
+            create_team_btn: "Crea Squadra", open_teams_title: "Squadre con iscrizioni aperte",
+            leave_team_btn: "Abbandona", invite_team_btn: "📢 Condividi Link d'Invito Squadra",
+            toggle_lock_btn_close: "Chiudi Adesioni", toggle_lock_btn_open: "Riapri Adesioni",
+            team_chat_title: "💬 Chat di Squadra", team_chat_placeholder: "Messaggio...",
+            global_teams_title: "Elenco Globale Squadre", organize_trn_title: "Organizza un Torneo",
+            trn_name_placeholder: "Nome del torneo...", create_trn_btn: "Crea Torneo",
+            open_trns_title: "Tornei Aperti (All'italiana)", past_trns_title: "Tornei Conclusi",
+            edit_trn_name_btn: "✏️ Modifica Nome", withdraw_team_btn: "🏃 Ritira Squadra",
+            trn_standings_title: "Classifica (Parziale/Finale)", trn_pos: "Pos", trn_team: "Squadra", trn_pt: "Pt",
+            trn_host_organizer: "Sei l'organizzatore.", trn_start_btn: "Genera Tabellone e Avvia",
+            trn_finish_btn: "Concludi Torneo", trn_delete_btn: "Elimina Torneo",
+            trn_bracket_title: "🥊 Tabellone Incontri", trn_waiting_start: "In attesa dell'avvio...",
+            pingpong_input_placeholder: "Scrivi la parola da inviare...", pingpong_send_btn: "Invia (Tu)",
+            match_details_title: "Dettagli Partita", match_details_hint: "I caratteri saltati o errati sono in rosso.",
+            medal_new_title: "Nuova Medaglia!", medal_fantastic_btn: "FANTASTICO!",
+            invite_modal_send: "INVIA INVITO 🚀", invite_modal_cancel: "ANNULLA", invite_modal_accept: "ACCETTA ✅", invite_modal_decline: "RIFIUTA ❌"
         },
         en: {
             hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", conn_secure: "Secure connection in progress...",
@@ -1068,7 +1091,76 @@
             tab_this_match: "This Match", tab_trn_lb: "Tournament Leaderboard", tab_callsigns: "Callsigns", tab_pingpong: "Ping Pong", tab_std_multi: "Words (Multi)", tab_std_single: "Words (Single)",
             btn_start_match: "START MATCH", btn_delete_room: "DELETE ROOM", btn_leave_lobby: "Leave Lobby",
             status_host: "You are the Match Host.", status_guest: "You are a participant. Wait for the start.", lobby_free: "Free Room Lobby", lobby_trn: "Tournament Match Lobby 🥊",
-            ready_btn: "I AM READY ✅", waiting_host: "Waiting for Host to start..."
+            ready_btn: "I AM READY ✅", waiting_host: "Waiting for Host to start...",
+            rules_privacy_title: "📜 Rules and Privacy",
+            rules_html: `
+                <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Game Rules</h3>
+                <p style="margin-top: 5px;">The game consists of listening to Morse code sequences and deciphering the correct word or callsign.</p>
+
+                <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Common Words Mode:</h4>
+                <ul style="margin-top: 2px; padding-left: 20px;">
+                    <li><b>Perfect Word/Group:</b> Receive <b>+10 pt</b>. Speed will increase by <b>+2 WPM</b>.</li>
+                    <li><b>1 Wrong Character:</b> Receive <b>+2 pt</b>. Speed will decrease by <b>-1 WPM</b>.</li>
+                    <li><b>More than 1 error:</b> Receive <b>0 pt</b>. Speed will decrease by <b>-2 WPM</b>.</li>
+                    <li><i>Note:</i> WPM speed <b>will never drop</b> below the minimum set threshold.</li>
+                </ul>
+
+                <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Ping Pong Mode:</h4>
+                <ul style="margin-top: 2px; padding-left: 20px;">
+                    <li>Turn-based challenge <b>Multiplayer only</b> (requires at least one other player in the room).</li>
+                    <li>In turn, user <b>A</b> thinks of a word and types it, user <b>B</b> (or others in the room) listen to it in Morse code and must decode it.</li>
+                    <li>Roles swap automatically for subsequent strings.</li>
+                    <li>Points and penalty calculation follows the <i>Common Words</i> rules above. <i>In tournaments, starting speed is fixed at 20 WPM.</i></li>
+                </ul>
+
+                <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Callsigns Mode (CW Freak):</h4>
+                <ul style="margin-top: 2px; padding-left: 20px;">
+                    <li>For each correct callsign, you receive a base score calculated as: <b>(WPM * 2)</b>.</li>
+                    <li>The more you guess in a row, the more the <b>Streak Bonus</b> increases (+5pt per streak). Speed rises by <b>+2 WPM</b>.</li>
+                    <li>At the first error, the streak resets, you get <b>0 pt</b> and the speed drops by <b>-1 WPM</b>.</li>
+                </ul>
+
+                <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Additional Features:</h4>
+                <ul style="margin-top: 2px; padding-left: 20px;">
+                    <li><b>Replay Button:</b> Allows replaying the current word audio, but the guessed word will <b>always be worth 0 points</b> and won't increase WPM (penalty).</li>
+                    <li><b>Fixed Speed:</b> In Singleplayer, you can check "Fixed" to lock WPM without changes for errors or successes.</li>
+                    <li><b>Room Timeout:</b> The timer in minutes indicated at start sets how long the lobby waits for players. Once started, the room lasts as long as needed.</li>
+                    <li><b>Accented Characters:</b> The dictionary also includes words with <i>à, è, é, ì, ò, ù</i> translated into Morse standards.</li>
+                </ul>
+
+                <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 15px 0;">
+
+                <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🔒 Privacy and Personal Data</h3>
+                <p style="margin-top: 5px;">Your data is protected and used <b>only</b> for gaming purposes.</p>
+                <ul style="margin-top: 2px; padding-left: 20px;">
+                    <li><b>What we save:</b> Your Telegram ID, Name, Username (if public), match history, error statistics, and team membership.</li>
+                    <li><b>Transparency:</b> Other users can see your Name in leaderboards or lobbies, and can click it to view your public Telegram profile.</li>
+                    <li><b>Total Deletion:</b> Using the red button below, you can irreversibly delete <b>ALL</b> data linked to your account from our database (history, teams, statistics).</li>
+                </ul>
+                <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 10px 0;">
+                <h3 style="color: var(--champ-color); font-size: 1.1em; margin-bottom: 5px;">💡 Suggestions</h3>
+                <p style="font-size: 0.9em; margin-bottom: 5px;">Have an idea to improve the app? Send us a message!</p>
+                <button id="sendFeedbackBtn" class="btn-link" style="margin:0; padding:5px; font-weight:bold; text-align:center; width:100%;">📬 Send a Suggestion to the Creator</button>
+            `,
+            tab_team_gest: "My Team", tab_all_teams: "All Teams", tab_tournaments: "Tournaments",
+            must_be_in_team: "To participate in tournaments you must be in a team.",
+            found_team_title: "Found your Team", team_name_placeholder: "Choose a name...",
+            create_team_btn: "Create Team", open_teams_title: "Teams with open registrations",
+            leave_team_btn: "Leave", invite_team_btn: "📢 Share Team Invite Link",
+            toggle_lock_btn_close: "Close Registrations", toggle_lock_btn_open: "Reopen Registrations",
+            team_chat_title: "💬 Team Chat", team_chat_placeholder: "Message...",
+            global_teams_title: "Global Team List", organize_trn_title: "Organize a Tournament",
+            trn_name_placeholder: "Tournament name...", create_trn_btn: "Create Tournament",
+            open_trns_title: "Open Tournaments", past_trns_title: "Finished Tournaments",
+            edit_trn_name_btn: "✏️ Edit Name", withdraw_team_btn: "🏃 Withdraw Team",
+            trn_standings_title: "Standings (Partial/Final)", trn_pos: "Pos", trn_team: "Team", trn_pt: "Pt",
+            trn_host_organizer: "You are the organizer.", trn_start_btn: "Generate Bracket and Start",
+            trn_finish_btn: "Finish Tournament", trn_delete_btn: "Delete Tournament",
+            trn_bracket_title: "🥊 Match Bracket", trn_waiting_start: "Waiting for start...",
+            pingpong_input_placeholder: "Type the word to send...", pingpong_send_btn: "Send (You)",
+            match_details_title: "Match Details", match_details_hint: "Skipped or wrong characters are in red.",
+            medal_new_title: "New Medal!", medal_fantastic_btn: "FANTASTIC!",
+            invite_modal_send: "SEND INVITE 🚀", invite_modal_cancel: "CANCEL", invite_modal_accept: "ACCEPT ✅", invite_modal_decline: "DECLINE ❌"
         }
     };
 
@@ -1090,6 +1182,7 @@
         document.getElementById('txt_lb_btn').textContent = "🏆 " + t.lb;
         document.getElementById('txt_profile_btn').textContent = "👤 " + t.profile;
         document.getElementById('txt_act_btn').textContent = "🏅 " + t.activity;
+        document.getElementById('txt_info_btn').textContent = "Info";
 
         document.getElementById('txt_free_challenge_title').textContent = t.free_challenge;
         document.getElementById('txt_play_solo_title').textContent = t.play_solo;
@@ -1113,6 +1206,7 @@
         document.getElementById('txt_online_users_title').textContent = t.online_users;
         document.getElementById('txt_global_chat_btn').textContent = t.global_chat;
         document.getElementById('txt_you_are_alone').textContent = t.you_are_alone;
+        document.getElementById('loadingText').textContent = t.conn_secure;
 
         // Chat
         document.getElementById('chatTitle').textContent = t.chat_title;
@@ -1137,6 +1231,8 @@
         document.getElementById('replayWordBtn').textContent = t.replay;
         document.getElementById('txt_game_chat_btn').textContent = t.game_chat;
         document.getElementById('quitGameBtn').textContent = t.quit_game;
+        document.getElementById('pingPongWordToSend').placeholder = t.pingpong_input_placeholder;
+        document.getElementById('btnSendPingPong').textContent = t.pingpong_send_btn;
 
         // Profile Screen
         document.getElementById('txt_profile_title').textContent = t.profile_title;
@@ -1171,6 +1267,47 @@
         document.getElementById('deleteRoomBtn').textContent = t.btn_delete_room;
         document.getElementById('leaveLobbyBtn').textContent = t.btn_leave_lobby;
         document.getElementById('readyBtn').textContent = t.ready_btn;
+
+        // Rules and Privacy instant content
+        document.getElementById('txt_rules_privacy_title').textContent = t.rules_privacy_title;
+        document.getElementById('rulesContent').innerHTML = t.rules_html;
+        document.getElementById('txt_back_btn_rules').textContent = t.back_to_menu;
+
+        // Team Area
+        document.getElementById('tabTeamGestBtn').textContent = t.tab_team_gest;
+        document.getElementById('tabAllTeamsBtn').textContent = t.tab_all_teams;
+        document.getElementById('tabTournamentsBtn').textContent = t.tab_tournaments;
+        document.getElementById('txt_must_be_in_team').textContent = t.must_be_in_team;
+        document.getElementById('txt_found_team_title').textContent = t.found_team_title;
+        document.getElementById('newTeamName').placeholder = t.team_name_placeholder;
+        document.getElementById('createTeamBtn').textContent = t.create_team_btn;
+        document.getElementById('txt_open_teams_title').textContent = t.open_teams_title;
+        document.getElementById('leaveTeamBtn').textContent = t.leave_team_btn;
+        document.getElementById('inviteTeamBtn').textContent = t.invite_team_btn;
+        document.getElementById('teamChatInput').placeholder = t.team_chat_placeholder;
+        document.getElementById('sendTeamChatBtn').textContent = t.chat_send;
+        document.getElementById('txt_global_teams_title').textContent = t.global_teams_title;
+
+        // Tournaments
+        document.getElementById('txt_organize_trn_title').textContent = t.organize_trn_title;
+        document.getElementById('newTrnName').placeholder = t.trn_name_placeholder;
+        document.getElementById('createTrnBtn').textContent = t.create_trn_btn;
+        document.getElementById('txt_open_trns_title').textContent = t.open_trns_title;
+        document.getElementById('txt_past_trns_title').textContent = t.past_trns_title;
+        document.getElementById('editTrnNameBtn').textContent = t.edit_trn_name_btn;
+        document.getElementById('leaveTrnBtn').textContent = t.withdraw_team_btn;
+        document.getElementById('startTrnBtn').textContent = t.trn_start_btn;
+        document.getElementById('finishTrnBtn').textContent = t.trn_finish_btn;
+        document.getElementById('deleteTrnBtn').textContent = t.trn_delete_btn;
+
+        // Invites & Medals
+        document.getElementById('sendInviteBtn').textContent = t.invite_modal_send;
+        document.getElementById('sendInviteBtn').textContent = t.invite_modal_send;
+        document.getElementById('acceptInviteBtn').textContent = t.invite_modal_accept;
+        document.getElementById('declineInviteBtn').textContent = t.invite_modal_decline;
+        document.getElementById('overlayMedalTitle').textContent = t.medal_new_title;
+        const fantasticBtn = document.querySelector('#medalOverlay .btn-champ');
+        if (fantasticBtn) fantasticBtn.textContent = t.medal_fantastic_btn;
 
         const loadingStats = document.getElementById('txt_loading_stats');
         if(loadingStats) loadingStats.textContent = t.loading;
