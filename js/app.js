@@ -1,4 +1,3 @@
-<script>
     const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
 
@@ -2605,4 +2604,3 @@
         });
     }
 
-</script>
