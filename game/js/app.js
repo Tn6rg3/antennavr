@@ -1581,16 +1581,7 @@ async function loadRegolamento() {
         }
     });
 
-    document.getElementById('sendFeedbackBtn').onclick = function() {
-        const text = encodeURIComponent("💡 Suggerimento per Sfida Telegrafia: \n\n[Scrivi qui il tuo messaggio...]");
-        const shareUrl = `https://t.me/share/url?text=${text}`;
-
-        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
-            window.Telegram.WebApp.openTelegramLink(shareUrl);
-        } else {
-            window.open(shareUrl, '_blank');
-        }
-    };
+    
 
 
     let userMatchHistory = [];
