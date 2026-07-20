@@ -690,9 +690,9 @@
 
     let myName, myId, myPrivacy = false;
     let db, auth;
-    let currentRoomListener = null, chatListener = null, pingPongListener = null;
+    let currentRoomListener = null, chatListener = null, pingPongListener = null, gamePlayersListener = null;
     let presenceListener = null, invitesListener = null, inviteAcceptedListener = null, outgoingInviteListener = null;
-    let roomCode = "", lastPlayerCount = 0, lobbyTimerInterval = null, roomHostId = null;
+    let roomCode = "", lastPlayerCount = 0, lobbyTimerInterval = null, roomHostId = null, gameStartPlayerCount = 0;
     let activeChatContext = null;
     let currentInviterId = null;
     let isChallenging = false;
@@ -897,7 +897,7 @@
         }
     }
 
-    let chatListenerRef = null; let isChatDrawerOpen = false; let lastChatTimestamp = Date.now();
+    let activeChatListeners = {};
 
     window.toggleChat = function() {
         const drawer = document.getElementById('chatDrawer');
@@ -909,7 +909,13 @@
 
     function hideChat() {
         document.getElementById('chatDrawer').style.display = 'none';
-        isChatDrawerOpen = false; if (chatListenerRef) { chatListenerRef.off(); chatListenerRef = null; }
+        isChatDrawerOpen = false;
+        
+        // Pulizia automatica dei listener quando nascondi la chat
+        Object.keys(activeChatListeners).forEach(key => {
+            activeChatListeners[key].ref.off('value', activeChatListeners[key].callback);
+            delete activeChatListeners[key];
+        });
     }
 
     function listenToChat() {
@@ -946,16 +952,27 @@
     document.getElementById('lobbyChatInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('sendLobbyChatBtn').click(); });
 
     function setupChat(chatRef, containerId, alertBtnId) {
-        if (chatListenerRef && chatListenerRef.toString() === chatRef.toString()) return;
-        if (chatListenerRef) chatListenerRef.off(); chatListenerRef = chatRef;
-        let initialLoad = true;
+        const container = document.getElementById(containerId);
+        if (!container) return;
 
-        chatRef.limitToLast(40).on('value', snapshot => {
-            const container = document.getElementById(containerId); container.innerHTML = '';
-            let newMsgsCount = 0; let latestMsg = null; let maxTs = lastChatTimestamp;
+        // Se c'era già un listener per QUESTO specifico box (es. il drawer o la lobby), staccalo per evitare cloni
+        if (activeChatListeners[containerId]) {
+            activeChatListeners[containerId].ref.off('value', activeChatListeners[containerId].callback);
+        }
+
+        let initialLoad = true;
+        let lastTs = Date.now();
+
+        const callback = chatRef.limitToLast(40).on('value', snapshot => {
+            container.innerHTML = '';
+            let newMsgsCount = 0;
+            let latestMsg = null;
+            let maxTs = lastTs;
 
             snapshot.forEach(child => {
-                const msg = child.val(); const div = document.createElement('div'); div.style.marginBottom = '6px';
+                const msg = child.val();
+                const div = document.createElement('div');
+                div.style.marginBottom = '6px';
                 let dateStr = "";
                 if(msg.ts) {
                     const d = new Date(msg.ts);
@@ -963,27 +980,38 @@
                     if(msg.ts > maxTs) maxTs = msg.ts;
                 }
                 let nHtml = `<b style="color:var(--link-color)">${escapeHTML(msg.name)}:</b>`;
-                div.innerHTML = `${dateStr}${nHtml} ${escapeHTML(msg.text)}`; container.appendChild(div);
+                div.innerHTML = `${dateStr}${nHtml} ${escapeHTML(msg.text)}`;
+                container.appendChild(div);
 
-                if (!initialLoad && msg.ts && msg.ts > lastChatTimestamp && msg.name !== myName) { newMsgsCount++; latestMsg = msg; }
+                if (!initialLoad && msg.ts && msg.ts > lastTs && msg.name !== myName) {
+                    newMsgsCount++; latestMsg = msg;
+                }
             });
 
-            lastChatTimestamp = maxTs; container.scrollTop = container.scrollHeight;
+            lastTs = maxTs;
+            container.scrollTop = container.scrollHeight;
+
+            // Notifiche (solo se il drawer è chiuso)
             if (!initialLoad && newMsgsCount > 0 && alertBtnId && !isChatDrawerOpen) {
                 showToast(`💬 Nuovo messaggio da ${latestMsg.name}`);
                 const btn = document.getElementById(alertBtnId);
                 if (btn) btn.style.backgroundColor = '#4caf50';
             }
+            
             // Notifica globale per messaggi in stanza se siamo l'host e siamo fuori
             if (!initialLoad && newMsgsCount > 0 && roomHostId === myId && activeChatContext !== 'room' && chatRef.key !== 'globalChat') {
                 if (latestMsg) showToast(`📢 (Stanza) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
             }
+            
             // Notifica per messaggi globali se siamo in una stanza
             if (!initialLoad && newMsgsCount > 0 && activeChatContext === 'room' && chatRef.key === 'globalChat') {
                 if (latestMsg) showToast(`🌎 (Global) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
             }
             initialLoad = false;
         });
+
+        // Salva il riferimento per poterlo rimuovere correttamente
+        activeChatListeners[containerId] = { ref: chatRef, callback: callback };
     }
 
     document.getElementById('sendChatBtn').addEventListener('click', () => {
@@ -1291,13 +1319,23 @@
             const u = child.val(); if (child.key === myId) return;
             count++;
             const li = document.createElement('li');
+            
             const isThisOneWaiting = (isChallenging && currentInviterId === child.key);
+            const isPlaying = (u.status === 'playing');
 
-            li.innerHTML = `<span><b>${escapeHTML(u.name)}</b><br><small>🟢 Online</small></span>
-                            <button class="action-btn-small ${isThisOneWaiting ? 'btn-danger' : 'btn-success'}"
-                                    ${isChallenging && !isThisOneWaiting ? 'disabled' : ''}
-                                    onclick="openInviteModal('${child.key}', '${escapeHTML(u.name)}')">
-                                    ${isThisOneWaiting ? 'In Attesa...' : 'Sfida'}</button>`;
+            let statusText = isPlaying ? "🟡 In Partita" : "🟢 Online";
+            let btnHtml = "";
+
+            if (isPlaying) {
+                btnHtml = `<button class="action-btn-small btn-secondary" disabled>In partita</button>`;
+            } else {
+                btnHtml = `<button class="action-btn-small ${isThisOneWaiting ? 'btn-danger' : 'btn-success'}"
+                                   ${isChallenging && !isThisOneWaiting ? 'disabled' : ''}
+                                   onclick="openInviteModal('${child.key}', '${escapeHTML(u.name)}')">
+                                   ${isThisOneWaiting ? 'In Attesa...' : 'Sfida'}</button>`;
+            }
+
+            li.innerHTML = `<span><b>${escapeHTML(u.name)}</b><br><small>${statusText}</small></span>${btnHtml}`;
             list.appendChild(li);
         });
         if (count === 0) list.innerHTML = `<li style="justify-content: center; color: var(--hint-color); background: none; border: none;">${i18n[currentLang].you_are_alone}</li>`;
@@ -1424,12 +1462,6 @@
 
                 // Sfida accettata! Resettiamo lo stato di sfida
                 isChallenging = false;
-                if (outgoingInviteListener) {
-                    // Pulizia listener monitoraggio rifiuto
-                    // Nota: targetId non è disponibile qui direttamente se non salvato
-                    // Ma isChallenging = false bloccherà il toast del rifiuto
-                }
-
                 closeInviteModal();
                 roomCode = data.roomCode;
                 joinRoomLogic(false);
@@ -1486,6 +1518,14 @@
         let targetScreen = 'setupScreen';
         const amIHost = (myId === roomHostId);
 
+        // Riporta lo stato utente online (esce dalla partita)
+        db.ref(`presence/${myId}`).update({ status: 'online' });
+
+        if (gamePlayersListener && roomCode) {
+            db.ref(`rooms/${roomCode}/players`).off('value', gamePlayersListener);
+            gamePlayersListener = null;
+        }
+
         if (roomCode) {
             if (roomCode.startsWith("TRN_")) {
                 targetScreen = 'teamsScreen';
@@ -1515,7 +1555,11 @@
     }
 
     function joinRoomLogic(isReconnect = false) {
-        gameRunning = false; // <-- AGGIUNGI QUESTA RIGA PER SBLOCCARE LE PARTITE
+        gameRunning = false;
+
+        // Imposta stato giocatore come in partita (occupato)
+        db.ref(`presence/${myId}`).update({ status: 'playing' });
+
         const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
         playerRef.once('value', snapshot => {
             if (snapshot.val()?.finished) { showScreen('leaderboardScreen'); activeTab="room"; showLeaderboardTab('tabRoomBtn'); return; }
@@ -1580,7 +1624,6 @@
         tg.openTelegramLink(shareUrl);
     });
 
-    // Funzione aggiornata per gestire il tasto "Pronto" e l'avvio automatico per Ping Pong e Tornei
     function renderPlayersList(playersData, hostId) {
         const list = document.getElementById('playersList'); list.innerHTML = '';
         const count = Object.keys(playersData).length;
@@ -1616,18 +1659,17 @@
         if (isTrnOrPP) {
             document.getElementById('waitingHostText').style.display = amIReady ? 'block' : 'none';
             document.getElementById('waitingHostText').textContent = t.waiting_host;
-            document.getElementById('statusInfoText').textContent = amIReady ? t.ready_btn : t.conn_secure; // Reuse or add better key
+            document.getElementById('statusInfoText').textContent = amIReady ? t.ready_btn : t.conn_secure; 
         } else {
             document.getElementById('waitingHostText').style.display = amIHost ? 'none' : 'block';
             document.getElementById('waitingHostText').textContent = t.waiting_host;
             document.getElementById('statusInfoText').textContent = amIHost ? t.status_host : t.status_guest;
         }
 
-        // Avvio automatico per tornei/pingpong quando TUTTI sono pronti (chiesto al primo della lista per evitare update doppi)
         // Avvio automatico per tornei/pingpong quando TUTTI sono pronti
-if (allReady && isTrnOrPP && (pKeys[0] === myId || amIHost)) {
-    db.ref(`rooms/${roomCode}`).update({ status: 'countdown', expiresAt: null });
-}
+        if (allReady && isTrnOrPP && (pKeys[0] === myId || amIHost)) {
+            db.ref(`rooms/${roomCode}`).update({ status: 'countdown', expiresAt: null });
+        }
     }
 
     // Tasto "Sono Pronto"
@@ -1811,6 +1853,24 @@ if (allReady && isTrnOrPP && (pKeys[0] === myId || amIHost)) {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (currentRoomListener) currentRoomListener.off();
 
+        // LOGICA ABBANDONO: Monitora se i giocatori in partita diminuiscono
+        if (!isSinglePlayer) {
+            db.ref(`rooms/${roomCode}/players`).once('value', snap => {
+                gameStartPlayerCount = snap.exists() ? Object.keys(snap.val()).length : 0;
+                
+                if (gamePlayersListener) db.ref(`rooms/${roomCode}/players`).off('value', gamePlayersListener);
+                gamePlayersListener = db.ref(`rooms/${roomCode}/players`).on('value', playersSnap => {
+                    if (!gameRunning) return;
+                    const currentPCount = playersSnap.exists() ? Object.keys(playersSnap.val()).length : 0;
+                    if (gameStartPlayerCount > 0 && currentPCount < gameStartPlayerCount) {
+                        alert("Un giocatore ha abbandonato la partita. Ritorno al menu principale.");
+                        gameRunning = false;
+                        exitRoomCleanly(false);
+                    }
+                });
+            });
+        }
+
         document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
         document.getElementById('scoreDisplay').textContent = `Punti: 0`;
         totalScore = 0; currentStreak = 0; wordIndex = 0;
@@ -1848,35 +1908,31 @@ if (allReady && isTrnOrPP && (pKeys[0] === myId || amIHost)) {
                             if (!gameRunning) return;
                             const ppData = snap.val(); if (!ppData) return;
 
-                            // ... dentro il listener di pingpong ...
-if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
-    window.lastSeenGuessId = ppData.lastGuess.id;
+                            if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
+                                window.lastSeenGuessId = ppData.lastGuess.id;
 
-    const tr = document.createElement('tr');
+                                const tr = document.createElement('tr');
 
-    // Creiamo le celle come nodi separati (più sicuro e pulito)
-    const tdTyped = document.createElement('td');
-    tdTyped.textContent = ppData.lastGuess.typed || '';
+                                const tdTyped = document.createElement('td');
+                                tdTyped.textContent = ppData.lastGuess.typed || '';
 
-    const tdReal = document.createElement('td');
-    // Se vuoi mantenere l'effetto "rosso" per gli errori, usiamo un metodo sicuro
-    // Invece di iniettare HTML, creiamo elementi span figli
-    renderDiffSecure(tdReal, ppData.lastGuess.real, ppData.lastGuess.typed || '');
+                                const tdReal = document.createElement('td');
+                                renderDiffSecure(tdReal, ppData.lastGuess.real, ppData.lastGuess.typed || '');
 
-    const tdPoints = document.createElement('td');
-    tdPoints.style.fontWeight = 'bold';
-    tdPoints.style.color = ppData.lastGuess.points > 0 ? "#4caf50" :
-                           (ppData.lastGuess.points === 0 && ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
-    tdPoints.textContent = ppData.lastGuess.points;
+                                const tdPoints = document.createElement('td');
+                                tdPoints.style.fontWeight = 'bold';
+                                tdPoints.style.color = ppData.lastGuess.points > 0 ? "#4caf50" :
+                                                       (ppData.lastGuess.points === 0 && ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
+                                tdPoints.textContent = ppData.lastGuess.points;
 
-    tr.appendChild(tdTyped);
-    tr.appendChild(tdReal);
-    tr.appendChild(tdPoints);
+                                tr.appendChild(tdTyped);
+                                tr.appendChild(tdReal);
+                                tr.appendChild(tdPoints);
 
-    document.getElementById('tableBody').appendChild(tr);
-    const tableWrapper = document.getElementById('tableWrapper');
-    tableWrapper.scrollTop = tableWrapper.scrollHeight;
-}
+                                document.getElementById('tableBody').appendChild(tr);
+                                const tableWrapper = document.getElementById('tableWrapper');
+                                tableWrapper.scrollTop = tableWrapper.scrollHeight;
+                            }
 
                             if (ppData.wordsPlayed >= requestedWordCount) { finishGame(); return; }
 
