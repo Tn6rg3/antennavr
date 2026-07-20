@@ -29,10 +29,10 @@ button:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed
 
 input[type="number"], input[type="text"], select { padding: 6px; font-size: 0.95em; width: 100%; box-sizing: border-box; text-align: center; margin: 2px 0; border: 1px solid var(--hint-color); border-radius: 8px; background-color: var(--bg-color); color: var(--text-color); }
 
-.settings-row { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 2px; gap: 6px; flex-wrap: wrap;}
-.settings-row > div { width: 48%; margin-bottom: 2px; text-align: center; }
-.settings-row > div > label { font-size: 0.85em; font-weight: bold; color: var(--hint-color); }
-.settings-row.full-width > div { width: 100%; }
+.settings-row { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin-bottom: 5px; gap: 4px; flex-wrap: nowrap;}
+.settings-row > div { flex: 1; min-width: 0; text-align: center; }
+.settings-row > div > label { font-size: 0.75em; font-weight: bold; color: var(--hint-color); display: block; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.settings-row.full-width > div { width: auto; }
 
 #countdownNumber { font-size: 6em; font-weight: bold; color: #ff9800; margin: auto 0; }
 
