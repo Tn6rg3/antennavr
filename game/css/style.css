@@ -114,5 +114,28 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
     border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
+
+/* Head to Head Leaderboard Styles */
+.h2h-container {
+    display: flex; gap: 10px; width: 100%; margin-bottom: 15px;
+    justify-content: center; flex-wrap: wrap;
+}
+.h2h-card {
+    flex: 1; min-width: 140px; background: var(--sec-bg-color);
+    border-radius: 12px; padding: 12px; display: flex;
+    flex-direction: column; align-items: center; text-align: center;
+    border: 2px solid transparent; transition: transform 0.2s;
+    cursor: pointer; position: relative;
+}
+.h2h-card:active { transform: scale(0.97); }
+.h2h-card.winner { border-color: #4caf50; box-shadow: 0 0 10px rgba(76, 175, 80, 0.3); }
+.h2h-card.winner::after { content: '🏆'; position: absolute; top: -10px; right: -5px; font-size: 1.5em; }
+
+.h2h-name { font-weight: bold; font-size: 1em; margin-bottom: 8px; color: var(--link-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+.h2h-stats { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.h2h-stat-row { display: flex; justify-content: space-between; font-size: 0.85em; width: 100%; }
+.h2h-val { font-weight: bold; }
+.h2h-hint { font-size: 0.7em; color: var(--hint-color); margin-top: 8px; }
+
 #inviteModal, #roomEventModal, #tournamentWelcomeModal { height: auto; top: 20%; }
 .event-modal-icon { font-size: 4em; display: block; margin-bottom: 10px; }
