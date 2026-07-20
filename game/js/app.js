@@ -1955,27 +1955,101 @@ async function loadRegolamento() {
         const waitingText = document.getElementById('waitingOthersText'); let allFinished = true;
 
         const playersArray = Object.entries(players).map(([id, data]) => {
-            return { id: id, name: data.name || "Sconosciuto", username: data.username, score: data.score || 0, wpm: data.wpm || 0, finished: data.finished };
+            return { id: id, name: data.name || "Sconosciuto", username: data.username, score: data.score || 0, wpm: data.wpm || 0, finished: data.finished, matchDetails: data.matchDetails || [] };
         });
         if(playersArray.length===0) return;
         playersArray.forEach(p => { if (!p.finished) allFinished = false; });
         waitingText.style.display = allFinished ? 'none' : 'block';
 
-        playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm)).forEach((player, index) => {
-            const row = document.createElement('div'); row.className = 'leaderboard-row';
-            let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-            const escName = escapeHTML(player.name);
-            const escUser = escapeHTML(player.username);
-            const nHtml = player.username ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${escName}</span>` : `<span>${escName}</span>`;
-            row.innerHTML = `<span>${medal} ${nHtml} <br><small style="color:var(--hint-color)">(${escapeHTML(player.wpm || 0)} WPM)</small></span> <span><b>${escapeHTML(player.score)} pt</b></span>`;
-            container.appendChild(row);
-        });
+        // Se è multiplayer o pingpong e tutti hanno finito, mostriamo la vista "Testa a Testa"
+        const isMultiOrPP = roomCode && (roomCode.startsWith("TRN_") || currentMode === 'pingpong' || (playersArray.length > 1));
+
+        if (allFinished && isMultiOrPP) {
+            renderHeadToHeadView(playersArray, container);
+        } else {
+            // Vista classica a lista
+            playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm)).forEach((player, index) => {
+                const row = document.createElement('div'); row.className = 'leaderboard-row';
+                let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                const escName = escapeHTML(player.name);
+                const escUser = escapeHTML(player.username);
+                const nHtml = player.username ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${escName}</span>` : `<span>${escName}</span>`;
+                row.innerHTML = `<span>${medal} ${nHtml} <br><small style="color:var(--hint-color)">(${escapeHTML(player.wpm || 0)} WPM)</small></span> <span><b>${escapeHTML(player.score)} pt</b></span>`;
+                container.appendChild(row);
+            });
+        }
 
         if(allFinished && playersArray.length > 0) {
             const winnerText = currentLang === 'it' ? "Vincitore: " : "Winner: ";
             const matchWinnerText = currentLang === 'it' ? "Vince il match: " : "Match winner: ";
             document.getElementById('roomWinnerBanner').textContent = roomCode.startsWith("TRN_") ? `🏆 ${matchWinnerText}${playersArray[0].name}` : `🏆 ${winnerText}${playersArray[0].name}`;
         }
+    }
+
+    function renderHeadToHeadView(players, container) {
+        const h2h = document.createElement('div');
+        h2h.className = 'h2h-container';
+
+        // Ordiniamo per punteggio decrescente
+        players.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
+        const maxScore = players[0].score;
+
+        players.forEach((p, idx) => {
+            const card = document.createElement('div');
+            card.className = 'h2h-card' + (p.score === maxScore && maxScore > 0 ? ' winner' : '');
+
+            const escName = escapeHTML(p.name);
+            const isMe = (p.id === myId);
+            const meLabel = isMe ? ` <small>(${currentLang==='it'?'Tu':'You'})</small>` : '';
+
+            card.innerHTML = `
+                <div class="h2h-name">${escName}${meLabel}</div>
+                <div class="h2h-stats">
+                    <div class="h2h-stat-row">
+                        <span>Punti:</span>
+                        <span class="h2h-val" style="color:#4caf50;">${p.score}</span>
+                    </div>
+                    <div class="h2h-stat-row">
+                        <span>Velocità:</span>
+                        <span class="h2h-val" style="color:var(--link-color);">${p.wpm} WPM</span>
+                    </div>
+                </div>
+                <div class="h2h-hint">${currentLang==='it'?'Clicca per dettagli':'Click for details'}</div>
+            `;
+
+            card.onclick = () => {
+                if (p.matchDetails && p.matchDetails.length > 0) {
+                    showPlayerDetailsModal(p.name, p.matchDetails);
+                } else if (p.id === myId && matchDetailsArray.length > 0) {
+                    showPlayerDetailsModal(p.name, matchDetailsArray);
+                } else {
+                    showToast(currentLang==='it'?"Dettagli non disponibili":"Details not available");
+                }
+            };
+
+            h2h.appendChild(card);
+        });
+
+        container.appendChild(h2h);
+    }
+
+    function showPlayerDetailsModal(name, details) {
+        const modal = document.getElementById('matchDetailsModal');
+        const body = document.getElementById('matchDetailsBody');
+        body.innerHTML = '';
+
+        // Titolo dinamico
+        modal.querySelector('h3').textContent = `${currentLang==='it'?'Dettagli Partita di':'Match Details for'} ${name}`;
+
+        details.forEach(row => {
+            const tr = document.createElement('tr');
+            let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
+            let realHTML = generateDiffHTML(row.real, row.typed || '');
+            tr.innerHTML = `<td>${escapeHTML(row.typed || '-')}</td><td><b>${realHTML}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
+            body.appendChild(tr);
+        });
+
+        modal.style.display = 'flex';
     }
 
     function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
