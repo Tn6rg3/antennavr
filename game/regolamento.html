@@ -1,47 +1,82 @@
-<h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
-<p style="margin-top: 5px;">Il gioco consiste nell'ascoltare sequenze in codice Morse e decifrare la parola o il nominativo corretto.</p>
+<div style="padding-bottom: 20px;">
+    <!-- SEZIONE 1: REGOLE DEL GIOCO -->
+    <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
+    <p style="margin-top: 5px; font-size: 0.9em;">Il gioco consiste nell'ascoltare sequenze in codice Morse e decifrare la parola o il nominativo corretto.</p>
 
-<h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Parole Comuni:</h4>
-<ul style="margin-top: 2px; padding-left: 20px;">
-    <li><b>Parola/Gruppo perfetto:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
-    <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
-    <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
-    <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata all'inizio.</li>
-</ul>
+    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">Modalità Parole Comuni:</h4>
+    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em;">
+        <li><b>Parola perfetta:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
+        <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
+        <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
+        <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata all'inizio.</li>
+    </ul>
 
-<h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Ping Pong:</h4>
-<ul style="margin-top: 2px; padding-left: 20px;">
-    <li>Sfida a turni <b>esclusivamente Multiplayer</b> (necessita di almeno un altro giocatore in stanza).</li>
-    <li>A turno, l'utente <b>A</b> pensa a una parola e la digita, l'utente <b>B</b> (o gli altri in stanza) la ascoltano in codice Morse e la devono decodificare.</li>
-    <li>I ruoli si invertono automaticamente per le stringhe successive.</li>
-    <li>Il calcolo di punti e penalità segue le regole delle <i>Parole Comuni</i> indicate sopra. <i>Nei tornei la velocità di partenza è fissata a 20 WPM.</i></li>
-</ul>
+    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">Modalità Ping Pong:</h4>
+    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em;">
+        <li>Sfida a turni <b>Multiplayer</b> (necessita di almeno 2 giocatori).</li>
+        <li>A turno, l'utente <b>A</b> pensa a una parola e la digita, l'utente <b>B</b> la ascolta in codice Morse e deve decodificarla. I ruoli si invertono per le stringhe successive.</li>
+    </ul>
 
-<h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Modalità Nominativi (CW Freak):</h4>
-<ul style="margin-top: 2px; padding-left: 20px;">
-    <li>Per ogni nominativo corretto ricevi un punteggio base calcolato come: <b>(WPM * 2)</b>.</li>
-    <li>Più ne indovini di fila, più il <b>Bonus Serie</b> aumenta (+5pt per ogni serie). La velocità sale di <b>+2 WPM</b>.</li>
-    <li>Al primo errore la serie si azzera, prendi <b>0 pt</b> e la velocità scende di <b>-1 WPM</b>.</li>
-</ul>
+    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">Modalità Nominativi (CW Freak):</h4>
+    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em;">
+        <li>Base: <b>(WPM * 2) pt</b>. Più ne indovini di fila, più il <b>Bonus Serie</b> aumenta (+5pt) e la velocità sale (+2 WPM).</li>
+        <li>Al primo errore la serie si azzera (0 pt) e la velocità scende di <b>-1 WPM</b>.</li>
+    </ul>
 
-<h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px;">Funzionalità Aggiuntive:</h4>
-<ul style="margin-top: 2px; padding-left: 20px;">
-    <li><b>Tasto Riascolta:</b> Permette di riascoltare l'audio della parola corrente, ma la parola indovinata varrà <b>sempre 0 punti</b> e non aumenterà il WPM (penalità).</li>
-    <li><b>Velocità Fissa:</b> In Singleplayer puoi spuntare "Fissa" per bloccare il WPM senza farlo variare per errori o successi.</li>
-    <li><b>Scadenza Stanza:</b> Il timer in minuti indicato in fase di avvio stabilisce per quanto tempo la lobby rimane in attesa di giocatori. Una volta avviata la partita, la stanza dura per tutto il tempo necessario.</li>
-    <li><b>Caratteri Accentati:</b> Il dizionario comprende anche parole con <i>à, è, é, ì, ò, ù</i> tradotte nei rispettivi standard Morse.</li>
-</ul>
+    <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 20px 0;">
 
-<hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 15px 0;">
+    <!-- SEZIONE 2: TERMINI E CONDIZIONI -->
+    <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">📄 Termini di Servizio (ToS)</h3>
+    <p style="margin-top: 5px; font-size: 0.85em; line-height: 1.4;">
+        L'accesso e l'utilizzo di "Sfida Telegrafia" implicano l'accettazione integrale dei seguenti termini.
+    </p>
+    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
+        <li><b>Comportamento degli Utenti:</b> È severamente vietato l'uso di linguaggio offensivo, diffamatorio o discriminatorio all'interno delle chat (Globali, di Stanza o di Squadra). È altresì vietato l'uso di bot, script o cheat per manipolare i punteggi.</li>
+        <li><b>Sanzioni:</b> L'amministratore si riserva il diritto insindacabile di azzerare i punteggi, rimuovere account o bannare utenti che violino le regole o disturbino la community.</li>
+        <li><b>Disponibilità del Servizio:</b> L'app è fornita "così com'è" (As-Is). Non si garantisce l'assenza di bug o il mantenimento perpetuo dei server o dei salvataggi. L'amministratore non è responsabile per eventuali perdite di dati o interruzioni di servizio.</li>
+    </ul>
 
-<h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🔒 Privacy e Dati Personali</h3>
-<p style="margin-top: 5px;">I tuoi dati sono protetti e usati <b>solo</b> ai fini del gioco.</p>
-<ul style="margin-top: 2px; padding-left: 20px;">
-    <li><b>Cosa salviamo:</b> Il tuo ID Telegram, Nome, Username (se pubblico), storico delle partite giocate, statistiche degli errori e appartenenza alle squadre.</li>
-    <li><b>Trasparenza:</b> Gli altri utenti possono vedere il tuo Nome in classifica o nelle lobby, e possono cliccarci per visualizzare il tuo profilo Telegram pubblico.</li>
-    <li><b>Cancellazione Totale:</b> Tramite il pulsante rosso sottostante puoi cancellare in modo irreversibile <b>TUTTI</b> i dati legati al tuo account dal nostro database (storico, squadre, statistiche).</li>
-</ul>
-<hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 10px 0;">
-<h3 style="color: var(--champ-color); font-size: 1.1em; margin-bottom: 5px;">💡 Suggerimenti</h3>
-<p style="font-size: 0.9em; margin-bottom: 5px;">Hai un'idea per migliorare l'app? Inviaci un messaggio!</p>
-<button id="sendFeedbackBtn" class="btn-link" style="margin:0; padding:5px; font-weight:bold; text-align:center; width:100%;">📬 Invia un Suggerimento al Creatore</button>
+    <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 20px 0;">
+
+    <!-- SEZIONE 3: PRIVACY POLICY (GDPR) -->
+    <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">⚖️ Informativa Privacy (GDPR)</h3>
+    <p style="margin-top: 5px; font-size: 0.85em; line-height: 1.4;">
+        Ai sensi del Regolamento (UE) 2016/679 (GDPR), ti informiamo su come raccogliamo, gestiamo e proteggiamo i tuoi dati personali. <br>
+        <b>Titolare del Trattamento:</b> Contattabile all'indirizzo/username <b>[INSERISCI LA TUA EMAIL O CONTATTO]</b>.
+    </p>
+
+    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">1. Dati Raccolti</h4>
+    <p style="margin-top: 2px; font-size: 0.85em; line-height: 1.4;">
+        Tramite le API di Telegram e l'uso dell'App raccogliamo:
+    </p>
+    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
+        <li><b>Dati Identificativi:</b> ID Telegram univoco, First Name (Nome) e Username pubblico (se impostato su Telegram).</li>
+        <li><b>Dati di Gioco:</b> Statistiche di precisione, storico delle partite, punteggi WPM, appartenenza a squadre e alias personalizzati.</li>
+        <li><b>Dati di Comunicazione:</b> I messaggi inviati nelle chat interne dell'app. Si prega di NON condividere informazioni personali sensibili nelle chat.</li>
+        <li><b>Dati di Navigazione (Local Storage):</b> L'app salva localmente sul tuo dispositivo (similmente ai cookie tecnici) le tue preferenze, come la lingua scelta o l'avvenuta visione dei popup, per migliorare l'esperienza.</li>
+    </ul>
+
+    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">2. Finalità e Base Giuridica</h4>
+    <p style="margin-top: 2px; font-size: 0.85em; line-height: 1.4;">
+        I dati sono trattati per permettere il funzionamento del gioco (esecuzione di un contratto), stilare classifiche e moderare le interazioni. Il tuo nome/alias sarà visibile pubblicamente in classifica. Puoi nascondere il link al tuo profilo attivando "Nascondi mio username Telegram" nel Profilo.
+    </p>
+
+    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">3. Terze Parti e Trasferimento Dati</h4>
+    <p style="margin-top: 2px; font-size: 0.85em; line-height: 1.4;">
+        L'app si appoggia a <b>Google Firebase</b> (Database e Auth) e all'ecosistema <b>Telegram</b>. I dati potrebbero essere elaborati su server extra-UE, ma sono protetti da clausole contrattuali standard (SCC) che ne garantiscono la sicurezza. Nessun dato viene ceduto per profilazione o marketing.
+    </p>
+
+    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">4. Conservazione e Diritti (Art. 15-22 GDPR)</h4>
+    <p style="margin-top: 2px; font-size: 0.85em; line-height: 1.4;">
+        I dati sono conservati finché mantieni attivo il tuo account. Hai il diritto di: accedere ai tuoi dati, richiederne la rettifica, la portabilità o opporsi al trattamento. Hai il <b>Diritto all'Oblio</b>: tramite il pulsante rosso qui in basso puoi eliminare istantaneamente e permanentemente tutti i tuoi record dal database.
+    </p>
+    <p style="margin-top: 2px; font-size: 0.85em; line-height: 1.4; color: var(--hint-color); font-style: italic;">
+        Utilizzando questa applicazione, confermi di avere almeno 14 anni (o l'età minima richiesta nel tuo Paese per prestare il consenso informatico).
+    </p>
+
+    <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 20px 0;">
+
+    <h3 style="color: var(--champ-color); font-size: 1.1em; margin-bottom: 5px;">💡 Suggerimenti o Segnalazioni</h3>
+    <p style="font-size: 0.85em; margin-bottom: 5px;">Hai un'idea per migliorare l'app o hai trovato un bug? Inviaci un messaggio!</p>
+    <button id="sendFeedbackBtn" class="btn-link" style="margin:0; padding:5px; font-weight:bold; text-align:center; width:100%;">📬 Invia un Suggerimento al Creatore</button>
+</div>
