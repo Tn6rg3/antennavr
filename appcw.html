@@ -1361,7 +1361,7 @@
             if (Date.now() - inv.ts > 60000) { db.ref(`invites/${myId}`).remove(); return; }
 
             document.getElementById('inviteModalTitle').textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
-            document.getElementById('inviteModalText').innerHTML = `Ti ha invitato a giocare:<br><b>${inv.mode.toUpperCase()}</b> a <b>${inv.wpm} WPM</b> (${inv.wordCount} test).`;
+            document.getElementById('inviteModalText').innerHTML = `Ti ha invitato a giocare:<br><b>${escapeHTML(inv.mode.toUpperCase())}</b> a <b>${escapeHTML(inv.wpm)} WPM</b> (${escapeHTML(inv.wordCount)} test).`;
             document.getElementById('inviteSettings').style.display = 'none';
             document.getElementById('incomingInviteArea').style.display = 'block';
             document.getElementById('outgoingInviteArea').style.display = 'none';
@@ -3164,12 +3164,12 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             }
 
             users.forEach((u, idx) => {
-                const li = document.createElement('li');
-                let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
-                li.innerHTML = `<span>${medal} <b>${escapeHTML(u.name || "Anonimo")}</b></span>
-                                <span><b>${u.games || 0}</b> <small>part.</small> <small style="color:#4caf50;">(${u.wins || 0} v.)</small></span>`;
-                list.appendChild(li);
-            });
+    const li = document.createElement('li');
+    let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
+    li.innerHTML = `<span>${medal} <b>${escapeHTML(u.name || "Anonimo")}</b></span>
+                    <span><b>${escapeHTML(u.games || 0)}</b> <small>part.</small> <small style="color:#4caf50;">(${escapeHTML(u.wins || 0)} v.)</small></span>`;
+    list.appendChild(li);
+});
         }).catch(err => {
             console.error("Errore fetch attività:", err);
             list.innerHTML = `<li style="justify-content:center; color:var(--hint-color); flex-direction:column; text-align:center;">
