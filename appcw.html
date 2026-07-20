@@ -1042,7 +1042,8 @@
             tab_this_match: "Questa Partita", tab_trn_lb: "Classifica Tornei", tab_callsigns: "Nominativi", tab_pingpong: "Ping Pong", tab_std_multi: "Parole (Multi)", tab_std_single: "Parole (Single)",
             btn_start_match: "AVVIA PARTITA", btn_delete_room: "ELIMINA STANZA", btn_leave_lobby: "Esci dalla Stanza",
             status_host: "Sei l'Host della partita.", status_guest: "Sei un partecipante. Attendi il via.", lobby_free: "Lobby Stanza Libera", lobby_trn: "Lobby Incontro Torneo 🥊",
-            ready_btn: "SONO PRONTO ✅", waiting_host: "In attesa che l'Host avvii..."
+            ready_btn: "SONO PRONTO ✅", waiting_host: "In attesa che l'Host avvii...",
+            tab_my_team: "La mia Squadra", tab_all_teams: "Tutte le Squadre", tab_tournaments: "I Tornei"
         },
         en: {
             hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", conn_secure: "Secure connection in progress...",
@@ -1068,7 +1069,8 @@
             tab_this_match: "This Match", tab_trn_lb: "Tournament Leaderboard", tab_callsigns: "Callsigns", tab_pingpong: "Ping Pong", tab_std_multi: "Words (Multi)", tab_std_single: "Words (Single)",
             btn_start_match: "START MATCH", btn_delete_room: "DELETE ROOM", btn_leave_lobby: "Leave Lobby",
             status_host: "You are the Match Host.", status_guest: "You are a participant. Wait for the start.", lobby_free: "Free Room Lobby", lobby_trn: "Tournament Match Lobby 🥊",
-            ready_btn: "I AM READY ✅", waiting_host: "Waiting for Host to start..."
+            ready_btn: "I AM READY ✅", waiting_host: "Waiting for Host to start...",
+            tab_my_team: "My Team", tab_all_teams: "All Teams", tab_tournaments: "Tournaments"
         }
     };
 
@@ -1171,6 +1173,11 @@
         document.getElementById('deleteRoomBtn').textContent = t.btn_delete_room;
         document.getElementById('leaveLobbyBtn').textContent = t.btn_leave_lobby;
         document.getElementById('readyBtn').textContent = t.ready_btn;
+        
+        // Teams and Tournaments Tabs
+        if(document.getElementById('tabTeamGestBtn')) document.getElementById('tabTeamGestBtn').textContent = t.tab_my_team;
+        if(document.getElementById('tabAllTeamsBtn')) document.getElementById('tabAllTeamsBtn').textContent = t.tab_all_teams;
+        if(document.getElementById('tabTournamentsBtn')) document.getElementById('tabTournamentsBtn').textContent = t.tab_tournaments;
 
         const loadingStats = document.getElementById('txt_loading_stats');
         if(loadingStats) loadingStats.textContent = t.loading;
@@ -1178,6 +1185,13 @@
         if(loadingStats2) loadingStats2.textContent = t.loading;
 
         checkGameTypeUI();
+        
+        // Se siamo nella vista torneo, forza un aggiornamento per ridisegnare i bottoni
+        if (activeTrnId) {
+            db.ref(`tournaments/${activeTrnId}`).once('value', snap => {
+                if(snap.exists()) renderActiveTournament(snap);
+            });
+        }
     }
 
     document.getElementById('gameModeInput').addEventListener('change', (e) => {
@@ -1286,7 +1300,7 @@
                                     ${isThisOneWaiting ? 'In Attesa...' : 'Sfida'}</button>`;
             list.appendChild(li);
         });
-        if (count === 0) list.innerHTML = '<li style="justify-content: center; color: var(--hint-color); background: none; border: none;">Sei solo.</li>';
+        if (count === 0) list.innerHTML = `<li style="justify-content: center; color: var(--hint-color); background: none; border: none;">${i18n[currentLang].you_are_alone}</li>`;
     }
 
     window.openInviteModal = function(targetId, targetName) {
@@ -1440,7 +1454,7 @@
                     list.appendChild(li);
                 }
             });
-            if (wCount === 0) list.innerHTML = '<li style="justify-content:center;color:var(--hint-color); background:none; border:none;">Nessuna sfida attiva.</li>';
+            if (wCount === 0) list.innerHTML = `<li style="justify-content:center;color:var(--hint-color); background:none; border:none;">${i18n[currentLang].no_challenges}</li>`;
         });
     }
     window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
@@ -2433,7 +2447,9 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         });
 
         if(allFinished && playersArray.length > 0) {
-            document.getElementById('roomWinnerBanner').textContent = roomCode.startsWith("TRN_") ? `🏆 Vince il match: ${playersArray[0].name}` : `🏆 Vincitore: ${playersArray[0].name}`;
+            const winnerText = currentLang === 'it' ? "Vincitore: " : "Winner: ";
+            const matchWinnerText = currentLang === 'it' ? "Vince il match: " : "Match winner: ";
+            document.getElementById('roomWinnerBanner').textContent = roomCode.startsWith("TRN_") ? `🏆 ${matchWinnerText}${playersArray[0].name}` : `🏆 ${winnerText}${playersArray[0].name}`;
         }
     }
 
@@ -2451,7 +2467,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             });
         } else if (tabType === 'active_tournament') {
             if (!activeTrnId) {
-                container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Non sei iscritto a nessun torneo attivo.</p>';
+                container.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang==='it' ? "Non sei iscritto a nessun torneo attivo." : "You are not enrolled in any active tournament."}</p>`;
             } else {
                 db.ref(`tournaments/${activeTrnId}`).once('value', snap => {
                     const trn = snap.val();
@@ -2463,9 +2479,9 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                         header.style.padding = '5px';
                         header.style.background = 'var(--sec-bg-color)';
                         header.style.borderRadius = '8px';
-                        header.innerHTML = `<small style="color:var(--hint-color)">Torneo Attivo:</small><br><b style="color:var(--champ-color); font-size:1.1em;">${escapeHTML(trn.name)}</b>`;
+                        header.innerHTML = `<small style="color:var(--hint-color)">${currentLang==='it'?'Torneo Attivo:':'Active Tournament:'}</small><br><b style="color:var(--champ-color); font-size:1.1em;">${escapeHTML(trn.name)}</b>`;
 
-                        let standings = Object.entries(trn.standings).map(([id, data]) => ({ name: data.name, score: data.points, date: "In corso" }));
+                        let standings = Object.entries(trn.standings).map(([id, data]) => ({ name: data.name, score: data.points, date: currentLang==='it'?"In corso":"In progress" }));
                         standings.sort((a,b) => b.score - a.score);
 
                         container.innerHTML = '';
@@ -2476,7 +2492,7 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
                         renderPlayersListHTML(standings, listCont, false, true);
                         container.appendChild(listCont);
                     } else {
-                        container.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Dati torneo non disponibili.</p>';
+                        container.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang==='it'?'Dati torneo non disponibili.':'Tournament data unavailable.'}</p>`;
                     }
                 });
             }
@@ -2810,7 +2826,10 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         const trn = trnSnap.val();
         if (!trn) return;
         const isFinished = trn.status === 'finished';
-        document.getElementById('activeTrnTitle').textContent = trn.name + (isFinished ? " (Concluso)" : "");
+        
+        // Traduzione dinamica del titolo
+        const finishedStr = currentLang === 'it' ? " (Concluso)" : " (Finished)";
+        document.getElementById('activeTrnTitle').textContent = trn.name + (isFinished ? finishedStr : "");
 
     const amIHost = (trn.hostId === myId);
     document.getElementById('editTrnNameBtn').style.display = (amIHost && !isFinished) ? 'block' : 'none';
@@ -2824,7 +2843,11 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
     standings.forEach((s, idx) => {
         const tr = document.createElement('tr');
         let med = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
-        tr.innerHTML = `<td>${med}</td><td><b>${escapeHTML(s.name)}</b> ${s.id===myTeamId?'(Voi)':''}</td><td><b>${s.points}</b></td>`;
+        
+        // Traduzione dinamica del "Voi"
+        const youStr = currentLang === 'it' ? '(Voi)' : '(You)';
+        
+        tr.innerHTML = `<td>${med}</td><td><b>${escapeHTML(s.name)}</b> ${s.id===myTeamId?youStr:''}</td><td><b>${s.points}</b></td>`;
         stdBody.appendChild(tr);
     });
 
@@ -2839,21 +2862,30 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
         };
     }
     const teamCount = trn.teams ? Object.keys(trn.teams).length : 0;
-    document.getElementById('trnTeamCountTxt').textContent = `Squadre Iscritte: ${teamCount}`;
+    
+    // Traduzione dinamica delle squadre iscritte
+    const enrolledStr = currentLang === 'it' ? "Squadre Iscritte: " : "Enrolled Teams: ";
+    document.getElementById('trnTeamCountTxt').textContent = `${enrolledStr}${teamCount}`;
 
     const startBtn = document.getElementById('startTrnBtn');
     if (startBtn) {
         // Se siamo l'host, permettiamo l'avvio anche se non siamo "playing" ancora
         startBtn.disabled = teamCount < 2 || (trn.status !== 'open' && trn.status !== 'playing');
-        if (trn.status === 'playing') startBtn.textContent = "Rigenera Tabellone (Attenzione!)";
-        else startBtn.textContent = "Genera Tabellone e Avvia";
+        
+        // Traduzione dinamica dei pulsanti host
+        if (trn.status === 'playing') {
+            startBtn.textContent = currentLang === 'it' ? "Rigenera Tabellone (Attenzione!)" : "Regenerate Bracket (Warning!)";
+        } else {
+            startBtn.textContent = currentLang === 'it' ? "Genera Tabellone e Avvia" : "Generate Bracket and Start";
+        }
     }
 
     const bracketCont = document.getElementById('trnBracketContainer');
     bracketCont.innerHTML = '';
 
     if (trn.status === 'open') {
-        bracketCont.innerHTML = '<p style="text-align:center; color:var(--hint-color); font-size:0.9em;">Il torneo è aperto, attendi l\'avvio dall\'organizzatore.</p>';
+        const waitStr = currentLang === 'it' ? "Il torneo è aperto, attendi l'avvio dall'organizzatore." : "The tournament is open, wait for the host to start.";
+        bracketCont.innerHTML = `<p style="text-align:center; color:var(--hint-color); font-size:0.9em;">${waitStr}</p>`;
     } else if (trn.matches) {
         Object.entries(trn.matches).forEach(([mId, m]) => {
             const isMyMatch = (m.teamA === myTeamId || m.teamB === myTeamId);
@@ -2874,24 +2906,30 @@ if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
 
             if (m.status !== 'finished') {
                 // I tasti slot ora chiamano toggleTrnSlot passando l'ID incontro e il lato (A o B)
+                // Traduzione dinamica slot liberi
+                const slotAEmpty = currentLang === 'it' ? 'A: Libero' : 'A: Open';
+                const slotBEmpty = currentLang === 'it' ? 'B: Libero' : 'B: Open';
+
                 let slotAHTML = `<button class="slot-btn ${m.playerA ? 'filled' : ''}"
                     onclick="toggleTrnSlot('${mId}', 'A', '${m.teamA}')">
-                    ${m.playerA ? escapeHTML(m.playerA.name) : 'A: Libero'}</button>`;
+                    ${m.playerA ? escapeHTML(m.playerA.name) : slotAEmpty}</button>`;
 
                 let slotBHTML = `<button class="slot-btn ${m.playerB ? 'filled' : ''}"
                     onclick="toggleTrnSlot('${mId}', 'B', '${m.teamB}')">
-                    ${m.playerB ? escapeHTML(m.playerB.name) : 'B: Libero'}</button>`;
+                    ${m.playerB ? escapeHTML(m.playerB.name) : slotBEmpty}</button>`;
 
                 card.innerHTML += `<div style="display:flex; width:100%; gap:10px;">${slotAHTML}${slotBHTML}</div>`;
 
                 // Pulsante AVVIA solo se entrambi gli slot sono pieni e sono uno dei giocatori
                 if (m.playerA && m.playerB) {
                     if (m.playerA.id === myId || m.playerB.id === myId) {
-                        card.innerHTML += `<button class="btn-success" style="font-size:0.85em; padding:6px; margin-top:8px;" onclick="startTrnMatch('${mId}')">ENTRA NELLA SFIDA</button>`;
+                        const joinMatchStr = currentLang === 'it' ? 'ENTRA NELLA SFIDA' : 'JOIN MATCH';
+                        card.innerHTML += `<button class="btn-success" style="font-size:0.85em; padding:6px; margin-top:8px;" onclick="startTrnMatch('${mId}')">${joinMatchStr}</button>`;
                     }
                 }
             } else {
-                card.innerHTML += `<div style="font-size:0.85em; color:#4caf50; font-weight:bold; margin-top:5px;">Concluso</div>`;
+                const finStr = currentLang === 'it' ? 'Concluso' : 'Finished';
+                card.innerHTML += `<div style="font-size:0.85em; color:#4caf50; font-weight:bold; margin-top:5px;">${finStr}</div>`;
             }
             bracketCont.appendChild(card);
         });
