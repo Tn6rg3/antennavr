@@ -724,6 +724,11 @@ async function loadRegolamento() {
             const leftSpan = document.createElement('span');
             const nameB = document.createElement('b');
             nameB.textContent = u.name;
+            nameB.style.cursor = 'pointer';
+            nameB.style.color = 'var(--link-color)';
+            nameB.style.textDecoration = 'underline';
+            nameB.onclick = () => openTeamInviteModal(child.key, u.name);
+
             leftSpan.appendChild(nameB);
             leftSpan.appendChild(document.createElement('br'));
             const statusSmall = document.createElement('small');
@@ -762,10 +767,47 @@ async function loadRegolamento() {
         document.getElementById('inviteModalTitle').textContent = "Sfida " + targetName;
         document.getElementById('inviteModalText').textContent = "Scegli le impostazioni per la sfida:";
         document.getElementById('inviteSettings').style.display = 'block';
+        document.getElementById('teamInviteSettings').style.display = 'none';
         document.getElementById('incomingInviteArea').style.display = 'none';
+        document.getElementById('incomingTeamInviteArea').style.display = 'none';
         document.getElementById('outgoingInviteArea').style.display = 'block';
         document.getElementById('inviteModal').style.display = 'flex';
     }
+
+    window.openTeamInviteModal = function(targetId, targetName) {
+        currentInviterId = targetId;
+        document.getElementById('inviteModalTitle').textContent = "Squadra: " + targetName;
+        document.getElementById('inviteModalText').textContent = myTeamId
+            ? `Vuoi invitare ${targetName} ad unirsi alla tua squadra (${myTeamName})?`
+            : `Vuoi suggerire a ${targetName} di creare una propria squadra per i tornei?`;
+
+        document.getElementById('inviteSettings').style.display = 'none';
+        document.getElementById('teamInviteSettings').style.display = 'block';
+        document.getElementById('incomingInviteArea').style.display = 'none';
+        document.getElementById('incomingTeamInviteArea').style.display = 'none';
+        document.getElementById('outgoingInviteArea').style.display = 'none';
+
+        const btn = document.getElementById('sendTeamInviteBtn');
+        btn.textContent = myTeamId ? "INVIA INVITO SQUADRA 🏆" : "SUGGERISCI CREAZIONE SQUADRA 💡";
+
+        document.getElementById('inviteModal').style.display = 'flex';
+    }
+
+    document.getElementById('sendTeamInviteBtn').addEventListener('click', () => {
+        const inviteData = {
+            fromId: myId,
+            fromName: myName,
+            type: 'team',
+            teamId: myTeamId || null,
+            teamName: myTeamName || null,
+            ts: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        db.ref(`invites/${currentInviterId}`).set(inviteData).then(() => {
+            showToast("Invito squadra inviato!");
+            closeInviteModal();
+        });
+    });
 
     window.closeInviteModal = function() {
         document.getElementById('inviteModal').style.display = 'none';
@@ -828,34 +870,75 @@ async function loadRegolamento() {
             // Se l'invito è vecchio (più di 1 min), ignoralo
             if (Date.now() - inv.ts > 60000) { db.ref(`invites/${myId}`).remove(); return; }
 
-            document.getElementById('inviteModalTitle').textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
+            if (inv.type === 'team') {
+                document.getElementById('inviteModalTitle').textContent = inv.teamId ? "🚀 INVITO IN SQUADRA" : "💡 SUGGERIMENTO SQUADRA";
 
-            const textEl = document.getElementById('inviteModalText');
-            textEl.innerHTML = '';
-            textEl.appendChild(document.createTextNode("Ti ha invitato a giocare:"));
-            textEl.appendChild(document.createElement('br'));
-            const bMode = document.createElement('b');
-            bMode.textContent = inv.mode.toUpperCase();
-            textEl.appendChild(bMode);
-            textEl.appendChild(document.createTextNode(" a "));
-            const bWpm = document.createElement('b');
-            bWpm.textContent = inv.wpm;
-            textEl.appendChild(bWpm);
-            textEl.appendChild(document.createTextNode(" WPM ("));
-            const bCount = document.createElement('b');
-            bCount.textContent = inv.wordCount;
-            textEl.appendChild(bCount);
-            textEl.appendChild(document.createTextNode(" test)."));
+                const textEl = document.getElementById('inviteModalText');
+                textEl.innerHTML = '';
+                if (inv.teamId) {
+                    textEl.appendChild(document.createTextNode(`${inv.fromName} ti ha invitato ad unirti alla squadra `));
+                    const bTeam = document.createElement('b');
+                    bTeam.textContent = inv.teamName;
+                    textEl.appendChild(bTeam);
+                    textEl.appendChild(document.createTextNode("."));
+                } else {
+                    textEl.appendChild(document.createTextNode(`${inv.fromName} ti suggerisce di creare una tua squadra per partecipare ai tornei!`));
+                }
 
-            document.getElementById('inviteSettings').style.display = 'none';
-            document.getElementById('incomingInviteArea').style.display = 'block';
-            document.getElementById('outgoingInviteArea').style.display = 'none';
+                document.getElementById('inviteSettings').style.display = 'none';
+                document.getElementById('teamInviteSettings').style.display = 'none';
+                document.getElementById('incomingInviteArea').style.display = 'none';
+                document.getElementById('incomingTeamInviteArea').style.display = 'block';
+                document.getElementById('outgoingInviteArea').style.display = 'none';
+
+                const acceptBtn = document.getElementById('acceptTeamInviteBtn');
+                acceptBtn.textContent = inv.teamId ? "UNISCITI ALLA SQUADRA ✅" : "VAI ALLA CREAZIONE 🛠️";
+                acceptBtn.onclick = () => {
+                    db.ref(`invites/${myId}`).remove();
+                    closeInviteModal();
+                    if (inv.teamId) {
+                        joinTeam(inv.teamId);
+                    } else {
+                        showScreen('teamsScreen');
+                    }
+                };
+            } else {
+                document.getElementById('inviteModalTitle').textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
+
+                const textEl = document.getElementById('inviteModalText');
+                textEl.innerHTML = '';
+                textEl.appendChild(document.createTextNode("Ti ha invitato a giocare:"));
+                textEl.appendChild(document.createElement('br'));
+                const bMode = document.createElement('b');
+                bMode.textContent = inv.mode.toUpperCase();
+                textEl.appendChild(bMode);
+                textEl.appendChild(document.createTextNode(" a "));
+                const bWpm = document.createElement('b');
+                bWpm.textContent = inv.wpm;
+                textEl.appendChild(bWpm);
+                textEl.appendChild(document.createTextNode(" WPM ("));
+                const bCount = document.createElement('b');
+                bCount.textContent = inv.wordCount;
+                textEl.appendChild(bCount);
+                textEl.appendChild(document.createTextNode(" test)."));
+
+                document.getElementById('inviteSettings').style.display = 'none';
+                document.getElementById('teamInviteSettings').style.display = 'none';
+                document.getElementById('incomingInviteArea').style.display = 'block';
+                document.getElementById('incomingTeamInviteArea').style.display = 'none';
+                document.getElementById('outgoingInviteArea').style.display = 'none';
+            }
             document.getElementById('inviteModal').style.display = 'flex';
 
             currentInviterId = inv.fromId;
             window.lastIncomingInvite = inv;
         });
     }
+
+    document.getElementById('declineTeamInviteBtn').addEventListener('click', () => {
+        db.ref(`invites/${myId}`).remove();
+        closeInviteModal();
+    });
 
     document.getElementById('declineInviteBtn').addEventListener('click', () => {
         db.ref(`invites/${myId}`).remove();
