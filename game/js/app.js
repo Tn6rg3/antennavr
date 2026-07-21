@@ -2726,8 +2726,11 @@ async function loadRegolamento() {
 
             snap.forEach(child => {
                 const t = child.val();
-                if (t.status === 'retired') return;
                 const count = Object.keys(t.members || {}).length;
+
+                // Filtro rigoroso: salta squadre ritirate o senza membri
+                if (t.status === 'retired' || count === 0) return;
+
                 const teamId = child.key;
                 const escTeam = escapeHTML(t.name);
                 const teamStatus = t.status || 'open'; // Default a open se manca
@@ -3449,4 +3452,3 @@ async function loadRegolamento() {
                               </li>`;
         });
     }
-
