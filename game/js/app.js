@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.2"; // Versione attuale del codice
+    const APP_VERSION = "20240520.3"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -54,7 +54,7 @@ async function loadRegolamento() {
         if (!response.ok) throw new Error("Errore nel caricamento del file");
         const htmlTesto = await response.text();
         document.getElementById('regolamentoContainer').innerHTML = htmlTesto;
-        
+
         // Ricolleghiamo il bottone feedback che ora è nel file esterno
         const btnFeedback = document.getElementById('sendFeedbackBtn');
         if (btnFeedback) {
@@ -242,7 +242,7 @@ async function loadRegolamento() {
             listenToOnlineUsers();
             listenToInvites();
             listenToInviteAccepted();
-          
+
             // CARICA IL REGOLAMENTO
             loadRegolamento();
 
@@ -307,7 +307,7 @@ async function loadRegolamento() {
     function hideChat() {
         document.getElementById('chatDrawer').style.display = 'none';
         isChatDrawerOpen = false;
-        
+
         // Pulizia automatica dei listener quando nascondi la chat
         Object.keys(activeChatListeners).forEach(key => {
             activeChatListeners[key].ref.off('value', activeChatListeners[key].callback);
@@ -343,10 +343,10 @@ async function loadRegolamento() {
     document.getElementById('sendLobbyChatBtn').addEventListener('click', () => {
         const input = document.getElementById('lobbyChatInput');
         const txt = input.value.trim(); if (!txt || !roomCode) return;
-        
+
         const msgRef = db.ref(`rooms/${roomCode}/chat`).push();
         msgRef.onDisconnect().remove(); // Cancella automaticamente alla disconnessione
-        
+
         msgRef.set({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         input.value = '';
     });
@@ -407,12 +407,12 @@ async function loadRegolamento() {
                 const btn = document.getElementById(alertBtnId);
                 if (btn) btn.style.backgroundColor = '#4caf50';
             }
-            
+
             // Notifica globale per messaggi in stanza se siamo l'host e siamo fuori
             if (!initialLoad && newMsgsCount > 0 && roomHostId === myId && activeChatContext !== 'room' && chatRef.key !== 'globalChat') {
                 if (latestMsg) showToast(`📢 (Stanza) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
             }
-            
+
             // Notifica per messaggi globali se siamo in una stanza
             if (!initialLoad && newMsgsCount > 0 && activeChatContext === 'room' && chatRef.key === 'globalChat') {
                 if (latestMsg) showToast(`🌎 (Global) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
@@ -427,7 +427,7 @@ async function loadRegolamento() {
     document.getElementById('sendChatBtn').addEventListener('click', () => {
         const txt = document.getElementById('chatInput').value.trim(); if (!txt) return;
         const currentUsername = myPrivacy ? "" : tgUsername;
-        
+
         let msgRef;
         if (activeChatContext === 'room' && roomCode) {
             msgRef = db.ref(`rooms/${roomCode}/chat`).push();
@@ -436,7 +436,7 @@ async function loadRegolamento() {
         }
 
         msgRef.onDisconnect().remove(); // Cancella automaticamente alla disconnessione
-        
+
         msgRef.set({ name: myName, username: currentUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         document.getElementById('chatInput').value = '';
     });
@@ -617,7 +617,7 @@ async function loadRegolamento() {
         document.getElementById('deleteRoomBtn').textContent = t.btn_delete_room;
         document.getElementById('leaveLobbyBtn').textContent = t.btn_leave_lobby;
         document.getElementById('readyBtn').textContent = t.ready_btn;
-        
+
         // Teams and Tournaments Tabs
         if(document.getElementById('tabTeamGestBtn')) document.getElementById('tabTeamGestBtn').textContent = t.tab_my_team;
         if(document.getElementById('tabAllTeamsBtn')) document.getElementById('tabAllTeamsBtn').textContent = t.tab_all_teams;
@@ -629,7 +629,7 @@ async function loadRegolamento() {
         if(loadingStats2) loadingStats2.textContent = t.loading;
 
         checkGameTypeUI();
-        
+
         // Se siamo nella vista torneo, forza un aggiornamento per ridisegnare i bottoni
         if (activeTrnId) {
             db.ref(`tournaments/${activeTrnId}`).once('value', snap => {
@@ -735,7 +735,7 @@ async function loadRegolamento() {
             const u = child.val(); if (child.key === myId) return;
             count++;
             const li = document.createElement('li');
-            
+
             const isThisOneWaiting = (isChallenging && currentInviterId === child.key);
             const isPlaying = (u.status === 'playing');
 
@@ -1278,7 +1278,7 @@ async function loadRegolamento() {
         if (isTrnOrPP) {
             document.getElementById('waitingHostText').style.display = amIReady ? 'block' : 'none';
             document.getElementById('waitingHostText').textContent = t.waiting_host;
-            document.getElementById('statusInfoText').textContent = amIReady ? t.ready_btn : t.conn_secure; 
+            document.getElementById('statusInfoText').textContent = amIReady ? t.ready_btn : t.conn_secure;
         } else {
             document.getElementById('waitingHostText').style.display = amIHost ? 'none' : 'block';
             document.getElementById('waitingHostText').textContent = t.waiting_host;
@@ -1487,7 +1487,7 @@ async function loadRegolamento() {
         if (!isSinglePlayer) {
             db.ref(`rooms/${roomCode}/players`).once('value', snap => {
                 gameStartPlayerCount = snap.exists() ? Object.keys(snap.val()).length : 0;
-                
+
                 if (gamePlayersListener) db.ref(`rooms/${roomCode}/players`).off('value', gamePlayersListener);
                 gamePlayersListener = db.ref(`rooms/${roomCode}/players`).on('value', playersSnap => {
                     if (!gameRunning) return;
@@ -1929,7 +1929,7 @@ async function loadRegolamento() {
         }
     });
 
-    
+
 
 
     let userMatchHistory = [];
@@ -2726,6 +2726,7 @@ async function loadRegolamento() {
                 const count = Object.keys(t.members || {}).length;
                 const teamId = child.key;
                 const escTeam = escapeHTML(t.name);
+                const teamStatus = t.status || 'open'; // Default a open se manca
 
                 const liAll = document.createElement('li');
                 liAll.style.flexDirection = 'column'; liAll.style.alignItems = 'flex-start';
@@ -2735,17 +2736,17 @@ async function loadRegolamento() {
                     membersHTML += `<span style="display:inline-block; margin-right:5px; font-size:0.85em; color:var(--hint-color);">- ${escapeHTML(m.name)}</span>`;
                 });
 
-                liAll.innerHTML = `<div style="width:100%; display:flex; justify-content:space-between; cursor:${(!isAlreadyInTeam && t.status === 'open') ? 'pointer' : 'default'};"
-                                      ${(!isAlreadyInTeam && t.status === 'open') ? `onclick="joinTeam('${escapeHTML(teamId)}')"` : ''}>
+                liAll.innerHTML = `<div style="width:100%; display:flex; justify-content:space-between; cursor:${(!isAlreadyInTeam && teamStatus === 'open') ? 'pointer' : 'default'};"
+                                      ${(!isAlreadyInTeam && teamStatus === 'open') ? `onclick="joinTeam('${escapeHTML(teamId)}')"` : ''}>
                                       <span><b>${escTeam}</b> <small>(${count} mem.)</small></span>
-                                      ${(!isAlreadyInTeam && t.status === 'open') ? `<span style="color:var(--link-color); font-size:0.8em; font-weight:bold;">+ Unisciti</span>` : ''}
+                                      ${(!isAlreadyInTeam && teamStatus === 'open') ? `<span style="color:var(--link-color); font-size:0.8em; font-weight:bold;">+ Unisciti</span>` : ''}
                                    </div>
                                    <div style="margin-top:3px; padding-left:5px; border-left:2px solid var(--link-color);">
                                       ${membersHTML}
                                    </div>`;
                 if(allList) allList.appendChild(liAll);
 
-                if (!isAlreadyInTeam && t.status === 'open') {
+                if (!isAlreadyInTeam && teamStatus === 'open') {
                     const liOpen = document.createElement('li');
                     liOpen.style.cursor = 'pointer';
                     liOpen.onclick = () => joinTeam(teamId);
@@ -2864,22 +2865,26 @@ async function loadRegolamento() {
 
             snap.forEach(child => {
                 const trn = child.val();
-                const isMember = trn.teams && trn.teams[myTeamId];
+                const trnId = child.key;
+                const isMember = myTeamId && trn.teams && trn.teams[myTeamId];
                 const isHost = trn.hostId === myId;
 
+                // Gestione Torneo Attivo (quello a cui partecipo o che ospito)
                 if ((isMember || isHost) && trn.status !== 'finished') {
                     // Priorità: Torneo in corso > Torneo aperto
                     if (!foundActive) {
                         foundActive = child;
                     } else {
-                        const currentActiveStatus = foundActive.val().status;
-                        if (trn.status === 'playing' && currentActiveStatus !== 'playing') {
+                        const currentStatus = trn.status;
+                        const activeStatus = foundActive.val().status;
+                        if (currentStatus === 'playing' && activeStatus !== 'playing') {
                             foundActive = child;
-                        } else if (trn.status === 'open' && (currentActiveStatus === 'finished' || currentActiveStatus === 'playing' && trn.status === 'playing')) {
-                            if (isHost && foundActive.val().hostId !== myId) foundActive = child;
                         }
                     }
-                } else if (trn.status === 'open') {
+                }
+
+                // Popolamento liste generali (solo se NON è quello che sto visualizzando come attivo)
+                if (trn.status === 'open') {
                     let teamCount = trn.teams ? Object.keys(trn.teams).length : 0;
                     const li = document.createElement('li');
 
@@ -2894,12 +2899,18 @@ async function loadRegolamento() {
 
                     li.appendChild(leftSpan);
 
-                    if (isTeamCaptain) {
+                    if (isTeamCaptain && !isMember) {
                         const btn = document.createElement('button');
                         btn.className = 'action-btn-small btn-champ';
                         btn.textContent = 'Iscrivi';
-                        btn.onclick = () => joinTournament(child.key);
+                        btn.onclick = () => joinTournament(trnId);
                         li.appendChild(btn);
+                    } else if (isMember) {
+                        const joinedSmall = document.createElement('small');
+                        joinedSmall.style.color = 'var(--link-color)';
+                        joinedSmall.style.fontWeight = 'bold';
+                        joinedSmall.textContent = ' (Iscritto)';
+                        li.appendChild(joinedSmall);
                     }
 
                     if (openList) openList.appendChild(li);
@@ -2918,7 +2929,7 @@ async function loadRegolamento() {
                     const btn = document.createElement('button');
                     btn.className = 'action-btn-small btn-secondary';
                     btn.textContent = 'Vedi Risultati';
-                    btn.onclick = () => viewTournament(child.key);
+                    btn.onclick = () => viewTournament(trnId);
 
                     li.appendChild(leftSpan);
                     li.appendChild(btn);
@@ -2972,7 +2983,7 @@ async function loadRegolamento() {
         const trn = trnSnap.val();
         if (!trn) return;
         const isFinished = trn.status === 'finished';
-        
+
         // Traduzione dinamica del titolo
         const finishedStr = currentLang === 'it' ? " (Concluso)" : " (Finished)";
         document.getElementById('activeTrnTitle').textContent = trn.name + (isFinished ? finishedStr : "");
@@ -2989,10 +3000,10 @@ async function loadRegolamento() {
     standings.forEach((s, idx) => {
         const tr = document.createElement('tr');
         let med = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
-        
+
         const tdMed = document.createElement('td');
         tdMed.textContent = med;
-        
+
         const tdName = document.createElement('td');
         const nameB = document.createElement('b');
         nameB.textContent = s.name;
@@ -3024,7 +3035,7 @@ async function loadRegolamento() {
         };
     }
     const teamCount = trn.teams ? Object.keys(trn.teams).length : 0;
-    
+
     // Traduzione dinamica delle squadre iscritte
     const enrolledStr = currentLang === 'it' ? "Squadre Iscritte: " : "Enrolled Teams: ";
     document.getElementById('trnTeamCountTxt').textContent = `${enrolledStr}${teamCount}`;
@@ -3033,7 +3044,7 @@ async function loadRegolamento() {
     if (startBtn) {
         // Se siamo l'host, permettiamo l'avvio anche se non siamo "playing" ancora
         startBtn.disabled = teamCount < 2 || (trn.status !== 'open' && trn.status !== 'playing');
-        
+
         // Traduzione dinamica dei pulsanti host
         if (trn.status === 'playing') {
             startBtn.textContent = currentLang === 'it' ? "Rigenera Tabellone (Attenzione!)" : "Regenerate Bracket (Warning!)";
