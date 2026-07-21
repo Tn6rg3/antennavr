@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.3"; // Versione attuale del codice
+    const APP_VERSION = "20240520.4"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -2681,6 +2681,7 @@ async function loadRegolamento() {
     }
 
     window.switchTeamTab = function(tab) {
+        console.log("Switching to tab:", tab);
         document.getElementById('tabTeamGestBtn').classList.remove('active-tab');
         document.getElementById('tabAllTeamsBtn').classList.remove('active-tab');
         document.getElementById('tabTournamentsBtn').classList.remove('active-tab');
@@ -2695,18 +2696,17 @@ async function loadRegolamento() {
             document.getElementById('tabTeamGestBtn').classList.add('active-tab');
             if(myTeamId) {
                 document.getElementById('myTeamView').style.display = 'flex';
-                document.getElementById('teamGestArea').style.display = 'flex'; // Assicuriamoci che l'area interna sia visibile
             } else {
                 document.getElementById('noTeamView').style.display = 'flex';
             }
         } else if (tab === 'allteams') {
             document.getElementById('tabAllTeamsBtn').classList.add('active-tab');
             document.getElementById('allTeamsArea').style.display = 'flex';
-            listenToAllTeams(!!myTeamId); // Forza aggiornamento lista
+            listenToAllTeams(!!myTeamId);
         } else {
             document.getElementById('tabTournamentsBtn').classList.add('active-tab');
             document.getElementById('tournamentsArea').style.display = 'flex';
-            listenToTournaments(); // Forza aggiornamento tornei
+            listenToTournaments();
         }
     }
 
@@ -2856,6 +2856,7 @@ async function loadRegolamento() {
     function listenToTournaments() {
         if (trnListener) db.ref('tournaments').off('value', trnListener);
         trnListener = db.ref('tournaments').on('value', snap => {
+            console.log("Tournaments data:", snap.val());
             activeTrnId = null;
             const openList = document.getElementById('openTournamentsList');
             const pastList = document.getElementById('pastTournamentsList');
@@ -3169,7 +3170,7 @@ async function loadRegolamento() {
         if(confirm("Eliminare definitivamente il torneo?")) db.ref(`tournaments/${activeTrnId}`).remove();
     });
 
-   document.getElementById('startTrnBtn').addEventListener('click', () => {
+    document.getElementById('startTrnBtn').addEventListener('click', () => {
     console.log("Start button clicked. activeTrnId:", activeTrnId);
     if (!activeTrnId) return;
     db.ref(`tournaments/${activeTrnId}/teams`).once('value', snap => {
