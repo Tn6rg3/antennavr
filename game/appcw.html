@@ -16,6 +16,11 @@
 </head>
 <body>
 
+<div id="updateBanner" style="display:none; position:fixed; top:0; left:0; width:100%; background:#ff9800; color:white; text-align:center; padding:10px; z-index:9999; font-weight:bold; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+    🚀 Nuova versione disponibile!
+    <button onclick="window.location.reload(true)" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em;">Aggiorna ora</button>
+</div>
+
 <div id="toastContainer"></div>
 
 
@@ -58,6 +63,11 @@
     </div>
 
     <p id="loadingText" style="margin-bottom: 5px;" data-i18n="conn_secure">Connessione sicura in corso...</p>
+
+    <!-- BOTTONE RIENTRO PARTITA -->
+    <div id="rejoinContainer" style="display:none; width:100%; margin-bottom: 10px;">
+        <button id="rejoinGameBtn" class="btn-success" style="padding: 15px; font-size: 1.1em; animation: pulse 2s infinite;">🔄 RIENTRA NELLA PARTITA IN CORSO</button>
+    </div>
 
     <!-- SEZIONE TORNEI -->
     <div style="width: 100%; text-align: center; margin-bottom: 0;">
@@ -196,30 +206,38 @@
 
     <!-- VISTA: L'utente HA una squadra (tab "La mia Squadra") -->
     <div id="myTeamView" style="width: 100%; display: none; flex-grow:1; flex-direction:column; min-height: 0;">
-        <div id="teamGestArea" style="display:flex; flex-direction:column; flex-grow:1; min-height:0;">
-            <div class="box-panel" style="flex-shrink: 0;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="box-panel" style="flex-shrink: 0; padding: 10px 5px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding: 0 5px;">
                     <h3 id="myTeamNameDisplay" style="color: var(--link-color); font-size: 1.2em; margin:0;">Nome Squadra</h3>
                     <button id="leaveTeamBtn" class="btn-danger action-btn-small">Abbandona</button>
                 </div>
                 <p style="text-align:center; margin: 5px 0; font-size:0.85em; font-weight:bold;" id="teamStatusText"></p>
+
+                <div id="teamMembersArea" style="background: var(--bg-color); border-radius: 8px; padding: 8px; margin: 5px 0;">
+                    <div id="teamCaptainInfo" style="text-align: center; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px; margin-bottom: 5px;">
+                        <small style="color: var(--hint-color); display: block; font-weight: bold; text-transform: uppercase; font-size: 0.7em;">Capitano</small>
+                        <div id="captainName" style="font-weight: bold; font-size: 1.1em; color: var(--link-color);"></div>
+                    </div>
+                    <div id="teamOthersList" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; font-size: 0.85em;"></div>
+                </div>
+
                 <button id="inviteTeamBtn" class="btn-link" style="margin:0; padding:2px; font-weight:bold; text-align: center; width: 100%;">📢 Condividi Link d'Invito Squadra</button>
                 <div id="captainActions" style="display:none; margin-top:5px; text-align:center;">
                     <button id="toggleTeamLockBtn" class="btn-secondary action-btn-small">Chiudi Adesioni</button>
                 </div>
-                <hr style="border:0; border-top:1px solid var(--hint-color); margin:6px 0;">
-                <ul id="myTeamMembersList" class="data-list" style="max-height: 80px; flex-grow: 0;"></ul>
             </div>
 
             <div class="box-panel" style="flex-grow:1; min-height:0; display:flex; flex-direction:column; padding:5px;">
-                <h3 style="margin-bottom:2px; font-size:0.9em; color:var(--hint-color);">💬 Chat di Squadra</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; padding: 0 5px;">
+                    <h3 style="margin:0; font-size:0.9em; color:var(--hint-color);">💬 Chat di Squadra</h3>
+                    <button id="clearTeamChatBtn" class="btn-danger action-btn-small" style="padding: 2px 8px; font-size: 0.75em;">Cancella</button>
+                </div>
                 <div id="teamChatMessages" style="flex-grow:1; overflow-y:auto; font-size:0.85em; padding:5px; background:var(--bg-color); border-radius:6px; margin-bottom:5px;"></div>
                 <div style="display:flex; gap:5px;">
                     <input type="text" id="teamChatInput" placeholder="Messaggio..." style="padding:8px; margin:0;">
                     <button id="sendTeamChatBtn" style="width:auto; padding:8px 12px; margin:0;">Invia</button>
                 </div>
             </div>
-        </div>
     </div>
 
     <!-- TAB 2: Tutte le Squadre -->
