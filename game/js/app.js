@@ -794,12 +794,12 @@ async function loadRegolamento() {
         document.getElementById('inviteModal').style.display = 'flex';
     }
 
-    window.openTeamInviteModal = function(targetId, targetName) {
+    window.openTeamInviteModal = async function(targetId, targetName) {
         currentInviterId = targetId;
-        document.getElementById('inviteModalTitle').textContent = "Squadra: " + targetName;
-        document.getElementById('inviteModalText').textContent = myTeamId
-            ? `Vuoi invitare ${targetName} ad unirsi alla tua squadra (${myTeamName})?`
-            : `Vuoi suggerire a ${targetName} di creare una propria squadra per i tornei?`;
+        document.getElementById('inviteModalTitle').textContent = "Recluta " + targetName;
+
+        const statusText = document.getElementById('recruitmentStatusText');
+        statusText.textContent = "Caricamento stato utente...";
 
         document.getElementById('inviteSettings').style.display = 'none';
         document.getElementById('teamInviteSettings').style.display = 'block';
@@ -807,27 +807,77 @@ async function loadRegolamento() {
         document.getElementById('incomingTeamInviteArea').style.display = 'none';
         document.getElementById('outgoingInviteArea').style.display = 'none';
 
-        const btn = document.getElementById('sendTeamInviteBtn');
-        btn.textContent = myTeamId ? "INVIA INVITO SQUADRA 🏆" : "SUGGERISCI CREAZIONE SQUADRA 💡";
+        const joinBtn = document.getElementById('recruitJoinBtn');
+        const createBtn = document.getElementById('recruitCreateBtn');
+        const msgBtn = document.getElementById('recruitMsgBtn');
+
+        joinBtn.style.display = 'none';
+
+        try {
+            // Controlliamo se l'utente è già in una squadra
+            const teamsSnap = await db.ref('teams').once('value');
+            let targetTeamName = null;
+            let isAlreadyInTeam = false;
+
+            teamsSnap.forEach(tSnap => {
+                const team = tSnap.val();
+                if (team.status !== 'retired' && team.members && team.members[targetId]) {
+                    isAlreadyInTeam = true;
+                    targetTeamName = team.name;
+                }
+            });
+
+            if (isAlreadyInTeam) {
+                statusText.innerHTML = `⚠️ <b>${targetName}</b> fa già parte della squadra <b>${targetTeamName}</b>.`;
+                createBtn.style.display = 'none';
+            } else {
+                statusText.innerHTML = `💡 <b>${targetName}</b> non ha ancora una squadra.`;
+                createBtn.style.display = 'block';
+                if (myTeamId) joinBtn.style.display = 'block';
+            }
+
+            // Azioni bottoni
+            joinBtn.onclick = () => sendRecruitmentInvite('team');
+            createBtn.onclick = () => sendRecruitmentInvite('suggest');
+            msgBtn.onclick = () => {
+                db.ref(`presence/${targetId}`).once('value', s => {
+                    const u = s.val();
+                    if (u && u.username) {
+                        tg.openTelegramLink('https://t.me/' + u.username);
+                    } else {
+                        tg.showAlert("L'utente non ha uno username pubblico.");
+                    }
+                });
+            };
+
+        } catch(e) {
+            console.error(e);
+            statusText.textContent = "Errore nel recupero dati.";
+        }
 
         document.getElementById('inviteModal').style.display = 'flex';
     }
 
-    document.getElementById('sendTeamInviteBtn').addEventListener('click', () => {
+    function sendRecruitmentInvite(type) {
         const inviteData = {
             fromId: myId,
             fromName: myName,
             type: 'team',
-            teamId: myTeamId || null,
-            teamName: myTeamName || null,
             ts: firebase.database.ServerValue.TIMESTAMP
         };
 
+        if (type === 'team') {
+            inviteData.teamId = myTeamId;
+            inviteData.teamName = myTeamName;
+        } else {
+            inviteData.teamId = null; // Suggest creation
+        }
+
         db.ref(`invites/${currentInviterId}`).set(inviteData).then(() => {
-            showToast("Invito squadra inviato!");
+            showToast(type === 'team' ? "Invito squadra inviato!" : "Suggerimento inviato!");
             closeInviteModal();
         });
-    });
+    }
 
     window.closeInviteModal = function() {
         document.getElementById('inviteModal').style.display = 'none';
@@ -1612,6 +1662,8 @@ async function loadRegolamento() {
         }
     }
 
+    let ppTimerInterval = null;
+
     function setupPingPongListener() {
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); }
         pingPongListener = db.ref(`rooms/${roomCode}/pingpong`).on('value', snap => {
@@ -1643,7 +1695,10 @@ async function loadRegolamento() {
                 tableWrapper.scrollTop = tableWrapper.scrollHeight;
             }
 
-            if (ppData.wordsPlayed >= requestedWordCount) { finishGame(); return; }
+            if (ppData.wordsPlayed >= requestedWordCount) {
+                if(ppTimerInterval) clearInterval(ppTimerInterval);
+                finishGame(); return;
+            }
 
             let amISender = (ppData.senderId === myId);
 
@@ -1653,7 +1708,11 @@ async function loadRegolamento() {
                     document.getElementById('gameInputArea').style.display = 'none';
                     document.getElementById('pingPongWordToSend').value = '';
                     setTimeout(() => document.getElementById('pingPongWordToSend').focus(), 100);
+
+                    // Inizia Timer 10 secondi
+                    startPingPongTimer();
                 } else {
+                    if(ppTimerInterval) clearInterval(ppTimerInterval);
                     document.getElementById('pingPongSendArea').style.display = 'none';
                     document.getElementById('gameInputArea').style.display = 'flex';
                     document.getElementById('permanentGameInput').disabled = true;
@@ -1661,6 +1720,7 @@ async function loadRegolamento() {
                     document.getElementById('permanentGameInput').value = "";
                 }
             } else {
+                if(ppTimerInterval) clearInterval(ppTimerInterval);
                 document.getElementById('pingPongSendArea').style.display = 'none';
                 document.getElementById('gameInputArea').style.display = 'flex';
 
@@ -1684,6 +1744,39 @@ async function loadRegolamento() {
         });
     }
 
+    function startPingPongTimer() {
+        if (ppTimerInterval) clearInterval(ppTimerInterval);
+        const bar = document.getElementById('pingPongTimerProgress');
+        let timeLeft = 100; // Percentuale
+        bar.style.width = '100%';
+
+        ppTimerInterval = setInterval(() => {
+            timeLeft -= 1; // Riduce di 1% ogni 100ms = 10 secondi totali
+            bar.style.width = timeLeft + '%';
+
+            if (timeLeft <= 0) {
+                clearInterval(ppTimerInterval);
+                sendAutoPingPongWord();
+            }
+        }, 100);
+    }
+
+    function sendAutoPingPongWord() {
+        if (!gameRunning || currentMode !== 'pingpong') return;
+
+        // Scegli una parola a caso dal dizionario attivo
+        const randomWord = masterDictionary[Math.floor(Math.random() * masterDictionary.length)].toUpperCase();
+
+        db.ref(`rooms/${roomCode}/pingpong`).transaction(currentData => {
+            if (currentData && !currentData.word) {
+                currentData.word = randomWord;
+                currentData.wordId = (currentData.wordId || 0) + 1;
+            }
+            return currentData;
+        });
+        showToast(currentLang==='it'?"Tempo scaduto! Parola inviata automaticamente.":"Time's up! Word sent automatically.");
+    }
+
     function finishGame() {
         gameRunning = false; inputActive = false; document.getElementById('permanentGameInput').blur();
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
@@ -1701,9 +1794,12 @@ async function loadRegolamento() {
 
         if (totalScore > 0 && !roomCode.startsWith("TRN_")) {
             let dbPath = '';
+            const finalPCount = Object.keys(players || {}).length;
+            const isReallySolo = isSinglePlayer || (finalPCount < 2);
+
             if (currentMode === 'callsign') dbPath = `leaderboard/callsign/global/${myId}`;
-            else if (currentMode === 'pingpong') dbPath = `leaderboard/pingpong/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
-            else dbPath = `leaderboard/standard/${isSinglePlayer ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+            else if (currentMode === 'pingpong') dbPath = `leaderboard/pingpong/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+            else dbPath = `leaderboard/standard/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
 
             if (currentMode !== 'callsign') {
                 let select = document.getElementById('lbWordFilter');
@@ -3452,3 +3548,4 @@ async function loadRegolamento() {
                               </li>`;
         });
     }
+
