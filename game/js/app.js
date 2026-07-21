@@ -2154,15 +2154,21 @@ async function loadRegolamento() {
             fetchAndRenderGlobalLeaderboard('callsign', null);
         } else if (tabId === 'tabGlobalPingPongBtn') {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
-            populateDynamicFilters('pingpong');
+            populateDynamicFilters('recent_matches/pingpong');
             let wc = document.getElementById('lbWordFilter').value;
             fetchAndRenderGlobalLeaderboard('pingpong', wc);
         } else {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
             let type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
-            populateDynamicFilters('standard', type);
-            let wc = document.getElementById('lbWordFilter').value;
-            fetchAndRenderGlobalLeaderboard('standard_' + type, wc);
+            if (type === 'multi') {
+                populateDynamicFilters('recent_matches/standard_multi');
+                let wc = document.getElementById('lbWordFilter').value;
+                fetchAndRenderGlobalLeaderboard('standard_multi', wc);
+            } else {
+                populateDynamicFilters('standard', 'single');
+                let wc = document.getElementById('lbWordFilter').value;
+                fetchAndRenderGlobalLeaderboard('standard_single', wc);
+            }
         }
     }
 
@@ -2198,9 +2204,15 @@ async function loadRegolamento() {
             let counts = [];
             snapshot.forEach(wordCountNode => {
                 const key = wordCountNode.key;
-                if (!subTypeFilter || key.startsWith(subTypeFilter + "_")) {
-                    const count = key.split('_').pop();
-                    if (!counts.includes(count)) counts.push(count);
+                // Se siamo nel nuovo percorso recent_matches, la chiave è direttamente il numero parole
+                if (modePath.startsWith('recent_matches')) {
+                    if (key !== 'unknown' && !counts.includes(key)) counts.push(key);
+                } else {
+                    // Vecchia logica per record singoli
+                    if (!subTypeFilter || key.startsWith(subTypeFilter + "_")) {
+                        const count = key.split('_').pop();
+                        if (!counts.includes(count)) counts.push(count);
+                    }
                 }
             });
             counts.sort((a,b) => parseInt(a) - parseInt(b)).forEach(c => {
