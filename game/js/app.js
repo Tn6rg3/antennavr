@@ -1,6 +1,6 @@
- const BOT_USERNAME = "cwappgame_bot";
+const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.10"; // Versione attuale del codice
+    const APP_VERSION = "20240520.11"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -828,10 +828,21 @@ async function loadRegolamento() {
             });
 
             if (isAlreadyInTeam) {
-                statusText.innerHTML = `⚠️ <b>${targetName}</b> fa già parte della squadra <b>${targetTeamName}</b>.`;
+                statusText.innerHTML = "";
+                statusText.appendChild(document.createTextNode("⚠️ "));
+                const bName = document.createElement('b'); bName.textContent = targetName;
+                statusText.appendChild(bName);
+                statusText.appendChild(document.createTextNode(" fa già parte della squadra "));
+                const bTeam = document.createElement('b'); bTeam.textContent = targetTeamName;
+                statusText.appendChild(bTeam);
+                statusText.appendChild(document.createTextNode("."));
                 createBtn.style.display = 'none';
             } else {
-                statusText.innerHTML = `💡 <b>${targetName}</b> non ha ancora una squadra.`;
+                statusText.innerHTML = "";
+                statusText.appendChild(document.createTextNode("💡 "));
+                const bName = document.createElement('b'); bName.textContent = targetName;
+                statusText.appendChild(bName);
+                statusText.appendChild(document.createTextNode(" non ha ancora una squadra."));
                 createBtn.style.display = 'block';
                 if (myTeamId) joinBtn.style.display = 'block';
             }
@@ -2043,41 +2054,83 @@ async function loadRegolamento() {
 
     window.showProfileScreen = function() {
         showScreen('profileScreen');
-        document.getElementById('errorChartContainer').innerHTML = '<p style="text-align:center;">Caricamento...</p>';
-        document.getElementById('wpmErrorChartContainer').innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+        document.getElementById('errorChartContainer').textContent = 'Caricamento...';
+        document.getElementById('wpmErrorChartContainer').textContent = 'Caricamento...';
         const list = document.getElementById('matchHistoryList');
-        list.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+        list.textContent = 'Caricamento...';
 
         db.ref(`users/${myId}/stats/charErrors`).once('value').then(snap => {
             const errors = snap.val() || {}; const container = document.getElementById('errorChartContainer'); container.innerHTML = '';
             const sorted = Object.entries(errors).sort((a,b) => b[1] - a[1]);
-            if(sorted.length === 0) container.innerHTML = '<p style="text-align:center;color:var(--hint-color)">Nessun errore.</p>';
-            else {
+            if(sorted.length === 0) {
+                const p = document.createElement('p');
+                p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)';
+                p.textContent = 'Nessun errore.';
+                container.appendChild(p);
+            } else {
                 let maxErr = sorted[0][1];
                 sorted.forEach(([char, count]) => {
-                    let pct = (count / maxErr) * 100; let row = document.createElement('div');
+                    let pct = (count / maxErr) * 100;
+                    let row = document.createElement('div');
                     row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.marginBottom = '4px';
-                    row.innerHTML = `<span style="width:20px; font-weight:bold;">${escapeHTML(char)}</span>
-                                     <div style="flex-grow:1; background:var(--bg-color); border:1px solid var(--hint-color); border-radius:4px; height:12px; margin: 0 5px; overflow:hidden;">
-                                        <div style="width:${pct}%; background:#d32f2f; height:100%;"></div>
-                                     </div><span style="width:25px; text-align:right; font-size:0.9em; font-weight:bold;">${count}</span>`;
+
+                    const charSpan = document.createElement('span');
+                    charSpan.style.width = '20px'; charSpan.style.fontWeight = 'bold';
+                    charSpan.textContent = char;
+
+                    const barContainer = document.createElement('div');
+                    barContainer.style.flexGrow = '1'; barContainer.style.background = 'var(--bg-color)';
+                    barContainer.style.border = '1px solid var(--hint-color)'; barContainer.style.borderRadius = '4px';
+                    barContainer.style.height = '12px'; barContainer.style.margin = '0 5px'; barContainer.style.overflow = 'hidden';
+
+                    const bar = document.createElement('div');
+                    bar.style.width = pct + '%'; bar.style.background = '#d32f2f'; bar.style.height = '100%';
+                    barContainer.appendChild(bar);
+
+                    const countSpan = document.createElement('span');
+                    countSpan.style.width = '25px'; countSpan.style.textAlign = 'right';
+                    countSpan.style.fontSize = '0.9em'; countSpan.style.fontWeight = 'bold';
+                    countSpan.textContent = count;
+
+                    row.appendChild(charSpan);
+                    row.appendChild(barContainer);
+                    row.appendChild(countSpan);
                     container.appendChild(row);
                 });
             }
         });
         db.ref(`users/${myId}/stats/errorsByWpm`).once('value').then(snap => {
             const wpmErrors = snap.val() || {}; const container = document.getElementById('wpmErrorChartContainer'); container.innerHTML = '';
-            if(Object.keys(wpmErrors).length === 0) { container.innerHTML = '<p style="text-align:center;color:var(--hint-color)">Nessun errore per WPM.</p>'; return; }
+            if(Object.keys(wpmErrors).length === 0) {
+                const p = document.createElement('p');
+                p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)';
+                p.textContent = 'Nessun errore per WPM.';
+                container.appendChild(p);
+                return;
+            }
             let wpmSorted = Object.keys(wpmErrors).sort((a,b) => parseInt(b) - parseInt(a));
             wpmSorted.forEach(wpm => {
                 let charsAtWpm = wpmErrors[wpm]; let totalErrs = Object.values(charsAtWpm).reduce((acc, curr) => acc + curr, 0);
                 let topChar = Object.entries(charsAtWpm).sort((a,b) => b[1] - a[1])[0];
                 let row = document.createElement('div'); row.style.marginBottom = '8px'; row.style.borderBottom = '1px solid var(--hint-color)'; row.style.paddingBottom = '4px';
-                row.innerHTML = `<div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--link-color);">
-                                    <span>${wpm} WPM</span> <span>Tot: ${totalErrs} err</span>
-                                 </div><div style="font-size:0.85em; color:var(--text-color);">
-                                    Peggior lettera: <b>${escapeHTML(topChar[0])}</b> (${topChar[1]} volte)
-                                 </div>`;
+
+                const topDiv = document.createElement('div');
+                topDiv.style.display = 'flex'; topDiv.style.justifyContent = 'space-between';
+                topDiv.style.fontWeight = 'bold'; topDiv.style.color = 'var(--link-color)';
+
+                const wpmSpan = document.createElement('span'); wpmSpan.textContent = wpm + " WPM";
+                const errSpan = document.createElement('span'); errSpan.textContent = "Tot: " + totalErrs + " err";
+                topDiv.appendChild(wpmSpan); topDiv.appendChild(errSpan);
+
+                const detailDiv = document.createElement('div');
+                detailDiv.style.fontSize = '0.85em'; detailDiv.style.color = 'var(--text-color)';
+                detailDiv.appendChild(document.createTextNode("Peggior lettera: "));
+                const bChar = document.createElement('b'); bChar.textContent = topChar[0];
+                detailDiv.appendChild(bChar);
+                detailDiv.appendChild(document.createTextNode(` (${topChar[1]} volte)`));
+
+                row.appendChild(topDiv);
+                row.appendChild(detailDiv);
                 container.appendChild(row);
             });
         });
@@ -2085,22 +2138,47 @@ async function loadRegolamento() {
             const list = document.getElementById('matchHistoryList');
             list.innerHTML = ''; userMatchHistory = [];
             snap.forEach(child => { userMatchHistory.push({ key: child.key, ...child.val() }); }); userMatchHistory.reverse();
-            if (userMatchHistory.length === 0) { list.innerHTML = '<li style="justify-content:center;color:var(--hint-color)">Nessuna partita giocata.</li>'; return; }
+            if (userMatchHistory.length === 0) {
+                const li = document.createElement('li');
+                li.style.justifyContent = 'center'; li.style.color = 'var(--hint-color)';
+                li.textContent = 'Nessuna partita giocata.';
+                list.appendChild(li);
+                return;
+            }
             userMatchHistory.forEach(match => {
                 const d = new Date(match.date || Date.now()); const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
                 const li = document.createElement('li'); li.style.flexDirection = 'column'; li.style.alignItems = 'flex-start';
                 let modeIcon = match.mode === 'callsign' ? '🎙️ Nom.' : match.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole';
-                li.innerHTML = `<div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
-                                    <span style="font-size:0.85em; font-weight:bold;">${escapeHTML(modeIcon)} (${escapeHTML(match.type)})</span>
-                                    <span style="font-size:0.8em; color:var(--hint-color);">${dateStr}</span>
-                                </div>
-                                <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                                    <span><b>${match.score} pt</b> <small>(${match.wpm} WPM)</small></span>
-                                    <div style="display:flex; gap:5px;">
-                                        <button class="action-btn-small btn-secondary" onclick="openMatchDetails('${match.key}')">Vedi</button>
-                                        <button class="action-btn-small btn-danger" onclick="deleteHistoryItem('${match.key}')">X</button>
-                                    </div>
-                                </div>`;
+
+                const topDiv = document.createElement('div');
+                topDiv.style.display = 'flex'; topDiv.style.justifyContent = 'space-between'; topDiv.style.width = '100%'; topDiv.style.marginBottom = '5px';
+                const modeSpan = document.createElement('span'); modeSpan.style.fontSize = '0.85em'; modeSpan.style.fontWeight = 'bold';
+                modeSpan.textContent = `${modeIcon} (${match.type})`;
+                const dateSpan = document.createElement('span'); dateSpan.style.fontSize = '0.8em'; dateSpan.style.color = 'var(--hint-color)';
+                dateSpan.textContent = dateStr;
+                topDiv.appendChild(modeSpan); topDiv.appendChild(dateSpan);
+
+                const botDiv = document.createElement('div');
+                botDiv.style.display = 'flex'; botDiv.style.justifyContent = 'space-between'; botDiv.style.width = '100%'; botDiv.style.alignItems = 'center';
+
+                const scoreSpan = document.createElement('span');
+                const bScore = document.createElement('b'); bScore.textContent = match.score + " pt";
+                const smallWpm = document.createElement('small'); smallWpm.textContent = ` (${match.wpm} WPM)`;
+                scoreSpan.appendChild(bScore); scoreSpan.appendChild(smallWpm);
+
+                const btnDiv = document.createElement('div');
+                btnDiv.style.display = 'flex'; btnDiv.style.gap = '5px';
+
+                const vBtn = document.createElement('button'); vBtn.className = "action-btn-small btn-secondary"; vBtn.textContent = "Vedi";
+                vBtn.onclick = () => openMatchDetails(match.key);
+                const dBtn = document.createElement('button'); dBtn.className = "action-btn-small btn-danger"; dBtn.textContent = "X";
+                dBtn.onclick = () => deleteHistoryItem(match.key);
+
+                btnDiv.appendChild(vBtn); btnDiv.appendChild(dBtn);
+                botDiv.appendChild(scoreSpan); botDiv.appendChild(btnDiv);
+
+                li.appendChild(topDiv);
+                li.appendChild(botDiv);
                 list.appendChild(li);
             });
         });
@@ -2859,32 +2937,71 @@ async function loadRegolamento() {
                 const liAll = document.createElement('li');
                 liAll.style.flexDirection = 'column'; liAll.style.alignItems = 'flex-start';
 
-                let membersHTML = '';
+                const topDiv = document.createElement('div');
+                topDiv.style.width = '100%'; topDiv.style.display = 'flex'; topDiv.style.justifyContent = 'space-between';
+                if (!isAlreadyInTeam && teamStatus === 'open') {
+                    topDiv.style.cursor = 'pointer';
+                    topDiv.onclick = () => joinTeam(teamId);
+                }
+
+                const leftSpan = document.createElement('span');
+                const bTeam = document.createElement('b'); bTeam.textContent = t.name;
+                const smallCount = document.createElement('small'); smallCount.textContent = ` (${count} mem.)`;
+                leftSpan.appendChild(bTeam); leftSpan.appendChild(smallCount);
+
+                topDiv.appendChild(leftSpan);
+                if (!isAlreadyInTeam && teamStatus === 'open') {
+                    const joinSpan = document.createElement('span');
+                    joinSpan.style.color = 'var(--link-color)'; joinSpan.style.fontSize = '0.8em'; joinSpan.style.fontWeight = 'bold';
+                    joinSpan.textContent = "+ Unisciti";
+                    topDiv.appendChild(joinSpan);
+                }
+
+                const membersDiv = document.createElement('div');
+                membersDiv.style.marginTop = '3px'; membersDiv.style.paddingLeft = '5px'; membersDiv.style.borderLeft = '2px solid var(--link-color)';
                 Object.values(t.members || {}).forEach(m => {
-                    membersHTML += `<span style="display:inline-block; margin-right:5px; font-size:0.85em; color:var(--hint-color);">- ${escapeHTML(m.name)}</span>`;
+                    const mSpan = document.createElement('span');
+                    mSpan.style.display = 'inline-block'; mSpan.style.marginRight = '5px'; mSpan.style.fontSize = '0.85em'; mSpan.style.color = 'var(--hint-color)';
+                    mSpan.textContent = `- ${m.name}`;
+                    membersDiv.appendChild(mSpan);
                 });
 
-                liAll.innerHTML = `<div style="width:100%; display:flex; justify-content:space-between; cursor:${(!isAlreadyInTeam && teamStatus === 'open') ? 'pointer' : 'default'};"
-                                      ${(!isAlreadyInTeam && teamStatus === 'open') ? `onclick="joinTeam('${escapeHTML(teamId)}')"` : ''}>
-                                      <span><b>${escTeam}</b> <small>(${count} mem.)</small></span>
-                                      ${(!isAlreadyInTeam && teamStatus === 'open') ? `<span style="color:var(--link-color); font-size:0.8em; font-weight:bold;">+ Unisciti</span>` : ''}
-                                   </div>
-                                   <div style="margin-top:3px; padding-left:5px; border-left:2px solid var(--link-color);">
-                                      ${membersHTML}
-                                   </div>`;
+                liAll.appendChild(topDiv);
+                liAll.appendChild(membersDiv);
                 if(allList) allList.appendChild(liAll);
 
                 if (!isAlreadyInTeam && teamStatus === 'open') {
                     const liOpen = document.createElement('li');
                     liOpen.style.cursor = 'pointer';
                     liOpen.onclick = () => joinTeam(teamId);
-                    liOpen.innerHTML = `<span><b>${escTeam}</b> <small>(${count} mem.)</small></span><span style="color:var(--link-color); font-weight:bold;">+ Unisciti</span>`;
+
+                    const leftOpen = document.createElement('span');
+                    const bOpen = document.createElement('b'); bOpen.textContent = t.name;
+                    const smallOpen = document.createElement('small'); smallOpen.textContent = ` (${count} mem.)`;
+                    leftOpen.appendChild(bOpen); leftOpen.appendChild(smallOpen);
+
+                    const rightOpen = document.createElement('span');
+                    rightOpen.style.color = 'var(--link-color)'; rightOpen.style.fontWeight = 'bold';
+                    rightOpen.textContent = "+ Unisciti";
+
+                    liOpen.appendChild(leftOpen);
+                    liOpen.appendChild(rightOpen);
                     if(openList) openList.appendChild(liOpen);
                 }
             });
 
-            if(openList && openList.innerHTML === '') openList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; background:none; border:none;">Nessuna squadra aperta.</li>';
-            if(allList && allList.innerHTML === '') allList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; background:none; border:none;">Nessuna squadra creata.</li>';
+            if(openList && openList.innerHTML === '') {
+                const li = document.createElement('li');
+                li.style.color = 'var(--hint-color)'; li.style.justifyContent = 'center'; li.style.background = 'none'; li.style.border = 'none';
+                li.textContent = 'Nessuna squadra aperta.';
+                openList.appendChild(li);
+            }
+            if(allList && allList.innerHTML === '') {
+                const li = document.createElement('li');
+                li.style.color = 'var(--hint-color)'; li.style.justifyContent = 'center'; li.style.background = 'none'; li.style.border = 'none';
+                li.textContent = 'Nessuna squadra creata.';
+                allList.appendChild(li);
+            }
         });
     }
 
@@ -3477,7 +3594,11 @@ async function loadRegolamento() {
         if (!cont) return;
         db.ref(`users/${myId}/medals`).once('value', snap => {
             if (!snap.exists()) {
-                cont.innerHTML = '<span style="font-size:0.6em; color:var(--hint-color);">Nessuna medaglia ancora.</span>';
+                cont.innerHTML = "";
+                const span = document.createElement('span');
+                span.style.fontSize = "0.6em"; span.style.color = "var(--hint-color)";
+                span.textContent = "Nessuna medaglia ancora.";
+                cont.appendChild(span);
                 return;
             }
             cont.innerHTML = '';
