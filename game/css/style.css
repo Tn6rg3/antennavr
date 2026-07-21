@@ -108,6 +108,12 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
     100% { opacity: 0; transform: translateY(-10px); }
 }
 
+@keyframes pulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
+    70% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+}
+
 #matchDetailsModal, #inviteModal, #roomEventModal, #tournamentWelcomeModal {
     display: none; position: fixed; top: 10%; left: 5%; width: 90%; height: 80%;
     background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color);
