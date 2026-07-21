@@ -1,6 +1,6 @@
-const BOT_USERNAME = "cwappgame_bot";
+ const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.8"; // Versione attuale del codice
+    const APP_VERSION = "20240520.9"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -1751,8 +1751,8 @@ async function loadRegolamento() {
         bar.style.width = '100%';
 
         ppTimerInterval = setInterval(() => {
-            timeLeft -= 1; // Riduce di 1% ogni 100ms = 10 secondi totali
-            bar.style.width = timeLeft + '%';
+            timeLeft -= (100 / 300); // 300 step da 100ms = 30 secondi
+            bar.style.width = Math.max(0, timeLeft) + '%';
 
             if (timeLeft <= 0) {
                 clearInterval(ppTimerInterval);
@@ -2227,6 +2227,7 @@ async function loadRegolamento() {
                 db.ref(`rooms/${roomCode}/status`).set('finished');
 
                 // Salva il match nel database globale se è Multiplayer o PingPong
+                // Il pingpong non ha necessariamente roomData.type === 'multi' in alcuni startParam
                 if (roomData.type === 'multi' || currentMode === 'pingpong') {
                     saveMatchToGlobalHistory(players, roomData);
                 }
@@ -2482,7 +2483,8 @@ async function loadRegolamento() {
 
         const matchId = Date.now().toString();
         const modePath = currentMode === 'pingpong' ? 'pingpong' : 'standard_multi';
-        const subPath = roomData.wordCount || 'unknown';
+        // Per il pingpong usiamo wordCount come fallback se manca
+        const subPath = roomData.wordCount || 'all';
 
         const matchData = {
             players: Object.entries(players).map(([id, data]) => ({
