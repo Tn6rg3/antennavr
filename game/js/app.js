@@ -20,6 +20,7 @@ const BOT_USERNAME = "cwappgame_bot";
     let myName, myId, myPrivacy = false;
     let db, auth;
     let currentRoomListener = null, chatListener = null, pingPongListener = null, gamePlayersListener = null;
+    let roomLeaderboardListener = null;
     let presenceListener = null, invitesListener = null, inviteAcceptedListener = null, outgoingInviteListener = null;
     let roomCode = "", lastPlayerCount = 0, lobbyTimerInterval = null, roomHostId = null, gameStartPlayerCount = 0;
     let activeChatContext = null;
@@ -867,6 +868,9 @@ async function loadRegolamento() {
             const inv = snap.val();
             if (!inv) return;
 
+            // Se il giocatore è già in una stanza o sta giocando, ignora l'invito
+            if (roomCode || gameRunning) return;
+
             // Se l'invito è vecchio (più di 1 min), ignoralo
             if (Date.now() - inv.ts > 60000) { db.ref(`invites/${myId}`).remove(); return; }
 
@@ -1031,6 +1035,15 @@ async function loadRegolamento() {
     window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
 
     document.getElementById('createRoomBtn').addEventListener('click', () => {
+        // Pulizia inviti pendenti prima di iniziare una nuova partita (Solo o Multi)
+        isChallenging = false;
+        if (currentInviterId) {
+            db.ref(`invites/${currentInviterId}`).once('value', s => {
+                if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove();
+            });
+        }
+        db.ref(`invite_accepted/${myId}`).remove();
+
         currentMode = document.getElementById('gameModeInput').value;
         isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
         currentWpm = currentMode==='callsign' ? 25 : parseInt(document.getElementById('startWpmInput').value);
@@ -1059,6 +1072,8 @@ async function loadRegolamento() {
 
         localStorage.removeItem(STORAGE_ROOM_KEY);
         isRejoining = false;
+        isChallenging = false;
+        currentInviterId = null;
 
         // Riporta lo stato utente online (esce dalla partita)
         db.ref(`presence/${myId}`).update({ status: 'online' });
@@ -1066,6 +1081,11 @@ async function loadRegolamento() {
         if (gamePlayersListener && roomCode) {
             db.ref(`rooms/${roomCode}/players`).off('value', gamePlayersListener);
             gamePlayersListener = null;
+        }
+
+        if (roomLeaderboardListener && roomCode) {
+            db.ref(`rooms/${roomCode}`).off('value', roomLeaderboardListener);
+            roomLeaderboardListener = null;
         }
 
         if (roomCode) {
@@ -1642,6 +1662,7 @@ async function loadRegolamento() {
 
         localStorage.removeItem(STORAGE_ROOM_KEY);
         isRejoining = false;
+        isChallenging = false;
 
         showScreen('leaderboardScreen');
 
@@ -2069,7 +2090,9 @@ async function loadRegolamento() {
     // Ascoltatore che decreta il vincitore e segna 1 o 0 al torneo
     function listenToRoomLeaderboard() {
         if (!roomCode) return;
-        db.ref(`rooms/${roomCode}`).on('value', snapshot => {
+        if (roomLeaderboardListener) db.ref(`rooms/${roomCode}`).off('value', roomLeaderboardListener);
+
+        roomLeaderboardListener = db.ref(`rooms/${roomCode}`).on('value', snapshot => {
             if (!snapshot.exists()) return;
             const roomData = snapshot.val(), players = roomData.players || {};
             if (activeTab === "room") renderRoomLeaderboard(players);
