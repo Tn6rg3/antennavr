@@ -1,5 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
+    const APP_VERSION = "20240520.1"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -139,6 +140,12 @@ async function loadRegolamento() {
         hideChat();
         document.getElementById('matchDetailsModal').style.display = 'none';
 
+        if (screenId === 'setupScreen') {
+            // Se torniamo al menu, ricontrolliamo se mostrare il tasto rejoining
+            const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
+            if (!lastRoom) document.getElementById('rejoinContainer').style.display = 'none';
+        }
+
         if(screenId === 'teamsScreen') { activeChatContext = 'team'; checkMyTeamStatus(); }
         else if (screenId === 'lobbyScreen' || screenId === 'gameArea') { activeChatContext = 'room'; listenToChat(); }
         else if (screenId === 'participationScreen') { switchActTab('daily'); activeChatContext = null; }
@@ -204,8 +211,12 @@ async function loadRegolamento() {
                     db.ref(`rooms/${lastRoom}`).once('value', snap => {
                         if (snap.exists() && snap.val().status !== 'finished') {
                             roomCode = lastRoom;
-                            isRejoining = true;
-                            joinRoomLogic(false);
+                            document.getElementById('rejoinContainer').style.display = 'block';
+                            document.getElementById('rejoinGameBtn').onclick = () => {
+                                isRejoining = true;
+                                joinRoomLogic(false);
+                            };
+                            showScreen('setupScreen');
                         } else {
                             localStorage.removeItem(STORAGE_ROOM_KEY);
                             showScreen('setupScreen');
@@ -234,7 +245,15 @@ async function loadRegolamento() {
           
             // CARICA IL REGOLAMENTO
             loadRegolamento();
-            
+
+            // GESTIONE AGGIORNAMENTI APP
+            db.ref('appConfig/latestVersion').on('value', snap => {
+                const latest = snap.val();
+                if (latest && latest !== APP_VERSION) {
+                    document.getElementById('updateBanner').style.display = 'block';
+                }
+            });
+
         }).catch(e => {
             document.getElementById('loadingText').innerHTML = "<b style='color:red'>Errore di Connessione.</b>";
         });
@@ -1137,7 +1156,7 @@ async function loadRegolamento() {
                 totalScore = playerData.score || 0;
                 wordIndex = playerData.wordIndex || 0;
                 matchDetailsArray = playerData.matchDetails || [];
-                // Ricostruisci tabella se necessario (verrà fatto in gameArea)
+                showToast("🔄 Partita recuperata!");
             }
 
             showScreen('lobbyScreen');
@@ -1478,16 +1497,18 @@ async function loadRegolamento() {
                     // Controlliamo quanti sono REALMENTE usciti (non solo offline)
                     // Se un giocatore viene rimosso del tutto dalla stanza, allora è abbandono
                     if (gameStartPlayerCount > 0 && currentPCount < gameStartPlayerCount) {
-                         // Aspettiamo un attimo per vedere se è una rimozione definitiva
+                         // Aspettiamo 10 secondi per vedere se è una rimozione definitiva o un ricaricamento
                          setTimeout(() => {
                             db.ref(`rooms/${roomCode}/players`).once('value', s => {
                                 if (gameRunning && Object.keys(s.val() || {}).length < gameStartPlayerCount) {
                                     alert("Un giocatore ha abbandonato la partita definitivamente. Ritorno al menu principale.");
                                     gameRunning = false;
                                     exitRoomCleanly(false);
+                                } else if (gameRunning) {
+                                    showToast("👥 Giocatore rientrato!");
                                 }
                             });
-                         }, 5000);
+                         }, 10000);
                     }
                 });
             });
@@ -1510,6 +1531,13 @@ async function loadRegolamento() {
                     db.ref(`rooms/${roomCode}/pingpong`).set({ senderId: myId, word: '', wordId: 0, wordsPlayed: 0, lastGuess: null });
                 }
             });
+        }
+
+        // Se stiamo recuperando la partita, non resettiamo wordIndex
+        if (!isRejoining) {
+            wordIndex = 0;
+            totalScore = 0;
+            matchDetailsArray = [];
         }
 
         showScreen('countdownScreen'); gameRunning = true;
@@ -2742,13 +2770,38 @@ async function loadRegolamento() {
             if(!snap.exists() || snap.val().status === 'retired') { checkMyTeamStatus(); return; }
             const team = snap.val(); document.getElementById('myTeamNameDisplay').textContent = team.name;
             document.getElementById('teamStatusText').innerHTML = team.status === 'open' ? '🟢 Adesioni Aperte' : '🔴 Adesioni Chiuse';
-            const list = document.getElementById('myTeamMembersList'); list.innerHTML = '';
+
+            const captainCont = document.getElementById('captainName');
+            const othersCont = document.getElementById('teamOthersList');
+            captainCont.innerHTML = '';
+            othersCont.innerHTML = '';
+
             Object.entries(team.members || {}).forEach(([id, mem]) => {
                 const isC = (id === team.captainId);
                 const escName = escapeHTML(mem.name); const escUser = escapeHTML(mem.username);
-                const nHtml = mem.username ? `<span onclick="openTelegramProfile('${escUser}')" style="color:var(--link-color);cursor:pointer;text-decoration:underline;">${escName}</span>` : `<span>${escName}</span>`;
-                list.innerHTML += `<li>${nHtml} ${isC?'<b style="color:var(--hint-color)">(Cap.)</b>':''}</li>`;
+
+                const span = document.createElement('span');
+                if (mem.username) {
+                    span.style.color = 'var(--link-color)';
+                    span.style.cursor = 'pointer';
+                    span.style.textDecoration = 'underline';
+                    span.onclick = () => openTelegramProfile(escUser);
+                }
+                span.textContent = escName;
+
+                if (isC) {
+                    captainCont.appendChild(span);
+                } else {
+                    if (othersCont.children.length > 0) {
+                        const sep = document.createElement('span');
+                        sep.textContent = ' | ';
+                        sep.style.color = 'var(--hint-color)';
+                        othersCont.appendChild(sep);
+                    }
+                    othersCont.appendChild(span);
+                }
             });
+
             document.getElementById('captainActions').style.display = isTeamCaptain ? 'block' : 'none';
             const btnLock = document.getElementById('toggleTeamLockBtn'); btnLock.textContent = team.status === 'open' ? "Chiudi Adesioni" : "Riapri Adesioni";
             btnLock.onclick = () => db.ref(`teams/${myTeamId}/status`).set(team.status === 'open' ? 'closed' : 'open');
@@ -2757,6 +2810,12 @@ async function loadRegolamento() {
             setupChat(db.ref(`teams/${myTeamId}/chat`), 'teamChatMessages', null);
         });
     }
+
+    document.getElementById('clearTeamChatBtn').addEventListener('click', () => {
+        if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat di squadra?')) {
+            if (myTeamId) db.ref(`teams/${myTeamId}/chat`).remove();
+        }
+    });
 
     document.getElementById('sendTeamChatBtn').addEventListener('click', () => {
         const txt = document.getElementById('teamChatInput').value.trim(); if (!txt || !myTeamId) return;
