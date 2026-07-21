@@ -1,4 +1,4 @@
-const BOT_USERNAME = "cwappgame_bot";
+ const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
     const APP_VERSION = "20240520.10"; // Versione attuale del codice
 
@@ -1779,6 +1779,7 @@ async function loadRegolamento() {
 
     function finishGame() {
         gameRunning = false; inputActive = false; document.getElementById('permanentGameInput').blur();
+        if (ppTimerInterval) clearInterval(ppTimerInterval);
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
 
         localStorage.removeItem(STORAGE_ROOM_KEY);
@@ -1789,33 +1790,43 @@ async function loadRegolamento() {
 
         if (roomCode) {
             const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-            myPlayerRef.update({ finished: true }); myPlayerRef.onDisconnect().cancel();
+            myPlayerRef.update({
+                finished: true,
+                score: totalScore,
+                wpm: currentWpm,
+                matchDetails: matchDetailsArray
+            });
+            myPlayerRef.onDisconnect().cancel();
         }
 
         if (totalScore > 0 && !roomCode.startsWith("TRN_")) {
-            let dbPath = '';
-            const finalPCount = Object.keys(players || {}).length;
-            const isReallySolo = isSinglePlayer || (finalPCount < 2);
+            // Recupera la lista aggiornata dei giocatori per determinare se è Solo o Multi
+            db.ref(`rooms/${roomCode}/players`).once('value', snapshot => {
+                const players = snapshot.val() || {};
+                const finalPCount = Object.keys(players).length;
+                const isReallySolo = isSinglePlayer || (finalPCount < 2);
+                let dbPath = '';
 
-            if (currentMode === 'callsign') dbPath = `leaderboard/callsign/global/${myId}`;
-            else if (currentMode === 'pingpong') dbPath = `leaderboard/pingpong/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
-            else dbPath = `leaderboard/standard/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                if (currentMode === 'callsign') dbPath = `leaderboard/callsign/global/${myId}`;
+                else if (currentMode === 'pingpong') dbPath = `leaderboard/pingpong/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                else dbPath = `leaderboard/standard/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
 
-            if (currentMode !== 'callsign') {
-                let select = document.getElementById('lbWordFilter');
-                if (!Array.from(select.options).some(opt => opt.value == requestedWordCount) && requestedWordCount !== 'all') {
-                    let opt = document.createElement('option'); opt.value = requestedWordCount; opt.text = `${requestedWordCount} Stringhe`; select.add(opt);
+                if (currentMode !== 'callsign') {
+                    let select = document.getElementById('lbWordFilter');
+                    if (!Array.from(select.options).some(opt => opt.value == requestedWordCount) && requestedWordCount !== 'all') {
+                        let opt = document.createElement('option'); opt.value = requestedWordCount; opt.text = `${requestedWordCount} Stringhe`; select.add(opt);
+                    }
+                    select.value = requestedWordCount;
                 }
-                select.value = requestedWordCount;
-            }
 
-            const globalUserRef = db.ref(dbPath);
-            globalUserRef.once('value', snapshot => {
-                let oldData = snapshot.val();
-                if (!oldData || totalScore > oldData.score) {
-                    const currentUsername = myPrivacy ? "" : tgUsername;
-                    globalUserRef.set({ name: myName, username: currentUsername, score: totalScore, wpm: currentWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') });
-                }
+                const globalUserRef = db.ref(dbPath);
+                globalUserRef.once('value', snap => {
+                    let oldData = snap.val();
+                    if (!oldData || totalScore > oldData.score) {
+                        const currentUsername = myPrivacy ? "" : tgUsername;
+                        globalUserRef.set({ name: myName, username: currentUsername, score: totalScore, wpm: currentWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') });
+                    }
+                });
             });
         }
 
