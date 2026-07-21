@@ -371,9 +371,14 @@
     </div>
 
     <!-- SEZIONE PING PONG -->
-    <div id="pingPongSendArea" style="display: none; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
-        <input type="text" id="pingPongWordToSend" placeholder="Scrivi la parola da inviare..." autocomplete="off" autocapitalize="none" style="flex-grow: 1; padding: 10px; font-size: 1.1em; margin: 0; border: 2px solid #ff9800;">
-        <button id="btnSendPingPong" class="btn-secondary" style="width: auto; margin: 0; padding: 10px;">Invia (Tu)</button>
+    <div id="pingPongSendArea" style="display: none; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0; flex-direction:column;">
+        <div id="pingPongTimerBar" style="width:100%; height:4px; background:rgba(0,0,0,0.1); border-radius:2px; margin-bottom:5px; overflow:hidden;">
+            <div id="pingPongTimerProgress" style="width:100%; height:100%; background:#ff9800; transition: width 0.1s linear;"></div>
+        </div>
+        <div style="display:flex; gap:5px; width:100%;">
+            <input type="text" id="pingPongWordToSend" placeholder="Scrivi la parola da inviare..." autocomplete="off" autocapitalize="none" style="flex-grow: 1; padding: 10px; font-size: 1.1em; margin: 0; border: 2px solid #ff9800;">
+            <button id="btnSendPingPong" class="btn-secondary" style="width: auto; margin: 0; padding: 10px;">Invia (Tu)</button>
+        </div>
     </div>
 
     <div id="gameInputArea" style="display: flex; flex-direction:column; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
@@ -492,7 +497,13 @@
         </div>
     </div>
     <div id="teamInviteSettings" class="box-panel" style="display:none; text-align:center;">
-        <button id="sendTeamInviteBtn" class="btn-champ">INVIA INVITO SQUADRA 🏆</button>
+        <p id="recruitmentStatusText" style="font-size:0.85em; margin-bottom:10px; color:var(--hint-color);"></p>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            <button id="recruitJoinBtn" class="btn-success action-btn-small" style="display:none;">INVITA NELLA MIA SQUADRA 🏆</button>
+            <button id="recruitCreateBtn" class="btn-champ action-btn-small">SUGGERISCI CREAZIONE SQUADRA 💡</button>
+            <button id="recruitMsgBtn" class="btn-secondary action-btn-small">INVIA MESSAGGIO TELEGRAM 💬</button>
+        </div>
+        <button onclick="closeInviteModal()" class="btn-link" style="margin-top:10px;">ANNULLA</button>
     </div>
     <div id="incomingInviteArea" style="display:none; text-align:center;">
         <button id="acceptInviteBtn" class="btn-success">ACCETTA ✅</button>
