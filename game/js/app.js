@@ -1,6 +1,6 @@
- const BOT_USERNAME = "cwappgame_bot";
+const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.9"; // Versione attuale del codice
+    const APP_VERSION = "20240520.10"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -3550,4 +3550,3 @@ async function loadRegolamento() {
                               </li>`;
         });
     }
-
