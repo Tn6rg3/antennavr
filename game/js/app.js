@@ -249,13 +249,20 @@ async function loadRegolamento() {
             // GESTIONE AGGIORNAMENTI APP
             db.ref('appConfig/latestVersion').on('value', snap => {
                 const latest = snap.val();
-                if (latest && latest !== APP_VERSION) {
+                if (latest && String(latest).trim() !== String(APP_VERSION).trim()) {
                     document.getElementById('updateBanner').style.display = 'block';
+                } else {
+                    document.getElementById('updateBanner').style.display = 'none';
                 }
             });
 
         }).catch(e => {
-            document.getElementById('loadingText').innerHTML = "<b style='color:red'>Errore di Connessione.</b>";
+            const loadingText = document.getElementById('loadingText');
+            if (loadingText) {
+                loadingText.textContent = "Errore di Connessione.";
+                loadingText.style.color = "red";
+                loadingText.style.fontWeight = "bold";
+            }
         });
 
         checkGameTypeUI();
