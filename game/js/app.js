@@ -2685,24 +2685,28 @@ async function loadRegolamento() {
         document.getElementById('tabAllTeamsBtn').classList.remove('active-tab');
         document.getElementById('tabTournamentsBtn').classList.remove('active-tab');
 
-        if(document.getElementById('noTeamView').style.display !== 'none') {
-            document.getElementById('noTeamView').style.display = 'none';
-        } else {
-            document.getElementById('teamGestArea').style.display = 'none';
-        }
+        // Nascondi tutto prima di mostrare il tab selezionato
+        document.getElementById('noTeamView').style.display = 'none';
+        document.getElementById('myTeamView').style.display = 'none';
         document.getElementById('allTeamsArea').style.display = 'none';
         document.getElementById('tournamentsArea').style.display = 'none';
 
         if (tab === 'gest') {
             document.getElementById('tabTeamGestBtn').classList.add('active-tab');
-            if(myTeamId) document.getElementById('teamGestArea').style.display = 'flex';
-            else document.getElementById('noTeamView').style.display = 'flex';
+            if(myTeamId) {
+                document.getElementById('myTeamView').style.display = 'flex';
+                document.getElementById('teamGestArea').style.display = 'flex'; // Assicuriamoci che l'area interna sia visibile
+            } else {
+                document.getElementById('noTeamView').style.display = 'flex';
+            }
         } else if (tab === 'allteams') {
             document.getElementById('tabAllTeamsBtn').classList.add('active-tab');
             document.getElementById('allTeamsArea').style.display = 'flex';
+            listenToAllTeams(!!myTeamId); // Forza aggiornamento lista
         } else {
             document.getElementById('tabTournamentsBtn').classList.add('active-tab');
             document.getElementById('tournamentsArea').style.display = 'flex';
+            listenToTournaments(); // Forza aggiornamento tornei
         }
     }
 
