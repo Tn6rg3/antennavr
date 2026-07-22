@@ -215,7 +215,6 @@
             </div>
         </div>
 
-        <!-- Selettore per la Modalità Vocale Continua -->
         <div style="margin-top: 10px; border-top: 1px solid var(--border); padding-top: 15px; display: flex; align-items: center; gap: 10px;">
             <input type="checkbox" id="continuousVoiceToggle" style="width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer;">
             <label for="continuousVoiceToggle" style="margin: 0; color: var(--text-color); cursor: pointer; font-weight: bold;">
@@ -227,7 +226,7 @@
     <div class="panel">
         <div class="chat-container">
             <div class="chat-controls">
-                <button id="voiceBtn" title="Avvia/Ferma ascolto manuale">🎤 Parla</button>
+                <button id="voiceBtn" title="Ascolto vocale singolo">🎤 Parla</button>
                 <input type="text" id="userInput" placeholder="Scrivi o di' la parola chiave seguita dal messaggio...">
                 <button id="sendBtn">Invia</button>
                 <button id="stopBtn" class="btn-danger" style="display: none;">Stop Audio</button>
@@ -247,12 +246,14 @@
 
     <script>
         let recognition = null;
-        let isAppBusy = false; // True se sta elaborando o trasmettendo Morse
+        let isAppBusy = false;
+        let isListeningActive = false;
+        let waitingForCommand = false; // Stato per gestire la pausa dopo la parola chiave
 
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
             document.getElementById('editKeyBtn').addEventListener('click', editApiKey);
-            document.getElementById('voiceBtn').addEventListener('click', toggleManualVoice);
+            document.getElementById('voiceBtn').addEventListener('click', startSingleVoiceRecognition);
             document.getElementById('sendBtn').addEventListener('click', sendMessage);
             document.getElementById('stopBtn').addEventListener('click', stopAudio);
             document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
@@ -262,7 +263,6 @@
                 if (e.key === 'Enter') sendMessage();
             });
 
-            // Gestione checkbox modalità continua
             const continuousToggle = document.getElementById('continuousVoiceToggle');
             continuousToggle.addEventListener('change', () => {
                 localStorage.setItem('morse_continuous_voice', continuousToggle.checked);
@@ -302,12 +302,10 @@
                 setHistoryState(false);
             }
 
-            // Ripristina lo stato della modalità continua salvata
             const isContinuousSaved = localStorage.getItem('morse_continuous_voice') === 'true';
             if (isContinuousSaved) {
                 continuousToggle.checked = true;
-                // Avvia l'ascolto dopo un piccolo ritardo per permettere al browser di caricarsi
-                setTimeout(startContinuousListening, 1000);
+                setTimeout(startContinuousListening, 1500);
             }
         });
 
@@ -452,7 +450,8 @@
         }
 
         async function transmitMorse(text) {
-            isAppBusy = true; // Segnala che siamo occupati (ferma il riconoscimento vocale)
+            isAppBusy = true;
+            stopContinuousListeningSafe();
             abortPlayback = false;
             
             let wpm = parseInt(document.getElementById('wpm').value, 10);
@@ -491,15 +490,16 @@
                 }
             }
 
+            document.getElementById('sendBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'block'; // Rimane stop finché non finisce o viene stoppato (piccolo bug fix logico)
             document.getElementById('sendBtn').style.display = 'block';
             document.getElementById('stopBtn').style.display = 'none';
-            isAppBusy = false; // Fine trasmissione, riattiva l'ascolto continuo se abilitato
+            isAppBusy = false;
             
             if (!abortPlayback) setStatus("Trasmissione completata.");
             
-            // Se la modalità continua è attiva, riavvia l'ascolto
             if (document.getElementById('continuousVoiceToggle').checked) {
-                startContinuousListening();
+                setTimeout(startContinuousListening, 1500);
             }
         }
 
@@ -515,21 +515,7 @@
             document.getElementById('stopBtn').style.display = 'none';
 
             if (document.getElementById('continuousVoiceToggle').checked) {
-                startContinuousListening();
-            }
-        }
-
-        // --- GESTIONE RICONOSCIMENTO VOCALE CONTINUO E MANUALE ---
-        function toggleManualVoice() {
-            const toggle = document.getElementById('continuousVoiceToggle');
-            if (toggle.checked) {
-                // Se la modalità continua è accesa, il tasto la spegne
-                toggle.checked = false;
-                stopContinuousListening();
-                setStatus("Ascolto vocale disattivato.");
-            } else {
-                // Altrimenti esegue un ascolto singolo manuale
-                startSingleVoiceRecognition();
+                setTimeout(startContinuousListening, 1500);
             }
         }
 
@@ -541,7 +527,7 @@
             rec.maxAlternatives = 1;
             
             let wakeWord = document.getElementById('wakeWord').value.trim().toLowerCase() || "gemini";
-            setStatus(`In ascolto... (Di' '${wakeWord}')`);
+            setStatus(`In ascolto singolo... (Di' '${wakeWord}')`);
             
             rec.onresult = function(event) {
                 processSpeechResult(event.results[0][0].transcript.trim());
@@ -552,52 +538,67 @@
 
         function startContinuousListening() {
             if (!('webkitSpeechRecognition' in window)) return;
-            if (isAppBusy) return; // Non avviare se stiamo trasmettendo Morse o elaborando
-
-            if (recognition) {
-                try { recognition.stop(); } catch(e) {}
-            }
-
-            recognition = new webkitSpeechRecognition();
-            recognition.lang = 'it-IT';
-            recognition.interimResults = false;
-            recognition.continuous = false; // Chiude dopo una frase per elaborarla
+            if (isAppBusy || isListeningActive) return;
 
             let wakeWord = document.getElementById('wakeWord').value.trim().toLowerCase() || "gemini";
-            setStatus(`🔴 Ascolto attivo (Di' '${wakeWord}'...)`);
-
-            recognition.onresult = function(event) {
-                let speechText = event.results[0][0].transcript.trim();
-                processSpeechResult(speechText);
-            };
-
-            recognition.onerror = function(event) {
-                // Ignora errori di silenzio prolungato per permettere il riavvio automatico
-                if (event.error !== 'no-speech' && event.error !== 'aborted') {
-                    console.warn("Errore riconoscimento vocale:", event.error);
-                }
-            };
-
-            recognition.onend = function() {
-                // Se la modalità continua è ancora attiva e non siamo occupati, riavvia subito l'ascolto
-                const isContinuous = document.getElementById('continuousVoiceToggle').checked;
-                if (isContinuous && !isAppBusy) {
-                    setTimeout(startContinuousListening, 300);
-                }
-            };
-
+            
             try {
+                recognition = new webkitSpeechRecognition();
+                recognition.lang = 'it-IT';
+                recognition.interimResults = false;
+                recognition.continuous = false;
+
+                recognition.onstart = function() {
+                    isListeningActive = true;
+                    if (!waitingForCommand) {
+                        setStatus(`🔴 In ascolto... (Pronuncia '${wakeWord}')`);
+                    }
+                };
+
+                recognition.onresult = function(event) {
+                    let speechText = event.results[0][0].transcript.trim();
+                    processSpeechResult(speechText);
+                };
+
+                recognition.onerror = function(event) {
+                    // Ignora silenzio per evitare log
+                };
+
+                recognition.onend = function() {
+                    isListeningActive = false;
+                    const isContinuous = document.getElementById('continuousVoiceToggle').checked;
+                    
+                    // Se stava aspettando il comando e ha chiuso per silenzio, resetta lo stato
+                    if (waitingForCommand) {
+                        waitingForCommand = false;
+                    }
+
+                    if (isContinuous && !isAppBusy) {
+                        setTimeout(() => {
+                            if (document.getElementById('continuousVoiceToggle').checked && !isAppBusy && !isListeningActive) {
+                                startContinuousListening();
+                            }
+                        }, 1200); // 1.2 secondi di pausa prima di riaprire, niente bip continui
+                    }
+                };
+
                 recognition.start();
             } catch(e) {
-                // Evita crash se l'istanza era già partita
+                isListeningActive = false;
             }
         }
 
-        function stopContinuousListening() {
+        function stopContinuousListeningSafe() {
             if (recognition) {
-                try { recognition.stop(); } catch(e) {}
+                try { recognition.abort(); } catch(e) {}
                 recognition = null;
             }
+            isListeningActive = false;
+            waitingForCommand = false;
+        }
+
+        function stopContinuousListening() {
+            stopContinuousListeningSafe();
             setStatus("Modalità continua disattivata.");
         }
 
@@ -605,6 +606,23 @@
             let lowerText = speechText.toLowerCase();
             let wakeWord = document.getElementById('wakeWord').value.trim().toLowerCase() || "gemini";
             
+            // SE IL SISTEMA ERA IN ATTESA DEL COMANDO DOPO UNA PAUSA
+            if (waitingForCommand) {
+                waitingForCommand = false;
+                if (speechText.length > 0) {
+                    document.getElementById('userInput').value = speechText;
+                    setStatus("Comando ricevuto. Invio...");
+                    sendMessage();
+                } else {
+                    setStatus("Nessun messaggio rilevato.");
+                    if (document.getElementById('continuousVoiceToggle').checked && !isAppBusy) {
+                        setTimeout(startContinuousListening, 1500);
+                    }
+                }
+                return;
+            }
+
+            // CONTROLLO NORMALE DELLA PAROLA CHIAVE
             if (lowerText.includes(wakeWord)) {
                 let wakeIndex = lowerText.indexOf(wakeWord);
                 let cleanText = speechText.substring(wakeIndex + wakeWord.length).trim();
@@ -614,16 +632,21 @@
                     setStatus("Parola chiave riconosciuta. Elaborazione...");
                     sendMessage();
                 } else {
-                    setStatus(`Hai detto '${wakeWord}' ma senza messaggio.`);
-                    // Riavvia se in modalità continua
-                    if (document.getElementById('continuousVoiceToggle').checked && !isAppBusy) {
-                        setTimeout(startContinuousListening, 500);
-                    }
+                    // L'utente ha detto solo la parola chiave e ha fatto una pausa!
+                    // Invece di chiudere e fare il bip, entriamo in stato di attesa comando
+                    waitingForCommand = true;
+                    setStatus(`💬 Sì? Ti ascolto... (Parla ora)`);
+                    
+                    // Riavvia subito il riconoscimento per catturare la frase successiva
+                    setTimeout(() => {
+                        if (waitingForCommand && !isAppBusy) {
+                            startContinuousListening();
+                        }
+                    }, 200);
                 }
             } else {
-                setStatus(`Ignorato (manca '${wakeWord}'). Riprova...`);
                 if (document.getElementById('continuousVoiceToggle').checked && !isAppBusy) {
-                    setTimeout(startContinuousListening, 500);
+                    setTimeout(startContinuousListening, 800);
                 }
             }
         }
@@ -640,8 +663,8 @@
         }
 
         async function sendMessage() {
-            isAppBusy = true; // Blocca l'ascolto vocale mentre contatta Gemini e suona
-            if (recognition) { try { recognition.stop(); } catch(e) {} }
+            isAppBusy = true;
+            stopContinuousListeningSafe();
 
             let encodedToken = localStorage.getItem('g_cw_auth_token');
             let apiKey = "";
@@ -666,6 +689,9 @@
             const originalPrompt = inputField.value.trim().replace(/[<>]/g, ""); 
             if (!originalPrompt) {
                 isAppBusy = false;
+                if (document.getElementById('continuousVoiceToggle').checked) {
+                    setTimeout(startContinuousListening, 1500);
+                }
                 return;
             }
 
@@ -728,14 +754,14 @@
                 isAppBusy = false;
                 
                 if (document.getElementById('continuousVoiceToggle').checked) {
-                    startContinuousListening();
+                    setTimeout(startContinuousListening, 1500);
                 }
                 return;
             }
             
             setStatus(`Modello agganciato. Trasmissione iniziata.`);
             addMessageToHistory(originalPrompt, geminiText);
-            await transmitMorse(geminiText); // Questo alla fine rimetterà isAppBusy a false e riavvierà il microfono
+            await transmitMorse(geminiText);
         }
     </script>
 </body>
