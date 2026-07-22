@@ -81,16 +81,11 @@
         .btn-outline-danger { background-color: transparent; border: 1px solid #ff4444; color: #ff4444; }
         .btn-outline-danger:hover { background-color: rgba(255, 68, 68, 0.1); }
 
+        /* Effetto per il microfono acceso */
         .mic-active {
             background-color: #ff4444 !important;
             color: white !important;
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.6; }
-            100% { opacity: 1; }
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
         }
 
         .chat-container {
@@ -231,7 +226,7 @@
     <div class="panel">
         <div class="chat-container">
             <div class="chat-controls">
-                <button id="voiceBtn" title="Clicca per accendere/spegnere il microfono">🎤 Parla</button>
+                <button id="voiceBtn" title="Clicca per ascoltare">🎤 Parla</button>
                 <input type="text" id="userInput" placeholder="Scrivi o di' la parola chiave seguita dal messaggio...">
                 <button id="sendBtn">Invia</button>
                 <button id="stopBtn" class="btn-danger" style="display: none;">Stop Audio</button>
@@ -251,8 +246,7 @@
 
     <script>
         let recognition = null;
-        let isUserMicActive = false; // Flag per sapere se l'utente vuole il microfono acceso
-        let isAppBusy = false;
+        let isListening = false;
 
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
@@ -283,16 +277,11 @@
                 const savedVal = localStorage.getItem(`morse_setting_${id}`);
                 if (savedVal !== null) el.value = savedVal;
                 
-                el.addEventListener('input', () => {
-                    localStorage.setItem(`morse_setting_${id}`, el.value);
-                });
-                el.addEventListener('change', () => {
-                    localStorage.setItem(`morse_setting_${id}`, el.value);
-                });
+                el.addEventListener('input', () => localStorage.setItem(`morse_setting_${id}`, el.value));
+                el.addEventListener('change', () => localStorage.setItem(`morse_setting_${id}`, el.value));
             });
 
-            const historyVisible = localStorage.getItem('morse_history_visible');
-            if (historyVisible === 'false') {
+            if (localStorage.getItem('morse_history_visible') === 'false') {
                 setHistoryState(false);
             }
         });
@@ -319,8 +308,7 @@
         function saveApiKey() {
             const key = document.getElementById('apiTokenInput').value.trim();
             if (key && key.length > 20 && !key.includes('<') && !key.includes('>')) {
-                const obfuscatedToken = btoa(key);
-                localStorage.setItem('g_cw_auth_token', obfuscatedToken);
+                localStorage.setItem('g_cw_auth_token', btoa(key));
                 localStorage.removeItem('gemini_api_key'); 
                 showApiKeySavedState();
             } else {
@@ -341,22 +329,15 @@
 
         function toggleHistory() {
             const container = document.getElementById('chatHistory');
-            const isHidden = container.style.display === 'none';
-            setHistoryState(isHidden);
+            setHistoryState(container.style.display === 'none');
         }
 
         function setHistoryState(show) {
             const container = document.getElementById('chatHistory');
             const btn = document.getElementById('toggleHistoryBtn');
-            if (show) {
-                container.style.display = 'flex';
-                btn.textContent = 'Nascondi Cronologia';
-                localStorage.setItem('morse_history_visible', 'true');
-            } else {
-                container.style.display = 'none';
-                btn.textContent = 'Mostra Cronologia';
-                localStorage.setItem('morse_history_visible', 'false');
-            }
+            container.style.display = show ? 'flex' : 'none';
+            btn.textContent = show ? 'Nascondi Cronologia' : 'Mostra Cronologia';
+            localStorage.setItem('morse_history_visible', show);
         }
 
         function clearHistory() {
@@ -366,29 +347,21 @@
 
         function addMessageToHistory(userText, geminiText) {
             const historyContainer = document.getElementById('chatHistory');
-            
             const messageBox = document.createElement('div');
             messageBox.className = 'message-box';
             
-            const header = document.createElement('div');
-            header.className = 'message-header';
-            header.innerHTML = '<span>🤖 Risposta Ricevuta</span><span>(Clicca sul testo sfocato per leggere)</span>';
+            messageBox.innerHTML = `
+                <div class="message-header">
+                    <span>🤖 Risposta Ricevuta</span>
+                    <span>(Clicca sul testo sfocato per leggere)</span>
+                </div>
+                <div class="user-prompt">Tu: "${userText}"</div>
+                <div class="masked-content">${geminiText}</div>
+            `;
             
-            const promptDiv = document.createElement('div');
-            promptDiv.className = 'user-prompt';
-            promptDiv.textContent = `Tu: "${userText}"`;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'masked-content';
-            contentDiv.textContent = geminiText;
-            
-            contentDiv.addEventListener('click', function() {
+            messageBox.querySelector('.masked-content').addEventListener('click', function() {
                 this.classList.toggle('revealed');
             });
-
-            messageBox.appendChild(header);
-            messageBox.appendChild(promptDiv);
-            messageBox.appendChild(contentDiv);
             
             historyContainer.insertBefore(messageBox, historyContainer.firstChild);
 
@@ -401,24 +374,27 @@
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
         }
 
         const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-        // --- MOTORE AUDIO PULITO E SENZA DISTORSIONI ---
+        // Motore Audio Solido e Pulito
         async function playTone(durationMs, frequency) {
             if (abortPlayback) return;
             initAudio();
 
             const durSec = durationMs / 1000;
             const now = audioCtx.currentTime;
-            const attack = 0.005; // 5ms di rampa per eliminare i click
+            const attack = 0.005; // dissolve rumori di clip
             
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
 
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(frequency, now);
+            osc.frequency.value = frequency;
 
             gain.gain.setValueAtTime(0, now);
             gain.gain.linearRampToValueAtTime(1, now + attack);
@@ -435,7 +411,6 @@
         }
 
         async function transmitMorse(text) {
-            isAppBusy = true;
             abortPlayback = false;
             
             let wpm = parseInt(document.getElementById('wpm').value, 10);
@@ -476,45 +451,43 @@
 
             document.getElementById('sendBtn').style.display = 'block';
             document.getElementById('stopBtn').style.display = 'none';
-            isAppBusy = false;
-            
             if (!abortPlayback) setStatus("Trasmissione completata.");
         }
 
         function stopAudio() {
             abortPlayback = true;
-            isAppBusy = false;
             setStatus("Audio interrotto.");
             document.getElementById('sendBtn').style.display = 'block';
             document.getElementById('stopBtn').style.display = 'none';
         }
 
-        // --- GESTIONE MICROFONO MANUALE STABILE ---
+        // --- MICROFONO SEMPLIFICATO E PULITO ---
         function toggleVoiceRecognition() {
-            if (isUserMicActive) {
-                stopVoiceRecognitionManually();
+            if (isListening) {
+                stopVoiceRecognition();
             } else {
                 startVoiceRecognition();
             }
         }
 
         function startVoiceRecognition() {
-            if (!('webkitSpeechRecognition' in window)) { alert("Web Speech API non supportata."); return; }
-            if (isAppBusy) return;
+            if (!('webkitSpeechRecognition' in window)) { 
+                alert("Il tuo browser non supporta il riconoscimento vocale."); 
+                return; 
+            }
 
-            isUserMicActive = true;
             let wakeWord = document.getElementById('wakeWord').value.trim().toLowerCase() || "gemini";
-
             recognition = new webkitSpeechRecognition();
             recognition.lang = 'it-IT';
-            recognition.interimResults = true;
+            recognition.interimResults = true; // Mostra testo mentre parli
             recognition.continuous = true;
 
             recognition.onstart = function() {
+                isListening = true;
                 const btn = document.getElementById('voiceBtn');
                 btn.classList.add('mic-active');
-                btn.textContent = "🔴 In ascolto...";
-                setStatus(`Microfono aperto. Di' '${wakeWord}' seguito dal messaggio...`);
+                btn.textContent = "🔴 In ascolto";
+                setStatus(`Microfono aperto. Parla, poi di' la parola chiave "${wakeWord}" per inviare.`);
             };
 
             recognition.onresult = function(event) {
@@ -530,23 +503,20 @@
                 }
 
                 let currentSpeech = (finalTranscript || interimTranscript).trim();
-                if (currentSpeech) {
-                    document.getElementById('userInput').value = currentSpeech;
-                }
+                document.getElementById('userInput').value = currentSpeech;
 
+                // Controlla se la parola chiave è presente nel testo definitivo
                 if (finalTranscript.trim().length > 0) {
-                    let fullText = finalTranscript.trim();
-                    let lowerText = fullText.toLowerCase();
+                    let lowerText = finalTranscript.toLowerCase();
 
                     if (lowerText.includes(wakeWord)) {
                         let wakeIndex = lowerText.indexOf(wakeWord);
-                        let cleanText = fullText.substring(wakeIndex + wakeWord.length).trim();
+                        let cleanText = finalTranscript.substring(wakeIndex + wakeWord.length).trim();
 
                         if (cleanText.length > 0) {
                             document.getElementById('userInput').value = cleanText;
-                            isUserMicActive = false; // Disattiva il flag utente
-                            try { recognition.stop(); } catch(e) {}
-                            setStatus("Comando catturato. Invio in corso...");
+                            stopVoiceRecognition(); // Spegniamo noi il microfono pulitamente
+                            setStatus("Parola chiave trovata. Invio in corso...");
                             sendMessage();
                         }
                     }
@@ -554,42 +524,32 @@
             };
 
             recognition.onerror = function(event) {
-                console.warn("Errore microfono:", event.error);
+                // Se c'è un errore, fermiamo tutto senza impazzire
+                stopVoiceRecognition();
+                setStatus("Ascolto interrotto.");
             };
 
             recognition.onend = function() {
-                // Se il browser chiude il microfono per silenzio ma l'utente NON lo aveva spento,
-                // lo riapriamo automaticamente in modo trasparente, così non si spegne mai da solo!
-                if (isUserMicActive && !isAppBusy) {
-                    try {
-                        recognition.start();
-                    } catch(e) {
-                        stopVoiceRecognitionManually();
-                    }
-                } else {
-                    stopVoiceRecognitionUIOnly();
+                // Se il browser chiude il microfono (es. per silenzio), lo accettiamo. NESSUN RIAVVIO FORZATO.
+                if (isListening) {
+                    stopVoiceRecognition();
+                    setStatus("Microfono chiuso per inattività. Clicca 'Parla' per riaprirlo.");
                 }
             };
 
             try {
                 recognition.start();
             } catch(e) {
-                isUserMicActive = false;
-                stopVoiceRecognitionUIOnly();
+                stopVoiceRecognition();
             }
         }
 
-        function stopVoiceRecognitionManually() {
-            isUserMicActive = false;
+        function stopVoiceRecognition() {
             if (recognition) {
                 try { recognition.stop(); } catch(e) {}
                 recognition = null;
             }
-            stopVoiceRecognitionUIOnly();
-            setStatus("Microfono spento manualmente.");
-        }
-
-        function stopVoiceRecognitionUIOnly() {
+            isListening = false;
             const btn = document.getElementById('voiceBtn');
             btn.classList.remove('mic-active');
             btn.textContent = "🎤 Parla";
@@ -607,10 +567,8 @@
         }
 
         async function sendMessage() {
-            isUserMicActive = false;
-            if (recognition) { try { recognition.stop(); } catch(e) {} }
-            stopVoiceRecognitionUIOnly();
-            isAppBusy = true;
+            // Assicuriamoci che il microfono sia spento prima di contattare le API
+            stopVoiceRecognition(); 
 
             let encodedToken = localStorage.getItem('g_cw_auth_token');
             let apiKey = "";
@@ -620,23 +578,18 @@
                     apiKey = atob(encodedToken); 
                 } catch(e) {
                     alert("Errore nella chiave salvata. Reinseriscila.");
-                    isAppBusy = false;
                     editApiKey();
                     return;
                 }
             } else {
                 alert("Inserisci la API Key prima di continuare."); 
-                isAppBusy = false;
                 editApiKey(); 
                 return; 
             }
 
             const inputField = document.getElementById('userInput');
             const originalPrompt = inputField.value.trim().replace(/[<>]/g, ""); 
-            if (!originalPrompt) {
-                isAppBusy = false;
-                return;
-            }
+            if (!originalPrompt) return;
 
             const maxWords = parseInt(document.getElementById('maxWords').value, 10);
             inputField.value = "";
@@ -691,10 +644,9 @@
             }
 
             if (!success) {
-                setStatus("Errore: Impossibile generare la risposta. Controlla la chiave API.");
+                setStatus("Errore: Impossibile generare la risposta. Controlla la API Key.");
                 document.getElementById('sendBtn').style.display = 'block';
                 document.getElementById('stopBtn').style.display = 'none';
-                isAppBusy = false;
                 return;
             }
             
