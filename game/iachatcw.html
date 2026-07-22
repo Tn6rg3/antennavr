@@ -95,7 +95,6 @@
             min-height: 20px;
         }
 
-        /* --- NUOVI STILI PER LA CHAT MASCHERATA --- */
         #chatHistory {
             margin-top: 20px;
             display: flex;
@@ -121,14 +120,12 @@
         .masked-content {
             font-size: 1.1em;
             letter-spacing: 1px;
-            /* Effetto sfocatura */
             filter: blur(6px);
             cursor: pointer;
             user-select: none;
             transition: filter 0.3s ease;
         }
 
-        /* Classe aggiunta quando si clicca per rivelare */
         .masked-content.revealed {
             filter: blur(0);
             user-select: auto;
@@ -201,7 +198,6 @@
             <div id="statusText">In attesa di input...</div>
         </div>
         
-        <!-- Contenitore della cronologia messaggi -->
         <div id="chatHistory"></div>
     </div>
 
@@ -251,7 +247,6 @@
             }
         }
 
-        // --- FUNZIONE PER AGGIUNGERE MESSAGGI MASCHERATI ---
         function addMessageToHistory(userText, geminiText) {
             const historyContainer = document.getElementById('chatHistory');
             
@@ -260,7 +255,7 @@
             
             const header = document.createElement('div');
             header.className = 'message-header';
-            header.innerHTML = '<span>🤖 Trasmissione in corso...</span><span>(Clicca sul testo sfocato per rivelare)</span>';
+            header.innerHTML = '<span>🤖 Risposta Ricevuta</span><span>(Clicca sul testo sfocato per leggere)</span>';
             
             const promptDiv = document.createElement('div');
             promptDiv.className = 'user-prompt';
@@ -270,7 +265,6 @@
             contentDiv.className = 'masked-content';
             contentDiv.textContent = geminiText;
             
-            // Toggle per la sfocatura al click
             contentDiv.addEventListener('click', function() {
                 this.classList.toggle('revealed');
             });
@@ -279,7 +273,6 @@
             messageBox.appendChild(promptDiv);
             messageBox.appendChild(contentDiv);
             
-            // Aggiunge in cima
             historyContainer.insertBefore(messageBox, historyContainer.firstChild);
         }
 
@@ -326,7 +319,6 @@
             document.getElementById('sendBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'block';
 
-            // Pulizia
             text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
             for (let i = 0; i < text.length; i++) {
@@ -397,7 +389,6 @@
                     m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent")
                 ).map(m => m.name.replace("models/", ""));
 
-                // Diamo priorità a flash e pro classici, mettendo i gemma in fondo per evitare i log lunghi
                 validModels.sort((a, b) => {
                     if (a.includes('flash') && !b.includes('flash')) return -1;
                     if (b.includes('flash') && !a.includes('flash')) return 1;
@@ -406,9 +397,9 @@
 
                 if (validModels.length === 0) throw new Error("Nessun modello di testo trovato.");
 
-                // ISTRUZIONI BLINDATE per evitare il "Thinking Process"
-                const sysInstruction = `Sei un telegrafo automatico. REGOLE ASSOLUTE: Non devi ASSOLUTAMENTE fare ragionamenti ad alta voce. Nessuna nota, nessun elenco, nessun "Word count", nessun "Final Polish". Restituisci ESCLUSIVAMENTE la frase finale da trasmettere (max ${maxWords} parole).`;
-                const userTextEnforced = `RICHIESTA: ${originalPrompt} \n\nRISPONDI SOLO CON IL MESSAGGIO FINALE, SENZA RAGIONAMENTI.`;
+                // ISTRUZIONI AGGIORNATE: Rispondi normalmente, ma in modo conciso e pulito.
+                const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
+                const userTextEnforced = `Domanda: ${originalPrompt}`;
 
                 const payload = {
                     contents: [{ parts: [{ text: userTextEnforced }] }],
@@ -434,12 +425,9 @@
                         if (response.ok && data.candidates) {
                             geminiText = data.candidates[0].content.parts[0].text.trim();
                             
-                            // Se il modello ha comunque sputato fuori i suoi ragionamenti ("Final Polish: ...")
-                            // Cerchiamo di estrarre solo l'ultima riga pulita per salvarci
                             if (geminiText.includes("Final Polish:")) {
                                 geminiText = geminiText.split("Final Polish:").pop().trim();
                             } else if (geminiText.includes("*")) {
-                                // Se ci sono bullet point, prendi solo l'ultima riga non vuota
                                 const lines = geminiText.split('\n').filter(l => l.trim().length > 0 && !l.includes('*'));
                                 if(lines.length > 0) geminiText = lines[lines.length - 1];
                             }
@@ -456,10 +444,8 @@
                 
                 setStatus(`Modello agganciato. Trasmissione iniziata.`);
                 
-                // Aggiunge la casella mascherata sotto i controlli
                 addMessageToHistory(originalPrompt, geminiText);
 
-                // Avvia il Morse
                 await transmitMorse(geminiText);
 
             } catch (error) {
