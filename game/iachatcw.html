@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- CONTENT SECURITY POLICY: Blocca caricamento di script non autorizzati e limita le connessioni API solo a Gemini -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https://generativelanguage.googleapis.com;">
+    <title>Gemini CW Morse Chat</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent: #00ff88;
+            --accent-hover: #00cc6a;
+            --border: #333;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 { text-align: center; color: var(--accent); }
+
+        .panel {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            color: #aaa;
+        }
+
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background-color: #2a2a2a;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: var(--accent);
+            color: #000;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        button:hover { background-color: var(--accent-hover); }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        
+        .btn-danger { background-color: #ff4444; color: white; }
+        .btn-danger:hover { background-color: #cc0000; }
+
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .chat-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-controls input { flex-grow: 1; }
+
+        #statusText {
+            font-size: 0.9em;
+            color: #888;
+            margin-top: 10px;
+            min-height: 20px;
+        }
+
+        .api-key-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Gemini CW Chat</h1>
+
+    <div class="panel">
+        <div class="api-key-container">
+            <div style="flex-grow: 1;">
+                <label for="apiKey">Chiave API Gemini (Salvata in modo sicuro nel browser locale)</label>
+                <input type="password" id="apiKey" placeholder="Incolla qui la tua API Key...">
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+                <button id="saveKeyBtn">Salva</button>
+            </div>
+        </div>
+
+        <div class="settings-grid">
+            <div>
+                <label for="wpm">Velocità (WPM)</label>
+                <select id="wpm">
+                    <option value="10">10 WPM (Lento)</option>
+                    <option value="15" selected>15 WPM (Normale)</option>
+                    <option value="20">20 WPM (Veloce)</option>
+                    <option value="25">25 WPM (Esperto)</option>
+                    <option value="30">30 WPM (Master)</option>
+                </select>
+            </div>
+            <div>
+                <label for="tone">Tono (Hz)</label>
+                <select id="tone">
+                    <option value="400">400 Hz</option>
+                    <option value="500">500 Hz</option>
+                    <option value="600" selected>600 Hz</option>
+                    <option value="700">700 Hz</option>
+                    <option value="800">800 Hz</option>
+                </select>
+            </div>
+            <div>
+                <label for="maxWords">Lunghezza Max</label>
+                <select id="maxWords">
+                    <option value="10">10 Parole</option>
+                    <option value="20" selected>20 Parole</option>
+                    <option value="30">30 Parole</option>
+                    <option value="40">40 Parole</option>
+                    <option value="50">50 Parole</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="chat-container">
+            <div class="chat-controls">
+                <button id="voiceBtn" title="Parla al microfono">🎤 Parla</button>
+                <input type="text" id="userInput" placeholder="Scrivi il tuo messaggio qui...">
+                <button id="sendBtn">Invia</button>
+                <button id="stopBtn" class="btn-danger" style="display: none;">Stop Audio</button>
+            </div>
+            <!-- statusText non usa innerHTML, verrà popolato solo con textContent per massima sicurezza -->
+            <div id="statusText">In attesa di input...</div>
+        </div>
+    </div>
+
+    <script>
+        // Inizializzazione sicura degli eventi per evitare attributi inline come 'onclick' nell'HTML (best practice CSP)
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
+            document.getElementById('voiceBtn').addEventListener('click', startVoiceRecognition);
+            document.getElementById('sendBtn').addEventListener('click', sendMessage);
+            document.getElementById('stopBtn').addEventListener('click', stopAudio);
+            
+            document.getElementById('userInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+
+            const savedKey = localStorage.getItem('gemini_api_key');
+            if (savedKey) {
+                document.getElementById('apiKey').value = savedKey;
+            }
+        });
+
+        const morseDict = {
+            'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.',
+            'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..',
+            'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.',
+            'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
+            'Y': '-.--', 'Z': '--..', '0': '-----', '1': '.----', '2': '..---',
+            '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...',
+            '8': '---..', '9': '----.', '.': '.-.-.-', ',': '--..--', '?': '..--..',
+            '!': '-.-.--', '-': '-....-', '/': '-..-.', '@': '.--.-.', '(': '-.--.',
+            ')': '-.--.-'
+        };
+
+        let audioCtx = null;
+        let abortPlayback = false;
+
+        function setStatus(msg) {
+            // USO ESCLUSIVO DI textContent PER PREVENIRE XSS
+            document.getElementById('statusText').textContent = msg;
+        }
+
+        function saveApiKey() {
+            // Pulizia dell'input: rimuove spazi bianchi non voluti
+            const key = document.getElementById('apiKey').value.trim();
+            // Controllo basico per evitare salvataggi accidentali di script
+            if (key && /^[a-zA-Z0-9_-]+$/.test(key)) {
+                localStorage.setItem('gemini_api_key', key);
+                alert('Chiave API salvata in modo sicuro nel browser!');
+            } else {
+                alert('Formato chiave API non valido.');
+            }
+        }
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        async function playTone(durationMs, frequency) {
+            if (abortPlayback) return;
+            
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.value = frequency;
+
+            const currentTime = audioCtx.currentTime;
+            gainNode.gain.setValueAtTime(0, currentTime);
+            gainNode.gain.linearRampToValueAtTime(1, currentTime + 0.005);
+            gainNode.gain.setValueAtTime(1, currentTime + (durationMs / 1000) - 0.005);
+            gainNode.gain.linearRampToValueAtTime(0, currentTime + (durationMs / 1000));
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.start(currentTime);
+            oscillator.stop(currentTime + (durationMs / 1000));
+
+            await sleep(durationMs);
+        }
+
+        async function transmitMorse(text) {
+            initAudio();
+            abortPlayback = false;
+            
+            const wpm = parseInt(document.getElementById('wpm').value, 10);
+            const freq = parseInt(document.getElementById('tone').value, 10);
+            
+            const dot = 1200 / wpm; 
+            const dash = dot * 3;
+            const symbolSpace = dot;
+            const letterSpace = dot * 3;
+            const wordSpace = dot * 7;
+
+            document.getElementById('sendBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'block';
+
+            // Pulizia del testo rigorosa
+            text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
+            for (let i = 0; i < text.length; i++) {
+                if (abortPlayback) break;
+
+                const char = text[i];
+                if (char === ' ') {
+                    await sleep(wordSpace - letterSpace); 
+                    continue;
+                }
+
+                const code = morseDict[char];
+                if (code) {
+                    for (let j = 0; j < code.length; j++) {
+                        if (abortPlayback) break;
+                        
+                        const symbol = code[j];
+                        if (symbol === '.') {
+                            await playTone(dot, freq);
+                        } else if (symbol === '-') {
+                            await playTone(dash, freq);
+                        }
+                        await sleep(symbolSpace);
+                    }
+                    await sleep(letterSpace - symbolSpace);
+                }
+            }
+
+            document.getElementById('sendBtn').style.display = 'block';
+            document.getElementById('stopBtn').style.display = 'none';
+            if (!abortPlayback) setStatus("Trasmissione completata.");
+        }
+
+        function stopAudio() {
+            abortPlayback = true;
+            setStatus("Audio interrotto.");
+            document.getElementById('sendBtn').style.display = 'block';
+            document.getElementById('stopBtn').style.display = 'none';
+        }
+
+        function startVoiceRecognition() {
+            if (!('webkitSpeechRecognition' in window)) {
+                alert("Il tuo browser non supporta il Web Speech API.");
+                return;
+            }
+            const recognition = new webkitSpeechRecognition();
+            recognition.lang = 'it-IT';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            setStatus("Ascolto in corso... Parla ora.");
+            
+            recognition.onresult = function(event) {
+                // Recupero del testo in modo sicuro
+                const text = event.results[0][0].transcript;
+                const inputField = document.getElementById('userInput');
+                inputField.value += text + " ";
+                setStatus("Testo acquisito. Pronto per l'invio.");
+            };
+
+            recognition.onerror = function(event) {
+                setStatus("Errore microfono: " + event.error);
+            };
+
+            recognition.start();
+        }
+
+        async function sendMessage() {
+            const apiKey = localStorage.getItem('gemini_api_key');
+            if (!apiKey) {
+                alert("Per favore, inserisci e salva la tua API Key di Gemini prima di continuare.");
+                return;
+            }
+
+            const inputField = document.getElementById('userInput');
+            // Sanitizzazione basica lato client
+            const prompt = inputField.value.trim().replace(/[<>]/g, ""); 
+            if (!prompt) return;
+
+            const maxWords = parseInt(document.getElementById('maxWords').value, 10);
+            inputField.value = "";
+            setStatus("In attesa della risposta di Gemini...");
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+                
+                const sysInstruction = `Sei un operatore telegrafico. Rispondi alla richiesta dell'utente usando TASSATIVAMENTE meno di ${maxWords} parole. Non usare assolutamente markdown, emoji, o simboli matematici. Usa solo testo semplice, numeri e punteggiatura base, perché la risposta verrà trasmessa in codice Morse.`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }] }],
+                    systemInstruction: { parts: [{ text: sysInstruction }] }
+                };
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error?.message || "Errore sconosciuto API");
+                }
+                
+                const geminiText = data.candidates[0].content.parts[0].text.trim();
+                setStatus(`Trasmittendo in Morse: "${geminiText}"`);
+                
+                await transmitMorse(geminiText);
+
+            } catch (error) {
+                console.error(error);
+                setStatus("Errore: " + error.message);
+                document.getElementById('sendBtn').style.display = 'block';
+                document.getElementById('stopBtn').style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
