@@ -78,6 +78,9 @@
         .btn-outline { background-color: transparent; border: 1px solid var(--accent); color: var(--accent); }
         .btn-outline:hover { background-color: rgba(0, 255, 136, 0.1); }
 
+        .btn-outline-danger { background-color: transparent; border: 1px solid #ff4444; color: #ff4444; }
+        .btn-outline-danger:hover { background-color: rgba(255, 68, 68, 0.1); }
+
         .chat-container {
             display: flex;
             flex-direction: column;
@@ -111,6 +114,11 @@
             margin: 0;
             font-size: 1.1em;
             color: var(--accent);
+        }
+
+        .history-actions {
+            display: flex;
+            gap: 8px;
         }
 
         #chatHistory {
@@ -217,7 +225,10 @@
         
         <div class="history-header">
             <h3>Cronologia Messaggi</h3>
-            <button id="toggleHistoryBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.8em;">Nascondi Cronologia</button>
+            <div class="history-actions">
+                <button id="clearHistoryBtn" class="btn-outline-danger" style="padding: 5px 10px; font-size: 0.8em;">Cancella</button>
+                <button id="toggleHistoryBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.8em;">Nascondi Cronologia</button>
+            </div>
         </div>
         <div id="chatHistory"></div>
     </div>
@@ -230,6 +241,7 @@
             document.getElementById('sendBtn').addEventListener('click', sendMessage);
             document.getElementById('stopBtn').addEventListener('click', stopAudio);
             document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
+            document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
             
             document.getElementById('userInput').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
@@ -326,6 +338,11 @@
             }
         }
 
+        function clearHistory() {
+            document.getElementById('chatHistory').innerHTML = '';
+            setStatus("Cronologia cancellata.");
+        }
+
         function addMessageToHistory(userText, geminiText) {
             const historyContainer = document.getElementById('chatHistory');
             
@@ -359,7 +376,6 @@
             }
         }
 
-        // --- MOTORE AUDIO ULTRA-PULITO (SENZA SCOPPIETTII) ---
         function initAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -385,16 +401,15 @@
             
             const now = audioCtx.currentTime;
             const durSec = durationMs / 1000;
-            const attackRelease = 0.005; // 5ms di rampa per eliminare totalmente i click
+            const attackRelease = 0.005;
 
             globalOscillator.frequency.setValueAtTime(frequency, now);
 
-            // Gestione della curva di volume liscia (Niente scoppiettii)
             globalGain.gain.cancelScheduledValues(now);
             globalGain.gain.setValueAtTime(0, now);
-            globalGain.gain.linearRampToValueAtTime(1, now + attackRelease); // Attacco fluido
+            globalGain.gain.linearRampToValueAtTime(1, now + attackRelease);
             globalGain.gain.setValueAtTime(1, now + durSec - attackRelease);
-            globalGain.gain.linearRampToValueAtTime(0, now + durSec); // Rilascio fluido
+            globalGain.gain.linearRampToValueAtTime(0, now + durSec);
 
             await sleep(durationMs);
         }
@@ -446,7 +461,6 @@
         function stopAudio() {
             abortPlayback = true;
             if (globalGain && audioCtx) {
-                // Mette subito a zero il volume per stoppare il suono all'istante
                 globalGain.gain.cancelScheduledValues(audioCtx.currentTime);
                 globalGain.gain.setValueAtTime(0, audioCtx.currentTime);
             }
