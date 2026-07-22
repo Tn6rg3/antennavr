@@ -206,18 +206,13 @@
         function saveApiKey() {
             // Pulizia dell'input: rimuove spazi bianchi non voluti
             const key = document.getElementById('apiKey').value.trim();
-            // Controllo basico per evitare salvataggi accidentali di script
-            if (key && /^[a-zA-Z0-9_-]+$/.test(key)) {
+            
+            // Controllo più flessibile: basta che sia abbastanza lunga e non contenga codice HTML
+            if (key && key.length > 20 && !key.includes('<') && !key.includes('>')) {
                 localStorage.setItem('gemini_api_key', key);
                 alert('Chiave API salvata in modo sicuro nel browser!');
             } else {
-                alert('Formato chiave API non valido.');
-            }
-        }
-
-        function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                alert('Formato chiave API non valido. Assicurati di averla copiata tutta e per intero.');
             }
         }
 
