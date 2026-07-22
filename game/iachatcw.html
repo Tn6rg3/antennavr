@@ -210,17 +210,24 @@
                 </select>
             </div>
             <div>
-                <!-- Casella di testo per personalizzare la parola chiave -->
                 <label for="wakeWord">Parola di Attivazione</label>
                 <input type="text" id="wakeWord" value="Gemini" placeholder="Es. Gemini, Jarvis...">
             </div>
+        </div>
+
+        <!-- Selettore per la Modalità Vocale Continua -->
+        <div style="margin-top: 10px; border-top: 1px solid var(--border); padding-top: 15px; display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="continuousVoiceToggle" style="width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer;">
+            <label for="continuousVoiceToggle" style="margin: 0; color: var(--text-color); cursor: pointer; font-weight: bold;">
+                Attiva Modalità Vocale Continua (Ascolto automatico mani libere)
+            </label>
         </div>
     </div>
 
     <div class="panel">
         <div class="chat-container">
             <div class="chat-controls">
-                <button id="voiceBtn" title="Parla usando la parola chiave">🎤 Parla</button>
+                <button id="voiceBtn" title="Avvia/Ferma ascolto manuale">🎤 Parla</button>
                 <input type="text" id="userInput" placeholder="Scrivi o di' la parola chiave seguita dal messaggio...">
                 <button id="sendBtn">Invia</button>
                 <button id="stopBtn" class="btn-danger" style="display: none;">Stop Audio</button>
@@ -239,10 +246,13 @@
     </div>
 
     <script>
+        let recognition = null;
+        let isAppBusy = false; // True se sta elaborando o trasmettendo Morse
+
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
             document.getElementById('editKeyBtn').addEventListener('click', editApiKey);
-            document.getElementById('voiceBtn').addEventListener('click', startVoiceRecognition);
+            document.getElementById('voiceBtn').addEventListener('click', toggleManualVoice);
             document.getElementById('sendBtn').addEventListener('click', sendMessage);
             document.getElementById('stopBtn').addEventListener('click', stopAudio);
             document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
@@ -250,6 +260,17 @@
             
             document.getElementById('userInput').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
+            });
+
+            // Gestione checkbox modalità continua
+            const continuousToggle = document.getElementById('continuousVoiceToggle');
+            continuousToggle.addEventListener('change', () => {
+                localStorage.setItem('morse_continuous_voice', continuousToggle.checked);
+                if (continuousToggle.checked) {
+                    startContinuousListening();
+                } else {
+                    stopContinuousListening();
+                }
             });
 
             const savedToken = localStorage.getItem('g_cw_auth_token');
@@ -262,7 +283,6 @@
                 }
             }
 
-            // Inclusione di wakeWord tra le impostazioni salvate in automatico
             const settings = ['wpm', 'tone', 'maxWords', 'wakeWord'];
             settings.forEach(id => {
                 const el = document.getElementById(id);
@@ -280,6 +300,14 @@
             const historyVisible = localStorage.getItem('morse_history_visible');
             if (historyVisible === 'false') {
                 setHistoryState(false);
+            }
+
+            // Ripristina lo stato della modalità continua salvata
+            const isContinuousSaved = localStorage.getItem('morse_continuous_voice') === 'true';
+            if (isContinuousSaved) {
+                continuousToggle.checked = true;
+                // Avvia l'ascolto dopo un piccolo ritardo per permettere al browser di caricarsi
+                setTimeout(startContinuousListening, 1000);
             }
         });
 
@@ -424,6 +452,7 @@
         }
 
         async function transmitMorse(text) {
+            isAppBusy = true; // Segnala che siamo occupati (ferma il riconoscimento vocale)
             abortPlayback = false;
             
             let wpm = parseInt(document.getElementById('wpm').value, 10);
@@ -464,7 +493,14 @@
 
             document.getElementById('sendBtn').style.display = 'block';
             document.getElementById('stopBtn').style.display = 'none';
+            isAppBusy = false; // Fine trasmissione, riattiva l'ascolto continuo se abilitato
+            
             if (!abortPlayback) setStatus("Trasmissione completata.");
+            
+            // Se la modalità continua è attiva, riavvia l'ascolto
+            if (document.getElementById('continuousVoiceToggle').checked) {
+                startContinuousListening();
+            }
         }
 
         function stopAudio() {
@@ -473,51 +509,123 @@
                 globalGain.gain.cancelScheduledValues(audioCtx.currentTime);
                 globalGain.gain.setValueAtTime(0, audioCtx.currentTime);
             }
+            isAppBusy = false;
             setStatus("Audio interrotto.");
             document.getElementById('sendBtn').style.display = 'block';
             document.getElementById('stopBtn').style.display = 'none';
+
+            if (document.getElementById('continuousVoiceToggle').checked) {
+                startContinuousListening();
+            }
         }
 
-        // --- RICONOSCIMENTO VOCALE DINAMICO CON WAKE-WORD CONFIGURABILE ---
-        function startVoiceRecognition() {
-            if (!('webkitSpeechRecognition' in window)) { alert("Web Speech API non supportata."); return; }
-            
-            // Legge la parola inserita dall'utente nella nuova casella (default: "gemini")
-            let wakeWordInput = document.getElementById('wakeWord').value.trim().toLowerCase();
-            if (!wakeWordInput) wakeWordInput = "gemini";
+        // --- GESTIONE RICONOSCIMENTO VOCALE CONTINUO E MANUALE ---
+        function toggleManualVoice() {
+            const toggle = document.getElementById('continuousVoiceToggle');
+            if (toggle.checked) {
+                // Se la modalità continua è accesa, il tasto la spegne
+                toggle.checked = false;
+                stopContinuousListening();
+                setStatus("Ascolto vocale disattivato.");
+            } else {
+                // Altrimenti esegue un ascolto singolo manuale
+                startSingleVoiceRecognition();
+            }
+        }
 
-            const recognition = new webkitSpeechRecognition();
+        function startSingleVoiceRecognition() {
+            if (!('webkitSpeechRecognition' in window)) { alert("Web Speech API non supportata."); return; }
+            const rec = new webkitSpeechRecognition();
+            rec.lang = 'it-IT';
+            rec.interimResults = false;
+            rec.maxAlternatives = 1;
+            
+            let wakeWord = document.getElementById('wakeWord').value.trim().toLowerCase() || "gemini";
+            setStatus(`In ascolto... (Di' '${wakeWord}')`);
+            
+            rec.onresult = function(event) {
+                processSpeechResult(event.results[0][0].transcript.trim());
+            };
+            rec.onerror = function(event) { setStatus("Errore microfono: " + event.error); };
+            rec.start();
+        }
+
+        function startContinuousListening() {
+            if (!('webkitSpeechRecognition' in window)) return;
+            if (isAppBusy) return; // Non avviare se stiamo trasmettendo Morse o elaborando
+
+            if (recognition) {
+                try { recognition.stop(); } catch(e) {}
+            }
+
+            recognition = new webkitSpeechRecognition();
             recognition.lang = 'it-IT';
             recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-            
-            setStatus(`In ascolto... (Di' '${wakeWordInput}' seguito dal messaggio)`);
-            
+            recognition.continuous = false; // Chiude dopo una frase per elaborarla
+
+            let wakeWord = document.getElementById('wakeWord').value.trim().toLowerCase() || "gemini";
+            setStatus(`🔴 Ascolto attivo (Di' '${wakeWord}'...)`);
+
             recognition.onresult = function(event) {
                 let speechText = event.results[0][0].transcript.trim();
-                let lowerText = speechText.toLowerCase();
-                
-                if (lowerText.includes(wakeWordInput)) {
-                    let wakeIndex = lowerText.indexOf(wakeWordInput);
-                    let cleanText = speechText.substring(wakeIndex + wakeWordInput.length).trim();
-                    
-                    if (cleanText.length > 0) {
-                        document.getElementById('userInput').value = cleanText;
-                        setStatus("Comando vocale ricevuto. Invio in corso...");
-                        sendMessage();
-                    } else {
-                        setStatus(`Hai detto '${wakeWordInput}' ma non hai aggiunto alcun messaggio.`);
-                    }
-                } else {
-                    setStatus(`Parola chiave '${wakeWordInput}' non rilevata. Riprova.`);
-                }
+                processSpeechResult(speechText);
             };
 
             recognition.onerror = function(event) {
-                setStatus("Errore microfono: " + event.error);
+                // Ignora errori di silenzio prolungato per permettere il riavvio automatico
+                if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                    console.warn("Errore riconoscimento vocale:", event.error);
+                }
             };
 
-            recognition.start();
+            recognition.onend = function() {
+                // Se la modalità continua è ancora attiva e non siamo occupati, riavvia subito l'ascolto
+                const isContinuous = document.getElementById('continuousVoiceToggle').checked;
+                if (isContinuous && !isAppBusy) {
+                    setTimeout(startContinuousListening, 300);
+                }
+            };
+
+            try {
+                recognition.start();
+            } catch(e) {
+                // Evita crash se l'istanza era già partita
+            }
+        }
+
+        function stopContinuousListening() {
+            if (recognition) {
+                try { recognition.stop(); } catch(e) {}
+                recognition = null;
+            }
+            setStatus("Modalità continua disattivata.");
+        }
+
+        function processSpeechResult(speechText) {
+            let lowerText = speechText.toLowerCase();
+            let wakeWord = document.getElementById('wakeWord').value.trim().toLowerCase() || "gemini";
+            
+            if (lowerText.includes(wakeWord)) {
+                let wakeIndex = lowerText.indexOf(wakeWord);
+                let cleanText = speechText.substring(wakeIndex + wakeWord.length).trim();
+                
+                if (cleanText.length > 0) {
+                    document.getElementById('userInput').value = cleanText;
+                    setStatus("Parola chiave riconosciuta. Elaborazione...");
+                    sendMessage();
+                } else {
+                    setStatus(`Hai detto '${wakeWord}' ma senza messaggio.`);
+                    // Riavvia se in modalità continua
+                    if (document.getElementById('continuousVoiceToggle').checked && !isAppBusy) {
+                        setTimeout(startContinuousListening, 500);
+                    }
+                }
+            } else {
+                setStatus(`Ignorato (manca '${wakeWord}'). Riprova...`);
+                if (document.getElementById('continuousVoiceToggle').checked && !isAppBusy) {
+                    setTimeout(startContinuousListening, 500);
+                }
+            }
         }
 
         function cleanGeminiResponse(rawText) {
@@ -532,6 +640,9 @@
         }
 
         async function sendMessage() {
+            isAppBusy = true; // Blocca l'ascolto vocale mentre contatta Gemini e suona
+            if (recognition) { try { recognition.stop(); } catch(e) {} }
+
             let encodedToken = localStorage.getItem('g_cw_auth_token');
             let apiKey = "";
             
@@ -540,18 +651,23 @@
                     apiKey = atob(encodedToken); 
                 } catch(e) {
                     alert("Errore nella chiave salvata. Reinseriscila.");
+                    isAppBusy = false;
                     editApiKey();
                     return;
                 }
             } else {
                 alert("Inserisci la API Key prima di continuare."); 
+                isAppBusy = false;
                 editApiKey(); 
                 return; 
             }
 
             const inputField = document.getElementById('userInput');
             const originalPrompt = inputField.value.trim().replace(/[<>]/g, ""); 
-            if (!originalPrompt) return;
+            if (!originalPrompt) {
+                isAppBusy = false;
+                return;
+            }
 
             const maxWords = parseInt(document.getElementById('maxWords').value, 10);
             inputField.value = "";
@@ -609,12 +725,17 @@
                 setStatus("Errore: Impossibile generare la risposta. Controlla la chiave API.");
                 document.getElementById('sendBtn').style.display = 'block';
                 document.getElementById('stopBtn').style.display = 'none';
+                isAppBusy = false;
+                
+                if (document.getElementById('continuousVoiceToggle').checked) {
+                    startContinuousListening();
+                }
                 return;
             }
             
             setStatus(`Modello agganciato. Trasmissione iniziata.`);
             addMessageToHistory(originalPrompt, geminiText);
-            await transmitMorse(geminiText);
+            await transmitMorse(geminiText); // Questo alla fine rimetterà isAppBusy a false e riavvierà il microfono
         }
     </script>
 </body>
