@@ -343,7 +343,7 @@
             setStatus("In attesa della risposta di Gemini...");
 
             try {
-               const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${encodeURIComponent(apiKey)}`;
+              const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${encodeURIComponent(apiKey)}`;
                 
                 const sysInstruction = `Sei un operatore telegrafico. Rispondi alla richiesta dell'utente usando TASSATIVAMENTE meno di ${maxWords} parole. Non usare assolutamente markdown, emoji, o simboli matematici. Usa solo testo semplice, numeri e punteggiatura base, perché la risposta verrà trasmessa in codice Morse.`;
 
