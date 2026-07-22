@@ -87,9 +87,10 @@
         .chat-controls {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
-        .chat-controls input { flex-grow: 1; }
+        .chat-controls input { flex-grow: 1; min-width: 200px; }
 
         #statusText {
             font-size: 0.9em;
@@ -210,6 +211,7 @@
                 <button id="voiceBtn" title="Parla al microfono">🎤 Parla</button>
                 <input type="text" id="userInput" placeholder="Scrivi il tuo messaggio qui...">
                 <button id="sendBtn">Invia</button>
+                <button id="newChatBtn" class="btn-outline" title="Cancella la memoria e avvia una nuova discussione">Nuova Chat</button>
                 <button id="stopBtn" class="btn-danger" style="display: none;">Stop Audio</button>
             </div>
             <div id="statusText">In attesa di input...</div>
@@ -223,11 +225,14 @@
     </div>
 
     <script>
+        let chatHistoryArray = [];
+
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
             document.getElementById('editKeyBtn').addEventListener('click', editApiKey);
             document.getElementById('voiceBtn').addEventListener('click', startVoiceRecognition);
             document.getElementById('sendBtn').addEventListener('click', sendMessage);
+            document.getElementById('newChatBtn').addEventListener('click', startNewChat);
             document.getElementById('stopBtn').addEventListener('click', stopAudio);
             document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
             
@@ -302,6 +307,12 @@
             document.getElementById('apiKeySavedContainer').style.display = 'none';
             document.getElementById('apiKeyInputContainer').style.display = 'flex';
             document.getElementById('apiTokenInput').focus();
+        }
+
+        function startNewChat() {
+            chatHistoryArray = [];
+            document.getElementById('chatHistory').innerHTML = '';
+            setStatus("Nuova discussione avviata. Memoria pulita.");
         }
 
         function toggleHistory() {
@@ -487,18 +498,22 @@
             const maxWords = parseInt(document.getElementById('maxWords').value, 10);
             inputField.value = "";
             
-            const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
-            const userTextEnforced = `Domanda: ${originalPrompt}`;
+            chatHistoryArray.push({
+                role: "user",
+                parts: [{ text: originalPrompt }]
+            });
+
+            const maxW = maxWords || 20;
+            const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxW} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
+            
             const payload = {
-                contents: [{ parts: [{ text: userTextEnforced }] }],
+                contents: chatHistoryArray,
                 systemInstruction: { parts: [{ text: sysInstruction }] }
             };
 
             let success = false;
             let geminiText = "";
             
-            // LISTA AGGIORNATA CON I NUOVI MODELLI 3.X
-            // Ordinati per priorità: i più avanzati/veloci prima.
             let modelsToTry = [
                 'gemini-3.6-flash',
                 'gemini-3.5-flash-lite',
@@ -539,12 +554,18 @@
             }
 
             if (!success) {
+                chatHistoryArray.pop();
                 setStatus("Errore: Impossibile generare la risposta. Controlla la chiave API.");
                 document.getElementById('sendBtn').style.display = 'block';
                 document.getElementById('stopBtn').style.display = 'none';
                 return;
             }
             
+            chatHistoryArray.push({
+                role: "model",
+                parts: [{ text: geminiText }]
+            });
+
             setStatus(`Modello agganciato. Trasmissione iniziata.`);
             addMessageToHistory(originalPrompt, geminiText);
             await transmitMorse(geminiText);
