@@ -366,6 +366,17 @@
             recognition.start();
         }
 
+        function cleanGeminiResponse(rawText) {
+            let cleaned = rawText.trim();
+            if (cleaned.includes("Final Polish:")) {
+                cleaned = cleaned.split("Final Polish:").pop().trim();
+            } else if (cleaned.includes("*")) {
+                const lines = cleaned.split('\n').filter(l => l.trim().length > 0 && !l.includes('*'));
+                if(lines.length > 0) cleaned = lines[lines.length - 1];
+            }
+            return cleaned;
+        }
+
         async function sendMessage() {
             const apiKey = localStorage.getItem('gemini_api_key');
             if (!apiKey) { alert("Inserisci la API Key prima di continuare."); return; }
@@ -376,83 +387,108 @@
 
             const maxWords = parseInt(document.getElementById('maxWords').value, 10);
             inputField.value = "";
-            setStatus("Ricerca modello...");
+            
+            const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
+            const userTextEnforced = `Domanda: ${originalPrompt}`;
+            const payload = {
+                contents: [{ parts: [{ text: userTextEnforced }] }],
+                systemInstruction: { parts: [{ text: sysInstruction }] }
+            };
 
-            try {
-                const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
-                const listRes = await fetch(listUrl);
-                if (!listRes.ok) throw new Error("Impossibile recuperare i modelli.");
-                
-                const listData = await listRes.json();
-                
-                let validModels = listData.models.filter(m => 
-                    m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent")
-                ).map(m => m.name.replace("models/", ""));
+            let success = false;
+            let geminiText = "";
+            
+            // CONTROLLA SE ESISTE GIA' UN MODELLO SALVATO E FUNZIONANTE
+            let cachedModel = localStorage.getItem('gemini_working_model');
 
-                validModels.sort((a, b) => {
-                    if (a.includes('flash') && !b.includes('flash')) return -1;
-                    if (b.includes('flash') && !a.includes('flash')) return 1;
-                    return 0;
-                });
+            if (cachedModel) {
+                setStatus(`Connessione rapida al modello (${cachedModel})...`);
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cachedModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
 
-                if (validModels.length === 0) throw new Error("Nessun modello di testo trovato.");
-
-                // ISTRUZIONI AGGIORNATE: Rispondi normalmente, ma in modo conciso e pulito.
-                const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
-                const userTextEnforced = `Domanda: ${originalPrompt}`;
-
-                const payload = {
-                    contents: [{ parts: [{ text: userTextEnforced }] }],
-                    systemInstruction: { parts: [{ text: sysInstruction }] }
-                };
-
-                let success = false;
-                let geminiText = "";
-
-                for (const modelName of validModels) {
-                    setStatus(`Tentativo con: ${modelName}...`);
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-                    
-                    try {
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-
-                        const data = await response.json();
-                        
-                        if (response.ok && data.candidates) {
-                            geminiText = data.candidates[0].content.parts[0].text.trim();
-                            
-                            if (geminiText.includes("Final Polish:")) {
-                                geminiText = geminiText.split("Final Polish:").pop().trim();
-                            } else if (geminiText.includes("*")) {
-                                const lines = geminiText.split('\n').filter(l => l.trim().length > 0 && !l.includes('*'));
-                                if(lines.length > 0) geminiText = lines[lines.length - 1];
-                            }
-
-                            success = true;
-                            break; 
-                        }
-                    } catch (e) {
-                        console.warn(`Errore con ${modelName}`);
+                    const data = await response.json();
+                    if (response.ok && data.candidates) {
+                        geminiText = cleanGeminiResponse(data.candidates[0].content.parts[0].text);
+                        success = true;
+                    } else {
+                        // Se il modello salvato dà errore, lo dimentichiamo
+                        console.warn("Modello in cache non più valido. Scarto...");
+                        localStorage.removeItem('gemini_working_model');
                     }
+                } catch (e) {
+                    console.warn("Errore di rete con il modello in cache.");
+                    localStorage.removeItem('gemini_working_model');
                 }
-
-                if (!success) throw new Error("Tutti i modelli hanno rifiutato la richiesta.");
-                
-                setStatus(`Modello agganciato. Trasmissione iniziata.`);
-                
-                addMessageToHistory(originalPrompt, geminiText);
-
-                await transmitMorse(geminiText);
-
-            } catch (error) {
-                setStatus("Errore: " + error.message);
-                document.getElementById('sendBtn').style.display = 'block';
-                document.getElementById('stopBtn').style.display = 'none';
             }
+
+            // SE NON C'ERA UN MODELLO SALVATO (O HA FALLITO), AVVIA LA SCANSIONE COMPLETA
+            if (!success) {
+                setStatus("Primo avvio: Ricerca del modello ottimale...");
+                try {
+                    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+                    const listRes = await fetch(listUrl);
+                    if (!listRes.ok) throw new Error("Impossibile recuperare i modelli.");
+                    
+                    const listData = await listRes.json();
+                    
+                    let validModels = listData.models.filter(m => 
+                        m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent")
+                    ).map(m => m.name.replace("models/", ""));
+
+                    validModels.sort((a, b) => {
+                        if (a.includes('flash') && !b.includes('flash')) return -1;
+                        if (b.includes('flash') && !a.includes('flash')) return 1;
+                        return 0;
+                    });
+
+                    if (validModels.length === 0) throw new Error("Nessun modello di testo trovato.");
+
+                    for (const modelName of validModels) {
+                        setStatus(`Tentativo con: ${modelName}...`);
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+                        
+                        try {
+                            const response = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+
+                            const data = await response.json();
+                            
+                            if (response.ok && data.candidates) {
+                                geminiText = cleanGeminiResponse(data.candidates[0].content.parts[0].text);
+                                success = true;
+                                
+                                // SALVA IL MODELLO FUNZIONANTE PER IL PROSSIMO MESSAGGIO
+                                localStorage.setItem('gemini_working_model', modelName);
+                                console.log("Modello salvato in memoria:", modelName);
+                                break; 
+                            }
+                        } catch (e) {
+                            console.warn(`Errore con ${modelName}`);
+                        }
+                    }
+
+                    if (!success) throw new Error("Tutti i modelli hanno rifiutato la richiesta.");
+
+                } catch (error) {
+                    setStatus("Errore: " + error.message);
+                    document.getElementById('sendBtn').style.display = 'block';
+                    document.getElementById('stopBtn').style.display = 'none';
+                    return;
+                }
+            }
+            
+            // TRASMISSIONE DEL TESTO RICEVUTO
+            setStatus(`Modello agganciato. Trasmissione iniziata.`);
+            addMessageToHistory(originalPrompt, geminiText);
+            await transmitMorse(geminiText);
         }
     </script>
 </body>
