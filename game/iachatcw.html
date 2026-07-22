@@ -17,7 +17,7 @@
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var--bg-color);
+            background-color: var(--bg-color);
             color: var(--text-color);
             max-width: 800px;
             margin: 0 auto;
@@ -81,7 +81,6 @@
         .btn-outline-danger { background-color: transparent; border: 1px solid #ff4444; color: #ff4444; }
         .btn-outline-danger:hover { background-color: rgba(255, 68, 68, 0.1); }
 
-        /* Stile speciale per quando il microfono è attivo */
         .mic-active {
             background-color: #ff4444 !important;
             color: white !important;
@@ -232,7 +231,6 @@
     <div class="panel">
         <div class="chat-container">
             <div class="chat-controls">
-                <!-- Il pulsante microfono ora fa da interruttore manuale stabile -->
                 <button id="voiceBtn" title="Clicca per accendere/spegnere il microfono">🎤 Parla</button>
                 <input type="text" id="userInput" placeholder="Scrivi o di' la parola chiave seguita dal messaggio...">
                 <button id="sendBtn">Invia</button>
@@ -253,7 +251,7 @@
 
     <script>
         let recognition = null;
-        let isListening = false;
+        let isUserMicActive = false; // Flag per sapere se l'utente vuole il microfono acceso
         let isAppBusy = false;
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -312,8 +310,6 @@
         };
 
         let audioCtx = null;
-        let globalOscillator = null;
-        let globalGain = null;
         let abortPlayback = false;
 
         function setStatus(msg) {
@@ -405,36 +401,35 @@
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
-            if (!globalOscillator) {
-                globalOscillator = audioCtx.createOscillator();
-                globalGain = audioCtx.createGain();
-                
-                globalOscillator.type = 'sine';
-                globalGain.gain.setValueAtTime(0, audioCtx.currentTime);
-                
-                globalOscillator.connect(globalGain);
-                globalGain.connect(audioCtx.destination);
-                globalOscillator.start();
-            }
         }
 
         const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+        // --- MOTORE AUDIO PULITO E SENZA DISTORSIONI ---
         async function playTone(durationMs, frequency) {
             if (abortPlayback) return;
             initAudio();
-            
-            const now = audioCtx.currentTime;
+
             const durSec = durationMs / 1000;
-            const attackRelease = 0.005;
+            const now = audioCtx.currentTime;
+            const attack = 0.005; // 5ms di rampa per eliminare i click
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
 
-            globalOscillator.frequency.setValueAtTime(frequency, now);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(frequency, now);
 
-            globalGain.gain.cancelScheduledValues(now);
-            globalGain.gain.setValueAtTime(0, now);
-            globalGain.gain.linearRampToValueAtTime(1, now + attackRelease);
-            globalGain.gain.setValueAtTime(1, now + durSec - attackRelease);
-            globalGain.gain.linearRampToValueAtTime(0, now + durSec);
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(1, now + attack);
+            gain.gain.setValueAtTime(1, now + durSec - attack);
+            gain.gain.linearRampToValueAtTime(0, now + durSec);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start(now);
+            osc.stop(now + durSec);
 
             await sleep(durationMs);
         }
@@ -488,20 +483,16 @@
 
         function stopAudio() {
             abortPlayback = true;
-            if (globalGain && audioCtx) {
-                globalGain.gain.cancelScheduledValues(audioCtx.currentTime);
-                globalGain.gain.setValueAtTime(0, audioCtx.currentTime);
-            }
             isAppBusy = false;
             setStatus("Audio interrotto.");
             document.getElementById('sendBtn').style.display = 'block';
             document.getElementById('stopBtn').style.display = 'none';
         }
 
-        // --- INTERRUTTORE MANUALE DEL MICROFONO ---
+        // --- GESTIONE MICROFONO MANUALE STABILE ---
         function toggleVoiceRecognition() {
-            if (isListening) {
-                stopVoiceRecognition();
+            if (isUserMicActive) {
+                stopVoiceRecognitionManually();
             } else {
                 startVoiceRecognition();
             }
@@ -511,19 +502,19 @@
             if (!('webkitSpeechRecognition' in window)) { alert("Web Speech API non supportata."); return; }
             if (isAppBusy) return;
 
+            isUserMicActive = true;
             let wakeWord = document.getElementById('wakeWord').value.trim().toLowerCase() || "gemini";
 
             recognition = new webkitSpeechRecognition();
             recognition.lang = 'it-IT';
-            recognition.interimResults = true; // Mostra in tempo reale cosa capisce
-            recognition.continuous = true; // Rimane aperto finché non lo spegni o finché non prende il comando
+            recognition.interimResults = true;
+            recognition.continuous = true;
 
             recognition.onstart = function() {
-                isListening = true;
                 const btn = document.getElementById('voiceBtn');
                 btn.classList.add('mic-active');
                 btn.textContent = "🔴 In ascolto...";
-                setStatus(`Microfono aperto. Di' '${wakeWord}' seguito dal tuo messaggio (riclicca per spegnere).`);
+                setStatus(`Microfono aperto. Di' '${wakeWord}' seguito dal messaggio...`);
             };
 
             recognition.onresult = function(event) {
@@ -538,13 +529,11 @@
                     }
                 }
 
-                // Mostra cosa sta sentendo nel box di input mentre parli
                 let currentSpeech = (finalTranscript || interimTranscript).trim();
                 if (currentSpeech) {
                     document.getElementById('userInput').value = currentSpeech;
                 }
 
-                // Se abbiamo una frase definitiva, controlliamo se contiene la parola chiave
                 if (finalTranscript.trim().length > 0) {
                     let fullText = finalTranscript.trim();
                     let lowerText = fullText.toLowerCase();
@@ -555,7 +544,8 @@
 
                         if (cleanText.length > 0) {
                             document.getElementById('userInput').value = cleanText;
-                            stopVoiceRecognition(); // Spegne il microfono
+                            isUserMicActive = false; // Disattiva il flag utente
+                            try { recognition.stop(); } catch(e) {}
                             setStatus("Comando catturato. Invio in corso...");
                             sendMessage();
                         }
@@ -568,26 +558,38 @@
             };
 
             recognition.onend = function() {
-                // Se era ancora attivo ma il browser lo ha chiuso per silenzio, resettiamo il bottone
-                if (isListening) {
-                    stopVoiceRecognition();
-                    setStatus("Microfono chiuso per inattività.");
+                // Se il browser chiude il microfono per silenzio ma l'utente NON lo aveva spento,
+                // lo riapriamo automaticamente in modo trasparente, così non si spegne mai da solo!
+                if (isUserMicActive && !isAppBusy) {
+                    try {
+                        recognition.start();
+                    } catch(e) {
+                        stopVoiceRecognitionManually();
+                    }
+                } else {
+                    stopVoiceRecognitionUIOnly();
                 }
             };
 
             try {
                 recognition.start();
             } catch(e) {
-                isListening = false;
+                isUserMicActive = false;
+                stopVoiceRecognitionUIOnly();
             }
         }
 
-        function stopVoiceRecognition() {
+        function stopVoiceRecognitionManually() {
+            isUserMicActive = false;
             if (recognition) {
                 try { recognition.stop(); } catch(e) {}
                 recognition = null;
             }
-            isListening = false;
+            stopVoiceRecognitionUIOnly();
+            setStatus("Microfono spento manualmente.");
+        }
+
+        function stopVoiceRecognitionUIOnly() {
             const btn = document.getElementById('voiceBtn');
             btn.classList.remove('mic-active');
             btn.textContent = "🎤 Parla";
@@ -605,7 +607,9 @@
         }
 
         async function sendMessage() {
-            stopVoiceRecognition();
+            isUserMicActive = false;
+            if (recognition) { try { recognition.stop(); } catch(e) {} }
+            stopVoiceRecognitionUIOnly();
             isAppBusy = true;
 
             let encodedToken = localStorage.getItem('g_cw_auth_token');
