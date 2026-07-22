@@ -106,6 +106,7 @@ async function loadRegolamento() {
     let usedReplay = false;
     let matchDetailsArray = [];
     let currentLang = 'it';
+    let lastWordStartTime = 0; // Per calcolo ms in modalità caratteri
 
     window.lastPlayedWordId = 0;
     window.lastSeenGuessId = 0;
@@ -544,6 +545,25 @@ async function loadRegolamento() {
         const t = i18n[lang];
         document.getElementById('langBtn').textContent = lang.toUpperCase();
 
+        // Leaderboard Dropdown translations
+        const lb_room = document.getElementById('opt_lb_room');
+        const lb_trn = document.getElementById('opt_lb_trn');
+        const lb_call = document.getElementById('opt_lb_call');
+        const lb_pp = document.getElementById('opt_lb_pp');
+        const lb_multi = document.getElementById('opt_lb_multi');
+        const lb_single = document.getElementById('opt_lb_single');
+        const lb_chars_multi = document.getElementById('opt_lb_chars_multi');
+        const lb_chars_single = document.getElementById('opt_lb_chars_single');
+
+        if(lb_room) lb_room.textContent = t.tab_this_match;
+        if(lb_trn) lb_trn.textContent = t.tab_trn_lb;
+        if(lb_call) lb_call.textContent = t.tab_callsigns;
+        if(lb_pp) lb_pp.textContent = t.tab_pingpong + " (" + (lang==='it'?'Sfide':'Challenges') + ")";
+        if(lb_multi) lb_multi.textContent = t.tab_std_multi + " (" + (lang==='it'?'Sfide':'Challenges') + ")";
+        if(lb_single) lb_single.textContent = t.tab_std_single;
+        if(lb_chars_multi) lb_chars_multi.textContent = (lang==='it'?'Caratteri (Multi - Sfide)':'Characters (Multi - Challenges)');
+        if(lb_chars_single) lb_chars_single.textContent = (lang==='it'?'Caratteri (Single)':'Characters (Single)');
+
         // Setup Screen
         document.getElementById('txt_hello').textContent = t.hello;
         document.getElementById('txt_lb_btn').textContent = "🏆 " + t.lb;
@@ -692,6 +712,10 @@ async function loadRegolamento() {
     function getGameWords(num, mode) {
         if (mode === 'callsign') return Array.from({length: num}, generateCallsign);
         if (mode === 'pingpong') return [];
+        if (mode === 'chars') {
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            return Array.from({length: num}, () => chars[Math.floor(Math.random() * chars.length)]);
+        }
         return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
     }
 
@@ -1398,32 +1422,62 @@ async function loadRegolamento() {
 
 
     const permInput = document.getElementById('permanentGameInput');
+
+    // Supporto per modalità caratteri (senza Invio)
+    permInput.addEventListener('input', function(e) {
+        if (currentMode === 'chars' && inputActive && gameRunning) {
+            const val = permInput.value.trim().toUpperCase();
+            if (val.length >= 1) {
+                // Prendi solo l'ultimo carattere inserito
+                handleWordSubmission(val[0]);
+                permInput.value = "";
+            }
+        }
+    });
+
     permInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && inputActive && gameRunning) {
+        if (e.key === 'Enter' && inputActive && gameRunning && currentMode !== 'chars') {
             const userWord = permInput.value.trim().toUpperCase();
             if (userWord === "") return;
-            inputActive = false; permInput.value = "";
+            handleWordSubmission(userWord);
+            permInput.value = "";
+        }
+    });
 
-            const currentWord = gameWords[wordIndex].toUpperCase();
-            let points = 0, scoreColor = "";
+    function handleWordSubmission(userWord) {
+        inputActive = false;
+        const currentWord = gameWords[wordIndex].toUpperCase();
+        let points = 0, scoreColor = "";
+        let reactionMs = 0;
 
-            if (userWord !== currentWord) {
-                let wrongChars = [];
-                const maxLen = Math.max(currentWord.length, userWord.length);
-                for(let i=0; i<maxLen; i++) {
-                    if(userWord[i] !== currentWord[i] && currentWord[i]) {
-                        let char = currentWord[i];
-                        if(char === '__proto__' || char === 'constructor' || char === 'prototype') continue;
-                        if(!wrongChars.includes(char)) wrongChars.push(char);
-                    }
-                }
-                if(!sessionErrorsByWpm[currentWpm]) sessionErrorsByWpm[currentWpm] = Object.create(null);
-                wrongChars.forEach(c => {
-                    sessionCharErrors[c] = (sessionCharErrors[c] || 0) + 1;
-                    sessionErrorsByWpm[currentWpm][c] = (sessionErrorsByWpm[currentWpm][c] || 0) + 1;
-                });
+        if (currentMode === 'chars') {
+            reactionMs = Date.now() - lastWordStartTime;
+            if (userWord === currentWord) {
+                // Calcolo punti basato su ms: max 100 punti se sotto i 500ms, poi scende
+                points = Math.max(10, Math.floor(100 - (reactionMs / 50)));
+                scoreColor = "#4caf50";
+            } else {
+                points = 0;
+                scoreColor = "#d32f2f";
             }
+        } else if (userWord !== currentWord) {
+            let wrongChars = [];
+            const maxLen = Math.max(currentWord.length, userWord.length);
+            for(let i=0; i<maxLen; i++) {
+                if(userWord[i] !== currentWord[i] && currentWord[i]) {
+                    let char = currentWord[i];
+                    if(char === '__proto__' || char === 'constructor' || char === 'prototype') continue;
+                    if(!wrongChars.includes(char)) wrongChars.push(char);
+                }
+            }
+            if(!sessionErrorsByWpm[currentWpm]) sessionErrorsByWpm[currentWpm] = Object.create(null);
+            wrongChars.forEach(c => {
+                sessionCharErrors[c] = (sessionCharErrors[c] || 0) + 1;
+                sessionErrorsByWpm[currentWpm][c] = (sessionErrorsByWpm[currentWpm][c] || 0) + 1;
+            });
+        }
 
+        if (currentMode !== 'chars') {
             if (usedReplay) {
                 points = 0; scoreColor = "#999999";
                 if (currentMode === 'callsign' && userWord !== currentWord) currentStreak = 0;
@@ -1438,72 +1492,86 @@ async function loadRegolamento() {
                     else { points = 0; scoreColor = "#d32f2f"; }
                 }
             }
-
-            if (!isFixedSpeed) {
-                if(currentMode === 'callsign') {
-                    if (userWord === currentWord && !usedReplay) currentWpm += 2;
-                    else if (userWord !== currentWord) currentWpm -= 1;
-                } else {
-                    const errs = getLevenshteinDistance(currentWord, userWord);
-                    if (errs === 0 && !usedReplay) currentWpm += 2;
-                    else if (errs === 1) currentWpm -= 1;
-                    else if (errs > 1) currentWpm -= 2;
-                }
-                currentWpm = Math.max(baseWpm, currentWpm);
-            }
-
-            totalScore += points;
-            matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm });
-
-            if (currentMode !== 'pingpong') {
-                const tr = document.createElement('tr');
-                const tdTyped = document.createElement('td');
-                tdTyped.textContent = userWord;
-                const tdReal = document.createElement('td');
-                const bReal = document.createElement('b');
-                bReal.textContent = currentWord;
-                tdReal.appendChild(bReal);
-                const tdPoints = document.createElement('td');
-                tdPoints.style.color = scoreColor;
-                tdPoints.style.fontWeight = 'bold';
-                tdPoints.textContent = usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points);
-
-                tr.appendChild(tdTyped);
-                tr.appendChild(tdReal);
-                tr.appendChild(tdPoints);
-                document.getElementById('tableBody').appendChild(tr);
-                const tableWrapper = document.getElementById('tableWrapper'); tableWrapper.scrollTop = tableWrapper.scrollHeight;
-            }
-
-            document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
-            document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
-
-            if (roomCode) {
-                db.ref(`rooms/${roomCode}/players/${myId}`).update({
-                    score: totalScore,
-                    wpm: currentWpm,
-                    wordIndex: wordIndex + 1,
-                    matchDetails: matchDetailsArray
-                });
-            }
-            usedReplay = false;
-
-            if (currentMode === 'pingpong') {
-                wordIndex++;
-                db.ref(`rooms/${roomCode}/pingpong`).transaction(currentData => {
-                    if (currentData) {
-                        currentData.senderId = myId;
-                        currentData.word = '';
-                        currentData.wordsPlayed = (currentData.wordsPlayed || 0) + 1;
-                        currentData.lastGuess = { id: Date.now(), real: currentWord, typed: userWord, points: points };
-                    }
-                    return currentData;
-                });
-            } else {
-                wordIndex++; setTimeout(playNextWord, 600);
-            }
         }
-    });
+
+        if (!isFixedSpeed && currentMode !== 'chars') {
+            if(currentMode === 'callsign') {
+                if (userWord === currentWord && !usedReplay) currentWpm += 2;
+                else if (userWord !== currentWord) currentWpm -= 1;
+            } else {
+                const errs = getLevenshteinDistance(currentWord, userWord);
+                if (errs === 0 && !usedReplay) currentWpm += 2;
+                else if (errs === 1) currentWpm -= 1;
+                else if (errs > 1) currentWpm -= 2;
+            }
+            currentWpm = Math.max(baseWpm, currentWpm);
+        }
+
+        totalScore += points;
+        matchDetailsArray.push({
+            real: currentWord,
+            typed: userWord,
+            points: points,
+            wpm: currentWpm,
+            ms: reactionMs
+        });
+
+        if (currentMode !== 'pingpong') {
+            const tr = document.createElement('tr');
+
+            const tdTyped = document.createElement('td');
+            tdTyped.textContent = userWord;
+
+            const tdReal = document.createElement('td');
+            const bReal = document.createElement('b');
+            bReal.textContent = currentWord;
+            tdReal.appendChild(bReal);
+
+            const tdPoints = document.createElement('td');
+            tdPoints.style.color = scoreColor;
+            tdPoints.style.fontWeight = 'bold';
+
+            if (currentMode === 'chars') {
+                tdPoints.textContent = points + " (" + reactionMs + "ms)";
+            } else {
+                tdPoints.textContent = usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points);
+            }
+
+            tr.appendChild(tdTyped);
+            tr.appendChild(tdReal);
+            tr.appendChild(tdPoints);
+            document.getElementById('tableBody').appendChild(tr);
+            const tableWrapper = document.getElementById('tableWrapper'); tableWrapper.scrollTop = tableWrapper.scrollHeight;
+        }
+
+        document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
+        document.getElementById('scoreDisplay').textContent = `Punti: ${totalScore}`;
+
+        if (roomCode) {
+            db.ref(`rooms/${roomCode}/players/${myId}`).update({
+                score: totalScore,
+                wpm: currentWpm,
+                wordIndex: wordIndex + 1,
+                matchDetails: matchDetailsArray
+            });
+        }
+        usedReplay = false;
+
+        if (currentMode === 'pingpong') {
+            wordIndex++;
+            db.ref(`rooms/${roomCode}/pingpong`).transaction(currentData => {
+                if (currentData) {
+                    currentData.senderId = myId;
+                    currentData.word = '';
+                    currentData.wordsPlayed = (currentData.wordsPlayed || 0) + 1;
+                    currentData.lastGuess = { id: Date.now(), real: currentWord, typed: userWord, points: points };
+                }
+                return currentData;
+            });
+        } else {
+            wordIndex++; setTimeout(playNextWord, 600);
+        }
+    }
 
     document.getElementById('btnSendPingPong').addEventListener('click', () => {
         if (!gameRunning || currentMode !== 'pingpong') return;
@@ -1539,6 +1607,7 @@ async function loadRegolamento() {
         }
 
         playMorseAudio(currentWord, currentWpm);
+        lastWordStartTime = Date.now();
         document.getElementById('permanentGameInput').focus();
     }
 
@@ -2226,8 +2295,24 @@ async function loadRegolamento() {
     }
 
     function showLeaderboardTab(tabId) {
-        document.querySelectorAll('#leaderboardTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
-        document.getElementById(tabId).classList.add('active-tab');
+        // Nascondi i vecchi bottoni e usa il selettore se preferito,
+        // ma per ora manteniamo tabId per compatibilità e sincronizziamo il menu a tendina.
+        const selector = document.getElementById('lbModeSelect');
+        const mapping = {
+            'tabRoomBtn': 'room',
+            'tabGlobalTournamentBtn': 'trn_global',
+            'tabGlobalCWFreakBtn': 'cwfreak',
+            'tabGlobalPingPongBtn': 'pingpong',
+            'tabGlobalStandardMultiBtn': 'std_multi',
+            'tabGlobalStandardSingleBtn': 'std_single',
+            'tabGlobalCharsMultiBtn': 'chars_multi',
+            'tabGlobalCharsSingleBtn': 'chars_single'
+        };
+
+        // Cerca la chiave se tabId è un ID bottone, altrimenti usa tabId come valore
+        let modeValue = mapping[tabId] || tabId;
+        selector.value = modeValue;
+
         const filterArea = document.getElementById('lbFilterArea'),
               roomWinnerBanner = document.getElementById('roomWinnerBanner'),
               waitingText = document.getElementById('waitingOthersText'),
@@ -2235,27 +2320,43 @@ async function loadRegolamento() {
 
         trnSubTabs.style.display = 'none';
 
-        if (tabId === 'tabRoomBtn') {
+        if (modeValue === 'room') {
             filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'block'; document.getElementById('leaderboardContainer').innerHTML = '';
             if (roomCode) db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
-            else { document.getElementById('leaderboardContainer').innerHTML = "<p style='text-align:center'>Nessuna partita attiva.</p>"; waitingText.style.display = 'none'; }
-        } else if (tabId === 'tabGlobalTournamentBtn') {
+            else {
+                const p = document.createElement('p');
+                p.style.textAlign = 'center';
+                p.textContent = 'Nessuna partita attiva.';
+                document.getElementById('leaderboardContainer').appendChild(p);
+                waitingText.style.display = 'none';
+            }
+        } else if (modeValue === 'trn_global') {
             filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
             trnSubTabs.style.display = 'flex';
             document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
             document.getElementById('btnTrnGlobalLB').classList.add('active-tab');
             fetchAndRenderGlobalLeaderboard('tournaments', null);
-        } else if (tabId === 'tabGlobalCWFreakBtn') {
+        } else if (modeValue === 'cwfreak') {
             filterArea.style.display = 'none'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
             fetchAndRenderGlobalLeaderboard('callsign', null);
-        } else if (tabId === 'tabGlobalPingPongBtn') {
+        } else if (modeValue === 'pingpong') {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
             populateDynamicFilters('recent_matches/pingpong');
             let wc = document.getElementById('lbWordFilter').value;
             fetchAndRenderGlobalLeaderboard('pingpong', wc);
+        } else if (modeValue === 'chars_multi') {
+            filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+            populateDynamicFilters('recent_matches/chars_multi');
+            let wc = document.getElementById('lbWordFilter').value;
+            fetchAndRenderGlobalLeaderboard('chars_multi', wc);
+        } else if (modeValue === 'chars_single') {
+            filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+            populateDynamicFilters('chars', 'single');
+            let wc = document.getElementById('lbWordFilter').value;
+            fetchAndRenderGlobalLeaderboard('chars_single', wc);
         } else {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
-            let type = tabId === 'tabGlobalStandardMultiBtn' ? 'multi' : 'single';
+            let type = modeValue === 'std_multi' ? 'multi' : 'single';
             if (type === 'multi') {
                 populateDynamicFilters('recent_matches/standard_multi');
                 let wc = document.getElementById('lbWordFilter').value;
@@ -2268,12 +2369,11 @@ async function loadRegolamento() {
         }
     }
 
-    document.getElementById('tabRoomBtn').addEventListener('click', () => { activeTab="room"; showLeaderboardTab('tabRoomBtn'); });
-    document.getElementById('tabGlobalTournamentBtn').addEventListener('click', () => { activeTab="trn_global"; showLeaderboardTab('tabGlobalTournamentBtn'); });
-    document.getElementById('tabGlobalCWFreakBtn').addEventListener('click', () => { activeTab="cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); });
-    document.getElementById('tabGlobalPingPongBtn').addEventListener('click', () => { activeTab="pingpong"; showLeaderboardTab('tabGlobalPingPongBtn'); });
-    document.getElementById('tabGlobalStandardMultiBtn').addEventListener('click', () => { activeTab="std_multi"; showLeaderboardTab('tabGlobalStandardMultiBtn'); });
-    document.getElementById('tabGlobalStandardSingleBtn').addEventListener('click', () => { activeTab="std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); });
+    // Listener per il nuovo menu a tendina
+    document.getElementById('lbModeSelect').addEventListener('change', (e) => {
+        activeTab = e.target.value;
+        showLeaderboardTab(e.target.value);
+    });
 
     document.getElementById('btnTrnGlobalLB').addEventListener('click', () => {
         document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
@@ -2615,9 +2715,9 @@ async function loadRegolamento() {
     function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
 
-        // Per Ping Pong e Multiplayer Standard, mostriamo le SFIDE RECENTI se richiesto (o di default)
-        if (tabType === 'pingpong' || tabType === 'standard_multi') {
-            const modePath = tabType === 'pingpong' ? 'pingpong' : 'standard_multi';
+        // Per Ping Pong, Multiplayer Standard e Caratteri Multi, mostriamo le SFIDE RECENTI
+        if (tabType === 'pingpong' || tabType === 'standard_multi' || tabType === 'chars_multi') {
+            const modePath = tabType === 'pingpong' ? 'pingpong' : (tabType === 'chars_multi' ? 'chars_multi' : 'standard_multi');
             db.ref(`leaderboard/recent_matches/${modePath}`).once('value', snapshot => {
                 let matches = [];
                 snapshot.forEach(wordCountNode => {
@@ -2679,15 +2779,16 @@ async function loadRegolamento() {
             }
         } else {
             let isStandard = tabType.startsWith('standard');
-            let modePath = isStandard ? 'standard' : 'pingpong';
-            let subType = isStandard ? tabType.replace('standard_', '') : '';
+            let isChars = tabType.startsWith('chars');
+            let modePath = isChars ? 'chars' : (isStandard ? 'standard' : 'pingpong');
+            let subType = isChars ? tabType.replace('chars_', '') : (isStandard ? tabType.replace('standard_', '') : '');
 
             db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
                 let players = [];
                 snapshot.forEach(wordCountNode => {
                     const key = wordCountNode.key;
                     // Filtro per sottotipo (es. "single" o "multi")
-                    if (isStandard && !key.startsWith(subType + "_")) return;
+                    if ((isStandard || isChars) && !key.startsWith(subType + "_")) return;
 
                     // Filtro per numero parole
                     if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
