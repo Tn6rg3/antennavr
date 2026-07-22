@@ -334,16 +334,41 @@
             }
 
             const inputField = document.getElementById('userInput');
-            // Sanitizzazione basica lato client
             const prompt = inputField.value.trim().replace(/[<>]/g, ""); 
             if (!prompt) return;
 
             const maxWords = parseInt(document.getElementById('maxWords').value, 10);
             inputField.value = "";
-            setStatus("In attesa della risposta di Gemini...");
+            setStatus("Ricerca del modello Gemini disponibile in corso...");
 
             try {
-              const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${encodeURIComponent(apiKey)}`;
+                // 1. SCOPRE AUTOMATICAMENTE I MODELLI DISPONIBILI
+                let targetModel = "gemini-1.5-flash"; // Nome di riserva
+                const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+                const listRes = await fetch(listUrl);
+                
+                if (listRes.ok) {
+                    const listData = await listRes.json();
+                    if (listData.models && listData.models.length > 0) {
+                        // Cerca solo i modelli in grado di generare testo
+                        const validModels = listData.models.filter(m => 
+                            m.supportedGenerationMethods && 
+                            m.supportedGenerationMethods.includes("generateContent")
+                        );
+                        
+                        if (validModels.length > 0) {
+                            // Cerca un modello "flash" o "pro" tra quelli attivi
+                            const bestModel = validModels.find(m => m.name.includes("flash")) || validModels[0];
+                            // Il nome arriva come "models/gemini-...", teniamo solo la parte finale
+                            targetModel = bestModel.name.replace("models/", "");
+                        }
+                    }
+                }
+
+                setStatus(`Elaborazione testo in corso con ${targetModel}...`);
+
+                // 2. INVIA LA RICHIESTA AL MODELLO TROVATO
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
                 
                 const sysInstruction = `Sei un operatore telegrafico. Rispondi alla richiesta dell'utente usando TASSATIVAMENTE meno di ${maxWords} parole. Non usare assolutamente markdown, emoji, o simboli matematici. Usa solo testo semplice, numeri e punteggiatura base, perché la risposta verrà trasmessa in codice Morse.`;
 
