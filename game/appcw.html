@@ -96,6 +96,7 @@
                     <option value="standard" id="txt_opt_std">Parole</option>
                     <option value="callsign" id="txt_opt_call">Nom.</option>
                     <option value="pingpong" id="txt_opt_pp">P.Pong</option>
+                    <option value="chars" id="txt_opt_chars">Carat.</option>
                 </select>
             </div>
         </div>
@@ -401,13 +402,26 @@
     <div id="roomWinnerBanner" style="text-align:center; font-weight:bold; color:var(--champ-color); margin-bottom:5px;"></div>
     <p id="waitingOthersText" style="text-align: center; font-style: italic; color: #ff9800; display: none; font-weight: bold; margin-bottom: 5px;">⏳ In attesa degli altri...</p>
 
-    <div class="tab-buttons" id="leaderboardTabs">
+    <div class="tab-buttons" id="leaderboardTabs" style="display: none;">
         <button id="tabRoomBtn" class="tab-btn active-tab" style="width: 100%;">Questa Partita</button>
         <button id="tabGlobalTournamentBtn" class="tab-btn">Classifica Tornei</button>
         <button id="tabGlobalCWFreakBtn" class="tab-btn">Nominativi</button>
         <button id="tabGlobalPingPongBtn" class="tab-btn">Ping Pong</button>
         <button id="tabGlobalStandardMultiBtn" class="tab-btn">Parole (Multi)</button>
         <button id="tabGlobalStandardSingleBtn" class="tab-btn">Parole (Single)</button>
+    </div>
+
+    <div id="lbModeSelectorArea" style="width:100%; margin-bottom:10px;">
+        <select id="lbModeSelect" style="padding: 10px; font-weight: bold; border: 2px solid var(--link-color);">
+            <option value="room" id="opt_lb_room">Questa Partita</option>
+            <option value="trn_global" id="opt_lb_trn">Classifica Tornei</option>
+            <option value="cwfreak" id="opt_lb_call">Nominativi (CW Freak)</option>
+            <option value="pingpong" id="opt_lb_pp">Ping Pong (Sfide)</option>
+            <option value="std_multi" id="opt_lb_multi">Parole (Multi - Sfide)</option>
+            <option value="std_single" id="opt_lb_single">Parole (Single)</option>
+            <option value="chars_multi" id="opt_lb_chars_multi">Caratteri (Multi - Sfide)</option>
+            <option value="chars_single" id="opt_lb_chars_single">Caratteri (Single)</option>
+        </select>
     </div>
 
     <div id="trnSubTabs" style="display:none; width:100%; gap:5px; margin-top:5px; flex-shrink: 0;">
