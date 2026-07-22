@@ -1,6 +1,6 @@
- const BOT_USERNAME = "cwappgame_bot";
+const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.11"; // Versione attuale del codice
+    const APP_VERSION = "20240520.12"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -1896,6 +1896,7 @@ async function loadRegolamento() {
 
                 if (currentMode === 'callsign') dbPath = `leaderboard/callsign/global/${myId}`;
                 else if (currentMode === 'pingpong') dbPath = `leaderboard/pingpong/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                else if (currentMode === 'chars') dbPath = `leaderboard/chars/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                 else dbPath = `leaderboard/standard/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
 
                 if (currentMode !== 'callsign') {
@@ -2436,7 +2437,7 @@ async function loadRegolamento() {
 
                 // Salva il match nel database globale se è Multiplayer o PingPong
                 // Il pingpong non ha necessariamente roomData.type === 'multi' in alcuni startParam
-                if (roomData.type === 'multi' || currentMode === 'pingpong') {
+                if (roomData.type === 'multi' || currentMode === 'pingpong' || currentMode === 'chars') {
                     saveMatchToGlobalHistory(players, roomData);
                 }
 
@@ -2690,7 +2691,10 @@ async function loadRegolamento() {
         if (myId !== roomData.hostId) return;
 
         const matchId = Date.now().toString();
-        const modePath = currentMode === 'pingpong' ? 'pingpong' : 'standard_multi';
+        let modePath = 'standard_multi';
+        if (currentMode === 'pingpong') modePath = 'pingpong';
+        else if (currentMode === 'chars') modePath = 'chars_multi';
+
         // Per il pingpong usiamo wordCount come fallback se manca
         const subPath = roomData.wordCount || 'all';
 
