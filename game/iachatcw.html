@@ -209,14 +209,19 @@
                     <option value="30">30 Parole</option>
                 </select>
             </div>
+            <div>
+                <!-- Casella di testo per personalizzare la parola chiave -->
+                <label for="wakeWord">Parola di Attivazione</label>
+                <input type="text" id="wakeWord" value="Gemini" placeholder="Es. Gemini, Jarvis...">
+            </div>
         </div>
     </div>
 
     <div class="panel">
         <div class="chat-container">
             <div class="chat-controls">
-                <button id="voiceBtn" title="Parla al microfono">🎤 Parla</button>
-                <input type="text" id="userInput" placeholder="Scrivi il tuo messaggio qui...">
+                <button id="voiceBtn" title="Parla usando la parola chiave">🎤 Parla</button>
+                <input type="text" id="userInput" placeholder="Scrivi o di' la parola chiave seguita dal messaggio...">
                 <button id="sendBtn">Invia</button>
                 <button id="stopBtn" class="btn-danger" style="display: none;">Stop Audio</button>
             </div>
@@ -257,12 +262,16 @@
                 }
             }
 
-            const settings = ['wpm', 'tone', 'maxWords'];
+            // Inclusione di wakeWord tra le impostazioni salvate in automatico
+            const settings = ['wpm', 'tone', 'maxWords', 'wakeWord'];
             settings.forEach(id => {
                 const el = document.getElementById(id);
                 const savedVal = localStorage.getItem(`morse_setting_${id}`);
-                if (savedVal) el.value = savedVal;
+                if (savedVal !== null) el.value = savedVal;
                 
+                el.addEventListener('input', () => {
+                    localStorage.setItem(`morse_setting_${id}`, el.value);
+                });
                 el.addEventListener('change', () => {
                     localStorage.setItem(`morse_setting_${id}`, el.value);
                 });
@@ -469,18 +478,45 @@
             document.getElementById('stopBtn').style.display = 'none';
         }
 
+        // --- RICONOSCIMENTO VOCALE DINAMICO CON WAKE-WORD CONFIGURABILE ---
         function startVoiceRecognition() {
             if (!('webkitSpeechRecognition' in window)) { alert("Web Speech API non supportata."); return; }
+            
+            // Legge la parola inserita dall'utente nella nuova casella (default: "gemini")
+            let wakeWordInput = document.getElementById('wakeWord').value.trim().toLowerCase();
+            if (!wakeWordInput) wakeWordInput = "gemini";
+
             const recognition = new webkitSpeechRecognition();
             recognition.lang = 'it-IT';
             recognition.interimResults = false;
             recognition.maxAlternatives = 1;
-            setStatus("Ascolto in corso... Parla ora.");
+            
+            setStatus(`In ascolto... (Di' '${wakeWordInput}' seguito dal messaggio)`);
             
             recognition.onresult = function(event) {
-                document.getElementById('userInput').value += event.results[0][0].transcript + " ";
-                setStatus("Testo acquisito. Pronto per l'invio.");
+                let speechText = event.results[0][0].transcript.trim();
+                let lowerText = speechText.toLowerCase();
+                
+                if (lowerText.includes(wakeWordInput)) {
+                    let wakeIndex = lowerText.indexOf(wakeWordInput);
+                    let cleanText = speechText.substring(wakeIndex + wakeWordInput.length).trim();
+                    
+                    if (cleanText.length > 0) {
+                        document.getElementById('userInput').value = cleanText;
+                        setStatus("Comando vocale ricevuto. Invio in corso...");
+                        sendMessage();
+                    } else {
+                        setStatus(`Hai detto '${wakeWordInput}' ma non hai aggiunto alcun messaggio.`);
+                    }
+                } else {
+                    setStatus(`Parola chiave '${wakeWordInput}' non rilevata. Riprova.`);
+                }
             };
+
+            recognition.onerror = function(event) {
+                setStatus("Errore microfono: " + event.error);
+            };
+
             recognition.start();
         }
 
