@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- CONTENT SECURITY POLICY: Blocca caricamento di script non autorizzati e limita le connessioni API solo a Gemini -->
+    <!-- CONTENT SECURITY POLICY: Massima sicurezza per GitHub Pages -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https://generativelanguage.googleapis.com;">
     <title>Gemini CW Morse Chat</title>
     <style>
@@ -110,7 +110,7 @@
     <div class="panel">
         <div class="api-key-container">
             <div style="flex-grow: 1;">
-                <label for="apiKey">Chiave API Gemini (Salvata in modo sicuro nel browser locale)</label>
+                <label for="apiKey">Chiave API Gemini (Salvata in modo sicuro nel browser)</label>
                 <input type="password" id="apiKey" placeholder="Incolla qui la tua API Key...">
             </div>
             <div style="display: flex; align-items: flex-end;">
@@ -160,13 +160,12 @@
                 <button id="sendBtn">Invia</button>
                 <button id="stopBtn" class="btn-danger" style="display: none;">Stop Audio</button>
             </div>
-            <!-- statusText non usa innerHTML, verrà popolato solo con textContent per massima sicurezza -->
             <div id="statusText">In attesa di input...</div>
         </div>
     </div>
 
     <script>
-        // Inizializzazione sicura degli eventi per evitare attributi inline come 'onclick' nell'HTML (best practice CSP)
+        // --- 1. SETUP EVENTI INIZIALI ---
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
             document.getElementById('voiceBtn').addEventListener('click', startVoiceRecognition);
@@ -183,6 +182,7 @@
             }
         });
 
+        // --- 2. DIZIONARIO MORSE ---
         const morseDict = {
             'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.',
             'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..',
@@ -195,24 +195,30 @@
             ')': '-.--.-'
         };
 
+        // --- 3. VARIABILI DI STATO ---
         let audioCtx = null;
         let abortPlayback = false;
 
+        // --- 4. FUNZIONI DI SUPPORTO ---
         function setStatus(msg) {
-            // USO ESCLUSIVO DI textContent PER PREVENIRE XSS
             document.getElementById('statusText').textContent = msg;
         }
 
         function saveApiKey() {
-            // Pulizia dell'input: rimuove spazi bianchi non voluti
             const key = document.getElementById('apiKey').value.trim();
-            
-            // Controllo più flessibile: basta che sia abbastanza lunga e non contenga codice HTML
+            // Controllo flessibile: lunghezza > 20 e nessun tag HTML
             if (key && key.length > 20 && !key.includes('<') && !key.includes('>')) {
                 localStorage.setItem('gemini_api_key', key);
                 alert('Chiave API salvata in modo sicuro nel browser!');
             } else {
-                alert('Formato chiave API non valido. Assicurati di averla copiata tutta e per intero.');
+                alert('Formato chiave API non valido. Assicurati di averla copiata per intero.');
+            }
+        }
+
+        // --- 5. MOTORE AUDIO MORSE ---
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
         }
 
@@ -243,7 +249,7 @@
         }
 
         async function transmitMorse(text) {
-            initAudio();
+            initAudio(); // Assicurati che l'audio sia inizializzato
             abortPlayback = false;
             
             const wpm = parseInt(document.getElementById('wpm').value, 10);
@@ -258,7 +264,7 @@
             document.getElementById('sendBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'block';
 
-            // Pulizia del testo rigorosa
+            // Pulizia del testo: toglie accenti e mette in maiuscolo
             text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
             for (let i = 0; i < text.length; i++) {
@@ -299,6 +305,7 @@
             document.getElementById('stopBtn').style.display = 'none';
         }
 
+        // --- 6. RICONOSCIMENTO VOCALE ---
         function startVoiceRecognition() {
             if (!('webkitSpeechRecognition' in window)) {
                 alert("Il tuo browser non supporta il Web Speech API.");
@@ -312,7 +319,6 @@
             setStatus("Ascolto in corso... Parla ora.");
             
             recognition.onresult = function(event) {
-                // Recupero del testo in modo sicuro
                 const text = event.results[0][0].transcript;
                 const inputField = document.getElementById('userInput');
                 inputField.value += text + " ";
@@ -326,6 +332,7 @@
             recognition.start();
         }
 
+        // --- 7. COMUNICAZIONE ROBUSTA CON GEMINI ---
         async function sendMessage() {
             const apiKey = localStorage.getItem('gemini_api_key');
             if (!apiKey) {
@@ -342,14 +349,14 @@
             setStatus("Ricerca di un modello compatibile in corso...");
 
             try {
-                // 1. Ottieni tutti i modelli autorizzati per la tua chiave
+                // Ottieni tutti i modelli autorizzati
                 const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
                 const listRes = await fetch(listUrl);
                 if (!listRes.ok) throw new Error("Impossibile recuperare la lista dei modelli.");
                 
                 const listData = await listRes.json();
                 
-                // 2. Filtra solo i modelli che sanno generare testo
+                // Filtra solo i modelli testuali
                 let validModels = listData.models.filter(m => 
                     m.supportedGenerationMethods && 
                     m.supportedGenerationMethods.includes("generateContent")
@@ -368,7 +375,7 @@
                 let success = false;
                 let geminiText = "";
 
-                // 3. Prova i modelli uno ad uno finché non ne funziona uno
+                // Prova i modelli uno ad uno finché uno non risponde
                 for (const modelName of validModels) {
                     setStatus(`Tentativo con il modello: ${modelName}...`);
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -382,13 +389,11 @@
 
                         const data = await response.json();
                         
-                        // Se la risposta è positiva e contiene testo, abbiamo vinto!
                         if (response.ok && data.candidates) {
                             geminiText = data.candidates[0].content.parts[0].text.trim();
                             success = true;
-                            break; // Esce dal ciclo, non prova gli altri modelli
+                            break; 
                         } else {
-                            // Registra l'errore di nascosto (nella console) e passa al prossimo
                             console.warn(`Modello ${modelName} scartato:`, data.error?.message);
                         }
                     } catch (e) {
@@ -396,12 +401,11 @@
                     }
                 }
 
-                // Se dopo averli provati TUTTI nessuno ha funzionato:
                 if (!success) {
-                    throw new Error("Tutti i modelli hanno rifiutato la richiesta. La chiave potrebbe avere limitazioni.");
+                    throw new Error("Tutti i modelli hanno rifiutato la richiesta. Controlla la chiave API.");
                 }
                 
-                // 4. Se ha funzionato, trasmetti!
+                // Avvia il Morse!
                 setStatus(`Trasmittendo in Morse: "${geminiText}"`);
                 await transmitMorse(geminiText);
 
