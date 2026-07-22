@@ -398,13 +398,27 @@
             let success = false;
             let geminiText = "";
             
-            // CONTROLLA SE ESISTE GIA' UN MODELLO SALVATO E FUNZIONANTE
-            let cachedModel = localStorage.getItem('gemini_working_model');
+            // LISTA FISSA DEI MODELLI MIGLIORI E STABILI
+            let modelsToTry = [
+                'gemini-1.5-flash',
+                'gemini-1.5-flash-8b',
+                'gemini-1.5-pro',
+                'gemini-pro'
+            ];
 
-            if (cachedModel) {
-                setStatus(`Connessione rapida al modello (${cachedModel})...`);
+            // SE ESISTE UN MODELLO IN CACHE, LO METTE AL PRIMO POSTO PER PROVARLO SUBITO
+            const cachedModel = localStorage.getItem('gemini_working_model');
+            if (cachedModel && !modelsToTry.includes(cachedModel)) {
+                modelsToTry.unshift(cachedModel);
+            } else if (cachedModel) {
+                modelsToTry = [cachedModel, ...modelsToTry.filter(m => m !== cachedModel)];
+            }
+
+            // PROVA I MODELLI FINO A TROVARNE UNO CHE RISPONDE
+            for (const modelName of modelsToTry) {
+                setStatus(`Connessione a ${modelName}...`);
                 try {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cachedModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -412,80 +426,29 @@
                     });
 
                     const data = await response.json();
+                    
                     if (response.ok && data.candidates) {
                         geminiText = cleanGeminiResponse(data.candidates[0].content.parts[0].text);
                         success = true;
+                        
+                        // SALVA IL MODELLO FUNZIONANTE (SALTA I TENTATIVI LA PROSSIMA VOLTA)
+                        localStorage.setItem('gemini_working_model', modelName);
+                        break; 
                     } else {
-                        // Se il modello salvato dà errore, lo dimentichiamo
-                        console.warn("Modello in cache non più valido. Scarto...");
-                        localStorage.removeItem('gemini_working_model');
+                        console.warn(`Modello ${modelName} rifiutato, provo il prossimo.`);
                     }
                 } catch (e) {
-                    console.warn("Errore di rete con il modello in cache.");
-                    localStorage.removeItem('gemini_working_model');
+                    console.warn(`Errore di rete con ${modelName}.`);
                 }
             }
 
-            // SE NON C'ERA UN MODELLO SALVATO (O HA FALLITO), AVVIA LA SCANSIONE COMPLETA
             if (!success) {
-                setStatus("Primo avvio: Ricerca del modello ottimale...");
-                try {
-                    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
-                    const listRes = await fetch(listUrl);
-                    if (!listRes.ok) throw new Error("Impossibile recuperare i modelli.");
-                    
-                    const listData = await listRes.json();
-                    
-                    let validModels = listData.models.filter(m => 
-                        m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent")
-                    ).map(m => m.name.replace("models/", ""));
-
-                    validModels.sort((a, b) => {
-                        if (a.includes('flash') && !b.includes('flash')) return -1;
-                        if (b.includes('flash') && !a.includes('flash')) return 1;
-                        return 0;
-                    });
-
-                    if (validModels.length === 0) throw new Error("Nessun modello di testo trovato.");
-
-                    for (const modelName of validModels) {
-                        setStatus(`Tentativo con: ${modelName}...`);
-                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-                        
-                        try {
-                            const response = await fetch(url, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(payload)
-                            });
-
-                            const data = await response.json();
-                            
-                            if (response.ok && data.candidates) {
-                                geminiText = cleanGeminiResponse(data.candidates[0].content.parts[0].text);
-                                success = true;
-                                
-                                // SALVA IL MODELLO FUNZIONANTE PER IL PROSSIMO MESSAGGIO
-                                localStorage.setItem('gemini_working_model', modelName);
-                                console.log("Modello salvato in memoria:", modelName);
-                                break; 
-                            }
-                        } catch (e) {
-                            console.warn(`Errore con ${modelName}`);
-                        }
-                    }
-
-                    if (!success) throw new Error("Tutti i modelli hanno rifiutato la richiesta.");
-
-                } catch (error) {
-                    setStatus("Errore: " + error.message);
-                    document.getElementById('sendBtn').style.display = 'block';
-                    document.getElementById('stopBtn').style.display = 'none';
-                    return;
-                }
+                setStatus("Errore: Tutti i modelli principali non sono disponibili.");
+                document.getElementById('sendBtn').style.display = 'block';
+                document.getElementById('stopBtn').style.display = 'none';
+                return;
             }
             
-            // TRASMISSIONE DEL TESTO RICEVUTO
             setStatus(`Modello agganciato. Trasmissione iniziata.`);
             addMessageToHistory(originalPrompt, geminiText);
             await transmitMorse(geminiText);
