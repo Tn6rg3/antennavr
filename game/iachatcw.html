@@ -339,59 +339,70 @@
 
             const maxWords = parseInt(document.getElementById('maxWords').value, 10);
             inputField.value = "";
-            setStatus("Ricerca del modello Gemini disponibile in corso...");
+            setStatus("Ricerca di un modello compatibile in corso...");
 
             try {
-                // 1. SCOPRE AUTOMATICAMENTE I MODELLI DISPONIBILI
-                let targetModel = "gemini-1.5-flash"; // Nome di riserva
+                // 1. Ottieni tutti i modelli autorizzati per la tua chiave
                 const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
                 const listRes = await fetch(listUrl);
+                if (!listRes.ok) throw new Error("Impossibile recuperare la lista dei modelli.");
                 
-                if (listRes.ok) {
-                    const listData = await listRes.json();
-                    if (listData.models && listData.models.length > 0) {
-                        // Cerca solo i modelli in grado di generare testo
-                        const validModels = listData.models.filter(m => 
-                            m.supportedGenerationMethods && 
-                            m.supportedGenerationMethods.includes("generateContent")
-                        );
-                        
-                        if (validModels.length > 0) {
-                            // Cerca un modello "flash" o "pro" tra quelli attivi
-                            const bestModel = validModels.find(m => m.name.includes("flash")) || validModels[0];
-                            // Il nome arriva come "models/gemini-...", teniamo solo la parte finale
-                            targetModel = bestModel.name.replace("models/", "");
-                        }
-                    }
+                const listData = await listRes.json();
+                
+                // 2. Filtra solo i modelli che sanno generare testo
+                let validModels = listData.models.filter(m => 
+                    m.supportedGenerationMethods && 
+                    m.supportedGenerationMethods.includes("generateContent")
+                ).map(m => m.name.replace("models/", ""));
+
+                if (validModels.length === 0) {
+                    throw new Error("Nessun modello di testo trovato per questa API Key.");
                 }
 
-                setStatus(`Elaborazione testo in corso con ${targetModel}...`);
-
-                // 2. INVIA LA RICHIESTA AL MODELLO TROVATO
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
-                
                 const sysInstruction = `Sei un operatore telegrafico. Rispondi alla richiesta dell'utente usando TASSATIVAMENTE meno di ${maxWords} parole. Non usare assolutamente markdown, emoji, o simboli matematici. Usa solo testo semplice, numeri e punteggiatura base, perché la risposta verrà trasmessa in codice Morse.`;
-
                 const payload = {
                     contents: [{ parts: [{ text: prompt }] }],
                     systemInstruction: { parts: [{ text: sysInstruction }] }
                 };
 
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+                let success = false;
+                let geminiText = "";
 
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error?.message || "Errore sconosciuto API");
+                // 3. Prova i modelli uno ad uno finché non ne funziona uno
+                for (const modelName of validModels) {
+                    setStatus(`Tentativo con il modello: ${modelName}...`);
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+                    
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        const data = await response.json();
+                        
+                        // Se la risposta è positiva e contiene testo, abbiamo vinto!
+                        if (response.ok && data.candidates) {
+                            geminiText = data.candidates[0].content.parts[0].text.trim();
+                            success = true;
+                            break; // Esce dal ciclo, non prova gli altri modelli
+                        } else {
+                            // Registra l'errore di nascosto (nella console) e passa al prossimo
+                            console.warn(`Modello ${modelName} scartato:`, data.error?.message);
+                        }
+                    } catch (e) {
+                        console.warn(`Errore di rete con ${modelName}, passo al prossimo.`);
+                    }
+                }
+
+                // Se dopo averli provati TUTTI nessuno ha funzionato:
+                if (!success) {
+                    throw new Error("Tutti i modelli hanno rifiutato la richiesta. La chiave potrebbe avere limitazioni.");
                 }
                 
-                const geminiText = data.candidates[0].content.parts[0].text.trim();
+                // 4. Se ha funzionato, trasmetti!
                 setStatus(`Trasmittendo in Morse: "${geminiText}"`);
-                
                 await transmitMorse(geminiText);
 
             } catch (error) {
