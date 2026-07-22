@@ -2439,10 +2439,12 @@ async function loadRegolamento() {
             if (allFinished && roomData.status !== 'finished' && Object.keys(players).length > 0) {
                 db.ref(`rooms/${roomCode}/status`).set('finished');
 
-                // Salva il match nel database globale se è Multiplayer o PingPong
-                // Il pingpong non ha necessariamente roomData.type === 'multi' in alcuni startParam
-                if (roomData.type === 'multi' || currentMode === 'pingpong' || currentMode === 'chars') {
-                    saveMatchToGlobalHistory(players, roomData);
+                // Salva il match nel database globale SOLO SE ci sono almeno 2 giocatori
+                const finalPCount = Object.keys(players).length;
+                if (finalPCount >= 2) {
+                    if (roomData.type === 'multi' || currentMode === 'pingpong' || currentMode === 'chars') {
+                        saveMatchToGlobalHistory(players, roomData);
+                    }
                 }
 
                 if (roomCode.startsWith("TRN_")) {
