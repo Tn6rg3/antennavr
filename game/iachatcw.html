@@ -87,10 +87,9 @@
         .chat-controls {
             display: flex;
             gap: 10px;
-            flex-wrap: wrap;
         }
 
-        .chat-controls input { flex-grow: 1; min-width: 200px; }
+        .chat-controls input { flex-grow: 1; }
 
         #statusText {
             font-size: 0.9em;
@@ -211,7 +210,6 @@
                 <button id="voiceBtn" title="Parla al microfono">🎤 Parla</button>
                 <input type="text" id="userInput" placeholder="Scrivi il tuo messaggio qui...">
                 <button id="sendBtn">Invia</button>
-                <button id="newChatBtn" class="btn-outline" title="Cancella la memoria e avvia una nuova discussione">Nuova Chat</button>
                 <button id="stopBtn" class="btn-danger" style="display: none;">Stop Audio</button>
             </div>
             <div id="statusText">In attesa di input...</div>
@@ -225,14 +223,11 @@
     </div>
 
     <script>
-        let chatHistoryArray = [];
-
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
             document.getElementById('editKeyBtn').addEventListener('click', editApiKey);
             document.getElementById('voiceBtn').addEventListener('click', startVoiceRecognition);
             document.getElementById('sendBtn').addEventListener('click', sendMessage);
-            document.getElementById('newChatBtn').addEventListener('click', startNewChat);
             document.getElementById('stopBtn').addEventListener('click', stopAudio);
             document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
             
@@ -280,6 +275,8 @@
         };
 
         let audioCtx = null;
+        let globalOscillator = null;
+        let globalGain = null;
         let abortPlayback = false;
 
         function setStatus(msg) {
@@ -307,12 +304,6 @@
             document.getElementById('apiKeySavedContainer').style.display = 'none';
             document.getElementById('apiKeyInputContainer').style.display = 'flex';
             document.getElementById('apiTokenInput').focus();
-        }
-
-        function startNewChat() {
-            chatHistoryArray = [];
-            document.getElementById('chatHistory').innerHTML = '';
-            setStatus("Nuova discussione avviata. Memoria pulita.");
         }
 
         function toggleHistory() {
@@ -368,35 +359,47 @@
             }
         }
 
+        // --- MOTORE AUDIO ULTRA-PULITO (SENZA SCOPPIETTII) ---
         function initAudio() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (!globalOscillator) {
+                globalOscillator = audioCtx.createOscillator();
+                globalGain = audioCtx.createGain();
+                
+                globalOscillator.type = 'sine';
+                globalGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                
+                globalOscillator.connect(globalGain);
+                globalGain.connect(audioCtx.destination);
+                globalOscillator.start();
+            }
         }
 
         const sleep = ms => new Promise(r => setTimeout(r, ms));
 
         async function playTone(durationMs, frequency) {
             if (abortPlayback) return;
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            oscillator.type = 'sine';
-            oscillator.frequency.value = frequency;
+            initAudio();
+            
+            const now = audioCtx.currentTime;
+            const durSec = durationMs / 1000;
+            const attackRelease = 0.005; // 5ms di rampa per eliminare totalmente i click
 
-            const currentTime = audioCtx.currentTime;
-            gainNode.gain.setValueAtTime(0, currentTime);
-            gainNode.gain.linearRampToValueAtTime(1, currentTime + 0.005);
-            gainNode.gain.setValueAtTime(1, currentTime + (durationMs / 1000) - 0.005);
-            gainNode.gain.linearRampToValueAtTime(0, currentTime + (durationMs / 1000));
+            globalOscillator.frequency.setValueAtTime(frequency, now);
 
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.start(currentTime);
-            oscillator.stop(currentTime + (durationMs / 1000));
+            // Gestione della curva di volume liscia (Niente scoppiettii)
+            globalGain.gain.cancelScheduledValues(now);
+            globalGain.gain.setValueAtTime(0, now);
+            globalGain.gain.linearRampToValueAtTime(1, now + attackRelease); // Attacco fluido
+            globalGain.gain.setValueAtTime(1, now + durSec - attackRelease);
+            globalGain.gain.linearRampToValueAtTime(0, now + durSec); // Rilascio fluido
 
             await sleep(durationMs);
         }
 
         async function transmitMorse(text) {
-            initAudio();
             abortPlayback = false;
             
             let wpm = parseInt(document.getElementById('wpm').value, 10);
@@ -442,6 +445,11 @@
 
         function stopAudio() {
             abortPlayback = true;
+            if (globalGain && audioCtx) {
+                // Mette subito a zero il volume per stoppare il suono all'istante
+                globalGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                globalGain.gain.setValueAtTime(0, audioCtx.currentTime);
+            }
             setStatus("Audio interrotto.");
             document.getElementById('sendBtn').style.display = 'block';
             document.getElementById('stopBtn').style.display = 'none';
@@ -498,16 +506,10 @@
             const maxWords = parseInt(document.getElementById('maxWords').value, 10);
             inputField.value = "";
             
-            chatHistoryArray.push({
-                role: "user",
-                parts: [{ text: originalPrompt }]
-            });
-
-            const maxW = maxWords || 20;
-            const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxW} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
-            
+            const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
+            const userTextEnforced = `Domanda: ${originalPrompt}`;
             const payload = {
-                contents: chatHistoryArray,
+                contents: [{ parts: [{ text: userTextEnforced }] }],
                 systemInstruction: { parts: [{ text: sysInstruction }] }
             };
 
@@ -554,18 +556,12 @@
             }
 
             if (!success) {
-                chatHistoryArray.pop();
                 setStatus("Errore: Impossibile generare la risposta. Controlla la chiave API.");
                 document.getElementById('sendBtn').style.display = 'block';
                 document.getElementById('stopBtn').style.display = 'none';
                 return;
             }
             
-            chatHistoryArray.push({
-                role: "model",
-                parts: [{ text: geminiText }]
-            });
-
             setStatus(`Modello agganciato. Trasmissione iniziata.`);
             addMessageToHistory(originalPrompt, geminiText);
             await transmitMorse(geminiText);
