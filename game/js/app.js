@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.12"; // Versione attuale del codice
+    const APP_VERSION = "20240520.11"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -2102,7 +2102,7 @@ async function loadRegolamento() {
             }
 
             // 5. Aggiorna classifiche record
-            const lbPaths = ['callsign/global', 'standard', 'pingpong'];
+            const lbPaths = ['callsign/global', 'standard', 'pingpong', 'chars'];
             for (const path of lbPaths) {
                 const ref = db.ref(`leaderboard/${path}`);
                 const snap = await ref.once('value');
@@ -2225,7 +2225,11 @@ async function loadRegolamento() {
             userMatchHistory.forEach(match => {
                 const d = new Date(match.date || Date.now()); const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
                 const li = document.createElement('li'); li.style.flexDirection = 'column'; li.style.alignItems = 'flex-start';
-                let modeIcon = match.mode === 'callsign' ? '🎙️ Nom.' : match.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole';
+
+                let modeIcon = '🔤 Parole';
+                if (match.mode === 'callsign') modeIcon = '🎙️ Nom.';
+                else if (match.mode === 'pingpong') modeIcon = '🏓 Ping Pong';
+                else if (match.mode === 'chars') modeIcon = '⌨️ Carat.';
 
                 const topDiv = document.createElement('div');
                 topDiv.style.display = 'flex'; topDiv.style.justifyContent = 'space-between'; topDiv.style.width = '100%'; topDiv.style.marginBottom = '5px';
