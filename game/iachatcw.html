@@ -48,7 +48,7 @@
             color: #aaa;
         }
 
-        input[type="text"], input[type="password"], select {
+        input[type="text"], input[type="password"], input[type="number"], select {
             width: 100%;
             padding: 10px;
             border: 1px solid var(--border);
@@ -179,14 +179,8 @@
 
         <div class="settings-grid">
             <div>
-                <label for="wpm">Velocità (WPM)</label>
-                <select id="wpm">
-                    <option value="10">10 WPM</option>
-                    <option value="15" selected>15 WPM</option>
-                    <option value="20">20 WPM</option>
-                    <option value="25">25 WPM</option>
-                    <option value="30">30 WPM</option>
-                </select>
+                <label for="wpm">Velocità (1-60 WPM)</label>
+                <input type="number" id="wpm" min="1" max="60" value="15">
             </div>
             <div>
                 <label for="tone">Tono (Hz)</label>
@@ -241,15 +235,12 @@
                 if (e.key === 'Enter') sendMessage();
             });
 
-            // Caricamento Chiave Offuscata
             const savedToken = localStorage.getItem('g_cw_auth_token');
             if (savedToken) {
                 try {
-                    // atob() decodifica il Base64 per riempire il campo nascosto
                     document.getElementById('apiTokenInput').value = atob(savedToken);
                     showApiKeySavedState();
                 } catch(e) {
-                    // Nel caso ci siano vecchi salvataggi non compatibili
                     localStorage.removeItem('g_cw_auth_token');
                 }
             }
@@ -293,13 +284,9 @@
         function saveApiKey() {
             const key = document.getElementById('apiTokenInput').value.trim();
             if (key && key.length > 20 && !key.includes('<') && !key.includes('>')) {
-                // btoa() trasforma la chiave in Base64 (offuscamento) per compiacere GitHub CodeQL
                 const obfuscatedToken = btoa(key);
                 localStorage.setItem('g_cw_auth_token', obfuscatedToken);
-                
-                // Rimuove la vecchia chiave in chiaro se presente per pulizia
                 localStorage.removeItem('gemini_api_key'); 
-                
                 showApiKeySavedState();
             } else {
                 alert('Formato chiave API non valido.');
@@ -401,7 +388,11 @@
             initAudio();
             abortPlayback = false;
             
-            const wpm = parseInt(document.getElementById('wpm').value, 10);
+            let wpm = parseInt(document.getElementById('wpm').value, 10);
+            if (isNaN(wpm) || wpm < 1) wpm = 1;
+            if (wpm > 60) wpm = 60;
+            document.getElementById('wpm').value = wpm;
+            
             const freq = parseInt(document.getElementById('tone').value, 10);
             
             const dot = 1200 / wpm; 
@@ -477,7 +468,7 @@
             
             if (encodedToken) {
                 try {
-                    apiKey = atob(encodedToken); // Decodifica per l'uso immediato
+                    apiKey = atob(encodedToken); 
                 } catch(e) {
                     alert("Errore nella chiave salvata. Reinseriscila.");
                     editApiKey();
@@ -506,11 +497,13 @@
             let success = false;
             let geminiText = "";
             
+            // LISTA AGGIORNATA CON I NUOVI MODELLI 3.X
+            // Ordinati per priorità: i più avanzati/veloci prima.
             let modelsToTry = [
-                'gemini-1.5-flash',
-                'gemini-1.5-flash-8b',
-                'gemini-1.5-pro',
-                'gemini-pro'
+                'gemini-3.6-flash',
+                'gemini-3.5-flash-lite',
+                'gemini-3.1-flash-lite',
+                'gemini-2.5-flash'
             ];
 
             const cachedModel = localStorage.getItem('gemini_working_model');
