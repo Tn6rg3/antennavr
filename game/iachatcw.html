@@ -74,6 +74,9 @@
         
         .btn-danger { background-color: #ff4444; color: white; }
         .btn-danger:hover { background-color: #cc0000; }
+        
+        .btn-outline { background-color: transparent; border: 1px solid var(--accent); color: var(--accent); }
+        .btn-outline:hover { background-color: rgba(0, 255, 136, 0.1); }
 
         .chat-container {
             display: flex;
@@ -95,8 +98,24 @@
             min-height: 20px;
         }
 
-        #chatHistory {
+        /* Stili per cronologia e mascheramento */
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-top: 20px;
+            border-top: 1px solid var(--border);
+            padding-top: 15px;
+        }
+
+        .history-header h3 {
+            margin: 0;
+            font-size: 1.1em;
+            color: var(--accent);
+        }
+
+        #chatHistory {
+            margin-top: 15px;
             display: flex;
             flex-direction: column;
             gap: 15px;
@@ -144,14 +163,21 @@
     <h1>Gemini CW Chat</h1>
 
     <div class="panel">
-        <div class="api-key-container" style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <!-- Input per inserire la chiave API -->
+        <div id="apiKeyInputContainer" style="display: flex; gap: 10px; margin-bottom: 20px;">
             <div style="flex-grow: 1;">
-                <label for="apiKey">Chiave API (Salvata nel browser)</label>
+                <label for="apiKey">Chiave API Gemini</label>
                 <input type="password" id="apiKey" placeholder="Incolla qui la tua API Key...">
             </div>
             <div style="display: flex; align-items: flex-end;">
                 <button id="saveKeyBtn">Salva</button>
             </div>
+        </div>
+
+        <!-- Vista quando la chiave è già salvata -->
+        <div id="apiKeySavedContainer" style="display: none; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 10px 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid var(--accent);">
+            <span style="color: var(--accent); font-weight: bold;">✓ Chiave API configurata e protetta</span>
+            <button id="editKeyBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.9em;">Modifica KEY</button>
         </div>
 
         <div class="settings-grid">
@@ -198,23 +224,55 @@
             <div id="statusText">In attesa di input...</div>
         </div>
         
+        <!-- Intestazione Cronologia richiudibile -->
+        <div class="history-header">
+            <h3>Cronologia Messaggi</h3>
+            <button id="toggleHistoryBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.8em;">Nascondi Cronologia</button>
+        </div>
+        <!-- Contenitore messaggi (viene mostrato o nascosto) -->
         <div id="chatHistory"></div>
     </div>
 
     <script>
+        // --- INIZIALIZZAZIONE E CARICAMENTO SALVATAGGI ---
         document.addEventListener('DOMContentLoaded', () => {
+            // 1. Gestione Eventi Principali
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
+            document.getElementById('editKeyBtn').addEventListener('click', editApiKey);
             document.getElementById('voiceBtn').addEventListener('click', startVoiceRecognition);
             document.getElementById('sendBtn').addEventListener('click', sendMessage);
             document.getElementById('stopBtn').addEventListener('click', stopAudio);
+            document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
             
             document.getElementById('userInput').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
             });
 
+            // 2. Caricamento Chiave API
             const savedKey = localStorage.getItem('gemini_api_key');
             if (savedKey) {
                 document.getElementById('apiKey').value = savedKey;
+                showApiKeySavedState();
+            }
+
+            // 3. Caricamento e Autosalvataggio Impostazioni
+            const settings = ['wpm', 'tone', 'maxWords'];
+            settings.forEach(id => {
+                const el = document.getElementById(id);
+                // Carica se esiste in memoria
+                const savedVal = localStorage.getItem(`morse_setting_${id}`);
+                if (savedVal) el.value = savedVal;
+                
+                // Salva automaticamente ad ogni cambio
+                el.addEventListener('change', () => {
+                    localStorage.setItem(`morse_setting_${id}`, el.value);
+                });
+            });
+
+            // 4. Caricamento stato Cronologia (Aperta/Chiusa)
+            const historyVisible = localStorage.getItem('morse_history_visible');
+            if (historyVisible === 'false') {
+                setHistoryState(false);
             }
         });
 
@@ -237,13 +295,46 @@
             document.getElementById('statusText').textContent = msg;
         }
 
+        // --- GESTIONE UI: CHIAVE API ---
         function saveApiKey() {
             const key = document.getElementById('apiKey').value.trim();
             if (key && key.length > 20 && !key.includes('<') && !key.includes('>')) {
                 localStorage.setItem('gemini_api_key', key);
-                alert('Chiave API salvata in modo sicuro!');
+                showApiKeySavedState();
             } else {
                 alert('Formato chiave API non valido.');
+            }
+        }
+
+        function showApiKeySavedState() {
+            document.getElementById('apiKeyInputContainer').style.display = 'none';
+            document.getElementById('apiKeySavedContainer').style.display = 'flex';
+        }
+
+        function editApiKey() {
+            document.getElementById('apiKeySavedContainer').style.display = 'none';
+            document.getElementById('apiKeyInputContainer').style.display = 'flex';
+            document.getElementById('apiKey').focus();
+        }
+
+        // --- GESTIONE UI: CRONOLOGIA ---
+        function toggleHistory() {
+            const container = document.getElementById('chatHistory');
+            const isHidden = container.style.display === 'none';
+            setHistoryState(isHidden);
+        }
+
+        function setHistoryState(show) {
+            const container = document.getElementById('chatHistory');
+            const btn = document.getElementById('toggleHistoryBtn');
+            if (show) {
+                container.style.display = 'flex';
+                btn.textContent = 'Nascondi Cronologia';
+                localStorage.setItem('morse_history_visible', 'true');
+            } else {
+                container.style.display = 'none';
+                btn.textContent = 'Mostra Cronologia';
+                localStorage.setItem('morse_history_visible', 'false');
             }
         }
 
@@ -273,9 +364,16 @@
             messageBox.appendChild(promptDiv);
             messageBox.appendChild(contentDiv);
             
+            // Inserisce in cima alla cronologia
             historyContainer.insertBefore(messageBox, historyContainer.firstChild);
+
+            // Se la cronologia era chiusa, aprila automaticamente per far vedere il nuovo messaggio
+            if (historyContainer.style.display === 'none') {
+                setHistoryState(true);
+            }
         }
 
+        // --- AUDIO MORSE ---
         function initAudio() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
@@ -351,6 +449,7 @@
             document.getElementById('stopBtn').style.display = 'none';
         }
 
+        // --- MICROFONO ---
         function startVoiceRecognition() {
             if (!('webkitSpeechRecognition' in window)) { alert("Web Speech API non supportata."); return; }
             const recognition = new webkitSpeechRecognition();
@@ -366,6 +465,7 @@
             recognition.start();
         }
 
+        // --- GEMINI API ---
         function cleanGeminiResponse(rawText) {
             let cleaned = rawText.trim();
             if (cleaned.includes("Final Polish:")) {
@@ -379,7 +479,11 @@
 
         async function sendMessage() {
             const apiKey = localStorage.getItem('gemini_api_key');
-            if (!apiKey) { alert("Inserisci la API Key prima di continuare."); return; }
+            if (!apiKey) { 
+                alert("Inserisci la API Key prima di continuare."); 
+                editApiKey(); 
+                return; 
+            }
 
             const inputField = document.getElementById('userInput');
             const originalPrompt = inputField.value.trim().replace(/[<>]/g, ""); 
@@ -398,7 +502,6 @@
             let success = false;
             let geminiText = "";
             
-            // LISTA FISSA DEI MODELLI MIGLIORI E STABILI
             let modelsToTry = [
                 'gemini-1.5-flash',
                 'gemini-1.5-flash-8b',
@@ -406,7 +509,6 @@
                 'gemini-pro'
             ];
 
-            // SE ESISTE UN MODELLO IN CACHE, LO METTE AL PRIMO POSTO PER PROVARLO SUBITO
             const cachedModel = localStorage.getItem('gemini_working_model');
             if (cachedModel && !modelsToTry.includes(cachedModel)) {
                 modelsToTry.unshift(cachedModel);
@@ -414,7 +516,6 @@
                 modelsToTry = [cachedModel, ...modelsToTry.filter(m => m !== cachedModel)];
             }
 
-            // PROVA I MODELLI FINO A TROVARNE UNO CHE RISPONDE
             for (const modelName of modelsToTry) {
                 setStatus(`Connessione a ${modelName}...`);
                 try {
@@ -430,12 +531,10 @@
                     if (response.ok && data.candidates) {
                         geminiText = cleanGeminiResponse(data.candidates[0].content.parts[0].text);
                         success = true;
-                        
-                        // SALVA IL MODELLO FUNZIONANTE (SALTA I TENTATIVI LA PROSSIMA VOLTA)
                         localStorage.setItem('gemini_working_model', modelName);
                         break; 
                     } else {
-                        console.warn(`Modello ${modelName} rifiutato, provo il prossimo.`);
+                        console.warn(`Modello ${modelName} rifiutato.`);
                     }
                 } catch (e) {
                     console.warn(`Errore di rete con ${modelName}.`);
@@ -443,7 +542,7 @@
             }
 
             if (!success) {
-                setStatus("Errore: Tutti i modelli principali non sono disponibili.");
+                setStatus("Errore: Impossibile generare la risposta. Controlla la chiave API.");
                 document.getElementById('sendBtn').style.display = 'block';
                 document.getElementById('stopBtn').style.display = 'none';
                 return;
