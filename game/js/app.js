@@ -1,4 +1,4 @@
-const BOT_USERNAME = "cwappgame_bot";
+ const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
     const APP_VERSION = "20240520.11"; // Versione attuale del codice
 
@@ -139,6 +139,12 @@ async function loadRegolamento() {
         document.getElementById(screenId).classList.add('active-screen');
         hideChat();
         document.getElementById('matchDetailsModal').style.display = 'none';
+
+        // Aggiornamento Presenza in tempo reale basato sulla schermata attiva
+        if (db && myId) {
+            const isPlayingScreen = (screenId === 'lobbyScreen' || screenId === 'gameArea' || screenId === 'countdownScreen');
+            db.ref(`presence/${myId}`).update({ status: isPlayingScreen ? 'playing' : 'online' });
+        }
 
         if (screenId === 'setupScreen') {
             // Se torniamo al menu, ricontrolliamo se mostrare il tasto rejoining
@@ -1162,9 +1168,6 @@ async function loadRegolamento() {
         isChallenging = false;
         currentInviterId = null;
 
-        // Riporta lo stato utente online (esce dalla partita)
-        db.ref(`presence/${myId}`).update({ status: 'online' });
-
         if (gamePlayersListener && roomCode) {
             db.ref(`rooms/${roomCode}/players`).off('value', gamePlayersListener);
             gamePlayersListener = null;
@@ -1206,9 +1209,6 @@ async function loadRegolamento() {
     function joinRoomLogic(isReconnect = false) {
         gameRunning = false;
         localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
-
-        // Imposta stato giocatore come in partita (occupato)
-        db.ref(`presence/${myId}`).update({ status: 'playing' });
 
         const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
         playerRef.once('value', snapshot => {
