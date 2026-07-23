@@ -3,10 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://js.puter.com; script-src 'unsafe-inline' https://js.puter.com; style-src 'unsafe-inline'; connect-src 'self' https://api.puter.com https://*.puter.com;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https://generativelanguage.googleapis.com;">
     <title>Gemini CW Morse Chat</title>
-    <!-- Libreria Puter.js per IA senza chiavi o registrazioni -->
-    <script src="https://js.puter.com/v2/"></script>
     <style>
         :root {
             --bg-color: #121212;
@@ -174,7 +172,7 @@
 
         .security-notice {
             font-size: 0.8em;
-            color: var(--accent);
+            color: #ffaa00;
             margin-top: 5px;
             display: block;
         }
@@ -185,9 +183,25 @@
     <h1>Gemini CW Chat</h1>
 
     <div class="panel">
-        <div style="background: #2a2a2a; padding: 12px 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid var(--accent);">
-            <span style="color: var(--accent); font-weight: bold;">✓ Modalità Zero-Configurazione Attiva</span>
-            <span class="security-notice">Non serve alcuna chiave API o registrazione: pronto all'uso in Italia.</span>
+        <div id="apiKeyInputContainer" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px;">
+            <div style="display: flex; gap: 10px;">
+                <div style="flex-grow: 1;">
+                    <label for="apiTokenInput">Chiave API Gemini</label>
+                    <input type="password" id="apiTokenInput" placeholder="Incolla qui la tua API Key...">
+                </div>
+                <div style="display: flex; align-items: flex-end;">
+                    <button id="saveKeyBtn">Salva</button>
+                </div>
+            </div>
+            <span class="security-notice">⚠️ La chiave viene salvata nel browser. Usa il tasto "Elimina" se sei su un computer condiviso.</span>
+        </div>
+
+        <div id="apiKeySavedContainer" style="display: none; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 10px 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid var(--accent);">
+            <span style="color: var(--accent); font-weight: bold;">✓ Chiave API configurata</span>
+            <div style="display: flex; gap: 10px;">
+                <button id="editKeyBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.9em;">Modifica</button>
+                <button id="deleteKeyBtn" class="btn-danger" style="padding: 5px 10px; font-size: 0.9em;">Elimina</button>
+            </div>
         </div>
 
         <div class="settings-grid">
@@ -245,7 +259,13 @@
     <script>
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+        // Variabile globale per mantenere la memoria della conversazione per l'API
+        let conversationContext = [];
+
         document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
+            document.getElementById('editKeyBtn').addEventListener('click', editApiKey);
+            document.getElementById('deleteKeyBtn').addEventListener('click', deleteApiKey);
             document.getElementById('sendBtn').addEventListener('click', sendMessage);
             document.getElementById('stopBtn').addEventListener('click', stopAudio);
             document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
@@ -263,6 +283,16 @@
             document.getElementById('userInput').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
             });
+
+            const savedToken = localStorage.getItem('g_cw_auth_token');
+            if (savedToken) {
+                try {
+                    document.getElementById('apiTokenInput').value = atob(savedToken);
+                    showApiKeySavedState();
+                } catch(e) {
+                    localStorage.removeItem('g_cw_auth_token');
+                }
+            }
 
             const settings = ['wpm', 'tone', 'maxWords', 'wakeWord'];
             settings.forEach(id => {
@@ -305,6 +335,36 @@
             document.getElementById('statusText').textContent = msg;
         }
 
+        function saveApiKey() {
+            const key = document.getElementById('apiTokenInput').value.trim();
+            if (key && key.length > 20 && !key.includes('<') && !key.includes('>')) {
+                const obfuscatedToken = btoa(key);
+                localStorage.setItem('g_cw_auth_token', obfuscatedToken);
+                showApiKeySavedState();
+            } else {
+                alert('Formato chiave API non valido.');
+            }
+        }
+
+        function showApiKeySavedState() {
+            document.getElementById('apiKeyInputContainer').style.display = 'none';
+            document.getElementById('apiKeySavedContainer').style.display = 'flex';
+        }
+
+        function editApiKey() {
+            document.getElementById('apiKeySavedContainer').style.display = 'none';
+            document.getElementById('apiKeyInputContainer').style.display = 'flex';
+            document.getElementById('apiTokenInput').focus();
+        }
+
+        function deleteApiKey() {
+            localStorage.removeItem('g_cw_auth_token');
+            document.getElementById('apiTokenInput').value = '';
+            document.getElementById('apiKeySavedContainer').style.display = 'none';
+            document.getElementById('apiKeyInputContainer').style.display = 'flex';
+            setStatus("Chiave API rimossa dal dispositivo.");
+        }
+
         function toggleHistory() {
             const container = document.getElementById('chatHistory');
             const isHidden = container.style.display === 'none';
@@ -327,7 +387,8 @@
 
         function clearHistory() {
             document.getElementById('chatHistory').innerHTML = '';
-            setStatus("Cronologia cancellata.");
+            conversationContext = []; // Azzera la memoria della conversazione per l'API
+            setStatus("Cronologia e contesto cancellati.");
         }
 
         function addMessageToHistory(userText, geminiText) {
@@ -508,6 +569,23 @@
         }
 
         async function sendMessage() {
+            let encodedToken = localStorage.getItem('g_cw_auth_token');
+            let apiKey = "";
+            
+            if (encodedToken) {
+                try {
+                    apiKey = atob(encodedToken); 
+                } catch(e) {
+                    alert("Errore nella chiave salvata. Reinseriscila.");
+                    editApiKey();
+                    return;
+                }
+            } else {
+                alert("Inserisci la API Key prima di continuare."); 
+                editApiKey(); 
+                return; 
+            }
+
             const inputField = document.getElementById('userInput');
             const originalPrompt = inputField.value.trim().replace(/[<>]/g, ""); 
             if (!originalPrompt) return;
@@ -517,25 +595,73 @@
             
             const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
             
-            setStatus("Connessione all'IA in corso...");
+            // Uniamo la storia passata con la domanda corrente
+            const currentRequestContents = [...conversationContext, { role: "user", parts: [{ text: originalPrompt }] }];
 
-            try {
-                // Sfrutta Puter.js per generare la risposta senza API key
-                const promptToSend = `${sysInstruction}\n\nDomanda dell'utente: ${originalPrompt}`;
-                const response = await puter.ai.chat(promptToSend);
-                
-                const geminiText = cleanGeminiResponse(response);
-                
-                setStatus(`Risposta ricevuta. Trasmissione iniziata.`);
-                addMessageToHistory(originalPrompt, geminiText);
-                await transmitMorse(geminiText);
+            const payload = {
+                contents: currentRequestContents,
+                systemInstruction: { parts: [{ text: sysInstruction }] }
+            };
 
-            } catch (error) {
-                console.error(error);
-                setStatus("Errore: Impossibile generare la risposta tramite Puter. Riprova.");
+            let success = false;
+            let geminiText = "";
+            
+            // 1. Svuotiamo la memoria del telefono per sicurezza
+            localStorage.removeItem('gemini_working_model');
+
+            // 2. Ecco la lista dei modelli UFFICIALI attualmente supportati da Google.
+            // Se in futuro uscirà Gemini 3, ti basterà aggiungerlo qui sotto.
+            // Mettiamo in cima i modelli più leggeri, che hanno limiti gratuiti più ampi
+            let rawModels = [
+                'gemini-1.5-flash-8b', // <--- Il modello "salva-vita", ultra leggero
+                'gemini-1.5-flash',    // Alternativa standard
+                'gemini-2.0-flash'     // Modello nuovo (più soggetto a blocchi)
+            ];
+            
+            // 3. Questa riga ripara gli errori di battitura o i trattini sbagliati inseriti dai cellulari
+            let modelsToTry = rawModels.map(m => m.replace(/–|—/g, '-').replace(/\s+/g, ''));
+            
+
+            for (const modelName of modelsToTry) {
+                setStatus(`Connessione a ${modelName}...`);
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok && data.candidates) {
+                        geminiText = cleanGeminiResponse(data.candidates[0].content.parts[0].text);
+                        success = true;
+                        localStorage.setItem('gemini_working_model', modelName);
+                        
+                        // Salviamo nello storico della conversazione (necessita alternanza user/model)
+                        conversationContext.push({ role: "user", parts: [{ text: originalPrompt }] });
+                        conversationContext.push({ role: "model", parts: [{ text: geminiText }] });
+                        
+                        break; 
+                    } else {
+                        console.warn(`Modello ${modelName} rifiutato.`);
+                    }
+                } catch (e) {
+                    console.warn(`Errore di rete con ${modelName}.`);
+                }
+            }
+
+            if (!success) {
+                setStatus("Errore: Impossibile generare la risposta. Controlla la chiave API.");
                 document.getElementById('sendBtn').style.display = 'block';
                 document.getElementById('stopBtn').style.display = 'none';
+                return;
             }
+            
+            setStatus(`Modello agganciato. Trasmissione iniziata.`);
+            addMessageToHistory(originalPrompt, geminiText);
+            await transmitMorse(geminiText);
         }
     </script>
 </body>
