@@ -39,6 +39,7 @@
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
             margin-bottom: 15px;
+            align-items: end;
         }
 
         label {
@@ -56,6 +57,31 @@
             background-color: #2a2a2a;
             color: white;
             box-sizing: border-box;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background-color: #2a2a2a;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            height: 41px; /* per allinearlo visivamente agli altri campi */
+            box-sizing: border-box;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .checkbox-container label {
+            margin: 0;
+            color: white;
+            cursor: pointer;
         }
 
         button {
@@ -232,6 +258,11 @@
                 <label for="wakeWord">Parola di Attivazione</label>
                 <input type="text" id="wakeWord" value="Gemini" placeholder="Es. Gemini, Jarvis...">
             </div>
+            <!-- Checkbox per la ricerca web -->
+            <div class="checkbox-container">
+                <input type="checkbox" id="webSearch">
+                <label for="webSearch">Ricerca Web</label>
+            </div>
         </div>
     </div>
 
@@ -259,7 +290,6 @@
     <script>
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-        // Variabile globale per mantenere la memoria della conversazione per l'API
         let conversationContext = [];
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -294,18 +324,33 @@
                 }
             }
 
-            const settings = ['wpm', 'tone', 'maxWords', 'wakeWord'];
-            settings.forEach(id => {
-                const el = document.getElementById(id);
-                const savedVal = localStorage.getItem(`morse_setting_${id}`);
-                if (savedVal !== null) el.value = savedVal;
+            // Gestione del salvataggio impostazioni inclusa la nuova checkbox
+            const settingsInputs = [
+                { id: 'wpm', type: 'value' },
+                { id: 'tone', type: 'value' },
+                { id: 'maxWords', type: 'value' },
+                { id: 'wakeWord', type: 'value' },
+                { id: 'webSearch', type: 'checked' }
+            ];
+
+            settingsInputs.forEach(item => {
+                const el = document.getElementById(item.id);
+                const savedVal = localStorage.getItem(`morse_setting_${item.id}`);
                 
-                el.addEventListener('input', () => {
-                    localStorage.setItem(`morse_setting_${id}`, el.value);
-                });
-                el.addEventListener('change', () => {
-                    localStorage.setItem(`morse_setting_${id}`, el.value);
-                });
+                if (savedVal !== null) {
+                    if (item.type === 'checked') {
+                        el.checked = savedVal === 'true';
+                    } else {
+                        el.value = savedVal;
+                    }
+                }
+                
+                const saveSetting = () => {
+                    localStorage.setItem(`morse_setting_${item.id}`, item.type === 'checked' ? el.checked : el.value);
+                };
+
+                el.addEventListener('input', saveSetting);
+                el.addEventListener('change', saveSetting);
             });
 
             const historyVisible = localStorage.getItem('morse_history_visible');
@@ -387,7 +432,7 @@
 
         function clearHistory() {
             document.getElementById('chatHistory').innerHTML = '';
-            conversationContext = []; // Azzera la memoria della conversazione per l'API
+            conversationContext = []; 
             setStatus("Cronologia e contesto cancellati.");
         }
 
@@ -593,15 +638,22 @@
             const maxWords = parseInt(document.getElementById('maxWords').value, 10);
             inputField.value = "";
             
-            const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
+            // Iniezione di data e ora correnti
+            const dataOdierna = new Date().toLocaleString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             
-            // Uniamo la storia passata con la domanda corrente
+            const sysInstruction = `Sei un assistente virtuale utile e diretto. Data e ora attuale: ${dataOdierna}. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
+            
             const currentRequestContents = [...conversationContext, { role: "user", parts: [{ text: originalPrompt }] }];
 
             const payload = {
                 contents: currentRequestContents,
                 systemInstruction: { parts: [{ text: sysInstruction }] }
             };
+
+            // Abilita la ricerca su Google se la checkbox è attiva
+            if (document.getElementById('webSearch').checked) {
+                payload.tools = [{ googleSearch: {} }];
+            }
 
             let success = false;
             let geminiText = "";
@@ -637,7 +689,6 @@
                         success = true;
                         localStorage.setItem('gemini_working_model', modelName);
                         
-                        // Salviamo nello storico della conversazione (necessita alternanza user/model)
                         conversationContext.push({ role: "user", parts: [{ text: originalPrompt }] });
                         conversationContext.push({ role: "model", parts: [{ text: geminiText }] });
                         
