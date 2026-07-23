@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.13"; // Versione attuale del codice
+    const APP_VERSION = "20240520.14"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -146,6 +146,11 @@ async function loadRegolamento() {
 
         hideChat();
         document.getElementById('matchDetailsModal').style.display = 'none';
+
+        // Interrompi audio se cambiamo schermata (es. abbandono)
+        if (audioCtx && audioCtx.state === 'running') {
+            // audioCtx.suspend(); // Sospende, ma meglio gameRunning per playMorseAudio
+        }
 
         // Aggiornamento Presenza in tempo reale basato sulla schermata attiva
         if (db && myId) {
@@ -301,6 +306,7 @@ async function loadRegolamento() {
             if (!gameRunning) break;
             if (morseDict[char]) {
                 for (let symbol of morseDict[char]) {
+                    if (!gameRunning) break;
                     const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
                     osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
                     const duration = (symbol === '-') ? (3 * unitDuration) : (unitDuration);
@@ -4091,7 +4097,15 @@ async function loadRegolamento() {
         }, 3000);
     }
 
-    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+    function sleep(ms) {
+        return new Promise(resolve => {
+            const check = () => {
+                if (!gameRunning) resolve(); // Esci subito se il gioco è fermo
+                else resolve();
+            };
+            setTimeout(resolve, ms);
+        });
+    }
 
     // Eventi Bottoni Quiz
     const buzzerBtn = document.getElementById('quizBuzzer');
