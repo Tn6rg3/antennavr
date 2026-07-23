@@ -71,7 +71,6 @@
 
         button:hover { background-color: var(--accent-hover); }
         
-        /* Stili per il pulsante disabilitato */
         button:disabled { 
             background-color: #444; 
             color: #888; 
@@ -258,8 +257,10 @@
     </div>
 
     <script>
-        // Inizializzazione standard Web Speech API per controllarne il supporto
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        // Variabile globale per mantenere la memoria della conversazione per l'API
+        let conversationContext = [];
 
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
@@ -270,7 +271,6 @@
             document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
             document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
             
-            // Controllo supporto API vocale su browser non supportati (Safari, Firefox base)
             const voiceBtn = document.getElementById('voiceBtn');
             if (!SpeechRecognition) {
                 voiceBtn.disabled = true;
@@ -387,7 +387,8 @@
 
         function clearHistory() {
             document.getElementById('chatHistory').innerHTML = '';
-            setStatus("Cronologia cancellata.");
+            conversationContext = []; // Azzera la memoria della conversazione per l'API
+            setStatus("Cronologia e contesto cancellati.");
         }
 
         function addMessageToHistory(userText, geminiText) {
@@ -593,16 +594,18 @@
             inputField.value = "";
             
             const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
-            const userTextEnforced = `Domanda: ${originalPrompt}`;
+            
+            // Uniamo la storia passata con la domanda corrente
+            const currentRequestContents = [...conversationContext, { role: "user", parts: [{ text: originalPrompt }] }];
+
             const payload = {
-                contents: [{ parts: [{ text: userTextEnforced }] }],
+                contents: currentRequestContents,
                 systemInstruction: { parts: [{ text: sysInstruction }] }
             };
 
             let success = false;
             let geminiText = "";
             
-            // Array modelli aggiornato per puntare alle versioni attualmente supportate e performanti
             let modelsToTry = [
                 'gemini-2.5-flash',
                 'gemini-2.0-flash',
@@ -633,6 +636,11 @@
                         geminiText = cleanGeminiResponse(data.candidates[0].content.parts[0].text);
                         success = true;
                         localStorage.setItem('gemini_working_model', modelName);
+                        
+                        // Salviamo nello storico della conversazione (necessita alternanza user/model)
+                        conversationContext.push({ role: "user", parts: [{ text: originalPrompt }] });
+                        conversationContext.push({ role: "model", parts: [{ text: geminiText }] });
+                        
                         break; 
                     } else {
                         console.warn(`Modello ${modelName} rifiutato.`);
