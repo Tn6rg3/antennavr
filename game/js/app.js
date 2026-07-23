@@ -481,9 +481,9 @@ async function loadRegolamento() {
 
         if (isTrn) {
             // Mostra solo opzioni Torneo
-            gameModes.forEach(opt => opt.style.display = 'none');
+            gameModes.forEach(opt => { opt.style.display = 'none'; opt.disabled = true; });
             if (trnGroup) trnGroup.style.display = 'block';
-            trnModes.forEach(opt => opt.style.display = 'block');
+            trnModes.forEach(opt => { opt.style.display = 'block'; opt.disabled = false; });
 
             // Forza la selezione su un'opzione valida per il torneo se quella attuale è sparita
             if (!modeSelect.value.startsWith('trn_')) {
@@ -492,9 +492,9 @@ async function loadRegolamento() {
             document.getElementById('createRoomBtn').textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
         } else {
             // Mostra solo opzioni Gioco
-            gameModes.forEach(opt => opt.style.display = 'block');
+            gameModes.forEach(opt => { opt.style.display = 'block'; opt.disabled = false; });
             if (trnGroup) trnGroup.style.display = 'none';
-            trnModes.forEach(opt => opt.style.display = 'none');
+            trnModes.forEach(opt => { opt.style.display = 'none'; opt.disabled = true; });
 
             // Forza la selezione su un'opzione valida per il gioco se quella attuale era un'opzione torneo
             if (modeSelect.value.startsWith('trn_')) {
@@ -1563,7 +1563,7 @@ async function loadRegolamento() {
             if (levDist === 0 && !usedReplay) currentWpm += 2;
             else if (levDist === 1) currentWpm -= 1;
             else if (levDist > 1) currentWpm -= 2;
-            currentWpm = Math.max(baseWpm, currentWpm);
+            currentWpm = Math.max(10, currentWpm); // Minimo assoluto 10 WPM, può scendere sotto baseWpm
         }
 
         totalScore += points;
