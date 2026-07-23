@@ -606,19 +606,20 @@
             let success = false;
             let geminiText = "";
             
-            let modelsToTry = [
-                'gemini-2.5-flash',
+            // 1. Svuotiamo la memoria del telefono per sicurezza
+            localStorage.removeItem('gemini_working_model');
+
+            // 2. Ecco la lista dei modelli UFFICIALI attualmente supportati da Google.
+            // Se in futuro uscirà Gemini 3, ti basterà aggiungerlo qui sotto.
+            let rawModels = [
                 'gemini-2.0-flash',
                 'gemini-1.5-flash',
                 'gemini-1.5-pro'
             ];
-
-            const cachedModel = localStorage.getItem('gemini_working_model');
-            if (cachedModel && !modelsToTry.includes(cachedModel)) {
-                modelsToTry.unshift(cachedModel);
-            } else if (cachedModel) {
-                modelsToTry = [cachedModel, ...modelsToTry.filter(m => m !== cachedModel)];
-            }
+            
+            // 3. Questa riga ripara gli errori di battitura o i trattini sbagliati inseriti dai cellulari
+            let modelsToTry = rawModels.map(m => m.replace(/–|—/g, '-').replace(/\s+/g, ''));
+            
 
             for (const modelName of modelsToTry) {
                 setStatus(`Connessione a ${modelName}...`);
