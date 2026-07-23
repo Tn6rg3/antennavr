@@ -135,15 +135,20 @@ async function loadRegolamento() {
         myName = tgUser.first_name; myId = tgUser.id.toString(); initGame();
     }
 
+    let quizTimerInterval = null, currentQuizQuestion = null, quizActiveBuzzerId = null;
+    let quizQuestionIndex = 0;
+
     function showScreen(screenId) {
         document.querySelectorAll('.screen').forEach(el => el.classList.remove('active-screen'));
-        document.getElementById(screenId).classList.add('active-screen');
+        const screenEl = document.getElementById(screenId);
+        if (screenEl) screenEl.classList.add('active-screen');
+
         hideChat();
         document.getElementById('matchDetailsModal').style.display = 'none';
 
         // Aggiornamento Presenza in tempo reale basato sulla schermata attiva
         if (db && myId) {
-            const isPlayingScreen = (screenId === 'lobbyScreen' || screenId === 'gameArea' || screenId === 'countdownScreen');
+            const isPlayingScreen = (screenId === 'lobbyScreen' || screenId === 'gameArea' || screenId === 'countdownScreen' || screenId === 'quizArea');
             db.ref(`presence/${myId}`).update({ status: isPlayingScreen ? 'playing' : 'online' });
         }
 
@@ -1712,10 +1717,18 @@ async function loadRegolamento() {
 
         document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
         document.getElementById('scoreDisplay').textContent = `Punti: 0`;
-        totalScore = 0; currentStreak = 0; wordIndex = 0;
-        usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
-        document.getElementById('tableBody').innerHTML = "";
 
+        if (!isRejoining) {
+            totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0;
+            usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
+        }
+
+        if (currentMode === 'quiz') {
+            startQuizSequence();
+            return;
+        }
+
+        document.getElementById('tableBody').innerHTML = "";
         window.lastPlayedWordId = 0; window.lastSeenGuessId = 0;
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
         document.getElementById('pingPongSendArea').style.display = 'none';
@@ -3887,4 +3900,202 @@ async function loadRegolamento() {
                                 <small style="font-size:0.7em; opacity:0.7;">Firebase: ${err.code || err.message}</small>
                               </li>`;
         });
+    }
+
+    // --- LOGICA MODALITÀ QUIZ ---
+    function startQuizSequence() {
+        showScreen('quizArea');
+        gameRunning = true;
+
+        document.getElementById('quizWpmDisplay').textContent = `WPM: ${currentWpm}`;
+        document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
+
+        if (roomCode && !isSinglePlayer) {
+            // Setup Multiplayer Quiz state
+            db.ref(`rooms/${roomCode}/quiz_state`).on('value', snap => {
+                const state = snap.val();
+                if (!state) return;
+
+                quizQuestionIndex = state.questionIndex || 0;
+                quizActiveBuzzerId = state.activeBuzzerId || null;
+
+                renderQuizUI(state);
+            });
+
+            // Inizia la prima domanda se siamo l'host
+            if (myId === roomHostId) {
+                db.ref(`rooms/${roomCode}/quiz_state`).set({
+                    questionIndex: 0,
+                    activeBuzzerId: null,
+                    status: 'playing'
+                });
+            }
+        } else {
+            // Single player quiz
+            loadNextQuizQuestion();
+        }
+    }
+
+    function loadNextQuizQuestion() {
+        if (quizQuestionIndex >= QUIZ_QUESTIONS.length) {
+            finishGame();
+            return;
+        }
+
+        currentQuizQuestion = QUIZ_QUESTIONS[quizQuestionIndex];
+        playQuizAudioSequence();
+    }
+
+    async function playQuizAudioSequence() {
+        inputActive = false;
+        disableQuizButtons(true);
+
+        document.getElementById('quizQuestionBox').textContent = "Ascolta la domanda...";
+        playMorseAudio(currentQuizQuestion.q, currentWpm);
+
+        // Aspettiamo che finisca l'audio della domanda (approssimativo)
+        const qDuration = (currentQuizQuestion.q.length * 60 / currentWpm) * 1000;
+        await sleep(qDuration + 1000);
+
+        if (!gameRunning) return;
+
+        // Riproduciamo le opzioni A, B, C, D
+        const letters = ["A", "B", "C", "D"];
+        for (let i = 0; i < 4; i++) {
+            if (!gameRunning) return;
+            document.getElementById('quizQuestionBox').textContent = `Opzione ${letters[i]}...`;
+            playMorseAudio(`${letters[i]} ${currentQuizQuestion.a[i]}`, currentWpm);
+            const aDuration = (currentQuizQuestion.a[i].length + 2) * 60 / currentWpm * 1000;
+            await sleep(aDuration + 800);
+        }
+
+        if (!gameRunning) return;
+
+        document.getElementById('quizQuestionBox').textContent = "RISPONDI ORA!";
+        enableQuizControls();
+        startQuizTimer(20);
+    }
+
+    function enableQuizControls() {
+        inputActive = true;
+        if (isSinglePlayer) {
+            disableQuizButtons(false);
+        } else {
+            // In multi, prima bisogna premere il buzzer
+            document.getElementById('quizBuzzer').style.display = 'block';
+            document.getElementById('quizOptionsContainer').style.opacity = '0.5';
+            disableQuizButtons(true);
+        }
+    }
+
+    function disableQuizButtons(disabled) {
+        for (let l of ['A', 'B', 'C', 'D']) {
+            const btn = document.getElementById('btnQuiz' + l);
+            if(btn) btn.disabled = disabled;
+        }
+    }
+
+    function startQuizTimer(seconds) {
+        if (quizTimerInterval) clearInterval(quizTimerInterval);
+        const bar = document.getElementById('quizTimerProgress');
+        let timeLeft = 100;
+        const decrement = 100 / (seconds * 10);
+
+        quizTimerInterval = setInterval(() => {
+            timeLeft -= decrement;
+            bar.style.width = Math.max(0, timeLeft) + '%';
+
+            if (timeLeft <= 0) {
+                clearInterval(quizTimerInterval);
+                handleQuizTimeout();
+            }
+        }, 100);
+    }
+
+    function handleQuizTimeout() {
+        if (!inputActive) return;
+        showToast("Tempo scaduto!");
+        if (isSinglePlayer) {
+            submitQuizAnswer(-1); // Sbagliata
+        } else if (quizActiveBuzzerId === myId) {
+            submitQuizAnswer(-1); // Chi ha prenotato non ha risposto
+        }
+    }
+
+    function submitQuizAnswer(index) {
+        if (quizTimerInterval) clearInterval(quizTimerInterval);
+        inputActive = false;
+
+        const isCorrect = (index === currentQuizQuestion.correct);
+        if (isCorrect) {
+            totalScore += 100; // Punteggio fisso quiz
+            showToast("CORRETTO! +100");
+        } else {
+            showToast("SBAGLIATO!");
+        }
+
+        document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
+
+        setTimeout(() => {
+            quizQuestionIndex++;
+            loadNextQuizQuestion();
+        }, 2000);
+    }
+
+    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    // Eventi Bottoni Quiz
+    const buzzerBtn = document.getElementById('quizBuzzer');
+    if(buzzerBtn) {
+        buzzerBtn.addEventListener('click', () => {
+            if (!roomCode || isSinglePlayer || quizActiveBuzzerId) return;
+
+            db.ref(`rooms/${roomCode}/quiz_state`).transaction(state => {
+                if (state && !state.activeBuzzerId) {
+                    state.activeBuzzerId = myId;
+                }
+                return state;
+            });
+        });
+    }
+
+    for (let i = 0; i < 4; i++) {
+        const letter = ["A", "B", "C", "D"][i];
+        const btn = document.getElementById('btnQuiz' + letter);
+        if(btn) btn.onclick = () => submitQuizAnswer(i);
+
+        const rBtn = document.getElementById('replay' + letter);
+        if(rBtn) rBtn.onclick = () => {
+            if (currentQuizQuestion) playMorseAudio(currentQuizQuestion.a[i], currentWpm);
+        };
+    }
+
+    const replayQBtn = document.getElementById('quizReplayQ');
+    if(replayQBtn) {
+        replayQBtn.onclick = () => {
+            if (currentQuizQuestion) playMorseAudio(currentQuizQuestion.q, currentWpm);
+        };
+    }
+
+    function renderQuizUI(state) {
+        const buzzerBtn = document.getElementById('quizBuzzer');
+        const winnerDiv = document.getElementById('buzzerWinner');
+
+        if (state.activeBuzzerId) {
+            buzzerBtn.style.display = 'none';
+            if (state.activeBuzzerId === myId) {
+                winnerDiv.textContent = "TOCCA A TE!";
+                document.getElementById('quizOptionsContainer').style.opacity = '1';
+                disableQuizButtons(false);
+            } else {
+                winnerDiv.textContent = "L'AVVERSARIO RISPONDE...";
+                document.getElementById('quizOptionsContainer').style.opacity = '0.5';
+                disableQuizButtons(true);
+            }
+        } else {
+            winnerDiv.textContent = "";
+            buzzerBtn.style.display = 'block';
+            document.getElementById('quizOptionsContainer').style.opacity = '0.5';
+            disableQuizButtons(true);
+        }
     }
