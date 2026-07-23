@@ -1,6 +1,6 @@
-const BOT_USERNAME = "cwappgame_bot";
+ const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.50"; // Versione attuale del codice
+    const APP_VERSION = "20240520.90"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -1239,7 +1239,7 @@ async function loadRegolamento() {
         isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
         currentWpm = currentMode==='callsign' ? 25 : parseInt(document.getElementById('startWpmInput').value);
         baseWpm = currentWpm;
-        requestedWordCount = currentMode==='callsign' ? 25 : Math.max(3, parseInt(document.getElementById('wordCountInput').value));
+        requestedWordCount = currentMode==='callsign' ? 25 : Math.max(1, parseInt(document.getElementById('wordCountInput').value));
         currentTone = parseInt(document.getElementById('toneInput').value);
         let timerMins = Math.max(1, parseInt(document.getElementById('roomTimerInput').value));
         let setFixedSpeed = document.getElementById('fixedSpeedCheckbox').checked;
@@ -2568,7 +2568,7 @@ async function loadRegolamento() {
                 // Salva il match nel database globale SOLO SE ci sono almeno 2 giocatori
                 const finalPCount = Object.keys(players).length;
                 if (finalPCount >= 2) {
-                    if (roomData.type === 'multi' || currentMode === 'pingpong' || currentMode === 'chars') {
+                    if (roomData.type === 'multi' || currentMode === 'pingpong' || currentMode === 'chars' || currentMode === 'quiz') {
                         saveMatchToGlobalHistory(players, roomData);
                     }
                 }
@@ -2826,6 +2826,7 @@ async function loadRegolamento() {
         let modePath = 'standard_multi';
         if (currentMode === 'pingpong') modePath = 'pingpong';
         else if (currentMode === 'chars') modePath = 'chars_multi';
+        else if (currentMode === 'quiz') modePath = 'quiz_multi';
 
         // Per il pingpong usiamo wordCount come fallback se manca
         const subPath = roomData.wordCount || 'all';
