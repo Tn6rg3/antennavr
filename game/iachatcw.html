@@ -70,22 +70,13 @@
         }
 
         button:hover { background-color: var(--accent-hover); }
-        
-        button:disabled { 
-            background-color: #444; 
-            color: #888; 
-            cursor: not-allowed; 
-            border: 1px solid #555;
-        }
+        button:disabled { background-color: #555; cursor: not-allowed; }
         
         .btn-danger { background-color: #ff4444; color: white; }
         .btn-danger:hover { background-color: #cc0000; }
         
         .btn-outline { background-color: transparent; border: 1px solid var(--accent); color: var(--accent); }
         .btn-outline:hover { background-color: rgba(0, 255, 136, 0.1); }
-
-        .btn-outline-danger { background-color: transparent; border: 1px solid #ff4444; color: #ff4444; }
-        .btn-outline-danger:hover { background-color: rgba(255, 68, 68, 0.1); }
 
         .chat-container {
             display: flex;
@@ -120,11 +111,6 @@
             margin: 0;
             font-size: 1.1em;
             color: var(--accent);
-        }
-
-        .history-actions {
-            display: flex;
-            gap: 8px;
         }
 
         #chatHistory {
@@ -169,13 +155,6 @@
             margin-bottom: 5px;
             font-size: 0.9em;
         }
-
-        .security-notice {
-            font-size: 0.8em;
-            color: #ffaa00;
-            margin-top: 5px;
-            display: block;
-        }
     </style>
 </head>
 <body>
@@ -183,25 +162,19 @@
     <h1>Gemini CW Chat</h1>
 
     <div class="panel">
-        <div id="apiKeyInputContainer" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px;">
-            <div style="display: flex; gap: 10px;">
-                <div style="flex-grow: 1;">
-                    <label for="apiTokenInput">Chiave API Gemini</label>
-                    <input type="password" id="apiTokenInput" placeholder="Incolla qui la tua API Key...">
-                </div>
-                <div style="display: flex; align-items: flex-end;">
-                    <button id="saveKeyBtn">Salva</button>
-                </div>
+        <div id="apiKeyInputContainer" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <div style="flex-grow: 1;">
+                <label for="apiTokenInput">Chiave API Gemini</label>
+                <input type="password" id="apiTokenInput" placeholder="Incolla qui la tua API Key...">
             </div>
-            <span class="security-notice">⚠️ La chiave viene salvata nel browser. Usa il tasto "Elimina" se sei su un computer condiviso.</span>
+            <div style="display: flex; align-items: flex-end;">
+                <button id="saveKeyBtn">Salva</button>
+            </div>
         </div>
 
         <div id="apiKeySavedContainer" style="display: none; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 10px 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid var(--accent);">
-            <span style="color: var(--accent); font-weight: bold;">✓ Chiave API configurata</span>
-            <div style="display: flex; gap: 10px;">
-                <button id="editKeyBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.9em;">Modifica</button>
-                <button id="deleteKeyBtn" class="btn-danger" style="padding: 5px 10px; font-size: 0.9em;">Elimina</button>
-            </div>
+            <span style="color: var(--accent); font-weight: bold;">✓ Chiave API configurata e protetta</span>
+            <button id="editKeyBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.9em;">Modifica KEY</button>
         </div>
 
         <div class="settings-grid">
@@ -228,18 +201,14 @@
                     <option value="30">30 Parole</option>
                 </select>
             </div>
-            <div>
-                <label for="wakeWord">Parola di Attivazione</label>
-                <input type="text" id="wakeWord" value="Gemini" placeholder="Es. Gemini, Jarvis...">
-            </div>
         </div>
     </div>
 
     <div class="panel">
         <div class="chat-container">
             <div class="chat-controls">
-                <button id="voiceBtn" title="Parla usando la parola chiave">🎤 Parla</button>
-                <input type="text" id="userInput" placeholder="Scrivi o di' la parola chiave seguita dal messaggio...">
+                <button id="voiceBtn" title="Parla al microfono">🎤 Parla</button>
+                <input type="text" id="userInput" placeholder="Scrivi il tuo messaggio qui...">
                 <button id="sendBtn">Invia</button>
                 <button id="stopBtn" class="btn-danger" style="display: none;">Stop Audio</button>
             </div>
@@ -248,38 +217,20 @@
         
         <div class="history-header">
             <h3>Cronologia Messaggi</h3>
-            <div class="history-actions">
-                <button id="clearHistoryBtn" class="btn-outline-danger" style="padding: 5px 10px; font-size: 0.8em;">Cancella</button>
-                <button id="toggleHistoryBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.8em;">Nascondi Cronologia</button>
-            </div>
+            <button id="toggleHistoryBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.8em;">Nascondi Cronologia</button>
         </div>
         <div id="chatHistory"></div>
     </div>
 
     <script>
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-        // Variabile globale per mantenere la memoria della conversazione per l'API
-        let conversationContext = [];
-
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
             document.getElementById('editKeyBtn').addEventListener('click', editApiKey);
-            document.getElementById('deleteKeyBtn').addEventListener('click', deleteApiKey);
+            document.getElementById('voiceBtn').addEventListener('click', startVoiceRecognition);
             document.getElementById('sendBtn').addEventListener('click', sendMessage);
             document.getElementById('stopBtn').addEventListener('click', stopAudio);
             document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
-            document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
             
-            const voiceBtn = document.getElementById('voiceBtn');
-            if (!SpeechRecognition) {
-                voiceBtn.disabled = true;
-                voiceBtn.title = "Il riconoscimento vocale non è supportato in questo browser.";
-                document.getElementById('userInput').placeholder = "Scrivi il tuo messaggio...";
-            } else {
-                voiceBtn.addEventListener('click', startVoiceRecognition);
-            }
-
             document.getElementById('userInput').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
             });
@@ -294,15 +245,12 @@
                 }
             }
 
-            const settings = ['wpm', 'tone', 'maxWords', 'wakeWord'];
+            const settings = ['wpm', 'tone', 'maxWords'];
             settings.forEach(id => {
                 const el = document.getElementById(id);
                 const savedVal = localStorage.getItem(`morse_setting_${id}`);
-                if (savedVal !== null) el.value = savedVal;
+                if (savedVal) el.value = savedVal;
                 
-                el.addEventListener('input', () => {
-                    localStorage.setItem(`morse_setting_${id}`, el.value);
-                });
                 el.addEventListener('change', () => {
                     localStorage.setItem(`morse_setting_${id}`, el.value);
                 });
@@ -340,6 +288,7 @@
             if (key && key.length > 20 && !key.includes('<') && !key.includes('>')) {
                 const obfuscatedToken = btoa(key);
                 localStorage.setItem('g_cw_auth_token', obfuscatedToken);
+                localStorage.removeItem('gemini_api_key'); 
                 showApiKeySavedState();
             } else {
                 alert('Formato chiave API non valido.');
@@ -355,14 +304,6 @@
             document.getElementById('apiKeySavedContainer').style.display = 'none';
             document.getElementById('apiKeyInputContainer').style.display = 'flex';
             document.getElementById('apiTokenInput').focus();
-        }
-
-        function deleteApiKey() {
-            localStorage.removeItem('g_cw_auth_token');
-            document.getElementById('apiTokenInput').value = '';
-            document.getElementById('apiKeySavedContainer').style.display = 'none';
-            document.getElementById('apiKeyInputContainer').style.display = 'flex';
-            setStatus("Chiave API rimossa dal dispositivo.");
         }
 
         function toggleHistory() {
@@ -383,12 +324,6 @@
                 btn.textContent = 'Mostra Cronologia';
                 localStorage.setItem('morse_history_visible', 'false');
             }
-        }
-
-        function clearHistory() {
-            document.getElementById('chatHistory').innerHTML = '';
-            conversationContext = []; // Azzera la memoria della conversazione per l'API
-            setStatus("Cronologia e contesto cancellati.");
         }
 
         function addMessageToHistory(userText, geminiText) {
@@ -424,6 +359,7 @@
             }
         }
 
+        // --- MOTORE AUDIO ULTRA-PULITO (SENZA SCOPPIETTII) ---
         function initAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -449,15 +385,16 @@
             
             const now = audioCtx.currentTime;
             const durSec = durationMs / 1000;
-            const attackRelease = 0.005;
+            const attackRelease = 0.005; // 5ms di rampa per eliminare totalmente i click
 
             globalOscillator.frequency.setValueAtTime(frequency, now);
 
+            // Gestione della curva di volume liscia (Niente scoppiettii)
             globalGain.gain.cancelScheduledValues(now);
             globalGain.gain.setValueAtTime(0, now);
-            globalGain.gain.linearRampToValueAtTime(1, now + attackRelease);
+            globalGain.gain.linearRampToValueAtTime(1, now + attackRelease); // Attacco fluido
             globalGain.gain.setValueAtTime(1, now + durSec - attackRelease);
-            globalGain.gain.linearRampToValueAtTime(0, now + durSec);
+            globalGain.gain.linearRampToValueAtTime(0, now + durSec); // Rilascio fluido
 
             await sleep(durationMs);
         }
@@ -509,6 +446,7 @@
         function stopAudio() {
             abortPlayback = true;
             if (globalGain && audioCtx) {
+                // Mette subito a zero il volume per stoppare il suono all'istante
                 globalGain.gain.cancelScheduledValues(audioCtx.currentTime);
                 globalGain.gain.setValueAtTime(0, audioCtx.currentTime);
             }
@@ -518,42 +456,17 @@
         }
 
         function startVoiceRecognition() {
-            if (!SpeechRecognition) return;
-            
-            let wakeWordInput = document.getElementById('wakeWord').value.trim().toLowerCase();
-            if (!wakeWordInput) wakeWordInput = "gemini";
-
-            const recognition = new SpeechRecognition();
+            if (!('webkitSpeechRecognition' in window)) { alert("Web Speech API non supportata."); return; }
+            const recognition = new webkitSpeechRecognition();
             recognition.lang = 'it-IT';
             recognition.interimResults = false;
             recognition.maxAlternatives = 1;
-            
-            setStatus(`In ascolto... (Di' '${wakeWordInput}' seguito dal messaggio)`);
+            setStatus("Ascolto in corso... Parla ora.");
             
             recognition.onresult = function(event) {
-                let speechText = event.results[0][0].transcript.trim();
-                let lowerText = speechText.toLowerCase();
-                
-                if (lowerText.includes(wakeWordInput)) {
-                    let wakeIndex = lowerText.indexOf(wakeWordInput);
-                    let cleanText = speechText.substring(wakeIndex + wakeWordInput.length).trim();
-                    
-                    if (cleanText.length > 0) {
-                        document.getElementById('userInput').value = cleanText;
-                        setStatus("Comando vocale ricevuto. Invio in corso...");
-                        sendMessage();
-                    } else {
-                        setStatus(`Hai detto '${wakeWordInput}' ma non hai aggiunto alcun messaggio.`);
-                    }
-                } else {
-                    setStatus(`Parola chiave '${wakeWordInput}' non rilevata. Riprova.`);
-                }
+                document.getElementById('userInput').value += event.results[0][0].transcript + " ";
+                setStatus("Testo acquisito. Pronto per l'invio.");
             };
-
-            recognition.onerror = function(event) {
-                setStatus("Errore microfono: " + event.error);
-            };
-
             recognition.start();
         }
 
@@ -594,33 +507,28 @@
             inputField.value = "";
             
             const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
-            
-            // Uniamo la storia passata con la domanda corrente
-            const currentRequestContents = [...conversationContext, { role: "user", parts: [{ text: originalPrompt }] }];
-
+            const userTextEnforced = `Domanda: ${originalPrompt}`;
             const payload = {
-                contents: currentRequestContents,
+                contents: [{ parts: [{ text: userTextEnforced }] }],
                 systemInstruction: { parts: [{ text: sysInstruction }] }
             };
 
             let success = false;
             let geminiText = "";
             
-            // 1. Svuotiamo la memoria del telefono per sicurezza
-            localStorage.removeItem('gemini_working_model');
-
-            // 2. Ecco la lista dei modelli UFFICIALI attualmente supportati da Google.
-            // Se in futuro uscirà Gemini 3, ti basterà aggiungerlo qui sotto.
-            // Mettiamo in cima i modelli più leggeri, che hanno limiti gratuiti più ampi
-            let rawModels = [
-                'gemini-1.5-flash-8b', // <--- Il modello "salva-vita", ultra leggero
-                'gemini-1.5-flash',    // Alternativa standard
-                'gemini-2.0-flash'     // Modello nuovo (più soggetto a blocchi)
+            let modelsToTry = [
+                'gemini-3.6-flash',
+                'gemini-3.5-flash-lite',
+                'gemini-3.1-flash-lite',
+                'gemini-2.5-flash'
             ];
-            
-            // 3. Questa riga ripara gli errori di battitura o i trattini sbagliati inseriti dai cellulari
-            let modelsToTry = rawModels.map(m => m.replace(/–|—/g, '-').replace(/\s+/g, ''));
-            
+
+            const cachedModel = localStorage.getItem('gemini_working_model');
+            if (cachedModel && !modelsToTry.includes(cachedModel)) {
+                modelsToTry.unshift(cachedModel);
+            } else if (cachedModel) {
+                modelsToTry = [cachedModel, ...modelsToTry.filter(m => m !== cachedModel)];
+            }
 
             for (const modelName of modelsToTry) {
                 setStatus(`Connessione a ${modelName}...`);
@@ -638,11 +546,6 @@
                         geminiText = cleanGeminiResponse(data.candidates[0].content.parts[0].text);
                         success = true;
                         localStorage.setItem('gemini_working_model', modelName);
-                        
-                        // Salviamo nello storico della conversazione (necessita alternanza user/model)
-                        conversationContext.push({ role: "user", parts: [{ text: originalPrompt }] });
-                        conversationContext.push({ role: "model", parts: [{ text: geminiText }] });
-                        
                         break; 
                     } else {
                         console.warn(`Modello ${modelName} rifiutato.`);
