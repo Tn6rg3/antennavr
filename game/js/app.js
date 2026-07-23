@@ -264,6 +264,10 @@ async function loadRegolamento() {
             // CARICA IL REGOLAMENTO
             loadRegolamento();
 
+            // MOSTRA VERSIONE IN UI
+            const vDisp = document.getElementById('appVersionDisplay');
+            if(vDisp) vDisp.textContent = APP_VERSION;
+
             // GESTIONE AGGIORNAMENTI APP
             console.log("Controllo aggiornamenti... Versione Locale:", APP_VERSION);
             db.ref('appConfig/latestVersion').on('value', snap => {
