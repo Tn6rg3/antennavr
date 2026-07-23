@@ -265,8 +265,10 @@ async function loadRegolamento() {
             loadRegolamento();
 
             // GESTIONE AGGIORNAMENTI APP
+            console.log("Controllo aggiornamenti... Versione Locale:", APP_VERSION);
             db.ref('appConfig/latestVersion').on('value', snap => {
                 const latest = snap.val();
+                console.log("Versione su Firebase:", latest);
                 if (latest && String(latest).trim() !== String(APP_VERSION).trim()) {
                     document.getElementById('updateBanner').style.display = 'block';
                 } else {
@@ -299,25 +301,30 @@ async function loadRegolamento() {
     }
 
     function playMorseAudio(text, wpm) {
-        if (!audioCtx || !gameRunning) return;
-        const unitDuration = 1.2 / wpm;
-        let time = audioCtx.currentTime + 0.05;
-        for (let char of text) {
-            if (!gameRunning) break;
-            if (morseDict[char]) {
-                for (let symbol of morseDict[char]) {
-                    if (!gameRunning) break;
-                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-                    osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
-                    const duration = (symbol === '-') ? (3 * unitDuration) : (unitDuration);
-                    gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
-                    gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
-                    osc.start(time); osc.stop(time + duration);
-                    time += duration + unitDuration;
-                }
-                time += 2 * unitDuration;
-            } else if (char === ' ') { time += 4 * unitDuration; }
-        }
+        return new Promise(resolve => {
+            if (!audioCtx || !gameRunning) { resolve(); return; }
+            const unitDuration = 1.2 / wpm;
+            let time = audioCtx.currentTime + 0.05;
+            for (let char of text) {
+                if (!gameRunning) break;
+                if (morseDict[char]) {
+                    for (let symbol of morseDict[char]) {
+                        if (!gameRunning) break;
+                        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                        osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
+                        const duration = (symbol === '-') ? (3 * unitDuration) : (unitDuration);
+                        gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
+                        gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
+                        osc.start(time); osc.stop(time + duration);
+                        time += duration + unitDuration;
+                    }
+                    time += 2 * unitDuration;
+                } else if (char === ' ') { time += 4 * unitDuration; }
+            }
+
+            const totalDurationMs = (time - audioCtx.currentTime) * 1000;
+            setTimeout(resolve, totalDurationMs);
+        });
     }
 
     let activeChatListeners = {};
@@ -911,7 +918,7 @@ async function loadRegolamento() {
             });
 
             if (isAlreadyInTeam) {
-                statusText.innerHTML = "";
+                statusText.textContent = "";
                 statusText.appendChild(document.createTextNode("⚠️ "));
                 const bName = document.createElement('b'); bName.textContent = targetName;
                 statusText.appendChild(bName);
@@ -921,7 +928,7 @@ async function loadRegolamento() {
                 statusText.appendChild(document.createTextNode("."));
                 createBtn.style.display = 'none';
             } else {
-                statusText.innerHTML = "";
+                statusText.textContent = "";
                 statusText.appendChild(document.createTextNode("💡 "));
                 const bName = document.createElement('b'); bName.textContent = targetName;
                 statusText.appendChild(bName);
@@ -3971,12 +3978,12 @@ async function loadRegolamento() {
         }
 
         document.getElementById('quizQuestionBox').textContent = "Ascolta la domanda...";
-        playMorseAudio(currentQuizQuestion.q, currentWpm);
 
-        // Aspetta 2 secondi fisso dopo la domanda
-        await sleep(2000);
+        // Aspettiamo che finisca davvero la domanda
+        await playMorseAudio(currentQuizQuestion.q, currentWpm);
 
         if (!gameRunning) return;
+        await sleep(1500); // Pausa di respiro dopo la domanda
 
         // Riproduciamo le opzioni A, B, C, D
         const letters = ["A", "B", "C", "D"];
@@ -3988,12 +3995,13 @@ async function loadRegolamento() {
             const currentBtn = document.getElementById('btnQuiz' + letters[i]);
             currentBtn.classList.add('active-choice');
 
-            playMorseAudio(`${letters[i]} ${currentQuizQuestion.a[i]}`, currentWpm);
-
-            // Pausa fissa di 1 secondo tra le opzioni (più il tempo del morse gestito da playMorseAudio)
-            await sleep(1500);
+            // Aspettiamo che finisca davvero l'opzione corrente
+            await playMorseAudio(`${letters[i]} ${currentQuizQuestion.a[i]}`, currentWpm);
 
             currentBtn.classList.remove('active-choice');
+
+            if (!gameRunning) return;
+            await sleep(1000); // Piccola pausa tra le opzioni
         }
 
         if (!gameRunning) return;
