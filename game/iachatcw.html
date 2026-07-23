@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https://generativelanguage.googleapis.com;">
-    <title>Gemini CW Morse Chat</title>
+    <title>Gemini CW Morse Chat - Voice Edition</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -88,14 +88,18 @@
         .btn-outline-danger { background-color: transparent; border: 1px solid #ff4444; color: #ff4444; }
         .btn-outline-danger:hover { background-color: rgba(255, 68, 68, 0.1); }
 
-        /* Stile speciale per il pulsante di ascolto attivo */
-        .btn-active-listening {
-            background-color: #ffaa00;
-            color: #000;
-            box-shadow: 0 0 10px #ffaa00;
+        /* Animazione e stile per l'ascolto continuo attivo */
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 170, 0, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 170, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 170, 0, 0); }
         }
-        .btn-active-listening:hover {
-            background-color: #ff8800;
+
+        .btn-active-listening {
+            background-color: #ffaa00 !important; /* Forza il colore arancione */
+            color: #000 !important;
+            animation: pulse 1.5s infinite;
+            border: 1px solid #ff8800;
         }
 
         .chat-container {
@@ -273,9 +277,8 @@
 
         let conversationContext = [];
         
-        // Variabili per gestire il flusso vocale continuo
-        let isListeningActive = false; // Indica se l'interruttore è acceso
-        let isTransmitting = false;    // Indica se stiamo generando o trasmettendo audio
+        let isListeningActive = false; 
+        let isTransmitting = false;    
         let recognition = null;
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -348,7 +351,7 @@
             el.style.color = color;
         }
 
-        function saveApiKey() { /* ... */ 
+        function saveApiKey() { 
             const key = document.getElementById('apiTokenInput').value.trim();
             if (key && key.length > 20 && !key.includes('<') && !key.includes('>')) {
                 const obfuscatedToken = btoa(key);
@@ -459,18 +462,22 @@
             await sleep(durationMs);
         }
 
-        // --- SISTEMA VOCALE CONTINUO ---
+        // --- SISTEMA VOCALE CONTINUO (Aggiornato per stabilità) ---
         function initVoiceRecognition() {
             recognition = new SpeechRecognition();
             recognition.lang = 'it-IT';
-            recognition.continuous = false; // Lo riavviamo manualmente in onend per evitare crash del browser
+            recognition.continuous = true; // Permette l'ascolto senza interruzioni continue
             recognition.interimResults = false;
 
             recognition.onresult = function(event) {
-                if (isTransmitting) return; // Ignoriamo input mentre l'IA parla o trasmette
+                if (isTransmitting) return; 
 
-                let speechText = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+                // Prende solo l'ultimo risultato riconosciuto
+                const currentResultIndex = event.resultIndex;
+                let speechText = event.results[currentResultIndex][0].transcript.trim().toLowerCase();
                 let wakeWordInput = document.getElementById('wakeWord').value.trim().toLowerCase() || "gemini";
+
+                console.log("Ascoltato: ", speechText); // Debug nella console
 
                 if (speechText.includes(wakeWordInput)) {
                     let wakeIndex = speechText.indexOf(wakeWordInput);
@@ -480,9 +487,8 @@
                         document.getElementById('userInput').value = cleanText;
                         setStatus(`Hai detto: "${cleanText}". Invio in corso...`, '#00ff88');
                         
-                        // Blocca temporaneamente il microfono e manda il messaggio
                         isTransmitting = true;
-                        recognition.stop(); 
+                        recognition.stop(); // Spegniamo il microfono per non ascoltare il Morse
                         sendMessage(true); 
                     } else {
                         setStatus(`Ho sentito "${wakeWordInput}" ma non hai detto altro. Sono in ascolto...`, '#ffaa00');
@@ -491,14 +497,16 @@
             };
 
             recognition.onend = function() {
-                // Se l'interruttore è attivo e non stiamo trasmettendo, riattiva subito il microfono
+                // Se l'ascolto dovrebbe essere attivo ma si è spento da solo, riavvialo con un piccolo ritardo
                 if (isListeningActive && !isTransmitting) {
-                    try { recognition.start(); } catch(e) {}
+                    setTimeout(() => {
+                        try { recognition.start(); } catch(e) {}
+                    }, 400);
                 }
             };
 
             recognition.onerror = function(event) {
-                if(event.error === 'no-speech') return; // Timeout normali, li ignoriamo
+                if(event.error === 'no-speech') return; 
                 if(event.error === 'not-allowed') {
                     isListeningActive = false;
                     updateVoiceBtnUI();
@@ -508,7 +516,7 @@
         }
 
         function toggleVoiceAssistant() {
-            initAudio(); // Inizializza l'audio al click dell'utente per sbloccarlo su Safari
+            initAudio(); 
             
             isListeningActive = !isListeningActive;
             updateVoiceBtnUI();
@@ -534,7 +542,22 @@
                 btn.classList.remove('btn-active-listening');
             }
         }
-        // -------------------------------
+
+        function onTransmissionEnd() {
+            isTransmitting = false;
+            if (isListeningActive) {
+                let wakeWordInput = document.getElementById('wakeWord').value.trim() || "Gemini";
+                setStatus(`🎙️ Ascolto riattivato. Di' "${wakeWordInput}".`, '#ffaa00');
+                // Riaccende il microfono con un ritardo per evitare accavallamenti audio/sistema
+                setTimeout(() => {
+                    if(recognition) {
+                        try { recognition.start(); } catch(e) {}
+                    }
+                }, 500); 
+            } else {
+                setStatus("Trasmissione completata.");
+            }
+        }
 
         async function transmitMorse(text) {
             abortPlayback = false;
@@ -577,15 +600,6 @@
 
             document.getElementById('sendBtn').style.display = 'block';
             document.getElementById('stopBtn').style.display = 'none';
-            
-            if (!abortPlayback) {
-                let wakeWordInput = document.getElementById('wakeWord').value.trim() || "Gemini";
-                if(isListeningActive) {
-                    setStatus(`🎙️ Ascolto riattivato. Di' "${wakeWordInput}".`, '#ffaa00');
-                } else {
-                    setStatus("Trasmissione completata.");
-                }
-            }
         }
 
         function stopAudio() {
@@ -597,15 +611,7 @@
             document.getElementById('sendBtn').style.display = 'block';
             document.getElementById('stopBtn').style.display = 'none';
             
-            // Ripristina l'ascolto se l'interruttore è attivo
             onTransmissionEnd();
-        }
-
-        function onTransmissionEnd() {
-            isTransmitting = false;
-            if (isListeningActive && recognition) {
-                try { recognition.start(); } catch(e) {}
-            }
         }
 
         function cleanGeminiResponse(rawText) {
@@ -634,8 +640,10 @@
             const originalPrompt = inputField.value.trim().replace(/[<>]/g, ""); 
             if (!originalPrompt) return;
 
-            // Se non è partita dalla voce e l'ascolto è attivo, lo blocchiamo temporaneamente
-            if (!isFromVoice) isTransmitting = true;
+            if (!isFromVoice) {
+                isTransmitting = true; 
+                if(recognition && isListeningActive) recognition.stop();
+            }
 
             const maxWords = parseInt(document.getElementById('maxWords').value, 10);
             inputField.value = "";
@@ -689,15 +697,16 @@
                 setStatus(`⚠️ Errore API. Controlla la chiave.`, '#ff4444');
                 document.getElementById('sendBtn').style.display = 'block';
                 document.getElementById('stopBtn').style.display = 'none';
-                onTransmissionEnd(); // Riattiva microfono se necessario
+                onTransmissionEnd(); 
                 return;
             }
             
             setStatus(`Trasmissione in corso...`, '#00ff88');
             addMessageToHistory(originalPrompt, geminiText);
             
-            // Aspetta che la trasmissione finisca, poi riattiva l'ascolto
             await transmitMorse(geminiText);
+            
+            // Riattiva tutto al termine
             onTransmissionEnd();
         }
     </script>
