@@ -568,7 +568,7 @@
             return cleaned;
         }
 
-        async function sendMessage() {
+       async function sendMessage() {
             let encodedToken = localStorage.getItem('g_cw_auth_token');
             let apiKey = "";
             
@@ -595,7 +595,6 @@
             
             const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
             
-            // Uniamo la storia passata con la domanda corrente
             const currentRequestContents = [...conversationContext, { role: "user", parts: [{ text: originalPrompt }] }];
 
             const payload = {
@@ -605,23 +604,18 @@
 
             let success = false;
             let geminiText = "";
+            let googleErrorMessage = "Errore sconosciuto"; // Variabile per salvare il vero errore
             
-            // 1. Svuotiamo la memoria del telefono per sicurezza
             localStorage.removeItem('gemini_working_model');
 
-            // 2. Ecco la lista dei modelli UFFICIALI attualmente supportati da Google.
-            // Se in futuro uscirà Gemini 3, ti basterà aggiungerlo qui sotto.
-            // Mettiamo in cima i modelli più leggeri, che hanno limiti gratuiti più ampi
             let rawModels = [
-                'gemini-1.5-flash-8b', // <--- Il modello "salva-vita", ultra leggero
-                'gemini-1.5-flash',    // Alternativa standard
-                'gemini-2.0-flash'     // Modello nuovo (più soggetto a blocchi)
+                'gemini-1.5-flash-8b', 
+                'gemini-1.5-flash',    
+                'gemini-2.0-flash'     
             ];
             
-            // 3. Questa riga ripara gli errori di battitura o i trattini sbagliati inseriti dai cellulari
             let modelsToTry = rawModels.map(m => m.replace(/–|—/g, '-').replace(/\s+/g, ''));
             
-
             for (const modelName of modelsToTry) {
                 setStatus(`Connessione a ${modelName}...`);
                 try {
@@ -639,21 +633,28 @@
                         success = true;
                         localStorage.setItem('gemini_working_model', modelName);
                         
-                        // Salviamo nello storico della conversazione (necessita alternanza user/model)
                         conversationContext.push({ role: "user", parts: [{ text: originalPrompt }] });
                         conversationContext.push({ role: "model", parts: [{ text: geminiText }] });
                         
                         break; 
                     } else {
-                        console.warn(`Modello ${modelName} rifiutato.`);
+                        // Salviamo il VERO messaggio di errore di Google
+                        console.warn(`Modello ${modelName} rifiutato. Dettagli:`, data);
+                        if (data.error && data.error.message) {
+                            googleErrorMessage = data.error.message;
+                        } else if (data.error && data.error.status) {
+                            googleErrorMessage = data.error.status;
+                        }
                     }
                 } catch (e) {
-                    console.warn(`Errore di rete con ${modelName}.`);
+                    console.error(`Errore di rete con ${modelName}:`, e);
+                    googleErrorMessage = "Errore di connessione (Controlla internet o CORS)";
                 }
             }
 
             if (!success) {
-                setStatus("Errore: Impossibile generare la risposta. Controlla la chiave API.");
+                // Stampiamo a schermo l'errore reale
+                setStatus(`Google API Error: ${googleErrorMessage}`);
                 document.getElementById('sendBtn').style.display = 'block';
                 document.getElementById('stopBtn').style.display = 'none';
                 return;
