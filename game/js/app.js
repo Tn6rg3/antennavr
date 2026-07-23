@@ -3973,9 +3973,8 @@ async function loadRegolamento() {
         document.getElementById('quizQuestionBox').textContent = "Ascolta la domanda...";
         playMorseAudio(currentQuizQuestion.q, currentWpm);
 
-        // Calcolo durata domanda
-        const qDuration = (currentQuizQuestion.q.length * 60 / currentWpm) * 1000;
-        await sleep(qDuration + 1500);
+        // Aspetta 2 secondi fisso dopo la domanda
+        await sleep(2000);
 
         if (!gameRunning) return;
 
@@ -3990,15 +3989,16 @@ async function loadRegolamento() {
             currentBtn.classList.add('active-choice');
 
             playMorseAudio(`${letters[i]} ${currentQuizQuestion.a[i]}`, currentWpm);
-            const aDuration = (currentQuizQuestion.a[i].length + 3) * 60 / currentWpm * 1000;
-            await sleep(aDuration + 1000);
+
+            // Pausa fissa di 1 secondo tra le opzioni (più il tempo del morse gestito da playMorseAudio)
+            await sleep(1500);
 
             currentBtn.classList.remove('active-choice');
         }
 
         if (!gameRunning) return;
 
-        document.getElementById('quizQuestionBox').textContent = "RISPONDI ORA!";
+        document.getElementById('quizQuestionBox').textContent = "SCEGLI LA TUA RISPOSTA!";
         enableQuizControls();
         startQuizTimer(20);
     }
