@@ -464,15 +464,28 @@ async function loadRegolamento() {
     });
 
     function checkGameTypeUI() {
-        const isSingle = document.getElementById('gameTypeInput').value === 'single';
-        document.getElementById('timeoutDiv').style.display = isSingle ? 'none' : 'block';
+        const type = document.getElementById('gameTypeInput').value;
+        const isSingle = type === 'single';
+        const isTrn = type === 'tournament';
+
+        document.getElementById('timeoutDiv').style.display = isSingle || isTrn ? 'none' : 'block';
         document.getElementById('fixedSpeedContainer').style.display = isSingle ? 'flex' : 'none';
         document.getElementById('easyModeContainer').style.display = isSingle ? 'flex' : 'none';
+
+        // Gestione opzioni torneo nel menu a tendina "Modo"
+        const trnGroup = document.getElementById('trn_opt_group');
+        if (trnGroup) trnGroup.style.display = isTrn ? 'block' : 'none';
+
+        if (isTrn) {
+            document.getElementById('createRoomBtn').textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
+        } else {
+            document.getElementById('createRoomBtn').textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
+        }
+
         if(!isSingle) {
             document.getElementById('fixedSpeedCheckbox').checked = false;
             document.getElementById('easyModeCheckbox').checked = false;
         }
-        document.getElementById('createRoomBtn').textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
     }
 
     const i18n = {
@@ -1152,6 +1165,18 @@ async function loadRegolamento() {
     window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
 
     document.getElementById('createRoomBtn').addEventListener('click', () => {
+        const gameType = document.getElementById('gameTypeInput').value;
+        const gameMode = document.getElementById('gameModeInput').value;
+
+        // Se è selezionata la modalità Torneo, reindirizza alle aree specifiche
+        if (gameType === 'tournament') {
+            showScreen('teamsScreen');
+            if (gameMode === 'trn_create_team') switchTeamTab('gest');
+            else if (gameMode === 'trn_join_team') switchTeamTab('allteams');
+            else if (gameMode === 'trn_create_trn') switchTeamTab('tournaments');
+            return;
+        }
+
         // Pulizia inviti pendenti prima di iniziare una nuova partita (Solo o Multi)
         isChallenging = false;
         if (currentInviterId) {
@@ -2134,6 +2159,23 @@ async function loadRegolamento() {
         } catch(e) {
             console.error("Errore salvataggio profilo:", e);
             alert("Errore durante il salvataggio.");
+        }
+    });
+
+    document.getElementById('resetStatsBtn').addEventListener('click', async () => {
+        if (confirm(currentLang === 'it' ? "Vuoi azzerare tutte le tue statistiche (errori caratteri, WPM e storico partite)? Questa operazione non può essere annullata." : "Do you want to reset all your statistics (character errors, WPM, and match history)? This action cannot be undone.")) {
+            try {
+                // Rimuove statistiche e storico dal database
+                await Promise.all([
+                    db.ref(`users/${myId}/stats`).remove(),
+                    db.ref(`users/${myId}/history`).remove()
+                ]);
+                showToast(currentLang === 'it' ? "Statistiche azzerate correttamente!" : "Statistics reset successfully!");
+                showProfileScreen(); // Ricarica la schermata del profilo
+            } catch(e) {
+                console.error("Errore durante il reset:", e);
+                alert("Errore durante il reset delle statistiche.");
+            }
         }
     });
 
