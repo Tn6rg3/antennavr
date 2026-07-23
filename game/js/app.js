@@ -464,7 +464,9 @@ async function loadRegolamento() {
     });
 
     function checkGameTypeUI() {
-        const type = document.getElementById('gameTypeInput').value;
+        const typeSelect = document.getElementById('gameTypeInput');
+        const modeSelect = document.getElementById('gameModeInput');
+        const type = typeSelect.value;
         const isSingle = type === 'single';
         const isTrn = type === 'tournament';
 
@@ -472,13 +474,32 @@ async function loadRegolamento() {
         document.getElementById('fixedSpeedContainer').style.display = isSingle ? 'flex' : 'none';
         document.getElementById('easyModeContainer').style.display = isSingle ? 'flex' : 'none';
 
-        // Gestione opzioni torneo nel menu a tendina "Modo"
+        // --- LOGICA FILTRO DINAMICO OPZIONI ---
+        const gameModes = modeSelect.querySelectorAll('option:not([value^="trn_"])');
         const trnGroup = document.getElementById('trn_opt_group');
-        if (trnGroup) trnGroup.style.display = isTrn ? 'block' : 'none';
+        const trnModes = trnGroup ? trnGroup.querySelectorAll('option') : [];
 
         if (isTrn) {
+            // Mostra solo opzioni Torneo
+            gameModes.forEach(opt => opt.style.display = 'none');
+            if (trnGroup) trnGroup.style.display = 'block';
+            trnModes.forEach(opt => opt.style.display = 'block');
+
+            // Forza la selezione su un'opzione valida per il torneo se quella attuale è sparita
+            if (!modeSelect.value.startsWith('trn_')) {
+                modeSelect.value = 'trn_join_team';
+            }
             document.getElementById('createRoomBtn').textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
         } else {
+            // Mostra solo opzioni Gioco
+            gameModes.forEach(opt => opt.style.display = 'block');
+            if (trnGroup) trnGroup.style.display = 'none';
+            trnModes.forEach(opt => opt.style.display = 'none');
+
+            // Forza la selezione su un'opzione valida per il gioco se quella attuale era un'opzione torneo
+            if (modeSelect.value.startsWith('trn_')) {
+                modeSelect.value = 'standard';
+            }
             document.getElementById('createRoomBtn').textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
         }
 
