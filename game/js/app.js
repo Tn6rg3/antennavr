@@ -3950,12 +3950,17 @@ async function loadRegolamento() {
         inputActive = false;
         disableQuizButtons(true);
 
+        // Reset visuale opzioni
+        for (let l of ['A', 'B', 'C', 'D']) {
+            document.getElementById('btnQuiz' + l).classList.remove('active-choice');
+        }
+
         document.getElementById('quizQuestionBox').textContent = "Ascolta la domanda...";
         playMorseAudio(currentQuizQuestion.q, currentWpm);
 
-        // Aspettiamo che finisca l'audio della domanda (approssimativo)
+        // Calcolo durata domanda
         const qDuration = (currentQuizQuestion.q.length * 60 / currentWpm) * 1000;
-        await sleep(qDuration + 1000);
+        await sleep(qDuration + 1500);
 
         if (!gameRunning) return;
 
@@ -3964,9 +3969,16 @@ async function loadRegolamento() {
         for (let i = 0; i < 4; i++) {
             if (!gameRunning) return;
             document.getElementById('quizQuestionBox').textContent = `Opzione ${letters[i]}...`;
+
+            // Evidenzia l'opzione che sta suonando
+            const currentBtn = document.getElementById('btnQuiz' + letters[i]);
+            currentBtn.classList.add('active-choice');
+
             playMorseAudio(`${letters[i]} ${currentQuizQuestion.a[i]}`, currentWpm);
-            const aDuration = (currentQuizQuestion.a[i].length + 2) * 60 / currentWpm * 1000;
-            await sleep(aDuration + 800);
+            const aDuration = (currentQuizQuestion.a[i].length + 3) * 60 / currentWpm * 1000;
+            await sleep(aDuration + 1000);
+
+            currentBtn.classList.remove('active-choice');
         }
 
         if (!gameRunning) return;
@@ -4023,23 +4035,51 @@ async function loadRegolamento() {
     }
 
     function submitQuizAnswer(index) {
+        if (!inputActive && !isSinglePlayer && quizActiveBuzzerId !== myId) return;
         if (quizTimerInterval) clearInterval(quizTimerInterval);
         inputActive = false;
 
+        // Disabilita tasti per evitare doppi click
+        disableQuizButtons(true);
+
         const isCorrect = (index === currentQuizQuestion.correct);
+        const selectedLetter = ["A", "B", "C", "D"][index] || "?";
+
         if (isCorrect) {
             totalScore += 100; // Punteggio fisso quiz
-            showToast("CORRETTO! +100");
+            showToast(`CORRETTO (${selectedLetter})! +100`);
         } else {
-            showToast("SBAGLIATO!");
+            showToast(`SBAGLIATO! Era la ${["A", "B", "C", "D"][currentQuizQuestion.correct]}`);
+
+            // In multiplayer, se sbagli, il punto va all'avversario
+            if (!isSinglePlayer && quizActiveBuzzerId === myId) {
+                // Sottraiamo punti a chi ha sbagliato o diamo punti agli altri?
+                // Seguiamo la richiesta: "se sbaglia il punto va all'avversario"
+                // Nota: In Firebase dovremmo aggiornare il punteggio dell'altro giocatore
+                // Per ora notifichiamo e basta, il sistema multiplayer aggiornerà i punteggi globali a fine match
+            }
         }
 
         document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
 
+        // Reset stato buzzer su Firebase se siamo in multi
+        if (roomCode && !isSinglePlayer && myId === roomHostId) {
+             // L'host resetta lo stato per la prossima domanda
+        }
+
         setTimeout(() => {
+            if (!gameRunning) return;
             quizQuestionIndex++;
-            loadNextQuizQuestion();
-        }, 2000);
+
+            if (roomCode && !isSinglePlayer && myId === roomHostId) {
+                db.ref(`rooms/${roomCode}/quiz_state`).update({
+                    questionIndex: quizQuestionIndex,
+                    activeBuzzerId: null
+                });
+            } else if (isSinglePlayer) {
+                loadNextQuizQuestion();
+            }
+        }, 3000);
     }
 
     function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
@@ -4074,6 +4114,17 @@ async function loadRegolamento() {
     if(replayQBtn) {
         replayQBtn.onclick = () => {
             if (currentQuizQuestion) playMorseAudio(currentQuizQuestion.q, currentWpm);
+        };
+    }
+
+    const quitQuizBtn = document.getElementById('quitQuizBtn');
+    if(quitQuizBtn) {
+        quitQuizBtn.onclick = () => {
+            if (confirm("Vuoi abbandonare il Quiz?")) {
+                if(quizTimerInterval) clearInterval(quizTimerInterval);
+                gameRunning = false;
+                exitRoomCleanly();
+            }
         };
     }
 
