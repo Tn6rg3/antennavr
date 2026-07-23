@@ -1448,19 +1448,54 @@ async function loadRegolamento() {
         inputActive = false;
         const currentWord = gameWords[wordIndex].toUpperCase();
         let points = 0, scoreColor = "";
-        let reactionMs = 0;
+        let reactionMs = Date.now() - lastWordStartTime;
+
+        // --- CALCOLO PUNTEGGIO STILE RUFZXP ---
+        const levDist = getLevenshteinDistance(currentWord, userWord);
 
         if (currentMode === 'chars') {
-            reactionMs = Date.now() - lastWordStartTime;
+            // Modalità Caratteri: Già basata su ms, la affiniamo
             if (userWord === currentWord) {
-                // Calcolo punti basato su ms: max 100 punti se sotto i 500ms, poi scende
-                points = Math.max(10, Math.floor(100 - (reactionMs / 50)));
+                // Max 1000 punti per < 300ms, poi scende
+                points = Math.max(100, Math.floor(1000 - (reactionMs / 2)));
                 scoreColor = "#4caf50";
             } else {
                 points = 0;
                 scoreColor = "#d32f2f";
             }
-        } else if (userWord !== currentWord) {
+        } else {
+            // Modalità Parole / Nominativi / Ping Pong
+            // Formula base: (WPM^2 * Lunghezza) / (10 * (Errori + 1)^2)
+            const basePoints = (Math.pow(currentWpm, 2) * currentWord.length) / (10 * Math.pow(levDist + 1, 2));
+
+            // Penalità Tempo (RufzXP): Bonus se veloce, malus se lento
+            // Tempo stimato audio: (Lunghezza * 60 / WPM) * 1000 ms approssimativo
+            // Diamo 2 secondi di "grace period" dopo la fine stimata dell'audio
+            const estimatedAudioMs = (currentWord.length * 60 / currentWpm) * 1000;
+            const gracePeriod = 2000;
+            let timeMultiplier = 1.0;
+
+            if (reactionMs > (estimatedAudioMs + gracePeriod)) {
+                const delay = reactionMs - (estimatedAudioMs + gracePeriod);
+                // Perdita del 5% per ogni secondo di ritardo, fino a min 50%
+                timeMultiplier = Math.max(0.5, 1.0 - (delay / 20000));
+            } else if (reactionMs < estimatedAudioMs && levDist === 0) {
+                // Bonus velocità estrema (head copy durante l'invio)
+                timeMultiplier = 1.1;
+            }
+
+            points = Math.round(basePoints * timeMultiplier);
+
+            // Colore basato sulla precisione
+            if (levDist === 0) scoreColor = usedReplay ? "#999999" : "#4caf50";
+            else if (levDist === 1) scoreColor = "#ff9800";
+            else scoreColor = "#d32f2f";
+
+            if (usedReplay) points = Math.round(points * 0.2); // Riascolto penalizza dell'80%
+        }
+
+        // --- STATISTICHE ERRORI ---
+        if (levDist > 0) {
             let wrongChars = [];
             const maxLen = Math.max(currentWord.length, userWord.length);
             for(let i=0; i<maxLen; i++) {
@@ -1477,33 +1512,11 @@ async function loadRegolamento() {
             });
         }
 
-        if (currentMode !== 'chars') {
-            if (usedReplay) {
-                points = 0; scoreColor = "#999999";
-                if (currentMode === 'callsign' && userWord !== currentWord) currentStreak = 0;
-            } else {
-                if (currentMode === 'callsign') {
-                    if (userWord === currentWord) { currentStreak++; points = (currentWpm * 2) + (currentStreak * 5); scoreColor = "#4caf50"; }
-                    else { currentStreak = 0; points = 0; scoreColor = "#d32f2f"; }
-                } else {
-                    const errors = getLevenshteinDistance(currentWord, userWord);
-                    if (errors === 0) { points = 10; scoreColor = "#4caf50"; }
-                    else if (errors === 1) { points = 2; scoreColor = "#ff9800"; }
-                    else { points = 0; scoreColor = "#d32f2f"; }
-                }
-            }
-        }
-
+        // --- AGGIORNAMENTO VELOCITÀ ADATTIVA ---
         if (!isFixedSpeed && currentMode !== 'chars') {
-            if(currentMode === 'callsign') {
-                if (userWord === currentWord && !usedReplay) currentWpm += 2;
-                else if (userWord !== currentWord) currentWpm -= 1;
-            } else {
-                const errs = getLevenshteinDistance(currentWord, userWord);
-                if (errs === 0 && !usedReplay) currentWpm += 2;
-                else if (errs === 1) currentWpm -= 1;
-                else if (errs > 1) currentWpm -= 2;
-            }
+            if (levDist === 0 && !usedReplay) currentWpm += 2;
+            else if (levDist === 1) currentWpm -= 1;
+            else if (levDist > 1) currentWpm -= 2;
             currentWpm = Math.max(baseWpm, currentWpm);
         }
 
