@@ -137,6 +137,7 @@ async function loadRegolamento() {
 
     let quizTimerInterval = null, currentQuizQuestion = null, quizActiveBuzzerId = null;
     let quizQuestionIndex = 0;
+    let randomizedQuizQuestions = [];
 
     function showScreen(screenId) {
         document.querySelectorAll('.screen').forEach(el => el.classList.remove('active-screen'));
@@ -3907,6 +3908,10 @@ async function loadRegolamento() {
         showScreen('quizArea');
         gameRunning = true;
 
+        // Randomizziamo le domande all'inizio del quiz
+        randomizedQuizQuestions = [...QUIZ_QUESTIONS].sort(() => Math.random() - 0.5);
+        quizQuestionIndex = 0;
+
         document.getElementById('quizWpmDisplay').textContent = `WPM: ${currentWpm}`;
         document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
 
@@ -3924,6 +3929,8 @@ async function loadRegolamento() {
 
             // Inizia la prima domanda se siamo l'host
             if (myId === roomHostId) {
+                // Per il multiplayer, usiamo l'ordine originale per sincronizzazione
+                // oppure dovremmo condividere il seed. Per ora usiamo l'indice condiviso.
                 db.ref(`rooms/${roomCode}/quiz_state`).set({
                     questionIndex: 0,
                     activeBuzzerId: null,
@@ -3937,12 +3944,14 @@ async function loadRegolamento() {
     }
 
     function loadNextQuizQuestion() {
-        if (quizQuestionIndex >= QUIZ_QUESTIONS.length) {
+        const sourceList = isSinglePlayer ? randomizedQuizQuestions : QUIZ_QUESTIONS;
+
+        if (quizQuestionIndex >= sourceList.length) {
             finishGame();
             return;
         }
 
-        currentQuizQuestion = QUIZ_QUESTIONS[quizQuestionIndex];
+        currentQuizQuestion = sourceList[quizQuestionIndex];
         playQuizAudioSequence();
     }
 
