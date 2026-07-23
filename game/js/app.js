@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.15"; // Versione aggiornata
+    const APP_VERSION = "20240520.99"; // Versione aggiornata
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -266,7 +266,10 @@ async function loadRegolamento() {
 
             // MOSTRA VERSIONE IN UI
             const vDisp = document.getElementById('appVersionDisplay');
-            if(vDisp) vDisp.textContent = APP_VERSION;
+            if(vDisp) vDisp.textContent = "v" + APP_VERSION;
+
+            const vFoot = document.getElementById('appVersionFooter');
+            if(vFoot) vFoot.textContent = APP_VERSION;
 
             // GESTIONE AGGIORNAMENTI APP
             console.log("Controllo aggiornamenti... Versione Locale:", APP_VERSION);
