@@ -98,6 +98,7 @@
                     <option value="callsign" id="txt_opt_call">Nom.</option>
                     <option value="pingpong" id="txt_opt_pp">P.Pong</option>
                     <option value="chars" id="txt_opt_chars">Carat.</option>
+                    <option value="quiz" id="txt_opt_quiz">Quiz</option>
                     <optgroup label="🏆 Tornei" id="trn_opt_group" style="display:none;">
                         <option value="trn_create_team">Fonda Squadra</option>
                         <option value="trn_join_team">Unisciti a Squadra</option>
@@ -405,6 +406,53 @@
     </div>
 </div>
 
+<!-- AREA QUIZ -->
+<div id="quizArea" class="screen">
+    <div class="header-stats">
+        <div id="quizWpmDisplay">WPM: 20</div>
+        <div id="quizScoreDisplay">Punti: 0</div>
+    </div>
+
+    <div class="box-panel" style="flex-grow: 1; justify-content: center; align-items: center; gap: 15px;">
+        <div id="quizTimerBar" style="width:100%; height:8px; background:rgba(0,0,0,0.1); border-radius:4px; overflow:hidden;">
+            <div id="quizTimerProgress" style="width:100%; height:100%; background:#4caf50; transition: width 0.1s linear;"></div>
+        </div>
+
+        <div id="quizQuestionBox" style="text-align: center; font-size: 1.2em; font-weight: bold; min-height: 50px;">
+            In attesa della domanda...
+        </div>
+
+        <button id="quizReplayQ" class="btn-secondary" style="width: auto; padding: 8px 15px;">🔁 Riascolta Domanda</button>
+
+        <div id="quizOptionsContainer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%;">
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizA" class="quiz-opt-btn" style="flex: 1;">A</button>
+                <button id="replayA" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizB" class="quiz-opt-btn" style="flex: 1;">B</button>
+                <button id="replayB" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizC" class="quiz-opt-btn" style="flex: 1;">C</button>
+                <button id="replayC" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizD" class="quiz-opt-btn" style="flex: 1;">D</button>
+                <button id="replayD" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+        </div>
+
+        <button id="quizBuzzer" class="btn-champ" style="display: none; height: 80px; font-size: 1.5em; border-radius: 50%; box-shadow: 0 5px 15px rgba(156, 39, 176, 0.4);">PREMIMI! 🚨</button>
+        <div id="buzzerWinner" style="text-align: center; font-weight: bold; color: var(--champ-color); min-height: 20px;"></div>
+    </div>
+
+    <div style="display:flex; gap:5px; width:100%; margin-top: 10px;">
+        <button onclick="toggleChat()" class="btn-secondary" style="margin-top: 0; flex:1;">💬 Chat</button>
+        <button id="quitQuizBtn" class="btn-danger" style="margin-top: 0; flex:1;">Abbandona</button>
+    </div>
+</div>
+
 <!-- LEADERBOARD -->
 <div id="leaderboardScreen" class="screen">
     <h2 style="margin-bottom: 5px;">🏆 Risultati</h2>
@@ -565,6 +613,7 @@
 </div>
 
 <!-- Richiamo dello script esterno -->
+<script src="js/quiz_data.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
