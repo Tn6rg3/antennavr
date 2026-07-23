@@ -607,6 +607,8 @@ async function loadRegolamento() {
         const lb_single = document.getElementById('opt_lb_single');
         const lb_chars_multi = document.getElementById('opt_lb_chars_multi');
         const lb_chars_single = document.getElementById('opt_lb_chars_single');
+        const lb_quiz_multi = document.getElementById('opt_lb_quiz_multi');
+        const lb_quiz_single = document.getElementById('opt_lb_quiz_single');
 
         if(lb_room) lb_room.textContent = t.tab_this_match;
         if(lb_trn) lb_trn.textContent = t.tab_trn_lb;
@@ -616,6 +618,8 @@ async function loadRegolamento() {
         if(lb_single) lb_single.textContent = t.tab_std_single;
         if(lb_chars_multi) lb_chars_multi.textContent = (lang==='it'?'Caratteri (Multi - Sfide)':'Characters (Multi - Challenges)');
         if(lb_chars_single) lb_chars_single.textContent = (lang==='it'?'Caratteri (Single)':'Characters (Single)');
+        if(lb_quiz_multi) lb_quiz_multi.textContent = (lang==='it'?'Quiz (Multi - Sfide)':'Quiz (Multi - Challenges)');
+        if(lb_quiz_single) lb_quiz_single.textContent = (lang==='it'?'Quiz (Single)':'Quiz (Single)');
 
         // Setup Screen
         document.getElementById('txt_hello').textContent = t.hello;
@@ -1171,6 +1175,7 @@ async function loadRegolamento() {
                     wCount++; let pCount = room.players ? Object.keys(room.players).length : 0;
                     const li = document.createElement('li');
                     let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : room.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole';
+                    if (room.mode === 'quiz') modeIcon = '❓ Quiz';
 
                     const leftSpan = document.createElement('span');
                     const titleB = document.createElement('b');
@@ -1953,6 +1958,7 @@ async function loadRegolamento() {
     function finishGame() {
         gameRunning = false; inputActive = false; document.getElementById('permanentGameInput').blur();
         if (ppTimerInterval) clearInterval(ppTimerInterval);
+        if (quizTimerInterval) clearInterval(quizTimerInterval);
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
 
         localStorage.removeItem(STORAGE_ROOM_KEY);
@@ -1983,6 +1989,7 @@ async function loadRegolamento() {
                 if (currentMode === 'callsign') dbPath = `leaderboard/callsign/global/${myId}`;
                 else if (currentMode === 'pingpong') dbPath = `leaderboard/pingpong/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                 else if (currentMode === 'chars') dbPath = `leaderboard/chars/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                else if (currentMode === 'quiz') dbPath = `leaderboard/quiz/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                 else dbPath = `leaderboard/standard/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
 
                 if (currentMode !== 'callsign') {
@@ -2414,7 +2421,9 @@ async function loadRegolamento() {
             'tabGlobalStandardMultiBtn': 'std_multi',
             'tabGlobalStandardSingleBtn': 'std_single',
             'tabGlobalCharsMultiBtn': 'chars_multi',
-            'tabGlobalCharsSingleBtn': 'chars_single'
+            'tabGlobalCharsSingleBtn': 'chars_single',
+            'tabGlobalQuizMultiBtn': 'quiz_multi',
+            'tabGlobalQuizSingleBtn': 'quiz_single'
         };
 
         // Cerca la chiave se tabId è un ID bottone, altrimenti usa tabId come valore
@@ -2462,6 +2471,16 @@ async function loadRegolamento() {
             populateDynamicFilters('chars', 'single');
             let wc = document.getElementById('lbWordFilter').value;
             fetchAndRenderGlobalLeaderboard('chars_single', wc);
+        } else if (modeValue === 'quiz_multi') {
+            filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+            populateDynamicFilters('recent_matches/quiz_multi');
+            let wc = document.getElementById('lbWordFilter').value;
+            fetchAndRenderGlobalLeaderboard('quiz_multi', wc);
+        } else if (modeValue === 'quiz_single') {
+            filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+            populateDynamicFilters('quiz', 'single');
+            let wc = document.getElementById('lbWordFilter').value;
+            fetchAndRenderGlobalLeaderboard('quiz_single', wc);
         } else {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
             let type = modeValue === 'std_multi' ? 'multi' : 'single';
@@ -4073,21 +4092,15 @@ async function loadRegolamento() {
             showToast(`CORRETTO (${selectedLetter})! +100`);
         } else {
             showToast(`SBAGLIATO! Era la ${["A", "B", "C", "D"][currentQuizQuestion.correct]}`);
-
-            // In multiplayer, se sbagli, il punto va all'avversario
-            if (!isSinglePlayer && quizActiveBuzzerId === myId) {
-                // Sottraiamo punti a chi ha sbagliato o diamo punti agli altri?
-                // Seguiamo la richiesta: "se sbaglia il punto va all'avversario"
-                // Nota: In Firebase dovremmo aggiornare il punteggio dell'altro giocatore
-                // Per ora notifichiamo e basta, il sistema multiplayer aggiornerà i punteggi globali a fine match
-            }
         }
 
         document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
 
-        // Reset stato buzzer su Firebase se siamo in multi
-        if (roomCode && !isSinglePlayer && myId === roomHostId) {
-             // L'host resetta lo stato per la prossima domanda
+        if (roomCode) {
+            db.ref(`rooms/${roomCode}/players/${myId}`).update({
+                score: totalScore,
+                wordIndex: quizQuestionIndex + 1
+            });
         }
 
         setTimeout(() => {
