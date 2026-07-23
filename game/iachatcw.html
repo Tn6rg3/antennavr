@@ -70,7 +70,14 @@
         }
 
         button:hover { background-color: var(--accent-hover); }
-        button:disabled { background-color: #555; cursor: not-allowed; }
+        
+        /* Stili per il pulsante disabilitato */
+        button:disabled { 
+            background-color: #444; 
+            color: #888; 
+            cursor: not-allowed; 
+            border: 1px solid #555;
+        }
         
         .btn-danger { background-color: #ff4444; color: white; }
         .btn-danger:hover { background-color: #cc0000; }
@@ -163,6 +170,13 @@
             margin-bottom: 5px;
             font-size: 0.9em;
         }
+
+        .security-notice {
+            font-size: 0.8em;
+            color: #ffaa00;
+            margin-top: 5px;
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -170,19 +184,25 @@
     <h1>Gemini CW Chat</h1>
 
     <div class="panel">
-        <div id="apiKeyInputContainer" style="display: flex; gap: 10px; margin-bottom: 20px;">
-            <div style="flex-grow: 1;">
-                <label for="apiTokenInput">Chiave API Gemini</label>
-                <input type="password" id="apiTokenInput" placeholder="Incolla qui la tua API Key...">
+        <div id="apiKeyInputContainer" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px;">
+            <div style="display: flex; gap: 10px;">
+                <div style="flex-grow: 1;">
+                    <label for="apiTokenInput">Chiave API Gemini</label>
+                    <input type="password" id="apiTokenInput" placeholder="Incolla qui la tua API Key...">
+                </div>
+                <div style="display: flex; align-items: flex-end;">
+                    <button id="saveKeyBtn">Salva</button>
+                </div>
             </div>
-            <div style="display: flex; align-items: flex-end;">
-                <button id="saveKeyBtn">Salva</button>
-            </div>
+            <span class="security-notice">⚠️ La chiave viene salvata nel browser. Usa il tasto "Elimina" se sei su un computer condiviso.</span>
         </div>
 
         <div id="apiKeySavedContainer" style="display: none; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 10px 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid var(--accent);">
-            <span style="color: var(--accent); font-weight: bold;">✓ Chiave API configurata e protetta</span>
-            <button id="editKeyBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.9em;">Modifica KEY</button>
+            <span style="color: var(--accent); font-weight: bold;">✓ Chiave API configurata</span>
+            <div style="display: flex; gap: 10px;">
+                <button id="editKeyBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.9em;">Modifica</button>
+                <button id="deleteKeyBtn" class="btn-danger" style="padding: 5px 10px; font-size: 0.9em;">Elimina</button>
+            </div>
         </div>
 
         <div class="settings-grid">
@@ -210,7 +230,6 @@
                 </select>
             </div>
             <div>
-                <!-- Casella di testo per personalizzare la parola chiave -->
                 <label for="wakeWord">Parola di Attivazione</label>
                 <input type="text" id="wakeWord" value="Gemini" placeholder="Es. Gemini, Jarvis...">
             </div>
@@ -239,15 +258,28 @@
     </div>
 
     <script>
+        // Inizializzazione standard Web Speech API per controllarne il supporto
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
             document.getElementById('editKeyBtn').addEventListener('click', editApiKey);
-            document.getElementById('voiceBtn').addEventListener('click', startVoiceRecognition);
+            document.getElementById('deleteKeyBtn').addEventListener('click', deleteApiKey);
             document.getElementById('sendBtn').addEventListener('click', sendMessage);
             document.getElementById('stopBtn').addEventListener('click', stopAudio);
             document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
             document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
             
+            // Controllo supporto API vocale su browser non supportati (Safari, Firefox base)
+            const voiceBtn = document.getElementById('voiceBtn');
+            if (!SpeechRecognition) {
+                voiceBtn.disabled = true;
+                voiceBtn.title = "Il riconoscimento vocale non è supportato in questo browser.";
+                document.getElementById('userInput').placeholder = "Scrivi il tuo messaggio...";
+            } else {
+                voiceBtn.addEventListener('click', startVoiceRecognition);
+            }
+
             document.getElementById('userInput').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
             });
@@ -262,7 +294,6 @@
                 }
             }
 
-            // Inclusione di wakeWord tra le impostazioni salvate in automatico
             const settings = ['wpm', 'tone', 'maxWords', 'wakeWord'];
             settings.forEach(id => {
                 const el = document.getElementById(id);
@@ -309,7 +340,6 @@
             if (key && key.length > 20 && !key.includes('<') && !key.includes('>')) {
                 const obfuscatedToken = btoa(key);
                 localStorage.setItem('g_cw_auth_token', obfuscatedToken);
-                localStorage.removeItem('gemini_api_key'); 
                 showApiKeySavedState();
             } else {
                 alert('Formato chiave API non valido.');
@@ -325,6 +355,14 @@
             document.getElementById('apiKeySavedContainer').style.display = 'none';
             document.getElementById('apiKeyInputContainer').style.display = 'flex';
             document.getElementById('apiTokenInput').focus();
+        }
+
+        function deleteApiKey() {
+            localStorage.removeItem('g_cw_auth_token');
+            document.getElementById('apiTokenInput').value = '';
+            document.getElementById('apiKeySavedContainer').style.display = 'none';
+            document.getElementById('apiKeyInputContainer').style.display = 'flex';
+            setStatus("Chiave API rimossa dal dispositivo.");
         }
 
         function toggleHistory() {
@@ -478,15 +516,13 @@
             document.getElementById('stopBtn').style.display = 'none';
         }
 
-        // --- RICONOSCIMENTO VOCALE DINAMICO CON WAKE-WORD CONFIGURABILE ---
         function startVoiceRecognition() {
-            if (!('webkitSpeechRecognition' in window)) { alert("Web Speech API non supportata."); return; }
+            if (!SpeechRecognition) return;
             
-            // Legge la parola inserita dall'utente nella nuova casella (default: "gemini")
             let wakeWordInput = document.getElementById('wakeWord').value.trim().toLowerCase();
             if (!wakeWordInput) wakeWordInput = "gemini";
 
-            const recognition = new webkitSpeechRecognition();
+            const recognition = new SpeechRecognition();
             recognition.lang = 'it-IT';
             recognition.interimResults = false;
             recognition.maxAlternatives = 1;
@@ -566,11 +602,12 @@
             let success = false;
             let geminiText = "";
             
+            // Array modelli aggiornato per puntare alle versioni attualmente supportate e performanti
             let modelsToTry = [
-                'gemini-3.6-flash',
-                'gemini-3.5-flash-lite',
-                'gemini-3.1-flash-lite',
-                'gemini-2.5-flash'
+                'gemini-2.5-flash',
+                'gemini-2.0-flash',
+                'gemini-1.5-flash',
+                'gemini-1.5-pro'
             ];
 
             const cachedModel = localStorage.getItem('gemini_working_model');
