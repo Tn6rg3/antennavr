@@ -2847,9 +2847,12 @@ async function loadRegolamento() {
     function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
 
-        // Per Ping Pong, Multiplayer Standard e Caratteri Multi, mostriamo le SFIDE RECENTI
-        if (tabType === 'pingpong' || tabType === 'standard_multi' || tabType === 'chars_multi') {
-            const modePath = tabType === 'pingpong' ? 'pingpong' : (tabType === 'chars_multi' ? 'chars_multi' : 'standard_multi');
+        // Per Ping Pong, Multiplayer Standard, Caratteri Multi e Quiz Multi mostriamo le SFIDE RECENTI
+        if (tabType === 'pingpong' || tabType === 'standard_multi' || tabType === 'chars_multi' || tabType === 'quiz_multi') {
+            const modePath = tabType === 'pingpong' ? 'pingpong' :
+                             (tabType === 'chars_multi' ? 'chars_multi' :
+                             (tabType === 'quiz_multi' ? 'quiz_multi' : 'standard_multi'));
+
             db.ref(`leaderboard/recent_matches/${modePath}`).once('value', snapshot => {
                 let matches = [];
                 snapshot.forEach(wordCountNode => {
@@ -2912,15 +2915,16 @@ async function loadRegolamento() {
         } else {
             let isStandard = tabType.startsWith('standard');
             let isChars = tabType.startsWith('chars');
-            let modePath = isChars ? 'chars' : (isStandard ? 'standard' : 'pingpong');
-            let subType = isChars ? tabType.replace('chars_', '') : (isStandard ? tabType.replace('standard_', '') : '');
+            let isQuiz = tabType.startsWith('quiz');
+            let modePath = isQuiz ? 'quiz' : (isChars ? 'chars' : (isStandard ? 'standard' : 'pingpong'));
+            let subType = isQuiz ? tabType.replace('quiz_', '') : (isChars ? tabType.replace('chars_', '') : (isStandard ? tabType.replace('standard_', '') : ''));
 
             db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
                 let players = [];
                 snapshot.forEach(wordCountNode => {
                     const key = wordCountNode.key;
                     // Filtro per sottotipo (es. "single" o "multi")
-                    if ((isStandard || isChars) && !key.startsWith(subType + "_")) return;
+                    if ((isStandard || isChars || isQuiz) && !key.startsWith(subType + "_")) return;
 
                     // Filtro per numero parole
                     if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
@@ -3978,7 +3982,7 @@ async function loadRegolamento() {
     function loadNextQuizQuestion() {
         const sourceList = isSinglePlayer ? randomizedQuizQuestions : QUIZ_QUESTIONS;
 
-        if (quizQuestionIndex >= sourceList.length) {
+        if (quizQuestionIndex >= requestedWordCount || quizQuestionIndex >= sourceList.length) {
             finishGame();
             return;
         }
