@@ -568,7 +568,7 @@
             return cleaned;
         }
 
-        async function sendMessage() {
+       async function sendMessage() {
             let encodedToken = localStorage.getItem('g_cw_auth_token');
             let apiKey = "";
             
@@ -595,7 +595,6 @@
             
             const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
             
-            // Uniamo la storia passata con la domanda corrente
             const currentRequestContents = [...conversationContext, { role: "user", parts: [{ text: originalPrompt }] }];
 
             const payload = {
@@ -605,6 +604,7 @@
 
             let success = false;
             let geminiText = "";
+            let apiErrorMessage = "Errore di connessione o file locale bloccato.";
             
             let modelsToTry = [
                 'gemini-2.5-flash',
@@ -637,21 +637,23 @@
                         success = true;
                         localStorage.setItem('gemini_working_model', modelName);
                         
-                        // Salviamo nello storico della conversazione (necessita alternanza user/model)
                         conversationContext.push({ role: "user", parts: [{ text: originalPrompt }] });
                         conversationContext.push({ role: "model", parts: [{ text: geminiText }] });
                         
                         break; 
                     } else {
-                        console.warn(`Modello ${modelName} rifiutato.`);
+                        if (data.error && data.error.message) {
+                            apiErrorMessage = data.error.message;
+                        }
                     }
                 } catch (e) {
-                    console.warn(`Errore di rete con ${modelName}.`);
+                    apiErrorMessage = "Il browser blocca la richiesta (CORS/File locale).";
                 }
             }
 
             if (!success) {
-                setStatus("Errore: Impossibile generare la risposta. Controlla la chiave API.");
+                // Ora mostra il vero errore sullo schermo!
+                setStatus(`⚠️ Errore: ${apiErrorMessage}`);
                 document.getElementById('sendBtn').style.display = 'block';
                 document.getElementById('stopBtn').style.display = 'none';
                 return;
