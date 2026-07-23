@@ -88,6 +88,7 @@
                 <select id="gameTypeInput">
                     <option value="multi" id="txt_opt_multi">Multi</option>
                     <option value="single" id="txt_opt_single">Solo</option>
+                    <option value="tournament" id="txt_opt_trn">Torneo</option>
                 </select>
             </div>
             <div>
@@ -97,6 +98,11 @@
                     <option value="callsign" id="txt_opt_call">Nom.</option>
                     <option value="pingpong" id="txt_opt_pp">P.Pong</option>
                     <option value="chars" id="txt_opt_chars">Carat.</option>
+                    <optgroup label="🏆 Tornei" id="trn_opt_group" style="display:none;">
+                        <option value="trn_create_team">Fonda Squadra</option>
+                        <option value="trn_join_team">Unisciti a Squadra</option>
+                        <option value="trn_create_trn">Crea Nuovo Torneo</option>
+                    </optgroup>
                 </select>
             </div>
         </div>
@@ -174,7 +180,10 @@
     </div>
 
     <div class="box-panel" style="flex-grow: 1; min-height:0; margin-bottom:0; margin-top: 5px;">
-        <h3 id="txt_match_history_title">📜 Storico Partite</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <h3 id="txt_match_history_title" style="margin:0;">📜 Storico Partite</h3>
+            <button id="resetStatsBtn" class="action-btn-small btn-danger" style="width:auto; padding:4px 8px; font-size:0.75em;">🗑️ Reset Statistiche</button>
+        </div>
         <ul id="matchHistoryList" class="data-list"></ul>
     </div>
 
