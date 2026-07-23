@@ -611,10 +611,11 @@
 
             // 2. Ecco la lista dei modelli UFFICIALI attualmente supportati da Google.
             // Se in futuro uscirà Gemini 3, ti basterà aggiungerlo qui sotto.
+            // Mettiamo in cima i modelli più leggeri, che hanno limiti gratuiti più ampi
             let rawModels = [
-                'gemini-2.0-flash',
-                'gemini-1.5-flash',
-                'gemini-1.5-pro'
+                'gemini-1.5-flash-8b', // <--- Il modello "salva-vita", ultra leggero
+                'gemini-1.5-flash',    // Alternativa standard
+                'gemini-2.0-flash'     // Modello nuovo (più soggetto a blocchi)
             ];
             
             // 3. Questa riga ripara gli errori di battitura o i trattini sbagliati inseriti dai cellulari
