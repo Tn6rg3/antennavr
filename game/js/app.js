@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.99"; // Versione aggiornata
+    const APP_VERSION = "20240520.15"; // Versione aggiornata
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -272,14 +272,26 @@ async function loadRegolamento() {
             if(vFoot) vFoot.textContent = APP_VERSION;
 
             // GESTIONE AGGIORNAMENTI APP
-            console.log("Controllo aggiornamenti... Versione Locale:", APP_VERSION);
             db.ref('appConfig/latestVersion').on('value', snap => {
                 const latest = snap.val();
-                console.log("Versione su Firebase:", latest);
-                if (latest && String(latest).trim() !== String(APP_VERSION).trim()) {
+                const current = String(APP_VERSION).trim();
+                const latestStr = latest ? String(latest).trim() : "";
+
+                console.log("--- DEBUG AGGIORNAMENTO ---");
+                console.log("Locale (JS):", "[" + current + "]");
+                console.log("Firebase:", "[" + latestStr + "]");
+
+                if (latestStr && latestStr !== current) {
+                    console.log("⚠️ DISCREPANZA RILEVATA - Mostro Banner");
                     document.getElementById('updateBanner').style.display = 'block';
                 } else {
+                    console.log("✅ VERSIONI ALLINEATE - Nascondo Banner");
                     document.getElementById('updateBanner').style.display = 'none';
+                }
+            }, err => {
+                console.error("❌ Errore Firebase (appConfig):", err.message);
+                if (err.code === 'PERMISSION_DENIED') {
+                    showToast("Configura i permessi per appConfig su Firebase!");
                 }
             });
 
