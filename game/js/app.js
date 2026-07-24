@@ -420,9 +420,11 @@ async function loadRegolamento() {
     window.toggleGlobalChatInline = function() {
         const container = document.getElementById('globalChatContainerInline');
         const icon = document.getElementById('globalChatToggleIcon');
+        const clearBtn = document.getElementById('clearGlobalChatBtnInline');
         if (container.style.display === 'none') {
             container.style.display = 'flex';
             icon.textContent = '▲';
+            if (clearBtn) clearBtn.style.display = 'block';
             setupChat(db.ref('globalChat'), 'globalChatMessagesInline', null);
             setTimeout(() => {
                 const msgBox = document.getElementById('globalChatMessagesInline');
@@ -431,8 +433,16 @@ async function loadRegolamento() {
         } else {
             container.style.display = 'none';
             icon.textContent = '▼';
+            if (clearBtn) clearBtn.style.display = 'none';
         }
     }
+
+    document.getElementById('clearGlobalChatBtnInline').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat globale?')) {
+            db.ref('globalChat').remove();
+        }
+    });
 
     document.getElementById('sendGlobalChatBtnInline').addEventListener('click', () => {
         const input = document.getElementById('globalChatInputInline');
@@ -494,6 +504,7 @@ async function loadRegolamento() {
                 const msg = child.val();
                 const div = document.createElement('div');
                 div.style.marginBottom = '6px';
+                div.style.wordBreak = 'break-word'; // Forza a capo per messaggi lunghi
 
                 if(msg.ts) {
                     const d = new Date(msg.ts);
@@ -519,6 +530,8 @@ async function loadRegolamento() {
             });
 
             lastTs = maxTs;
+
+            // Auto-scorrimento al fondo
             container.scrollTop = container.scrollHeight;
 
             // Notifiche (solo se il drawer è chiuso)
