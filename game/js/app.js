@@ -307,6 +307,15 @@ async function loadRegolamento() {
                     showToast("Configura i permessi per appConfig su Firebase!");
                 }
             });
+                    console.log("✅ VERSIONI ALLINEATE - Nascondo Banner");
+                    document.getElementById('updateBanner').style.display = 'none';
+                }
+            }, err => {
+                console.error("❌ Errore Firebase (appConfig):", err.message);
+                if (err.code === 'PERMISSION_DENIED') {
+                    showToast("Configura i permessi per appConfig su Firebase!");
+                }
+            });
 
         }).catch(e => {
             const loadingText = document.getElementById('loadingText');
