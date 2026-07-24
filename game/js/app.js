@@ -425,11 +425,15 @@ async function loadRegolamento() {
             container.style.display = 'flex';
             icon.textContent = '▲';
             if (clearBtn) clearBtn.style.display = 'block';
+
+            // Carica la chat
             setupChat(db.ref('globalChat'), 'globalChatMessagesInline', null);
+
+            // Forza lo scroll al fondo dopo un breve delay per il rendering
             setTimeout(() => {
                 const msgBox = document.getElementById('globalChatMessagesInline');
-                msgBox.scrollTop = msgBox.scrollHeight;
-            }, 100);
+                if(msgBox) msgBox.scrollTop = msgBox.scrollHeight;
+            }, 200);
         } else {
             container.style.display = 'none';
             icon.textContent = '▼';
@@ -926,9 +930,13 @@ async function loadRegolamento() {
 
     let lastOnlineUsersSnap = null;
     function listenToOnlineUsers() {
+        console.log("Avvio ascolto utenti online...");
         db.ref('presence').on('value', snap => {
+            console.log("Dati presenza ricevuti, utenti totali:", snap.numChildren());
             lastOnlineUsersSnap = snap;
             renderOnlineUsers();
+        }, err => {
+            console.error("Errore Firebase Presenza:", err.message);
         });
     }
 
@@ -1279,18 +1287,28 @@ async function loadRegolamento() {
     }
 
     function listenToRooms() {
+        console.log("Avvio ascolto bacheca sfide...");
         db.ref('rooms').on('value', snapshot => {
-            const list = document.getElementById('waitingRoomsList'); list.innerHTML = ''; let wCount = 0;
+            const list = document.getElementById('waitingRoomsList');
+            if(!list) return;
+            list.innerHTML = '';
+            let wCount = 0;
+
+            console.log("Dati stanze ricevuti:", snapshot.numChildren());
+
             snapshot.forEach(child => {
                 const room = child.val(); const code = child.key;
                 if (code.startsWith("TRN_")) return;
                 if (room.expiresAt && Date.now() > room.expiresAt) { db.ref(`rooms/${code}`).remove(); return; }
 
                 if (room.status === 'waiting' && room.type !== 'single') {
-                    wCount++; let pCount = room.players ? Object.keys(room.players).length : 0;
+                    wCount++;
+                    let pCount = room.players ? Object.keys(room.players).length : 0;
                     const li = document.createElement('li');
+
                     let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : room.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole';
                     if (room.mode === 'quiz') modeIcon = '❓ Quiz';
+                    if (room.mode === 'chars') modeIcon = '⌨️ Carat.';
 
                     const leftSpan = document.createElement('span');
                     const titleB = document.createElement('b');
@@ -1313,13 +1331,13 @@ async function loadRegolamento() {
             });
             if (wCount === 0) {
                 const li = document.createElement('li');
-                li.style.justifyContent = 'center';
-                li.style.color = 'var(--hint-color)';
-                li.style.background = 'none';
-                li.style.border = 'none';
+                li.style.justifyContent = 'center'; li.style.color = 'var(--hint-color)';
+                li.style.background = 'none'; li.style.border = 'none';
                 li.textContent = i18n[currentLang].no_challenges;
                 list.appendChild(li);
             }
+        }, err => {
+            console.error("Errore Firebase Bacheca:", err.message);
         });
     }
     window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
