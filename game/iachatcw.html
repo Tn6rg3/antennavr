@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -70,13 +71,7 @@
         }
 
         button:hover { background-color: var(--accent-hover); }
-        
-        button:disabled { 
-            background-color: #444; 
-            color: #888; 
-            cursor: not-allowed; 
-            border: 1px solid #555;
-        }
+        button:disabled { background-color: #555; cursor: not-allowed; }
         
         .btn-danger { background-color: #ff4444; color: white; }
         .btn-danger:hover { background-color: #cc0000; }
@@ -169,13 +164,6 @@
             margin-bottom: 5px;
             font-size: 0.9em;
         }
-
-        .security-notice {
-            font-size: 0.8em;
-            color: #ffaa00;
-            margin-top: 5px;
-            display: block;
-        }
     </style>
 </head>
 <body>
@@ -183,25 +171,19 @@
     <h1>Gemini CW Chat</h1>
 
     <div class="panel">
-        <div id="apiKeyInputContainer" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px;">
-            <div style="display: flex; gap: 10px;">
-                <div style="flex-grow: 1;">
-                    <label for="apiTokenInput">Chiave API Gemini</label>
-                    <input type="password" id="apiTokenInput" placeholder="Incolla qui la tua API Key...">
-                </div>
-                <div style="display: flex; align-items: flex-end;">
-                    <button id="saveKeyBtn">Salva</button>
-                </div>
+        <div id="apiKeyInputContainer" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <div style="flex-grow: 1;">
+                <label for="apiTokenInput">Chiave API Gemini</label>
+                <input type="password" id="apiTokenInput" placeholder="Incolla qui la tua API Key...">
             </div>
-            <span class="security-notice">⚠️ La chiave viene salvata nel browser. Usa il tasto "Elimina" se sei su un computer condiviso.</span>
+            <div style="display: flex; align-items: flex-end;">
+                <button id="saveKeyBtn">Salva</button>
+            </div>
         </div>
 
         <div id="apiKeySavedContainer" style="display: none; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 10px 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid var(--accent);">
-            <span style="color: var(--accent); font-weight: bold;">✓ Chiave API configurata</span>
-            <div style="display: flex; gap: 10px;">
-                <button id="editKeyBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.9em;">Modifica</button>
-                <button id="deleteKeyBtn" class="btn-danger" style="padding: 5px 10px; font-size: 0.9em;">Elimina</button>
-            </div>
+            <span style="color: var(--accent); font-weight: bold;">✓ Chiave API configurata e protetta</span>
+            <button id="editKeyBtn" class="btn-outline" style="padding: 5px 10px; font-size: 0.9em;">Modifica KEY</button>
         </div>
 
         <div class="settings-grid">
@@ -228,18 +210,14 @@
                     <option value="30">30 Parole</option>
                 </select>
             </div>
-            <div>
-                <label for="wakeWord">Parola di Attivazione</label>
-                <input type="text" id="wakeWord" value="Gemini" placeholder="Es. Gemini, Jarvis...">
-            </div>
         </div>
     </div>
 
     <div class="panel">
         <div class="chat-container">
             <div class="chat-controls">
-                <button id="voiceBtn" title="Parla usando la parola chiave">🎤 Parla</button>
-                <input type="text" id="userInput" placeholder="Scrivi o di' la parola chiave seguita dal messaggio...">
+                <button id="voiceBtn" title="Parla al microfono">🎤 Parla</button>
+                <input type="text" id="userInput" placeholder="Scrivi il tuo messaggio qui...">
                 <button id="sendBtn">Invia</button>
                 <button id="stopBtn" class="btn-danger" style="display: none;">Stop Audio</button>
             </div>
@@ -257,29 +235,15 @@
     </div>
 
     <script>
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-        // Variabile globale per mantenere la memoria della conversazione per l'API
-        let conversationContext = [];
-
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
             document.getElementById('editKeyBtn').addEventListener('click', editApiKey);
-            document.getElementById('deleteKeyBtn').addEventListener('click', deleteApiKey);
+            document.getElementById('voiceBtn').addEventListener('click', startVoiceRecognition);
             document.getElementById('sendBtn').addEventListener('click', sendMessage);
             document.getElementById('stopBtn').addEventListener('click', stopAudio);
             document.getElementById('toggleHistoryBtn').addEventListener('click', toggleHistory);
             document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
             
-            const voiceBtn = document.getElementById('voiceBtn');
-            if (!SpeechRecognition) {
-                voiceBtn.disabled = true;
-                voiceBtn.title = "Il riconoscimento vocale non è supportato in questo browser.";
-                document.getElementById('userInput').placeholder = "Scrivi il tuo messaggio...";
-            } else {
-                voiceBtn.addEventListener('click', startVoiceRecognition);
-            }
-
             document.getElementById('userInput').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
             });
@@ -294,15 +258,12 @@
                 }
             }
 
-            const settings = ['wpm', 'tone', 'maxWords', 'wakeWord'];
+            const settings = ['wpm', 'tone', 'maxWords'];
             settings.forEach(id => {
                 const el = document.getElementById(id);
                 const savedVal = localStorage.getItem(`morse_setting_${id}`);
-                if (savedVal !== null) el.value = savedVal;
+                if (savedVal) el.value = savedVal;
                 
-                el.addEventListener('input', () => {
-                    localStorage.setItem(`morse_setting_${id}`, el.value);
-                });
                 el.addEventListener('change', () => {
                     localStorage.setItem(`morse_setting_${id}`, el.value);
                 });
@@ -340,6 +301,7 @@
             if (key && key.length > 20 && !key.includes('<') && !key.includes('>')) {
                 const obfuscatedToken = btoa(key);
                 localStorage.setItem('g_cw_auth_token', obfuscatedToken);
+                localStorage.removeItem('gemini_api_key'); 
                 showApiKeySavedState();
             } else {
                 alert('Formato chiave API non valido.');
@@ -355,14 +317,6 @@
             document.getElementById('apiKeySavedContainer').style.display = 'none';
             document.getElementById('apiKeyInputContainer').style.display = 'flex';
             document.getElementById('apiTokenInput').focus();
-        }
-
-        function deleteApiKey() {
-            localStorage.removeItem('g_cw_auth_token');
-            document.getElementById('apiTokenInput').value = '';
-            document.getElementById('apiKeySavedContainer').style.display = 'none';
-            document.getElementById('apiKeyInputContainer').style.display = 'flex';
-            setStatus("Chiave API rimossa dal dispositivo.");
         }
 
         function toggleHistory() {
@@ -387,8 +341,7 @@
 
         function clearHistory() {
             document.getElementById('chatHistory').innerHTML = '';
-            conversationContext = []; // Azzera la memoria della conversazione per l'API
-            setStatus("Cronologia e contesto cancellati.");
+            setStatus("Cronologia cancellata.");
         }
 
         function addMessageToHistory(userText, geminiText) {
@@ -518,42 +471,17 @@
         }
 
         function startVoiceRecognition() {
-            if (!SpeechRecognition) return;
-            
-            let wakeWordInput = document.getElementById('wakeWord').value.trim().toLowerCase();
-            if (!wakeWordInput) wakeWordInput = "gemini";
-
-            const recognition = new SpeechRecognition();
+            if (!('webkitSpeechRecognition' in window)) { alert("Web Speech API non supportata."); return; }
+            const recognition = new webkitSpeechRecognition();
             recognition.lang = 'it-IT';
             recognition.interimResults = false;
             recognition.maxAlternatives = 1;
-            
-            setStatus(`In ascolto... (Di' '${wakeWordInput}' seguito dal messaggio)`);
+            setStatus("Ascolto in corso... Parla ora.");
             
             recognition.onresult = function(event) {
-                let speechText = event.results[0][0].transcript.trim();
-                let lowerText = speechText.toLowerCase();
-                
-                if (lowerText.includes(wakeWordInput)) {
-                    let wakeIndex = lowerText.indexOf(wakeWordInput);
-                    let cleanText = speechText.substring(wakeIndex + wakeWordInput.length).trim();
-                    
-                    if (cleanText.length > 0) {
-                        document.getElementById('userInput').value = cleanText;
-                        setStatus("Comando vocale ricevuto. Invio in corso...");
-                        sendMessage();
-                    } else {
-                        setStatus(`Hai detto '${wakeWordInput}' ma non hai aggiunto alcun messaggio.`);
-                    }
-                } else {
-                    setStatus(`Parola chiave '${wakeWordInput}' non rilevata. Riprova.`);
-                }
+                document.getElementById('userInput').value += event.results[0][0].transcript + " ";
+                setStatus("Testo acquisito. Pronto per l'invio.");
             };
-
-            recognition.onerror = function(event) {
-                setStatus("Errore microfono: " + event.error);
-            };
-
             recognition.start();
         }
 
@@ -569,94 +497,90 @@
         }
 
         async function sendMessage() {
-    let encodedToken = localStorage.getItem('g_cw_auth_token');
-    let apiKey = "";
-    
-    if (encodedToken) {
-        try {
-            apiKey = atob(encodedToken); 
-        } catch(e) {
-            alert("Errore nella chiave salvata. Reinseriscila.");
-            editApiKey();
-            return;
-        }
-    } else {
-        alert("Inserisci la API Key prima di continuare."); 
-        editApiKey(); 
-        return; 
-    }
+            let encodedToken = localStorage.getItem('g_cw_auth_token');
+            let apiKey = "";
+            
+            if (encodedToken) {
+                try {
+                    apiKey = atob(encodedToken); 
+                } catch(e) {
+                    alert("Errore nella chiave salvata. Reinseriscila.");
+                    editApiKey();
+                    return;
+                }
+            } else {
+                alert("Inserisci la API Key prima di continuare."); 
+                editApiKey(); 
+                return; 
+            }
 
-    const inputField = document.getElementById('userInput');
-    const originalPrompt = inputField.value.trim().replace(/[<>]/g, ""); 
-    if (!originalPrompt) return;
+            const inputField = document.getElementById('userInput');
+            const originalPrompt = inputField.value.trim().replace(/[<>]/g, ""); 
+            if (!originalPrompt) return;
 
-    const maxWords = parseInt(document.getElementById('maxWords').value, 10);
-    inputField.value = "";
-    
-    const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
-    
-    const currentRequestContents = [...conversationContext, { role: "user", parts: [{ text: originalPrompt }] }];
+            const maxWords = parseInt(document.getElementById('maxWords').value, 10);
+            inputField.value = "";
+            
+            const sysInstruction = `Sei un assistente virtuale utile e diretto. REGOLE ASSOLUTE: 1) Rispondi in modo naturale ma sii ESTREMAMENTE conciso, usando TASSATIVAMENTE meno di ${maxWords} parole. 2) Usa SOLO testo semplice, numeri e punteggiatura base. NIENTE markdown (niente asterischi, niente grassetto), niente emoji, niente simboli matematici. 3) Scrivi DIRETTAMENTE la risposta, senza fare ragionamenti ad alta voce.`;
+            const userTextEnforced = `Domanda: ${originalPrompt}`;
+            const payload = {
+                contents: [{ parts: [{ text: userTextEnforced }] }],
+                systemInstruction: { parts: [{ text: sysInstruction }] }
+            };
 
-    const payload = {
-        contents: currentRequestContents,
-        systemInstruction: { parts: [{ text: sysInstruction }] }
-    };
+            let success = false;
+            let geminiText = "";
+            
+            let modelsToTry = [
+                'gemini-3.6-flash',
+                'gemini-3.5-flash-lite',
+                'gemini-3.1-flash-lite',
+                'gemini-2.5-flash'
+            ];
 
-    let success = false;
-    let geminiText = "";
-    
-    // Lista dei modelli correnti supportati da Google
-    let modelsToTry = [
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-lite'
-    ];
+            const cachedModel = localStorage.getItem('gemini_working_model');
+            if (cachedModel && !modelsToTry.includes(cachedModel)) {
+                modelsToTry.unshift(cachedModel);
+            } else if (cachedModel) {
+                modelsToTry = [cachedModel, ...modelsToTry.filter(m => m !== cachedModel)];
+            }
 
-    for (const modelName of modelsToTry) {
-        setStatus(`Connessione a ${modelName}...`);
-        try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            for (const modelName of modelsToTry) {
+                setStatus(`Connessione a ${modelName}...`);
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
 
-            // Gestione specifica dell'errore di Quota / Rate Limit (429)
-            if (response.status === 429) {
-                setStatus("⚠️ Limite di richieste superato (429). Attendi 30-60 secondi e riprova.");
+                    const data = await response.json();
+                    
+                    if (response.ok && data.candidates) {
+                        geminiText = cleanGeminiResponse(data.candidates[0].content.parts[0].text);
+                        success = true;
+                        localStorage.setItem('gemini_working_model', modelName);
+                        break; 
+                    } else {
+                        console.warn(`Modello ${modelName} rifiutato.`);
+                    }
+                } catch (e) {
+                    console.warn(`Errore di rete con ${modelName}.`);
+                }
+            }
+
+            if (!success) {
+                setStatus("Errore: Impossibile generare la risposta. Controlla la chiave API.");
+                document.getElementById('sendBtn').style.display = 'block';
+                document.getElementById('stopBtn').style.display = 'none';
                 return;
             }
-
-            const data = await response.json();
             
-            if (response.ok && data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
-                geminiText = cleanGeminiResponse(data.candidates[0].content.parts[0].text);
-                success = true;
-                localStorage.setItem('gemini_working_model', modelName);
-                
-                conversationContext.push({ role: "user", parts: [{ text: originalPrompt }] });
-                conversationContext.push({ role: "model", parts: [{ text: geminiText }] });
-                
-                break; 
-            } else {
-                console.warn(`Modello ${modelName} non disponibile o errore risposta:`, data);
-            }
-        } catch (e) {
-            console.warn(`Errore di rete con ${modelName}.`, e);
+            setStatus(`Modello agganciato. Trasmissione iniziata.`);
+            addMessageToHistory(originalPrompt, geminiText);
+            await transmitMorse(geminiText);
         }
-    }
-
-    if (!success) {
-        setStatus("Errore: Impossibile generare la risposta. Controlla la chiave API o attendi un minuto.");
-        document.getElementById('sendBtn').style.display = 'block';
-        document.getElementById('stopBtn').style.display = 'none';
-        return;
-    }
-    
-    setStatus(`Trasmissione in corso...`);
-    addMessageToHistory(originalPrompt, geminiText);
-    await transmitMorse(geminiText);
-}
     </script>
 </body>
 </html>
