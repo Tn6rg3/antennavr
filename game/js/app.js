@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.17"; // Versione aggiornata
+    const APP_VERSION = "20240520.15"; // Versione aggiornata
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -19,6 +19,7 @@ const BOT_USERNAME = "cwappgame_bot";
     }
 
     let myName, myId, myPrivacy = false;
+    let myNotifyChat = true, myNotifyInvite = true, myHidePresence = false;
     let db, auth;
     let currentRoomListener = null, chatListener = null, pingPongListener = null, gamePlayersListener = null;
     let roomLeaderboardListener = null;
@@ -192,14 +193,21 @@ async function loadRegolamento() {
         db = firebase.database(); auth = firebase.auth();
 
         auth.signInAnonymously().then(async () => {
-            // Caricamento Alias e Privacy
+            // Caricamento Alias, Privacy e Notifiche
             try {
                 const userSnap = await db.ref(`users/${myId}`).once('value');
                 const userData = userSnap.val() || {};
                 if (userData.alias) myName = userData.alias;
                 myPrivacy = userData.privacyUsername || false;
 
+                myNotifyChat = userData.notifyChat !== undefined ? userData.notifyChat : true;
+                myNotifyInvite = userData.notifyInvite !== undefined ? userData.notifyInvite : true;
+                myHidePresence = userData.hidePresence || false;
+
                 document.getElementById('privacyUsernameCheckbox').checked = myPrivacy;
+                document.getElementById('notifyChatCheckbox').checked = !myNotifyChat;
+                document.getElementById('notifyInviteCheckbox').checked = !myNotifyInvite;
+                document.getElementById('hidePresenceCheckbox').checked = myHidePresence;
             } catch(e) { console.error("Errore caricamento dati utente:", e); }
 
             document.getElementById('playerName').textContent = myName;
@@ -214,8 +222,13 @@ async function loadRegolamento() {
                 // Sistema di Presenza
                 const pRef = db.ref(`presence/${myId}`);
                 const currentUsername = myPrivacy ? "" : tgUsername;
-                pRef.onDisconnect().remove();
-                pRef.set({ name: myName, username: currentUsername, status: 'online', ts: firebase.database.ServerValue.TIMESTAMP });
+
+                if (myHidePresence) {
+                    pRef.remove();
+                } else {
+                    pRef.onDisconnect().remove();
+                    pRef.set({ name: myName, username: currentUsername, status: 'online', ts: firebase.database.ServerValue.TIMESTAMP });
+                }
 
                 if (roomCode) joinRoomLogic(true);
             });
@@ -404,7 +417,60 @@ async function loadRegolamento() {
     });
     document.getElementById('lobbyChatInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('sendLobbyChatBtn').click(); });
 
-    function setupChat(chatRef, containerId, alertBtnId) {
+    window.toggleGlobalChatInline = function() {
+        const container = document.getElementById('globalChatContainerInline');
+        const icon = document.getElementById('globalChatToggleIcon');
+        if (container.style.display === 'none') {
+            container.style.display = 'flex';
+            icon.textContent = '▲';
+            setupChat(db.ref('globalChat'), 'globalChatMessagesInline', null);
+            setTimeout(() => {
+                const msgBox = document.getElementById('globalChatMessagesInline');
+                msgBox.scrollTop = msgBox.scrollHeight;
+            }, 100);
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▼';
+        }
+    }
+
+    document.getElementById('sendGlobalChatBtnInline').addEventListener('click', () => {
+        const input = document.getElementById('globalChatInputInline');
+        const txt = input.value.trim(); if (!txt) return;
+        const currentUsername = myPrivacy ? "" : tgUsername;
+        db.ref('globalChat').push({ name: myName, username: currentUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+        input.value = '';
+    });
+    document.getElementById('globalChatInputInline').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('sendGlobalChatBtnInline').click(); });
+
+    function showInAppNotification(sender, text, type) {
+        if (type === 'chat' && !myNotifyChat) return;
+        if (type === 'invite' && !myNotifyInvite) return;
+
+        const popup = document.getElementById('msgNotificationPopup');
+        document.getElementById('notifSenderName').textContent = sender;
+        document.getElementById('notifMsgText').textContent = text;
+
+        const replyBtn = document.getElementById('notifReplyBtn');
+        if (type === 'chat') {
+            replyBtn.style.display = 'block';
+            replyBtn.onclick = () => {
+                popup.style.display = 'none';
+                showScreen('setupScreen');
+                const chatCont = document.getElementById('globalChatContainerInline');
+                if (chatCont.style.display === 'none') toggleGlobalChatInline();
+                document.getElementById('globalChatInputInline').focus();
+            };
+        } else {
+            replyBtn.style.display = 'none';
+        }
+
+        popup.style.display = 'block';
+        playBeep(800, 0.1);
+
+        // Auto-chiusura dopo 8 secondi
+        setTimeout(() => { popup.style.display = 'none'; }, 8000);
+    }
         const container = document.getElementById(containerId);
         if (!container) return;
 
@@ -454,10 +520,14 @@ async function loadRegolamento() {
             container.scrollTop = container.scrollHeight;
 
             // Notifiche (solo se il drawer è chiuso)
-            if (!initialLoad && newMsgsCount > 0 && alertBtnId && !isChatDrawerOpen) {
-                showToast(`💬 Nuovo messaggio da ${latestMsg.name}`);
-                const btn = document.getElementById(alertBtnId);
-                if (btn) btn.style.backgroundColor = '#4caf50';
+            if (!initialLoad && newMsgsCount > 0) {
+                if (chatRef.key === 'globalChat') {
+                    showInAppNotification(latestMsg.name, latestMsg.text, 'chat');
+                } else if (alertBtnId && !isChatDrawerOpen) {
+                    showToast(`💬 Nuovo messaggio da ${latestMsg.name}`);
+                    const btn = document.getElementById(alertBtnId);
+                    if (btn) btn.style.backgroundColor = '#4caf50';
+                }
             }
 
             // Notifica globale per messaggi in stanza se siamo l'host e siamo fuori
@@ -1066,6 +1136,10 @@ async function loadRegolamento() {
 
             // Se l'invito è vecchio (più di 1 min), ignoralo
             if (Date.now() - inv.ts > 60000) { db.ref(`invites/${myId}`).remove(); return; }
+
+            if (inv.type !== 'team') {
+                showInAppNotification(inv.fromName, `Ti ha invitato: ${inv.mode.toUpperCase()} @ ${inv.wpm}WPM`, 'invite');
+            }
 
             if (inv.type === 'team') {
                 document.getElementById('inviteModalTitle').textContent = inv.teamId ? "🚀 INVITO IN SQUADRA" : "💡 SUGGERIMENTO SQUADRA";
@@ -2147,6 +2221,10 @@ async function loadRegolamento() {
         const alias = document.getElementById('userAliasInput').value.trim();
         const privacy = document.getElementById('privacyUsernameCheckbox').checked;
 
+        const notifyChat = !document.getElementById('notifyChatCheckbox').checked;
+        const notifyInvite = !document.getElementById('notifyInviteCheckbox').checked;
+        const hidePresence = document.getElementById('hidePresenceCheckbox').checked;
+
         if (privacy && !alias) {
             alert("L'Alias è obbligatorio se nascondi lo username Telegram!");
             return;
@@ -2160,19 +2238,31 @@ async function loadRegolamento() {
         try {
             await db.ref(`users/${myId}`).update({
                 alias: alias || null,
-                privacyUsername: privacy
+                privacyUsername: privacy,
+                notifyChat: notifyChat,
+                notifyInvite: notifyInvite,
+                hidePresence: hidePresence
             });
 
             myName = newName;
             myPrivacy = privacy;
+            myNotifyChat = notifyChat;
+            myNotifyInvite = notifyInvite;
+            myHidePresence = hidePresence;
+
             document.getElementById('playerName').textContent = myName;
             showToast("Profilo aggiornato!");
 
-            // 1. Aggiorna Presenza (Online)
-            await db.ref(`presence/${myId}`).update({
-                name: myName,
-                username: currentUsername
-            });
+            // Aggiorna Presenza (Online)
+            const pRef = db.ref(`presence/${myId}`);
+            if (myHidePresence) {
+                pRef.remove();
+            } else {
+                await pRef.update({
+                    name: myName,
+                    username: currentUsername
+                });
+            }
 
             // 2. Aggiorna Attività (Classifiche di partecipazione attuali)
             const now = new Date();
