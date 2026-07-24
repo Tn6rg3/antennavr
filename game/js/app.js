@@ -21,6 +21,7 @@ const BOT_USERNAME = "cwappgame_bot";
     let myName, myId, myPrivacy = false;
     let db, auth;
     let currentRoomListener = null, chatListener = null, pingPongListener = null, gamePlayersListener = null;
+    let quizStateListener = null;
     let roomLeaderboardListener = null;
     let presenceListener = null, invitesListener = null, inviteAcceptedListener = null, outgoingInviteListener = null;
     let roomCode = "", lastPlayerCount = 0, lobbyTimerInterval = null, roomHostId = null, gameStartPlayerCount = 0;
@@ -138,6 +139,7 @@ async function loadRegolamento() {
     let quizTimerInterval = null, currentQuizQuestion = null, quizActiveBuzzerId = null;
     let quizQuestionIndex = 0;
     let randomizedQuizQuestions = [];
+    let lastLoadedQuizIndex = -1;
 
     function showScreen(screenId) {
         document.querySelectorAll('.screen').forEach(el => el.classList.remove('active-screen'));
@@ -1291,6 +1293,11 @@ async function loadRegolamento() {
             roomLeaderboardListener = null;
         }
 
+        if (quizStateListener && roomCode) {
+            db.ref(`rooms/${roomCode}/quiz_state`).off('value', quizStateListener);
+            quizStateListener = null;
+        }
+
         if (roomCode) {
             if (roomCode.startsWith("TRN_")) {
                 targetScreen = 'teamsScreen';
@@ -1979,6 +1986,7 @@ async function loadRegolamento() {
         if (ppTimerInterval) clearInterval(ppTimerInterval);
         if (quizTimerInterval) clearInterval(quizTimerInterval);
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
+        if (quizStateListener && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', quizStateListener); quizStateListener = null; }
 
         localStorage.removeItem(STORAGE_ROOM_KEY);
         isRejoining = false;
@@ -3963,6 +3971,7 @@ async function loadRegolamento() {
     function startQuizSequence() {
         showScreen('quizArea');
         gameRunning = true;
+        lastLoadedQuizIndex = -1;
 
         // Randomizziamo le domande all'inizio del quiz
         randomizedQuizQuestions = [...QUIZ_QUESTIONS].sort(() => Math.random() - 0.5);
@@ -3972,12 +3981,22 @@ async function loadRegolamento() {
         document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
 
         if (roomCode && !isSinglePlayer) {
+            if (quizStateListener) {
+                db.ref(`rooms/${roomCode}/quiz_state`).off('value', quizStateListener);
+            }
+
             // Setup Multiplayer Quiz state
-            db.ref(`rooms/${roomCode}/quiz_state`).on('value', snap => {
+            quizStateListener = db.ref(`rooms/${roomCode}/quiz_state`).on('value', snap => {
                 const state = snap.val();
                 if (!state) return;
 
-                quizQuestionIndex = state.questionIndex || 0;
+                const newIndex = state.questionIndex || 0;
+                if (newIndex !== lastLoadedQuizIndex) {
+                    lastLoadedQuizIndex = newIndex;
+                    quizQuestionIndex = newIndex;
+                    loadNextQuizQuestion();
+                }
+
                 quizActiveBuzzerId = state.activeBuzzerId || null;
 
                 renderQuizUI(state);
