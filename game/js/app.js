@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.19"; // Versione aggiornata
+    const APP_VERSION = "20240520.20"; // Versione aggiornata
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -4159,14 +4159,18 @@ async function loadRegolamento() {
 
         setTimeout(() => {
             if (!gameRunning) return;
-            quizQuestionIndex++;
 
-            if (roomCode && !isSinglePlayer && myId === roomHostId) {
-                db.ref(`rooms/${roomCode}/quiz_state`).update({
-                    questionIndex: quizQuestionIndex,
-                    activeBuzzerId: null
+            if (roomCode && !isSinglePlayer) {
+                // Usa una transazione per incrementare l'indice e resettare il buzzer per tutti
+                db.ref(`rooms/${roomCode}/quiz_state`).transaction(state => {
+                    if (state && state.activeBuzzerId === myId) {
+                        state.questionIndex = (state.questionIndex || 0) + 1;
+                        state.activeBuzzerId = null;
+                    }
+                    return state;
                 });
             } else if (isSinglePlayer) {
+                quizQuestionIndex++;
                 loadNextQuizQuestion();
             }
         }, 3000);
