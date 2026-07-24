@@ -18,7 +18,7 @@
 
 <div id="updateBanner" style="display:none; position:fixed; top:0; left:0; width:100%; background:#ff9800; color:white; text-align:center; padding:10px; z-index:9999; font-weight:bold; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
     🚀 Nuova versione disponibile!
-    <button onclick="window.location.reload(true)" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em;">Aggiorna ora</button>
+    <button onclick="window.location.href = window.location.pathname + '?v=' + Date.now();" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em;">Aggiorna ora</button>
 </div>
 
 <div id="toastContainer"></div>
@@ -98,6 +98,7 @@
                     <option value="callsign" id="txt_opt_call">Nom.</option>
                     <option value="pingpong" id="txt_opt_pp">P.Pong</option>
                     <option value="chars" id="txt_opt_chars">Carat.</option>
+                    <option value="quiz" id="txt_opt_quiz">Quiz</option>
                     <optgroup label="🏆 Tornei" id="trn_opt_group" style="display:none;">
                         <option value="trn_create_team">Fonda Squadra</option>
                         <option value="trn_join_team">Unisciti a Squadra</option>
@@ -141,6 +142,9 @@
             <ul id="onlineUsersList" class="data-list">
                 <li id="txt_you_are_alone" style="justify-content: center; color: var(--hint-color); background: none; border: none;">Sei solo.</li>
             </ul>
+            <div style="text-align: center; font-size: 0.6em; color: var(--hint-color); margin-top: auto; padding-top: 5px;">
+                Versione: <span id="appVersionFooter">--</span>
+            </div>
         </div>
     </div>
 </div>
@@ -311,6 +315,10 @@
     </div>
 
     <button onclick="goBackToMenu()" style="margin-top: 5px; flex-shrink: 0;">Torna al Menu Principale</button>
+
+    <div style="margin-top: auto; padding: 10px 0; text-align: center; font-size: 0.7em; color: var(--hint-color); opacity: 0.6;">
+        Build: <span id="appVersionDisplay">--</span>
+    </div>
 </div>
 
 <!-- INFO, REGOLE E PRIVACY -->
@@ -405,6 +413,53 @@
     </div>
 </div>
 
+<!-- AREA QUIZ -->
+<div id="quizArea" class="screen">
+    <div class="header-stats">
+        <div id="quizWpmDisplay">WPM: 20</div>
+        <div id="quizScoreDisplay">Punti: 0</div>
+    </div>
+
+    <div class="box-panel" style="flex-grow: 1; justify-content: center; align-items: center; gap: 15px;">
+        <div id="quizTimerBar" style="width:100%; height:8px; background:rgba(0,0,0,0.1); border-radius:4px; overflow:hidden;">
+            <div id="quizTimerProgress" style="width:100%; height:100%; background:#4caf50; transition: width 0.1s linear;"></div>
+        </div>
+
+        <div id="quizQuestionBox" style="text-align: center; font-size: 1.2em; font-weight: bold; min-height: 50px;">
+            In attesa della domanda...
+        </div>
+
+        <button id="quizReplayQ" class="btn-secondary" style="width: auto; padding: 8px 15px;">🔁 Riascolta Domanda</button>
+
+        <div id="quizOptionsContainer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%;">
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizA" class="quiz-opt-btn" style="flex: 1;">A</button>
+                <button id="replayA" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizB" class="quiz-opt-btn" style="flex: 1;">B</button>
+                <button id="replayB" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizC" class="quiz-opt-btn" style="flex: 1;">C</button>
+                <button id="replayC" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizD" class="quiz-opt-btn" style="flex: 1;">D</button>
+                <button id="replayD" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+        </div>
+
+        <button id="quizBuzzer" class="btn-champ" style="display: none; height: 80px; font-size: 1.5em; border-radius: 50%; box-shadow: 0 5px 15px rgba(156, 39, 176, 0.4);">PREMIMI! 🚨</button>
+        <div id="buzzerWinner" style="text-align: center; font-weight: bold; color: var(--champ-color); min-height: 20px;"></div>
+    </div>
+
+    <div style="display:flex; gap:5px; width:100%; margin-top: 10px;">
+        <button onclick="toggleChat()" class="btn-secondary" style="margin-top: 0; flex:1;">💬 Chat</button>
+        <button id="quitQuizBtn" class="btn-danger" style="margin-top: 0; flex:1;">Abbandona</button>
+    </div>
+</div>
+
 <!-- LEADERBOARD -->
 <div id="leaderboardScreen" class="screen">
     <h2 style="margin-bottom: 5px;">🏆 Risultati</h2>
@@ -430,6 +485,8 @@
             <option value="std_single" id="opt_lb_single">Parole (Single)</option>
             <option value="chars_multi" id="opt_lb_chars_multi">Caratteri (Multi - Sfide)</option>
             <option value="chars_single" id="opt_lb_chars_single">Caratteri (Single)</option>
+            <option value="quiz_multi" id="opt_lb_quiz_multi">Quiz (Multi - Sfide)</option>
+            <option value="quiz_single" id="opt_lb_quiz_single">Quiz (Single)</option>
         </select>
     </div>
 
@@ -565,6 +622,7 @@
 </div>
 
 <!-- Richiamo dello script esterno -->
-<script src="js/app.js"></script>
+<script src="js/quiz_data.js?v=20240520.15"></script>
+<script src="js/app.js?v=20240520.15"></script>
 </body>
 </html>
