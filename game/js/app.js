@@ -50,19 +50,20 @@ const BOT_USERNAME = "cwappgame_bot";
 }
 
 async function loadRegolamento() {
+    const container = document.getElementById('regolamentoContainer');
+    if (!container) return;
     try {
         const response = await fetch('regolamento.html');
         if (!response.ok) throw new Error("Errore nel caricamento del file");
         const htmlTesto = await response.text();
-        document.getElementById('regolamentoContainer').innerHTML = htmlTesto;
+        container.innerHTML = htmlTesto;
 
-        // Ricolleghiamo il bottone feedback che ora è nel file esterno
         const btnFeedback = document.getElementById('sendFeedbackBtn');
         if (btnFeedback) {
             btnFeedback.onclick = function() {
                 const text = encodeURIComponent("💡 Suggerimento per Sfida Telegrafia: \n\n[Scrivi qui il tuo messaggio...]");
                 const shareUrl = `https://t.me/share/url?text=${text}`;
-                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
+                if (window.Telegram?.WebApp?.openTelegramLink) {
                     window.Telegram.WebApp.openTelegramLink(shareUrl);
                 } else {
                     window.open(shareUrl, '_blank');
@@ -70,7 +71,7 @@ async function loadRegolamento() {
             };
         }
     } catch (e) {
-        document.getElementById('regolamentoContainer').innerHTML = "<p style='color:red; text-align:center;'>Impossibile caricare il regolamento.</p>";
+        container.innerHTML = "<p style='color:red; text-align:center;'>Impossibile caricare il regolamento.</p>";
         console.warn("Errore caricamento regolamento:", e);
     }
 }
@@ -193,120 +194,107 @@ async function loadRegolamento() {
         db = firebase.database(); auth = firebase.auth();
 
         auth.signInAnonymously().then(async () => {
-            // Caricamento Alias, Privacy e Notifiche
+            // 1. Caricamento Dati Utente (Alias, Privacy, Notifiche)
             try {
                 const userSnap = await db.ref(`users/${myId}`).once('value');
                 const userData = userSnap.val() || {};
                 if (userData.alias) myName = userData.alias;
                 myPrivacy = userData.privacyUsername || false;
-
                 myNotifyChat = userData.notifyChat !== undefined ? userData.notifyChat : true;
                 myNotifyInvite = userData.notifyInvite !== undefined ? userData.notifyInvite : true;
                 myHidePresence = userData.hidePresence || false;
 
-                document.getElementById('privacyUsernameCheckbox').checked = myPrivacy;
-                document.getElementById('notifyChatCheckbox').checked = !myNotifyChat;
-                document.getElementById('notifyInviteCheckbox').checked = !myNotifyInvite;
-                document.getElementById('hidePresenceCheckbox').checked = myHidePresence;
-            } catch(e) { console.error("Errore caricamento dati utente:", e); }
+                const privCheck = document.getElementById('privacyUsernameCheckbox');
+                if(privCheck) privCheck.checked = myPrivacy;
+                const chatCheck = document.getElementById('notifyChatCheckbox');
+                if(chatCheck) chatCheck.checked = !myNotifyChat;
+                const invCheck = document.getElementById('notifyInviteCheckbox');
+                if(invCheck) invCheck.checked = !myNotifyInvite;
+                const presCheck = document.getElementById('hidePresenceCheckbox');
+                if(presCheck) presCheck.checked = myHidePresence;
+            } catch(e) { console.warn("Errore caricamento dati utente:", e); }
 
-            document.getElementById('playerName').textContent = myName;
-            document.getElementById('userAliasInput').value = (myName !== tgUser.first_name) ? myName : "";
+            const nameDisp = document.getElementById('playerName');
+            if(nameDisp) nameDisp.textContent = myName;
+            const aliasInp = document.getElementById('userAliasInput');
+            if(aliasInp) aliasInp.value = (myName !== tgUser.first_name) ? myName : "";
 
-            document.getElementById('loadingText').style.display = 'none';
-            document.getElementById('createRoomBtn').disabled = false;
+            const loadText = document.getElementById('loadingText');
+            if(loadText) loadText.style.display = 'none';
+            const createBtn = document.getElementById('createRoomBtn');
+            if(createBtn) createBtn.disabled = false;
 
+            // 2. Sistema di Presenza e Riconnessione
             db.ref('.info/connected').on('value', (snap) => {
                 if (snap.val() === false) return;
-
-                // Sistema di Presenza
                 const pRef = db.ref(`presence/${myId}`);
                 const currentUsername = myPrivacy ? "" : tgUsername;
-
-                if (myHidePresence) {
-                    pRef.remove();
-                } else {
+                if (myHidePresence) { pRef.remove(); }
+                else {
                     pRef.onDisconnect().remove();
                     pRef.set({ name: myName, username: currentUsername, status: 'online', ts: firebase.database.ServerValue.TIMESTAMP });
                 }
-
                 if (roomCode) joinRoomLogic(true);
             });
 
+            // 3. Gestione Parametri Avvio e Sessione Precedente
             if (startParam) {
-                if (startParam.startsWith('team_')) { processTeamInvite(startParam.replace('team_', '')); }
-                else if (startParam.startsWith('room_')) { window.joinSpecificRoom(startParam.replace('room_', '')); }
+                if (startParam.startsWith('team_')) processTeamInvite(startParam.replace('team_', ''));
+                else if (startParam.startsWith('room_')) window.joinSpecificRoom(startParam.replace('room_', ''));
+                showScreen('setupScreen');
             } else {
                 const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
                 if (lastRoom) {
                     db.ref(`rooms/${lastRoom}`).once('value', snap => {
                         if (snap.exists() && snap.val().status !== 'finished') {
                             roomCode = lastRoom;
-                            document.getElementById('rejoinContainer').style.display = 'block';
-                            document.getElementById('rejoinGameBtn').onclick = () => {
-                                isRejoining = true;
-                                joinRoomLogic(false);
-                            };
-                            showScreen('setupScreen');
+                            const rejCont = document.getElementById('rejoinContainer');
+                            if(rejCont) rejCont.style.display = 'block';
+                            const rejBtn = document.getElementById('rejoinGameBtn');
+                            if(rejBtn) rejBtn.onclick = () => { isRejoining = true; joinRoomLogic(false); };
                         } else {
                             localStorage.removeItem(STORAGE_ROOM_KEY);
-                            showScreen('setupScreen');
                         }
+                        showScreen('setupScreen');
                     });
                 } else {
                     showScreen('setupScreen');
                 }
             }
 
-            // Caricamento dizionari e lingua
+            // 4. Caricamento Risorse (Indipendenti)
             const savedLang = localStorage.getItem('gameLang');
             if (savedLang) setLanguage(savedLang);
-            loadDictionaries();
+            loadDictionaries().catch(e => console.warn("Errore dizionari:", e));
+            loadRegolamento().catch(e => console.warn("Errore regolamento:", e));
 
-            // Controlla attività e premia medaglie DOPO aver mostrato il menu
-            checkActivityAndAwardMedals();
-
-            // Mostra il pop-up dei tornei se non disattivato
-            checkTournamentPopup();
-
+            // 5. Attivazione Listener Globali
             listenToRooms();
             listenToOnlineUsers();
             listenToInvites();
             listenToInviteAccepted();
+            checkActivityAndAwardMedals().catch(e => console.warn("Errore attività:", e));
+            checkTournamentPopup();
 
-            // CARICA IL REGOLAMENTO
-            loadRegolamento();
-
-            // MOSTRA VERSIONE IN UI
-            const vDisp = document.getElementById('appVersionDisplay');
-            if(vDisp) vDisp.textContent = "v" + APP_VERSION;
-
-            const vFoot = document.getElementById('appVersionFooter');
-            if(vFoot) vFoot.textContent = APP_VERSION;
-
-            // GESTIONE AGGIORNAMENTI APP
+            // 6. Monitoraggio Aggiornamenti
             db.ref('appConfig/latestVersion').on('value', snap => {
                 const latest = snap.val();
                 const current = String(APP_VERSION).trim();
                 const latestStr = latest ? String(latest).trim() : "";
-
-                console.log("--- DEBUG AGGIORNAMENTO ---");
-                console.log("Locale (JS):", "[" + current + "]");
-                console.log("Firebase:", "[" + latestStr + "]");
-
-                if (latestStr && latestStr !== current) {
-                    console.log("⚠️ DISCREPANZA RILEVATA - Mostro Banner");
-                    document.getElementById('updateBanner').style.display = 'block';
-                } else {
-                    console.log("✅ VERSIONI ALLINEATE - Nascondo Banner");
-                    document.getElementById('updateBanner').style.display = 'none';
-                }
+                const banner = document.getElementById('updateBanner');
+                if(banner) banner.style.display = (latestStr && latestStr !== current) ? 'block' : 'none';
             }, err => {
-                console.error("❌ Errore Firebase (appConfig):", err.message);
-                if (err.code === 'PERMISSION_DENIED') {
-                    showToast("Configura i permessi per appConfig su Firebase!");
-                }
+                if (err.code === 'PERMISSION_DENIED') console.error("Firebase Permission Denied for appConfig");
             });
+
+        }).catch(e => {
+            const loadingText = document.getElementById('loadingText');
+            if (loadingText) {
+                loadingText.textContent = "Errore Critico Inizializzazione.";
+                loadingText.style.color = "red";
+            }
+            console.error("Init Game Error:", e);
+        });
 
         }).catch(e => {
             const loadingText = document.getElementById('loadingText');
