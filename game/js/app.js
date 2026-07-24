@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.21"; // Versione aggiornata
+    const APP_VERSION = "20240520.22"; // Versione aggiornata
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -40,6 +40,9 @@ const BOT_USERNAME = "cwappgame_bot";
 
     let masterDictionary = [];
     let itDictionary = [], enDictionary = [];
+    let customDictionary = [];
+
+    const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
 
     async function loadDictionaries() {
     await Promise.all([
@@ -251,6 +254,15 @@ async function loadRegolamento() {
             const savedLang = localStorage.getItem('gameLang');
             if (savedLang) setLanguage(savedLang);
             loadDictionaries();
+
+            // Caricamento Dizionario Personale
+            const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);
+            if (savedCustom) {
+                try {
+                    customDictionary = JSON.parse(savedCustom);
+                    updateCustomDictStatus();
+                } catch(e) { console.warn("Errore caricamento dizionario personale:", e); }
+            }
 
             // Controlla attività e premia medaglie DOPO aver mostrato il menu
             checkActivityAndAwardMedals();
@@ -509,10 +521,14 @@ async function loadRegolamento() {
         const type = typeSelect.value;
         const isSingle = type === 'single';
         const isTrn = type === 'tournament';
+        const isCustom = modeSelect.value === 'custom';
 
         document.getElementById('timeoutDiv').style.display = isSingle || isTrn ? 'none' : 'block';
         document.getElementById('fixedSpeedContainer').style.display = isSingle ? 'flex' : 'none';
         document.getElementById('easyModeContainer').style.display = isSingle ? 'flex' : 'none';
+
+        // Mostra il pulsante di configurazione dizionario se in modalità single + custom
+        document.getElementById('customDictControl').style.display = (isSingle && isCustom) ? 'flex' : 'none';
 
         // --- LOGICA FILTRO DINAMICO OPZIONI ---
         const gameModes = modeSelect.querySelectorAll('option:not([value^="trn_"])');
@@ -556,6 +572,7 @@ async function loadRegolamento() {
             game_type: "Tipo di Gioco:", mode: "Modalità:", wpm: "WPM:", words: "Parole:", tone: "Tono:", timeout: "Scadenza Stanza (min):",
             opt_multi: "Multiplayer (con Lobby)", opt_single: "Singleplayer (Immediata)",
             opt_std: "Parole Comuni", opt_call: "Nominativi (CW Freak)", opt_pp: "Ping Pong",
+            opt_custom: "Personale",
             fixed: "Fissa", easy: "Semplice", create_room: "Inizia Partita Libera", play_now: "Gioca Subito",
             challenge_board: "Bacheca Sfide ⏳", no_challenges: "Nessuna sfida.",
             online_users: "Utenti Online 🟢", global_chat: "💬 Chat", you_are_alone: "Sei solo.",
@@ -575,7 +592,12 @@ async function loadRegolamento() {
             btn_start_match: "AVVIA PARTITA", btn_delete_room: "ELIMINA STANZA", btn_leave_lobby: "Esci dalla Stanza",
             status_host: "Sei l'Host della partita.", status_guest: "Sei un partecipante. Attendi il via.", lobby_free: "Lobby Stanza Libera", lobby_trn: "Lobby Incontro Torneo 🥊",
             ready_btn: "SONO PRONTO ✅", waiting_host: "In attesa che l'Host avvii...",
-            tab_my_team: "La mia Squadra", tab_all_teams: "Tutte le Squadre", tab_tournaments: "I Tornei"
+            tab_my_team: "La mia Squadra", tab_all_teams: "Tutte le Squadre", tab_tournaments: "I Tornei",
+            custom_title: "Dizionario Personale 📖", custom_desc: "Carica un file di testo (.txt) con le tue parole personalizzate.",
+            select_file: "Scegli File .txt", custom_hint1: "Le parole possono essere separate da spazio, virgola o a capo.",
+            custom_hint2: "Verranno ignorate le parole più corte di 3 caratteri.", custom_hint3: "Il dizionario rimarrà salvato in locale.",
+            no_file: "Nessun file caricato.", loaded_words: "Parole caricate: ",
+            manage_custom: "⚙️ Gestisci Dizionario Personale"
         },
         en: {
             hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", conn_secure: "Secure connection in progress...",
@@ -583,6 +605,7 @@ async function loadRegolamento() {
             game_type: "Game Type:", mode: "Mode:", wpm: "WPM:", words: "Words:", tone: "Tone:", timeout: "Room Timeout (min):",
             opt_multi: "Multiplayer (Lobby)", opt_single: "Singleplayer (Immediate)",
             opt_std: "Common Words", opt_call: "Callsigns (CW Freak)", opt_pp: "Ping Pong",
+            opt_custom: "Personal",
             fixed: "Fixed", easy: "Easy", create_room: "Start Free Match", play_now: "Play Now",
             challenge_board: "Challenge Board ⏳", no_challenges: "No challenges.",
             online_users: "Online Users 🟢", global_chat: "💬 Chat", you_are_alone: "You are alone.",
@@ -602,7 +625,12 @@ async function loadRegolamento() {
             btn_start_match: "START MATCH", btn_delete_room: "DELETE ROOM", btn_leave_lobby: "Leave Lobby",
             status_host: "You are the Match Host.", status_guest: "You are a participant. Wait for the start.", lobby_free: "Free Room Lobby", lobby_trn: "Tournament Match Lobby 🥊",
             ready_btn: "I AM READY ✅", waiting_host: "Waiting for Host to start...",
-            tab_my_team: "My Team", tab_all_teams: "All Teams", tab_tournaments: "Tournaments"
+            tab_my_team: "My Team", tab_all_teams: "All Teams", tab_tournaments: "Tournaments",
+            custom_title: "Personal Dictionary 📖", custom_desc: "Upload a text file (.txt) with your custom words.",
+            select_file: "Choose .txt File", custom_hint1: "Words can be separated by spaces, commas, or newlines.",
+            custom_hint2: "Words shorter than 3 characters will be ignored.", custom_hint3: "The dictionary will be saved locally.",
+            no_file: "No file uploaded.", loaded_words: "Words loaded: ",
+            manage_custom: "⚙️ Manage Personal Dictionary"
         }
     };
 
@@ -734,6 +762,17 @@ async function loadRegolamento() {
         if(document.getElementById('tabAllTeamsBtn')) document.getElementById('tabAllTeamsBtn').textContent = t.tab_all_teams;
         if(document.getElementById('tabTournamentsBtn')) document.getElementById('tabTournamentsBtn').textContent = t.tab_tournaments;
 
+        // Custom Dictionary Modal translations
+        if(document.getElementById('txt_custom_dict_title')) document.getElementById('txt_custom_dict_title').textContent = t.custom_title;
+        if(document.getElementById('txt_custom_dict_desc')) document.getElementById('txt_custom_dict_desc').textContent = t.custom_desc;
+        if(document.getElementById('txt_select_file_btn')) document.getElementById('txt_select_file_btn').textContent = t.select_file;
+        if(document.getElementById('txt_custom_hint1')) document.getElementById('txt_custom_hint1').textContent = t.custom_hint1;
+        if(document.getElementById('txt_custom_hint2')) document.getElementById('txt_custom_hint2').textContent = t.custom_hint2;
+        if(document.getElementById('txt_custom_hint3')) document.getElementById('txt_custom_hint3').textContent = t.custom_hint3;
+        if(document.getElementById('txt_close_custom_btn')) document.getElementById('txt_close_custom_btn').textContent = t.chat_close;
+        if(document.getElementById('txt_manage_custom_btn')) document.getElementById('txt_manage_custom_btn').textContent = t.manage_custom;
+        updateCustomDictStatus();
+
         const loadingStats = document.getElementById('txt_loading_stats');
         if(loadingStats) loadingStats.textContent = t.loading;
         const loadingStats2 = document.getElementById('txt_loading_stats2');
@@ -767,8 +806,58 @@ async function loadRegolamento() {
         });
         document.getElementById('fixedSpeedCheckbox').disabled = isC;
         if(isC) document.getElementById('fixedSpeedCheckbox').checked = false;
+
+        checkGameTypeUI();
     });
     document.getElementById('gameTypeInput').addEventListener('change', checkGameTypeUI);
+
+    // --- LOGICA DIZIONARIO PERSONALE ---
+    function updateCustomDictStatus() {
+        const el = document.getElementById('customDictStatus');
+        if (!el) return;
+        const t = i18n[currentLang];
+        if (customDictionary.length === 0) {
+            el.textContent = t.no_file;
+            el.style.color = "var(--hint-color)";
+        } else {
+            el.textContent = t.loaded_words + customDictionary.length;
+            el.style.color = "var(--link-color)";
+        }
+    }
+
+    const fileInput = document.getElementById('customDictFileInput');
+    if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.name.toLowerCase().endsWith('.txt')) {
+                alert(currentLang === 'it' ? "Per favore seleziona un file .txt!" : "Please select a .txt file!");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target.result;
+                // Regex: separa per qualsiasi spazio bianco o segni di interpunzione comuni
+                const rawWords = text.split(/[\s,;.:!?"'()\[\]{}]+/).filter(w => w.trim().length >= 3);
+
+                // Rendi uniche, in maiuscolo e pulisci
+                const uniqueWords = [...new Set(rawWords.map(w => w.trim().toLowerCase()))];
+
+                if (uniqueWords.length === 0) {
+                    alert(currentLang === 'it' ? "Nessuna parola valida trovata nel file (minimo 3 caratteri)." : "No valid words found in the file (minimum 3 characters).");
+                    return;
+                }
+
+                customDictionary = uniqueWords;
+                localStorage.setItem(STORAGE_CUSTOM_DICT_KEY, JSON.stringify(customDictionary));
+                updateCustomDictStatus();
+                showToast(currentLang === 'it' ? `Caricate ${uniqueWords.length} parole!` : `Loaded ${uniqueWords.length} words!`);
+            };
+            reader.readAsText(file);
+        });
+    }
 
     function generateCallsign() {
         const prefixes = ["I", "IK", "IZ", "IN", "IT", "IS", "IU", "IW", "W", "K", "N", "A", "WA", "WB", "DL", "DJ", "DK", "DO", "EA", "EB", "EC", "F", "G", "M", "GW", "GM", "9A", "S5", "OK", "OM", "SP", "SQ", "UA", "UR", "EW", "ER", "YO", "YU", "HA", "LZ", "OE", "HB", "PA", "PB", "ON", "VE", "VK", "ZL", "JA", "PY", "LU", "CX"];
@@ -793,6 +882,10 @@ async function loadRegolamento() {
         if (mode === 'chars') {
             const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
             return Array.from({length: num}, () => chars[Math.floor(Math.random() * chars.length)]);
+        }
+        if (mode === 'custom') {
+            if (customDictionary.length === 0) return [];
+            return [...customDictionary].sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
         }
         return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
     }
@@ -1240,6 +1333,13 @@ async function loadRegolamento() {
             if (gameMode === 'trn_create_team') switchTeamTab('gest');
             else if (gameMode === 'trn_join_team') switchTeamTab('allteams');
             else if (gameMode === 'trn_create_trn') switchTeamTab('tournaments');
+            return;
+        }
+
+        // Se è selezionata la modalità Personale e non ci sono parole, apri il caricamento
+        if (gameMode === 'custom' && customDictionary.length === 0) {
+            document.getElementById('customDictModal').style.display = 'flex';
+            showToast(currentLang === 'it' ? "Carica prima un file di testo!" : "Upload a text file first!");
             return;
         }
 
