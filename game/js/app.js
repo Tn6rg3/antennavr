@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.20"; // Versione aggiornata
+    const APP_VERSION = "20240520.21"; // Versione aggiornata
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -1340,11 +1340,13 @@ async function loadRegolamento() {
                 return;
             }
 
-            if (isRejoining && playerData) {
+            // Recupero automatico progressi se presenti
+            if (playerData) {
                 totalScore = playerData.score || 0;
                 wordIndex = playerData.wordIndex || 0;
+                quizQuestionIndex = playerData.wordIndex || 0;
                 matchDetailsArray = playerData.matchDetails || [];
-                showToast("🔄 Partita recuperata!");
+                if (isRejoining) showToast("🔄 Partita recuperata!");
             }
 
             showScreen('lobbyScreen');
@@ -1376,7 +1378,7 @@ async function loadRegolamento() {
                 isFixedSpeed = roomData.fixedSpeed || false;
                 roomHostId = roomData.hostId;
 
-                if (roomData.status === 'playing' && isRejoining && !gameRunning) {
+                if (roomData.status === 'playing' && !gameRunning) {
                     currentWpm = roomData.wpm; baseWpm = roomData.wpm; currentTone = roomData.tone;
                     if (roomData.words) gameWords = roomData.words;
                     resumeGameSequence(); return;
@@ -1858,12 +1860,16 @@ async function loadRegolamento() {
             body.appendChild(tr);
         });
 
-        showScreen('gameArea');
-        if (currentMode === 'pingpong') {
-            setupPingPongListener();
+        if (currentMode === 'quiz') {
+            startQuizSequence();
         } else {
-            setTimeout(() => document.getElementById('permanentGameInput').focus(), 200);
-            setTimeout(() => { if (gameRunning) playNextWord(); }, 800);
+            showScreen('gameArea');
+            if (currentMode === 'pingpong') {
+                setupPingPongListener();
+            } else {
+                setTimeout(() => document.getElementById('permanentGameInput').focus(), 200);
+                setTimeout(() => { if (gameRunning) playNextWord(); }, 800);
+            }
         }
     }
 
