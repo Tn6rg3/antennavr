@@ -1,4 +1,4 @@
-const BOT_USERNAME = "cwappgame_bot";
+ const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
     const APP_VERSION = "20240520.16"; // Versione aggiornata
 
@@ -471,6 +471,8 @@ async function loadRegolamento() {
         // Auto-chiusura dopo 8 secondi
         setTimeout(() => { popup.style.display = 'none'; }, 8000);
     }
+
+    function setupChat(chatRef, containerId, alertBtnId) {
         const container = document.getElementById(containerId);
         if (!container) return;
 
