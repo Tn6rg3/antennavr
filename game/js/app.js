@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.15"; // Versione aggiornata
+    const APP_VERSION = "20240520.11"; // Versione attuale del codice
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -19,7 +19,6 @@ const BOT_USERNAME = "cwappgame_bot";
     }
 
     let myName, myId, myPrivacy = false;
-    let myNotifyChat = true, myNotifyInvite = true, myHidePresence = false;
     let db, auth;
     let currentRoomListener = null, chatListener = null, pingPongListener = null, gamePlayersListener = null;
     let roomLeaderboardListener = null;
@@ -50,20 +49,19 @@ const BOT_USERNAME = "cwappgame_bot";
 }
 
 async function loadRegolamento() {
-    const container = document.getElementById('regolamentoContainer');
-    if (!container) return;
     try {
         const response = await fetch('regolamento.html');
         if (!response.ok) throw new Error("Errore nel caricamento del file");
         const htmlTesto = await response.text();
-        container.innerHTML = htmlTesto;
+        document.getElementById('regolamentoContainer').innerHTML = htmlTesto;
 
+        // Ricolleghiamo il bottone feedback che ora è nel file esterno
         const btnFeedback = document.getElementById('sendFeedbackBtn');
         if (btnFeedback) {
             btnFeedback.onclick = function() {
                 const text = encodeURIComponent("💡 Suggerimento per Sfida Telegrafia: \n\n[Scrivi qui il tuo messaggio...]");
                 const shareUrl = `https://t.me/share/url?text=${text}`;
-                if (window.Telegram?.WebApp?.openTelegramLink) {
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
                     window.Telegram.WebApp.openTelegramLink(shareUrl);
                 } else {
                     window.open(shareUrl, '_blank');
@@ -71,7 +69,7 @@ async function loadRegolamento() {
             };
         }
     } catch (e) {
-        container.innerHTML = "<p style='color:red; text-align:center;'>Impossibile caricare il regolamento.</p>";
+        document.getElementById('regolamentoContainer').innerHTML = "<p style='color:red; text-align:center;'>Impossibile caricare il regolamento.</p>";
         console.warn("Errore caricamento regolamento:", e);
     }
 }
@@ -137,26 +135,15 @@ async function loadRegolamento() {
         myName = tgUser.first_name; myId = tgUser.id.toString(); initGame();
     }
 
-    let quizTimerInterval = null, currentQuizQuestion = null, quizActiveBuzzerId = null;
-    let quizQuestionIndex = 0;
-    let randomizedQuizQuestions = [];
-
     function showScreen(screenId) {
         document.querySelectorAll('.screen').forEach(el => el.classList.remove('active-screen'));
-        const screenEl = document.getElementById(screenId);
-        if (screenEl) screenEl.classList.add('active-screen');
-
+        document.getElementById(screenId).classList.add('active-screen');
         hideChat();
         document.getElementById('matchDetailsModal').style.display = 'none';
 
-        // Interrompi audio se cambiamo schermata (es. abbandono)
-        if (audioCtx && audioCtx.state === 'running') {
-            // audioCtx.suspend(); // Sospende, ma meglio gameRunning per playMorseAudio
-        }
-
         // Aggiornamento Presenza in tempo reale basato sulla schermata attiva
         if (db && myId) {
-            const isPlayingScreen = (screenId === 'lobbyScreen' || screenId === 'gameArea' || screenId === 'countdownScreen' || screenId === 'quizArea');
+            const isPlayingScreen = (screenId === 'lobbyScreen' || screenId === 'gameArea' || screenId === 'countdownScreen');
             db.ref(`presence/${myId}`).update({ status: isPlayingScreen ? 'playing' : 'online' });
         }
 
@@ -194,107 +181,87 @@ async function loadRegolamento() {
         db = firebase.database(); auth = firebase.auth();
 
         auth.signInAnonymously().then(async () => {
-            // 1. Caricamento Dati Utente (Alias, Privacy, Notifiche)
+            // Caricamento Alias e Privacy
             try {
                 const userSnap = await db.ref(`users/${myId}`).once('value');
                 const userData = userSnap.val() || {};
                 if (userData.alias) myName = userData.alias;
                 myPrivacy = userData.privacyUsername || false;
-                myNotifyChat = userData.notifyChat !== undefined ? userData.notifyChat : true;
-                myNotifyInvite = userData.notifyInvite !== undefined ? userData.notifyInvite : true;
-                myHidePresence = userData.hidePresence || false;
 
-                const privCheck = document.getElementById('privacyUsernameCheckbox');
-                if(privCheck) privCheck.checked = myPrivacy;
-                const chatCheck = document.getElementById('notifyChatCheckbox');
-                if(chatCheck) chatCheck.checked = !myNotifyChat;
-                const invCheck = document.getElementById('notifyInviteCheckbox');
-                if(invCheck) invCheck.checked = !myNotifyInvite;
-                const presCheck = document.getElementById('hidePresenceCheckbox');
-                if(presCheck) presCheck.checked = myHidePresence;
-            } catch(e) { console.warn("Errore caricamento dati utente:", e); }
+                document.getElementById('privacyUsernameCheckbox').checked = myPrivacy;
+            } catch(e) { console.error("Errore caricamento dati utente:", e); }
 
-            const nameDisp = document.getElementById('playerName');
-            if(nameDisp) nameDisp.textContent = myName;
-            const aliasInp = document.getElementById('userAliasInput');
-            if(aliasInp) aliasInp.value = (myName !== tgUser.first_name) ? myName : "";
+            document.getElementById('playerName').textContent = myName;
+            document.getElementById('userAliasInput').value = (myName !== tgUser.first_name) ? myName : "";
 
-            const loadText = document.getElementById('loadingText');
-            if(loadText) loadText.style.display = 'none';
-            const createBtn = document.getElementById('createRoomBtn');
-            if(createBtn) createBtn.disabled = false;
+            document.getElementById('loadingText').style.display = 'none';
+            document.getElementById('createRoomBtn').disabled = false;
 
-            // 2. Sistema di Presenza e Riconnessione
             db.ref('.info/connected').on('value', (snap) => {
                 if (snap.val() === false) return;
+
+                // Sistema di Presenza
                 const pRef = db.ref(`presence/${myId}`);
                 const currentUsername = myPrivacy ? "" : tgUsername;
-                if (myHidePresence) { pRef.remove(); }
-                else {
-                    pRef.onDisconnect().remove();
-                    pRef.set({ name: myName, username: currentUsername, status: 'online', ts: firebase.database.ServerValue.TIMESTAMP });
-                }
+                pRef.onDisconnect().remove();
+                pRef.set({ name: myName, username: currentUsername, status: 'online', ts: firebase.database.ServerValue.TIMESTAMP });
+
                 if (roomCode) joinRoomLogic(true);
             });
 
-            // 3. Gestione Parametri Avvio e Sessione Precedente
             if (startParam) {
-                if (startParam.startsWith('team_')) processTeamInvite(startParam.replace('team_', ''));
-                else if (startParam.startsWith('room_')) window.joinSpecificRoom(startParam.replace('room_', ''));
-                showScreen('setupScreen');
+                if (startParam.startsWith('team_')) { processTeamInvite(startParam.replace('team_', '')); }
+                else if (startParam.startsWith('room_')) { window.joinSpecificRoom(startParam.replace('room_', '')); }
             } else {
                 const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
                 if (lastRoom) {
                     db.ref(`rooms/${lastRoom}`).once('value', snap => {
                         if (snap.exists() && snap.val().status !== 'finished') {
                             roomCode = lastRoom;
-                            const rejCont = document.getElementById('rejoinContainer');
-                            if(rejCont) rejCont.style.display = 'block';
-                            const rejBtn = document.getElementById('rejoinGameBtn');
-                            if(rejBtn) rejBtn.onclick = () => { isRejoining = true; joinRoomLogic(false); };
+                            document.getElementById('rejoinContainer').style.display = 'block';
+                            document.getElementById('rejoinGameBtn').onclick = () => {
+                                isRejoining = true;
+                                joinRoomLogic(false);
+                            };
+                            showScreen('setupScreen');
                         } else {
                             localStorage.removeItem(STORAGE_ROOM_KEY);
+                            showScreen('setupScreen');
                         }
-                        showScreen('setupScreen');
                     });
                 } else {
                     showScreen('setupScreen');
                 }
             }
 
-            // 4. Caricamento Risorse (Indipendenti)
+            // Caricamento dizionari e lingua
             const savedLang = localStorage.getItem('gameLang');
             if (savedLang) setLanguage(savedLang);
-            loadDictionaries().catch(e => console.warn("Errore dizionari:", e));
-            loadRegolamento().catch(e => console.warn("Errore regolamento:", e));
+            loadDictionaries();
 
-            // 5. Attivazione Listener Globali
+            // Controlla attività e premia medaglie DOPO aver mostrato il menu
+            checkActivityAndAwardMedals();
+
+            // Mostra il pop-up dei tornei se non disattivato
+            checkTournamentPopup();
+
             listenToRooms();
             listenToOnlineUsers();
             listenToInvites();
             listenToInviteAccepted();
-            checkActivityAndAwardMedals().catch(e => console.warn("Errore attività:", e));
-            checkTournamentPopup();
 
-            // 6. Monitoraggio Aggiornamenti
+            // CARICA IL REGOLAMENTO
+            loadRegolamento();
+
+            // GESTIONE AGGIORNAMENTI APP
             db.ref('appConfig/latestVersion').on('value', snap => {
                 const latest = snap.val();
-                const current = String(APP_VERSION).trim();
-                const latestStr = latest ? String(latest).trim() : "";
-                const banner = document.getElementById('updateBanner');
-                if(banner) banner.style.display = (latestStr && latestStr !== current) ? 'block' : 'none';
-            }, err => {
-                if (err.code === 'PERMISSION_DENIED') console.error("Firebase Permission Denied for appConfig");
+                if (latest && String(latest).trim() !== String(APP_VERSION).trim()) {
+                    document.getElementById('updateBanner').style.display = 'block';
+                } else {
+                    document.getElementById('updateBanner').style.display = 'none';
+                }
             });
-
-        }).catch(e => {
-            const loadingText = document.getElementById('loadingText');
-            if (loadingText) {
-                loadingText.textContent = "Errore Critico Inizializzazione.";
-                loadingText.style.color = "red";
-            }
-            console.error("Init Game Error:", e);
-        });
 
         }).catch(e => {
             const loadingText = document.getElementById('loadingText');
@@ -321,30 +288,24 @@ async function loadRegolamento() {
     }
 
     function playMorseAudio(text, wpm) {
-        return new Promise(resolve => {
-            if (!audioCtx || !gameRunning) { resolve(); return; }
-            const unitDuration = 1.2 / wpm;
-            let time = audioCtx.currentTime + 0.05;
-            for (let char of text) {
-                if (!gameRunning) break;
-                if (morseDict[char]) {
-                    for (let symbol of morseDict[char]) {
-                        if (!gameRunning) break;
-                        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-                        osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
-                        const duration = (symbol === '-') ? (3 * unitDuration) : (unitDuration);
-                        gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
-                        gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
-                        osc.start(time); osc.stop(time + duration);
-                        time += duration + unitDuration;
-                    }
-                    time += 2 * unitDuration;
-                } else if (char === ' ') { time += 4 * unitDuration; }
-            }
-
-            const totalDurationMs = (time - audioCtx.currentTime) * 1000;
-            setTimeout(resolve, totalDurationMs);
-        });
+        if (!audioCtx || !gameRunning) return;
+        const unitDuration = 1.2 / wpm;
+        let time = audioCtx.currentTime + 0.05;
+        for (let char of text) {
+            if (!gameRunning) break;
+            if (morseDict[char]) {
+                for (let symbol of morseDict[char]) {
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
+                    const duration = (symbol === '-') ? (3 * unitDuration) : (unitDuration);
+                    gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
+                    gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
+                    osc.start(time); osc.stop(time + duration);
+                    time += duration + unitDuration;
+                }
+                time += 2 * unitDuration;
+            } else if (char === ' ') { time += 4 * unitDuration; }
+        }
     }
 
     let activeChatListeners = {};
@@ -405,75 +366,6 @@ async function loadRegolamento() {
     });
     document.getElementById('lobbyChatInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('sendLobbyChatBtn').click(); });
 
-    window.toggleGlobalChatInline = function() {
-        const container = document.getElementById('globalChatContainerInline');
-        const icon = document.getElementById('globalChatToggleIcon');
-        const clearBtn = document.getElementById('clearGlobalChatBtnInline');
-        if (container.style.display === 'none') {
-            container.style.display = 'flex';
-            icon.textContent = '▲';
-            if (clearBtn) clearBtn.style.display = 'block';
-
-            // Carica la chat
-            setupChat(db.ref('globalChat'), 'globalChatMessagesInline', null);
-
-            // Forza lo scroll al fondo dopo un breve delay per il rendering
-            setTimeout(() => {
-                const msgBox = document.getElementById('globalChatMessagesInline');
-                if(msgBox) msgBox.scrollTop = msgBox.scrollHeight;
-            }, 200);
-        } else {
-            container.style.display = 'none';
-            icon.textContent = '▼';
-            if (clearBtn) clearBtn.style.display = 'none';
-        }
-    }
-
-    document.getElementById('clearGlobalChatBtnInline').addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat globale?')) {
-            db.ref('globalChat').remove();
-        }
-    });
-
-    document.getElementById('sendGlobalChatBtnInline').addEventListener('click', () => {
-        const input = document.getElementById('globalChatInputInline');
-        const txt = input.value.trim(); if (!txt) return;
-        const currentUsername = myPrivacy ? "" : tgUsername;
-        db.ref('globalChat').push({ name: myName, username: currentUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
-        input.value = '';
-    });
-    document.getElementById('globalChatInputInline').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('sendGlobalChatBtnInline').click(); });
-
-    function showInAppNotification(sender, text, type) {
-        if (type === 'chat' && !myNotifyChat) return;
-        if (type === 'invite' && !myNotifyInvite) return;
-
-        const popup = document.getElementById('msgNotificationPopup');
-        document.getElementById('notifSenderName').textContent = sender;
-        document.getElementById('notifMsgText').textContent = text;
-
-        const replyBtn = document.getElementById('notifReplyBtn');
-        if (type === 'chat') {
-            replyBtn.style.display = 'block';
-            replyBtn.onclick = () => {
-                popup.style.display = 'none';
-                showScreen('setupScreen');
-                const chatCont = document.getElementById('globalChatContainerInline');
-                if (chatCont.style.display === 'none') toggleGlobalChatInline();
-                document.getElementById('globalChatInputInline').focus();
-            };
-        } else {
-            replyBtn.style.display = 'none';
-        }
-
-        popup.style.display = 'block';
-        playBeep(800, 0.1);
-
-        // Auto-chiusura dopo 8 secondi
-        setTimeout(() => { popup.style.display = 'none'; }, 8000);
-    }
-
     function setupChat(chatRef, containerId, alertBtnId) {
         const container = document.getElementById(containerId);
         if (!container) return;
@@ -496,7 +388,6 @@ async function loadRegolamento() {
                 const msg = child.val();
                 const div = document.createElement('div');
                 div.style.marginBottom = '6px';
-                div.style.wordBreak = 'break-word'; // Forza a capo per messaggi lunghi
 
                 if(msg.ts) {
                     const d = new Date(msg.ts);
@@ -522,19 +413,13 @@ async function loadRegolamento() {
             });
 
             lastTs = maxTs;
-
-            // Auto-scorrimento al fondo
             container.scrollTop = container.scrollHeight;
 
             // Notifiche (solo se il drawer è chiuso)
-            if (!initialLoad && newMsgsCount > 0) {
-                if (chatRef.key === 'globalChat') {
-                    showInAppNotification(latestMsg.name, latestMsg.text, 'chat');
-                } else if (alertBtnId && !isChatDrawerOpen) {
-                    showToast(`💬 Nuovo messaggio da ${latestMsg.name}`);
-                    const btn = document.getElementById(alertBtnId);
-                    if (btn) btn.style.backgroundColor = '#4caf50';
-                }
+            if (!initialLoad && newMsgsCount > 0 && alertBtnId && !isChatDrawerOpen) {
+                showToast(`💬 Nuovo messaggio da ${latestMsg.name}`);
+                const btn = document.getElementById(alertBtnId);
+                if (btn) btn.style.backgroundColor = '#4caf50';
             }
 
             // Notifica globale per messaggi in stanza se siamo l'host e siamo fuori
@@ -703,8 +588,6 @@ async function loadRegolamento() {
         const lb_single = document.getElementById('opt_lb_single');
         const lb_chars_multi = document.getElementById('opt_lb_chars_multi');
         const lb_chars_single = document.getElementById('opt_lb_chars_single');
-        const lb_quiz_multi = document.getElementById('opt_lb_quiz_multi');
-        const lb_quiz_single = document.getElementById('opt_lb_quiz_single');
 
         if(lb_room) lb_room.textContent = t.tab_this_match;
         if(lb_trn) lb_trn.textContent = t.tab_trn_lb;
@@ -714,8 +597,6 @@ async function loadRegolamento() {
         if(lb_single) lb_single.textContent = t.tab_std_single;
         if(lb_chars_multi) lb_chars_multi.textContent = (lang==='it'?'Caratteri (Multi - Sfide)':'Characters (Multi - Challenges)');
         if(lb_chars_single) lb_chars_single.textContent = (lang==='it'?'Caratteri (Single)':'Characters (Single)');
-        if(lb_quiz_multi) lb_quiz_multi.textContent = (lang==='it'?'Quiz (Multi - Sfide)':'Quiz (Multi - Challenges)');
-        if(lb_quiz_single) lb_quiz_single.textContent = (lang==='it'?'Quiz (Single)':'Quiz (Single)');
 
         // Setup Screen
         document.getElementById('txt_hello').textContent = t.hello;
@@ -814,13 +695,6 @@ async function loadRegolamento() {
         const loadingStats2 = document.getElementById('txt_loading_stats2');
         if(loadingStats2) loadingStats2.textContent = t.loading;
 
-        // AGGIORNAMENTO VERSIONI IN UI (Sempre dopo caricamento lingua)
-        const vDisp = document.getElementById('appVersionDisplay');
-        if(vDisp) vDisp.textContent = "v" + APP_VERSION;
-
-        const vFoot = document.getElementById('appVersionFooter');
-        if(vFoot) vFoot.textContent = APP_VERSION;
-
         checkGameTypeUI();
 
         // Se siamo nella vista torneo, forza un aggiornamento per ridisegnare i bottoni
@@ -918,13 +792,9 @@ async function loadRegolamento() {
 
     let lastOnlineUsersSnap = null;
     function listenToOnlineUsers() {
-        console.log("Avvio ascolto utenti online...");
         db.ref('presence').on('value', snap => {
-            console.log("Dati presenza ricevuti, utenti totali:", snap.numChildren());
             lastOnlineUsersSnap = snap;
             renderOnlineUsers();
-        }, err => {
-            console.error("Errore Firebase Presenza:", err.message);
         });
     }
 
@@ -1029,7 +899,7 @@ async function loadRegolamento() {
             });
 
             if (isAlreadyInTeam) {
-                statusText.textContent = "";
+                statusText.innerHTML = "";
                 statusText.appendChild(document.createTextNode("⚠️ "));
                 const bName = document.createElement('b'); bName.textContent = targetName;
                 statusText.appendChild(bName);
@@ -1039,7 +909,7 @@ async function loadRegolamento() {
                 statusText.appendChild(document.createTextNode("."));
                 createBtn.style.display = 'none';
             } else {
-                statusText.textContent = "";
+                statusText.innerHTML = "";
                 statusText.appendChild(document.createTextNode("💡 "));
                 const bName = document.createElement('b'); bName.textContent = targetName;
                 statusText.appendChild(bName);
@@ -1154,10 +1024,6 @@ async function loadRegolamento() {
 
             // Se l'invito è vecchio (più di 1 min), ignoralo
             if (Date.now() - inv.ts > 60000) { db.ref(`invites/${myId}`).remove(); return; }
-
-            if (inv.type !== 'team') {
-                showInAppNotification(inv.fromName, `Ti ha invitato: ${inv.mode.toUpperCase()} @ ${inv.wpm}WPM`, 'invite');
-            }
 
             if (inv.type === 'team') {
                 document.getElementById('inviteModalTitle').textContent = inv.teamId ? "🚀 INVITO IN SQUADRA" : "💡 SUGGERIMENTO SQUADRA";
@@ -1275,28 +1141,17 @@ async function loadRegolamento() {
     }
 
     function listenToRooms() {
-        console.log("Avvio ascolto bacheca sfide...");
         db.ref('rooms').on('value', snapshot => {
-            const list = document.getElementById('waitingRoomsList');
-            if(!list) return;
-            list.innerHTML = '';
-            let wCount = 0;
-
-            console.log("Dati stanze ricevuti:", snapshot.numChildren());
-
+            const list = document.getElementById('waitingRoomsList'); list.innerHTML = ''; let wCount = 0;
             snapshot.forEach(child => {
                 const room = child.val(); const code = child.key;
                 if (code.startsWith("TRN_")) return;
                 if (room.expiresAt && Date.now() > room.expiresAt) { db.ref(`rooms/${code}`).remove(); return; }
 
                 if (room.status === 'waiting' && room.type !== 'single') {
-                    wCount++;
-                    let pCount = room.players ? Object.keys(room.players).length : 0;
+                    wCount++; let pCount = room.players ? Object.keys(room.players).length : 0;
                     const li = document.createElement('li');
-
                     let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : room.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole';
-                    if (room.mode === 'quiz') modeIcon = '❓ Quiz';
-                    if (room.mode === 'chars') modeIcon = '⌨️ Carat.';
 
                     const leftSpan = document.createElement('span');
                     const titleB = document.createElement('b');
@@ -1319,13 +1174,13 @@ async function loadRegolamento() {
             });
             if (wCount === 0) {
                 const li = document.createElement('li');
-                li.style.justifyContent = 'center'; li.style.color = 'var(--hint-color)';
-                li.style.background = 'none'; li.style.border = 'none';
+                li.style.justifyContent = 'center';
+                li.style.color = 'var(--hint-color)';
+                li.style.background = 'none';
+                li.style.border = 'none';
                 li.textContent = i18n[currentLang].no_challenges;
                 list.appendChild(li);
             }
-        }, err => {
-            console.error("Errore Firebase Bacheca:", err.message);
         });
     }
     window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
@@ -1356,7 +1211,7 @@ async function loadRegolamento() {
         isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
         currentWpm = currentMode==='callsign' ? 25 : parseInt(document.getElementById('startWpmInput').value);
         baseWpm = currentWpm;
-        requestedWordCount = currentMode==='callsign' ? 25 : Math.max(1, parseInt(document.getElementById('wordCountInput').value));
+        requestedWordCount = currentMode==='callsign' ? 25 : Math.max(3, parseInt(document.getElementById('wordCountInput').value));
         currentTone = parseInt(document.getElementById('toneInput').value);
         let timerMins = Math.max(1, parseInt(document.getElementById('roomTimerInput').value));
         let setFixedSpeed = document.getElementById('fixedSpeedCheckbox').checked;
@@ -1857,18 +1712,10 @@ async function loadRegolamento() {
 
         document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
         document.getElementById('scoreDisplay').textContent = `Punti: 0`;
-
-        if (!isRejoining) {
-            totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0;
-            usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
-        }
-
-        if (currentMode === 'quiz') {
-            startQuizSequence();
-            return;
-        }
-
+        totalScore = 0; currentStreak = 0; wordIndex = 0;
+        usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
         document.getElementById('tableBody').innerHTML = "";
+
         window.lastPlayedWordId = 0; window.lastSeenGuessId = 0;
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
         document.getElementById('pingPongSendArea').style.display = 'none';
@@ -2079,7 +1926,6 @@ async function loadRegolamento() {
     function finishGame() {
         gameRunning = false; inputActive = false; document.getElementById('permanentGameInput').blur();
         if (ppTimerInterval) clearInterval(ppTimerInterval);
-        if (quizTimerInterval) clearInterval(quizTimerInterval);
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
 
         localStorage.removeItem(STORAGE_ROOM_KEY);
@@ -2110,7 +1956,6 @@ async function loadRegolamento() {
                 if (currentMode === 'callsign') dbPath = `leaderboard/callsign/global/${myId}`;
                 else if (currentMode === 'pingpong') dbPath = `leaderboard/pingpong/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                 else if (currentMode === 'chars') dbPath = `leaderboard/chars/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
-                else if (currentMode === 'quiz') dbPath = `leaderboard/quiz/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                 else dbPath = `leaderboard/standard/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
 
                 if (currentMode !== 'callsign') {
@@ -2249,10 +2094,6 @@ async function loadRegolamento() {
         const alias = document.getElementById('userAliasInput').value.trim();
         const privacy = document.getElementById('privacyUsernameCheckbox').checked;
 
-        const notifyChat = !document.getElementById('notifyChatCheckbox').checked;
-        const notifyInvite = !document.getElementById('notifyInviteCheckbox').checked;
-        const hidePresence = document.getElementById('hidePresenceCheckbox').checked;
-
         if (privacy && !alias) {
             alert("L'Alias è obbligatorio se nascondi lo username Telegram!");
             return;
@@ -2266,31 +2107,19 @@ async function loadRegolamento() {
         try {
             await db.ref(`users/${myId}`).update({
                 alias: alias || null,
-                privacyUsername: privacy,
-                notifyChat: notifyChat,
-                notifyInvite: notifyInvite,
-                hidePresence: hidePresence
+                privacyUsername: privacy
             });
 
             myName = newName;
             myPrivacy = privacy;
-            myNotifyChat = notifyChat;
-            myNotifyInvite = notifyInvite;
-            myHidePresence = hidePresence;
-
             document.getElementById('playerName').textContent = myName;
             showToast("Profilo aggiornato!");
 
-            // Aggiorna Presenza (Online)
-            const pRef = db.ref(`presence/${myId}`);
-            if (myHidePresence) {
-                pRef.remove();
-            } else {
-                await pRef.update({
-                    name: myName,
-                    username: currentUsername
-                });
-            }
+            // 1. Aggiorna Presenza (Online)
+            await db.ref(`presence/${myId}`).update({
+                name: myName,
+                username: currentUsername
+            });
 
             // 2. Aggiorna Attività (Classifiche di partecipazione attuali)
             const now = new Date();
@@ -2558,9 +2387,7 @@ async function loadRegolamento() {
             'tabGlobalStandardMultiBtn': 'std_multi',
             'tabGlobalStandardSingleBtn': 'std_single',
             'tabGlobalCharsMultiBtn': 'chars_multi',
-            'tabGlobalCharsSingleBtn': 'chars_single',
-            'tabGlobalQuizMultiBtn': 'quiz_multi',
-            'tabGlobalQuizSingleBtn': 'quiz_single'
+            'tabGlobalCharsSingleBtn': 'chars_single'
         };
 
         // Cerca la chiave se tabId è un ID bottone, altrimenti usa tabId come valore
@@ -2608,16 +2435,6 @@ async function loadRegolamento() {
             populateDynamicFilters('chars', 'single');
             let wc = document.getElementById('lbWordFilter').value;
             fetchAndRenderGlobalLeaderboard('chars_single', wc);
-        } else if (modeValue === 'quiz_multi') {
-            filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
-            populateDynamicFilters('recent_matches/quiz_multi');
-            let wc = document.getElementById('lbWordFilter').value;
-            fetchAndRenderGlobalLeaderboard('quiz_multi', wc);
-        } else if (modeValue === 'quiz_single') {
-            filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
-            populateDynamicFilters('quiz', 'single');
-            let wc = document.getElementById('lbWordFilter').value;
-            fetchAndRenderGlobalLeaderboard('quiz_single', wc);
         } else {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
             let type = modeValue === 'std_multi' ? 'multi' : 'single';
@@ -2701,7 +2518,7 @@ async function loadRegolamento() {
                 // Salva il match nel database globale SOLO SE ci sono almeno 2 giocatori
                 const finalPCount = Object.keys(players).length;
                 if (finalPCount >= 2) {
-                    if (roomData.type === 'multi' || currentMode === 'pingpong' || currentMode === 'chars' || currentMode === 'quiz') {
+                    if (roomData.type === 'multi' || currentMode === 'pingpong' || currentMode === 'chars') {
                         saveMatchToGlobalHistory(players, roomData);
                     }
                 }
@@ -2959,7 +2776,6 @@ async function loadRegolamento() {
         let modePath = 'standard_multi';
         if (currentMode === 'pingpong') modePath = 'pingpong';
         else if (currentMode === 'chars') modePath = 'chars_multi';
-        else if (currentMode === 'quiz') modePath = 'quiz_multi';
 
         // Per il pingpong usiamo wordCount come fallback se manca
         const subPath = roomData.wordCount || 'all';
@@ -2985,12 +2801,9 @@ async function loadRegolamento() {
     function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
 
-        // Per Ping Pong, Multiplayer Standard, Caratteri Multi e Quiz Multi mostriamo le SFIDE RECENTI
-        if (tabType === 'pingpong' || tabType === 'standard_multi' || tabType === 'chars_multi' || tabType === 'quiz_multi') {
-            const modePath = tabType === 'pingpong' ? 'pingpong' :
-                             (tabType === 'chars_multi' ? 'chars_multi' :
-                             (tabType === 'quiz_multi' ? 'quiz_multi' : 'standard_multi'));
-
+        // Per Ping Pong, Multiplayer Standard e Caratteri Multi, mostriamo le SFIDE RECENTI
+        if (tabType === 'pingpong' || tabType === 'standard_multi' || tabType === 'chars_multi') {
+            const modePath = tabType === 'pingpong' ? 'pingpong' : (tabType === 'chars_multi' ? 'chars_multi' : 'standard_multi');
             db.ref(`leaderboard/recent_matches/${modePath}`).once('value', snapshot => {
                 let matches = [];
                 snapshot.forEach(wordCountNode => {
@@ -3053,16 +2866,15 @@ async function loadRegolamento() {
         } else {
             let isStandard = tabType.startsWith('standard');
             let isChars = tabType.startsWith('chars');
-            let isQuiz = tabType.startsWith('quiz');
-            let modePath = isQuiz ? 'quiz' : (isChars ? 'chars' : (isStandard ? 'standard' : 'pingpong'));
-            let subType = isQuiz ? tabType.replace('quiz_', '') : (isChars ? tabType.replace('chars_', '') : (isStandard ? tabType.replace('standard_', '') : ''));
+            let modePath = isChars ? 'chars' : (isStandard ? 'standard' : 'pingpong');
+            let subType = isChars ? tabType.replace('chars_', '') : (isStandard ? tabType.replace('standard_', '') : '');
 
             db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
                 let players = [];
                 snapshot.forEach(wordCountNode => {
                     const key = wordCountNode.key;
                     // Filtro per sottotipo (es. "single" o "multi")
-                    if ((isStandard || isChars || isQuiz) && !key.startsWith(subType + "_")) return;
+                    if ((isStandard || isChars) && !key.startsWith(subType + "_")) return;
 
                     // Filtro per numero parole
                     if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
@@ -4075,264 +3887,4 @@ async function loadRegolamento() {
                                 <small style="font-size:0.7em; opacity:0.7;">Firebase: ${err.code || err.message}</small>
                               </li>`;
         });
-    }
-
-    // --- LOGICA MODALITÀ QUIZ ---
-    function startQuizSequence() {
-        showScreen('quizArea');
-        gameRunning = true;
-
-        // Randomizziamo le domande all'inizio del quiz
-        randomizedQuizQuestions = [...QUIZ_QUESTIONS].sort(() => Math.random() - 0.5);
-        quizQuestionIndex = 0;
-
-        document.getElementById('quizWpmDisplay').textContent = `WPM: ${currentWpm}`;
-        document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
-
-        if (roomCode && !isSinglePlayer) {
-            // Setup Multiplayer Quiz state
-            db.ref(`rooms/${roomCode}/quiz_state`).on('value', snap => {
-                const state = snap.val();
-                if (!state) return;
-
-                quizQuestionIndex = state.questionIndex || 0;
-                quizActiveBuzzerId = state.activeBuzzerId || null;
-
-                renderQuizUI(state);
-            });
-
-            // Inizia la prima domanda se siamo l'host
-            if (myId === roomHostId) {
-                // Per il multiplayer, usiamo l'ordine originale per sincronizzazione
-                // oppure dovremmo condividere il seed. Per ora usiamo l'indice condiviso.
-                db.ref(`rooms/${roomCode}/quiz_state`).set({
-                    questionIndex: 0,
-                    activeBuzzerId: null,
-                    status: 'playing'
-                });
-            }
-        } else {
-            // Single player quiz
-            loadNextQuizQuestion();
-        }
-    }
-
-    function loadNextQuizQuestion() {
-        const sourceList = isSinglePlayer ? randomizedQuizQuestions : QUIZ_QUESTIONS;
-
-        if (quizQuestionIndex >= requestedWordCount || quizQuestionIndex >= sourceList.length) {
-            finishGame();
-            return;
-        }
-
-        currentQuizQuestion = sourceList[quizQuestionIndex];
-        playQuizAudioSequence();
-    }
-
-    async function playQuizAudioSequence() {
-        inputActive = false;
-        disableQuizButtons(true);
-
-        // Reset visuale opzioni
-        for (let l of ['A', 'B', 'C', 'D']) {
-            document.getElementById('btnQuiz' + l).classList.remove('active-choice');
-        }
-
-        document.getElementById('quizQuestionBox').textContent = "Ascolta la domanda...";
-
-        // Aspettiamo che finisca davvero la domanda
-        await playMorseAudio(currentQuizQuestion.q, currentWpm);
-
-        if (!gameRunning) return;
-        await sleep(1500); // Pausa di respiro dopo la domanda
-
-        // Riproduciamo le opzioni A, B, C, D
-        const letters = ["A", "B", "C", "D"];
-        for (let i = 0; i < 4; i++) {
-            if (!gameRunning) return;
-            document.getElementById('quizQuestionBox').textContent = `Opzione ${letters[i]}...`;
-
-            // Evidenzia l'opzione che sta suonando
-            const currentBtn = document.getElementById('btnQuiz' + letters[i]);
-            currentBtn.classList.add('active-choice');
-
-            // Aspettiamo che finisca davvero l'opzione corrente
-            await playMorseAudio(`${letters[i]} ${currentQuizQuestion.a[i]}`, currentWpm);
-
-            currentBtn.classList.remove('active-choice');
-
-            if (!gameRunning) return;
-            await sleep(1000); // Piccola pausa tra le opzioni
-        }
-
-        if (!gameRunning) return;
-
-        document.getElementById('quizQuestionBox').textContent = "SCEGLI LA TUA RISPOSTA!";
-        enableQuizControls();
-        startQuizTimer(20);
-    }
-
-    function enableQuizControls() {
-        inputActive = true;
-        if (isSinglePlayer) {
-            disableQuizButtons(false);
-        } else {
-            // In multi, prima bisogna premere il buzzer
-            document.getElementById('quizBuzzer').style.display = 'block';
-            document.getElementById('quizOptionsContainer').style.opacity = '0.5';
-            disableQuizButtons(true);
-        }
-    }
-
-    function disableQuizButtons(disabled) {
-        for (let l of ['A', 'B', 'C', 'D']) {
-            const btn = document.getElementById('btnQuiz' + l);
-            if(btn) btn.disabled = disabled;
-        }
-    }
-
-    function startQuizTimer(seconds) {
-        if (quizTimerInterval) clearInterval(quizTimerInterval);
-        const bar = document.getElementById('quizTimerProgress');
-        let timeLeft = 100;
-        const decrement = 100 / (seconds * 10);
-
-        quizTimerInterval = setInterval(() => {
-            timeLeft -= decrement;
-            bar.style.width = Math.max(0, timeLeft) + '%';
-
-            if (timeLeft <= 0) {
-                clearInterval(quizTimerInterval);
-                handleQuizTimeout();
-            }
-        }, 100);
-    }
-
-    function handleQuizTimeout() {
-        if (!inputActive) return;
-        showToast("Tempo scaduto!");
-        if (isSinglePlayer) {
-            submitQuizAnswer(-1); // Sbagliata
-        } else if (quizActiveBuzzerId === myId) {
-            submitQuizAnswer(-1); // Chi ha prenotato non ha risposto
-        }
-    }
-
-    function submitQuizAnswer(index) {
-        if (!inputActive && !isSinglePlayer && quizActiveBuzzerId !== myId) return;
-        if (quizTimerInterval) clearInterval(quizTimerInterval);
-        inputActive = false;
-
-        // Disabilita tasti per evitare doppi click
-        disableQuizButtons(true);
-
-        const isCorrect = (index === currentQuizQuestion.correct);
-        const selectedLetter = ["A", "B", "C", "D"][index] || "?";
-
-        if (isCorrect) {
-            totalScore += 100; // Punteggio fisso quiz
-            showToast(`CORRETTO (${selectedLetter})! +100`);
-        } else {
-            showToast(`SBAGLIATO! Era la ${["A", "B", "C", "D"][currentQuizQuestion.correct]}`);
-        }
-
-        document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
-
-        if (roomCode) {
-            db.ref(`rooms/${roomCode}/players/${myId}`).update({
-                score: totalScore,
-                wordIndex: quizQuestionIndex + 1
-            });
-        }
-
-        setTimeout(() => {
-            if (!gameRunning) return;
-            quizQuestionIndex++;
-
-            if (roomCode && !isSinglePlayer && myId === roomHostId) {
-                db.ref(`rooms/${roomCode}/quiz_state`).update({
-                    questionIndex: quizQuestionIndex,
-                    activeBuzzerId: null
-                });
-            } else if (isSinglePlayer) {
-                loadNextQuizQuestion();
-            }
-        }, 3000);
-    }
-
-    function sleep(ms) {
-        return new Promise(resolve => {
-            const check = () => {
-                if (!gameRunning) resolve(); // Esci subito se il gioco è fermo
-                else resolve();
-            };
-            setTimeout(resolve, ms);
-        });
-    }
-
-    // Eventi Bottoni Quiz
-    const buzzerBtn = document.getElementById('quizBuzzer');
-    if(buzzerBtn) {
-        buzzerBtn.addEventListener('click', () => {
-            if (!roomCode || isSinglePlayer || quizActiveBuzzerId) return;
-
-            db.ref(`rooms/${roomCode}/quiz_state`).transaction(state => {
-                if (state && !state.activeBuzzerId) {
-                    state.activeBuzzerId = myId;
-                }
-                return state;
-            });
-        });
-    }
-
-    for (let i = 0; i < 4; i++) {
-        const letter = ["A", "B", "C", "D"][i];
-        const btn = document.getElementById('btnQuiz' + letter);
-        if(btn) btn.onclick = () => submitQuizAnswer(i);
-
-        const rBtn = document.getElementById('replay' + letter);
-        if(rBtn) rBtn.onclick = () => {
-            if (currentQuizQuestion) playMorseAudio(currentQuizQuestion.a[i], currentWpm);
-        };
-    }
-
-    const replayQBtn = document.getElementById('quizReplayQ');
-    if(replayQBtn) {
-        replayQBtn.onclick = () => {
-            if (currentQuizQuestion) playMorseAudio(currentQuizQuestion.q, currentWpm);
-        };
-    }
-
-    const quitQuizBtn = document.getElementById('quitQuizBtn');
-    if(quitQuizBtn) {
-        quitQuizBtn.onclick = () => {
-            if (confirm("Vuoi abbandonare il Quiz?")) {
-                if(quizTimerInterval) clearInterval(quizTimerInterval);
-                gameRunning = false;
-                exitRoomCleanly();
-            }
-        };
-    }
-
-    function renderQuizUI(state) {
-        const buzzerBtn = document.getElementById('quizBuzzer');
-        const winnerDiv = document.getElementById('buzzerWinner');
-
-        if (state.activeBuzzerId) {
-            buzzerBtn.style.display = 'none';
-            if (state.activeBuzzerId === myId) {
-                winnerDiv.textContent = "TOCCA A TE!";
-                document.getElementById('quizOptionsContainer').style.opacity = '1';
-                disableQuizButtons(false);
-            } else {
-                winnerDiv.textContent = "L'AVVERSARIO RISPONDE...";
-                document.getElementById('quizOptionsContainer').style.opacity = '0.5';
-                disableQuizButtons(true);
-            }
-        } else {
-            winnerDiv.textContent = "";
-            buzzerBtn.style.display = 'block';
-            document.getElementById('quizOptionsContainer').style.opacity = '0.5';
-            disableQuizButtons(true);
-        }
     }
