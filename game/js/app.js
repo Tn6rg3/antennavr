@@ -2,13 +2,15 @@ const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
     const APP_VERSION = "20240520.22"; // Versione aggiornata
 
-    window.Telegram.WebApp.ready();
-    window.Telegram.WebApp.expand();
+    const tg = window.Telegram?.WebApp || null;
+    if (tg) {
+        tg.ready();
+        tg.expand();
+    }
 
-    const tg = window.Telegram.WebApp;
-    const tgUser = tg.initDataUnsafe?.user;
+    const tgUser = tg?.initDataUnsafe?.user;
     const tgUsername = tgUser?.username || "";
-    const startParam = tg.initDataUnsafe?.start_param;
+    const startParam = tg?.initDataUnsafe?.start_param;
 
     function escapeHTML(str) {
         if (!str && str !== 0) return "";
@@ -119,6 +121,7 @@ async function loadRegolamento() {
     let sessionErrorsByWpm = Object.create(null);
 
     window.openTelegramProfile = function(username) {
+        if (!tg) return;
         if (username) tg.openTelegramLink('https://t.me/' + username);
         else tg.showAlert("Questo utente non ha impostato un Username pubblico su Telegram.");
     }
