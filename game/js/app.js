@@ -4359,3 +4359,205 @@ async function loadRegolamento() {
             disableQuizButtons(true);
         }
     }
+
+
+    // --- BRIDGE DI COMPATIBILITÀ MODULI ---
+    (function setupModuleCompatibilityBridge() {
+        function safeSet(path, value) {
+            if (!window.GameState || typeof GameState.set !== 'function') return;
+            try { GameState.set(path, value); } catch (_) {}
+        }
+
+        function syncLegacyToGameState() {
+            if (!window.GameState) return;
+
+            safeSet('player.id', myId || null);
+            safeSet('player.name', myName || null);
+            safeSet('player.username', myPrivacy ? '' : (tgUsername || ''));
+            safeSet('player.privacy', !!myPrivacy);
+            safeSet('player.teamId', myTeamId || null);
+            safeSet('player.teamName', myTeamName || '');
+            safeSet('player.isTeamCaptain', !!isTeamCaptain);
+
+            safeSet('room.code', roomCode || '');
+            safeSet('room.hostId', roomHostId || null);
+            safeSet('room.mode', currentMode || 'standard');
+            safeSet('room.type', isSinglePlayer ? 'single' : 'multi');
+            safeSet('room.wpm', currentWpm || 20);
+            safeSet('room.baseWpm', baseWpm || 20);
+            safeSet('room.tone', currentTone || 600);
+            safeSet('room.wordCount', requestedWordCount || 10);
+            safeSet('room.isFixedSpeed', !!isFixedSpeed);
+            safeSet('room.isEasyMode', !!isEasyMode);
+
+            safeSet('game.running', !!gameRunning);
+            safeSet('game.singlePlayer', !!isSinglePlayer);
+            safeSet('game.wordIndex', wordIndex || 0);
+            safeSet('game.totalScore', totalScore || 0);
+            safeSet('game.currentStreak', currentStreak || 0);
+            safeSet('game.words', Array.isArray(gameWords) ? gameWords : []);
+            safeSet('game.matchDetails', Array.isArray(matchDetailsArray) ? matchDetailsArray : []);
+            safeSet('game.usedReplay', !!usedReplay);
+            safeSet('game.inputActive', !!inputActive);
+            safeSet('game.lastWordStartTime', lastWordStartTime || 0);
+            safeSet('game.currentLang', currentLang || 'it');
+
+            safeSet('quiz.currentQuestion', currentQuizQuestion || null);
+            safeSet('quiz.questionIndex', quizQuestionIndex || 0);
+            safeSet('quiz.randomizedQuestions', Array.isArray(randomizedQuizQuestions) ? randomizedQuizQuestions : []);
+            safeSet('quiz.lastLoadedIndex', lastLoadedQuizIndex || -1);
+            safeSet('quiz.activeBuzzerId', quizActiveBuzzerId || null);
+            safeSet('quiz.timerInterval', quizTimerInterval || null);
+
+            safeSet('errors.sessionCharErrors', sessionCharErrors || Object.create(null));
+            safeSet('errors.sessionErrorsByWpm', sessionErrorsByWpm || Object.create(null));
+
+            safeSet('ui.activeTab', activeTab || 'room');
+            safeSet('ui.activeChatContext', activeChatContext || null);
+            safeSet('ui.chatOpen', document.getElementById('chatDrawer')?.style.display !== 'none');
+
+            safeSet('tournament.activeTrnId', activeTrnId || null);
+            safeSet('tournament.myTeamId', myTeamId || null);
+            safeSet('tournament.isTeamCaptain', !!isTeamCaptain);
+
+            safeSet('invites.currentInviterId', currentInviterId || null);
+            safeSet('invites.isChallenging', !!isChallenging);
+            safeSet('invites.isRejoining', !!isRejoining);
+
+            safeSet('tracking.lastPlayedWordId', window.lastPlayedWordId || 0);
+            safeSet('tracking.lastSeenGuessId', window.lastSeenGuessId || 0);
+            safeSet('tracking.lastPlayerCount', lastPlayerCount || 0);
+            safeSet('tracking.gameStartPlayerCount', gameStartPlayerCount || 0);
+        }
+
+        function wireUIManager() {
+            if (!window.UIManager) return;
+            UIManager.showScreen = showScreen;
+            UIManager.showToast = showToast;
+            UIManager.toggleChat = window.toggleChat;
+            UIManager.hideChat = hideChat;
+            UIManager.listenToChat = listenToChat;
+            UIManager.setupChatListener = setupChat;
+            UIManager.showMatchDetailsModal = showPlayerDetailsModal;
+            UIManager.renderDiffSecure = renderDiffSecure;
+            UIManager.switchActTab = window.switchActTab;
+            UIManager.renderActivityRankings = renderActivityRankings;
+            UIManager.checkMyTeamStatus = checkMyTeamStatus;
+            UIManager.getWeekNumber = getWeekNumber;
+        }
+
+        function wireAudioManager() {
+            if (!window.AudioManager) return;
+            AudioManager.init = function initLegacyAudio() {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                AudioManager.ctx = audioCtx;
+                return audioCtx;
+            };
+            AudioManager.beep = playBeep;
+            AudioManager.playMorse = function playLegacyMorse(text, wpm) {
+                return new Promise(resolve => {
+                    playMorseAudio(text, wpm);
+                    const estimatedMs = Math.max(200, Math.round((String(text || '').length * 1200) / Math.max(5, wpm || 20)));
+                    setTimeout(resolve, estimatedMs);
+                });
+            };
+            AudioManager.playMedalSound = playMedalSound;
+            AudioManager.stop = function stopLegacyAudio() {
+                if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+            };
+        }
+
+        function wireFirebaseDB() {
+            if (!window.FirebaseDB) return;
+
+            FirebaseDB.init = function initLegacyFirebase(firebaseConfig) {
+                if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+                db = firebase.database();
+                auth = firebase.auth();
+                FirebaseDB.db = db;
+                FirebaseDB.auth = auth;
+            };
+
+            FirebaseDB.attachListener = function(path, key, callback) {
+                if (!db) return null;
+                FirebaseDB.detachListener(key);
+                const ref = db.ref(path);
+                ref.on('value', callback);
+                if (window.GameState && GameState.listeners) GameState.listeners[key] = { ref, callback };
+                return ref;
+            };
+
+            FirebaseDB.detachListener = function(key) {
+                if (!window.GameState || !GameState.listeners || !GameState.listeners[key]) return;
+                const l = GameState.listeners[key];
+                if (l.ref && l.callback) l.ref.off('value', l.callback);
+                delete GameState.listeners[key];
+            };
+
+            FirebaseDB.updateScore = function(room, score, wpm, idx) {
+                if (!db || !room || !myId) return Promise.resolve();
+                const payload = { score, wpm };
+                if (idx !== null && idx !== undefined) payload.wordIndex = idx;
+                return db.ref(`rooms/${room}/players/${myId}`).update(payload);
+            };
+
+            Object.defineProperty(FirebaseDB, 'db', {
+                get() { return db; },
+                set(v) { db = v; }
+            });
+            Object.defineProperty(FirebaseDB, 'auth', {
+                get() { return auth; },
+                set(v) { auth = v; }
+            });
+        }
+
+        function wireGameEngine() {
+            if (!window.GameEngine) return;
+            GameEngine.levenshteinDistance = getLevenshteinDistance;
+            GameEngine.calculateScore = function(userWord, currentWord, wpm, isReplay) {
+                const levDist = getLevenshteinDistance(currentWord, userWord);
+                const reactionMs = Date.now() - lastWordStartTime;
+                const basePoints = (Math.pow(wpm, 2) * currentWord.length) / (10 * Math.pow(levDist + 1, 2));
+                const estimatedAudioMs = (currentWord.length * 60 / wpm) * 1000;
+                const gracePeriod = 2000;
+                let timeMultiplier = 1.0;
+                if (reactionMs > estimatedAudioMs + gracePeriod) {
+                    const delay = reactionMs - (estimatedAudioMs + gracePeriod);
+                    timeMultiplier = Math.max(0.5, 1.0 - (delay / 20000));
+                } else if (reactionMs < estimatedAudioMs && levDist === 0) {
+                    timeMultiplier = 1.1;
+                }
+                let points = Math.round(basePoints * timeMultiplier);
+                if (isReplay) points = Math.round(points * 0.2);
+                let color = levDist === 0 ? (isReplay ? '#999999' : '#4caf50') : (levDist === 1 ? '#ff9800' : '#d32f2f');
+                return { points, color };
+            };
+            GameEngine.handleWordSubmission = function(userWord) {
+                return handleWordSubmission(userWord);
+            };
+            GameEngine.getGameWords = function(num, mode, externalMaster, externalCustom) {
+                if (Array.isArray(externalMaster)) masterDictionary = externalMaster;
+                if (Array.isArray(externalCustom)) customDictionary = externalCustom;
+                return getGameWords(num, mode || currentMode);
+            };
+            GameEngine.generateCallsign = generateCallsign;
+        }
+
+        function exposeModuleGlobals() {
+            window.GameModulesBridge = {
+                syncLegacyToGameState,
+                wireUIManager,
+                wireAudioManager,
+                wireFirebaseDB,
+                wireGameEngine
+            };
+        }
+
+        wireUIManager();
+        wireAudioManager();
+        wireFirebaseDB();
+        wireGameEngine();
+        syncLegacyToGameState();
+        setInterval(syncLegacyToGameState, 1000);
+        exposeModuleGlobals();
+    })();
