@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.11"; // Versione attuale del codice
+    const APP_VERSION = "20240520.17"; // Versione aggiornata
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -135,15 +135,26 @@ async function loadRegolamento() {
         myName = tgUser.first_name; myId = tgUser.id.toString(); initGame();
     }
 
+    let quizTimerInterval = null, currentQuizQuestion = null, quizActiveBuzzerId = null;
+    let quizQuestionIndex = 0;
+    let randomizedQuizQuestions = [];
+
     function showScreen(screenId) {
         document.querySelectorAll('.screen').forEach(el => el.classList.remove('active-screen'));
-        document.getElementById(screenId).classList.add('active-screen');
+        const screenEl = document.getElementById(screenId);
+        if (screenEl) screenEl.classList.add('active-screen');
+
         hideChat();
         document.getElementById('matchDetailsModal').style.display = 'none';
 
+        // Interrompi audio se cambiamo schermata (es. abbandono)
+        if (audioCtx && audioCtx.state === 'running') {
+            // audioCtx.suspend(); // Sospende, ma meglio gameRunning per playMorseAudio
+        }
+
         // Aggiornamento Presenza in tempo reale basato sulla schermata attiva
         if (db && myId) {
-            const isPlayingScreen = (screenId === 'lobbyScreen' || screenId === 'gameArea' || screenId === 'countdownScreen');
+            const isPlayingScreen = (screenId === 'lobbyScreen' || screenId === 'gameArea' || screenId === 'countdownScreen' || screenId === 'quizArea');
             db.ref(`presence/${myId}`).update({ status: isPlayingScreen ? 'playing' : 'online' });
         }
 
@@ -253,13 +264,34 @@ async function loadRegolamento() {
             // CARICA IL REGOLAMENTO
             loadRegolamento();
 
+            // MOSTRA VERSIONE IN UI
+            const vDisp = document.getElementById('appVersionDisplay');
+            if(vDisp) vDisp.textContent = "v" + APP_VERSION;
+
+            const vFoot = document.getElementById('appVersionFooter');
+            if(vFoot) vFoot.textContent = APP_VERSION;
+
             // GESTIONE AGGIORNAMENTI APP
             db.ref('appConfig/latestVersion').on('value', snap => {
                 const latest = snap.val();
-                if (latest && String(latest).trim() !== String(APP_VERSION).trim()) {
+                const current = String(APP_VERSION).trim();
+                const latestStr = latest ? String(latest).trim() : "";
+
+                console.log("--- DEBUG AGGIORNAMENTO ---");
+                console.log("Locale (JS):", "[" + current + "]");
+                console.log("Firebase:", "[" + latestStr + "]");
+
+                if (latestStr && latestStr !== current) {
+                    console.log("⚠️ DISCREPANZA RILEVATA - Mostro Banner");
                     document.getElementById('updateBanner').style.display = 'block';
                 } else {
+                    console.log("✅ VERSIONI ALLINEATE - Nascondo Banner");
                     document.getElementById('updateBanner').style.display = 'none';
+                }
+            }, err => {
+                console.error("❌ Errore Firebase (appConfig):", err.message);
+                if (err.code === 'PERMISSION_DENIED') {
+                    showToast("Configura i permessi per appConfig su Firebase!");
                 }
             });
 
@@ -288,24 +320,30 @@ async function loadRegolamento() {
     }
 
     function playMorseAudio(text, wpm) {
-        if (!audioCtx || !gameRunning) return;
-        const unitDuration = 1.2 / wpm;
-        let time = audioCtx.currentTime + 0.05;
-        for (let char of text) {
-            if (!gameRunning) break;
-            if (morseDict[char]) {
-                for (let symbol of morseDict[char]) {
-                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-                    osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
-                    const duration = (symbol === '-') ? (3 * unitDuration) : (unitDuration);
-                    gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
-                    gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
-                    osc.start(time); osc.stop(time + duration);
-                    time += duration + unitDuration;
-                }
-                time += 2 * unitDuration;
-            } else if (char === ' ') { time += 4 * unitDuration; }
-        }
+        return new Promise(resolve => {
+            if (!audioCtx || !gameRunning) { resolve(); return; }
+            const unitDuration = 1.2 / wpm;
+            let time = audioCtx.currentTime + 0.05;
+            for (let char of text) {
+                if (!gameRunning) break;
+                if (morseDict[char]) {
+                    for (let symbol of morseDict[char]) {
+                        if (!gameRunning) break;
+                        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                        osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
+                        const duration = (symbol === '-') ? (3 * unitDuration) : (unitDuration);
+                        gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
+                        gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
+                        osc.start(time); osc.stop(time + duration);
+                        time += duration + unitDuration;
+                    }
+                    time += 2 * unitDuration;
+                } else if (char === ' ') { time += 4 * unitDuration; }
+            }
+
+            const totalDurationMs = (time - audioCtx.currentTime) * 1000;
+            setTimeout(resolve, totalDurationMs);
+        });
     }
 
     let activeChatListeners = {};
@@ -588,6 +626,8 @@ async function loadRegolamento() {
         const lb_single = document.getElementById('opt_lb_single');
         const lb_chars_multi = document.getElementById('opt_lb_chars_multi');
         const lb_chars_single = document.getElementById('opt_lb_chars_single');
+        const lb_quiz_multi = document.getElementById('opt_lb_quiz_multi');
+        const lb_quiz_single = document.getElementById('opt_lb_quiz_single');
 
         if(lb_room) lb_room.textContent = t.tab_this_match;
         if(lb_trn) lb_trn.textContent = t.tab_trn_lb;
@@ -597,6 +637,8 @@ async function loadRegolamento() {
         if(lb_single) lb_single.textContent = t.tab_std_single;
         if(lb_chars_multi) lb_chars_multi.textContent = (lang==='it'?'Caratteri (Multi - Sfide)':'Characters (Multi - Challenges)');
         if(lb_chars_single) lb_chars_single.textContent = (lang==='it'?'Caratteri (Single)':'Characters (Single)');
+        if(lb_quiz_multi) lb_quiz_multi.textContent = (lang==='it'?'Quiz (Multi - Sfide)':'Quiz (Multi - Challenges)');
+        if(lb_quiz_single) lb_quiz_single.textContent = (lang==='it'?'Quiz (Single)':'Quiz (Single)');
 
         // Setup Screen
         document.getElementById('txt_hello').textContent = t.hello;
@@ -899,7 +941,7 @@ async function loadRegolamento() {
             });
 
             if (isAlreadyInTeam) {
-                statusText.innerHTML = "";
+                statusText.textContent = "";
                 statusText.appendChild(document.createTextNode("⚠️ "));
                 const bName = document.createElement('b'); bName.textContent = targetName;
                 statusText.appendChild(bName);
@@ -909,7 +951,7 @@ async function loadRegolamento() {
                 statusText.appendChild(document.createTextNode("."));
                 createBtn.style.display = 'none';
             } else {
-                statusText.innerHTML = "";
+                statusText.textContent = "";
                 statusText.appendChild(document.createTextNode("💡 "));
                 const bName = document.createElement('b'); bName.textContent = targetName;
                 statusText.appendChild(bName);
@@ -1152,6 +1194,7 @@ async function loadRegolamento() {
                     wCount++; let pCount = room.players ? Object.keys(room.players).length : 0;
                     const li = document.createElement('li');
                     let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : room.mode === 'pingpong' ? '🏓 Ping Pong' : '🔤 Parole';
+                    if (room.mode === 'quiz') modeIcon = '❓ Quiz';
 
                     const leftSpan = document.createElement('span');
                     const titleB = document.createElement('b');
@@ -1211,7 +1254,7 @@ async function loadRegolamento() {
         isSinglePlayer = document.getElementById('gameTypeInput').value === 'single';
         currentWpm = currentMode==='callsign' ? 25 : parseInt(document.getElementById('startWpmInput').value);
         baseWpm = currentWpm;
-        requestedWordCount = currentMode==='callsign' ? 25 : Math.max(3, parseInt(document.getElementById('wordCountInput').value));
+        requestedWordCount = currentMode==='callsign' ? 25 : Math.max(1, parseInt(document.getElementById('wordCountInput').value));
         currentTone = parseInt(document.getElementById('toneInput').value);
         let timerMins = Math.max(1, parseInt(document.getElementById('roomTimerInput').value));
         let setFixedSpeed = document.getElementById('fixedSpeedCheckbox').checked;
@@ -1712,10 +1755,18 @@ async function loadRegolamento() {
 
         document.getElementById('wpmDisplay').textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
         document.getElementById('scoreDisplay').textContent = `Punti: 0`;
-        totalScore = 0; currentStreak = 0; wordIndex = 0;
-        usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
-        document.getElementById('tableBody').innerHTML = "";
 
+        if (!isRejoining) {
+            totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0;
+            usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
+        }
+
+        if (currentMode === 'quiz') {
+            startQuizSequence();
+            return;
+        }
+
+        document.getElementById('tableBody').innerHTML = "";
         window.lastPlayedWordId = 0; window.lastSeenGuessId = 0;
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
         document.getElementById('pingPongSendArea').style.display = 'none';
@@ -1926,6 +1977,7 @@ async function loadRegolamento() {
     function finishGame() {
         gameRunning = false; inputActive = false; document.getElementById('permanentGameInput').blur();
         if (ppTimerInterval) clearInterval(ppTimerInterval);
+        if (quizTimerInterval) clearInterval(quizTimerInterval);
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
 
         localStorage.removeItem(STORAGE_ROOM_KEY);
@@ -1956,6 +2008,7 @@ async function loadRegolamento() {
                 if (currentMode === 'callsign') dbPath = `leaderboard/callsign/global/${myId}`;
                 else if (currentMode === 'pingpong') dbPath = `leaderboard/pingpong/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                 else if (currentMode === 'chars') dbPath = `leaderboard/chars/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
+                else if (currentMode === 'quiz') dbPath = `leaderboard/quiz/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
                 else dbPath = `leaderboard/standard/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}/${myId}`;
 
                 if (currentMode !== 'callsign') {
@@ -2387,7 +2440,9 @@ async function loadRegolamento() {
             'tabGlobalStandardMultiBtn': 'std_multi',
             'tabGlobalStandardSingleBtn': 'std_single',
             'tabGlobalCharsMultiBtn': 'chars_multi',
-            'tabGlobalCharsSingleBtn': 'chars_single'
+            'tabGlobalCharsSingleBtn': 'chars_single',
+            'tabGlobalQuizMultiBtn': 'quiz_multi',
+            'tabGlobalQuizSingleBtn': 'quiz_single'
         };
 
         // Cerca la chiave se tabId è un ID bottone, altrimenti usa tabId come valore
@@ -2435,6 +2490,16 @@ async function loadRegolamento() {
             populateDynamicFilters('chars', 'single');
             let wc = document.getElementById('lbWordFilter').value;
             fetchAndRenderGlobalLeaderboard('chars_single', wc);
+        } else if (modeValue === 'quiz_multi') {
+            filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+            populateDynamicFilters('recent_matches/quiz_multi');
+            let wc = document.getElementById('lbWordFilter').value;
+            fetchAndRenderGlobalLeaderboard('quiz_multi', wc);
+        } else if (modeValue === 'quiz_single') {
+            filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
+            populateDynamicFilters('quiz', 'single');
+            let wc = document.getElementById('lbWordFilter').value;
+            fetchAndRenderGlobalLeaderboard('quiz_single', wc);
         } else {
             filterArea.style.display = 'block'; roomWinnerBanner.style.display = 'none'; waitingText.style.display = 'none';
             let type = modeValue === 'std_multi' ? 'multi' : 'single';
@@ -2518,7 +2583,7 @@ async function loadRegolamento() {
                 // Salva il match nel database globale SOLO SE ci sono almeno 2 giocatori
                 const finalPCount = Object.keys(players).length;
                 if (finalPCount >= 2) {
-                    if (roomData.type === 'multi' || currentMode === 'pingpong' || currentMode === 'chars') {
+                    if (roomData.type === 'multi' || currentMode === 'pingpong' || currentMode === 'chars' || currentMode === 'quiz') {
                         saveMatchToGlobalHistory(players, roomData);
                     }
                 }
@@ -2776,6 +2841,7 @@ async function loadRegolamento() {
         let modePath = 'standard_multi';
         if (currentMode === 'pingpong') modePath = 'pingpong';
         else if (currentMode === 'chars') modePath = 'chars_multi';
+        else if (currentMode === 'quiz') modePath = 'quiz_multi';
 
         // Per il pingpong usiamo wordCount come fallback se manca
         const subPath = roomData.wordCount || 'all';
@@ -2801,9 +2867,12 @@ async function loadRegolamento() {
     function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         const container = document.getElementById('leaderboardContainer'); container.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
 
-        // Per Ping Pong, Multiplayer Standard e Caratteri Multi, mostriamo le SFIDE RECENTI
-        if (tabType === 'pingpong' || tabType === 'standard_multi' || tabType === 'chars_multi') {
-            const modePath = tabType === 'pingpong' ? 'pingpong' : (tabType === 'chars_multi' ? 'chars_multi' : 'standard_multi');
+        // Per Ping Pong, Multiplayer Standard, Caratteri Multi e Quiz Multi mostriamo le SFIDE RECENTI
+        if (tabType === 'pingpong' || tabType === 'standard_multi' || tabType === 'chars_multi' || tabType === 'quiz_multi') {
+            const modePath = tabType === 'pingpong' ? 'pingpong' :
+                             (tabType === 'chars_multi' ? 'chars_multi' :
+                             (tabType === 'quiz_multi' ? 'quiz_multi' : 'standard_multi'));
+
             db.ref(`leaderboard/recent_matches/${modePath}`).once('value', snapshot => {
                 let matches = [];
                 snapshot.forEach(wordCountNode => {
@@ -2866,15 +2935,16 @@ async function loadRegolamento() {
         } else {
             let isStandard = tabType.startsWith('standard');
             let isChars = tabType.startsWith('chars');
-            let modePath = isChars ? 'chars' : (isStandard ? 'standard' : 'pingpong');
-            let subType = isChars ? tabType.replace('chars_', '') : (isStandard ? tabType.replace('standard_', '') : '');
+            let isQuiz = tabType.startsWith('quiz');
+            let modePath = isQuiz ? 'quiz' : (isChars ? 'chars' : (isStandard ? 'standard' : 'pingpong'));
+            let subType = isQuiz ? tabType.replace('quiz_', '') : (isChars ? tabType.replace('chars_', '') : (isStandard ? tabType.replace('standard_', '') : ''));
 
             db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
                 let players = [];
                 snapshot.forEach(wordCountNode => {
                     const key = wordCountNode.key;
                     // Filtro per sottotipo (es. "single" o "multi")
-                    if ((isStandard || isChars) && !key.startsWith(subType + "_")) return;
+                    if ((isStandard || isChars || isQuiz) && !key.startsWith(subType + "_")) return;
 
                     // Filtro per numero parole
                     if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
@@ -3887,4 +3957,264 @@ async function loadRegolamento() {
                                 <small style="font-size:0.7em; opacity:0.7;">Firebase: ${err.code || err.message}</small>
                               </li>`;
         });
+    }
+
+    // --- LOGICA MODALITÀ QUIZ ---
+    function startQuizSequence() {
+        showScreen('quizArea');
+        gameRunning = true;
+
+        // Randomizziamo le domande all'inizio del quiz
+        randomizedQuizQuestions = [...QUIZ_QUESTIONS].sort(() => Math.random() - 0.5);
+        quizQuestionIndex = 0;
+
+        document.getElementById('quizWpmDisplay').textContent = `WPM: ${currentWpm}`;
+        document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
+
+        if (roomCode && !isSinglePlayer) {
+            // Setup Multiplayer Quiz state
+            db.ref(`rooms/${roomCode}/quiz_state`).on('value', snap => {
+                const state = snap.val();
+                if (!state) return;
+
+                quizQuestionIndex = state.questionIndex || 0;
+                quizActiveBuzzerId = state.activeBuzzerId || null;
+
+                renderQuizUI(state);
+            });
+
+            // Inizia la prima domanda se siamo l'host
+            if (myId === roomHostId) {
+                // Per il multiplayer, usiamo l'ordine originale per sincronizzazione
+                // oppure dovremmo condividere il seed. Per ora usiamo l'indice condiviso.
+                db.ref(`rooms/${roomCode}/quiz_state`).set({
+                    questionIndex: 0,
+                    activeBuzzerId: null,
+                    status: 'playing'
+                });
+            }
+        } else {
+            // Single player quiz
+            loadNextQuizQuestion();
+        }
+    }
+
+    function loadNextQuizQuestion() {
+        const sourceList = isSinglePlayer ? randomizedQuizQuestions : QUIZ_QUESTIONS;
+
+        if (quizQuestionIndex >= requestedWordCount || quizQuestionIndex >= sourceList.length) {
+            finishGame();
+            return;
+        }
+
+        currentQuizQuestion = sourceList[quizQuestionIndex];
+        playQuizAudioSequence();
+    }
+
+    async function playQuizAudioSequence() {
+        inputActive = false;
+        disableQuizButtons(true);
+
+        // Reset visuale opzioni
+        for (let l of ['A', 'B', 'C', 'D']) {
+            document.getElementById('btnQuiz' + l).classList.remove('active-choice');
+        }
+
+        document.getElementById('quizQuestionBox').textContent = "Ascolta la domanda...";
+
+        // Aspettiamo che finisca davvero la domanda
+        await playMorseAudio(currentQuizQuestion.q, currentWpm);
+
+        if (!gameRunning) return;
+        await sleep(1500); // Pausa di respiro dopo la domanda
+
+        // Riproduciamo le opzioni A, B, C, D
+        const letters = ["A", "B", "C", "D"];
+        for (let i = 0; i < 4; i++) {
+            if (!gameRunning) return;
+            document.getElementById('quizQuestionBox').textContent = `Opzione ${letters[i]}...`;
+
+            // Evidenzia l'opzione che sta suonando
+            const currentBtn = document.getElementById('btnQuiz' + letters[i]);
+            currentBtn.classList.add('active-choice');
+
+            // Aspettiamo che finisca davvero l'opzione corrente
+            await playMorseAudio(`${letters[i]} ${currentQuizQuestion.a[i]}`, currentWpm);
+
+            currentBtn.classList.remove('active-choice');
+
+            if (!gameRunning) return;
+            await sleep(1000); // Piccola pausa tra le opzioni
+        }
+
+        if (!gameRunning) return;
+
+        document.getElementById('quizQuestionBox').textContent = "SCEGLI LA TUA RISPOSTA!";
+        enableQuizControls();
+        startQuizTimer(20);
+    }
+
+    function enableQuizControls() {
+        inputActive = true;
+        if (isSinglePlayer) {
+            disableQuizButtons(false);
+        } else {
+            // In multi, prima bisogna premere il buzzer
+            document.getElementById('quizBuzzer').style.display = 'block';
+            document.getElementById('quizOptionsContainer').style.opacity = '0.5';
+            disableQuizButtons(true);
+        }
+    }
+
+    function disableQuizButtons(disabled) {
+        for (let l of ['A', 'B', 'C', 'D']) {
+            const btn = document.getElementById('btnQuiz' + l);
+            if(btn) btn.disabled = disabled;
+        }
+    }
+
+    function startQuizTimer(seconds) {
+        if (quizTimerInterval) clearInterval(quizTimerInterval);
+        const bar = document.getElementById('quizTimerProgress');
+        let timeLeft = 100;
+        const decrement = 100 / (seconds * 10);
+
+        quizTimerInterval = setInterval(() => {
+            timeLeft -= decrement;
+            bar.style.width = Math.max(0, timeLeft) + '%';
+
+            if (timeLeft <= 0) {
+                clearInterval(quizTimerInterval);
+                handleQuizTimeout();
+            }
+        }, 100);
+    }
+
+    function handleQuizTimeout() {
+        if (!inputActive) return;
+        showToast("Tempo scaduto!");
+        if (isSinglePlayer) {
+            submitQuizAnswer(-1); // Sbagliata
+        } else if (quizActiveBuzzerId === myId) {
+            submitQuizAnswer(-1); // Chi ha prenotato non ha risposto
+        }
+    }
+
+    function submitQuizAnswer(index) {
+        if (!inputActive && !isSinglePlayer && quizActiveBuzzerId !== myId) return;
+        if (quizTimerInterval) clearInterval(quizTimerInterval);
+        inputActive = false;
+
+        // Disabilita tasti per evitare doppi click
+        disableQuizButtons(true);
+
+        const isCorrect = (index === currentQuizQuestion.correct);
+        const selectedLetter = ["A", "B", "C", "D"][index] || "?";
+
+        if (isCorrect) {
+            totalScore += 100; // Punteggio fisso quiz
+            showToast(`CORRETTO (${selectedLetter})! +100`);
+        } else {
+            showToast(`SBAGLIATO! Era la ${["A", "B", "C", "D"][currentQuizQuestion.correct]}`);
+        }
+
+        document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
+
+        if (roomCode) {
+            db.ref(`rooms/${roomCode}/players/${myId}`).update({
+                score: totalScore,
+                wordIndex: quizQuestionIndex + 1
+            });
+        }
+
+        setTimeout(() => {
+            if (!gameRunning) return;
+            quizQuestionIndex++;
+
+            if (roomCode && !isSinglePlayer && myId === roomHostId) {
+                db.ref(`rooms/${roomCode}/quiz_state`).update({
+                    questionIndex: quizQuestionIndex,
+                    activeBuzzerId: null
+                });
+            } else if (isSinglePlayer) {
+                loadNextQuizQuestion();
+            }
+        }, 3000);
+    }
+
+    function sleep(ms) {
+        return new Promise(resolve => {
+            const check = () => {
+                if (!gameRunning) resolve(); // Esci subito se il gioco è fermo
+                else resolve();
+            };
+            setTimeout(resolve, ms);
+        });
+    }
+
+    // Eventi Bottoni Quiz
+    const buzzerBtn = document.getElementById('quizBuzzer');
+    if(buzzerBtn) {
+        buzzerBtn.addEventListener('click', () => {
+            if (!roomCode || isSinglePlayer || quizActiveBuzzerId) return;
+
+            db.ref(`rooms/${roomCode}/quiz_state`).transaction(state => {
+                if (state && !state.activeBuzzerId) {
+                    state.activeBuzzerId = myId;
+                }
+                return state;
+            });
+        });
+    }
+
+    for (let i = 0; i < 4; i++) {
+        const letter = ["A", "B", "C", "D"][i];
+        const btn = document.getElementById('btnQuiz' + letter);
+        if(btn) btn.onclick = () => submitQuizAnswer(i);
+
+        const rBtn = document.getElementById('replay' + letter);
+        if(rBtn) rBtn.onclick = () => {
+            if (currentQuizQuestion) playMorseAudio(currentQuizQuestion.a[i], currentWpm);
+        };
+    }
+
+    const replayQBtn = document.getElementById('quizReplayQ');
+    if(replayQBtn) {
+        replayQBtn.onclick = () => {
+            if (currentQuizQuestion) playMorseAudio(currentQuizQuestion.q, currentWpm);
+        };
+    }
+
+    const quitQuizBtn = document.getElementById('quitQuizBtn');
+    if(quitQuizBtn) {
+        quitQuizBtn.onclick = () => {
+            if (confirm("Vuoi abbandonare il Quiz?")) {
+                if(quizTimerInterval) clearInterval(quizTimerInterval);
+                gameRunning = false;
+                exitRoomCleanly();
+            }
+        };
+    }
+
+    function renderQuizUI(state) {
+        const buzzerBtn = document.getElementById('quizBuzzer');
+        const winnerDiv = document.getElementById('buzzerWinner');
+
+        if (state.activeBuzzerId) {
+            buzzerBtn.style.display = 'none';
+            if (state.activeBuzzerId === myId) {
+                winnerDiv.textContent = "TOCCA A TE!";
+                document.getElementById('quizOptionsContainer').style.opacity = '1';
+                disableQuizButtons(false);
+            } else {
+                winnerDiv.textContent = "L'AVVERSARIO RISPONDE...";
+                document.getElementById('quizOptionsContainer').style.opacity = '0.5';
+                disableQuizButtons(true);
+            }
+        } else {
+            winnerDiv.textContent = "";
+            buzzerBtn.style.display = 'block';
+            document.getElementById('quizOptionsContainer').style.opacity = '0.5';
+            disableQuizButtons(true);
+        }
     }
