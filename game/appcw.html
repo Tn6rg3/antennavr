@@ -164,10 +164,13 @@
     <div class="box-panel" style="margin-top: 8px; flex-shrink: 0; display: flex; flex-direction: column; padding: 5px;">
         <div style="display:flex; justify-content:space-between; align-items:center; cursor: pointer;" onclick="toggleGlobalChatInline()">
             <h3 id="txt_global_chat_title_inline" style="margin:0; font-size:1em; color:var(--link-color);">🌎 Chat Globale</h3>
-            <span id="globalChatToggleIcon">▼</span>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <button id="clearGlobalChatBtnInline" class="btn-danger action-btn-small" style="padding: 2px 8px; font-size: 0.75em; margin:0; display:none;" onclick="event.stopPropagation()">Cancella</button>
+                <span id="globalChatToggleIcon">▼</span>
+            </div>
         </div>
         <div id="globalChatContainerInline" style="display:none; flex-direction: column; margin-top: 5px;">
-            <div id="globalChatMessagesInline" style="height: 120px; overflow-y: auto; font-size: 0.85em; padding: 5px; background: var(--bg-color); border-radius: 6px; margin-bottom: 5px;"></div>
+            <div id="globalChatMessagesInline" style="height: 120px; overflow-y: auto; font-size: 0.85em; padding: 5px; background: var(--bg-color); border-radius: 6px; margin-bottom: 5px; display: flex; flex-direction: column;"></div>
             <div style="display:flex; gap:5px;">
                 <input type="text" id="globalChatInputInline" placeholder="Scrivi un messaggio..." style="padding:8px; margin:0; flex-grow:1;">
                 <button id="sendGlobalChatBtnInline" style="width:auto; padding:8px 12px; margin:0;">Invia</button>
@@ -665,7 +668,7 @@
 </div>
 
 <!-- Richiamo dello script esterno -->
-<script src="js/quiz_data.js?v=20240520.16"></script>
-<script src="js/app.js?v=20240520.16"></script>
+<script src="js/quiz_data.js?v=20240520.15"></script>
+<script src="js/app.js?v=20240520.15"></script>
 </body>
 </html>
