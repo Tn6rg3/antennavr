@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
-    const APP_VERSION = "20240520.18"; // Versione aggiornata
+    const APP_VERSION = "20240520.19"; // Versione aggiornata
 
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
@@ -1768,11 +1768,6 @@ async function loadRegolamento() {
             usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
         }
 
-        if (currentMode === 'quiz') {
-            startQuizSequence();
-            return;
-        }
-
         document.getElementById('tableBody').innerHTML = "";
         window.lastPlayedWordId = 0; window.lastSeenGuessId = 0;
         if (pingPongListener) { db.ref(`rooms/${roomCode}/pingpong`).off('value', pingPongListener); pingPongListener = null; }
@@ -1810,6 +1805,12 @@ async function loadRegolamento() {
                 playBeep(800, 0.3);
                 setTimeout(() => {
                     if (!gameRunning) return;
+
+                    if (currentMode === 'quiz') {
+                        startQuizSequence();
+                        return;
+                    }
+
                     showScreen('gameArea');
 
                     if (currentMode === 'pingpong') {
@@ -3973,10 +3974,6 @@ async function loadRegolamento() {
         gameRunning = true;
         lastLoadedQuizIndex = -1;
 
-        // Randomizziamo le domande all'inizio del quiz
-        randomizedQuizQuestions = [...QUIZ_QUESTIONS].sort(() => Math.random() - 0.5);
-        quizQuestionIndex = 0;
-
         document.getElementById('quizWpmDisplay').textContent = `WPM: ${currentWpm}`;
         document.getElementById('quizScoreDisplay').textContent = `Punti: ${totalScore}`;
 
@@ -3991,6 +3988,14 @@ async function loadRegolamento() {
                 if (!state) return;
 
                 const newIndex = state.questionIndex || 0;
+
+                // Sincronizzazione ordine domande (se l'host lo ha generato)
+                if (state.questionsOrder) {
+                    randomizedQuizQuestions = state.questionsOrder.map(idx => QUIZ_QUESTIONS[idx]);
+                } else {
+                    randomizedQuizQuestions = QUIZ_QUESTIONS; // Fallback
+                }
+
                 if (newIndex !== lastLoadedQuizIndex) {
                     lastLoadedQuizIndex = newIndex;
                     quizQuestionIndex = newIndex;
@@ -3998,28 +4003,32 @@ async function loadRegolamento() {
                 }
 
                 quizActiveBuzzerId = state.activeBuzzerId || null;
-
                 renderQuizUI(state);
             });
 
             // Inizia la prima domanda se siamo l'host
             if (myId === roomHostId) {
-                // Per il multiplayer, usiamo l'ordine originale per sincronizzazione
-                // oppure dovremmo condividere il seed. Per ora usiamo l'indice condiviso.
+                // L'host genera l'ordine casuale una volta sola
+                const indices = Array.from({length: QUIZ_QUESTIONS.length}, (_, i) => i);
+                const shuffledIndices = indices.sort(() => Math.random() - 0.5);
+
                 db.ref(`rooms/${roomCode}/quiz_state`).set({
                     questionIndex: 0,
                     activeBuzzerId: null,
-                    status: 'playing'
+                    status: 'playing',
+                    questionsOrder: shuffledIndices
                 });
             }
         } else {
             // Single player quiz
+            randomizedQuizQuestions = [...QUIZ_QUESTIONS].sort(() => Math.random() - 0.5);
+            quizQuestionIndex = 0;
             loadNextQuizQuestion();
         }
     }
 
     function loadNextQuizQuestion() {
-        const sourceList = isSinglePlayer ? randomizedQuizQuestions : QUIZ_QUESTIONS;
+        const sourceList = randomizedQuizQuestions;
 
         if (quizQuestionIndex >= requestedWordCount || quizQuestionIndex >= sourceList.length) {
             finishGame();
@@ -4120,7 +4129,9 @@ async function loadRegolamento() {
     }
 
     function submitQuizAnswer(index) {
-        if (!inputActive && !isSinglePlayer && quizActiveBuzzerId !== myId) return;
+        if (!isSinglePlayer && (!inputActive || quizActiveBuzzerId !== myId)) return;
+        if (isSinglePlayer && !inputActive) return;
+
         if (quizTimerInterval) clearInterval(quizTimerInterval);
         inputActive = false;
 
@@ -4175,7 +4186,7 @@ async function loadRegolamento() {
     const buzzerBtn = document.getElementById('quizBuzzer');
     if(buzzerBtn) {
         buzzerBtn.addEventListener('click', () => {
-            if (!roomCode || isSinglePlayer || quizActiveBuzzerId) return;
+            if (!roomCode || isSinglePlayer || quizActiveBuzzerId || !inputActive) return;
 
             db.ref(`rooms/${roomCode}/quiz_state`).transaction(state => {
                 if (state && !state.activeBuzzerId) {
@@ -4232,7 +4243,8 @@ async function loadRegolamento() {
             }
         } else {
             winnerDiv.textContent = "";
-            buzzerBtn.style.display = 'block';
+            // Mostriamo il buzzer solo se l'input è attivo (cioè dopo l'audio)
+            buzzerBtn.style.display = inputActive ? 'block' : 'none';
             document.getElementById('quizOptionsContainer').style.opacity = '0.5';
             disableQuizButtons(true);
         }
