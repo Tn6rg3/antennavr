@@ -1,4 +1,4 @@
- const BOT_USERNAME = "cwappgame_bot";
+const BOT_USERNAME = "cwappgame_bot";
     const WEBAPP_NAME = "cwgame";
     const APP_VERSION = "20240520.15"; // Versione aggiornata
 
@@ -808,6 +808,13 @@ async function loadRegolamento() {
         if(loadingStats) loadingStats.textContent = t.loading;
         const loadingStats2 = document.getElementById('txt_loading_stats2');
         if(loadingStats2) loadingStats2.textContent = t.loading;
+
+        // AGGIORNAMENTO VERSIONI IN UI (Sempre dopo caricamento lingua)
+        const vDisp = document.getElementById('appVersionDisplay');
+        if(vDisp) vDisp.textContent = "v" + APP_VERSION;
+
+        const vFoot = document.getElementById('appVersionFooter');
+        if(vFoot) vFoot.textContent = APP_VERSION;
 
         checkGameTypeUI();
 
