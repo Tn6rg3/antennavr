@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240520.29"; // Versione incrementata
+const APP_VERSION = "20240520.30"; // Versione aggiornata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -76,8 +76,8 @@ function showToast(message) {
 }
 
 window.openTelegramProfile = function(username) {
-    if (username && username.trim() !== "") tg.openTelegramLink('https://t.me/' + username);
-    else tg.showAlert("Questo utente ha impostato la privacy o non ha un Username pubblico.");
+    if (username && String(username).trim() !== "") tg.openTelegramLink('https://t.me/' + username);
+    else tg.showAlert("Questo utente ha impostato la privacy o non ha uno username pubblico.");
 }
 
 function showScreen(screenId) {
@@ -539,7 +539,7 @@ window.openTeamInviteModal = async function(targetId, targetName) {
         if (inTeam) { els.recruitmentStatusText.innerHTML = `⚠️ <b>${targetName}</b> fa già parte della squadra <b>${tName}</b>.`; els.recruitCreateBtn.style.display = 'none'; } 
         else { els.recruitmentStatusText.innerHTML = `💡 <b>${targetName}</b> non ha ancora una squadra.`; els.recruitCreateBtn.style.display = 'block'; if (myTeamId) els.recruitJoinBtn.style.display = 'block'; }
         els.recruitJoinBtn.onclick = () => sendRecruitmentInvite('team'); els.recruitCreateBtn.onclick = () => sendRecruitmentInvite('suggest');
-        els.recruitMsgBtn.onclick = () => { db.ref(`presence/${targetId}`).once('value', s => { const u = s.val(); if (u && u.username && u.username !== "") tg.openTelegramLink('https://t.me/' + u.username); else tg.showAlert("Nessun username pubblico."); }); };
+        els.recruitMsgBtn.onclick = () => { db.ref(`presence/${targetId}`).once('value', s => { const u = s.val(); if (u && u.username && u.username.trim() !== "") tg.openTelegramLink('https://t.me/' + u.username); else tg.showAlert("Nessun username pubblico."); }); };
     } catch(e) {} els.inviteModal.style.display = 'flex';
 }
 
@@ -638,7 +638,7 @@ function joinRoomLogic(isReconnect = false) {
         showScreen('lobbyScreen'); els.lobbyTitleText.textContent = roomCode.startsWith("TRN_") ? "Lobby Incontro Torneo 🥊" : "Lobby Stanza Libera"; if(els.permanentGameInput) els.permanentGameInput.blur();
         playerRef.onDisconnect().update({ online: false }); 
         if (!pData) playerRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, score: 0, wpm: 0, finished: false, teamId: myTeamId, ready: false, online: true }); 
-        else playerRef.update({ online: true, name: myName, username: myPrivacy ? "" : tgUsername }); // <-- FIX PRIVACY LOBBY
+        else playerRef.update({ online: true, name: myName, username: myPrivacy ? "" : tgUsername });
         listenToChat(); if (listeners.room && !isReconnect) listeners.room.off();
         listeners.room = db.ref(`rooms/${roomCode}`);
         listeners.room.on('value', snap => {
@@ -833,7 +833,8 @@ function finishGame() {
             }
             db.ref(dbPath).once('value', s => { 
                 let oldData = s.val(); 
-                if (!oldData || totalScore > oldData.score) {
+                let oldScore = oldData ? (Number(oldData.score) || 0) : 0;
+                if (!oldData || totalScore > oldScore) {
                     db.ref(dbPath).set({ name: myName, username: myPrivacy ? "" : tgUsername, score: totalScore, wpm: currentWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') }); 
                     showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
                 } else {
@@ -904,7 +905,7 @@ if(els.saveAliasBtn) els.saveAliasBtn.addEventListener('click', async () => {
         await db.ref(`users/${myId}`).update({ alias: alias || null, privacyUsername: privacy });
         myName = newName; myPrivacy = privacy; els.playerName.textContent = myName; showToast("Profilo aggiornato!");
         await db.ref(`presence/${myId}`).update({ name: myName, username: currentUsername });
-        if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ name: myName, username: currentUsername }); // <-- FIX PRIVACY IN LOBBY
+        if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ name: myName, username: currentUsername });
         const now = new Date(); const dKey = now.toISOString().split('T')[0]; const wKey = getWeekNumber(now); const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
         for (const path of [`activity/daily/${dKey}`, `activity/weekly/${wKey}`, `activity/monthly/${mKey}`]) { const actRef = db.ref(`${path}/${myId}`); const actSnap = await actRef.once('value'); if (actSnap.exists()) await actRef.update({ name: myName }); }
         if (myTeamId) await db.ref(`teams/${myTeamId}/members/${myId}`).update({ name: myName, username: currentUsername });
@@ -1083,7 +1084,7 @@ function renderRoomLeaderboard(players) {
             const row = document.createElement('div'); row.className = 'leaderboard-row';
             let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
             const leftSpan = document.createElement('span'); leftSpan.appendChild(document.createTextNode(medal + " "));
-            if (player.username && player.username.trim() !== "") { const nameLink = document.createElement('span'); nameLink.style.color = 'var(--link-color)'; nameLink.style.cursor = 'pointer'; nameLink.style.textDecoration = 'underline'; nameLink.textContent = player.name; nameLink.onclick = () => openTelegramProfile(player.username); leftSpan.appendChild(nameLink); } 
+            if (player.username && String(player.username).trim() !== "") { const nameLink = document.createElement('span'); nameLink.style.color = 'var(--link-color)'; nameLink.style.cursor = 'pointer'; nameLink.style.textDecoration = 'underline'; nameLink.textContent = player.name; nameLink.onclick = () => openTelegramProfile(player.username); leftSpan.appendChild(nameLink); } 
             else leftSpan.appendChild(document.createTextNode(player.name));
             leftSpan.appendChild(document.createElement('br')); const wpmSmall = document.createElement('small'); wpmSmall.style.color = 'var(--hint-color)'; wpmSmall.textContent = `(${player.wpm || 0} WPM)`; leftSpan.appendChild(wpmSmall);
             const rightSpan = document.createElement('span');
@@ -1150,6 +1151,8 @@ function saveMatchToGlobalHistory(players, roomData) {
 
 function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
     els.leaderboardContainer.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+    
+    // Sfide recenti
     if (['standard_multi', 'chars_multi', 'quiz_multi'].includes(tabType)) {
         db.ref(`leaderboard/recent_matches/${tabType}`).once('value', snapshot => {
             let matches = [];
@@ -1158,56 +1161,90 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         });
         return;
     }
+
+    // PingPong
     if (tabType === 'pingpong') {
         db.ref(`leaderboard/pingpong`).once('value', snapshot => {
             let players = [];
             snapshot.forEach(wordCountNode => {
                 const key = wordCountNode.key;
                 if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
-                wordCountNode.forEach(userNode => players.push(userNode.val()));
+                wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
             });
-            players.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
+            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
             renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, true);
         });
         return;
     }
-    if (tabType === 'callsign' || tabType === 'tournaments') {
-        db.ref(`leaderboard/${tabType}${tabType === 'callsign' ? '/global' : ''}`).orderByChild('score').limitToLast(50).once('value', snap => {
-            let arr = []; snap.forEach(c => arr.push(c.val())); renderPlayersListHTML(arr.reverse(), els.leaderboardContainer, false, tabType === 'tournaments');
-        });
-    } else if (tabType === 'active_tournament') {
-        if (!activeTrnId) els.leaderboardContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang==='it' ? "Non sei iscritto a nessun torneo attivo." : "You are not enrolled in any active tournament."}</p>`;
-        else db.ref(`tournaments/${activeTrnId}`).once('value', snap => {
-            const trn = snap.val();
-            if (trn && trn.standings) {
-                els.leaderboardContainer.innerHTML = `<div style="text-align:center; margin-bottom:10px; padding:5px; background:var(--sec-bg-color); border-radius:8px;"><small style="color:var(--hint-color)">${currentLang==='it'?'Torneo Attivo:':'Active Tournament:'}</small><br><b style="color:var(--champ-color); font-size:1.1em;">${escapeHTML(trn.name)}</b></div>`;
-                let std = Object.entries(trn.standings).map(([id, data]) => ({ name: data.name, score: data.points, date: currentLang==='it'?"In corso":"In progress" })); std.sort((a,b) => b.score - a.score);
-                const listCont = document.createElement('div'); renderPlayersListHTML(std, listCont, false, true); els.leaderboardContainer.appendChild(listCont);
-            } else els.leaderboardContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang==='it'?'Dati torneo non disponibili.':'Tournament data unavailable.'}</p>`;
-        });
-    } else {
-        let isStandard = tabType.startsWith('standard');
-        let isChars = tabType.startsWith('chars');
-        let isQuiz = tabType.startsWith('quiz');
-        let modePath = isQuiz ? 'quiz' : (isChars ? 'chars' : 'standard');
-        let subType = isQuiz ? tabType.replace('quiz_', '') : (isChars ? tabType.replace('chars_', '') : tabType.replace('standard_', ''));
 
-        db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
+    // Callsign (Nominativi / CW Freak)
+    if (tabType === 'callsign') {
+        db.ref('leaderboard/callsign/global').once('value', snapshot => {
             let players = [];
-            snapshot.forEach(wordCountNode => {
-                const key = wordCountNode.key;
-                if (!key.startsWith(subType + "_")) return;
-                if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
-
-                wordCountNode.forEach(userNode => {
-                    players.push(userNode.val());
-                });
-            });
-
-            players.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
-            renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, true);
+            if (snapshot.exists()) {
+                snapshot.forEach(child => { if (child.val()) players.push(child.val()); });
+            }
+            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+            renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, false);
         });
+        return;
     }
+
+    // Tornei
+    if (tabType === 'tournaments') {
+        db.ref('leaderboard/tournaments').once('value', snapshot => {
+            let teams = [];
+            if (snapshot.exists()) {
+                snapshot.forEach(child => { if (child.val()) teams.push(child.val()); });
+            }
+            teams.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+            renderPlayersListHTML(teams.slice(0, 100), els.leaderboardContainer, false, true);
+        });
+        return;
+    }
+
+    // Torneo Attivo
+    if (tabType === 'active_tournament') {
+        if (!activeTrnId) {
+            els.leaderboardContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang==='it' ? "Non sei iscritto a nessun torneo attivo." : "You are not enrolled in any active tournament."}</p>`;
+        } else {
+            db.ref(`tournaments/${activeTrnId}`).once('value', snap => {
+                const trn = snap.val();
+                if (trn && trn.standings) {
+                    els.leaderboardContainer.innerHTML = `<div style="text-align:center; margin-bottom:10px; padding:5px; background:var(--sec-bg-color); border-radius:8px;"><small style="color:var(--hint-color)">${currentLang==='it'?'Torneo Attivo:':'Active Tournament:'}</small><br><b style="color:var(--champ-color); font-size:1.1em;">${escapeHTML(trn.name)}</b></div>`;
+                    let std = Object.entries(trn.standings).map(([id, data]) => ({ name: data.name, score: data.points, date: currentLang==='it'?"In corso":"In progress" }));
+                    std.sort((a,b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+                    const listCont = document.createElement('div');
+                    renderPlayersListHTML(std, listCont, false, true);
+                    els.leaderboardContainer.appendChild(listCont);
+                } else {
+                    els.leaderboardContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang==='it'?'Dati torneo non disponibili.':'Tournament data unavailable.'}</p>`;
+                }
+            });
+        }
+        return;
+    }
+
+    // Modalità singole (standard, chars, quiz)
+    let isStandard = tabType.startsWith('standard');
+    let isChars = tabType.startsWith('chars');
+    let isQuiz = tabType.startsWith('quiz');
+    let modePath = isQuiz ? 'quiz' : (isChars ? 'chars' : 'standard');
+    let subType = isQuiz ? tabType.replace('quiz_', '') : (isChars ? tabType.replace('chars_', '') : tabType.replace('standard_', ''));
+
+    db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
+        let players = [];
+        snapshot.forEach(wordCountNode => {
+            const key = wordCountNode.key;
+            if (!key.startsWith(subType + "_")) return;
+            if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
+
+            wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
+        });
+
+        players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+        renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, true);
+    });
 }
 
 function renderMatchesHistoryHTML(matches, container) {
@@ -1242,7 +1279,7 @@ function renderPlayersListHTML(players, container, showWordCount, isTeam = false
         const infoDiv = document.createElement('div'); infoDiv.style.display = 'flex'; infoDiv.style.flexDirection = 'column';
         const nameDiv = document.createElement('div'); nameDiv.style.display = 'flex'; nameDiv.style.alignItems = 'center';
         
-        if (player.username && player.username.trim() !== "" && !isTeam) {
+        if (player.username && String(player.username).trim() !== "" && !isTeam) {
             const nameLink = document.createElement('span'); nameLink.style.color = 'var(--link-color)'; nameLink.style.cursor = 'pointer'; nameLink.style.textDecoration = 'underline'; nameLink.style.fontWeight = 'bold'; nameLink.textContent = player.name; nameLink.onclick = () => openTelegramProfile(player.username);
             nameDiv.appendChild(nameLink);
         } else {
@@ -1253,7 +1290,7 @@ function renderPlayersListHTML(players, container, showWordCount, isTeam = false
             const wcSpan = document.createElement('span'); wcSpan.style.background = 'var(--hint-color)'; wcSpan.style.color = 'var(--bg-color)'; wcSpan.style.padding = '1px 4px'; wcSpan.style.borderRadius = '3px'; wcSpan.style.fontSize = '0.8em'; wcSpan.style.marginLeft = '4px'; wcSpan.textContent = player.wordCount + " str."; nameDiv.appendChild(wcSpan);
         }
 
-        const dateDiv = document.createElement('div'); dateDiv.style.fontSize = '0.75em'; dateDiv.style.color = 'var(--hint-color)'; dateDiv.textContent = player.date + " ";
+        const dateDiv = document.createElement('div'); dateDiv.style.fontSize = '0.75em'; dateDiv.style.color = 'var(--hint-color)'; dateDiv.textContent = (player.date || "") + " ";
         if (!isTeam && player.wpm) {
             const wpmSpan = document.createElement('span'); wpmSpan.style.color = 'var(--champ-color)'; wpmSpan.style.fontWeight = 'bold'; wpmSpan.textContent = player.wpm + " WPM"; dateDiv.appendChild(wpmSpan);
         }
