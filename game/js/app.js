@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240520.30"; // Versione aggiornata
+const APP_VERSION = "20240520.31"; // Versione incrementata per sicurezza
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -516,30 +516,53 @@ function listenToOnlineUsers() {
         snap.forEach(child => {
             const u = child.val(); if (child.key === myId) return; count++; const li = document.createElement('li');
             const isWaiting = (isChallenging && currentInviterId === child.key), isPlaying = (u.status === 'playing');
-            const leftSpan = document.createElement('span'); const nameB = document.createElement('b'); nameB.textContent = u.name; nameB.style.cursor = 'pointer'; nameB.style.color = 'var(--link-color)'; nameB.style.textDecoration = 'underline';
-            nameB.onclick = () => openTeamInviteModal(child.key, u.name); leftSpan.appendChild(nameB); leftSpan.appendChild(document.createElement('br'));
+            
+            const leftSpan = document.createElement('span'); 
+            const nameB = document.createElement('b'); nameB.textContent = u.name; nameB.style.cursor = 'pointer'; nameB.style.color = 'var(--link-color)'; nameB.style.textDecoration = 'underline';
+            nameB.onclick = () => openTeamInviteModal(child.key, u.name); 
+            leftSpan.appendChild(nameB); leftSpan.appendChild(document.createElement('br'));
+            
             const statusSmall = document.createElement('small'); statusSmall.textContent = isPlaying ? "🟡 In Partita" : "🟢 Online"; leftSpan.appendChild(statusSmall);
+            
             const btn = document.createElement('button'); btn.className = `action-btn-small ${isWaiting ? 'btn-danger' : 'btn-success'}`;
             if (isPlaying) { btn.classList.add('btn-secondary'); btn.disabled = true; btn.textContent = "In partita"; }
             else { if (isChallenging && !isWaiting) btn.disabled = true; btn.textContent = isWaiting ? 'In Attesa...' : 'Sfida'; btn.onclick = () => openInviteModal(child.key, u.name); }
             li.appendChild(leftSpan); li.appendChild(btn); els.onlineUsersList.appendChild(li);
         });
-        if (count === 0) els.onlineUsersList.innerHTML = '<li style="justify-content:center; color:var(--hint-color); background:none; border:none;">Sei solo.</li>';
+        if (count === 0) {
+            const emptyLi = document.createElement('li'); emptyLi.style.cssText = "justify-content:center; color:var(--hint-color); background:none; border:none;";
+            emptyLi.textContent = "Sei solo."; els.onlineUsersList.appendChild(emptyLi);
+        }
     });
 }
 
 window.openInviteModal = function(targetId, targetName) {
     currentInviterId = targetId; els.inviteModalTitle.textContent = "Sfida " + targetName; els.inviteModalText.textContent = "Scegli le impostazioni per la sfida:"; els.inviteSettings.style.display = 'block'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'none'; els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'block'; els.inviteModal.style.display = 'flex';
 }
+
 window.openTeamInviteModal = async function(targetId, targetName) {
     currentInviterId = targetId; els.inviteModalTitle.textContent = "Recluta " + targetName; els.recruitmentStatusText.textContent = "Caricamento stato..."; els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'block'; els.incomingInviteArea.style.display = 'none'; els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'none'; els.recruitJoinBtn.style.display = 'none';
     try {
         const teamsSnap = await db.ref('teams').once('value'); let tName = null, inTeam = false;
         teamsSnap.forEach(tSnap => { const t = tSnap.val(); if (t.status !== 'retired' && t.members && t.members[targetId]) { inTeam = true; tName = t.name; } });
-        if (inTeam) { els.recruitmentStatusText.innerHTML = `⚠️ <b>${targetName}</b> fa già parte della squadra <b>${tName}</b>.`; els.recruitCreateBtn.style.display = 'none'; } 
-        else { els.recruitmentStatusText.innerHTML = `💡 <b>${targetName}</b> non ha ancora una squadra.`; els.recruitCreateBtn.style.display = 'block'; if (myTeamId) els.recruitJoinBtn.style.display = 'block'; }
+        
+        els.recruitmentStatusText.innerHTML = "";
+        if (inTeam) {
+            els.recruitmentStatusText.appendChild(document.createTextNode("⚠️ "));
+            const b1 = document.createElement('b'); b1.textContent = targetName; els.recruitmentStatusText.appendChild(b1);
+            els.recruitmentStatusText.appendChild(document.createTextNode(" fa già parte della squadra "));
+            const b2 = document.createElement('b'); b2.textContent = tName; els.recruitmentStatusText.appendChild(b2);
+            els.recruitmentStatusText.appendChild(document.createTextNode("."));
+            els.recruitCreateBtn.style.display = 'none'; 
+        } else {
+            els.recruitmentStatusText.appendChild(document.createTextNode("💡 "));
+            const b1 = document.createElement('b'); b1.textContent = targetName; els.recruitmentStatusText.appendChild(b1);
+            els.recruitmentStatusText.appendChild(document.createTextNode(" non ha ancora una squadra."));
+            els.recruitCreateBtn.style.display = 'block'; if (myTeamId) els.recruitJoinBtn.style.display = 'block'; 
+        }
+        
         els.recruitJoinBtn.onclick = () => sendRecruitmentInvite('team'); els.recruitCreateBtn.onclick = () => sendRecruitmentInvite('suggest');
-        els.recruitMsgBtn.onclick = () => { db.ref(`presence/${targetId}`).once('value', s => { const u = s.val(); if (u && u.username && u.username.trim() !== "") tg.openTelegramLink('https://t.me/' + u.username); else tg.showAlert("Nessun username pubblico."); }); };
+        els.recruitMsgBtn.onclick = () => { db.ref(`presence/${targetId}`).once('value', s => { const u = s.val(); if (u && u.username && String(u.username).trim() !== "") tg.openTelegramLink('https://t.me/' + u.username); else tg.showAlert("Nessun username pubblico."); }); };
     } catch(e) {} els.inviteModal.style.display = 'flex';
 }
 
@@ -561,11 +584,31 @@ function listenToInvites() {
     db.ref(`invites/${myId}`).on('value', snap => {
         const inv = snap.val(); if (!inv || roomCode || gameRunning) return;
         if (Date.now() - inv.ts > 60000) return db.ref(`invites/${myId}`).remove();
+        
+        els.inviteModalText.innerHTML = '';
         if (inv.type === 'team') {
-            els.inviteModalTitle.textContent = inv.teamId ? "🚀 INVITO SQUADRA" : "💡 SUGGERIMENTO SQUADRA"; els.inviteModalText.innerHTML = inv.teamId ? `${inv.fromName} ti ha invitato ad unirti alla squadra <b>${inv.teamName}</b>.` : `${inv.fromName} ti suggerisce di creare una tua squadra!`; els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'none'; els.incomingTeamInviteArea.style.display = 'block'; els.outgoingInviteArea.style.display = 'none';
+            els.inviteModalTitle.textContent = inv.teamId ? "🚀 INVITO SQUADRA" : "💡 SUGGERIMENTO SQUADRA";
+            if (inv.teamId) {
+                els.inviteModalText.appendChild(document.createTextNode(inv.fromName + " ti ha invitato ad unirti alla squadra "));
+                const bTeam = document.createElement('b'); bTeam.textContent = inv.teamName; els.inviteModalText.appendChild(bTeam);
+                els.inviteModalText.appendChild(document.createTextNode("."));
+            } else els.inviteModalText.appendChild(document.createTextNode(inv.fromName + " ti suggerisce di creare una tua squadra!"));
+            
+            els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'none'; els.incomingTeamInviteArea.style.display = 'block'; els.outgoingInviteArea.style.display = 'none';
             els.acceptTeamInviteBtn.textContent = inv.teamId ? "UNISCITI ✅" : "VAI ALLA CREAZIONE 🛠️"; els.acceptTeamInviteBtn.onclick = () => { db.ref(`invites/${myId}`).remove(); closeInviteModal(); if (inv.teamId) joinTeam(inv.teamId); else showScreen('teamsScreen'); };
         } else {
-            els.inviteModalTitle.textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase(); els.inviteModalText.innerHTML = `Ti ha invitato a giocare:<br><b>${inv.mode.toUpperCase()}</b> a <b>${inv.wpm}</b> WPM (<b>${inv.wordCount}</b> test).`; els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'block'; els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'none';
+            els.inviteModalTitle.textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
+            
+            els.inviteModalText.appendChild(document.createTextNode("Ti ha invitato a giocare:"));
+            els.inviteModalText.appendChild(document.createElement('br'));
+            const bMode = document.createElement('b'); bMode.textContent = inv.mode.toUpperCase(); els.inviteModalText.appendChild(bMode);
+            els.inviteModalText.appendChild(document.createTextNode(" a "));
+            const bWpm = document.createElement('b'); bWpm.textContent = inv.wpm; els.inviteModalText.appendChild(bWpm);
+            els.inviteModalText.appendChild(document.createTextNode(" WPM ("));
+            const bCount = document.createElement('b'); bCount.textContent = inv.wordCount; els.inviteModalText.appendChild(bCount);
+            els.inviteModalText.appendChild(document.createTextNode(" test)."));
+            
+            els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'block'; els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'none';
         }
         els.inviteModal.style.display = 'flex'; currentInviterId = inv.fromId; window.lastIncomingInvite = inv;
     });
@@ -591,7 +634,13 @@ function listenToRooms() {
             if (room.status === 'waiting' && room.type !== 'single') {
                 wCount++; const pCount = room.players ? Object.keys(room.players).length : 0; const li = document.createElement('li');
                 let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : room.mode === 'pingpong' ? '🏓 Ping Pong' : room.mode === 'quiz' ? '❓ Quiz' : '🔤 Parole';
-                li.innerHTML = `<span><b>#${code} - ${modeIcon}</b><br><small>${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test</small></span>`;
+                
+                const span = document.createElement('span');
+                const bTitle = document.createElement('b'); bTitle.textContent = `#${code} - ${modeIcon}`;
+                const smallInfo = document.createElement('small'); smallInfo.textContent = `${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test`;
+                span.appendChild(bTitle); span.appendChild(document.createElement('br')); span.appendChild(smallInfo);
+                li.appendChild(span);
+                
                 const btn = document.createElement('button'); btn.className = 'action-btn-small'; btn.textContent = 'Entra'; btn.onclick = () => window.joinSpecificRoom(code); li.appendChild(btn); els.waitingRoomsList.appendChild(li);
             }
         });
@@ -661,7 +710,7 @@ function renderPlayersList(playersData, hostId) {
     if (count > lastPlayerCount && lastPlayerCount > 0) { playBeep(500, 0.1); setTimeout(() => playBeep(700, 0.15), 150); showToast("👤 Nuovo giocatore!"); } lastPlayerCount = count; let allReady = true; const pKeys = Object.keys(playersData); if (pKeys.length < 2) allReady = false;
     Object.entries(playersData).forEach(([id, data]) => {
         if (!data.ready) allReady = false; const li = document.createElement('li'); const nSpan = document.createElement('span'); nSpan.textContent = `${data.ready ? '✅' : '⏳'} ${data.name}`;
-        if (data.username && data.username.trim() !== "") { nSpan.style.color = 'var(--link-color)'; nSpan.style.cursor = 'pointer'; nSpan.style.textDecoration = 'underline'; nSpan.onclick = () => openTelegramProfile(data.username); }
+        if (data.username && String(data.username).trim() !== "") { nSpan.style.color = 'var(--link-color)'; nSpan.style.cursor = 'pointer'; nSpan.style.textDecoration = 'underline'; nSpan.onclick = () => openTelegramProfile(data.username); }
         li.appendChild(nSpan); if (id === hostId) { const sHost = document.createElement('small'); sHost.textContent = ' (HOST)'; li.appendChild(sHost); } els.playersList.appendChild(li);
     });
     const isTrnOrPP = roomCode.startsWith("TRN_") || currentMode === 'pingpong'; const amIHost = (myId === hostId) || roomCode.startsWith("TRN_"); const amIReady = playersData[myId]?.ready;
@@ -936,8 +985,13 @@ window.showProfileScreen = function() {
         else {
             let maxErr = sorted[0][1];
             sorted.forEach(([char, count]) => {
-                let row = document.createElement('div'); row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.marginBottom = '4px';
-                row.innerHTML = `<span style="width:20px; font-weight:bold;">${char}</span><div style="flex-grow:1; background:var(--bg-color); border:1px solid var(--hint-color); border-radius:4px; height:12px; margin:0 5px; overflow:hidden;"><div style="width:${(count / maxErr) * 100}%; background:#d32f2f; height:100%;"></div></div><span style="width:25px; text-align:right; font-size:0.9em; font-weight:bold;">${count}</span>`;
+                const row = document.createElement('div'); row.style.cssText = "display:flex; align-items:center; margin-bottom:4px;";
+                const spanChar = document.createElement('span'); spanChar.style.cssText = "width:20px; font-weight:bold;"; spanChar.textContent = char;
+                const barWrap = document.createElement('div'); barWrap.style.cssText = "flex-grow:1; background:var(--bg-color); border:1px solid var(--hint-color); border-radius:4px; height:12px; margin:0 5px; overflow:hidden;";
+                const barFill = document.createElement('div'); barFill.style.cssText = `width:${(count / maxErr) * 100}%; background:#d32f2f; height:100%;`;
+                barWrap.appendChild(barFill);
+                const spanCount = document.createElement('span'); spanCount.style.cssText = "width:25px; text-align:right; font-size:0.9em; font-weight:bold;"; spanCount.textContent = count;
+                row.appendChild(spanChar); row.appendChild(barWrap); row.appendChild(spanCount);
                 els.errorChartContainer.appendChild(row);
             });
         }
@@ -947,8 +1001,15 @@ window.showProfileScreen = function() {
         if(Object.keys(wpmErrors).length === 0) { const p = document.createElement('p'); p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)'; p.textContent = 'Nessun errore per WPM.'; els.wpmErrorChartContainer.appendChild(p); return; }
         Object.keys(wpmErrors).sort((a,b) => parseInt(b) - parseInt(a)).forEach(wpm => {
             let charsAtWpm = wpmErrors[wpm]; let totalErrs = Object.values(charsAtWpm).reduce((acc, curr) => acc + curr, 0); let topChar = Object.entries(charsAtWpm).sort((a,b) => b[1] - a[1])[0];
-            let row = document.createElement('div'); row.style.marginBottom = '8px'; row.style.borderBottom = '1px solid var(--hint-color)'; row.style.paddingBottom = '4px';
-            row.innerHTML = `<div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--link-color);"><span>${wpm} WPM</span><span>Tot: ${totalErrs} err</span></div><div style="font-size:0.85em; color:var(--text-color);">Peggior lettera: <b>${topChar[0]}</b> (${topChar[1]} volte)</div>`;
+            const row = document.createElement('div'); row.style.cssText = "margin-bottom:8px; border-bottom:1px solid var(--hint-color); padding-bottom:4px;";
+            const divTop = document.createElement('div'); divTop.style.cssText = "display:flex; justify-content:space-between; font-weight:bold; color:var(--link-color);";
+            const spanWpm = document.createElement('span'); spanWpm.textContent = `${wpm} WPM`;
+            const spanTot = document.createElement('span'); spanTot.textContent = `Tot: ${totalErrs} err`;
+            divTop.appendChild(spanWpm); divTop.appendChild(spanTot);
+            const divBot = document.createElement('div'); divBot.style.cssText = "font-size:0.85em; color:var(--text-color);";
+            divBot.appendChild(document.createTextNode("Peggior lettera: "));
+            const bChar = document.createElement('b'); bChar.textContent = topChar[0]; divBot.appendChild(bChar); divBot.appendChild(document.createTextNode(` (${topChar[1]} volte)`));
+            row.appendChild(divTop); row.appendChild(divBot);
             els.wpmErrorChartContainer.appendChild(row);
         });
     });
@@ -960,14 +1021,21 @@ window.showProfileScreen = function() {
             const d = new Date(match.date || Date.now()); const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
             let modeIcon = match.mode === 'callsign' ? '🎙️ Nom.' : match.mode === 'pingpong' ? '🏓 Ping Pong' : match.mode === 'chars' ? '⌨️ Carat.' : '🔤 Parole';
             const li = document.createElement('li'); li.style.flexDirection = 'column'; li.style.alignItems = 'flex-start';
-            const botDiv = document.createElement('div'); botDiv.style.display = 'flex'; botDiv.style.justifyContent = 'space-between'; botDiv.style.width = '100%'; botDiv.style.alignItems = 'center';
-            botDiv.innerHTML = `<span><b>${match.score} pt</b><small> (${match.wpm} WPM)</small></span>`;
+            
+            const topDiv = document.createElement('div'); topDiv.style.cssText = "display:flex; justify-content:space-between; width:100%; margin-bottom:5px;";
+            const spanLeft = document.createElement('span'); spanLeft.style.cssText = "font-size:0.85em; font-weight:bold;"; spanLeft.textContent = `${modeIcon} (${match.type})`;
+            const spanRight = document.createElement('span'); spanRight.style.cssText = "font-size:0.8em; color:var(--hint-color);"; spanRight.textContent = dateStr;
+            topDiv.appendChild(spanLeft); topDiv.appendChild(spanRight);
+            
+            const botDiv = document.createElement('div'); botDiv.style.cssText = "display:flex; justify-content:space-between; width:100%; align-items:center;";
+            const spanScore = document.createElement('span'); const bScore = document.createElement('b'); bScore.textContent = `${match.score} pt`; const smallWpm = document.createElement('small'); smallWpm.textContent = ` (${match.wpm} WPM)`;
+            spanScore.appendChild(bScore); spanScore.appendChild(smallWpm);
+            
             const btnDiv = document.createElement('div'); btnDiv.style.display = 'flex'; btnDiv.style.gap = '5px';
             const vBtn = document.createElement('button'); vBtn.className = "action-btn-small btn-secondary"; vBtn.textContent = "Vedi"; vBtn.onclick = () => openMatchDetails(match.key);
             const dBtn = document.createElement('button'); dBtn.className = "action-btn-small btn-danger"; dBtn.textContent = "X"; dBtn.onclick = () => deleteHistoryItem(match.key);
-            btnDiv.appendChild(vBtn); btnDiv.appendChild(dBtn); botDiv.appendChild(btnDiv);
-            li.innerHTML = `<div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;"><span style="font-size:0.85em; font-weight:bold;">${modeIcon} (${match.type})</span><span style="font-size:0.8em; color:var(--hint-color);">${dateStr}</span></div>`;
-            li.appendChild(botDiv); els.matchHistoryList.appendChild(li);
+            btnDiv.appendChild(vBtn); btnDiv.appendChild(dBtn); botDiv.appendChild(spanScore); botDiv.appendChild(btnDiv);
+            li.appendChild(topDiv); li.appendChild(botDiv); els.matchHistoryList.appendChild(li);
         });
     });
 }
@@ -1108,8 +1176,17 @@ function renderHeadToHeadView(players, container) {
         card.appendChild(nameDiv);
 
         const statsDiv = document.createElement('div'); statsDiv.className = 'h2h-stats';
-        const rowPt = document.createElement('div'); rowPt.className = 'h2h-stat-row'; rowPt.innerHTML = `<span>${currentLang === 'it' ? 'Punti:' : 'Points:'}</span><span class="h2h-val" style="color:#4caf50;">${p.score}</span>`; statsDiv.appendChild(rowPt);
-        const rowSp = document.createElement('div'); rowSp.className = 'h2h-stat-row'; rowSp.innerHTML = `<span>${currentLang === 'it' ? 'Velocità:' : 'Speed:'}</span><span class="h2h-val" style="color:var(--link-color);">${p.wpm} WPM</span>`; statsDiv.appendChild(rowSp);
+        
+        const rowPt = document.createElement('div'); rowPt.className = 'h2h-stat-row'; 
+        const sPtLbl = document.createElement('span'); sPtLbl.textContent = currentLang === 'it' ? 'Punti:' : 'Points:';
+        const sPtVal = document.createElement('span'); sPtVal.className = 'h2h-val'; sPtVal.style.color = '#4caf50'; sPtVal.textContent = p.score;
+        rowPt.appendChild(sPtLbl); rowPt.appendChild(sPtVal); statsDiv.appendChild(rowPt);
+        
+        const rowSp = document.createElement('div'); rowSp.className = 'h2h-stat-row'; 
+        const sSpLbl = document.createElement('span'); sSpLbl.textContent = currentLang === 'it' ? 'Velocità:' : 'Speed:';
+        const sSpVal = document.createElement('span'); sSpVal.className = 'h2h-val'; sSpVal.style.color = 'var(--link-color)'; sSpVal.textContent = `${p.wpm} WPM`;
+        rowSp.appendChild(sSpLbl); rowSp.appendChild(sSpVal); statsDiv.appendChild(rowSp);
+        
         card.appendChild(statsDiv);
 
         const hintDiv = document.createElement('div'); hintDiv.className = 'h2h-hint';
@@ -1166,11 +1243,13 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
     if (tabType === 'pingpong') {
         db.ref(`leaderboard/pingpong`).once('value', snapshot => {
             let players = [];
-            snapshot.forEach(wordCountNode => {
-                const key = wordCountNode.key;
-                if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
-                wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
-            });
+            if(snapshot.exists()) {
+                snapshot.forEach(wordCountNode => {
+                    const key = wordCountNode.key;
+                    if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
+                    wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
+                });
+            }
             players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
             renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, true);
         });
@@ -1206,19 +1285,29 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
     // Torneo Attivo
     if (tabType === 'active_tournament') {
         if (!activeTrnId) {
-            els.leaderboardContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang==='it' ? "Non sei iscritto a nessun torneo attivo." : "You are not enrolled in any active tournament."}</p>`;
+            els.leaderboardContainer.innerHTML = '';
+            const p = document.createElement('p'); p.style.cssText = "text-align:center; color:var(--hint-color);"; p.textContent = currentLang==='it' ? "Non sei iscritto a nessun torneo attivo." : "You are not enrolled in any active tournament.";
+            els.leaderboardContainer.appendChild(p);
         } else {
             db.ref(`tournaments/${activeTrnId}`).once('value', snap => {
                 const trn = snap.val();
                 if (trn && trn.standings) {
-                    els.leaderboardContainer.innerHTML = `<div style="text-align:center; margin-bottom:10px; padding:5px; background:var(--sec-bg-color); border-radius:8px;"><small style="color:var(--hint-color)">${currentLang==='it'?'Torneo Attivo:':'Active Tournament:'}</small><br><b style="color:var(--champ-color); font-size:1.1em;">${escapeHTML(trn.name)}</b></div>`;
+                    els.leaderboardContainer.innerHTML = '';
+                    const header = document.createElement('div'); header.style.cssText = "text-align:center; margin-bottom:10px; padding:5px; background:var(--sec-bg-color); border-radius:8px;";
+                    const hSmall = document.createElement('small'); hSmall.style.color = "var(--hint-color)"; hSmall.textContent = currentLang==='it'?'Torneo Attivo:':'Active Tournament:';
+                    const hB = document.createElement('b'); hB.style.cssText = "color:var(--champ-color); font-size:1.1em;"; hB.textContent = trn.name;
+                    header.appendChild(hSmall); header.appendChild(document.createElement('br')); header.appendChild(hB);
+                    els.leaderboardContainer.appendChild(header);
+
                     let std = Object.entries(trn.standings).map(([id, data]) => ({ name: data.name, score: data.points, date: currentLang==='it'?"In corso":"In progress" }));
                     std.sort((a,b) => (Number(b.score) || 0) - (Number(a.score) || 0));
                     const listCont = document.createElement('div');
                     renderPlayersListHTML(std, listCont, false, true);
                     els.leaderboardContainer.appendChild(listCont);
                 } else {
-                    els.leaderboardContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang==='it'?'Dati torneo non disponibili.':'Tournament data unavailable.'}</p>`;
+                    els.leaderboardContainer.innerHTML = '';
+                    const p = document.createElement('p'); p.style.cssText = "text-align:center; color:var(--hint-color);"; p.textContent = currentLang==='it'?'Dati torneo non disponibili.':'Tournament data unavailable.';
+                    els.leaderboardContainer.appendChild(p);
                 }
             });
         }
@@ -1234,14 +1323,15 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
 
     db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
         let players = [];
-        snapshot.forEach(wordCountNode => {
-            const key = wordCountNode.key;
-            if (!key.startsWith(subType + "_")) return;
-            if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
+        if(snapshot.exists()) {
+            snapshot.forEach(wordCountNode => {
+                const key = wordCountNode.key;
+                if (!key.startsWith(subType + "_")) return;
+                if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
 
-            wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
-        });
-
+                wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
+            });
+        }
         players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
         renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, true);
     });
@@ -1348,25 +1438,25 @@ function listenToAllTeams(isAlreadyInTeam) {
             const t = child.val(); const count = Object.keys(t.members || {}).length; if (t.status === 'retired' || count === 0) return;
             const liAll = document.createElement('li'); liAll.style.flexDirection = 'column'; liAll.style.alignItems = 'flex-start';
             
-            const topDiv = document.createElement('div'); topDiv.style.width = '100%'; topDiv.style.display = 'flex'; topDiv.style.justifyContent = 'space-between';
+            const topDiv = document.createElement('div'); topDiv.style.cssText = "width:100%; display:flex; justify-content:space-between;";
             if (!isAlreadyInTeam && t.status !== 'closed') { topDiv.style.cursor = 'pointer'; topDiv.onclick = () => window.joinTeam(child.key); }
             
-            const leftSpan = document.createElement('span');
-            const bTeam = document.createElement('b'); bTeam.textContent = t.name;
-            const smallCount = document.createElement('small'); smallCount.textContent = ` (${count} mem.)`;
-            leftSpan.appendChild(bTeam); leftSpan.appendChild(smallCount);
-            topDiv.appendChild(leftSpan);
+            const spanTitle = document.createElement('span');
+            const bTitle = document.createElement('b'); bTitle.textContent = t.name;
+            const smCount = document.createElement('small'); smCount.textContent = ` (${count} mem.)`;
+            spanTitle.appendChild(bTitle); spanTitle.appendChild(smCount);
+            topDiv.appendChild(spanTitle);
 
             if (!isAlreadyInTeam && t.status !== 'closed') {
-                const joinSpan = document.createElement('span'); joinSpan.style.color = 'var(--link-color)'; joinSpan.style.fontSize = '0.8em'; joinSpan.style.fontWeight = 'bold'; joinSpan.textContent = "+ Unisciti"; topDiv.appendChild(joinSpan);
+                const spanJoin = document.createElement('span'); spanJoin.style.cssText = "color:var(--link-color); font-size:0.8em; font-weight:bold;"; spanJoin.textContent = "+ Unisciti"; topDiv.appendChild(spanJoin);
             }
 
-            const membersDiv = document.createElement('div'); membersDiv.style.marginTop = '3px'; membersDiv.style.paddingLeft = '5px'; membersDiv.style.borderLeft = '2px solid var(--link-color)';
+            const memDiv = document.createElement('div'); memDiv.style.cssText = "margin-top:3px; padding-left:5px; border-left:2px solid var(--link-color);";
             Object.values(t.members || {}).forEach(m => {
-                const mSpan = document.createElement('span'); mSpan.style.display = 'inline-block'; mSpan.style.marginRight = '5px'; mSpan.style.fontSize = '0.85em'; mSpan.style.color = 'var(--hint-color)'; mSpan.textContent = `- ${m.name}`; membersDiv.appendChild(mSpan);
+                const spanM = document.createElement('span'); spanM.style.cssText = "display:inline-block; margin-right:5px; font-size:0.85em; color:var(--hint-color);"; spanM.textContent = `- ${m.name}`; memDiv.appendChild(spanM);
             });
             
-            liAll.appendChild(topDiv); liAll.appendChild(membersDiv);
+            liAll.appendChild(topDiv); liAll.appendChild(memDiv);
             if(els.globalAllTeamsList) els.globalAllTeamsList.appendChild(liAll);
 
             if (!isAlreadyInTeam && t.status !== 'closed' && els.openTeamsList) {
@@ -1376,8 +1466,12 @@ function listenToAllTeams(isAlreadyInTeam) {
                 liOpen.appendChild(leftOpen); liOpen.appendChild(rightOpen); els.openTeamsList.appendChild(liOpen);
             }
         });
-        if(els.openTeamsList && !els.openTeamsList.innerHTML) els.openTeamsList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; border:none;">Nessuna squadra aperta.</li>';
-        if(els.globalAllTeamsList && !els.globalAllTeamsList.innerHTML) els.globalAllTeamsList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; border:none;">Nessuna squadra creata.</li>';
+        if(els.openTeamsList && !els.openTeamsList.innerHTML) {
+            const li = document.createElement('li'); li.style.cssText = "color:var(--hint-color); justify-content:center; border:none;"; li.textContent = "Nessuna squadra aperta."; els.openTeamsList.appendChild(li);
+        }
+        if(els.globalAllTeamsList && !els.globalAllTeamsList.innerHTML) {
+            const li = document.createElement('li'); li.style.cssText = "color:var(--hint-color); justify-content:center; border:none;"; li.textContent = "Nessuna squadra creata."; els.globalAllTeamsList.appendChild(li);
+        }
     });
 }
 
@@ -1391,7 +1485,7 @@ function listenToMyTeam() {
         els.captainName.innerHTML = ''; els.teamOthersList.innerHTML = '';
         Object.entries(team.members || {}).forEach(([id, mem]) => {
             const span = document.createElement('span'); span.textContent = mem.name;
-            if (mem.username && mem.username.trim() !== "") { span.style.color = 'var(--link-color)'; span.style.cursor = 'pointer'; span.style.textDecoration = 'underline'; span.onclick = () => openTelegramProfile(mem.username); }
+            if (mem.username && String(mem.username).trim() !== "") { span.style.color = 'var(--link-color)'; span.style.cursor = 'pointer'; span.style.textDecoration = 'underline'; span.onclick = () => openTelegramProfile(mem.username); }
             if (id === team.captainId) els.captainName.appendChild(span);
             else { 
                 if (els.teamOthersList.children.length > 0) { const sep = document.createElement('span'); sep.style.color = 'var(--hint-color)'; sep.textContent = ' | '; els.teamOthersList.appendChild(sep); } 
@@ -1440,7 +1534,15 @@ function listenToTournaments() {
             }
         });
         if (foundActive) { activeTrnId = foundActive.key; renderActiveTournament(foundActive); } 
-        else { els.trnLobbyArea.style.display = 'flex'; els.trnActiveArea.style.display = 'none'; if(els.openTournamentsList && !els.openTournamentsList.innerHTML) els.openTournamentsList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; border:none;">Nessun torneo aperto.</li>'; if(els.pastTournamentsList && !els.pastTournamentsList.innerHTML) els.pastTournamentsList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; border:none;">Nessun torneo concluso.</li>'; }
+        else { 
+            els.trnLobbyArea.style.display = 'flex'; els.trnActiveArea.style.display = 'none'; 
+            if(els.openTournamentsList && !els.openTournamentsList.innerHTML) {
+                const li1 = document.createElement('li'); li1.style.cssText="color:var(--hint-color); justify-content:center; border:none;"; li1.textContent = "Nessun torneo aperto."; els.openTournamentsList.appendChild(li1);
+            }
+            if(els.pastTournamentsList && !els.pastTournamentsList.innerHTML) {
+                const li2 = document.createElement('li'); li2.style.cssText="color:var(--hint-color); justify-content:center; border:none;"; li2.textContent = "Nessun torneo concluso."; els.pastTournamentsList.appendChild(li2);
+            }
+        }
     });
 }
 window.viewTournament = function(tId) { db.ref(`tournaments/${tId}`).once('value', snap => { if(snap.exists()) { activeTrnId = tId; renderActiveTournament(snap); els.trnLobbyArea.style.display = 'none'; els.trnActiveArea.style.display = 'flex'; } }); }
@@ -1476,11 +1578,12 @@ function renderActiveTournament(trnSnap) {
             if (isMyMatch) { card.style.borderColor = "var(--champ-color)"; card.style.borderWidth = "2px"; }
             let aColor = m.winnerTeamId === m.teamA ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)"); let bColor = m.winnerTeamId === m.teamB ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)");
             
-            const teamsDiv = document.createElement('div'); teamsDiv.className = 'match-card-teams';
-            const teamADiv = document.createElement('div'); teamADiv.style.color = aColor; const teamAB = document.createElement('b'); teamAB.textContent = m.teamAName; teamADiv.appendChild(teamAB);
-            const vsDiv = document.createElement('div'); vsDiv.className = 'match-vs'; vsDiv.textContent = 'VS';
-            const teamBDiv = document.createElement('div'); teamBDiv.style.color = bColor; const teamBB = document.createElement('b'); teamBB.textContent = m.teamBName; teamBDiv.appendChild(teamBB);
-            teamsDiv.appendChild(teamADiv); teamsDiv.appendChild(vsDiv); teamsDiv.appendChild(teamBDiv); card.appendChild(teamsDiv);
+            const matchCardTeams = document.createElement('div'); matchCardTeams.className = "match-card-teams";
+            const tA = document.createElement('div'); tA.style.color = aColor; const bA = document.createElement('b'); bA.textContent = m.teamAName; tA.appendChild(bA);
+            const mVs = document.createElement('div'); mVs.className = "match-vs"; mVs.textContent = "VS";
+            const tB = document.createElement('div'); tB.style.color = bColor; const bB = document.createElement('b'); bB.textContent = m.teamBName; tB.appendChild(bB);
+            matchCardTeams.appendChild(tA); matchCardTeams.appendChild(mVs); matchCardTeams.appendChild(tB);
+            card.appendChild(matchCardTeams);
 
             if (m.status !== 'finished') {
                 const slotsDiv = document.createElement('div'); slotsDiv.style.display = 'flex'; slotsDiv.style.width = '100%'; slotsDiv.style.gap = '10px';
@@ -1576,20 +1679,31 @@ window.switchActTab = function(period) {
 }
 
 function renderActivityRankings(period, key) {
-    els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Caricamento...</li>';
+    els.activityRankList.innerHTML = '';
+    const loadLi = document.createElement('li'); loadLi.style.cssText = "justify-content:center; color:var(--hint-color);"; loadLi.textContent = "Caricamento..."; els.activityRankList.appendChild(loadLi);
+    
     db.ref(`activity/${period}/${key}`).once('value').then(snap => {
         els.activityRankList.innerHTML = ''; let users = [];
         if (snap.exists()) snap.forEach(child => { const u = child.val(); if (u && typeof u === 'object') users.push({ id: child.key, ...u }); });
         users.sort((a, b) => (b.games || 0) - (a.games || 0)); users = users.slice(0, 50);
-        if (users.length === 0) return els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna attività registrata.</li>';
+        if (users.length === 0) {
+            const empLi = document.createElement('li'); empLi.style.cssText = "justify-content:center; color:var(--hint-color);"; empLi.textContent = "Nessuna attività registrata."; els.activityRankList.appendChild(empLi); return;
+        }
         users.forEach((u, idx) => {
             let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
-            const li = document.createElement('li'); const nameSpan = document.createElement('span'); nameSpan.appendChild(document.createTextNode(medal + " ")); const nameB = document.createElement('b'); nameB.textContent = u.name || "Anonimo"; nameSpan.appendChild(nameB);
+            const li = document.createElement('li'); 
+            const nameSpan = document.createElement('span'); nameSpan.appendChild(document.createTextNode(medal + " ")); const nameB = document.createElement('b'); nameB.textContent = u.name || "Anonimo"; nameSpan.appendChild(nameB);
             const statsSpan = document.createElement('span'); const gamesB = document.createElement('b'); gamesB.textContent = u.games || 0; statsSpan.appendChild(gamesB); statsSpan.appendChild(document.createTextNode(" part. "));
             const winsSmall = document.createElement('small'); winsSmall.style.color = '#4caf50'; winsSmall.textContent = `(${u.wins || 0} v.)`; statsSpan.appendChild(winsSmall);
             li.appendChild(nameSpan); li.appendChild(statsSpan); els.activityRankList.appendChild(li);
         });
-    }).catch(err => { els.activityRankList.innerHTML = `<li style="justify-content:center; color:var(--hint-color); flex-direction:column; text-align:center;"><span>Errore nel caricamento.</span><small style="font-size:0.7em; opacity:0.7;">${err.message}</small></li>`; });
+    }).catch(err => { 
+        els.activityRankList.innerHTML = ''; 
+        const errLi = document.createElement('li'); errLi.style.cssText = "justify-content:center; color:var(--hint-color); flex-direction:column; text-align:center;";
+        const eSpan = document.createElement('span'); eSpan.textContent = "Errore nel caricamento."; errLi.appendChild(eSpan);
+        const eSmall = document.createElement('small'); eSmall.style.cssText = "font-size:0.7em; opacity:0.7;"; eSmall.textContent = err.message; errLi.appendChild(eSmall);
+        els.activityRankList.appendChild(errLi);
+    });
 }
 
 // --- LOGICA QUIZ ---
