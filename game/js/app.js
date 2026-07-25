@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240520.27";
+const APP_VERSION = "20240520.28"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -46,7 +46,7 @@ const listeners = {
     outgoingInvite: null, team: null, allTeams: null, trn: null, activeChat: {}
 };
 
-// --- AGGIORNAMENTO APP (Svuota Cache) ---
+// --- FORZATURA AGGIORNAMENTO CACHE ---
 window.forceAppUpdate = function() {
     showToast("Aggiornamento in corso...");
     if ('caches' in window) caches.keys().then(names => names.forEach(name => caches.delete(name)));
@@ -119,7 +119,6 @@ async function loadRegolamento() {
         const response = await fetch('regolamento.html');
         if (!response.ok) throw new Error("Errore nel caricamento");
         els.regolamentoContainer.innerHTML = await response.text();
-
         if (els.sendFeedbackBtn) {
             els.sendFeedbackBtn.onclick = function() {
                 const text = encodeURIComponent("💡 Suggerimento per Sfida Telegrafia: \n\n[Scrivi qui il tuo messaggio...]");
@@ -967,7 +966,8 @@ function renderRoomLeaderboard(players) {
             if (player.username) { const nameLink = document.createElement('span'); nameLink.style.color = 'var(--link-color)'; nameLink.style.cursor = 'pointer'; nameLink.style.textDecoration = 'underline'; nameLink.textContent = player.name; nameLink.onclick = () => openTelegramProfile(player.username); leftSpan.appendChild(nameLink); } 
             else leftSpan.appendChild(document.createTextNode(player.name));
             leftSpan.appendChild(document.createElement('br')); const wpmSmall = document.createElement('small'); wpmSmall.style.color = 'var(--hint-color)'; wpmSmall.textContent = `(${player.wpm || 0} WPM)`; leftSpan.appendChild(wpmSmall);
-            const rightSpan = document.createElement('span'); rightSpan.innerHTML = `<b>${player.score} pt</b>`;
+            const rightSpan = document.createElement('span');
+            const scoreB = document.createElement('b'); scoreB.textContent = `${player.score} pt`; rightSpan.appendChild(scoreB);
             row.appendChild(leftSpan); row.appendChild(rightSpan); els.leaderboardContainer.appendChild(row);
         });
     }
@@ -979,8 +979,23 @@ function renderHeadToHeadView(players, container) {
     players.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm)); const maxScore = players[0].score;
     players.forEach((p) => {
         const card = document.createElement('div'); card.className = 'h2h-card' + (p.score === maxScore && maxScore > 0 ? ' winner' : '');
-        card.innerHTML = `<div class="h2h-name">${p.name}${p.id === myId ? ` <small>(${currentLang === 'it' ? 'Tu' : 'You'})</small>` : ''}</div><div class="h2h-stats"><div class="h2h-stat-row"><span>${currentLang === 'it' ? 'Punti:' : 'Points:'}</span><span class="h2h-val" style="color:#4caf50;">${p.score}</span></div><div class="h2h-stat-row"><span>${currentLang === 'it' ? 'Velocità:' : 'Speed:'}</span><span class="h2h-val" style="color:var(--link-color);">${p.wpm} WPM</span></div></div><div class="h2h-hint">${p.id === myId ? (currentLang === 'it' ? 'Clicca per dettagli' : 'Click for details') : (currentLang === 'it' ? 'Dettagli privati' : 'Details are private')}</div>`;
-        if (p.id !== myId) card.querySelector('.h2h-hint').style.opacity = "0.5";
+        
+        const nameDiv = document.createElement('div'); nameDiv.className = 'h2h-name'; nameDiv.textContent = p.name;
+        if (p.id === myId) {
+            const meSmall = document.createElement('small'); meSmall.textContent = ` (${currentLang === 'it' ? 'Tu' : 'You'})`; nameDiv.appendChild(meSmall);
+        }
+        card.appendChild(nameDiv);
+
+        const statsDiv = document.createElement('div'); statsDiv.className = 'h2h-stats';
+        const rowPt = document.createElement('div'); rowPt.className = 'h2h-stat-row'; rowPt.innerHTML = `<span>${currentLang === 'it' ? 'Punti:' : 'Points:'}</span><span class="h2h-val" style="color:#4caf50;">${p.score}</span>`; statsDiv.appendChild(rowPt);
+        const rowSp = document.createElement('div'); rowSp.className = 'h2h-stat-row'; rowSp.innerHTML = `<span>${currentLang === 'it' ? 'Velocità:' : 'Speed:'}</span><span class="h2h-val" style="color:var(--link-color);">${p.wpm} WPM</span>`; statsDiv.appendChild(rowSp);
+        card.appendChild(statsDiv);
+
+        const hintDiv = document.createElement('div'); hintDiv.className = 'h2h-hint';
+        hintDiv.textContent = p.id === myId ? (currentLang === 'it' ? 'Clicca per dettagli' : 'Click for details') : (currentLang === 'it' ? 'Dettagli privati' : 'Details are private');
+        card.appendChild(hintDiv);
+
+        if (p.id !== myId) hintDiv.style.opacity = "0.5";
         card.onclick = () => {
             if (p.id !== myId) return showToast(currentLang === 'it' ? "Puoi vedere solo i tuoi dettagli." : "You can only view your own details.");
             if (p.matchDetails && p.matchDetails.length > 0) showPlayerDetailsModal(p.name, p.matchDetails);
@@ -1064,10 +1079,13 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
 
 function renderMatchesHistoryHTML(matches, container) {
     container.innerHTML = '';
-    if (matches.length === 0) return container.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang === 'it' ? 'Nessuna sfida recente trovata.' : 'No recent challenges found.'}</p>`;
+    if (matches.length === 0) {
+        const p = document.createElement('p'); p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)'; p.textContent = currentLang === 'it' ? 'Nessuna sfida recente trovata.' : 'No recent challenges found.'; container.appendChild(p); return;
+    }
     matches.forEach(match => {
         const mw = document.createElement('div'); mw.style.marginBottom = "25px"; mw.style.borderBottom = "1px dashed var(--hint-color)"; mw.style.paddingBottom = "15px";
-        mw.innerHTML = `<div style="text-align:center; font-size:0.8em; color:var(--hint-color); margin-bottom:8px;">📅 ${match.date} - ${match.wordCount} Stringhe</div>`;
+        const infoDiv = document.createElement('div'); infoDiv.style.textAlign = 'center'; infoDiv.style.fontSize = '0.8em'; infoDiv.style.color = 'var(--hint-color)'; infoDiv.style.marginBottom = '8px';
+        infoDiv.textContent = `📅 ${match.date} - ${match.wordCount} Stringhe`; mw.appendChild(infoDiv);
         renderHeadToHeadView(match.players, mw); container.appendChild(mw);
     });
 }
@@ -1082,7 +1100,6 @@ function renderPlayersListHTML(players, container, showWordCount, isTeam = false
 
     players.forEach((player, index) => {
         const row = document.createElement('div'); row.className = 'leaderboard-row'; row.style.padding = "8px 10px"; row.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
-        
         const mainDiv = document.createElement('div'); mainDiv.style.display = 'flex'; mainDiv.style.alignItems = 'center'; mainDiv.style.gap = '8px'; mainDiv.style.flexGrow = '1';
         
         const medalDiv = document.createElement('div'); medalDiv.style.fontSize = '1.2em'; medalDiv.style.minWidth = '1.5em'; medalDiv.style.textAlign = 'center';
@@ -1090,8 +1107,8 @@ function renderPlayersListHTML(players, container, showWordCount, isTeam = false
         else { const span = document.createElement('span'); span.style.color = 'var(--hint-color)'; span.style.fontSize = '0.8em'; span.textContent = (index + 1) + "."; medalDiv.appendChild(span); }
 
         const infoDiv = document.createElement('div'); infoDiv.style.display = 'flex'; infoDiv.style.flexDirection = 'column';
-        
         const nameDiv = document.createElement('div'); nameDiv.style.display = 'flex'; nameDiv.style.alignItems = 'center';
+        
         if (player.username && !isTeam) {
             const nameLink = document.createElement('span'); nameLink.style.color = 'var(--link-color)'; nameLink.style.cursor = 'pointer'; nameLink.style.textDecoration = 'underline'; nameLink.style.fontWeight = 'bold'; nameLink.textContent = player.name; nameLink.onclick = () => openTelegramProfile(player.username);
             nameDiv.appendChild(nameLink);
