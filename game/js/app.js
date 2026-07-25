@@ -738,6 +738,37 @@ if(els.inviteFriendsBtn) els.inviteFriendsBtn.addEventListener('click', () => {
     tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=room_${roomCode}`)}&text=${encodeURIComponent(`Sfida in Telegrafia! Entra nella mia stanza: #${roomCode}`)}`);
 });
 
+// Funzione per forzare l'aggiornamento reale della WebApp
+window.forceAppUpdate = function() {
+    showToast("Aggiornamento in corso...");
+
+    // 1. Pulizia Caches API (se presente)
+    if ('caches' in window) {
+        caches.keys().then(names => {
+            names.forEach(name => caches.delete(name));
+        });
+    }
+
+    // 2. Disinstallazione Service Worker (se presenti)
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(r => r.unregister());
+        });
+    }
+
+    // 3. Ricaricamento con Cache-Buster nell'URL
+    setTimeout(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('v', Date.now()); // Aggiunge o aggiorna ?v=1716200000000
+        window.location.replace(url.toString());
+    }, 300);
+};
+
+// Collega la funzione al bottone nel banner
+if (els.updateBannerBtn) {
+    els.updateBannerBtn.addEventListener('click', window.forceAppUpdate);
+}
+
 function renderPlayersList(playersData, hostId) {
     if(!els.playersList) return;
     els.playersList.innerHTML = ''; const count = Object.keys(playersData).length;
