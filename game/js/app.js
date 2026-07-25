@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240520.26";
+const APP_VERSION = "20240520.27";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -11,28 +11,20 @@ const tgUsername = tgUser?.username || "";
 const startParam = tg.initDataUnsafe?.start_param;
 
 // --- MAPPA DOM DINAMICA (Proxy) ---
-// Sostituisce tutti i document.getElementById('id') con els.id
 const els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
 
 // --- COSTANTI ---
 const STORAGE_ROOM_KEY = "cwgame_last_room";
 const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
 
-// --- STATO GLOBALE (Blocchi Logici) ---
-// Utente e Squadre
+// --- STATO GLOBALE ---
 let myName, myId, myPrivacy = false;
 let myTeamId = null, myTeamName = "", isTeamCaptain = false;
-
-// App e Firebase
 let db, auth, currentLang = 'it';
 let activeChatContext = null, activeTab = "room", isChatDrawerOpen = false;
 let isChallenging = false, isRejoining = false, currentInviterId = null;
-
-// Stanze e Tornei
 let roomCode = "", roomHostId = null, activeTrnId = null;
 let lastPlayerCount = 0, gameStartPlayerCount = 0, lobbyTimerInterval = null;
-
-// Gameplay
 let gameRunning = false, inputActive = false, audioCtx = null;
 let gameWords = [], wordIndex = 0, currentWpm = 20, baseWpm = 20, currentTone = 600;
 let totalScore = 0, currentStreak = 0, usedReplay = false, matchDetailsArray = [];
@@ -42,23 +34,31 @@ let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
 window.lastPlayedWordId = 0;
 window.lastSeenGuessId = 0;
 
-// Dizionari
 let masterDictionary = [], itDictionary = [], enDictionary = [], customDictionary = [];
-
-// Quiz
 let quizTimerInterval = null, currentQuizQuestion = null, quizActiveBuzzerId = null;
 let quizQuestionIndex = 0, randomizedQuizQuestions = [], lastLoadedQuizIndex = -1;
-
-// Statistiche
 let sessionCharErrors = Object.create(null), sessionErrorsByWpm = Object.create(null);
 let userMatchHistory = [];
 
-// Listener Firebase
 const listeners = {
     room: null, chat: null, pingPong: null, players: null, quizState: null,
     roomLb: null, presence: null, invites: null, inviteAccepted: null,
     outgoingInvite: null, team: null, allTeams: null, trn: null, activeChat: {}
 };
+
+// --- AGGIORNAMENTO APP (Svuota Cache) ---
+window.forceAppUpdate = function() {
+    showToast("Aggiornamento in corso...");
+    if ('caches' in window) caches.keys().then(names => names.forEach(name => caches.delete(name)));
+    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
+    setTimeout(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('v', Date.now());
+        window.location.replace(url.toString());
+    }, 300);
+};
+
+if (els.updateBannerBtn) els.updateBannerBtn.addEventListener('click', window.forceAppUpdate);
 
 // --- FUNZIONI DI SUPPORTO ---
 function escapeHTML(str) {
@@ -70,9 +70,7 @@ function escapeHTML(str) {
 }
 
 function showToast(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
+    const toast = document.createElement('div'); toast.className = 'toast'; toast.textContent = message;
     els.toastContainer.appendChild(toast);
     setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 4000);
 }
@@ -110,7 +108,7 @@ window.goBackToMenu = function() {
     showScreen('setupScreen');
 }
 
-// --- DIZIONARI & DATI ---
+// --- DIZIONARI ---
 async function loadDictionaries() {
     await Promise.all([ fetchDictionary("parole.txt", 'it'), fetchDictionary("words.txt", 'en') ]);
     updateDictionary();
@@ -126,8 +124,7 @@ async function loadRegolamento() {
             els.sendFeedbackBtn.onclick = function() {
                 const text = encodeURIComponent("💡 Suggerimento per Sfida Telegrafia: \n\n[Scrivi qui il tuo messaggio...]");
                 const shareUrl = `https://t.me/share/url?text=${text}`;
-                if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl);
-                else window.open(shareUrl, '_blank');
+                if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl); else window.open(shareUrl, '_blank');
             };
         }
     } catch (e) {
@@ -147,9 +144,7 @@ async function fetchDictionary(url, lang) {
     }
 }
 
-function updateDictionary() {
-    masterDictionary = (currentLang === 'en' && enDictionary.length > 0) ? enDictionary : itDictionary;
-}
+function updateDictionary() { masterDictionary = (currentLang === 'en' && enDictionary.length > 0) ? enDictionary : itDictionary; }
 
 const morseDict = {
     'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..',
@@ -157,21 +152,12 @@ const morseDict = {
     'À': '.--.-', 'È': '..-..', 'É': '..-..', 'Ì': '.---.', 'Ò': '---.', 'Ù': '..--','?': '..--..' 
 };
 
-// --- INIZIALIZZAZIONE APP ---
-if (!tgUser) {
-    els.loadingScreen.classList.remove('active-screen');
-    els.errorScreen.classList.add('active-screen');
-} else {
-    myName = tgUser.first_name; myId = tgUser.id.toString(); initGame();
-}
+// --- INIZIALIZZAZIONE ---
+if (!tgUser) { els.loadingScreen.classList.remove('active-screen'); els.errorScreen.classList.add('active-screen'); } 
+else { myName = tgUser.first_name; myId = tgUser.id.toString(); initGame(); }
 
 function initGame() {
-    const firebaseConfig = {
-        apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk", authDomain: "telegrafiabot.firebaseapp.com",
-        databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "telegrafiabot", storageBucket: "telegrafiabot.firebasestorage.app",
-        messagingSenderId: "575790683327", appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
-    };
+    const firebaseConfig = { apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk", authDomain: "telegrafiabot.firebaseapp.com", databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app", projectId: "telegrafiabot", storageBucket: "telegrafiabot.firebasestorage.app", messagingSenderId: "575790683327", appId: "1:575790683327:web:db333b0316c8e8ec63a20a" };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     db = firebase.database(); auth = firebase.auth();
 
@@ -179,14 +165,11 @@ function initGame() {
         try {
             const userData = (await db.ref(`users/${myId}`).once('value')).val() || {};
             if (userData.alias) myName = userData.alias;
-            myPrivacy = userData.privacyUsername || false;
-            els.privacyUsernameCheckbox.checked = myPrivacy;
+            myPrivacy = userData.privacyUsername || false; els.privacyUsernameCheckbox.checked = myPrivacy;
         } catch(e) {}
 
-        els.playerName.textContent = myName;
-        els.userAliasInput.value = (myName !== tgUser.first_name) ? myName : "";
-        els.loadingText.style.display = 'none';
-        els.createRoomBtn.disabled = false;
+        els.playerName.textContent = myName; els.userAliasInput.value = (myName !== tgUser.first_name) ? myName : "";
+        els.loadingText.style.display = 'none'; els.createRoomBtn.disabled = false;
 
         db.ref('.info/connected').on('value', (snap) => {
             if (snap.val() === false) return;
@@ -204,29 +187,19 @@ function initGame() {
             if (lastRoom) {
                 db.ref(`rooms/${lastRoom}`).once('value', snap => {
                     if (snap.exists() && snap.val().status !== 'finished') {
-                        roomCode = lastRoom;
-                        els.rejoinContainer.style.display = 'block';
-                        els.rejoinGameBtn.onclick = () => { isRejoining = true; joinRoomLogic(false); };
-                        showScreen('setupScreen');
-                    } else {
-                        localStorage.removeItem(STORAGE_ROOM_KEY);
-                        showScreen('setupScreen');
-                    }
+                        roomCode = lastRoom; els.rejoinContainer.style.display = 'block'; els.rejoinGameBtn.onclick = () => { isRejoining = true; joinRoomLogic(false); }; showScreen('setupScreen');
+                    } else { localStorage.removeItem(STORAGE_ROOM_KEY); showScreen('setupScreen'); }
                 });
             } else showScreen('setupScreen');
         }
 
-        const savedLang = localStorage.getItem('gameLang');
-        if (savedLang) setLanguage(savedLang);
+        const savedLang = localStorage.getItem('gameLang'); if (savedLang) setLanguage(savedLang);
         loadDictionaries();
 
         const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);
-        if (savedCustom) {
-            try { customDictionary = JSON.parse(savedCustom); updateCustomDictStatus(); } catch(e) {}
-        }
+        if (savedCustom) { try { customDictionary = JSON.parse(savedCustom); updateCustomDictStatus(); } catch(e) {} }
 
-        checkActivityAndAwardMedals();
-        checkTournamentPopup();
+        checkActivityAndAwardMedals(); checkTournamentPopup();
         listenToRooms(); listenToOnlineUsers(); listenToInvites(); listenToInviteAccepted();
         loadRegolamento();
 
@@ -236,22 +209,17 @@ function initGame() {
         db.ref('appConfig/latestVersion').on('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
             const currentStr = String(APP_VERSION).trim();
-            if (latestStr && latestStr !== currentStr) els.updateBanner.style.display = 'block';
-            else els.updateBanner.style.display = 'none';
+            if (latestStr && latestStr !== currentStr) els.updateBanner.style.display = 'block'; else els.updateBanner.style.display = 'none';
         });
 
     }).catch(e => {
-        if (els.loadingText) {
-            els.loadingText.textContent = "Errore di Connessione.";
-            els.loadingText.style.color = "red";
-            els.loadingText.style.fontWeight = "bold";
-        }
+        if (els.loadingText) { els.loadingText.textContent = "Errore di Connessione."; els.loadingText.style.color = "red"; els.loadingText.style.fontWeight = "bold"; }
     });
 
     checkGameTypeUI();
 }
 
-// --- GESTIONE AUDIO ---
+// --- AUDIO ---
 function playBeep(freq, duration) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     try {
@@ -267,8 +235,7 @@ function playBeep(freq, duration) {
 function playMorseAudio(text, wpm) {
     return new Promise(resolve => {
         if (!audioCtx || !gameRunning) { resolve(); return; }
-        const unitDuration = 1.2 / wpm;
-        let time = audioCtx.currentTime + 0.05;
+        const unitDuration = 1.2 / wpm; let time = audioCtx.currentTime + 0.05;
         for (let char of text) {
             if (!gameRunning) break;
             if (morseDict[char]) {
@@ -298,25 +265,17 @@ window.toggleChat = function() {
 }
 
 function hideChat() {
-    if(els.chatDrawer) els.chatDrawer.style.display = 'none';
-    isChatDrawerOpen = false;
-    Object.keys(listeners.activeChat).forEach(key => {
-        listeners.activeChat[key].ref.off('value', listeners.activeChat[key].callback);
-        delete listeners.activeChat[key];
-    });
+    if(els.chatDrawer) els.chatDrawer.style.display = 'none'; isChatDrawerOpen = false;
+    Object.keys(listeners.activeChat).forEach(key => { listeners.activeChat[key].ref.off('value', listeners.activeChat[key].callback); delete listeners.activeChat[key]; });
 }
 
 function listenToChat() {
     if (activeChatContext === 'room' && roomCode) {
-        setupChat(db.ref(`rooms/${roomCode}/chat`), 'lobbyChatMessages', null);
-        setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', null);
+        setupChat(db.ref(`rooms/${roomCode}/chat`), 'lobbyChatMessages', null); setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', null);
         if(els.chatTitle) els.chatTitle.textContent = "💬 Chat Stanza";
-        if (els.gameArea && els.gameArea.classList.contains('active-screen')) {
-            els.chatDrawer.style.display = 'none'; isChatDrawerOpen = false;
-        }
+        if (els.gameArea && els.gameArea.classList.contains('active-screen')) { els.chatDrawer.style.display = 'none'; isChatDrawerOpen = false; }
     } else {
-        setupChat(db.ref('globalChat'), 'chatMessages', null);
-        if(els.chatTitle) els.chatTitle.textContent = "🌎 Chat Globale";
+        setupChat(db.ref('globalChat'), 'chatMessages', null); if(els.chatTitle) els.chatTitle.textContent = "🌎 Chat Globale";
     }
 }
 
@@ -324,52 +283,33 @@ window.openGlobalChat = function() { activeChatContext = 'global'; listenToChat(
 
 if(els.sendLobbyChatBtn) els.sendLobbyChatBtn.addEventListener('click', () => {
     const txt = els.lobbyChatInput.value.trim(); if (!txt || !roomCode) return;
-    const msgRef = db.ref(`rooms/${roomCode}/chat`).push();
-    msgRef.onDisconnect().remove();
-    msgRef.set({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
-    els.lobbyChatInput.value = '';
+    const msgRef = db.ref(`rooms/${roomCode}/chat`).push(); msgRef.onDisconnect().remove();
+    msgRef.set({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP }); els.lobbyChatInput.value = '';
 });
 if(els.lobbyChatInput) els.lobbyChatInput.addEventListener('keypress', e => { if (e.key === 'Enter') els.sendLobbyChatBtn.click(); });
 
 function setupChat(chatRef, containerId, alertBtnId) {
-    const container = els[containerId];
-    if (!container) return;
+    const container = els[containerId]; if (!container) return;
     if (listeners.activeChat[containerId]) listeners.activeChat[containerId].ref.off('value', listeners.activeChat[containerId].callback);
-
     let initialLoad = true, lastTs = Date.now();
     const callback = chatRef.limitToLast(40).on('value', snapshot => {
-        container.innerHTML = '';
-        let newMsgsCount = 0, latestMsg = null, maxTs = lastTs;
-
+        container.innerHTML = ''; let newMsgsCount = 0, latestMsg = null, maxTs = lastTs;
         snapshot.forEach(child => {
-            const msg = child.val();
-            const div = document.createElement('div'); div.style.marginBottom = '6px';
+            const msg = child.val(); const div = document.createElement('div'); div.style.marginBottom = '6px';
             if(msg.ts) {
-                const d = new Date(msg.ts);
-                const dateSmall = document.createElement('small');
+                const d = new Date(msg.ts); const dateSmall = document.createElement('small');
                 dateSmall.style.color = 'var(--hint-color)'; dateSmall.style.fontSize = '0.75em';
                 dateSmall.textContent = `[${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}] `;
-                div.appendChild(dateSmall);
-                if(msg.ts > maxTs) maxTs = msg.ts;
+                div.appendChild(dateSmall); if(msg.ts > maxTs) maxTs = msg.ts;
             }
             const nameB = document.createElement('b'); nameB.style.color = 'var(--link-color)'; nameB.textContent = msg.name + ":";
-            div.appendChild(nameB); div.appendChild(document.createTextNode(" " + msg.text));
-            container.appendChild(div);
-
+            div.appendChild(nameB); div.appendChild(document.createTextNode(" " + msg.text)); container.appendChild(div);
             if (!initialLoad && msg.ts && msg.ts > lastTs && msg.name !== myName) { newMsgsCount++; latestMsg = msg; }
         });
         lastTs = maxTs; container.scrollTop = container.scrollHeight;
-
-        if (!initialLoad && newMsgsCount > 0 && alertBtnId && !isChatDrawerOpen) {
-            showToast(`💬 Nuovo messaggio da ${latestMsg.name}`);
-            if (els[alertBtnId]) els[alertBtnId].style.backgroundColor = '#4caf50';
-        }
-        if (!initialLoad && newMsgsCount > 0 && roomHostId === myId && activeChatContext !== 'room' && chatRef.key !== 'globalChat') {
-            if (latestMsg) showToast(`📢 (Stanza) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
-        }
-        if (!initialLoad && newMsgsCount > 0 && activeChatContext === 'room' && chatRef.key === 'globalChat') {
-            if (latestMsg) showToast(`🌎 (Global) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
-        }
+        if (!initialLoad && newMsgsCount > 0 && alertBtnId && !isChatDrawerOpen) { showToast(`💬 Nuovo messaggio da ${latestMsg.name}`); if (els[alertBtnId]) els[alertBtnId].style.backgroundColor = '#4caf50'; }
+        if (!initialLoad && newMsgsCount > 0 && roomHostId === myId && activeChatContext !== 'room' && chatRef.key !== 'globalChat') if (latestMsg) showToast(`📢 (Stanza) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
+        if (!initialLoad && newMsgsCount > 0 && activeChatContext === 'room' && chatRef.key === 'globalChat') if (latestMsg) showToast(`🌎 (Global) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
         initialLoad = false;
     });
     listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
@@ -378,25 +318,14 @@ function setupChat(chatRef, containerId, alertBtnId) {
 if(els.sendChatBtn) els.sendChatBtn.addEventListener('click', () => {
     const txt = els.chatInput.value.trim(); if (!txt) return;
     let msgRef = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
-    msgRef.onDisconnect().remove();
-    msgRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
-    els.chatInput.value = '';
+    msgRef.onDisconnect().remove(); msgRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP }); els.chatInput.value = '';
 });
 if(els.chatInput) els.chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') els.sendChatBtn.click(); });
+if(els.clearChatBtn) els.clearChatBtn.addEventListener('click', () => { if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).remove(); else db.ref('globalChat').remove(); } });
 
-if(els.clearChatBtn) els.clearChatBtn.addEventListener('click', () => {
-    if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) {
-        if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).remove();
-        else db.ref('globalChat').remove();
-    }
-});
-
-// --- UI & LINGUA ---
+// --- LINGUA E UI ---
 function checkGameTypeUI() {
-    const isSingle = els.gameTypeInput.value === 'single';
-    const isTrn = els.gameTypeInput.value === 'tournament';
-    const isCustom = els.gameModeInput.value === 'custom';
-
+    const isSingle = els.gameTypeInput.value === 'single', isTrn = els.gameTypeInput.value === 'tournament', isCustom = els.gameModeInput.value === 'custom';
     els.timeoutDiv.style.display = isSingle || isTrn ? 'none' : 'block';
     els.fixedSpeedContainer.style.display = isSingle ? 'flex' : 'none';
     els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
@@ -422,39 +351,18 @@ function checkGameTypeUI() {
 }
 
 const i18n = {
-    it: { hello: "Ciao", lb: "Classifica", profile: "Profilo", activity: "Attività", /*... resto delle traduzioni come prima ...*/ btn_start_match: "AVVIA PARTITA", status_host: "Sei l'Host della partita.", status_guest: "Sei un partecipante. Attendi il via." },
-    en: { hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", /*... resto delle traduzioni come prima ...*/ btn_start_match: "START MATCH", status_host: "You are the Match Host.", status_guest: "You are a participant. Wait for the start." }
+    it: { hello: "Ciao", lb: "Classifica", profile: "Profilo", activity: "Attività", btn_start_match: "AVVIA PARTITA", status_host: "Sei l'Host della partita.", status_guest: "Sei un partecipante. Attendi il via." },
+    en: { hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", btn_start_match: "START MATCH", status_host: "You are the Match Host.", status_guest: "You are a participant. Wait for the start." }
 };
-// [Nota: Il dizionario i18n originale è conservato integralmente, lo applico dinamicamente nei punti appropriati]
 
-window.toggleLanguage = function() {
-    const newLang = (currentLang === 'it') ? 'en' : 'it';
-    setLanguage(newLang); updateDictionary();
-    showToast(newLang === 'it' ? "Lingua: Italiano" : "Language: English");
-}
-
-function setLanguage(lang) {
-    currentLang = lang; localStorage.setItem('gameLang', lang);
-    const t = i18n[lang] || i18n.it;
-    if(els.langBtn) els.langBtn.textContent = lang.toUpperCase();
-
-    // Aggiornamento parziale UI per non allungare il codice (si assumono tag esistenti)
-    if(els.txt_hello) els.txt_hello.textContent = t.hello;
-    checkGameTypeUI();
-    if (activeTrnId) db.ref(`tournaments/${activeTrnId}`).once('value', snap => { if(snap.exists()) renderActiveTournament(snap); });
-}
+window.toggleLanguage = function() { const newLang = (currentLang === 'it') ? 'en' : 'it'; setLanguage(newLang); updateDictionary(); showToast(newLang === 'it' ? "Lingua: Italiano" : "Language: English"); }
+function setLanguage(lang) { currentLang = lang; localStorage.setItem('gameLang', lang); const t = i18n[lang] || i18n.it; if(els.langBtn) els.langBtn.textContent = lang.toUpperCase(); if(els.txt_hello) els.txt_hello.textContent = t.hello; checkGameTypeUI(); if (activeTrnId) db.ref(`tournaments/${activeTrnId}`).once('value', snap => { if(snap.exists()) renderActiveTournament(snap); }); }
 
 if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => {
-    const isC = e.target.value === 'callsign'; const isPP = e.target.value === 'pingpong';
-    if (isPP) { els.gameTypeInput.value = 'multi'; els.gameTypeInput.disabled = true; checkGameTypeUI(); }
-    else els.gameTypeInput.disabled = false;
-
-    ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => {
-        els[id].disabled = isC;
-        if(isC && id!=='toneInput') els[id].value = 25;
-    });
-    els.fixedSpeedCheckbox.disabled = isC; if(isC) els.fixedSpeedCheckbox.checked = false;
-    checkGameTypeUI();
+    const isC = e.target.value === 'callsign', isPP = e.target.value === 'pingpong';
+    if (isPP) { els.gameTypeInput.value = 'multi'; els.gameTypeInput.disabled = true; checkGameTypeUI(); } else els.gameTypeInput.disabled = false;
+    ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => { els[id].disabled = isC; if(isC && id!=='toneInput') els[id].value = 25; });
+    els.fixedSpeedCheckbox.disabled = isC; if(isC) els.fixedSpeedCheckbox.checked = false; checkGameTypeUI();
 });
 if(els.gameTypeInput) els.gameTypeInput.addEventListener('change', checkGameTypeUI);
 
@@ -464,30 +372,23 @@ function updateCustomDictStatus() {
     else { els.customDictStatus.textContent = "Parole caricate: " + customDictionary.length; els.customDictStatus.style.color = "var(--link-color)"; }
 }
 
-if (els.customDictFileInput) {
-    els.customDictFileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        if (!file.name.toLowerCase().endsWith('.txt')) return alert("Per favore seleziona un file .txt!");
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const rawWords = event.target.result.split(/[\s,;.:!?"'()\[\]{}]+/).filter(w => w.trim().length >= 3);
-            const uniqueWords = [...new Set(rawWords.map(w => w.trim().toLowerCase()))];
-            if (uniqueWords.length === 0) return alert("Nessuna parola valida trovata.");
-            customDictionary = uniqueWords; localStorage.setItem(STORAGE_CUSTOM_DICT_KEY, JSON.stringify(customDictionary));
-            updateCustomDictStatus(); showToast(`Caricate ${uniqueWords.length} parole!`);
-        };
-        reader.readAsText(file);
-    });
-}
+if (els.customDictFileInput) els.customDictFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.txt')) return alert("Per favore seleziona un file .txt!");
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const uniqueWords = [...new Set(event.target.result.split(/[\s,;.:!?"'()\[\]{}]+/).filter(w => w.trim().length >= 3).map(w => w.trim().toLowerCase()))];
+        if (uniqueWords.length === 0) return alert("Nessuna parola valida trovata.");
+        customDictionary = uniqueWords; localStorage.setItem(STORAGE_CUSTOM_DICT_KEY, JSON.stringify(customDictionary)); updateCustomDictStatus(); showToast(`Caricate ${uniqueWords.length} parole!`);
+    }; reader.readAsText(file);
+});
 
 function generateCallsign() {
     const prefixes = ["I", "IK", "IZ", "IN", "IT", "IS", "IU", "IW", "W", "K", "N", "A", "WA", "WB", "DL", "DJ", "DK", "DO", "EA", "EB", "EC", "F", "G", "M", "GW", "GM", "9A", "S5", "OK", "OM", "SP", "SQ", "UA", "UR", "EW", "ER", "YO", "YU", "HA", "LZ", "OE", "HB", "PA", "PB", "ON", "VE", "VK", "ZL", "JA", "PY", "LU", "CX"];
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let callsign = prefixes[Math.floor(Math.random() * prefixes.length)] + Math.floor(Math.random() * 10);
     let suffixLen = (Math.random() > 0.9) ? 1 : (Math.random() > 0.7) ? 2 : 3;
-    for(let i = 0; i < suffixLen; i++) callsign += chars[Math.floor(Math.random() * chars.length)];
-    if (Math.random() > 0.90) callsign += ["/QRP", "/P", "/M", "/AM", "/MM"][Math.floor(Math.random() * 5)];
-    return callsign;
+    for(let i = 0; i < suffixLen; i++) callsign += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
+    if (Math.random() > 0.90) callsign += ["/QRP", "/P", "/M", "/AM", "/MM"][Math.floor(Math.random() * 5)]; return callsign;
 }
 
 function getGameWords(num, mode) {
@@ -498,38 +399,21 @@ function getGameWords(num, mode) {
     return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
 }
 
-window.showRoomEventModal = function(title, text) {
-    els.roomEventTitle.textContent = title; els.roomEventText.textContent = text; els.roomEventModal.style.display = 'flex';
-    playBeep(600, 0.2); setTimeout(() => playBeep(800, 0.3), 200);
-}
+window.showRoomEventModal = function(title, text) { els.roomEventTitle.textContent = title; els.roomEventText.textContent = text; els.roomEventModal.style.display = 'flex'; playBeep(600, 0.2); setTimeout(() => playBeep(800, 0.3), 200); }
 if(els.goToRoomBtn) els.goToRoomBtn.addEventListener('click', () => { els.roomEventModal.style.display = 'none'; if (roomCode) joinRoomLogic(false); });
-
-window.checkTournamentPopup = function() {
-    if (localStorage.getItem('hideTrnWelcomePopup') === 'true' || myTeamId) return;
-    setTimeout(() => { if(els.tournamentWelcomeModal) els.tournamentWelcomeModal.style.display = 'flex'; }, 1500);
-}
-window.closeTrnWelcomeModal = function() {
-    if (els.stopShowingTrnPopup && els.stopShowingTrnPopup.checked) localStorage.setItem('hideTrnWelcomePopup', 'true');
-    if(els.tournamentWelcomeModal) els.tournamentWelcomeModal.style.display = 'none';
-}
+window.checkTournamentPopup = function() { if (localStorage.getItem('hideTrnWelcomePopup') === 'true' || myTeamId) return; setTimeout(() => { if(els.tournamentWelcomeModal) els.tournamentWelcomeModal.style.display = 'flex'; }, 1500); }
+window.closeTrnWelcomeModal = function() { if (els.stopShowingTrnPopup && els.stopShowingTrnPopup.checked) localStorage.setItem('hideTrnWelcomePopup', 'true'); if(els.tournamentWelcomeModal) els.tournamentWelcomeModal.style.display = 'none'; }
 window.goToTournamentsFromPopup = function() { closeTrnWelcomeModal(); showScreen('teamsScreen'); }
 
 function listenToOnlineUsers() {
     db.ref('presence').on('value', snap => {
-        if(!els.onlineUsersList) return;
-        els.onlineUsersList.innerHTML = ''; let count = 0;
+        if(!els.onlineUsersList) return; els.onlineUsersList.innerHTML = ''; let count = 0;
         snap.forEach(child => {
-            const u = child.val(); if (child.key === myId) return;
-            count++; const li = document.createElement('li');
-            const isWaiting = (isChallenging && currentInviterId === child.key);
-            const isPlaying = (u.status === 'playing');
-
-            const leftSpan = document.createElement('span');
-            const nameB = document.createElement('b'); nameB.textContent = u.name; nameB.style.cursor = 'pointer'; nameB.style.color = 'var(--link-color)'; nameB.style.textDecoration = 'underline';
-            nameB.onclick = () => openTeamInviteModal(child.key, u.name);
-            leftSpan.appendChild(nameB); leftSpan.appendChild(document.createElement('br'));
+            const u = child.val(); if (child.key === myId) return; count++; const li = document.createElement('li');
+            const isWaiting = (isChallenging && currentInviterId === child.key), isPlaying = (u.status === 'playing');
+            const leftSpan = document.createElement('span'); const nameB = document.createElement('b'); nameB.textContent = u.name; nameB.style.cursor = 'pointer'; nameB.style.color = 'var(--link-color)'; nameB.style.textDecoration = 'underline';
+            nameB.onclick = () => openTeamInviteModal(child.key, u.name); leftSpan.appendChild(nameB); leftSpan.appendChild(document.createElement('br'));
             const statusSmall = document.createElement('small'); statusSmall.textContent = isPlaying ? "🟡 In Partita" : "🟢 Online"; leftSpan.appendChild(statusSmall);
-
             const btn = document.createElement('button'); btn.className = `action-btn-small ${isWaiting ? 'btn-danger' : 'btn-success'}`;
             if (isPlaying) { btn.classList.add('btn-secondary'); btn.disabled = true; btn.textContent = "In partita"; }
             else { if (isChallenging && !isWaiting) btn.disabled = true; btn.textContent = isWaiting ? 'In Attesa...' : 'Sfida'; btn.onclick = () => openInviteModal(child.key, u.name); }
@@ -539,106 +423,71 @@ function listenToOnlineUsers() {
     });
 }
 
-// Logica Inviti ridotta
 window.openInviteModal = function(targetId, targetName) {
-    currentInviterId = targetId; els.inviteModalTitle.textContent = "Sfida " + targetName; els.inviteModalText.textContent = "Scegli le impostazioni per la sfida:";
-    els.inviteSettings.style.display = 'block'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'none';
-    els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'block'; els.inviteModal.style.display = 'flex';
+    currentInviterId = targetId; els.inviteModalTitle.textContent = "Sfida " + targetName; els.inviteModalText.textContent = "Scegli le impostazioni per la sfida:"; els.inviteSettings.style.display = 'block'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'none'; els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'block'; els.inviteModal.style.display = 'flex';
 }
-
 window.openTeamInviteModal = async function(targetId, targetName) {
-    currentInviterId = targetId; els.inviteModalTitle.textContent = "Recluta " + targetName;
-    els.recruitmentStatusText.textContent = "Caricamento stato...";
-    els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'block'; els.incomingInviteArea.style.display = 'none';
-    els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'none'; els.recruitJoinBtn.style.display = 'none';
+    currentInviterId = targetId; els.inviteModalTitle.textContent = "Recluta " + targetName; els.recruitmentStatusText.textContent = "Caricamento stato..."; els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'block'; els.incomingInviteArea.style.display = 'none'; els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'none'; els.recruitJoinBtn.style.display = 'none';
     try {
         const teamsSnap = await db.ref('teams').once('value'); let tName = null, inTeam = false;
         teamsSnap.forEach(tSnap => { const t = tSnap.val(); if (t.status !== 'retired' && t.members && t.members[targetId]) { inTeam = true; tName = t.name; } });
-        if (inTeam) {
-            els.recruitmentStatusText.innerHTML = `⚠️ <b>${targetName}</b> fa già parte della squadra <b>${tName}</b>.`; els.recruitCreateBtn.style.display = 'none';
-        } else {
-            els.recruitmentStatusText.innerHTML = `💡 <b>${targetName}</b> non ha ancora una squadra.`; els.recruitCreateBtn.style.display = 'block';
-            if (myTeamId) els.recruitJoinBtn.style.display = 'block';
-        }
+        if (inTeam) { els.recruitmentStatusText.innerHTML = `⚠️ <b>${targetName}</b> fa già parte della squadra <b>${tName}</b>.`; els.recruitCreateBtn.style.display = 'none'; } 
+        else { els.recruitmentStatusText.innerHTML = `💡 <b>${targetName}</b> non ha ancora una squadra.`; els.recruitCreateBtn.style.display = 'block'; if (myTeamId) els.recruitJoinBtn.style.display = 'block'; }
         els.recruitJoinBtn.onclick = () => sendRecruitmentInvite('team'); els.recruitCreateBtn.onclick = () => sendRecruitmentInvite('suggest');
         els.recruitMsgBtn.onclick = () => { db.ref(`presence/${targetId}`).once('value', s => { const u = s.val(); if (u && u.username) tg.openTelegramLink('https://t.me/' + u.username); else tg.showAlert("Nessun username pubblico."); }); };
-    } catch(e) {}
-    els.inviteModal.style.display = 'flex';
+    } catch(e) {} els.inviteModal.style.display = 'flex';
 }
 
 function sendRecruitmentInvite(type) {
-    const inviteData = { fromId: myId, fromName: myName, type: 'team', ts: firebase.database.ServerValue.TIMESTAMP, teamId: type === 'team' ? myTeamId : null, teamName: type === 'team' ? myTeamName : null };
-    db.ref(`invites/${currentInviterId}`).set(inviteData).then(() => { showToast("Invito inviato!"); closeInviteModal(); });
+    db.ref(`invites/${currentInviterId}`).set({ fromId: myId, fromName: myName, type: 'team', ts: firebase.database.ServerValue.TIMESTAMP, teamId: type === 'team' ? myTeamId : null, teamName: type === 'team' ? myTeamName : null }).then(() => { showToast("Invito inviato!"); closeInviteModal(); });
 }
 window.closeInviteModal = function() { els.inviteModal.style.display = 'none'; currentInviterId = null; }
 
 if(els.sendInviteBtn) els.sendInviteBtn.addEventListener('click', () => {
-    if (isChallenging) return;
-    isChallenging = true;
-    const inv = { fromId: myId, fromName: myName, mode: els.inviteModeInput.value, wpm: parseInt(els.inviteWpmInput.value), wordCount: parseInt(els.inviteWordCountInput.value), ts: firebase.database.ServerValue.TIMESTAMP, status: 'pending' };
-    const tId = currentInviterId;
-    db.ref(`invites/${tId}`).set(inv).then(() => {
+    if (isChallenging) return; isChallenging = true; const tId = currentInviterId;
+    db.ref(`invites/${tId}`).set({ fromId: myId, fromName: myName, mode: els.inviteModeInput.value, wpm: parseInt(els.inviteWpmInput.value), wordCount: parseInt(els.inviteWordCountInput.value), ts: firebase.database.ServerValue.TIMESTAMP, status: 'pending' }).then(() => {
         showToast("Invito inviato! In attesa..."); closeInviteModal();
         if (listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite);
-        listeners.outgoingInvite = db.ref(`invites/${tId}`).on('value', snap => {
-            if (!snap.exists() && isChallenging) setTimeout(() => {
-                if (isChallenging) { showToast("Rifiutato o scaduto."); isChallenging = false; currentInviterId = null; if(listeners.outgoingInvite) { db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite); listeners.outgoingInvite=null;} }
-            }, 1000);
-        });
+        listeners.outgoingInvite = db.ref(`invites/${tId}`).on('value', snap => { if (!snap.exists() && isChallenging) setTimeout(() => { if (isChallenging) { showToast("Rifiutato o scaduto."); isChallenging = false; currentInviterId = null; if(listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite); } }, 1000); });
     });
 });
 
 function listenToInvites() {
     db.ref(`invites/${myId}`).on('value', snap => {
         const inv = snap.val(); if (!inv || roomCode || gameRunning) return;
-        if (Date.now() - inv.ts > 60000) { db.ref(`invites/${myId}`).remove(); return; }
+        if (Date.now() - inv.ts > 60000) return db.ref(`invites/${myId}`).remove();
         if (inv.type === 'team') {
-            els.inviteModalTitle.textContent = inv.teamId ? "🚀 INVITO SQUADRA" : "💡 SUGGERIMENTO SQUADRA";
-            els.inviteModalText.innerHTML = inv.teamId ? `${inv.fromName} ti ha invitato ad unirti alla squadra <b>${inv.teamName}</b>.` : `${inv.fromName} ti suggerisce di creare una tua squadra!`;
-            els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'none'; els.incomingTeamInviteArea.style.display = 'block'; els.outgoingInviteArea.style.display = 'none';
-            els.acceptTeamInviteBtn.textContent = inv.teamId ? "UNISCITI ✅" : "VAI ALLA CREAZIONE 🛠️";
-            els.acceptTeamInviteBtn.onclick = () => { db.ref(`invites/${myId}`).remove(); closeInviteModal(); if (inv.teamId) joinTeam(inv.teamId); else showScreen('teamsScreen'); };
+            els.inviteModalTitle.textContent = inv.teamId ? "🚀 INVITO SQUADRA" : "💡 SUGGERIMENTO SQUADRA"; els.inviteModalText.innerHTML = inv.teamId ? `${inv.fromName} ti ha invitato ad unirti alla squadra <b>${inv.teamName}</b>.` : `${inv.fromName} ti suggerisce di creare una tua squadra!`; els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'none'; els.incomingTeamInviteArea.style.display = 'block'; els.outgoingInviteArea.style.display = 'none';
+            els.acceptTeamInviteBtn.textContent = inv.teamId ? "UNISCITI ✅" : "VAI ALLA CREAZIONE 🛠️"; els.acceptTeamInviteBtn.onclick = () => { db.ref(`invites/${myId}`).remove(); closeInviteModal(); if (inv.teamId) joinTeam(inv.teamId); else showScreen('teamsScreen'); };
         } else {
-            els.inviteModalTitle.textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
-            els.inviteModalText.innerHTML = `Ti ha invitato a giocare:<br><b>${inv.mode.toUpperCase()}</b> a <b>${inv.wpm}</b> WPM (<b>${inv.wordCount}</b> test).`;
-            els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'block'; els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'none';
+            els.inviteModalTitle.textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase(); els.inviteModalText.innerHTML = `Ti ha invitato a giocare:<br><b>${inv.mode.toUpperCase()}</b> a <b>${inv.wpm}</b> WPM (<b>${inv.wordCount}</b> test).`; els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'block'; els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'none';
         }
         els.inviteModal.style.display = 'flex'; currentInviterId = inv.fromId; window.lastIncomingInvite = inv;
     });
 }
-
 if(els.declineTeamInviteBtn) els.declineTeamInviteBtn.addEventListener('click', () => { db.ref(`invites/${myId}`).remove(); closeInviteModal(); });
 if(els.declineInviteBtn) els.declineInviteBtn.addEventListener('click', () => { db.ref(`invites/${myId}`).remove(); closeInviteModal(); });
-
 if(els.acceptInviteBtn) els.acceptInviteBtn.addEventListener('click', () => {
-    const inv = window.lastIncomingInvite; db.ref(`invites/${myId}`).remove(); closeInviteModal();
-    const rCode = Math.floor(1000 + Math.random() * 9000).toString();
-    db.ref(`rooms/${rCode}`).set({ status: 'waiting', type: 'multi', mode: inv.mode, wpm: inv.wpm, tone: 600, wordCount: inv.wordCount, words: getGameWords(inv.wordCount, inv.mode), createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + 600000, hostId: inv.fromId }).then(() => {
-        db.ref(`invite_accepted/${inv.fromId}`).set({ roomCode: rCode }); roomCode = rCode; joinRoomLogic(false);
-    });
+    const inv = window.lastIncomingInvite; db.ref(`invites/${myId}`).remove(); closeInviteModal(); const rCode = Math.floor(1000 + Math.random() * 9000).toString();
+    db.ref(`rooms/${rCode}`).set({ status: 'waiting', type: 'multi', mode: inv.mode, wpm: inv.wpm, tone: 600, wordCount: inv.wordCount, words: getGameWords(inv.wordCount, inv.mode), createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + 600000, hostId: inv.fromId }).then(() => { db.ref(`invite_accepted/${inv.fromId}`).set({ roomCode: rCode }); roomCode = rCode; joinRoomLogic(false); });
 });
 
 function listenToInviteAccepted() {
     if (listeners.inviteAccepted) db.ref(`invite_accepted/${myId}`).off('value', listeners.inviteAccepted);
-    listeners.inviteAccepted = db.ref(`invite_accepted/${myId}`).on('value', snap => {
-        const d = snap.val(); if (d && d.roomCode) { db.ref(`invite_accepted/${myId}`).remove(); isChallenging = false; closeInviteModal(); roomCode = d.roomCode; joinRoomLogic(false); }
-    });
+    listeners.inviteAccepted = db.ref(`invite_accepted/${myId}`).on('value', snap => { const d = snap.val(); if (d && d.roomCode) { db.ref(`invite_accepted/${myId}`).remove(); isChallenging = false; closeInviteModal(); roomCode = d.roomCode; joinRoomLogic(false); } });
 }
 
 function listenToRooms() {
     db.ref('rooms').on('value', snap => {
-        if(!els.waitingRoomsList) return;
-        els.waitingRoomsList.innerHTML = ''; let wCount = 0;
+        if(!els.waitingRoomsList) return; els.waitingRoomsList.innerHTML = ''; let wCount = 0;
         snap.forEach(child => {
             const room = child.val(); const code = child.key;
             if (code.startsWith("TRN_") || (room.expiresAt && Date.now() > room.expiresAt)) { if(Date.now() > room.expiresAt) db.ref(`rooms/${code}`).remove(); return; }
             if (room.status === 'waiting' && room.type !== 'single') {
-                wCount++; const pCount = room.players ? Object.keys(room.players).length : 0;
-                const li = document.createElement('li');
+                wCount++; const pCount = room.players ? Object.keys(room.players).length : 0; const li = document.createElement('li');
                 let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : room.mode === 'pingpong' ? '🏓 Ping Pong' : room.mode === 'quiz' ? '❓ Quiz' : '🔤 Parole';
                 li.innerHTML = `<span><b>#${code} - ${modeIcon}</b><br><small>${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test</small></span>`;
-                const btn = document.createElement('button'); btn.className = 'action-btn-small'; btn.textContent = 'Entra'; btn.onclick = () => window.joinSpecificRoom(code);
-                li.appendChild(btn); els.waitingRoomsList.appendChild(li);
+                const btn = document.createElement('button'); btn.className = 'action-btn-small'; btn.textContent = 'Entra'; btn.onclick = () => window.joinSpecificRoom(code); li.appendChild(btn); els.waitingRoomsList.appendChild(li);
             }
         });
         if (wCount === 0) els.waitingRoomsList.innerHTML = '<li style="justify-content:center; color:var(--hint-color); background:none; border:none;">Nessuna sfida.</li>';
@@ -648,48 +497,27 @@ window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false)
 
 if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
     const gameType = els.gameTypeInput.value, gameMode = els.gameModeInput.value;
-    if (gameType === 'tournament') {
-        showScreen('teamsScreen');
-        if (gameMode === 'trn_create_team') switchTeamTab('gest'); else if (gameMode === 'trn_join_team') switchTeamTab('allteams'); else if (gameMode === 'trn_create_trn') switchTeamTab('tournaments'); return;
-    }
+    if (gameType === 'tournament') { showScreen('teamsScreen'); if (gameMode === 'trn_create_team') switchTeamTab('gest'); else if (gameMode === 'trn_join_team') switchTeamTab('allteams'); else if (gameMode === 'trn_create_trn') switchTeamTab('tournaments'); return; }
     if (gameMode === 'custom' && customDictionary.length === 0) { els.customDictModal.style.display = 'flex'; return showToast("Carica prima un file di testo!"); }
 
-    isChallenging = false;
-    if (currentInviterId) db.ref(`invites/${currentInviterId}`).once('value', s => { if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove(); });
-    db.ref(`invite_accepted/${myId}`).remove();
-
-    currentMode = gameMode; isSinglePlayer = gameType === 'single';
-    currentWpm = currentMode==='callsign' ? 25 : parseInt(els.startWpmInput.value); baseWpm = currentWpm;
-    requestedWordCount = currentMode==='callsign' ? 25 : Math.max(1, parseInt(els.wordCountInput.value));
-    currentTone = parseInt(els.toneInput.value);
-    isFixedSpeed = els.fixedSpeedCheckbox.checked; isEasyMode = els.easyModeCheckbox.checked;
+    isChallenging = false; if (currentInviterId) db.ref(`invites/${currentInviterId}`).once('value', s => { if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove(); });
+    db.ref(`invite_accepted/${myId}`).remove(); currentMode = gameMode; isSinglePlayer = gameType === 'single'; currentWpm = currentMode==='callsign' ? 25 : parseInt(els.startWpmInput.value); baseWpm = currentWpm; requestedWordCount = currentMode==='callsign' ? 25 : Math.max(1, parseInt(els.wordCountInput.value)); currentTone = parseInt(els.toneInput.value); isFixedSpeed = els.fixedSpeedCheckbox.checked; isEasyMode = els.easyModeCheckbox.checked;
     roomCode = Math.floor(1000 + Math.random() * 9000).toString(); gameWords = getGameWords(requestedWordCount, currentMode);
-
-    db.ref('rooms/' + roomCode).set({
-        status: isSinglePlayer ? 'countdown' : 'waiting', type: isSinglePlayer ? 'single' : 'multi',
-        mode: currentMode, wpm: currentWpm, tone: currentTone, wordCount: requestedWordCount, words: gameWords,
-        fixedSpeed: isFixedSpeed, createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: isSinglePlayer ? null : Date.now() + (Math.max(1, parseInt(els.roomTimerInput.value)) * 60000), hostId: myId
-    }).then(() => joinRoomLogic(false));
+    db.ref('rooms/' + roomCode).set({ status: isSinglePlayer ? 'countdown' : 'waiting', type: isSinglePlayer ? 'single' : 'multi', mode: currentMode, wpm: currentWpm, tone: currentTone, wordCount: requestedWordCount, words: gameWords, fixedSpeed: isFixedSpeed, createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: isSinglePlayer ? null : Date.now() + (Math.max(1, parseInt(els.roomTimerInput.value)) * 60000), hostId: myId }).then(() => joinRoomLogic(false));
 });
 
 function exitRoomCleanly(roomWasDeletedByHost = false) {
-    let targetScreen = 'setupScreen'; const amIHost = (myId === roomHostId);
-    localStorage.removeItem(STORAGE_ROOM_KEY); isRejoining = false; isChallenging = false; currentInviterId = null;
-
+    let targetScreen = 'setupScreen'; const amIHost = (myId === roomHostId); localStorage.removeItem(STORAGE_ROOM_KEY); isRejoining = false; isChallenging = false; currentInviterId = null;
     if (listeners.players && roomCode) { db.ref(`rooms/${roomCode}/players`).off('value', listeners.players); listeners.players = null; }
     if (listeners.roomLb && roomCode) { db.ref(`rooms/${roomCode}`).off('value', listeners.roomLb); listeners.roomLb = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
-
     if (roomCode) {
         if (roomCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
-        if (!roomWasDeletedByHost && amIHost && !roomCode.startsWith("TRN_")) { /* Host rimane in ascolto per non morire in bacheca */ } 
-        else {
+        if (!roomWasDeletedByHost && amIHost && !roomCode.startsWith("TRN_")) {} else {
             if (listeners.room) { listeners.room.off(); listeners.room = null; }
             if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
-            const rc = roomCode;
-            db.ref(`rooms/${rc}/players/${myId}`).onDisconnect().cancel();
-            db.ref(`rooms/${rc}`).once('value', snap => { if (snap.exists()) db.ref(`rooms/${rc}/players/${myId}`).remove(); });
-            roomCode = "";
+            db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
+            db.ref(`rooms/${roomCode}`).once('value', snap => { if (snap.exists()) db.ref(`rooms/${roomCode}/players/${myId}`).remove(); }); roomCode = "";
         }
     } else { if (listeners.room) { listeners.room.off(); listeners.room = null; } }
     hideChat(); showScreen(targetScreen);
@@ -702,185 +530,96 @@ function joinRoomLogic(isReconnect = false) {
         const pData = snapshot.val();
         if (pData?.finished) { showScreen('leaderboardScreen'); activeTab="room"; showLeaderboardTab('tabRoomBtn'); localStorage.removeItem(STORAGE_ROOM_KEY); return; }
         if (pData) { totalScore = pData.score || 0; wordIndex = pData.wordIndex || 0; quizQuestionIndex = pData.wordIndex || 0; matchDetailsArray = pData.matchDetails || []; if (isRejoining) showToast("🔄 Partita recuperata!"); }
-
-        showScreen('lobbyScreen'); els.lobbyTitleText.textContent = roomCode.startsWith("TRN_") ? "Lobby Incontro Torneo 🥊" : "Lobby Stanza Libera";
-        if(els.permanentGameInput) els.permanentGameInput.blur();
-        playerRef.onDisconnect().update({ online: false });
-        if (!pData) playerRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, score: 0, wpm: 0, finished: false, teamId: myTeamId, ready: false, online: true }); else playerRef.update({ online: true });
-
-        listenToChat();
-        if (listeners.room && !isReconnect) listeners.room.off();
+        showScreen('lobbyScreen'); els.lobbyTitleText.textContent = roomCode.startsWith("TRN_") ? "Lobby Incontro Torneo 🥊" : "Lobby Stanza Libera"; if(els.permanentGameInput) els.permanentGameInput.blur();
+        playerRef.onDisconnect().update({ online: false }); if (!pData) playerRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, score: 0, wpm: 0, finished: false, teamId: myTeamId, ready: false, online: true }); else playerRef.update({ online: true });
+        listenToChat(); if (listeners.room && !isReconnect) listeners.room.off();
         listeners.room = db.ref(`rooms/${roomCode}`);
         listeners.room.on('value', snap => {
-            if (!snap.exists()) return exitRoomCleanly(true);
-            const rData = snap.val(); currentMode = rData.mode; requestedWordCount = rData.wordCount; isSinglePlayer = rData.type === 'single'; isFixedSpeed = rData.fixedSpeed || false; roomHostId = rData.hostId;
+            if (!snap.exists()) return exitRoomCleanly(true); const rData = snap.val(); currentMode = rData.mode; requestedWordCount = rData.wordCount; isSinglePlayer = rData.type === 'single'; isFixedSpeed = rData.fixedSpeed || false; roomHostId = rData.hostId;
             if (rData.status === 'playing' && !gameRunning) { currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone; if (rData.words) gameWords = rData.words; return resumeGameSequence(); }
             if (rData.status === 'countdown' && !gameRunning) { currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone; if (rData.words) gameWords = rData.words; return startCountdownSequence(); }
             if (rData.status === 'waiting') {
-                renderPlayersList(rData.players || {}, rData.hostId);
-                const pCount = Object.keys(rData.players || {}).length;
-                if (myId === rData.hostId && pCount > lastPlayerCount && activeChatContext !== 'room') showRoomEventModal("Qualcuno è entrato!", "Un nuovo giocatore è appena entrato.");
-                lastPlayerCount = pCount;
+                renderPlayersList(rData.players || {}, rData.hostId); const pCount = Object.keys(rData.players || {}).length;
+                if (myId === rData.hostId && pCount > lastPlayerCount && activeChatContext !== 'room') showRoomEventModal("Qualcuno è entrato!", "Un nuovo giocatore è appena entrato."); lastPlayerCount = pCount;
                 if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
-                if (rData.expiresAt && !isSinglePlayer) {
-                    lobbyTimerInterval = setInterval(() => {
-                        const diff = rData.expiresAt - Date.now();
-                        if (diff <= 0) { clearInterval(lobbyTimerInterval); els.lobbyTimerText.textContent = "Tempo scaduto!"; }
-                        else els.lobbyTimerText.textContent = `Scade tra: ${Math.floor(diff/60000)}:${Math.floor((diff%60000)/1000).toString().padStart(2, '0')}`;
-                    }, 1000);
-                } else { if(els.lobbyTimerText) els.lobbyTimerText.textContent = ""; }
+                if (rData.expiresAt && !isSinglePlayer) lobbyTimerInterval = setInterval(() => { const diff = rData.expiresAt - Date.now(); if (diff <= 0) { clearInterval(lobbyTimerInterval); els.lobbyTimerText.textContent = "Tempo scaduto!"; } else els.lobbyTimerText.textContent = `Scade tra: ${Math.floor(diff/60000)}:${Math.floor((diff%60000)/1000).toString().padStart(2, '0')}`; }, 1000); else if(els.lobbyTimerText) els.lobbyTimerText.textContent = "";
             }
         });
     });
 }
-
-if(els.inviteFriendsBtn) els.inviteFriendsBtn.addEventListener('click', () => {
-    tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=room_${roomCode}`)}&text=${encodeURIComponent(`Sfida in Telegrafia! Entra nella mia stanza: #${roomCode}`)}`);
-});
-
-// Funzione per forzare l'aggiornamento reale della WebApp
-window.forceAppUpdate = function() {
-    showToast("Aggiornamento in corso...");
-
-    // 1. Pulizia Caches API (se presente)
-    if ('caches' in window) {
-        caches.keys().then(names => {
-            names.forEach(name => caches.delete(name));
-        });
-    }
-
-    // 2. Disinstallazione Service Worker (se presenti)
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(registrations => {
-            registrations.forEach(r => r.unregister());
-        });
-    }
-
-    // 3. Ricaricamento con Cache-Buster nell'URL
-    setTimeout(() => {
-        const url = new URL(window.location.href);
-        url.searchParams.set('v', Date.now()); // Aggiunge o aggiorna ?v=1716200000000
-        window.location.replace(url.toString());
-    }, 300);
-};
-
-// Collega la funzione al bottone nel banner
-if (els.updateBannerBtn) {
-    els.updateBannerBtn.addEventListener('click', window.forceAppUpdate);
-}
+if(els.inviteFriendsBtn) els.inviteFriendsBtn.addEventListener('click', () => tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=room_${roomCode}`)}&text=${encodeURIComponent(`Sfida in Telegrafia! Entra nella mia stanza: #${roomCode}`)}`));
 
 function renderPlayersList(playersData, hostId) {
-    if(!els.playersList) return;
-    els.playersList.innerHTML = ''; const count = Object.keys(playersData).length;
-    if (count > lastPlayerCount && lastPlayerCount > 0) { playBeep(500, 0.1); setTimeout(() => playBeep(700, 0.15), 150); showToast("👤 Nuovo giocatore!"); }
-    lastPlayerCount = count; let allReady = true; const pKeys = Object.keys(playersData); if (pKeys.length < 2) allReady = false;
-
+    if(!els.playersList) return; els.playersList.innerHTML = ''; const count = Object.keys(playersData).length;
+    if (count > lastPlayerCount && lastPlayerCount > 0) { playBeep(500, 0.1); setTimeout(() => playBeep(700, 0.15), 150); showToast("👤 Nuovo giocatore!"); } lastPlayerCount = count; let allReady = true; const pKeys = Object.keys(playersData); if (pKeys.length < 2) allReady = false;
     Object.entries(playersData).forEach(([id, data]) => {
-        if (!data.ready) allReady = false;
-        const li = document.createElement('li'); const nSpan = document.createElement('span'); nSpan.textContent = `${data.ready ? '✅' : '⏳'} ${data.name}`;
+        if (!data.ready) allReady = false; const li = document.createElement('li'); const nSpan = document.createElement('span'); nSpan.textContent = `${data.ready ? '✅' : '⏳'} ${data.name}`;
         if (data.username) { nSpan.style.color = 'var(--link-color)'; nSpan.style.cursor = 'pointer'; nSpan.style.textDecoration = 'underline'; nSpan.onclick = () => openTelegramProfile(data.username); }
-        li.appendChild(nSpan); if (id === hostId) { const sHost = document.createElement('small'); sHost.textContent = ' (HOST)'; li.appendChild(sHost); }
-        els.playersList.appendChild(li);
+        li.appendChild(nSpan); if (id === hostId) { const sHost = document.createElement('small'); sHost.textContent = ' (HOST)'; li.appendChild(sHost); } els.playersList.appendChild(li);
     });
-
     const isTrnOrPP = roomCode.startsWith("TRN_") || currentMode === 'pingpong'; const amIHost = (myId === hostId) || roomCode.startsWith("TRN_"); const amIReady = playersData[myId]?.ready;
-    els.startMultiplayerBtn.style.display = (amIHost && !isTrnOrPP) ? 'block' : 'none';
-    els.deleteRoomBtn.style.display = (myId === hostId && !roomCode.startsWith("TRN_")) ? 'block' : 'none';
-    els.readyBtn.style.display = (isTrnOrPP && !amIReady) ? 'block' : 'none';
-
-    if (isTrnOrPP) { els.waitingHostText.style.display = amIReady ? 'block' : 'none'; els.waitingHostText.textContent = "In attesa..."; els.statusInfoText.textContent = amIReady ? "SONO PRONTO ✅" : "Connessione sicura in corso..."; } 
-    else { els.waitingHostText.style.display = amIHost ? 'none' : 'block'; els.waitingHostText.textContent = "In attesa dell'host..."; els.statusInfoText.textContent = amIHost ? "Sei l'Host." : "Sei un partecipante."; }
+    els.startMultiplayerBtn.style.display = (amIHost && !isTrnOrPP) ? 'block' : 'none'; els.deleteRoomBtn.style.display = (myId === hostId && !roomCode.startsWith("TRN_")) ? 'block' : 'none'; els.readyBtn.style.display = (isTrnOrPP && !amIReady) ? 'block' : 'none';
+    if (isTrnOrPP) { els.waitingHostText.style.display = amIReady ? 'block' : 'none'; els.waitingHostText.textContent = "In attesa..."; els.statusInfoText.textContent = amIReady ? "SONO PRONTO ✅" : "Connessione sicura in corso..."; } else { els.waitingHostText.style.display = amIHost ? 'none' : 'block'; els.waitingHostText.textContent = "In attesa dell'host..."; els.statusInfoText.textContent = amIHost ? "Sei l'Host." : "Sei un partecipante."; }
     if (allReady && isTrnOrPP && (pKeys[0] === myId || amIHost)) db.ref(`rooms/${roomCode}`).update({ status: 'countdown', expiresAt: null });
 }
 if(els.readyBtn) els.readyBtn.addEventListener('click', () => { if(roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ ready: true }); });
 
 function getLevenshteinDistance(a, b) {
     const matrix = []; for (let i = 0; i <= b.length; i++) matrix[i] = [i]; for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-    for (let i = 1; i <= b.length; i++) for (let j = 1; j <= a.length; j++) {
-        if (b.charAt(i-1) === a.charAt(j-1)) matrix[i][j] = matrix[i-1][j-1]; else matrix[i][j] = Math.min(matrix[i-1][j-1]+1, Math.min(matrix[i][j-1]+1, matrix[i-1][j]+1));
-    }
-    return matrix[b.length][a.length];
+    for (let i = 1; i <= b.length; i++) for (let j = 1; j <= a.length; j++) { if (b.charAt(i-1) === a.charAt(j-1)) matrix[i][j] = matrix[i-1][j-1]; else matrix[i][j] = Math.min(matrix[i-1][j-1]+1, Math.min(matrix[i][j-1]+1, matrix[i-1][j]+1)); } return matrix[b.length][a.length];
 }
 function renderDiffSecure(container, real, typed) {
-    for (let i = 0; i < Math.max(real.length, typed.length); i++) {
-        if (!real[i]) continue; const span = document.createElement('span');
-        if (!typed[i] || typed[i] !== real[i]) span.style.color = "#d32f2f";
-        span.textContent = real[i]; container.appendChild(span);
-    }
+    for (let i = 0; i < Math.max(real.length, typed.length); i++) { if (!real[i]) continue; const span = document.createElement('span'); if (!typed[i] || typed[i] !== real[i]) span.style.color = "#d32f2f"; span.textContent = real[i]; container.appendChild(span); }
 }
 if(els.replayWordBtn) els.replayWordBtn.addEventListener('click', () => { if (!gameRunning || !inputActive) return; usedReplay = true; playMorseAudio(gameWords[wordIndex].toUpperCase(), currentWpm); els.permanentGameInput.focus(); });
 
 if(els.permanentGameInput) {
-    els.permanentGameInput.addEventListener('input', function(e) {
-        if (currentMode === 'chars' && inputActive && gameRunning) { const val = els.permanentGameInput.value.trim().toUpperCase(); if (val.length >= 1) { handleWordSubmission(val[0]); els.permanentGameInput.value = ""; } }
-    });
-    els.permanentGameInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && inputActive && gameRunning && currentMode !== 'chars') { const val = els.permanentGameInput.value.trim().toUpperCase(); if (val) { handleWordSubmission(val); els.permanentGameInput.value = ""; } }
-    });
+    els.permanentGameInput.addEventListener('input', function(e) { if (currentMode === 'chars' && inputActive && gameRunning) { const val = els.permanentGameInput.value.trim().toUpperCase(); if (val.length >= 1) { handleWordSubmission(val[0]); els.permanentGameInput.value = ""; } } });
+    els.permanentGameInput.addEventListener('keypress', function(e) { if (e.key === 'Enter' && inputActive && gameRunning && currentMode !== 'chars') { const val = els.permanentGameInput.value.trim().toUpperCase(); if (val) { handleWordSubmission(val); els.permanentGameInput.value = ""; } } });
 }
 
 function handleWordSubmission(userWord) {
     inputActive = false; const currentWord = gameWords[wordIndex].toUpperCase(); let points = 0, scoreColor = ""; const reactionMs = Date.now() - lastWordStartTime; const levDist = getLevenshteinDistance(currentWord, userWord);
-    if (currentMode === 'chars') {
-        if (userWord === currentWord) { points = Math.max(100, Math.floor(1000 - (reactionMs / 2))); scoreColor = "#4caf50"; } else { points = 0; scoreColor = "#d32f2f"; }
-    } else {
-        const basePoints = (Math.pow(currentWpm, 2) * currentWord.length) / (10 * Math.pow(levDist + 1, 2));
-        const estimatedAudioMs = (currentWord.length * 60 / currentWpm) * 1000;
-        let timeMultiplier = 1.0;
-        if (reactionMs > (estimatedAudioMs + 2000)) timeMultiplier = Math.max(0.5, 1.0 - ((reactionMs - (estimatedAudioMs + 2000)) / 20000));
-        else if (reactionMs < estimatedAudioMs && levDist === 0) timeMultiplier = 1.1;
-        points = Math.round(basePoints * timeMultiplier);
-        if (levDist === 0) scoreColor = usedReplay ? "#999999" : "#4caf50"; else if (levDist === 1) scoreColor = "#ff9800"; else scoreColor = "#d32f2f";
-        if (usedReplay) points = Math.round(points * 0.2);
+    if (currentMode === 'chars') { if (userWord === currentWord) { points = Math.max(100, Math.floor(1000 - (reactionMs / 2))); scoreColor = "#4caf50"; } else { points = 0; scoreColor = "#d32f2f"; } } 
+    else {
+        const basePoints = (Math.pow(currentWpm, 2) * currentWord.length) / (10 * Math.pow(levDist + 1, 2)); const estimatedAudioMs = (currentWord.length * 60 / currentWpm) * 1000; let timeMultiplier = 1.0;
+        if (reactionMs > (estimatedAudioMs + 2000)) timeMultiplier = Math.max(0.5, 1.0 - ((reactionMs - (estimatedAudioMs + 2000)) / 20000)); else if (reactionMs < estimatedAudioMs && levDist === 0) timeMultiplier = 1.1;
+        points = Math.round(basePoints * timeMultiplier); if (levDist === 0) scoreColor = usedReplay ? "#999999" : "#4caf50"; else if (levDist === 1) scoreColor = "#ff9800"; else scoreColor = "#d32f2f"; if (usedReplay) points = Math.round(points * 0.2);
     }
 
     if (levDist > 0) {
         let wrongChars = [];
-        for(let i=0; i<Math.max(currentWord.length, userWord.length); i++) {
-            if(userWord[i] !== currentWord[i] && currentWord[i] && !['__proto__','constructor','prototype'].includes(currentWord[i])) if(!wrongChars.includes(currentWord[i])) wrongChars.push(currentWord[i]);
-        }
+        for(let i=0; i<Math.max(currentWord.length, userWord.length); i++) if(userWord[i] !== currentWord[i] && currentWord[i] && !['__proto__','constructor','prototype'].includes(currentWord[i])) if(!wrongChars.includes(currentWord[i])) wrongChars.push(currentWord[i]);
         if(!sessionErrorsByWpm[currentWpm]) sessionErrorsByWpm[currentWpm] = Object.create(null);
         wrongChars.forEach(c => { sessionCharErrors[c] = (sessionCharErrors[c] || 0) + 1; sessionErrorsByWpm[currentWpm][c] = (sessionErrorsByWpm[currentWpm][c] || 0) + 1; });
     }
 
-    if (!isFixedSpeed && currentMode !== 'chars') {
-        if (levDist === 0 && !usedReplay) currentWpm += 2; else if (levDist === 1) currentWpm -= 1; else if (levDist > 1) currentWpm -= 2;
-        currentWpm = Math.max(10, currentWpm);
-    }
+    if (!isFixedSpeed && currentMode !== 'chars') { if (levDist === 0 && !usedReplay) currentWpm += 2; else if (levDist === 1) currentWpm -= 1; else if (levDist > 1) currentWpm -= 2; currentWpm = Math.max(10, currentWpm); }
     totalScore += points; matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm, ms: reactionMs });
 
     if (currentMode !== 'pingpong') {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${userWord}</td><td><b>${currentWord}</b></td><td style="color:${scoreColor}; font-weight:bold;">${currentMode === 'chars' ? points + " (" + reactionMs + "ms)" : (usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points))}</td>`;
+        const tdTyped = document.createElement('td'); tdTyped.textContent = userWord;
+        const tdReal = document.createElement('td'); const bReal = document.createElement('b'); bReal.textContent = currentWord; tdReal.appendChild(bReal);
+        const tdPoints = document.createElement('td'); tdPoints.style.color = scoreColor; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = currentMode === 'chars' ? points + " (" + reactionMs + "ms)" : (usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points));
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
         if(els.tableBody) { els.tableBody.appendChild(tr); els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight; }
     }
-    if(els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
-    if(els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
-
+    if(els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`; if(els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
     if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm, wordIndex: wordIndex + 1, matchDetails: matchDetailsArray });
     usedReplay = false;
-    if (currentMode === 'pingpong') {
-        wordIndex++;
-        db.ref(`rooms/${roomCode}/pingpong`).transaction(d => { if (d) { d.senderId = myId; d.word = ''; d.wordsPlayed = (d.wordsPlayed || 0) + 1; d.lastGuess = { id: Date.now(), real: currentWord, typed: userWord, points: points }; } return d; });
-    } else { wordIndex++; setTimeout(playNextWord, 600); }
+    if (currentMode === 'pingpong') { wordIndex++; db.ref(`rooms/${roomCode}/pingpong`).transaction(d => { if (d) { d.senderId = myId; d.word = ''; d.wordsPlayed = (d.wordsPlayed || 0) + 1; d.lastGuess = { id: Date.now(), real: currentWord, typed: userWord, points: points }; } return d; }); } else { wordIndex++; setTimeout(playNextWord, 600); }
 }
 
-if(els.btnSendPingPong) els.btnSendPingPong.addEventListener('click', () => {
-    if (!gameRunning || currentMode !== 'pingpong') return;
-    let word = els.pingPongWordToSend.value.trim().toUpperCase(); if (!word) return;
-    db.ref(`rooms/${roomCode}/pingpong`).transaction(d => { if (d) { d.word = word; d.wordId = (d.wordId || 0) + 1; } return d; });
-});
+if(els.btnSendPingPong) els.btnSendPingPong.addEventListener('click', () => { if (!gameRunning || currentMode !== 'pingpong') return; let word = els.pingPongWordToSend.value.trim().toUpperCase(); if (!word) return; db.ref(`rooms/${roomCode}/pingpong`).transaction(d => { if (d) { d.word = word; d.wordId = (d.wordId || 0) + 1; } return d; }); });
 if(els.pingPongWordToSend) els.pingPongWordToSend.addEventListener('keypress', e => { if (e.key === 'Enter') els.btnSendPingPong.click(); });
 
 function playNextWord() {
-    if (!gameRunning || currentMode === 'pingpong') return;
-    if (wordIndex >= requestedWordCount) return finishGame();
+    if (!gameRunning || currentMode === 'pingpong') return; if (wordIndex >= requestedWordCount) return finishGame();
     if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
     inputActive = true; usedReplay = false; const currentWord = gameWords[wordIndex].toUpperCase();
-    if (isEasyMode && isSinglePlayer && els.easyModeHint) { els.easyModeHint.textContent = currentWord.split('').sort(() => 0.5 - Math.random()).join(' '); els.easyModeHint.style.display = 'block'; }
-    else if(els.easyModeHint) els.easyModeHint.style.display = 'none';
-    playMorseAudio(currentWord, currentWpm); lastWordStartTime = Date.now();
-    if(els.permanentGameInput) els.permanentGameInput.focus();
+    if (isEasyMode && isSinglePlayer && els.easyModeHint) { els.easyModeHint.textContent = currentWord.split('').sort(() => 0.5 - Math.random()).join(' '); els.easyModeHint.style.display = 'block'; } else if(els.easyModeHint) els.easyModeHint.style.display = 'none';
+    playMorseAudio(currentWord, currentWpm); lastWordStartTime = Date.now(); if(els.permanentGameInput) els.permanentGameInput.focus();
 }
 
 function startCountdownSequence() {
@@ -892,41 +631,24 @@ function startCountdownSequence() {
             if (listeners.players) db.ref(`rooms/${roomCode}/players`).off('value', listeners.players);
             listeners.players = db.ref(`rooms/${roomCode}/players`).on('value', pSnap => {
                 if (!gameRunning) return; const currentPCount = Object.keys(pSnap.val() || {}).length;
-                if (gameStartPlayerCount > 0 && currentPCount < gameStartPlayerCount) {
-                    setTimeout(() => {
-                        db.ref(`rooms/${roomCode}/players`).once('value', s => {
-                            if (gameRunning && Object.keys(s.val() || {}).length < gameStartPlayerCount) { alert("Un giocatore ha abbandonato. Ritorno al menu."); gameRunning = false; exitRoomCleanly(false); } else if (gameRunning) showToast("👥 Giocatore rientrato!");
-                        });
-                    }, 10000);
-                }
+                if (gameStartPlayerCount > 0 && currentPCount < gameStartPlayerCount) setTimeout(() => { db.ref(`rooms/${roomCode}/players`).once('value', s => { if (gameRunning && Object.keys(s.val() || {}).length < gameStartPlayerCount) { alert("Un giocatore ha abbandonato. Ritorno al menu."); gameRunning = false; exitRoomCleanly(false); } else if (gameRunning) showToast("👥 Giocatore rientrato!"); }); }, 10000);
             });
         });
     }
-    if(els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
-    if(els.scoreDisplay) els.scoreDisplay.textContent = `Punti: 0`;
+    if(els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`; if(els.scoreDisplay) els.scoreDisplay.textContent = `Punti: 0`;
     if (!isRejoining) { totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0; usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = []; }
-    if(els.tableBody) els.tableBody.innerHTML = "";
-    window.lastPlayedWordId = 0; window.lastSeenGuessId = 0;
+    if(els.tableBody) els.tableBody.innerHTML = ""; window.lastPlayedWordId = 0; window.lastSeenGuessId = 0;
     if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
-    if(els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
-    if(els.gameInputArea) els.gameInputArea.style.display = 'flex';
+    if(els.pingPongSendArea) els.pingPongSendArea.style.display = 'none'; if(els.gameInputArea) els.gameInputArea.style.display = 'flex';
     if (currentMode === 'pingpong' && (myId === roomHostId || roomCode.startsWith("TRN_"))) db.ref(`rooms/${roomCode}/pingpong`).once('value', s => { if(!s.exists()) db.ref(`rooms/${roomCode}/pingpong`).set({ senderId: myId, word: '', wordId: 0, wordsPlayed: 0, lastGuess: null }); });
     if (!isRejoining) { wordIndex = 0; totalScore = 0; matchDetailsArray = []; }
-
     showScreen('countdownScreen'); gameRunning = true; let count = 3; if(els.countdownNumber) els.countdownNumber.textContent = count;
     const interval = setInterval(() => {
         if (count > 1) { count--; if(els.countdownNumber) els.countdownNumber.textContent = count; playBeep(600, 0.1); }
         else {
-            clearInterval(interval);
-            if (myId === roomHostId) db.ref(`rooms/${roomCode}`).update({ status: 'playing' });
-            if(els.countdownNumber) els.countdownNumber.textContent = (currentLang === 'en' ? 'GO!' : 'VIA!');
-            playBeep(800, 0.3);
-            setTimeout(() => {
-                if (!gameRunning) return;
-                if (currentMode === 'quiz') return startQuizSequence();
-                showScreen('gameArea');
-                if (currentMode === 'pingpong') setupPingPongListener(); else { setTimeout(() => els.permanentGameInput && els.permanentGameInput.focus(), 200); setTimeout(() => { if (gameRunning) playNextWord(); }, 800); }
-            }, 500);
+            clearInterval(interval); if (myId === roomHostId) db.ref(`rooms/${roomCode}`).update({ status: 'playing' });
+            if(els.countdownNumber) els.countdownNumber.textContent = (currentLang === 'en' ? 'GO!' : 'VIA!'); playBeep(800, 0.3);
+            setTimeout(() => { if (!gameRunning) return; if (currentMode === 'quiz') return startQuizSequence(); showScreen('gameArea'); if (currentMode === 'pingpong') setupPingPongListener(); else { setTimeout(() => els.permanentGameInput && els.permanentGameInput.focus(), 200); setTimeout(() => { if (gameRunning) playNextWord(); }, 800); } }, 500);
         }
     }, 1000);
 }
@@ -934,14 +656,15 @@ function startCountdownSequence() {
 function resumeGameSequence() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     gameRunning = true; isRejoining = false;
-    if(els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
-    if(els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
+    if(els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`; if(els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
     if(els.tableBody) {
         els.tableBody.innerHTML = "";
         matchDetailsArray.forEach(row => {
             const tr = document.createElement('tr'); let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
-            tr.innerHTML = `<td>${row.typed}</td><td><b>${row.real}</b></td><td style="color:${color}; font-weight:bold;">${row.points}</td>`;
-            els.tableBody.appendChild(tr);
+            const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed;
+            const tdReal = document.createElement('td'); const bReal = document.createElement('b'); bReal.textContent = row.real; tdReal.appendChild(bReal);
+            const tdPoints = document.createElement('td'); tdPoints.style.color = color; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = row.points;
+            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); els.tableBody.appendChild(tr);
         });
     }
     if (currentMode === 'quiz') startQuizSequence(); else { showScreen('gameArea'); if (currentMode === 'pingpong') setupPingPongListener(); else { setTimeout(() => els.permanentGameInput && els.permanentGameInput.focus(), 200); setTimeout(() => { if (gameRunning) playNextWord(); }, 800); } }
@@ -954,33 +677,28 @@ function setupPingPongListener() {
         if (!gameRunning) return; const ppData = snap.val(); if (!ppData) return;
         if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
             window.lastSeenGuessId = ppData.lastGuess.id;
-            const tr = document.createElement('tr'); const tdReal = document.createElement('td'); renderDiffSecure(tdReal, ppData.lastGuess.real, ppData.lastGuess.typed || '');
-            let color = ppData.lastGuess.points > 0 ? "#4caf50" : (ppData.lastGuess.points === 0 && ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
-            tr.innerHTML = `<td>${ppData.lastGuess.typed || ''}</td>`; tr.appendChild(tdReal); tr.innerHTML += `<td style="color:${color}; font-weight:bold;">${ppData.lastGuess.points}</td>`;
+            const tr = document.createElement('tr');
+            const tdTyped = document.createElement('td'); tdTyped.textContent = ppData.lastGuess.typed || '';
+            const tdReal = document.createElement('td'); renderDiffSecure(tdReal, ppData.lastGuess.real, ppData.lastGuess.typed || '');
+            const tdPoints = document.createElement('td'); tdPoints.style.fontWeight = 'bold'; tdPoints.style.color = ppData.lastGuess.points > 0 ? "#4caf50" : (ppData.lastGuess.points === 0 && ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999"); tdPoints.textContent = ppData.lastGuess.points;
+            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
             if(els.tableBody) els.tableBody.appendChild(tr); if(els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
         }
         if (ppData.wordsPlayed >= requestedWordCount) { if(ppTimerInterval) clearInterval(ppTimerInterval); return finishGame(); }
         if (ppData.senderId === myId) {
-            if (!ppData.word) {
-                els.pingPongSendArea.style.display = 'flex'; els.gameInputArea.style.display = 'none'; els.pingPongWordToSend.value = ''; setTimeout(() => els.pingPongWordToSend.focus(), 100); startPingPongTimer();
-            } else {
-                if(ppTimerInterval) clearInterval(ppTimerInterval); els.pingPongSendArea.style.display = 'none'; els.gameInputArea.style.display = 'flex'; els.permanentGameInput.disabled = true; els.permanentGameInput.placeholder = "Avversario in decodifica..."; els.permanentGameInput.value = "";
-            }
+            if (!ppData.word) { els.pingPongSendArea.style.display = 'flex'; els.gameInputArea.style.display = 'none'; els.pingPongWordToSend.value = ''; setTimeout(() => els.pingPongWordToSend.focus(), 100); startPingPongTimer(); } 
+            else { if(ppTimerInterval) clearInterval(ppTimerInterval); els.pingPongSendArea.style.display = 'none'; els.gameInputArea.style.display = 'flex'; els.permanentGameInput.disabled = true; els.permanentGameInput.placeholder = "Avversario in decodifica..."; els.permanentGameInput.value = ""; }
         } else {
             if(ppTimerInterval) clearInterval(ppTimerInterval); els.pingPongSendArea.style.display = 'none'; els.gameInputArea.style.display = 'flex';
-            if (ppData.word && ppData.wordId > window.lastPlayedWordId) {
-                window.lastPlayedWordId = ppData.wordId; gameWords[wordIndex] = ppData.word; els.permanentGameInput.disabled = false; els.permanentGameInput.placeholder = "Decodifica e scrivi..."; els.permanentGameInput.value = ""; setTimeout(() => els.permanentGameInput.focus(), 100); inputActive = true; setTimeout(() => playMorseAudio(ppData.word.toUpperCase(), currentWpm), 500);
-            } else if (!ppData.word) { els.permanentGameInput.disabled = true; els.permanentGameInput.placeholder = "In attesa dell'avversario..."; els.permanentGameInput.value = ""; inputActive = false; }
+            if (ppData.word && ppData.wordId > window.lastPlayedWordId) { window.lastPlayedWordId = ppData.wordId; gameWords[wordIndex] = ppData.word; els.permanentGameInput.disabled = false; els.permanentGameInput.placeholder = "Decodifica e scrivi..."; els.permanentGameInput.value = ""; setTimeout(() => els.permanentGameInput.focus(), 100); inputActive = true; setTimeout(() => playMorseAudio(ppData.word.toUpperCase(), currentWpm), 500); } 
+            else if (!ppData.word) { els.permanentGameInput.disabled = true; els.permanentGameInput.placeholder = "In attesa dell'avversario..."; els.permanentGameInput.value = ""; inputActive = false; }
         }
     });
 }
 
 function startPingPongTimer() {
     if (ppTimerInterval) clearInterval(ppTimerInterval); let timeLeft = 100; if(els.pingPongTimerProgress) els.pingPongTimerProgress.style.width = '100%';
-    ppTimerInterval = setInterval(() => {
-        timeLeft -= (100 / 300); if(els.pingPongTimerProgress) els.pingPongTimerProgress.style.width = Math.max(0, timeLeft) + '%';
-        if (timeLeft <= 0) { clearInterval(ppTimerInterval); sendAutoPingPongWord(); }
-    }, 100);
+    ppTimerInterval = setInterval(() => { timeLeft -= (100 / 300); if(els.pingPongTimerProgress) els.pingPongTimerProgress.style.width = Math.max(0, timeLeft) + '%'; if (timeLeft <= 0) { clearInterval(ppTimerInterval); sendAutoPingPongWord(); } }, 100);
 }
 
 function sendAutoPingPongWord() {
@@ -997,25 +715,16 @@ function finishGame() {
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
     localStorage.removeItem(STORAGE_ROOM_KEY); isRejoining = false; isChallenging = false; showScreen('leaderboardScreen');
 
-    if (roomCode) {
-        const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-        myPlayerRef.update({ finished: true, score: totalScore, wpm: currentWpm, matchDetails: matchDetailsArray });
-        myPlayerRef.onDisconnect().cancel();
-    }
+    if (roomCode) { const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`); myPlayerRef.update({ finished: true, score: totalScore, wpm: currentWpm, matchDetails: matchDetailsArray }); myPlayerRef.onDisconnect().cancel(); }
     if (totalScore > 0 && !roomCode.startsWith("TRN_")) {
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
             const isReallySolo = isSinglePlayer || (Object.keys(snap.val() || {}).length < 2);
             let dbPath = `leaderboard/${currentMode === 'callsign' ? 'callsign/global' : `${currentMode === 'quiz' ? 'quiz' : currentMode === 'chars' ? 'chars' : currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}`}/${myId}`;
             if (currentMode !== 'callsign' && els.lbWordFilter) {
-                if (!Array.from(els.lbWordFilter.options).some(opt => opt.value == requestedWordCount) && requestedWordCount !== 'all') {
-                    let opt = document.createElement('option'); opt.value = requestedWordCount; opt.text = `${requestedWordCount} Stringhe`; els.lbWordFilter.add(opt);
-                }
+                if (!Array.from(els.lbWordFilter.options).some(opt => opt.value == requestedWordCount) && requestedWordCount !== 'all') { let opt = document.createElement('option'); opt.value = requestedWordCount; opt.text = `${requestedWordCount} Stringhe`; els.lbWordFilter.add(opt); }
                 els.lbWordFilter.value = requestedWordCount;
             }
-            db.ref(dbPath).once('value', s => {
-                let oldData = s.val();
-                if (!oldData || totalScore > oldData.score) db.ref(dbPath).set({ name: myName, username: myPrivacy ? "" : tgUsername, score: totalScore, wpm: currentWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') });
-            });
+            db.ref(dbPath).once('value', s => { let oldData = s.val(); if (!oldData || totalScore > oldData.score) db.ref(dbPath).set({ name: myName, username: myPrivacy ? "" : tgUsername, score: totalScore, wpm: currentWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') }); });
         });
     }
     if (matchDetailsArray.length > 0) {
@@ -1080,11 +789,8 @@ if(els.saveAliasBtn) els.saveAliasBtn.addEventListener('click', async () => {
         await db.ref(`users/${myId}`).update({ alias: alias || null, privacyUsername: privacy });
         myName = newName; myPrivacy = privacy; els.playerName.textContent = myName; showToast("Profilo aggiornato!");
         await db.ref(`presence/${myId}`).update({ name: myName, username: currentUsername });
-
         const now = new Date(); const dKey = now.toISOString().split('T')[0]; const wKey = getWeekNumber(now); const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
-        for (const path of [`activity/daily/${dKey}`, `activity/weekly/${wKey}`, `activity/monthly/${mKey}`]) {
-            const actRef = db.ref(`${path}/${myId}`); const actSnap = await actRef.once('value'); if (actSnap.exists()) await actRef.update({ name: myName });
-        }
+        for (const path of [`activity/daily/${dKey}`, `activity/weekly/${wKey}`, `activity/monthly/${mKey}`]) { const actRef = db.ref(`${path}/${myId}`); const actSnap = await actRef.once('value'); if (actSnap.exists()) await actRef.update({ name: myName }); }
         if (myTeamId) await db.ref(`teams/${myTeamId}/members/${myId}`).update({ name: myName, username: currentUsername });
         const trnsSnap = await db.ref('tournaments').once('value');
         if (trnsSnap.exists()) {
@@ -1103,11 +809,7 @@ if(els.saveAliasBtn) els.saveAliasBtn.addEventListener('click', async () => {
         }
     } catch(e) { alert("Errore durante il salvataggio."); }
 });
-if(els.resetStatsBtn) els.resetStatsBtn.addEventListener('click', async () => {
-    if (confirm(currentLang === 'it' ? "Vuoi azzerare tutte le tue statistiche? Questa operazione non può essere annullata." : "Reset all your statistics? This cannot be undone.")) {
-        try { await Promise.all([ db.ref(`users/${myId}/stats`).remove(), db.ref(`users/${myId}/history`).remove() ]); showToast("Statistiche azzerate correttamente!"); showProfileScreen(); } catch(e) { alert("Errore durante il reset delle statistiche."); }
-    }
-});
+if(els.resetStatsBtn) els.resetStatsBtn.addEventListener('click', async () => { if (confirm(currentLang === 'it' ? "Vuoi azzerare tutte le tue statistiche? Questa operazione non può essere annullata." : "Reset all your statistics? This cannot be undone.")) { try { await Promise.all([ db.ref(`users/${myId}/stats`).remove(), db.ref(`users/${myId}/history`).remove() ]); showToast("Statistiche azzerate correttamente!"); showProfileScreen(); } catch(e) { alert("Errore durante il reset delle statistiche."); } } });
 
 window.showProfileScreen = function() {
     showScreen('profileScreen'); els.errorChartContainer.textContent = 'Caricamento...'; els.wpmErrorChartContainer.textContent = 'Caricamento...'; els.matchHistoryList.textContent = 'Caricamento...';
@@ -1157,9 +859,10 @@ window.openMatchDetails = function(matchKey) {
     els.matchDetailsBody.innerHTML = '';
     (match.details || []).forEach(row => {
         const tr = document.createElement('tr'); let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
+        const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || '-';
         const tdReal = document.createElement('td'); const bReal = document.createElement('b'); renderDiffSecure(bReal, row.real, row.typed || ''); tdReal.appendChild(bReal);
-        tr.innerHTML = `<td>${row.typed || '-'}</td>`; tr.appendChild(tdReal); tr.innerHTML += `<td style="color:${color}; font-weight:bold;">${row.points}</td>`;
-        els.matchDetailsBody.appendChild(tr);
+        const tdPoints = document.createElement('td'); tdPoints.style.color = color; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = row.points;
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); els.matchDetailsBody.appendChild(tr);
     });
     els.matchDetailsModal.style.display = 'flex';
 }
@@ -1294,9 +997,10 @@ function showPlayerDetailsModal(name, details) {
     els.matchDetailsModal.querySelector('h3').textContent = `${currentLang === 'it' ? 'Dettagli Partita di' : 'Match Details for'} ${name}`;
     details.forEach(row => {
         const tr = document.createElement('tr'); let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
+        const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || '-';
         const tdReal = document.createElement('td'); const bReal = document.createElement('b'); renderDiffSecure(bReal, row.real, row.typed || ''); tdReal.appendChild(bReal);
-        tr.innerHTML = `<td>${row.typed || '-'}</td>`; tr.appendChild(tdReal); tr.innerHTML += `<td style="color:${color}; font-weight:bold;">${row.points}</td>`;
-        els.matchDetailsBody.appendChild(tr);
+        const tdPoints = document.createElement('td'); tdPoints.style.color = color; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = row.points;
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); els.matchDetailsBody.appendChild(tr);
     });
     els.matchDetailsModal.style.display = 'flex';
 }
@@ -1334,13 +1038,26 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
             } else els.leaderboardContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang==='it'?'Dati torneo non disponibili.':'Tournament data unavailable.'}</p>`;
         });
     } else {
-        let isQuiz = tabType.startsWith('quiz'), isChars = tabType.startsWith('chars'), isStandard = tabType.startsWith('standard');
+        let isStandard = tabType.startsWith('standard');
+        let isChars = tabType.startsWith('chars');
+        let isQuiz = tabType.startsWith('quiz');
         let modePath = isQuiz ? 'quiz' : (isChars ? 'chars' : (isStandard ? 'standard' : 'pingpong'));
         let subType = isQuiz ? tabType.replace('quiz_', '') : (isChars ? tabType.replace('chars_', '') : (isStandard ? tabType.replace('standard_', '') : ''));
-        db.ref(`leaderboard/${modePath}`).once('value', snap => {
+
+        db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
             let players = [];
-            snap.forEach(wcNode => { if (((!isStandard && !isChars && !isQuiz) || wcNode.key.startsWith(subType + "_")) && (filterWordCount === 'all' || wcNode.key.endsWith("_" + filterWordCount))) wcNode.forEach(uNode => players.push(uNode.val())); });
-            players.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm)); renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, true);
+            snapshot.forEach(wordCountNode => {
+                const key = wordCountNode.key;
+                if ((isStandard || isChars || isQuiz) && !key.startsWith(subType + "_")) return;
+                if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
+
+                wordCountNode.forEach(userNode => {
+                    players.push(userNode.val());
+                });
+            });
+
+            players.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
+            renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, true);
         });
     }
 }
@@ -1357,22 +1074,49 @@ function renderMatchesHistoryHTML(matches, container) {
 
 function renderPlayersListHTML(players, container, showWordCount, isTeam = false) {
     container.innerHTML = '';
-    if (players.length === 0) return container.innerHTML = `<p style="text-align:center; color:var(--hint-color);">${currentLang === 'it' ? 'Nessun record trovato.' : 'No records found.'}</p>`;
+    if (players.length === 0) {
+        const p = document.createElement('p'); p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)';
+        p.textContent = currentLang === 'it' ? 'Nessun record trovato per questa categoria.' : 'No records found for this category.';
+        container.appendChild(p); return;
+    }
+
     players.forEach((player, index) => {
         const row = document.createElement('div'); row.className = 'leaderboard-row'; row.style.padding = "8px 10px"; row.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
-        let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `<span style="color:var(--hint-color); font-size:0.8em;">${index + 1}.</span>`;
+        
         const mainDiv = document.createElement('div'); mainDiv.style.display = 'flex'; mainDiv.style.alignItems = 'center'; mainDiv.style.gap = '8px'; mainDiv.style.flexGrow = '1';
-        mainDiv.innerHTML = `<div style="font-size:1.2em; min-width:1.5em; text-align:center;">${medal}</div>`;
+        
+        const medalDiv = document.createElement('div'); medalDiv.style.fontSize = '1.2em'; medalDiv.style.minWidth = '1.5em'; medalDiv.style.textAlign = 'center';
+        if (index === 0) medalDiv.textContent = "🥇"; else if (index === 1) medalDiv.textContent = "🥈"; else if (index === 2) medalDiv.textContent = "🥉";
+        else { const span = document.createElement('span'); span.style.color = 'var(--hint-color)'; span.style.fontSize = '0.8em'; span.textContent = (index + 1) + "."; medalDiv.appendChild(span); }
+
         const infoDiv = document.createElement('div'); infoDiv.style.display = 'flex'; infoDiv.style.flexDirection = 'column';
+        
         const nameDiv = document.createElement('div'); nameDiv.style.display = 'flex'; nameDiv.style.alignItems = 'center';
-        if (player.username && !isTeam) { const nameLink = document.createElement('span'); nameLink.style.color = 'var(--link-color)'; nameLink.style.cursor = 'pointer'; nameLink.style.textDecoration = 'underline'; nameLink.style.fontWeight = 'bold'; nameLink.textContent = player.name; nameLink.onclick = () => openTelegramProfile(player.username); nameDiv.appendChild(nameLink); }
-        else { const nameSpan = document.createElement('span'); nameSpan.style.fontWeight = 'bold'; nameSpan.textContent = player.name; nameDiv.appendChild(nameSpan); }
-        if (showWordCount && player.wordCount) nameDiv.innerHTML += `<span style="background:var(--hint-color); color:var(--bg-color); padding:1px 4px; border-radius:3px; font-size:0.8em; margin-left:4px;">${player.wordCount} str.</span>`;
-        infoDiv.appendChild(nameDiv);
-        infoDiv.innerHTML += `<div style="font-size:0.75em; color:var(--hint-color);">${player.date} ${!isTeam && player.wpm ? `<span style="color:var(--champ-color); font-weight:bold;">${player.wpm} WPM</span>` : ''}</div>`;
-        mainDiv.appendChild(infoDiv);
-        row.appendChild(mainDiv); row.innerHTML += `<div style="text-align:right;"><b style="font-size:1.1em; color:var(--link-color);">${player.score}</b><span style="font-size:0.7em; color:var(--hint-color); margin-left:2px;">pt</span></div>`;
-        container.appendChild(row);
+        if (player.username && !isTeam) {
+            const nameLink = document.createElement('span'); nameLink.style.color = 'var(--link-color)'; nameLink.style.cursor = 'pointer'; nameLink.style.textDecoration = 'underline'; nameLink.style.fontWeight = 'bold'; nameLink.textContent = player.name; nameLink.onclick = () => openTelegramProfile(player.username);
+            nameDiv.appendChild(nameLink);
+        } else {
+            const nameSpan = document.createElement('span'); nameSpan.style.fontWeight = 'bold'; nameSpan.textContent = player.name; nameDiv.appendChild(nameSpan);
+        }
+        
+        if (showWordCount && player.wordCount) {
+            const wcSpan = document.createElement('span'); wcSpan.style.background = 'var(--hint-color)'; wcSpan.style.color = 'var(--bg-color)'; wcSpan.style.padding = '1px 4px'; wcSpan.style.borderRadius = '3px'; wcSpan.style.fontSize = '0.8em'; wcSpan.style.marginLeft = '4px'; wcSpan.textContent = player.wordCount + " str."; nameDiv.appendChild(wcSpan);
+        }
+
+        const dateDiv = document.createElement('div'); dateDiv.style.fontSize = '0.75em'; dateDiv.style.color = 'var(--hint-color)'; dateDiv.textContent = player.date + " ";
+        if (!isTeam && player.wpm) {
+            const wpmSpan = document.createElement('span'); wpmSpan.style.color = 'var(--champ-color)'; wpmSpan.style.fontWeight = 'bold'; wpmSpan.textContent = player.wpm + " WPM"; dateDiv.appendChild(wpmSpan);
+        }
+
+        infoDiv.appendChild(nameDiv); infoDiv.appendChild(dateDiv);
+        mainDiv.appendChild(medalDiv); mainDiv.appendChild(infoDiv);
+
+        const scoreDiv = document.createElement('div'); scoreDiv.style.textAlign = 'right';
+        const scoreB = document.createElement('b'); scoreB.style.fontSize = '1.1em'; scoreB.style.color = 'var(--link-color)'; scoreB.textContent = player.score;
+        const ptSpan = document.createElement('span'); ptSpan.style.fontSize = '0.7em'; ptSpan.style.color = 'var(--hint-color)'; ptSpan.style.marginLeft = '2px'; ptSpan.textContent = 'pt';
+        scoreDiv.appendChild(scoreB); scoreDiv.appendChild(ptSpan);
+
+        row.appendChild(mainDiv); row.appendChild(scoreDiv); container.appendChild(row);
     });
 }
 
@@ -1416,22 +1160,40 @@ function listenToAllTeams(isAlreadyInTeam) {
         snap.forEach(child => {
             const t = child.val(); const count = Object.keys(t.members || {}).length; if (t.status === 'retired' || count === 0) return;
             const liAll = document.createElement('li'); liAll.style.flexDirection = 'column'; liAll.style.alignItems = 'flex-start';
+            
             const topDiv = document.createElement('div'); topDiv.style.width = '100%'; topDiv.style.display = 'flex'; topDiv.style.justifyContent = 'space-between';
             if (!isAlreadyInTeam && t.status !== 'closed') { topDiv.style.cursor = 'pointer'; topDiv.onclick = () => window.joinTeam(child.key); }
-            topDiv.innerHTML = `<span><b>${t.name}</b><small> (${count} mem.)</small></span>${!isAlreadyInTeam && t.status !== 'closed' ? '<span style="color:var(--link-color); font-size:0.8em; font-weight:bold;">+ Unisciti</span>' : ''}`;
-            let memHtml = `<div style="margin-top:3px; padding-left:5px; border-left:2px solid var(--link-color);">`;
-            Object.values(t.members || {}).forEach(m => memHtml += `<span style="display:inline-block; margin-right:5px; font-size:0.85em; color:var(--hint-color);">- ${m.name}</span>`);
-            liAll.innerHTML = topDiv.outerHTML + memHtml + `</div>`;
+            
+            const leftSpan = document.createElement('span');
+            const bTeam = document.createElement('b'); bTeam.textContent = t.name;
+            const smallCount = document.createElement('small'); smallCount.textContent = ` (${count} mem.)`;
+            leftSpan.appendChild(bTeam); leftSpan.appendChild(smallCount);
+            topDiv.appendChild(leftSpan);
+
+            if (!isAlreadyInTeam && t.status !== 'closed') {
+                const joinSpan = document.createElement('span'); joinSpan.style.color = 'var(--link-color)'; joinSpan.style.fontSize = '0.8em'; joinSpan.style.fontWeight = 'bold'; joinSpan.textContent = "+ Unisciti"; topDiv.appendChild(joinSpan);
+            }
+
+            const membersDiv = document.createElement('div'); membersDiv.style.marginTop = '3px'; membersDiv.style.paddingLeft = '5px'; membersDiv.style.borderLeft = '2px solid var(--link-color)';
+            Object.values(t.members || {}).forEach(m => {
+                const mSpan = document.createElement('span'); mSpan.style.display = 'inline-block'; mSpan.style.marginRight = '5px'; mSpan.style.fontSize = '0.85em'; mSpan.style.color = 'var(--hint-color)'; mSpan.textContent = `- ${m.name}`; membersDiv.appendChild(mSpan);
+            });
+            
+            liAll.appendChild(topDiv); liAll.appendChild(membersDiv);
             if(els.globalAllTeamsList) els.globalAllTeamsList.appendChild(liAll);
+
             if (!isAlreadyInTeam && t.status !== 'closed' && els.openTeamsList) {
                 const liOpen = document.createElement('li'); liOpen.style.cursor = 'pointer'; liOpen.onclick = () => window.joinTeam(child.key);
-                liOpen.innerHTML = `<span><b>${t.name}</b><small> (${count} mem.)</small></span><span style="color:var(--link-color); font-weight:bold;">+ Unisciti</span>`; els.openTeamsList.appendChild(liOpen);
+                const leftOpen = document.createElement('span'); const bOpen = document.createElement('b'); bOpen.textContent = t.name; const smallOpen = document.createElement('small'); smallOpen.textContent = ` (${count} mem.)`; leftOpen.appendChild(bOpen); leftOpen.appendChild(smallOpen);
+                const rightOpen = document.createElement('span'); rightOpen.style.color = 'var(--link-color)'; rightOpen.style.fontWeight = 'bold'; rightOpen.textContent = "+ Unisciti";
+                liOpen.appendChild(leftOpen); liOpen.appendChild(rightOpen); els.openTeamsList.appendChild(liOpen);
             }
         });
         if(els.openTeamsList && !els.openTeamsList.innerHTML) els.openTeamsList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; border:none;">Nessuna squadra aperta.</li>';
         if(els.globalAllTeamsList && !els.globalAllTeamsList.innerHTML) els.globalAllTeamsList.innerHTML = '<li style="color:var(--hint-color); justify-content:center; border:none;">Nessuna squadra creata.</li>';
     });
 }
+
 window.joinTeam = function(tId) { db.ref(`teams/${tId}/members/${myId}`).set({ name: myName, username: myPrivacy ? "" : tgUsername }).then(() => checkMyTeamStatus()); }
 
 function listenToMyTeam() {
@@ -1444,7 +1206,10 @@ function listenToMyTeam() {
             const span = document.createElement('span'); span.textContent = mem.name;
             if (mem.username) { span.style.color = 'var(--link-color)'; span.style.cursor = 'pointer'; span.style.textDecoration = 'underline'; span.onclick = () => openTelegramProfile(mem.username); }
             if (id === team.captainId) els.captainName.appendChild(span);
-            else { if (els.teamOthersList.children.length > 0) els.teamOthersList.innerHTML += '<span style="color:var(--hint-color);"> | </span>'; els.teamOthersList.appendChild(span); }
+            else { 
+                if (els.teamOthersList.children.length > 0) { const sep = document.createElement('span'); sep.style.color = 'var(--hint-color)'; sep.textContent = ' | '; els.teamOthersList.appendChild(sep); } 
+                els.teamOthersList.appendChild(span); 
+            }
         });
         els.captainActions.style.display = isTeamCaptain ? 'block' : 'none';
         els.toggleTeamLockBtn.textContent = team.status === 'open' ? "Chiudi Adesioni" : "Riapri Adesioni"; els.toggleTeamLockBtn.onclick = () => db.ref(`teams/${myTeamId}/status`).set(team.status === 'open' ? 'closed' : 'open');
@@ -1452,6 +1217,7 @@ function listenToMyTeam() {
         setupChat(db.ref(`teams/${myTeamId}/chat`), 'teamChatMessages', null);
     });
 }
+
 if(els.clearTeamChatBtn) els.clearTeamChatBtn.addEventListener('click', () => { if (confirm('Vuoi cancellare la chat di squadra?')) if (myTeamId) db.ref(`teams/${myTeamId}/chat`).remove(); });
 if(els.sendTeamChatBtn) els.sendTeamChatBtn.addEventListener('click', () => { const txt = els.teamChatInput.value.trim(); if (!txt || !myTeamId) return; db.ref(`teams/${myTeamId}/chat`).push({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP }); els.teamChatInput.value = ''; });
 if(els.teamChatInput) els.teamChatInput.addEventListener('keypress', e => { if (e.key === 'Enter') els.sendTeamChatBtn.click(); });
@@ -1476,12 +1242,12 @@ function listenToTournaments() {
             const trn = child.val(); const trnId = child.key; const isMember = myTeamId && trn.teams && trn.teams[myTeamId]; const isHost = trn.hostId === myId;
             if ((isMember || isHost) && trn.status !== 'finished') { if (!foundActive) foundActive = child; else if (trn.status === 'playing' && foundActive.val().status !== 'playing') foundActive = child; }
             if (trn.status === 'open') {
-                const li = document.createElement('li'); li.innerHTML = `<span><b>${trn.name}</b> <small>(${Object.keys(trn.teams || {}).length} sq.)</small></span>`;
+                const li = document.createElement('li'); const leftSpan = document.createElement('span'); const nameB = document.createElement('b'); nameB.textContent = trn.name; const countSmall = document.createElement('small'); countSmall.textContent = ` (${Object.keys(trn.teams || {}).length} sq.)`; leftSpan.appendChild(nameB); leftSpan.appendChild(countSmall); li.appendChild(leftSpan);
                 if (isTeamCaptain && !isMember) { const btn = document.createElement('button'); btn.className = 'action-btn-small btn-champ'; btn.textContent = 'Iscrivi'; btn.onclick = () => window.joinTournament(trnId); li.appendChild(btn); } 
-                else if (isMember) li.innerHTML += `<small style="color:var(--link-color); font-weight:bold;"> (Iscritto)</small>`;
+                else if (isMember) { const joinedSmall = document.createElement('small'); joinedSmall.style.color = 'var(--link-color)'; joinedSmall.style.fontWeight = 'bold'; joinedSmall.textContent = ' (Iscritto)'; li.appendChild(joinedSmall); }
                 if(els.openTournamentsList) els.openTournamentsList.appendChild(li);
             } else if (trn.status === 'finished') {
-                const li = document.createElement('li'); li.innerHTML = `<span><b>${trn.name}</b> <small>(Concluso)</small></span>`;
+                const li = document.createElement('li'); const leftSpan = document.createElement('span'); const nameB = document.createElement('b'); nameB.textContent = trn.name; const statusSmall = document.createElement('small'); statusSmall.textContent = " (Concluso)"; leftSpan.appendChild(nameB); leftSpan.appendChild(statusSmall); li.appendChild(leftSpan);
                 const btn = document.createElement('button'); btn.className = 'action-btn-small btn-secondary'; btn.textContent = 'Vedi Risultati'; btn.onclick = () => window.viewTournament(trnId);
                 li.appendChild(btn); if(els.pastTournamentsList) els.pastTournamentsList.appendChild(li);
             }
@@ -1502,7 +1268,10 @@ function renderActiveTournament(trnSnap) {
     els.trnStandingsBody.innerHTML = ''; let std = Object.entries(trn.standings || {}).map(([id, data]) => ({ id, ...data })); std.sort((a,b) => b.points - a.points);
     std.forEach((s, idx) => {
         let med = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
-        const tr = document.createElement('tr'); tr.innerHTML = `<td>${med}</td><td><b>${s.name}</b>${s.id === myTeamId ? (currentLang === 'it' ? ' (Voi)' : ' (You)') : ''}</td><td><b>${s.points}</b></td>`; els.trnStandingsBody.appendChild(tr);
+        const tr = document.createElement('tr'); const tdMed = document.createElement('td'); tdMed.textContent = med; const tdName = document.createElement('td'); const nameB = document.createElement('b'); nameB.textContent = s.name; tdName.appendChild(nameB);
+        if (s.id === myTeamId) tdName.appendChild(document.createTextNode(" " + (currentLang === 'it' ? '(Voi)' : '(You)')));
+        const tdPts = document.createElement('td'); const ptsB = document.createElement('b'); ptsB.textContent = s.points; tdPts.appendChild(ptsB);
+        tr.appendChild(tdMed); tr.appendChild(tdName); tr.appendChild(tdPts); els.trnStandingsBody.appendChild(tr);
     });
 
     els.trnHostControls.style.display = (amIHost && !isFinished) ? 'block' : 'none';
@@ -1512,14 +1281,20 @@ function renderActiveTournament(trnSnap) {
     if (els.startTrnBtn) { els.startTrnBtn.disabled = teamCount < 2 || (trn.status !== 'open' && trn.status !== 'playing'); els.startTrnBtn.textContent = trn.status === 'playing' ? (currentLang === 'it' ? "Rigenera Tabellone (Attenzione!)" : "Regenerate Bracket (Warning!)") : (currentLang === 'it' ? "Genera Tabellone e Avvia" : "Generate Bracket and Start"); }
     
     els.trnBracketContainer.innerHTML = '';
-    if (trn.status === 'open') els.trnBracketContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color); font-size:0.9em;">${currentLang === 'it' ? "Il torneo è aperto, attendi l'avvio dall'organizzatore." : "The tournament is open, wait for the host to start."}</p>`;
-    else if (trn.matches) {
+    if (trn.status === 'open') {
+        const waitP = document.createElement('p'); waitP.style.textAlign = 'center'; waitP.style.color = 'var(--hint-color)'; waitP.style.fontSize = '0.9em'; waitP.textContent = currentLang === 'it' ? "Il torneo è aperto, attendi l'avvio dall'organizzatore." : "The tournament is open, wait for the host to start."; els.trnBracketContainer.appendChild(waitP);
+    } else if (trn.matches) {
         Object.entries(trn.matches).forEach(([mId, m]) => {
             const isMyMatch = (m.teamA === myTeamId || m.teamB === myTeamId); const card = document.createElement('div'); card.className = 'match-card';
             if (isMyMatch) { card.style.borderColor = "var(--champ-color)"; card.style.borderWidth = "2px"; }
             let aColor = m.winnerTeamId === m.teamA ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)"); let bColor = m.winnerTeamId === m.teamB ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)");
             
-            card.innerHTML = `<div class="match-card-teams"><div style="color:${aColor}"><b>${m.teamAName}</b></div><div class="match-vs">VS</div><div style="color:${bColor}"><b>${m.teamBName}</b></div></div>`;
+            const teamsDiv = document.createElement('div'); teamsDiv.className = 'match-card-teams';
+            const teamADiv = document.createElement('div'); teamADiv.style.color = aColor; const teamAB = document.createElement('b'); teamAB.textContent = m.teamAName; teamADiv.appendChild(teamAB);
+            const vsDiv = document.createElement('div'); vsDiv.className = 'match-vs'; vsDiv.textContent = 'VS';
+            const teamBDiv = document.createElement('div'); teamBDiv.style.color = bColor; const teamBB = document.createElement('b'); teamBB.textContent = m.teamBName; teamBDiv.appendChild(teamBB);
+            teamsDiv.appendChild(teamADiv); teamsDiv.appendChild(vsDiv); teamsDiv.appendChild(teamBDiv); card.appendChild(teamsDiv);
+
             if (m.status !== 'finished') {
                 const slotsDiv = document.createElement('div'); slotsDiv.style.display = 'flex'; slotsDiv.style.width = '100%'; slotsDiv.style.gap = '10px';
                 const btnA = document.createElement('button'); btnA.className = 'slot-btn' + (m.playerA ? ' filled' : ''); btnA.textContent = m.playerA ? m.playerA.name : (currentLang === 'it' ? 'A: Libero' : 'A: Open'); btnA.onclick = () => window.toggleTrnSlot(mId, 'A', m.teamA);
@@ -1528,7 +1303,7 @@ function renderActiveTournament(trnSnap) {
                 if (m.playerA && m.playerB && (m.playerA.id === myId || m.playerB.id === myId)) {
                     const joinBtn = document.createElement('button'); joinBtn.className = 'btn-success'; joinBtn.style.fontSize = '0.85em'; joinBtn.style.padding = '6px'; joinBtn.style.marginTop = '8px'; joinBtn.textContent = currentLang === 'it' ? 'ENTRA NELLA SFIDA' : 'JOIN MATCH'; joinBtn.onclick = () => window.startTrnMatch(mId); card.appendChild(joinBtn);
                 }
-            } else card.innerHTML += `<div style="font-size:0.85em; color:#4caf50; font-weight:bold; margin-top:5px;">${currentLang === 'it' ? 'Concluso' : 'Finished'}</div>`;
+            } else { const finDiv = document.createElement('div'); finDiv.style.fontSize = '0.85em'; finDiv.style.color = '#4caf50'; finDiv.style.fontWeight = 'bold'; finDiv.style.marginTop = '5px'; finDiv.textContent = currentLang === 'it' ? 'Concluso' : 'Finished'; card.appendChild(finDiv); }
             els.trnBracketContainer.appendChild(card);
         });
     }
@@ -1622,7 +1397,10 @@ function renderActivityRankings(period, key) {
         if (users.length === 0) return els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna attività registrata.</li>';
         users.forEach((u, idx) => {
             let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
-            const li = document.createElement('li'); li.innerHTML = `<span>${medal} <b>${u.name || "Anonimo"}</b></span><span><b>${u.games || 0}</b> part. <small style="color:#4caf50;">(${u.wins || 0} v.)</small></span>`; els.activityRankList.appendChild(li);
+            const li = document.createElement('li'); const nameSpan = document.createElement('span'); nameSpan.appendChild(document.createTextNode(medal + " ")); const nameB = document.createElement('b'); nameB.textContent = u.name || "Anonimo"; nameSpan.appendChild(nameB);
+            const statsSpan = document.createElement('span'); const gamesB = document.createElement('b'); gamesB.textContent = u.games || 0; statsSpan.appendChild(gamesB); statsSpan.appendChild(document.createTextNode(" part. "));
+            const winsSmall = document.createElement('small'); winsSmall.style.color = '#4caf50'; winsSmall.textContent = `(${u.wins || 0} v.)`; statsSpan.appendChild(winsSmall);
+            li.appendChild(nameSpan); li.appendChild(statsSpan); els.activityRankList.appendChild(li);
         });
     }).catch(err => { els.activityRankList.innerHTML = `<li style="justify-content:center; color:var(--hint-color); flex-direction:column; text-align:center;"><span>Errore nel caricamento.</span><small style="font-size:0.7em; opacity:0.7;">${err.message}</small></li>`; });
 }
