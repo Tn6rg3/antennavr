@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240520.31"; // Versione incrementata per sicurezza
+const APP_VERSION = "20240520.32"; // Versione incrementata per sicurezza
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1660,21 +1660,47 @@ function updateActivity(won = false) {
     });
 }
 
+
+
 async function checkActivityAndAwardMedals() {
     const now = new Date(); const dKey = now.toISOString().split('T')[0]; const wKey = getWeekNumber(now); const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
     try {
         const [dSnap, wSnap, mSnap, uMedals] = await Promise.all([ db.ref(`activity/daily/${dKey}/${myId}`).once('value'), db.ref(`activity/weekly/${wKey}/${myId}`).once('value'), db.ref(`activity/monthly/${mKey}/${myId}`).once('value'), db.ref(`users/${myId}/medals`).once('value') ]);
-        const dData = dSnap.val() || { games: 0 }, wData = wSnap.val() || { games: 0 }, mData = mSnap.val() || { games: 0 }, myMedals = uMedals.val() || {};
-        const check = (count, thresh, id, title, desc, icon) => { if (count >= thresh && !myMedals[id]) { awardMedal(id, title, desc, icon); return true; } return false; };
-        check(dData.games, 3, `d_bronze_${dKey}`, "Bronzo Giornaliero", "Hai giocato 3 partite oggi!", "🥉"); check(dData.games, 7, `d_silver_${dKey}`, "Argento Giornaliero", "Sei un veterano! 7 partite oggi!", "🥈"); check(dData.games, 15, `d_gold_${dKey}`, "Oro Giornaliero", "Incredibile! 15 partite in un giorno!", "🥇");
-        check(wData.games, 20, `w_active_${wKey}`, "Stakanovista Settimanale", "20 partite questa settimana!", "🎖️"); check(wData.games, 50, `w_pro_${wKey}`, "Campione Settimanale", "50 partite! Una leggenda questa settimana!", "🏆");
-        check(mData.games, 150, `m_legend_${mKey}`, "Titano del Mese", "150 partite! Il gioco non ha segreti per te.", "💎");
+        const dData = dSnap.val() || { games: 0 }, wData = wSnap.val() || { games: 0 }, mData = mSnap.val() || { games: 0 };
+        let myMedals = uMedals.val() || {};
+
+        // 1. PULIZIA: Rimuove le medaglie scadute (reset giornaliero, settimanale, mensile)
+        const validKeys = [dKey, wKey, mKey];
+        for (let id in myMedals) {
+            if (!validKeys.includes(myMedals[id].periodKey)) {
+                await db.ref(`users/${myId}/medals/${id}`).remove();
+                delete myMedals[id];
+            }
+        }
+
+        // 2. ASSEGNAZIONE: Controlla e assegna le nuove medaglie con un ID statico
+        const check = (count, thresh, id, title, desc, icon, pKey) => { 
+            if (count >= thresh && (!myMedals[id] || myMedals[id].periodKey !== pKey)) { 
+                awardMedal(id, title, desc, icon, pKey); 
+                myMedals[id] = { periodKey: pKey }; // Aggiorna in locale per evitare popup ripetuti
+                return true; 
+            } 
+            return false; 
+        };
+
+        check(dData.games, 3, 'd_bronze', "Bronzo Giornaliero", "Hai giocato 3 partite oggi!", "🥉", dKey); 
+        check(dData.games, 7, 'd_silver', "Argento Giornaliero", "Sei un veterano! 7 partite oggi!", "🥈", dKey); 
+        check(dData.games, 15, 'd_gold', "Oro Giornaliero", "Incredibile! 15 partite in un giorno!", "🥇", dKey);
+        check(wData.games, 20, 'w_active', "Stakanovista Settimanale", "20 partite questa settimana!", "🎖️", wKey); 
+        check(wData.games, 50, 'w_pro', "Campione Settimanale", "50 partite! Una leggenda questa settimana!", "🏆", wKey);
+        check(mData.games, 150, 'm_legend', "Titano del Mese", "150 partite! Il gioco non ha segreti per te.", "💎", mKey);
     } catch(e) {}
     updateMedalGallery();
 }
 
-function awardMedal(id, title, desc, icon) {
-    db.ref(`users/${myId}/medals/${id}`).set({ title, date: new Date().toLocaleDateString('it-IT'), icon });
+function awardMedal(id, title, desc, icon, periodKey) {
+    // Salviamo anche la periodKey per permettere la pulizia dinamica
+    db.ref(`users/${myId}/medals/${id}`).set({ title, date: new Date().toLocaleDateString('it-IT'), icon, periodKey });
     els.overlayMedalIcon.textContent = icon; els.overlayMedalTitle.textContent = title; els.overlayMedalDesc.textContent = desc; els.medalOverlay.style.display = 'flex';
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination);
