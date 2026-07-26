@@ -574,9 +574,29 @@ window.closeInviteModal = function() { els.inviteModal.style.display = 'none'; c
 if(els.sendInviteBtn) els.sendInviteBtn.addEventListener('click', () => {
     if (isChallenging) return; isChallenging = true; const tId = currentInviterId;
     db.ref(`invites/${tId}`).set({ fromId: myId, fromName: myName, mode: els.inviteModeInput.value, wpm: parseInt(els.inviteWpmInput.value), wordCount: parseInt(els.inviteWordCountInput.value), ts: firebase.database.ServerValue.TIMESTAMP, status: 'pending' }).then(() => {
-        showToast("Invito inviato! In attesa..."); closeInviteModal();
+        showToast("Invito inviato! In attesa...");
+        
+        // Chiudiamo il modale ma NON azzeriamo currentInviterId (non usiamo closeInviteModal)
+        els.inviteModal.style.display = 'none';
+        
+        // Forza un re-render della lista online aggiornando il proprio timestamp
+        db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
+
         if (listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite);
-        listeners.outgoingInvite = db.ref(`invites/${tId}`).on('value', snap => { if (!snap.exists() && isChallenging) setTimeout(() => { if (isChallenging) { showToast("Rifiutato o scaduto."); isChallenging = false; currentInviterId = null; if(listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite); } }, 1000); });
+        listeners.outgoingInvite = db.ref(`invites/${tId}`).on('value', snap => { 
+            if (!snap.exists() && isChallenging) setTimeout(() => { 
+                if (isChallenging) { 
+                    showToast("Rifiutato o scaduto."); 
+                    isChallenging = false; 
+                    currentInviterId = null; 
+                    
+                    // Forza di nuovo il re-render per far tornare il pulsante su "Sfida"
+                    db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
+                    
+                    if(listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite); 
+                } 
+            }, 1000); 
+        });
     });
 });
 
