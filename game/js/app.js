@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240520.32"; // Versione incrementata per sicurezza
+const APP_VERSION = "20240521.33"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -16,12 +16,14 @@ const els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
 // --- COSTANTI ---
 const STORAGE_ROOM_KEY = "cwgame_last_room";
 const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
+const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted"; // Nuova costante per il mute
 
 // --- STATO GLOBALE ---
 let myName, myId, myPrivacy = false;
 let myTeamId = null, myTeamName = "", isTeamCaptain = false;
 let db, auth, currentLang = 'it';
 let activeChatContext = null, activeTab = "room", isChatDrawerOpen = false;
+let isGlobalChatMuted = false; // Stato per le notifiche della chat globale
 let isChallenging = false, isRejoining = false, currentInviterId = null;
 let roomCode = "", roomHostId = null, activeTrnId = null;
 let lastPlayerCount = 0, gameStartPlayerCount = 0, lobbyTimerInterval = null;
@@ -220,7 +222,17 @@ function setLanguage(lang) {
     if(els.permanentGameInput) els.permanentGameInput.placeholder = t.input_placeholder;
 
     checkGameTypeUI();
+    updateMuteBtnUI();
     if (activeTrnId) db.ref(`tournaments/${activeTrnId}`).once('value', snap => { if(snap.exists()) renderActiveTournament(snap); });
+}
+
+// Funzione dedicata per aggiornare la UI del tasto Mute
+function updateMuteBtnUI() {
+    if (els.muteGlobalChatBtn) {
+        els.muteGlobalChatBtn.textContent = isGlobalChatMuted 
+            ? (currentLang === 'it' ? "🔇 Notifiche Disattivate" : "🔇 Notifications Muted") 
+            : (currentLang === 'it' ? "🔊 Notifiche Attive" : "🔊 Notifications Active");
+    }
 }
 
 async function loadDictionaries() {
@@ -274,6 +286,9 @@ function initGame() {
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     db = firebase.database(); auth = firebase.auth();
 
+    // Carica stato mute
+    isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
+
     auth.signInAnonymously().then(async () => {
         try {
             const userData = (await db.ref(`users/${myId}`).once('value')).val() || {};
@@ -307,6 +322,8 @@ function initGame() {
         }
 
         const savedLang = localStorage.getItem('gameLang'); if (savedLang) setLanguage(savedLang);
+        else updateMuteBtnUI(); // Aggiorna se non è passato da setLanguage
+        
         loadDictionaries();
 
         const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);
@@ -420,9 +437,26 @@ function setupChat(chatRef, containerId, alertBtnId) {
             if (!initialLoad && msg.ts && msg.ts > lastTs && msg.name !== myName) { newMsgsCount++; latestMsg = msg; }
         });
         lastTs = maxTs; container.scrollTop = container.scrollHeight;
-        if (!initialLoad && newMsgsCount > 0 && alertBtnId && !isChatDrawerOpen) { showToast(`💬 Nuovo messaggio da ${latestMsg.name}`); if (els[alertBtnId]) els[alertBtnId].style.backgroundColor = '#4caf50'; }
-        if (!initialLoad && newMsgsCount > 0 && roomHostId === myId && activeChatContext !== 'room' && chatRef.key !== 'globalChat') if (latestMsg) showToast(`📢 (Stanza) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
-        if (!initialLoad && newMsgsCount > 0 && activeChatContext === 'room' && chatRef.key === 'globalChat') if (latestMsg) showToast(`🌎 (Global) ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
+        
+        // Logica per le notifiche messaggi aggiornata per gestire correttamente il mute e il gamestate
+        if (!initialLoad && newMsgsCount > 0) {
+            if (alertBtnId && !isChatDrawerOpen && els[alertBtnId]) els[alertBtnId].style.backgroundColor = '#4caf50';
+            
+            if (latestMsg) {
+                if (chatRef.key === 'globalChat') {
+                    // Chat globale: notifica se non mutato, NON in partita e NON aperta in primo piano
+                    if (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global')) {
+                        showToast(`🌎 ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
+                    }
+                } else {
+                    // Altre chat (stanza, team)
+                    if (!isChatDrawerOpen || chatRef.key !== (activeChatContext === 'room' ? roomCode : myTeamId)) {
+                        showToast(`💬 ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
+                    }
+                }
+            }
+        }
+        
         initialLoad = false;
     });
     listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
@@ -435,6 +469,18 @@ if(els.sendChatBtn) els.sendChatBtn.addEventListener('click', () => {
 });
 if(els.chatInput) els.chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') els.sendChatBtn.click(); });
 if(els.clearChatBtn) els.clearChatBtn.addEventListener('click', () => { if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).remove(); else db.ref('globalChat').remove(); } });
+
+// Mute global chat button event listener
+if (els.muteGlobalChatBtn) {
+    els.muteGlobalChatBtn.addEventListener('click', () => {
+        isGlobalChatMuted = !isGlobalChatMuted;
+        localStorage.setItem(STORAGE_CHAT_MUTED_KEY, isGlobalChatMuted);
+        updateMuteBtnUI();
+        showToast(isGlobalChatMuted 
+            ? (currentLang==='it'?"Notifiche Chat Globale silenziate.":"Global Chat notifications muted.") 
+            : (currentLang==='it'?"Notifiche Chat Globale riattivate.":"Global Chat notifications unmuted."));
+    });
+}
 
 // --- LINGUA E UI ---
 function checkGameTypeUI() {
@@ -567,19 +613,20 @@ window.openTeamInviteModal = async function(targetId, targetName) {
 }
 
 function sendRecruitmentInvite(type) {
-    db.ref(`invites/${currentInviterId}`).set({ fromId: myId, fromName: myName, type: 'team', ts: firebase.database.ServerValue.TIMESTAMP, teamId: type === 'team' ? myTeamId : null, teamName: type === 'team' ? myTeamName : null }).then(() => { showToast("Invito inviato!"); closeInviteModal(); });
+    db.ref(`invites/${currentInviterId}`).set({ fromId: myId, fromName: myName, type: 'team', ts: firebase.database.ServerValue.TIMESTAMP, teamId: type === 'team' ? myTeamId : null, teamName: type === 'team' ? myTeamName : null }).then(() => { showToast("Invito inviato!"); window.closeInviteModal(); });
 }
+
 window.closeInviteModal = function() { els.inviteModal.style.display = 'none'; currentInviterId = null; }
 
 if(els.sendInviteBtn) els.sendInviteBtn.addEventListener('click', () => {
     if (isChallenging) return; isChallenging = true; const tId = currentInviterId;
     db.ref(`invites/${tId}`).set({ fromId: myId, fromName: myName, mode: els.inviteModeInput.value, wpm: parseInt(els.inviteWpmInput.value), wordCount: parseInt(els.inviteWordCountInput.value), ts: firebase.database.ServerValue.TIMESTAMP, status: 'pending' }).then(() => {
-        showToast("Invito inviato! In attesa...");
+        showToast("Invito inviato! In attesa..."); 
         
-        // Chiudiamo il modale ma NON azzeriamo currentInviterId (non usiamo closeInviteModal)
+        // Fix: nascondiamo il modale ma teniamo conservato il currentInviterId
         els.inviteModal.style.display = 'none';
         
-        // Forza un re-render della lista online aggiornando il proprio timestamp
+        // Forza l'aggiornamento UI pingando il proprio timestamp presence
         db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
 
         if (listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite);
@@ -590,7 +637,7 @@ if(els.sendInviteBtn) els.sendInviteBtn.addEventListener('click', () => {
                     isChallenging = false; 
                     currentInviterId = null; 
                     
-                    // Forza di nuovo il re-render per far tornare il pulsante su "Sfida"
+                    // Forza aggiornamento UI a reset
                     db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
                     
                     if(listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite); 
@@ -615,7 +662,7 @@ function listenToInvites() {
             } else els.inviteModalText.appendChild(document.createTextNode(inv.fromName + " ti suggerisce di creare una tua squadra!"));
             
             els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'none'; els.incomingTeamInviteArea.style.display = 'block'; els.outgoingInviteArea.style.display = 'none';
-            els.acceptTeamInviteBtn.textContent = inv.teamId ? "UNISCITI ✅" : "VAI ALLA CREAZIONE 🛠️"; els.acceptTeamInviteBtn.onclick = () => { db.ref(`invites/${myId}`).remove(); closeInviteModal(); if (inv.teamId) joinTeam(inv.teamId); else showScreen('teamsScreen'); };
+            els.acceptTeamInviteBtn.textContent = inv.teamId ? "UNISCITI ✅" : "VAI ALLA CREAZIONE 🛠️"; els.acceptTeamInviteBtn.onclick = () => { db.ref(`invites/${myId}`).remove(); window.closeInviteModal(); if (inv.teamId) joinTeam(inv.teamId); else showScreen('teamsScreen'); };
         } else {
             els.inviteModalTitle.textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
             
@@ -633,16 +680,16 @@ function listenToInvites() {
         els.inviteModal.style.display = 'flex'; currentInviterId = inv.fromId; window.lastIncomingInvite = inv;
     });
 }
-if(els.declineTeamInviteBtn) els.declineTeamInviteBtn.addEventListener('click', () => { db.ref(`invites/${myId}`).remove(); closeInviteModal(); });
-if(els.declineInviteBtn) els.declineInviteBtn.addEventListener('click', () => { db.ref(`invites/${myId}`).remove(); closeInviteModal(); });
+if(els.declineTeamInviteBtn) els.declineTeamInviteBtn.addEventListener('click', () => { db.ref(`invites/${myId}`).remove(); window.closeInviteModal(); });
+if(els.declineInviteBtn) els.declineInviteBtn.addEventListener('click', () => { db.ref(`invites/${myId}`).remove(); window.closeInviteModal(); });
 if(els.acceptInviteBtn) els.acceptInviteBtn.addEventListener('click', () => {
-    const inv = window.lastIncomingInvite; db.ref(`invites/${myId}`).remove(); closeInviteModal(); const rCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const inv = window.lastIncomingInvite; db.ref(`invites/${myId}`).remove(); window.closeInviteModal(); const rCode = Math.floor(1000 + Math.random() * 9000).toString();
     db.ref(`rooms/${rCode}`).set({ status: 'waiting', type: 'multi', mode: inv.mode, wpm: inv.wpm, tone: 600, wordCount: inv.wordCount, words: getGameWords(inv.wordCount, inv.mode), createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + 600000, hostId: inv.fromId }).then(() => { db.ref(`invite_accepted/${inv.fromId}`).set({ roomCode: rCode }); roomCode = rCode; joinRoomLogic(false); });
 });
 
 function listenToInviteAccepted() {
     if (listeners.inviteAccepted) db.ref(`invite_accepted/${myId}`).off('value', listeners.inviteAccepted);
-    listeners.inviteAccepted = db.ref(`invite_accepted/${myId}`).on('value', snap => { const d = snap.val(); if (d && d.roomCode) { db.ref(`invite_accepted/${myId}`).remove(); isChallenging = false; closeInviteModal(); roomCode = d.roomCode; joinRoomLogic(false); } });
+    listeners.inviteAccepted = db.ref(`invite_accepted/${myId}`).on('value', snap => { const d = snap.val(); if (d && d.roomCode) { db.ref(`invite_accepted/${myId}`).remove(); isChallenging = false; window.closeInviteModal(); roomCode = d.roomCode; joinRoomLogic(false); } });
 }
 
 function listenToRooms() {
@@ -1660,8 +1707,6 @@ function updateActivity(won = false) {
     });
 }
 
-
-
 async function checkActivityAndAwardMedals() {
     const now = new Date(); const dKey = now.toISOString().split('T')[0]; const wKey = getWeekNumber(now); const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
     try {
@@ -1678,11 +1723,11 @@ async function checkActivityAndAwardMedals() {
             }
         }
 
-        // 2. ASSEGNAZIONE: Controlla e assegna le nuove medaglie con un ID statico
+        // 2. ASSEGNAZIONE: Controlla e assegna le nuove medaglie
         const check = (count, thresh, id, title, desc, icon, pKey) => { 
             if (count >= thresh && (!myMedals[id] || myMedals[id].periodKey !== pKey)) { 
                 awardMedal(id, title, desc, icon, pKey); 
-                myMedals[id] = { periodKey: pKey }; // Aggiorna in locale per evitare popup ripetuti
+                myMedals[id] = { periodKey: pKey };
                 return true; 
             } 
             return false; 
@@ -1699,7 +1744,6 @@ async function checkActivityAndAwardMedals() {
 }
 
 function awardMedal(id, title, desc, icon, periodKey) {
-    // Salviamo anche la periodKey per permettere la pulizia dinamica
     db.ref(`users/${myId}/medals/${id}`).set({ title, date: new Date().toLocaleDateString('it-IT'), icon, periodKey });
     els.overlayMedalIcon.textContent = icon; els.overlayMedalTitle.textContent = title; els.overlayMedalDesc.textContent = desc; els.medalOverlay.style.display = 'flex';
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
