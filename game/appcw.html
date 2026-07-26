@@ -32,6 +32,8 @@
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--hint-color); padding-bottom:5px; margin-bottom:5px;">
         <span id="chatTitle" style="font-weight:bold;">💬 Chat</span>
         <div style="display: flex; gap: 5px;">
+            <!-- TASTO PER SILENZIARE LE NOTIFICHE AGGIUNTO QUI -->
+            <button id="muteGlobalChatBtn" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-secondary">🔊 Notifiche Attive</button>
             <button id="clearChatBtn" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-danger">Cancella</button>
             <button id="closeChatBtn" onclick="toggleChat()" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-secondary">Chiudi</button>
         </div>
@@ -157,7 +159,6 @@
         </div>
     </div>
     
-    <!-- NUOVO BOTTONE SPOSTATO QUI DENTRO IL MENU PRINCIPALE -->
     <div style="text-align: center; margin-top: 15px;">
         <button onclick="window.location.href='https://tn6rg3.github.io/antennavr/cw/index.html'" class="btn-secondary" style="width: auto; padding: 10px 20px; font-weight: bold; font-size: 1.1em; background-color: var(--link-color); color: white; border: none;">
             🔗 CW IP
@@ -661,9 +662,9 @@
     </div>
 </div>
 
-<!-- Richiamo dello script esterno -->
-<script src="js/app.js?v=20240520.32"></script>
-<script src="js/quiz_data.js?v=20240520.32"></script>
+<!-- Richiamo dello script esterno aggiornato -->
+<script src="js/app.js?v=20240521.33"></script>
+<script src="js/quiz_data.js?v=20240521.33"></script>
 
 </body>
 </html>
