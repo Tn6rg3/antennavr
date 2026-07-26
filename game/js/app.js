@@ -370,7 +370,6 @@ function playNotificationSound() {
     setTimeout(() => playBeep(1100, 0.1), 120); // Secondo tono più alto
 }
 
-
 function playMorseAudio(text, wpm) {
     return new Promise(resolve => {
         if (!audioCtx || !gameRunning) { resolve(); return; }
@@ -447,22 +446,22 @@ function setupChat(chatRef, containerId, alertBtnId) {
         });
         lastTs = maxTs; container.scrollTop = container.scrollHeight;
         
-        // Logica per le notifiche messaggi aggiornata per gestire mute, gioco in corso e suono
+        // Logica per le notifiche visive E AUDIO
         if (!initialLoad && newMsgsCount > 0) {
             if (alertBtnId && !isChatDrawerOpen && els[alertBtnId]) els[alertBtnId].style.backgroundColor = '#4caf50';
             
             if (latestMsg) {
                 if (chatRef.key === 'globalChat') {
-                    // Chat globale: notifica se NON in muto, NON in partita e chat NON in primo piano
+                    // Chat globale: notifica se non mutato, NON in partita e NON aperta in primo piano
                     if (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global')) {
                         showToast(`🌎 ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
-                        playNotificationSound(); // Suono notifica
+                        if (typeof playNotificationSound === 'function') playNotificationSound(); // <-- SUONO AGGIUNTO QUI
                     }
                 } else {
                     // Altre chat (stanza, team)
                     if (!isChatDrawerOpen || chatRef.key !== (activeChatContext === 'room' ? roomCode : myTeamId)) {
                         showToast(`💬 ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
-                        playNotificationSound(); // Suono notifica
+                        if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound(); // <-- SUONO AGGIUNTO QUI
                     }
                 }
             }
@@ -471,6 +470,33 @@ function setupChat(chatRef, containerId, alertBtnId) {
         initialLoad = false;
     });
     listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
+}
+
+if(els.sendChatBtn) els.sendChatBtn.addEventListener('click', () => {
+    const txt = els.chatInput.value.trim(); if (!txt) return;
+    let msgRef = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
+    
+    // NOTA BENE: Ho rimosso msgRef.onDisconnect().remove() per sistemare l'invio
+    msgRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP })
+        .catch(e => showToast("Errore invio: " + e.message)); 
+        
+    els.chatInput.value = '';
+});
+
+if(els.chatInput) els.chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') els.sendChatBtn.click(); });
+
+if(els.clearChatBtn) els.clearChatBtn.addEventListener('click', () => { if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).remove(); else db.ref('globalChat').remove(); } });
+
+// Listener per il pulsante Mute (se usi l'evento via JS e non onclick HTML)
+if (els.muteGlobalChatBtn) {
+    els.muteGlobalChatBtn.addEventListener('click', () => {
+        isGlobalChatMuted = !isGlobalChatMuted;
+        localStorage.setItem(STORAGE_CHAT_MUTED_KEY, isGlobalChatMuted);
+        if (typeof updateMuteBtnUI === 'function') updateMuteBtnUI();
+        showToast(isGlobalChatMuted 
+            ? (currentLang==='it'?"Notifiche Chat silenziate.":"Chat notifications muted.") 
+            : (currentLang==='it'?"Notifiche Chat riattivate.":"Chat notifications unmuted."));
+    });
 }
 // --- LINGUA E UI ---
 function checkGameTypeUI() {
