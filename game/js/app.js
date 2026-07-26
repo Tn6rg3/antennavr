@@ -287,6 +287,7 @@ else { myName = tgUser.first_name; myId = tgUser.id.toString(); initGame(); }
 function initGame() {
     const firebaseConfig = { apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk", authDomain: "telegrafiabot.firebaseapp.com", databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app", projectId: "telegrafiabot", storageBucket: "telegrafiabot.firebasestorage.app", messagingSenderId: "575790683327", appId: "1:575790683327:web:db333b0316c8e8ec63a20a" };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
     // --- NUOVO CODICE APP CHECK ---
     const appCheck = firebase.appCheck();
     appCheck.activate(
@@ -297,15 +298,11 @@ function initGame() {
 
     db = firebase.database(); 
     auth = firebase.auth();
-    
-    
-    
-    db = firebase.database(); auth = firebase.auth();
 
     // Carica stato mute
     isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
 
-    // NUOVO: Carica preferenze WPM, Parole e Tono
+    // Carica preferenze WPM, Parole e Tono
     if (els.startWpmInput && localStorage.getItem(STORAGE_PREF_WPM)) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM);
     if (els.wordCountInput && localStorage.getItem(STORAGE_PREF_WORDS)) els.wordCountInput.value = localStorage.getItem(STORAGE_PREF_WORDS);
     if (els.toneInput && localStorage.getItem(STORAGE_PREF_TONE)) els.toneInput.value = localStorage.getItem(STORAGE_PREF_TONE);
@@ -343,7 +340,7 @@ function initGame() {
         }
 
         const savedLang = localStorage.getItem('gameLang'); if (savedLang) setLanguage(savedLang);
-        else updateMuteBtnUI(); // Aggiorna se non è passato da setLanguage
+        else updateMuteBtnUI();
         
         loadDictionaries();
 
