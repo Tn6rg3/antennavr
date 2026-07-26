@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.33"; // Versione incrementata
+const APP_VERSION = "20240521.34"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -362,6 +362,15 @@ function playBeep(freq, duration) {
     } catch(e) {}
 }
 
+// NUOVA FUNZIONE: Suono di notifica per la chat
+function playNotificationSound() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    playBeep(880, 0.08); // Primo tono
+    setTimeout(() => playBeep(1100, 0.1), 120); // Secondo tono più alto
+}
+
+
 function playMorseAudio(text, wpm) {
     return new Promise(resolve => {
         if (!audioCtx || !gameRunning) { resolve(); return; }
@@ -438,20 +447,22 @@ function setupChat(chatRef, containerId, alertBtnId) {
         });
         lastTs = maxTs; container.scrollTop = container.scrollHeight;
         
-        // Logica per le notifiche messaggi aggiornata per gestire correttamente il mute e il gamestate
+        // Logica per le notifiche messaggi aggiornata per gestire mute, gioco in corso e suono
         if (!initialLoad && newMsgsCount > 0) {
             if (alertBtnId && !isChatDrawerOpen && els[alertBtnId]) els[alertBtnId].style.backgroundColor = '#4caf50';
             
             if (latestMsg) {
                 if (chatRef.key === 'globalChat') {
-                    // Chat globale: notifica se non mutato, NON in partita e NON aperta in primo piano
+                    // Chat globale: notifica se NON in muto, NON in partita e chat NON in primo piano
                     if (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global')) {
                         showToast(`🌎 ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
+                        playNotificationSound(); // Suono notifica
                     }
                 } else {
                     // Altre chat (stanza, team)
                     if (!isChatDrawerOpen || chatRef.key !== (activeChatContext === 'room' ? roomCode : myTeamId)) {
                         showToast(`💬 ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
+                        playNotificationSound(); // Suono notifica
                     }
                 }
             }
@@ -461,27 +472,6 @@ function setupChat(chatRef, containerId, alertBtnId) {
     });
     listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
 }
-
-if(els.sendChatBtn) els.sendChatBtn.addEventListener('click', () => {
-    const txt = els.chatInput.value.trim(); if (!txt) return;
-    let msgRef = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
-    msgRef.onDisconnect().remove(); msgRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP }); els.chatInput.value = '';
-});
-if(els.chatInput) els.chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') els.sendChatBtn.click(); });
-if(els.clearChatBtn) els.clearChatBtn.addEventListener('click', () => { if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).remove(); else db.ref('globalChat').remove(); } });
-
-// Mute global chat button event listener
-if (els.muteGlobalChatBtn) {
-    els.muteGlobalChatBtn.addEventListener('click', () => {
-        isGlobalChatMuted = !isGlobalChatMuted;
-        localStorage.setItem(STORAGE_CHAT_MUTED_KEY, isGlobalChatMuted);
-        updateMuteBtnUI();
-        showToast(isGlobalChatMuted 
-            ? (currentLang==='it'?"Notifiche Chat Globale silenziate.":"Global Chat notifications muted.") 
-            : (currentLang==='it'?"Notifiche Chat Globale riattivate.":"Global Chat notifications unmuted."));
-    });
-}
-
 // --- LINGUA E UI ---
 function checkGameTypeUI() {
     const isSingle = els.gameTypeInput.value === 'single', isTrn = els.gameTypeInput.value === 'tournament', isCustom = els.gameModeInput.value === 'custom';
