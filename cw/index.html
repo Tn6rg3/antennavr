@@ -317,20 +317,30 @@
     let preOscRemote = null, preGainRemote = null;
     let remoteWatchdog = null;
 
-    // VARIABILI PER IL JITTER BUFFER E SINCRONIZZAZIONE
     let timeOffset = 0;
     const PLAYBACK_DELAY = 150; 
     let syncInterval = null;
 
     // =======================================================
-    // 1.B LOBBY E PRESENZA CON HEARTBEAT E PULIZIA FANTASMI
+    // 1.B LOBBY E PRESENZA CON SINCRONIZZAZIONE SERVER TIME
     // =======================================================
     let presenceInterval = null;
+    let serverTimeOffset = 0;
+
+    // Cattura la differenza in millisecondi tra l'orologio locale e quello di Firebase
+    db.ref('.info/serverTimeOffset').on('value', (snap) => {
+        serverTimeOffset = snap.val() || 0;
+    });
+
+    // Funzione per ottenere l'ora sincronizzata di Firebase
+    function getSyncTime() {
+        return Date.now() + serverTimeOffset;
+    }
 
     function updateLobbyPresence() {
         const user = document.getElementById('n_user').value.trim();
 
-        // Pulizia del vecchio utente se cambia nome o disconnette
+        // Pulizia del vecchio utente
         if (myPresenceRef) {
             myPresenceRef.remove();
             myPresenceRef = null;
@@ -344,9 +354,9 @@
         
         myPresenceRef = db.ref('lobby/users/' + user);
         
-        // Invia il battito iniziale e imposta la disconnessione
+        // Heartbeat con ora di Firebase invece che ora locale
         const sendHeartbeat = () => {
-            if (myPresenceRef) myPresenceRef.set({ t: Date.now() });
+            if (myPresenceRef) myPresenceRef.set({ t: getSyncTime() });
         };
         
         sendHeartbeat();
@@ -356,7 +366,7 @@
         presenceInterval = setInterval(sendHeartbeat, 10000);
         
         // Ascolta inviti e PM
-        db.ref('lobby/pms/' + user).off(); // Rimuove listener precedenti per evitare duplicati
+        db.ref('lobby/pms/' + user).off(); 
         db.ref('lobby/pms/' + user).on('child_added', (snap) => {
             const data = snap.val();
             if (!data) return;
@@ -365,13 +375,8 @@
                 const div = document.createElement('div');
                 div.className = 'chat-pm';
                 Object.assign(div.style, {
-                    backgroundColor: '#2c3e50',
-                    padding: '10px',
-                    borderRadius: '5px',
-                    marginTop: '8px',
-                    marginBottom: '8px',
-                    borderLeft: '4px solid #3498db',
-                    color: 'white'
+                    backgroundColor: '#2c3e50', padding: '10px', borderRadius: '5px',
+                    marginTop: '8px', marginBottom: '8px', borderLeft: '4px solid #3498db', color: 'white'
                 });
 
                 const textNode = document.createTextNode(`🔔 Da ${data.from}: Ti ha invitato in una stanza P2P! `);
@@ -381,18 +386,11 @@
                 const btn = document.createElement('button');
                 btn.textContent = '✔️ ACCETTA E CONNETTI';
                 Object.assign(btn.style, {
-                    backgroundColor: '#27ae60',
-                    padding: '6px 15px',
-                    marginTop: '8px',
-                    fontSize: '12px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer'
+                    backgroundColor: '#27ae60', padding: '6px 15px', marginTop: '8px',
+                    fontSize: '12px', borderRadius: '4px', border: 'none', color: 'white', cursor: 'pointer'
                 });
                 
                 btn.onclick = () => acceptInvite(data.room, data.pass);
-                
                 div.appendChild(btn);
                 
                 const b = document.getElementById('chat-global');
@@ -411,7 +409,6 @@
         });
     }
 
-    // SISTEMA INVITI
     function sendInvite(toUser) {
         const randRoom = "cw-" + Math.random().toString(36).substr(2, 5);
         const randPass = Math.random().toString(36).substr(2, 4);
@@ -422,10 +419,7 @@
         
         const myName = document.getElementById('n_user').value.trim();
         db.ref('lobby/pms/' + toUser).push({
-            from: myName,
-            type: 'INVITE',
-            room: randRoom,
-            pass: randPass
+            from: myName, type: 'INVITE', room: randRoom, pass: randPass
         });
         
         switchChat('global');
@@ -528,7 +522,6 @@
             audioCtx.resume().catch(e => console.log("Audio resume:", e));
         }
 
-        // GHOST OSCILLATOR (DAC KEEP-ALIVE)
         if (!window.keepAliveOsc) {
             window.keepAliveOsc = audioCtx.createOscillator();
             const keepAliveGain = audioCtx.createGain();
@@ -562,7 +555,6 @@
         return f;
     }
 
-    // OTTIMIZZAZIONE LATENZA: L'audio viene eseguito PRIMA della chiamata di rete
     function playTone(freq, isLocal = true, isSystem = false) {
         initAudioOptimized();
         if (isLocal && isTx) return;
@@ -573,7 +565,6 @@
             isTx = true;
             if(!isSystem) document.getElementById('mouse-pad').classList.add('active');
             
-            // 1. SCHEDULA L'AUDIO LOCALE ISTANTANEAMENTE
             preOscLocal.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.0005);
             let vol = parseFloat(document.getElementById('a_vol').value);
             
@@ -581,7 +572,6 @@
             preGainLocal.gain.setValueAtTime(preGainLocal.gain.value, audioCtx.currentTime);
             preGainLocal.gain.setTargetAtTime(vol, audioCtx.currentTime, attack / 3);
             
-            // 2. INVIA ALLA RETE DOPO L'ESECUZIONE AUDIO
             if (!isSystem && conn && conn.open) {
                 conn.send({type: 'DN', f: freq, ts: Date.now()});
             }
@@ -595,12 +585,10 @@
             isTx = false;
             if(!isSystem) document.getElementById('mouse-pad').classList.remove('active');
             
-            // 1. FERMA L'AUDIO LOCALE ISTANTANEAMENTE
             preGainLocal.gain.cancelScheduledValues(audioCtx.currentTime);
             preGainLocal.gain.setValueAtTime(preGainLocal.gain.value, audioCtx.currentTime);
             preGainLocal.gain.setTargetAtTime(0, audioCtx.currentTime, rel / 3);
             
-            // 2. INVIA ALLA RETE DOPO
             if(!isSystem && conn && conn.open) {
                 conn.send({type: 'UP', ts: Date.now()});
             }
@@ -638,7 +626,7 @@
     }
 
     // =======================================================
-    // 3. MOTORE IAMBIC E MANUALE ASSOLUTO (POINTER EVENTS OTTMIZZATI)
+    // 3. MOTORE IAMBIC E MANUALE ASSOLUTO 
     // =======================================================
     let dotPressed = false, dashPressed = false, keyerActive = false, lastIambic = null;
 
@@ -695,17 +683,14 @@
         }
     }
 
-    // SOSTITUZIONE CON POINTER EVENTS (Elimina il ritardo Mobile/Touch)
     const pad = document.getElementById('mouse-pad');
-    pad.style.touchAction = 'none'; // Disabilita scroll e zoom nativo del browser sul pad
+    pad.style.touchAction = 'none'; 
 
     pad.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        pad.setPointerCapture(e.pointerId); // Cattura il tocco anche se esce dal div
-        
+        pad.setPointerCapture(e.pointerId); 
         const rect = pad.getBoundingClientRect();
         const isRight = (e.clientX - rect.left) > (rect.width / 2);
-        
         handlePadStart(e.button === 2 || isRight);
     });
 
@@ -846,14 +831,12 @@
             }
             else if (d.type === 'DN') {
                 if (!d.ts) { playTone(d.f, false); return; } 
-
                 const targetTimeMs = d.ts + timeOffset + PLAYBACK_DELAY;
                 const safeDelaySec = Math.max(0.01, (targetTimeMs - Date.now()) / 1000);
                 playToneScheduled(d.f, audioCtx.currentTime + safeDelaySec);
             }
             else if (d.type === 'UP') {
                 if (!d.ts) { stopTone(false); return; } 
-
                 const targetTimeMs = d.ts + timeOffset + PLAYBACK_DELAY;
                 const safeDelaySec = Math.max(0.01, (targetTimeMs - Date.now()) / 1000);
                 stopToneScheduled(audioCtx.currentTime + safeDelaySec);
@@ -992,7 +975,6 @@
                 ]
             });
             
-            // Baud Rate allineato con il nuovo sketch Arduino
             await port.open({ baudRate: 500000 });
             await port.setSignals({ dataTerminalReady: true, requestToSend: true });
             
@@ -1025,11 +1007,10 @@
     }
 
     async function readSerialData() {
-        // Lettura ultrarapida Raw Bytes invece che Text Strings
         const reader = port.readable.getReader();
         
         while (true) {
-            const { value, done } = await reader.read(); // value è un Uint8Array
+            const { value, done } = await reader.read(); 
             if (done) {
                 reader.releaseLock();
                 break;
@@ -1038,23 +1019,15 @@
 
             for (let i = 0; i < value.length; i++) {
                 const byte = value[i];
-                
-                // Leggiamo byte puri (1, 2, 0) o ASCII in caso di fallback
-                if (byte === 1 || byte === 49 || byte === 68) { 
-                    playTone(getFreq('dot'), true); 
-                } 
-                else if (byte === 2 || byte === 76) { 
-                    playTone(getFreq('dash'), true); 
-                } 
-                else if (byte === 0 || byte === 48) { 
-                    stopTone(true); 
-                }
+                if (byte === 1 || byte === 49 || byte === 68) { playTone(getFreq('dot'), true); } 
+                else if (byte === 2 || byte === 76) { playTone(getFreq('dash'), true); } 
+                else if (byte === 0 || byte === 48) { stopTone(true); }
             }
         }
     }
 
     // =======================================================
-    // FIX: FUNZIONE LETTURA LOBBY IN TEMPO REALE CON FILTRO TIMEOUT
+    // FIX: LETTURA LOBBY CON FILTRO LOCALE E SYNC SERVER
     // =======================================================
     function listenToLobby() {
         db.ref('lobby/users').on('value', (snap) => {
@@ -1065,18 +1038,17 @@
             
             const users = snap.val();
             const myUser = document.getElementById('n_user').value.trim();
-            const now = Date.now();
+            const now = getSyncTime(); 
             let count = 0;
 
             if (users) {
                 for (let userName in users) {
                     const userData = users[userName];
 
-                    // FILTRO FANTASMI: Se l'utente non aggiorna il battito da più di 25 secondi,
-                    // viene considerato offline e rimosso da Firebase.
-                    if (!userData || !userData.t || (now - userData.t > 25000)) {
-                        db.ref('lobby/users/' + userName).remove();
-                        continue;
+                    // FILTRO LOCALE: Se il timestamp è più vecchio di 35 secondi lo ignoriamo
+                    // visivamente. Ma NON eseguiamo più il .remove() per non cancellare utenti validi!
+                    if (!userData || !userData.t || (now - userData.t > 35000)) {
+                        continue; 
                     }
 
                     count++;
@@ -1105,7 +1077,7 @@
         });
     }
 
-    // Pulizia immediata quando la scheda/pagina viene chiusa
+    // Pulizia immediata SE il browser viene chiuso
     window.onbeforeunload = () => {
         if (myPresenceRef) myPresenceRef.remove();
     };
