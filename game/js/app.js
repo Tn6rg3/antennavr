@@ -17,6 +17,9 @@ const els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
 const STORAGE_ROOM_KEY = "cwgame_last_room";
 const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
 const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted"; // Nuova costante per il mute
+const STORAGE_PREF_WPM = "cwgame_pref_wpm";
+const STORAGE_PREF_WORDS = "cwgame_pref_words";
+const STORAGE_PREF_TONE = "cwgame_pref_tone";
 
 // --- STATO GLOBALE ---
 let myName, myId, myPrivacy = false;
@@ -289,6 +292,11 @@ function initGame() {
     // Carica stato mute
     isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
 
+    // NUOVO: Carica preferenze WPM, Parole e Tono
+    if (els.startWpmInput && localStorage.getItem(STORAGE_PREF_WPM)) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM);
+    if (els.wordCountInput && localStorage.getItem(STORAGE_PREF_WORDS)) els.wordCountInput.value = localStorage.getItem(STORAGE_PREF_WORDS);
+    if (els.toneInput && localStorage.getItem(STORAGE_PREF_TONE)) els.toneInput.value = localStorage.getItem(STORAGE_PREF_TONE);
+
     auth.signInAnonymously().then(async () => {
         try {
             const userData = (await db.ref(`users/${myId}`).once('value')).val() || {};
@@ -528,10 +536,27 @@ function checkGameTypeUI() {
 if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => {
     const isC = e.target.value === 'callsign', isPP = e.target.value === 'pingpong';
     if (isPP) { els.gameTypeInput.value = 'multi'; els.gameTypeInput.disabled = true; checkGameTypeUI(); } else els.gameTypeInput.disabled = false;
-    ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => { els[id].disabled = isC; if(isC && id!=='toneInput') els[id].value = 25; });
+    
+    ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => { 
+        els[id].disabled = isC; 
+        if (isC && id !== 'toneInput') {
+            els[id].value = 25; // Forza a 25 per i nominativi
+        } else if (!isC && id !== 'toneInput') {
+            // Ripristina dai salvataggi se l'utente esce dalla modalità nominativi
+            if (id === 'startWpmInput' && localStorage.getItem(STORAGE_PREF_WPM)) els[id].value = localStorage.getItem(STORAGE_PREF_WPM);
+            if (id === 'wordCountInput' && localStorage.getItem(STORAGE_PREF_WORDS)) els[id].value = localStorage.getItem(STORAGE_PREF_WORDS);
+        }
+    });
+    
     els.fixedSpeedCheckbox.disabled = isC; if(isC) els.fixedSpeedCheckbox.checked = false; checkGameTypeUI();
 });
 if(els.gameTypeInput) els.gameTypeInput.addEventListener('change', checkGameTypeUI);
+
+// --- LISTENER SALVATAGGIO PREFERENZE ---
+if (els.startWpmInput) els.startWpmInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_WPM, e.target.value));
+if (els.wordCountInput) els.wordCountInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_WORDS, e.target.value));
+if (els.toneInput) els.toneInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_TONE, e.target.value));
+
 
 function updateCustomDictStatus() {
     if (!els.customDictStatus) return;
