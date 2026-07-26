@@ -323,74 +323,94 @@
     let syncInterval = null;
 
     // =======================================================
-    // 1.B LOBBY E PRESENZA (SOCIAL & INVITI)
+    // 1.B LOBBY E PRESENZA CON HEARTBEAT E PULIZIA FANTASMI
     // =======================================================
+    let presenceInterval = null;
+
     function updateLobbyPresence() {
-    const user = document.getElementById('n_user').value.trim();
-    if (!user) return;
-    
-    if (myPresenceRef) myPresenceRef.remove(); 
-    
-    myPresenceRef = db.ref('lobby/users/' + user);
-    myPresenceRef.set({ t: Date.now() });
-    myPresenceRef.onDisconnect().remove();
-    
-    db.ref('lobby/pms/' + user).on('child_added', (snap) => {
-        const data = snap.val();
-        if (!data) return;
+        const user = document.getElementById('n_user').value.trim();
 
-        if (data.type === 'INVITE') {
-            const div = document.createElement('div');
-            div.className = 'chat-pm';
-            Object.assign(div.style, {
-                backgroundColor: '#2c3e50',
-                padding: '10px',
-                borderRadius: '5px',
-                marginTop: '8px',
-                marginBottom: '8px',
-                borderLeft: '4px solid #3498db',
-                color: 'white'
-            });
+        // Pulizia del vecchio utente se cambia nome o disconnette
+        if (myPresenceRef) {
+            myPresenceRef.remove();
+            myPresenceRef = null;
+        }
+        if (presenceInterval) {
+            clearInterval(presenceInterval);
+            presenceInterval = null;
+        }
 
-            // Creazione testo sicuro
-            const textNode = document.createTextNode(`🔔 Da ${data.from}: Ti ha invitato in una stanza P2P! `);
-            div.appendChild(textNode);
-            div.appendChild(document.createElement('br'));
+        if (!user) return;
+        
+        myPresenceRef = db.ref('lobby/users/' + user);
+        
+        // Invia il battito iniziale e imposta la disconnessione
+        const sendHeartbeat = () => {
+            if (myPresenceRef) myPresenceRef.set({ t: Date.now() });
+        };
+        
+        sendHeartbeat();
+        myPresenceRef.onDisconnect().remove();
+        
+        // Heartbeat ogni 10 secondi
+        presenceInterval = setInterval(sendHeartbeat, 10000);
+        
+        // Ascolta inviti e PM
+        db.ref('lobby/pms/' + user).off(); // Rimuove listener precedenti per evitare duplicati
+        db.ref('lobby/pms/' + user).on('child_added', (snap) => {
+            const data = snap.val();
+            if (!data) return;
 
-            // Creazione bottone sicuro senza onclick inline
-            const btn = document.createElement('button');
-            btn.textContent = '✔️ ACCETTA E CONNETTI';
-            Object.assign(btn.style, {
-                backgroundColor: '#27ae60',
-                padding: '6px 15px',
-                marginTop: '8px',
-                fontSize: '12px',
-                borderRadius: '4px',
-                border: 'none',
-                color: 'white',
-                cursor: 'pointer'
-            });
-            
-            // Assegnazione evento tramite funzione, non stringa
-            btn.onclick = () => acceptInvite(data.room, data.pass);
-            
-            div.appendChild(btn);
-            
-            const b = document.getElementById('chat-global');
-            if (b) {
-                b.appendChild(div);
-                b.scrollTop = b.scrollHeight;
+            if (data.type === 'INVITE') {
+                const div = document.createElement('div');
+                div.className = 'chat-pm';
+                Object.assign(div.style, {
+                    backgroundColor: '#2c3e50',
+                    padding: '10px',
+                    borderRadius: '5px',
+                    marginTop: '8px',
+                    marginBottom: '8px',
+                    borderLeft: '4px solid #3498db',
+                    color: 'white'
+                });
+
+                const textNode = document.createTextNode(`🔔 Da ${data.from}: Ti ha invitato in una stanza P2P! `);
+                div.appendChild(textNode);
+                div.appendChild(document.createElement('br'));
+
+                const btn = document.createElement('button');
+                btn.textContent = '✔️ ACCETTA E CONNETTI';
+                Object.assign(btn.style, {
+                    backgroundColor: '#27ae60',
+                    padding: '6px 15px',
+                    marginTop: '8px',
+                    fontSize: '12px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    color: 'white',
+                    cursor: 'pointer'
+                });
+                
+                btn.onclick = () => acceptInvite(data.room, data.pass);
+                
+                div.appendChild(btn);
+                
+                const b = document.getElementById('chat-global');
+                if (b) {
+                    b.appendChild(div);
+                    b.scrollTop = b.scrollHeight;
+                }
+                
+                if (document.getElementById('a_sys_sounds')?.checked) playSystemCW("I"); 
+            } else {
+                appendChat("Da " + data.from, data.msg, "chat-pm", "global");
+                if (document.getElementById('a_sys_sounds')?.checked) playSystemCW("M");
             }
             
-            if (document.getElementById('a_sys_sounds')?.checked) playSystemCW("I"); 
-        } else {
-            appendChat("Da " + data.from, data.msg, "chat-pm", "global");
-            if (document.getElementById('a_sys_sounds')?.checked) playSystemCW("M");
-        }
-        
-        snap.ref.remove(); 
-    });
-}
+            snap.ref.remove(); 
+        });
+    }
+
     // SISTEMA INVITI
     function sendInvite(toUser) {
         const randRoom = "cw-" + Math.random().toString(36).substr(2, 5);
@@ -1034,21 +1054,31 @@
     }
 
     // =======================================================
-    // FIX: FUNZIONE LETTURA LOBBY UTENTI ONLINE
+    // FIX: FUNZIONE LETTURA LOBBY IN TEMPO REALE CON FILTRO TIMEOUT
     // =======================================================
     function listenToLobby() {
         db.ref('lobby/users').on('value', (snap) => {
             const lobbyBox = document.getElementById('lobby-list');
             if (!lobbyBox) return;
             
-            lobbyBox.innerHTML = ''; // Rimuove la scritta "Caricamento..."
+            lobbyBox.innerHTML = '';
             
             const users = snap.val();
             const myUser = document.getElementById('n_user').value.trim();
+            const now = Date.now();
             let count = 0;
 
             if (users) {
                 for (let userName in users) {
+                    const userData = users[userName];
+
+                    // FILTRO FANTASMI: Se l'utente non aggiorna il battito da più di 25 secondi,
+                    // viene considerato offline e rimosso da Firebase.
+                    if (!userData || !userData.t || (now - userData.t > 25000)) {
+                        db.ref('lobby/users/' + userName).remove();
+                        continue;
+                    }
+
                     count++;
                     const div = document.createElement('div');
                     div.className = 'lobby-user';
@@ -1058,7 +1088,6 @@
                     spanName.style.color = userName === myUser ? "#2ecc71" : "#bdc3c7";
                     div.appendChild(spanName);
 
-                    // Mostra il pulsante di invito solo per gli altri utenti
                     if (userName !== myUser && myUser !== "") {
                         const btn = document.createElement('button');
                         btn.textContent = "INVITA P2P";
@@ -1075,6 +1104,11 @@
             }
         });
     }
+
+    // Pulizia immediata quando la scheda/pagina viene chiusa
+    window.onbeforeunload = () => {
+        if (myPresenceRef) myPresenceRef.remove();
+    };
 
     // =======================================================
     // 7. FUNZIONI INTERFACCIA E REATTIVITÀ WPM/MS
@@ -1143,7 +1177,7 @@
         loadConfig();
         initAudioOptimized();
         updateLobbyPresence();
-        listenToLobby(); // FUNZIONE AGGIUNTA QUI
+        listenToLobby();
     };
 </script>
 </body>
