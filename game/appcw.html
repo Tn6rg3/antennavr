@@ -11,6 +11,7 @@
 
     <title>Sfida Telegrafia</title>
 
+    <!-- Script essenziali (Telegram e Firebase) -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -21,13 +22,29 @@
 </head>
 <body>
 
+<!-- BANNER AGGIORNAMENTO -->
 <div id="updateBanner" style="display:none; position:fixed; top:0; left:0; width:100%; background:#ff9800; color:white; text-align:center; padding:10px; z-index:9999; font-weight:bold; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
     🚀 Nuova Versione Disponibile!
     <button onclick="window.location.href = window.location.pathname + '?v=' + Date.now();" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em;">Aggiorna ora</button>
 </div>
 
+<!-- CONTENITORE NOTIFICHE TOAST -->
 <div id="toastContainer"></div>
 
+<!-- POPUP SFIDA GIORNALIERA -->
+<div id="dailyChallengeModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+    <span style="font-size: 3em; margin-bottom: 10px;">📅</span>
+    <h2 style="color: var(--champ-color); margin: 0 0 10px 0;">Sfida Giornaliera!</h2>
+    <p style="font-size: 0.9em; margin-bottom: 15px;">20 Parole a 15 WPM (con velocità crescente se indovini). Tutti i giocatori affrontano le stesse parole oggi. Entra in classifica e vinci una medaglia se arrivi a podio!</p>
+    
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button id="btnPlayDailyNow" class="btn-success">ACCETTA LA SFIDA 🚀</button>
+        <button id="btnPlayDailyLater" class="btn-secondary">Più Tardi</button>
+        <button id="btnDeclineDaily" class="btn-danger">Rifiuta per oggi</button>
+    </div>
+</div>
+
+<!-- CHAT GLOBALE (DRAWER) -->
 <div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:45%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--hint-color); padding-bottom:5px; margin-bottom:5px;">
         <span id="chatTitle" style="font-weight:bold;">💬 Chat</span>
@@ -44,11 +61,13 @@
     </div>
 </div>
 
+<!-- SCHERMATA CARICAMENTO -->
 <div id="loadingScreen" class="screen active-screen">
     <h2 style="margin-top: 40px;">Caricamento... 📻</h2>
     <p id="initStatusText">Verifica credenziali in corso...</p>
 </div>
 
+<!-- SCHERMATA ERRORE ESTERNO A TELEGRAM -->
 <div id="errorScreen" class="screen">
     <h2>Accesso Negato 🛑</h2>
     <p>Questa applicazione è progettata per funzionare <b>esclusivamente</b> all'interno di Telegram.</p>
@@ -130,7 +149,7 @@
             </label>
         </div>
 
-        <!-- NUOVI CONTROLLI PER SPAZIATURA AVANZATA (SINGLE PLAYER) -->
+        <!-- CONTROLLI SPAZIATURA AVANZATA (FARNSWORTH) -->
         <div id="advancedSpacingContainer" style="display:none; justify-content:center; align-items:center; gap:15px; margin-top:10px; font-size:0.85em;">
             <div style="display:flex; flex-direction:column; align-items:center;">
                 <label style="color:var(--hint-color); font-weight:bold;">Spazio Caratt. (WPM)</label>
@@ -150,6 +169,7 @@
             </div>
         </div>
 
+        <!-- DIZIONARIO PERSONALE -->
         <div id="customDictControl" style="display:none; justify-content:center; margin-top:5px;">
             <button onclick="document.getElementById('customDictModal').style.display='flex'" class="btn-link" style="font-size:0.85em; margin:0; padding:2px;" id="txt_manage_custom_btn">⚙️ Gestisci Dizionario Personale</button>
         </div>
@@ -157,6 +177,7 @@
         <button id="createRoomBtn" disabled class="btn-success">Inizia Partita Libera</button>
     </div>
 
+    <!-- LISTE STANZE E UTENTI ONLINE -->
     <div style="display: flex; gap: 8px; flex-grow: 1; min-height: 0; margin-bottom: 0;">
         <div class="box-panel" style="flex: 1; min-height: 0;">
             <h3 id="txt_challenge_board_title">Bacheca Sfide ⏳</h3>
@@ -219,15 +240,16 @@
     <button onclick="goBackToMenu()" id="txt_back_btn" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
-<!-- LEADERBOARD E TUTTO IL RESTO UGUALE ... -->
+<!-- SCHERMATA SQUADRE E TORNEI -->
 <div id="teamsScreen" class="screen">
     <h2 style="color: var(--champ-color); margin-bottom: 5px;">🏆 Area Tornei</h2>
-    <!-- (Rimane identico a come me lo hai inviato) -->
     <div class="tab-buttons" style="margin-bottom: 5px;">
         <button id="tabTeamGestBtn" class="tab-btn active-tab" onclick="switchTeamTab('gest')">La mia Squadra</button>
         <button id="tabAllTeamsBtn" class="tab-btn" onclick="switchTeamTab('allteams')">Tutte le Squadre</button>
         <button id="tabTournamentsBtn" class="tab-btn" onclick="switchTeamTab('tournaments')">I Tornei</button>
     </div>
+
+    <!-- VISTA: Nessuna Squadra -->
     <div id="noTeamView" style="width: 100%; display: none; flex-direction: column; flex-grow: 1; min-height: 0;">
         <p style="text-align:center; font-size:0.9em; margin-top:0;">Per partecipare ai tornei devi essere in una squadra.</p>
         <div class="box-panel" style="flex-shrink: 0;">
@@ -240,6 +262,8 @@
             <ul id="openTeamsList" class="data-list"></ul>
         </div>
     </div>
+
+    <!-- VISTA: La Mia Squadra -->
     <div id="myTeamView" style="width: 100%; display: none; flex-direction:column; flex-grow: 1; min-height: 0;">
         <div class="box-panel" style="flex-shrink: 0; padding: 10px 5px;">
             <div style="display:flex; justify-content:space-between; align-items:center; padding: 0 5px;">
@@ -271,12 +295,16 @@
             </div>
         </div>
     </div>
+
+    <!-- TAB 2: Tutte le Squadre -->
     <div id="allTeamsArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
         <div class="box-panel" style="flex-grow:1; min-height:0; overflow-y:auto;">
             <h3 style="margin-top:0;">Elenco Globale Squadre</h3>
             <ul id="globalAllTeamsList" class="data-list"></ul>
         </div>
     </div>
+
+    <!-- TAB 3: Tornei (Lista, Creazione, Tabellone) -->
     <div id="tournamentsArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
         <div id="trnLobbyArea" style="display:flex; flex-direction:column; flex-grow:1; min-height:0;">
             <div class="box-panel" id="createTrnPanel" style="flex-shrink:0; display:none;">
@@ -293,12 +321,14 @@
                 <ul id="pastTournamentsList" class="data-list"></ul>
             </div>
         </div>
+
         <div id="trnActiveArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
             <h3 id="activeTrnTitle" style="color:var(--champ-color); text-align:center; margin: 0 0 5px 0;">Nome Torneo</h3>
             <div style="display:flex; justify-content:center; gap:10px; margin-bottom:5px;">
                 <button id="editTrnNameBtn" class="action-btn-small btn-secondary" style="display:none; margin:0;">✏️ Modifica Nome</button>
                 <button id="leaveTrnBtn" class="action-btn-small btn-danger" style="display:none; margin:0;">🏃 Ritira Squadra</button>
             </div>
+
             <div class="box-panel" style="flex-shrink:0; max-height:130px; overflow-y:auto; padding:5px;">
                 <h3 style="margin-bottom:2px; font-size:0.9em;">Classifica (Parziale/Finale)</h3>
                 <table style="font-size:0.85em;">
@@ -306,6 +336,7 @@
                     <tbody id="trnStandingsBody"></tbody>
                 </table>
             </div>
+
             <div id="trnHostControls" class="box-panel" style="display:none; flex-shrink:0; text-align:center; border-color:var(--champ-color);">
                 <p style="margin:0 0 5px 0; font-size:0.85em;">Sei l'organizzatore.</p>
                 <p id="trnTeamCountTxt" style="font-size:0.8em; font-weight:bold; color:var(--hint-color); margin:0 0 5px 0;"></p>
@@ -313,6 +344,7 @@
                 <button id="finishTrnBtn" class="btn-champ action-btn-small" style="display:none; margin-top:5px;">Concludi Torneo</button>
                 <button id="deleteTrnBtn" class="btn-danger action-btn-small">Elimina Torneo</button>
             </div>
+
             <div class="box-panel" style="flex-grow:1; min-height:0; overflow-y:auto; padding:5px;">
                 <h3 style="margin-bottom:5px; color:var(--champ-color);">🥊 Tabellone Incontri</h3>
                 <div id="trnBracketContainer" style="display:flex; flex-direction:column; gap:8px;">
@@ -321,12 +353,15 @@
             </div>
         </div>
     </div>
+
     <button onclick="goBackToMenu()" style="margin-top: 5px; flex-shrink: 0;">Torna al Menu Principale</button>
+
     <div style="margin-top: auto; padding: 10px 0; text-align: center; font-size: 0.7em; color: var(--hint-color); opacity: 0.6;">
         Build: <span id="appVersionDisplay">--</span>
     </div>
 </div>
 
+<!-- SCHERMATA REGOLE E PRIVACY -->
 <div id="privacyScreen" class="screen">
     <h2 style="margin-bottom: 5px;">📜 Regolamento e Privacy</h2>
     <div id="regolamentoContainer" class="box-panel" style="text-align: left; font-size: 0.9em; flex-grow: 1; overflow-y: auto; padding-right: 10px; margin-bottom: 0;">
@@ -336,14 +371,19 @@
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
+<!-- LOBBY GIOCO MULTIPLAYER -->
 <div id="lobbyScreen" class="screen">
     <h2 id="lobbyTitleText">Lobby Stanza</h2>
     <p id="lobbyTimerText" style="text-align: center; font-weight: bold; color: #ff9800; margin-top: 2px; margin-bottom: 5px;"></p>
+
     <div class="box-panel" style="flex-shrink:0; margin-bottom:5px;">
         <h3 id="txt_lobby_players" style="margin:0 0 5px 0; font-size:0.9em;">Giocatori presenti:</h3>
         <ul id="playersList" class="data-list" style="max-height: 80px;"></ul>
     </div>
+
     <button id="inviteFriendsBtn" class="btn-link" style="font-weight: bold; font-size: 0.9em; margin: 2px 0; text-align: center;">📢 Invita Amici su Telegram</button>
+
+    <!-- CHAT INTEGRATA NELLA LOBBY -->
     <div class="box-panel" style="flex-grow:1; min-height:0; display:flex; flex-direction:column; padding:5px; margin-bottom:5px;">
         <h3 id="txt_lobby_chat_title" style="margin-bottom:2px; font-size:0.9em; color:var(--hint-color);">💬 Chat di Stanza</h3>
         <div id="lobbyChatMessages" style="flex-grow:1; overflow-y:auto; font-size:0.85em; padding:5px; background:var(--bg-color); border-radius:6px; margin-bottom:5px;"></div>
@@ -352,33 +392,41 @@
             <button id="sendLobbyChatBtn" style="width:auto; padding:8px 12px; margin:0;">Invia</button>
         </div>
     </div>
+
     <div style="margin-top: 0; width: 100%; flex-shrink: 0;">
         <p id="statusInfoText" style="text-align: center; color: var(--hint-color); font-style: italic; margin-bottom: 5px; font-size: 0.85em;">Verifica ruolo...</p>
+
         <button id="readyBtn" style="display:none;" class="btn-success">SONO PRONTO ✅</button>
         <button id="startMultiplayerBtn" style="display:none;" class="btn-success">AVVIA PARTITA</button>
         <button id="deleteRoomBtn" style="display:none; padding:8px; font-size:0.85em;" class="btn-danger">ELIMINA STANZA</button>
+
         <p id="waitingHostText" style="display:none; font-style: italic; text-align: center; font-size: 0.85em; margin-bottom: 5px;">In attesa che l'Host avvii...</p>
         <button id="leaveLobbyBtn" class="btn-secondary" style="margin-top: 5px; padding:8px;">Esci dalla Stanza</button>
     </div>
 </div>
 
+<!-- COUNTDOWN -->
 <div id="countdownScreen" class="screen">
     <h2 id="txt_prepare" style="margin-top: auto;">Preparati!</h2>
     <div id="countdownNumber">3</div>
     <div style="margin-top: auto;"></div>
 </div>
 
+<!-- AREA GIOCO PRINCIPALE -->
 <div id="gameArea" class="screen">
     <div class="header-stats">
         <div id="wpmDisplay">WPM: 20</div>
         <div id="scoreDisplay">Punti: 0</div>
     </div>
+
     <div class="table-wrapper" id="tableWrapper">
         <table id="gameTable">
             <thead><tr><th id="txt_th_typed">Scritto</th><th id="txt_th_real">Reale</th><th id="txt_th_pts">Punti</th></tr></thead>
             <tbody id="tableBody"></tbody>
         </table>
     </div>
+
+    <!-- SEZIONE PING PONG -->
     <div id="pingPongSendArea" style="display: none; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0; flex-direction:column;">
         <div id="pingPongTimerBar" style="width:100%; height:4px; background:rgba(0,0,0,0.1); border-radius:2px; margin-bottom:5px; overflow:hidden;">
             <div id="pingPongTimerProgress" style="width:100%; height:100%; background:#ff9800; transition: width 0.1s linear;"></div>
@@ -388,6 +436,8 @@
             <button id="btnSendPingPong" class="btn-secondary" style="width: auto; margin: 0; padding: 10px;">Invia (Tu)</button>
         </div>
     </div>
+
+    <!-- SEZIONE INPUT NORMALE -->
     <div id="gameInputArea" style="display: flex; flex-direction:column; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
         <div id="easyModeHint" style="display:none; text-align:center; font-size:1.4em; font-weight:bold; color:var(--champ-color); background:var(--sec-bg-color); padding:5px; border-radius:8px; letter-spacing: 2px;"></div>
         <div style="display:flex; gap:5px; width:100%;">
@@ -395,55 +445,75 @@
             <button id="replayWordBtn" class="btn-secondary" style="width: auto; margin: 0; padding: 10px; font-size: 0.9em;">🔁 Riascolta</button>
         </div>
     </div>
+
     <div style="display:flex; gap:5px; width:100%;">
         <button onclick="toggleChat()" class="btn-secondary" style="margin-top: 0; flex:1;" id="txt_game_chat_btn">💬 Chat</button>
         <button id="quitGameBtn" class="btn-danger" style="margin-top: 0; flex:1;">Abbandona</button>
     </div>
 </div>
 
+<!-- AREA QUIZ -->
 <div id="quizArea" class="screen">
     <div class="header-stats">
         <div id="quizWpmDisplay">WPM: 20</div>
         <div id="quizScoreDisplay">Punti: 0</div>
     </div>
+
     <div class="box-panel" style="flex-grow: 1; justify-content: center; align-items: center; gap: 15px;">
         <div id="quizTimerBar" style="width:100%; height:8px; background:rgba(0,0,0,0.1); border-radius:4px; overflow:hidden;">
             <div id="quizTimerProgress" style="width:100%; height:100%; background:#4caf50; transition: width 0.1s linear;"></div>
         </div>
+
         <div id="quizQuestionBox" style="text-align: center; font-size: 1.2em; font-weight: bold; min-height: 50px;">
             In attesa della domanda...
         </div>
+
         <button id="quizReplayQ" class="btn-secondary" style="width: auto; padding: 8px 15px;">🔁 Riascolta Domanda</button>
+
         <div id="quizOptionsContainer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%;">
-            <div style="display: flex; gap: 5px; align-items: center;"><button id="btnQuizA" class="quiz-opt-btn" style="flex: 1;">A</button><button id="replayA" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button></div>
-            <div style="display: flex; gap: 5px; align-items: center;"><button id="btnQuizB" class="quiz-opt-btn" style="flex: 1;">B</button><button id="replayB" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button></div>
-            <div style="display: flex; gap: 5px; align-items: center;"><button id="btnQuizC" class="quiz-opt-btn" style="flex: 1;">C</button><button id="replayC" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button></div>
-            <div style="display: flex; gap: 5px; align-items: center;"><button id="btnQuizD" class="quiz-opt-btn" style="flex: 1;">D</button><button id="replayD" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button></div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizA" class="quiz-opt-btn" style="flex: 1;">A</button>
+                <button id="replayA" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizB" class="quiz-opt-btn" style="flex: 1;">B</button>
+                <button id="replayB" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizC" class="quiz-opt-btn" style="flex: 1;">C</button>
+                <button id="replayC" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <button id="btnQuizD" class="quiz-opt-btn" style="flex: 1;">D</button>
+                <button id="replayD" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
+            </div>
         </div>
+
         <button id="quizBuzzer" class="btn-champ" style="display: none; height: 80px; font-size: 1.5em; border-radius: 50%; box-shadow: 0 5px 15px rgba(156, 39, 176, 0.4);">PREMIMI! 🚨</button>
         <div id="buzzerWinner" style="text-align: center; font-weight: bold; color: var(--champ-color); min-height: 20px;"></div>
     </div>
+
     <div style="display:flex; gap:5px; width:100%; margin-top: 10px;">
         <button onclick="toggleChat()" class="btn-secondary" style="margin-top: 0; flex:1;">💬 Chat</button>
         <button id="quitQuizBtn" class="btn-danger" style="margin-top: 0; flex:1;">Abbandona</button>
     </div>
 </div>
 
+<!-- LEADERBOARD / RISULTATI -->
 <div id="leaderboardScreen" class="screen">
     <h2 style="margin-bottom: 5px;">🏆 Risultati</h2>
+    
+    <!-- TASTO DI CONDIVISIONE SFIDA GIORNALIERA (nascosto di default) -->
+    <button id="btnShareDaily" class="btn-link" style="display:none; background:#ff9800; color:white; font-weight:bold; margin-bottom: 10px; padding: 10px; border-radius: 8px; text-decoration: none;">📢 Condividi Risultato su Telegram!</button>
+
     <div id="roomWinnerBanner" style="text-align:center; font-weight:bold; color:var(--champ-color); margin-bottom:5px;"></div>
     <p id="waitingOthersText" style="text-align: center; font-style: italic; color: #ff9800; display: none; font-weight: bold; margin-bottom: 5px;">⏳ In attesa degli altri...</p>
-    <div class="tab-buttons" id="leaderboardTabs" style="display: none;">
-        <button id="tabRoomBtn" class="tab-btn active-tab" style="width: 100%;">Questa Partita</button>
-        <button id="tabGlobalTournamentBtn" class="tab-btn">Classifica Tornei</button>
-        <button id="tabGlobalCWFreakBtn" class="tab-btn">Nominativi</button>
-        <button id="tabGlobalPingPongBtn" class="tab-btn">Ping Pong</button>
-        <button id="tabGlobalStandardMultiBtn" class="tab-btn">Parole (Multi)</button>
-        <button id="tabGlobalStandardSingleBtn" class="tab-btn">Parole (Single)</button>
-    </div>
+
+    <!-- Menu Classifiche -->
     <div id="lbModeSelectorArea" style="width:100%; margin-bottom:10px;">
         <select id="lbModeSelect" style="padding: 10px; font-weight: bold; border: 2px solid var(--link-color);">
             <option value="room" id="opt_lb_room">Questa Partita</option>
+            <option value="daily_challenge" id="opt_lb_daily" style="font-weight: bold; color: var(--champ-color);">📅 Sfida Giornaliera</option>
             <option value="trn_global" id="opt_lb_trn">Classifica Tornei</option>
             <option value="cwfreak" id="opt_lb_call">Nominativi (CW Freak)</option>
             <option value="pingpong" id="opt_lb_pp">Ping Pong (Sfide)</option>
@@ -455,10 +525,14 @@
             <option value="quiz_single" id="opt_lb_quiz_single">Quiz (Single)</option>
         </select>
     </div>
+
+    <!-- Sotto-tab Tornei -->
     <div id="trnSubTabs" style="display:none; width:100%; gap:5px; margin-top:5px; flex-shrink: 0;">
         <button id="btnTrnGlobalLB" class="tab-btn active-tab" style="font-size:0.75em; padding:6px;">🏆 Globale</button>
         <button id="btnTrnActiveLB" class="tab-btn" style="font-size:0.75em; padding:6px;">🥊 In Corso</button>
     </div>
+
+    <!-- Filtri Parole -->
     <div id="lbFilterArea" style="display:none; width:100%; text-align:center; margin-bottom:5px; flex-shrink: 0;">
         <label style="font-size:0.9em; font-weight:bold;">Filtra per Q.ta: </label>
         <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px; font-size: 0.9em;">
@@ -469,10 +543,13 @@
             <option value="50">50 Stringhe</option>
         </select>
     </div>
+
     <div id="leaderboardContainer" style="width: 100%; flex-grow: 1; overflow-y: auto; margin-top: 5px; border-top: 1px solid var(--hint-color); padding-top: 5px;"></div>
+
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
+<!-- SCHERMATA ATTIVITÀ E MEDAGLIE -->
 <div id="participationScreen" class="screen">
     <h2 style="color: var(--champ-color); margin-bottom: 10px;">🏅 Partecipazione e Attività</h2>
     <div class="tab-buttons" style="margin-bottom: 10px;">
@@ -480,19 +557,23 @@
         <button id="tabWeeklyAct" class="tab-btn" onclick="switchActTab('weekly')">Settimana</button>
         <button id="tabMonthlyAct" class="tab-btn" onclick="switchActTab('monthly')">Mese</button>
     </div>
+
     <div class="box-panel" style="flex-grow: 1; min-height:0; overflow-y:auto; padding:5px;">
         <h3 id="actListTitle">Classifica Attività</h3>
         <ul id="activityRankList" class="data-list"></ul>
     </div>
+
     <div class="box-panel" style="flex-shrink:0; margin-top:5px; padding:8px;">
         <h3 style="font-size:0.9em; margin-bottom:5px;">🎖️ Le Mie Medaglie</h3>
         <div id="myMedalsContainer" style="display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:1.5em;">
             <span style="font-size:0.6em; color:var(--hint-color);">Nessuna medaglia ancora.</span>
         </div>
     </div>
+
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
+<!-- MODAL: DETTAGLI PARTITA -->
 <div id="matchDetailsModal" style="display: none; position: fixed; top: 10%; left: 5%; width: 90%; height: 80%; background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color); border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
     <h3 style="margin-top:0; text-align: center; color: var(--link-color);">Dettagli Partita</h3>
     <p style="text-align: center; font-size: 0.85em; color: var(--hint-color); margin-top: -10px;">I caratteri saltati o errati sono in <span style="color: #d32f2f; font-weight: bold;">rosso</span>.</p>
@@ -505,6 +586,7 @@
     <button onclick="document.getElementById('matchDetailsModal').style.display='none'" style="margin-top:auto;">Chiudi</button>
 </div>
 
+<!-- OVERLAY: NUOVA MEDAGLIA -->
 <div id="medalOverlay" class="medal-overlay" onclick="this.style.display='none'">
     <div class="medal-box">
         <span class="medal-icon" id="overlayMedalIcon">🥇</span>
@@ -514,9 +596,12 @@
     </div>
 </div>
 
+<!-- MODAL: INVITO -->
 <div id="inviteModal">
     <h3 id="inviteModalTitle">Invia Invito</h3>
     <p id="inviteModalText" style="text-align: center; font-size: 0.9em;"></p>
+
+    <!-- Impostazioni Sfida Standard -->
     <div id="inviteSettings" class="box-panel">
         <h4 style="margin: 0 0 5px 0;">Configura Match:</h4>
         <div class="settings-row full-width">
@@ -533,6 +618,8 @@
             <div><label>Test:</label> <input type="number" id="inviteWordCountInput" value="10" min="3" max="50"></div>
         </div>
     </div>
+
+    <!-- Invito Squadra -->
     <div id="teamInviteSettings" class="box-panel" style="display:none; text-align:center;">
         <p id="recruitmentStatusText" style="font-size:0.85em; margin-bottom:10px; color:var(--hint-color);"></p>
         <div style="display:flex; flex-direction:column; gap:8px;">
@@ -542,20 +629,24 @@
         </div>
         <button onclick="closeInviteModal()" class="btn-link" style="margin-top:10px;">ANNULLA</button>
     </div>
+
     <div id="incomingInviteArea" style="display:none; text-align:center;">
         <button id="acceptInviteBtn" class="btn-success">ACCETTA ✅</button>
         <button id="declineInviteBtn" class="btn-danger" style="margin-top:5px;">RIFIUTA ❌</button>
     </div>
+
     <div id="incomingTeamInviteArea" style="display:none; text-align:center;">
         <button id="acceptTeamInviteBtn" class="btn-success">UNISCITI ALLA SQUADRA ✅</button>
         <button id="declineTeamInviteBtn" class="btn-danger" style="margin-top:5px;">RIFIUTA ❌</button>
     </div>
+
     <div id="outgoingInviteArea" style="display:block; text-align:center;">
         <button id="sendInviteBtn" class="btn-success">INVIA INVITO 🚀</button>
         <button onclick="closeInviteModal()" class="btn-secondary" style="margin-top:5px;">ANNULLA</button>
     </div>
 </div>
 
+<!-- MODAL: QUALCUNO È ENTRATO NELLA STANZA -->
 <div id="roomEventModal" style="text-align: center;">
     <span class="event-modal-icon">👤</span>
     <h3 id="roomEventTitle">Qualcuno è entrato!</h3>
@@ -564,6 +655,7 @@
     <button onclick="document.getElementById('roomEventModal').style.display='none'" class="btn-secondary" style="margin-top: 10px;">CHIUDI</button>
 </div>
 
+<!-- MODAL: BENVENUTO TORNEI -->
 <div id="tournamentWelcomeModal" style="text-align: center;">
     <span class="event-modal-icon">🏆</span>
     <h3 style="color:var(--champ-color); margin-bottom:10px;">Partecipa ai Tornei!</h3>
@@ -576,9 +668,11 @@
     <button onclick="closeTrnWelcomeModal()" class="btn-secondary" style="margin-top: 15px; padding:8px; font-size:0.9em; width:auto;">Più tardi</button>
 </div>
 
+<!-- MODAL: DIZIONARIO PERSONALE -->
 <div id="customDictModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; max-height: 70%; background: var(--bg-color); z-index: 4000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
     <h3 style="margin-top:0; text-align: center; color: var(--champ-color);" id="txt_custom_dict_title">Dizionario Personale 📖</h3>
     <p style="text-align: center; font-size: 0.85em; color: var(--hint-color);" id="txt_custom_dict_desc">Carica un file di testo (.txt) con le tue parole personalizzate.</p>
+    
     <div style="background: var(--sec-bg-color); padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 15px;">
         <input type="file" id="customDictFileInput" accept=".txt" style="display: none;">
         <button onclick="document.getElementById('customDictFileInput').click()" class="btn-success" style="width: auto; padding: 10px 20px;" id="txt_select_file_btn">Scegli File .txt</button>
@@ -586,6 +680,7 @@
             Nessun file caricato.
         </div>
     </div>
+    
     <div style="font-size: 0.8em; color: var(--hint-color); margin-bottom: 15px;">
         <ul style="padding-left: 20px; margin: 5px 0;">
             <li id="txt_custom_hint1">Le parole possono essere separate da spazio, virgola o a capo.</li>
@@ -593,11 +688,13 @@
             <li id="txt_custom_hint3">Il dizionario rimarrà salvato in locale.</li>
         </ul>
     </div>
+    
     <div style="display: flex; gap: 10px; margin-top: auto;">
         <button onclick="document.getElementById('customDictModal').style.display='none'" class="btn-secondary" style="flex: 1;" id="txt_close_custom_btn">Chiudi</button>
     </div>
 </div>
 
+<!-- SCRIPT PRINCIPALI -->
 <script src="js/app.js?v=20240521.39"></script>
 <script src="js/quiz_data.js?v=20240521.39"></script>
 
