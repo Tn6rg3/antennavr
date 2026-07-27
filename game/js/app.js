@@ -16,19 +16,20 @@ const els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
 // --- COSTANTI ---
 const STORAGE_ROOM_KEY = "cwgame_last_room";
 const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
-const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted"; // Nuova costante per il mute
+const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted"; 
 const STORAGE_PREF_WPM = "cwgame_pref_wpm";
 const STORAGE_PREF_WORDS = "cwgame_pref_words";
 const STORAGE_PREF_TONE = "cwgame_pref_tone";
-const STORAGE_PREF_CHAR_SPACE = "cwgame_pref_char_space"; // Nuovo
-const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space"; // Nuovo
+const STORAGE_PREF_CHAR_SPACE = "cwgame_pref_char_space";
+const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space";
+const STORAGE_DAILY_SHOWN = "cwgame_daily_shown";
 
 // --- STATO GLOBALE ---
 let myName, myId, myPrivacy = false;
 let myTeamId = null, myTeamName = "", isTeamCaptain = false;
 let db, auth, currentLang = 'it';
 let activeChatContext = null, activeTab = "room", isChatDrawerOpen = false;
-let isGlobalChatMuted = false; // Stato per le notifiche della chat globale
+let isGlobalChatMuted = false;
 let isChallenging = false, isRejoining = false, currentInviterId = null;
 let roomCode = "", roomHostId = null, activeTrnId = null;
 let lastPlayerCount = 0, gameStartPlayerCount = 0, lobbyTimerInterval = null;
@@ -38,7 +39,6 @@ let totalScore = 0, currentStreak = 0, usedReplay = false, matchDetailsArray = [
 let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
 
-// Variabili per spaziatura
 window.charSpaceWpm = 0;
 window.wordSpaceMult = 1.0;
 window.lastPlayedWordId = 0;
@@ -234,7 +234,6 @@ function setLanguage(lang) {
     if (activeTrnId) db.ref(`tournaments/${activeTrnId}`).once('value', snap => { if(snap.exists()) renderActiveTournament(snap); });
 }
 
-// Funzione dedicata per aggiornare la UI del tasto Mute
 function updateMuteBtnUI() {
     if (els.muteGlobalChatBtn) {
         els.muteGlobalChatBtn.textContent = isGlobalChatMuted 
@@ -285,7 +284,29 @@ const morseDict = {
     'À': '.--.-', 'È': '..-..', 'É': '..-..', 'Ì': '.---.', 'Ò': '---.', 'Ù': '..--','?': '..--..' 
 };
 
-// --- INIZIALIZZAZIONE ---
+// GENERATORE SEED PER SFIDA GIORNALIERA
+function mulberry32(a) {
+    return function() {
+      var t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+}
+
+function getDailyWords(num) {
+    let todayStr = new Date().toISOString().split('T')[0];
+    let seed = parseInt(todayStr.replace(/-/g, ''));
+    let prng = mulberry32(seed);
+    let dict = [...masterDictionary];
+    for (let i = dict.length - 1; i > 0; i--) {
+        const j = Math.floor(prng() * (i + 1));
+        [dict[i], dict[j]] = [dict[j], dict[i]];
+    }
+    return dict.slice(0, num).map(w => w.toUpperCase());
+}
+
+// INIZIALIZZAZIONE
 if (!tgUser) { els.loadingScreen.classList.remove('active-screen'); els.errorScreen.classList.add('active-screen'); } 
 else { myName = tgUser.first_name; myId = tgUser.id.toString(); initGame(); }
 
@@ -296,10 +317,8 @@ function initGame() {
     db = firebase.database(); 
     auth = firebase.auth();
 
-    // Carica stato mute
     isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
 
-    // Carica preferenze base
     if (els.startWpmInput && localStorage.getItem(STORAGE_PREF_WPM)) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM);
     if (els.wordCountInput && localStorage.getItem(STORAGE_PREF_WORDS)) els.wordCountInput.value = localStorage.getItem(STORAGE_PREF_WORDS);
     if (els.toneInput && localStorage.getItem(STORAGE_PREF_TONE)) els.toneInput.value = localStorage.getItem(STORAGE_PREF_TONE);
@@ -324,6 +343,8 @@ function initGame() {
             if (roomCode) joinRoomLogic(true);
         });
 
+        checkYesterdayDailyMedal();
+
         if (startParam) {
             if (startParam.startsWith('team_')) processTeamInvite(startParam.replace('team_', ''));
             else if (startParam.startsWith('room_')) window.joinSpecificRoom(startParam.replace('room_', ''));
@@ -341,7 +362,13 @@ function initGame() {
         const savedLang = localStorage.getItem('gameLang'); if (savedLang) setLanguage(savedLang);
         else updateMuteBtnUI();
         
-        loadDictionaries();
+        loadDictionaries().then(() => {
+            let todayStr = new Date().toISOString().split('T')[0];
+            let lastShown = localStorage.getItem(STORAGE_DAILY_SHOWN);
+            if (lastShown !== todayStr && !startParam) {
+                if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'flex';
+            }
+        });
 
         const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);
         if (savedCustom) { try { customDictionary = JSON.parse(savedCustom); updateCustomDictStatus(); } catch(e) {} }
@@ -366,6 +393,43 @@ function initGame() {
     checkGameTypeUI();
 }
 
+async function checkYesterdayDailyMedal() {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const checkRef = db.ref(`users/${myId}/daily_medals_awarded/${yesterday}`);
+    const checkSnap = await checkRef.once('value');
+    if (checkSnap.exists()) return;
+
+    const lbSnap = await db.ref(`leaderboard/daily_challenge/${yesterday}`).once('value');
+    if (!lbSnap.exists()) return;
+
+    let players = [];
+    lbSnap.forEach(child => { players.push({ id: child.key, ...child.val() }); });
+    players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+
+    let myRank = players.findIndex(p => p.id === myId);
+    if (myRank >= 0 && myRank <= 2) {
+        let medalId = myRank === 0 ? 'daily_gold' : (myRank === 1 ? 'daily_silver' : 'daily_bronze');
+        let medalIcon = myRank === 0 ? '🥇' : (myRank === 1 ? '🥈' : '🥉');
+        let medalTitle = myRank === 0 ? 'Oro Giornaliero' : (myRank === 1 ? 'Argento Giornaliero' : 'Bronzo Giornaliero');
+        
+        const medalRef = db.ref(`users/${myId}/medals/${medalId}`);
+        const mSnap = await medalRef.once('value');
+        let currentCount = mSnap.exists() ? (mSnap.val().count || 1) : 0;
+        
+        await medalRef.set({
+            title: medalTitle,
+            icon: medalIcon,
+            date: new Date().toLocaleDateString('it-IT'),
+            periodKey: 'daily_champ', 
+            count: currentCount + 1
+        });
+        
+        showToast(`Complimenti! Hai vinto la medaglia ${medalIcon} per la Sfida di Ieri!`);
+    }
+    await checkRef.set(true);
+    updateMedalGallery();
+}
+
 // --- AUDIO ---
 function playBeep(freq, duration) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -386,14 +450,12 @@ function playNotificationSound() {
     setTimeout(() => playBeep(1100, 0.1), 120);
 }
 
-// FUNZIONE AUDIO COMPLETAMENTE RIVISTA PER SUPPORTO FARNSWORTH/SPAZIATURA
 function playMorseAudio(text, wpm) {
     return new Promise(resolve => {
         if (!audioCtx || !gameRunning) { resolve(); return; }
 
         let charUnit = 1.2 / wpm;
         
-        // Logica Farnsworth: se lo spazio tra caratteri ha un WPM minore di quello globale, lo applichiamo
         let effSpaceWpm = (window.charSpaceWpm && window.charSpaceWpm < wpm) ? window.charSpaceWpm : wpm;
         let spaceUnit = 1.2 / effSpaceWpm;
         let wordMult = window.wordSpaceMult || 1.0;
@@ -425,15 +487,12 @@ function playMorseAudio(text, wpm) {
                     osc.stop(time + duration);
                     
                     time += duration;
-                    // Pausa intra-carattere (tra punti e linee della stessa lettera) a velocità normale
                     if (i < morseDict[char].length - 1) {
                         time += charUnit;
                     }
                 }
-                // Pausa inter-carattere al termine della lettera (3 unità) calcolata in base alla spaziatura scelta
                 time += (3 * spaceUnit);
             } else if (char === ' ') {
-                // Spazio tra parole. Lo standard è 7 unità, ne abbiamo già aggiunte 3 a fine carattere
                 let totalWordSpace = (7 * spaceUnit) * wordMult;
                 let remainingSpace = totalWordSpace - (3 * spaceUnit);
                 time += Math.max(0, remainingSpace);
@@ -535,7 +594,6 @@ if (els.muteGlobalChatBtn) {
     });
 }
 
-// --- LINGUA E UI ---
 function checkGameTypeUI() {
     const isSingle = els.gameTypeInput.value === 'single';
     const isTrn = els.gameTypeInput.value === 'tournament';
@@ -545,11 +603,9 @@ function checkGameTypeUI() {
 
     els.timeoutDiv.style.display = isSingle || isTrn ? 'none' : 'block';
     
-    // Controlli fissa/semplice (solo in singleplayer)
     els.fixedSpeedContainer.style.display = isSingle ? 'flex' : 'none';
     els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
     
-    // Nuovi controlli spaziatura (solo singleplayer, ESCLUSI caratteri e ping pong)
     if (els.advancedSpacingContainer) {
         els.advancedSpacingContainer.style.display = (isSingle && !isChars && !isPP) ? 'flex' : 'none';
     }
@@ -593,7 +649,6 @@ if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => {
 });
 if(els.gameTypeInput) els.gameTypeInput.addEventListener('change', checkGameTypeUI);
 
-// --- LISTENER SALVATAGGIO PREFERENZE ---
 if (els.startWpmInput) els.startWpmInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_WPM, e.target.value));
 if (els.wordCountInput) els.wordCountInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_WORDS, e.target.value));
 if (els.toneInput) els.toneInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_TONE, e.target.value));
@@ -626,6 +681,7 @@ function generateCallsign() {
 }
 
 function getGameWords(num, mode) {
+    if (mode === 'daily_challenge') return getDailyWords(num);
     if (mode === 'callsign') return Array.from({length: num}, generateCallsign);
     if (mode === 'pingpong') return [];
     if (mode === 'chars') return Array.from({length: num}, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)]);
@@ -798,7 +854,6 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
     isChallenging = false; if (currentInviterId) db.ref(`invites/${currentInviterId}`).once('value', s => { if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove(); });
     db.ref(`invite_accepted/${myId}`).remove(); currentMode = gameMode; isSinglePlayer = gameType === 'single'; currentWpm = currentMode==='callsign' ? 25 : parseInt(els.startWpmInput.value); baseWpm = currentWpm; requestedWordCount = currentMode==='callsign' ? 25 : Math.max(1, parseInt(els.wordCountInput.value)); currentTone = parseInt(els.toneInput.value); isFixedSpeed = els.fixedSpeedCheckbox.checked; isEasyMode = els.easyModeCheckbox.checked;
     
-    // Assegna la spaziatura avanzata, altrimenti fallback ai default
     let cSpace = (els.charSpaceInput && els.charSpaceInput.value) ? parseInt(els.charSpaceInput.value) : currentWpm;
     let wSpace = (els.wordSpaceSelect && els.wordSpaceSelect.value) ? parseFloat(els.wordSpaceSelect.value) : 1.0;
     window.charSpaceWpm = cSpace;
@@ -820,6 +875,48 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
         expiresAt: isSinglePlayer ? null : Date.now() + (Math.max(1, parseInt(els.roomTimerInput.value)) * 60000), 
         hostId: myId 
     }).then(() => joinRoomLogic(false));
+});
+
+if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
+    let todayStr = new Date().toISOString().split('T')[0];
+    localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
+    els.dailyChallengeModal.style.display = 'none';
+
+    currentMode = 'daily_challenge';
+    isSinglePlayer = true;
+    currentWpm = 15; baseWpm = 15;
+    requestedWordCount = 20;
+    currentTone = 600;
+    isFixedSpeed = false;
+    isEasyMode = false;
+    window.charSpaceWpm = 15;
+    window.wordSpaceMult = 1.0;
+
+    roomCode = Math.floor(1000 + Math.random() * 9000).toString(); 
+    gameWords = getGameWords(requestedWordCount, currentMode);
+    
+    db.ref('rooms/' + roomCode).set({ 
+        status: 'countdown', 
+        type: 'single', 
+        mode: currentMode, 
+        wpm: currentWpm, 
+        tone: currentTone, 
+        wordCount: requestedWordCount, 
+        words: gameWords, 
+        fixedSpeed: isFixedSpeed, 
+        createdAt: firebase.database.ServerValue.TIMESTAMP, 
+        hostId: myId 
+    }).then(() => joinRoomLogic(false));
+});
+
+if(els.btnPlayDailyLater) els.btnPlayDailyLater.addEventListener('click', () => {
+    els.dailyChallengeModal.style.display = 'none';
+});
+
+if(els.btnDeclineDaily) els.btnDeclineDaily.addEventListener('click', () => {
+    let todayStr = new Date().toISOString().split('T')[0];
+    localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
+    els.dailyChallengeModal.style.display = 'none';
 });
 
 function exitRoomCleanly(roomWasDeletedByHost = false) {
@@ -1034,17 +1131,34 @@ function finishGame() {
     if (ppTimerInterval) clearInterval(ppTimerInterval); if (quizTimerInterval) clearInterval(quizTimerInterval);
     if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
-    localStorage.removeItem(STORAGE_ROOM_KEY); isRejoining = false; isChallenging = false; showScreen('leaderboardScreen');
+    localStorage.removeItem(STORAGE_ROOM_KEY); isRejoining = false; isChallenging = false; 
+    
+    showScreen('leaderboardScreen');
+
+    if (currentMode === 'daily_challenge' && els.btnShareDaily) {
+        els.btnShareDaily.style.display = 'inline-block';
+        els.btnShareDaily.onclick = () => {
+            const txt = encodeURIComponent(`📻 Sfida Giornaliera CW!\nHo totalizzato ${totalScore} pt (Max Velocità: ${currentWpm} WPM).\nRiesci a fare di meglio?\nGioca qui: https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`);
+            tg.openTelegramLink(`https://t.me/share/url?url=&text=${txt}`);
+        };
+    } else if(els.btnShareDaily) {
+        els.btnShareDaily.style.display = 'none';
+    }
 
     if (roomCode) { const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`); myPlayerRef.update({ finished: true, score: totalScore, wpm: currentWpm, matchDetails: matchDetailsArray }); myPlayerRef.onDisconnect().cancel(); }
+    
     if (totalScore > 0 && !roomCode.startsWith("TRN_")) {
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
             const isReallySolo = isSinglePlayer || (Object.keys(snap.val() || {}).length < 2);
-            let dbPath = `leaderboard/${currentMode === 'callsign' ? 'callsign/global' : `${currentMode === 'quiz' ? 'quiz' : currentMode === 'chars' ? 'chars' : currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}`}/${myId}`;
-            if (currentMode !== 'callsign' && els.lbWordFilter) {
-                if (!Array.from(els.lbWordFilter.options).some(opt => opt.value == requestedWordCount) && requestedWordCount !== 'all') { let opt = document.createElement('option'); opt.value = requestedWordCount; opt.text = `${requestedWordCount} Stringhe`; els.lbWordFilter.add(opt); }
-                els.lbWordFilter.value = requestedWordCount;
+            
+            let dbPath;
+            if (currentMode === 'daily_challenge') {
+                let todayStr = new Date().toISOString().split('T')[0];
+                dbPath = `leaderboard/daily_challenge/${todayStr}/${myId}`;
+            } else {
+                dbPath = `leaderboard/${currentMode === 'callsign' ? 'callsign/global' : `${currentMode === 'quiz' ? 'quiz' : currentMode === 'chars' ? 'chars' : currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}`}/${myId}`;
             }
+
             db.ref(dbPath).once('value', s => { 
                 let oldData = s.val(); 
                 let oldScore = oldData ? (Number(oldData.score) || 0) : 0;
@@ -1057,18 +1171,24 @@ function finishGame() {
             });
         });
     }
+
     if (matchDetailsArray.length > 0) {
         db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: currentMode, score: totalScore, wpm: currentWpm, type: isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
         updateActivity(totalScore > 0);
         if (Object.keys(sessionCharErrors).length > 0) db.ref(`users/${myId}/stats/charErrors`).once('value', s => { let curr = s.val() || {}; for (let char in sessionCharErrors) curr[char] = (curr[char] || 0) + sessionCharErrors[char]; db.ref(`users/${myId}/stats/charErrors`).set(curr); });
         if (Object.keys(sessionErrorsByWpm).length > 0) db.ref(`users/${myId}/stats/errorsByWpm`).once('value', s => { let curr = s.val() || {}; for (let w in sessionErrorsByWpm) { if(!curr[w]) curr[w]={}; for (let c in sessionErrorsByWpm[w]) curr[w][c] = (curr[w][c] || 0) + sessionErrorsByWpm[w][c]; } db.ref(`users/${myId}/stats/errorsByWpm`).set(curr); });
     }
-    if (roomCode && roomCode.startsWith("TRN_")) { activeTab="room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
+
+    if (currentMode === 'daily_challenge') {
+        activeTab = "daily_challenge"; showLeaderboardTab('opt_lb_daily');
+    }
+    else if (roomCode && roomCode.startsWith("TRN_")) { activeTab="room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
     else if (isSinglePlayer && currentMode === 'callsign') { activeTab = "cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); }
     else if (isSinglePlayer && currentMode === 'pingpong') { activeTab = "pingpong"; showLeaderboardTab('tabGlobalPingPongBtn'); }
     else if (isSinglePlayer) { activeTab = "std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); }
     else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
 }
+
 if(els.quitGameBtn) els.quitGameBtn.addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
 if(els.startMultiplayerBtn) els.startMultiplayerBtn.addEventListener('click', () => {
     db.ref(`rooms/${roomCode}/players`).once('value', snap => {
@@ -1184,7 +1304,7 @@ window.showProfileScreen = function() {
         if (userMatchHistory.length === 0) { const li = document.createElement('li'); li.style.justifyContent = 'center'; li.style.color = 'var(--hint-color)'; li.textContent = 'Nessuna partita giocata.'; els.matchHistoryList.appendChild(li); return; }
         userMatchHistory.forEach(match => {
             const d = new Date(match.date || Date.now()); const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
-            let modeIcon = match.mode === 'callsign' ? '🎙️ Nom.' : match.mode === 'pingpong' ? '🏓 Ping Pong' : match.mode === 'chars' ? '⌨️ Carat.' : '🔤 Parole';
+            let modeIcon = match.mode === 'callsign' ? '🎙️ Nom.' : match.mode === 'pingpong' ? '🏓 Ping Pong' : match.mode === 'chars' ? '⌨️ Carat.' : (match.mode === 'daily_challenge' ? '📅 Daily' : '🔤 Parole');
             const li = document.createElement('li'); li.style.flexDirection = 'column'; li.style.alignItems = 'flex-start';
             
             const topDiv = document.createElement('div'); topDiv.style.cssText = "display:flex; justify-content:space-between; width:100%; margin-bottom:5px;";
@@ -1219,7 +1339,7 @@ window.openMatchDetails = function(matchKey) {
 window.deleteHistoryItem = function(key) { if(confirm("Eliminare questa partita?")) db.ref(`users/${myId}/history/${key}`).remove().then(() => showProfileScreen()); }
 
 function showLeaderboardTab(tabId) {
-    const mapping = { 'tabRoomBtn': 'room', 'tabGlobalTournamentBtn': 'trn_global', 'tabGlobalCWFreakBtn': 'cwfreak', 'tabGlobalPingPongBtn': 'pingpong', 'tabGlobalStandardMultiBtn': 'std_multi', 'tabGlobalStandardSingleBtn': 'std_single', 'tabGlobalCharsMultiBtn': 'chars_multi', 'tabGlobalCharsSingleBtn': 'chars_single', 'tabGlobalQuizMultiBtn': 'quiz_multi', 'tabGlobalQuizSingleBtn': 'quiz_single' };
+    const mapping = { 'tabRoomBtn': 'room', 'opt_lb_daily': 'daily_challenge', 'tabGlobalTournamentBtn': 'trn_global', 'tabGlobalCWFreakBtn': 'cwfreak', 'tabGlobalPingPongBtn': 'pingpong', 'tabGlobalStandardMultiBtn': 'std_multi', 'tabGlobalStandardSingleBtn': 'std_single', 'tabGlobalCharsMultiBtn': 'chars_multi', 'tabGlobalCharsSingleBtn': 'chars_single', 'tabGlobalQuizMultiBtn': 'quiz_multi', 'tabGlobalQuizSingleBtn': 'quiz_single' };
     let modeValue = mapping[tabId] || tabId; if(els.lbModeSelect) els.lbModeSelect.value = modeValue;
 
     els.trnSubTabs.style.display = 'none';
@@ -1227,6 +1347,9 @@ function showLeaderboardTab(tabId) {
         els.lbFilterArea.style.display = 'none'; els.roomWinnerBanner.style.display = 'block'; els.leaderboardContainer.innerHTML = '';
         if (roomCode) db.ref(`rooms/${roomCode}/players`).once('value', snap => renderRoomLeaderboard(snap.val() || {}));
         else { els.leaderboardContainer.innerHTML = '<p style="text-align:center;">Nessuna partita attiva.</p>'; els.waitingOthersText.style.display = 'none'; }
+    } else if (modeValue === 'daily_challenge') {
+        els.lbFilterArea.style.display = 'none'; els.roomWinnerBanner.style.display = 'none'; els.waitingOthersText.style.display = 'none';
+        fetchAndRenderGlobalLeaderboard('daily_challenge', null);
     } else if (modeValue === 'trn_global') {
         els.lbFilterArea.style.display = 'none'; els.roomWinnerBanner.style.display = 'none'; els.waitingOthersText.style.display = 'none'; els.trnSubTabs.style.display = 'flex';
         document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab')); els.btnTrnGlobalLB.classList.add('active-tab'); fetchAndRenderGlobalLeaderboard('tournaments', null);
@@ -1394,6 +1517,19 @@ function saveMatchToGlobalHistory(players, roomData) {
 function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
     els.leaderboardContainer.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
     
+    if (tabType === 'daily_challenge') {
+        let todayStr = new Date().toISOString().split('T')[0];
+        db.ref(`leaderboard/daily_challenge/${todayStr}`).once('value', snapshot => {
+            let players = [];
+            if(snapshot.exists()) {
+                snapshot.forEach(child => { if (child.val()) players.push(child.val()); });
+            }
+            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+            renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, false);
+        });
+        return;
+    }
+
     // Sfide recenti
     if (['standard_multi', 'chars_multi', 'quiz_multi'].includes(tabType)) {
         db.ref(`leaderboard/recent_matches/${tabType}`).once('value', snapshot => {
@@ -1812,7 +1948,7 @@ async function checkActivityAndAwardMedals() {
         const dData = dSnap.val() || { games: 0 }, wData = wSnap.val() || { games: 0 }, mData = mSnap.val() || { games: 0 };
         let myMedals = uMedals.val() || {};
 
-        const validKeys = [dKey, wKey, mKey];
+        const validKeys = [dKey, wKey, mKey, 'daily_champ'];
         for (let id in myMedals) {
             if (!validKeys.includes(myMedals[id].periodKey)) {
                 await db.ref(`users/${myId}/medals/${id}`).remove();
@@ -1853,7 +1989,14 @@ function updateMedalGallery() {
     db.ref(`users/${myId}/medals`).once('value', snap => {
         if (!snap.exists()) return els.myMedalsContainer.innerHTML = '<span style="font-size:0.6em; color:var(--hint-color);">Nessuna medaglia.</span>';
         els.myMedalsContainer.innerHTML = '';
-        Object.values(snap.val()).forEach(m => { const span = document.createElement('span'); span.textContent = m.icon; span.title = `${m.title} (${m.date})`; span.onclick = () => showToast(`${m.title} - ${m.date}`); span.style.cursor = "pointer"; els.myMedalsContainer.appendChild(span); });
+        Object.values(snap.val()).forEach(m => { 
+            const span = document.createElement('span'); 
+            span.textContent = (m.count && m.count > 1) ? `${m.count}x ${m.icon}` : m.icon; 
+            span.title = `${m.title} (${m.date})`; 
+            span.onclick = () => showToast(`${m.title} - ${m.date}`); 
+            span.style.cursor = "pointer"; 
+            els.myMedalsContainer.appendChild(span); 
+        });
     });
 }
 
