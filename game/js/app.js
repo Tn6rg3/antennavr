@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.43"; // Versione incrementata
+const APP_VERSION = "20240521.44"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -878,8 +878,7 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
 });
 
 if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
-    let todayStr = new Date().toISOString().split('T')[0];
-    localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
+    // Abbiamo rimosso il salvataggio in localStorage da qui!
     els.dailyChallengeModal.style.display = 'none';
 
     currentMode = 'daily_challenge';
@@ -889,7 +888,9 @@ if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
     currentTone = 600;
     isFixedSpeed = false;
     isEasyMode = false;
-    window.charSpaceWpm = 0; // A 0 per seguire sempre la velocità dinamica
+    
+    // Impostiamo a 0 per far seguire dinamicamente la velocità
+    window.charSpaceWpm = 0; 
     window.wordSpaceMult = 1.0;
 
     roomCode = Math.floor(1000 + Math.random() * 9000).toString(); 
@@ -904,13 +905,12 @@ if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
         wordCount: requestedWordCount, 
         words: gameWords, 
         fixedSpeed: isFixedSpeed, 
-        charSpaceWpm: 0, // Aggiunto e salvato nel database
-        wordSpaceMult: 1.0, // Aggiunto e salvato nel database
+        charSpaceWpm: 0, // Aggiunto e salvato
+        wordSpaceMult: 1.0, // Aggiunto e salvato
         createdAt: firebase.database.ServerValue.TIMESTAMP, 
         hostId: myId 
     }).then(() => joinRoomLogic(false));
 });
-
 if(els.btnPlayDailyLater) els.btnPlayDailyLater.addEventListener('click', () => {
     els.dailyChallengeModal.style.display = 'none';
 });
@@ -1185,7 +1185,12 @@ function finishGame() {
     }
 
     if (currentMode === 'daily_challenge') {
-        activeTab = "daily_challenge"; showLeaderboardTab('opt_lb_daily');
+        // SALVATAGGIO SPOSTATO QUI: La partita è ufficialmente conclusa!
+        let todayStr = new Date().toISOString().split('T')[0];
+        localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
+        
+        activeTab = "daily_challenge"; 
+        showLeaderboardTab('opt_lb_daily');
     }
     else if (roomCode && roomCode.startsWith("TRN_")) { activeTab="room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
     else if (isSinglePlayer && currentMode === 'callsign') { activeTab = "cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); }
