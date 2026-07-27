@@ -84,7 +84,7 @@
     <div class="main-box">
         <div class="main-title">🔗 Connessione Stanza P2P</div>
         <div class="grid-2">
-            <label>Tuo Nome:</label><input type="text" id="n_user" placeholder="Esempio:Nome" onchange="saveConfig(); updateLobbyPresence();">
+            <label>Tuo Nome:</label><input type="text" id="n_user" placeholder="Esempio:Nome" oninput="saveConfig(); updateLobbyPresence();">
             <label>Stanza:</label><input type="text" id="n_room" placeholder="Nome della Stanza" onchange="saveConfig()">
             <label>Password:</label><input type="password" id="n_pass" placeholder="Codice d'accesso" onchange="saveConfig()">
         </div>
@@ -327,12 +327,10 @@
     let presenceInterval = null;
     let serverTimeOffset = 0;
 
-    // Cattura la differenza in millisecondi tra l'orologio locale e quello di Firebase
     db.ref('.info/serverTimeOffset').on('value', (snap) => {
         serverTimeOffset = snap.val() || 0;
     });
 
-    // Funzione per ottenere l'ora sincronizzata di Firebase
     function getSyncTime() {
         return Date.now() + serverTimeOffset;
     }
@@ -340,7 +338,6 @@
     function updateLobbyPresence() {
         const user = document.getElementById('n_user').value.trim();
 
-        // Pulizia del vecchio utente
         if (myPresenceRef) {
             myPresenceRef.remove();
             myPresenceRef = null;
@@ -354,7 +351,6 @@
         
         myPresenceRef = db.ref('lobby/users/' + user);
         
-        // Heartbeat con ora di Firebase invece che ora locale
         const sendHeartbeat = () => {
             if (myPresenceRef) myPresenceRef.set({ t: getSyncTime() });
         };
@@ -362,10 +358,8 @@
         sendHeartbeat();
         myPresenceRef.onDisconnect().remove();
         
-        // Heartbeat ogni 10 secondi
         presenceInterval = setInterval(sendHeartbeat, 10000);
         
-        // Ascolta inviti e PM
         db.ref('lobby/pms/' + user).off(); 
         db.ref('lobby/pms/' + user).on('child_added', (snap) => {
             const data = snap.val();
@@ -948,9 +942,8 @@
     }
 
     // =======================================================
-    // 6. SERIALE ARDUINO E LOGICA CALCOLO TEMPI/WPM (OTTIMIZZATI RAW BYTES)
+    // 6. SERIALE ARDUINO E LOGICA CALCOLO TEMPI/WPM
     // =======================================================
-        
     async function connectSerial() {
         let serialAPI = navigator.serial;
         
@@ -1027,7 +1020,7 @@
     }
 
     // =======================================================
-    // FIX: LETTURA LOBBY CON FILTRO LOCALE E SYNC SERVER
+    // 7. LETTURA LOBBY CON FILTRO LOCALE E SYNC SERVER
     // =======================================================
     function listenToLobby() {
         db.ref('lobby/users').on('value', (snap) => {
@@ -1045,8 +1038,6 @@
                 for (let userName in users) {
                     const userData = users[userName];
 
-                    // FILTRO LOCALE: Se il timestamp è più vecchio di 35 secondi lo ignoriamo
-                    // visivamente. Ma NON eseguiamo più il .remove() per non cancellare utenti validi!
                     if (!userData || !userData.t || (now - userData.t > 35000)) {
                         continue; 
                     }
@@ -1077,13 +1068,12 @@
         });
     }
 
-    // Pulizia immediata SE il browser viene chiuso
     window.onbeforeunload = () => {
         if (myPresenceRef) myPresenceRef.remove();
     };
 
     // =======================================================
-    // 7. FUNZIONI INTERFACCIA E REATTIVITÀ WPM/MS
+    // 8. FUNZIONI INTERFACCIA E REATTIVITÀ WPM/MS
     // =======================================================
     function changeSource() {
         const s = document.getElementById('v_input_source').value;
@@ -1148,8 +1138,8 @@
     window.onload = () => {
         loadConfig();
         initAudioOptimized();
-        updateLobbyPresence();
-        listenToLobby();
+        updateLobbyPresence(); // Registra subito la presenza all'avvio se c'è un nome salvato
+        listenToLobby();       // Ascolta i cambiamenti della lobby
     };
 </script>
 </body>
