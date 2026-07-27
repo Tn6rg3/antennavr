@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.38"; // Versione incrementata
+const APP_VERSION = "20240521.39"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -20,6 +20,8 @@ const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted"; // Nuova costante per il mut
 const STORAGE_PREF_WPM = "cwgame_pref_wpm";
 const STORAGE_PREF_WORDS = "cwgame_pref_words";
 const STORAGE_PREF_TONE = "cwgame_pref_tone";
+const STORAGE_PREF_CHAR_SPACE = "cwgame_pref_char_space"; // Nuovo
+const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space"; // Nuovo
 
 // --- STATO GLOBALE ---
 let myName, myId, myPrivacy = false;
@@ -36,6 +38,9 @@ let totalScore = 0, currentStreak = 0, usedReplay = false, matchDetailsArray = [
 let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
 
+// Variabili per spaziatura
+window.charSpaceWpm = 0;
+window.wordSpaceMult = 1.0;
 window.lastPlayedWordId = 0;
 window.lastSeenGuessId = 0;
 
@@ -288,19 +293,18 @@ function initGame() {
     const firebaseConfig = { apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk", authDomain: "telegrafiabot.firebaseapp.com", databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app", projectId: "telegrafiabot", storageBucket: "telegrafiabot.firebasestorage.app", messagingSenderId: "575790683327", appId: "1:575790683327:web:db333b0316c8e8ec63a20a" };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
-    
-    // ------------------------------
-
     db = firebase.database(); 
     auth = firebase.auth();
 
     // Carica stato mute
     isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
 
-    // Carica preferenze WPM, Parole e Tono
+    // Carica preferenze base
     if (els.startWpmInput && localStorage.getItem(STORAGE_PREF_WPM)) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM);
     if (els.wordCountInput && localStorage.getItem(STORAGE_PREF_WORDS)) els.wordCountInput.value = localStorage.getItem(STORAGE_PREF_WORDS);
     if (els.toneInput && localStorage.getItem(STORAGE_PREF_TONE)) els.toneInput.value = localStorage.getItem(STORAGE_PREF_TONE);
+    if (els.charSpaceInput && localStorage.getItem(STORAGE_PREF_CHAR_SPACE)) els.charSpaceInput.value = localStorage.getItem(STORAGE_PREF_CHAR_SPACE);
+    if (els.wordSpaceSelect && localStorage.getItem(STORAGE_PREF_WORD_SPACE)) els.wordSpaceSelect.value = localStorage.getItem(STORAGE_PREF_WORD_SPACE);
 
     auth.signInAnonymously().then(async () => {
         try {
@@ -375,35 +379,67 @@ function playBeep(freq, duration) {
     } catch(e) {}
 }
 
-// NUOVA FUNZIONE: Suono di notifica per la chat
 function playNotificationSound() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    playBeep(880, 0.08); // Primo tono
-    setTimeout(() => playBeep(1100, 0.1), 120); // Secondo tono più alto
+    playBeep(880, 0.08);
+    setTimeout(() => playBeep(1100, 0.1), 120);
 }
 
+// FUNZIONE AUDIO COMPLETAMENTE RIVISTA PER SUPPORTO FARNSWORTH/SPAZIATURA
 function playMorseAudio(text, wpm) {
     return new Promise(resolve => {
         if (!audioCtx || !gameRunning) { resolve(); return; }
-        const unitDuration = 1.2 / wpm; let time = audioCtx.currentTime + 0.05;
+
+        let charUnit = 1.2 / wpm;
+        
+        // Logica Farnsworth: se lo spazio tra caratteri ha un WPM minore di quello globale, lo applichiamo
+        let effSpaceWpm = (window.charSpaceWpm && window.charSpaceWpm < wpm) ? window.charSpaceWpm : wpm;
+        let spaceUnit = 1.2 / effSpaceWpm;
+        let wordMult = window.wordSpaceMult || 1.0;
+
+        let time = audioCtx.currentTime + 0.05;
+
         for (let char of text) {
             if (!gameRunning) break;
+            
             if (morseDict[char]) {
-                for (let symbol of morseDict[char]) {
+                for (let i = 0; i < morseDict[char].length; i++) {
                     if (!gameRunning) break;
-                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-                    osc.frequency.value = currentTone; osc.connect(gain); gain.connect(audioCtx.destination);
-                    const duration = (symbol === '-') ? (3 * unitDuration) : (unitDuration);
-                    gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
-                    gain.gain.setValueAtTime(0.5, time + duration - 0.005); gain.gain.linearRampToValueAtTime(0, time + duration);
-                    osc.start(time); osc.stop(time + duration);
-                    time += duration + unitDuration;
+                    let symbol = morseDict[char][i];
+                    
+                    const osc = audioCtx.createOscillator(); 
+                    const gain = audioCtx.createGain();
+                    osc.frequency.value = currentTone; 
+                    osc.connect(gain); 
+                    gain.connect(audioCtx.destination);
+                    
+                    const duration = (symbol === '-') ? (3 * charUnit) : charUnit;
+                    
+                    gain.gain.setValueAtTime(0, time); 
+                    gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
+                    gain.gain.setValueAtTime(0.5, time + duration - 0.005); 
+                    gain.gain.linearRampToValueAtTime(0, time + duration);
+                    
+                    osc.start(time); 
+                    osc.stop(time + duration);
+                    
+                    time += duration;
+                    // Pausa intra-carattere (tra punti e linee della stessa lettera) a velocità normale
+                    if (i < morseDict[char].length - 1) {
+                        time += charUnit;
+                    }
                 }
-                time += 2 * unitDuration;
-            } else if (char === ' ') { time += 4 * unitDuration; }
+                // Pausa inter-carattere al termine della lettera (3 unità) calcolata in base alla spaziatura scelta
+                time += (3 * spaceUnit);
+            } else if (char === ' ') {
+                // Spazio tra parole. Lo standard è 7 unità, ne abbiamo già aggiunte 3 a fine carattere
+                let totalWordSpace = (7 * spaceUnit) * wordMult;
+                let remainingSpace = totalWordSpace - (3 * spaceUnit);
+                time += Math.max(0, remainingSpace);
+            }
         }
-        setTimeout(resolve, (time - audioCtx.currentTime) * 1000);
+        setTimeout(resolve, Math.max(0, (time - audioCtx.currentTime) * 1000));
     });
 }
 
@@ -459,27 +495,22 @@ function setupChat(chatRef, containerId, alertBtnId) {
         });
         lastTs = maxTs; container.scrollTop = container.scrollHeight;
         
-        // Logica per le notifiche visive E AUDIO
         if (!initialLoad && newMsgsCount > 0) {
             if (alertBtnId && !isChatDrawerOpen && els[alertBtnId]) els[alertBtnId].style.backgroundColor = '#4caf50';
-            
             if (latestMsg) {
                 if (chatRef.key === 'globalChat') {
-                    // Chat globale: notifica se non mutato, NON in partita e NON aperta in primo piano
                     if (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global')) {
                         showToast(`🌎 ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
-                        if (typeof playNotificationSound === 'function') playNotificationSound(); // <-- SUONO AGGIUNTO QUI
+                        if (typeof playNotificationSound === 'function') playNotificationSound();
                     }
                 } else {
-                    // Altre chat (stanza, team)
                     if (!isChatDrawerOpen || chatRef.key !== (activeChatContext === 'room' ? roomCode : myTeamId)) {
                         showToast(`💬 ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
-                        if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound(); // <-- SUONO AGGIUNTO QUI
+                        if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound(); 
                     }
                 }
             }
         }
-        
         initialLoad = false;
     });
     listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
@@ -488,35 +519,41 @@ function setupChat(chatRef, containerId, alertBtnId) {
 if(els.sendChatBtn) els.sendChatBtn.addEventListener('click', () => {
     const txt = els.chatInput.value.trim(); if (!txt) return;
     let msgRef = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
-    
-    // NOTA BENE: Ho rimosso msgRef.onDisconnect().remove() per sistemare l'invio
     msgRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP })
         .catch(e => showToast("Errore invio: " + e.message)); 
-        
     els.chatInput.value = '';
 });
-
 if(els.chatInput) els.chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') els.sendChatBtn.click(); });
-
 if(els.clearChatBtn) els.clearChatBtn.addEventListener('click', () => { if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).remove(); else db.ref('globalChat').remove(); } });
 
-// Listener per il pulsante Mute (se usi l'evento via JS e non onclick HTML)
 if (els.muteGlobalChatBtn) {
     els.muteGlobalChatBtn.addEventListener('click', () => {
         isGlobalChatMuted = !isGlobalChatMuted;
         localStorage.setItem(STORAGE_CHAT_MUTED_KEY, isGlobalChatMuted);
         if (typeof updateMuteBtnUI === 'function') updateMuteBtnUI();
-        showToast(isGlobalChatMuted 
-            ? (currentLang==='it'?"Notifiche Chat silenziate.":"Chat notifications muted.") 
-            : (currentLang==='it'?"Notifiche Chat riattivate.":"Chat notifications unmuted."));
+        showToast(isGlobalChatMuted ? (currentLang==='it'?"Notifiche Chat silenziate.":"Chat notifications muted.") : (currentLang==='it'?"Notifiche Chat riattivate.":"Chat notifications unmuted."));
     });
 }
+
 // --- LINGUA E UI ---
 function checkGameTypeUI() {
-    const isSingle = els.gameTypeInput.value === 'single', isTrn = els.gameTypeInput.value === 'tournament', isCustom = els.gameModeInput.value === 'custom';
+    const isSingle = els.gameTypeInput.value === 'single';
+    const isTrn = els.gameTypeInput.value === 'tournament';
+    const isCustom = els.gameModeInput.value === 'custom';
+    const isChars = els.gameModeInput.value === 'chars';
+    const isPP = els.gameModeInput.value === 'pingpong';
+
     els.timeoutDiv.style.display = isSingle || isTrn ? 'none' : 'block';
+    
+    // Controlli fissa/semplice (solo in singleplayer)
     els.fixedSpeedContainer.style.display = isSingle ? 'flex' : 'none';
     els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
+    
+    // Nuovi controlli spaziatura (solo singleplayer, ESCLUSI caratteri e ping pong)
+    if (els.advancedSpacingContainer) {
+        els.advancedSpacingContainer.style.display = (isSingle && !isChars && !isPP) ? 'flex' : 'none';
+    }
+
     els.customDictControl.style.display = (isSingle && isCustom) ? 'flex' : 'none';
 
     const gameModes = els.gameModeInput.querySelectorAll('option:not([value^="trn_"])');
@@ -545,9 +582,8 @@ if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => {
     ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => { 
         els[id].disabled = isC; 
         if (isC && id !== 'toneInput') {
-            els[id].value = 25; // Forza a 25 per i nominativi
+            els[id].value = 25; 
         } else if (!isC && id !== 'toneInput') {
-            // Ripristina dai salvataggi se l'utente esce dalla modalità nominativi
             if (id === 'startWpmInput' && localStorage.getItem(STORAGE_PREF_WPM)) els[id].value = localStorage.getItem(STORAGE_PREF_WPM);
             if (id === 'wordCountInput' && localStorage.getItem(STORAGE_PREF_WORDS)) els[id].value = localStorage.getItem(STORAGE_PREF_WORDS);
         }
@@ -561,7 +597,8 @@ if(els.gameTypeInput) els.gameTypeInput.addEventListener('change', checkGameType
 if (els.startWpmInput) els.startWpmInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_WPM, e.target.value));
 if (els.wordCountInput) els.wordCountInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_WORDS, e.target.value));
 if (els.toneInput) els.toneInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_TONE, e.target.value));
-
+if (els.charSpaceInput) els.charSpaceInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_CHAR_SPACE, e.target.value));
+if (els.wordSpaceSelect) els.wordSpaceSelect.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_WORD_SPACE, e.target.value));
 
 function updateCustomDictStatus() {
     if (!els.customDictStatus) return;
@@ -668,11 +705,7 @@ if(els.sendInviteBtn) els.sendInviteBtn.addEventListener('click', () => {
     if (isChallenging) return; isChallenging = true; const tId = currentInviterId;
     db.ref(`invites/${tId}`).set({ fromId: myId, fromName: myName, mode: els.inviteModeInput.value, wpm: parseInt(els.inviteWpmInput.value), wordCount: parseInt(els.inviteWordCountInput.value), ts: firebase.database.ServerValue.TIMESTAMP, status: 'pending' }).then(() => {
         showToast("Invito inviato! In attesa..."); 
-        
-        // Fix: nascondiamo il modale ma teniamo conservato il currentInviterId
         els.inviteModal.style.display = 'none';
-        
-        // Forza l'aggiornamento UI pingando il proprio timestamp presence
         db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
 
         if (listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite);
@@ -680,12 +713,8 @@ if(els.sendInviteBtn) els.sendInviteBtn.addEventListener('click', () => {
             if (!snap.exists() && isChallenging) setTimeout(() => { 
                 if (isChallenging) { 
                     showToast("Rifiutato o scaduto."); 
-                    isChallenging = false; 
-                    currentInviterId = null; 
-                    
-                    // Forza aggiornamento UI a reset
+                    isChallenging = false; currentInviterId = null; 
                     db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
-                    
                     if(listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite); 
                 } 
             }, 1000); 
@@ -711,7 +740,6 @@ function listenToInvites() {
             els.acceptTeamInviteBtn.textContent = inv.teamId ? "UNISCITI ✅" : "VAI ALLA CREAZIONE 🛠️"; els.acceptTeamInviteBtn.onclick = () => { db.ref(`invites/${myId}`).remove(); window.closeInviteModal(); if (inv.teamId) joinTeam(inv.teamId); else showScreen('teamsScreen'); };
         } else {
             els.inviteModalTitle.textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
-            
             els.inviteModalText.appendChild(document.createTextNode("Ti ha invitato a giocare:"));
             els.inviteModalText.appendChild(document.createElement('br'));
             const bMode = document.createElement('b'); bMode.textContent = inv.mode.toUpperCase(); els.inviteModalText.appendChild(bMode);
@@ -769,8 +797,29 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
 
     isChallenging = false; if (currentInviterId) db.ref(`invites/${currentInviterId}`).once('value', s => { if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove(); });
     db.ref(`invite_accepted/${myId}`).remove(); currentMode = gameMode; isSinglePlayer = gameType === 'single'; currentWpm = currentMode==='callsign' ? 25 : parseInt(els.startWpmInput.value); baseWpm = currentWpm; requestedWordCount = currentMode==='callsign' ? 25 : Math.max(1, parseInt(els.wordCountInput.value)); currentTone = parseInt(els.toneInput.value); isFixedSpeed = els.fixedSpeedCheckbox.checked; isEasyMode = els.easyModeCheckbox.checked;
+    
+    // Assegna la spaziatura avanzata, altrimenti fallback ai default
+    let cSpace = (els.charSpaceInput && els.charSpaceInput.value) ? parseInt(els.charSpaceInput.value) : currentWpm;
+    let wSpace = (els.wordSpaceSelect && els.wordSpaceSelect.value) ? parseFloat(els.wordSpaceSelect.value) : 1.0;
+    window.charSpaceWpm = cSpace;
+    window.wordSpaceMult = wSpace;
+
     roomCode = Math.floor(1000 + Math.random() * 9000).toString(); gameWords = getGameWords(requestedWordCount, currentMode);
-    db.ref('rooms/' + roomCode).set({ status: isSinglePlayer ? 'countdown' : 'waiting', type: isSinglePlayer ? 'single' : 'multi', mode: currentMode, wpm: currentWpm, tone: currentTone, wordCount: requestedWordCount, words: gameWords, fixedSpeed: isFixedSpeed, createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: isSinglePlayer ? null : Date.now() + (Math.max(1, parseInt(els.roomTimerInput.value)) * 60000), hostId: myId }).then(() => joinRoomLogic(false));
+    db.ref('rooms/' + roomCode).set({ 
+        status: isSinglePlayer ? 'countdown' : 'waiting', 
+        type: isSinglePlayer ? 'single' : 'multi', 
+        mode: currentMode, 
+        wpm: currentWpm, 
+        tone: currentTone, 
+        wordCount: requestedWordCount, 
+        words: gameWords, 
+        fixedSpeed: isFixedSpeed, 
+        charSpaceWpm: cSpace,
+        wordSpaceMult: wSpace,
+        createdAt: firebase.database.ServerValue.TIMESTAMP, 
+        expiresAt: isSinglePlayer ? null : Date.now() + (Math.max(1, parseInt(els.roomTimerInput.value)) * 60000), 
+        hostId: myId 
+    }).then(() => joinRoomLogic(false));
 });
 
 function exitRoomCleanly(roomWasDeletedByHost = false) {
@@ -804,7 +853,10 @@ function joinRoomLogic(isReconnect = false) {
         listenToChat(); if (listeners.room && !isReconnect) listeners.room.off();
         listeners.room = db.ref(`rooms/${roomCode}`);
         listeners.room.on('value', snap => {
-            if (!snap.exists()) return exitRoomCleanly(true); const rData = snap.val(); currentMode = rData.mode; requestedWordCount = rData.wordCount; isSinglePlayer = rData.type === 'single'; isFixedSpeed = rData.fixedSpeed || false; roomHostId = rData.hostId;
+            if (!snap.exists()) return exitRoomCleanly(true); const rData = snap.val(); 
+            currentMode = rData.mode; requestedWordCount = rData.wordCount; isSinglePlayer = rData.type === 'single'; isFixedSpeed = rData.fixedSpeed || false; roomHostId = rData.hostId;
+            window.charSpaceWpm = rData.charSpaceWpm || rData.wpm; window.wordSpaceMult = rData.wordSpaceMult || 1.0;
+            
             if (rData.status === 'playing' && !gameRunning) { currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone; if (rData.words) gameWords = rData.words; return resumeGameSequence(); }
             if (rData.status === 'countdown' && !gameRunning) { currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone; if (rData.words) gameWords = rData.words; return startCountdownSequence(); }
             if (rData.status === 'waiting') {
@@ -1760,7 +1812,6 @@ async function checkActivityAndAwardMedals() {
         const dData = dSnap.val() || { games: 0 }, wData = wSnap.val() || { games: 0 }, mData = mSnap.val() || { games: 0 };
         let myMedals = uMedals.val() || {};
 
-        // 1. PULIZIA: Rimuove le medaglie scadute (reset giornaliero, settimanale, mensile)
         const validKeys = [dKey, wKey, mKey];
         for (let id in myMedals) {
             if (!validKeys.includes(myMedals[id].periodKey)) {
@@ -1769,7 +1820,6 @@ async function checkActivityAndAwardMedals() {
             }
         }
 
-        // 2. ASSEGNAZIONE: Controlla e assegna le nuove medaglie
         const check = (count, thresh, id, title, desc, icon, pKey) => { 
             if (count >= thresh && (!myMedals[id] || myMedals[id].periodKey !== pKey)) { 
                 awardMedal(id, title, desc, icon, pKey); 
