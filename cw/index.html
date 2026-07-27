@@ -83,11 +83,11 @@
 <div class="panel-left">
     <div class="main-box">
         <div class="main-title">🔗 Connessione Stanza P2P</div>
-        <div class="grid-2">
-            <label>Tuo Nome:</label><input type="text" id="n_user" placeholder="Esempio:Nome" oninput="saveConfig(); updateLobbyPresence();">
-            <label>Stanza:</label><input type="text" id="n_room" placeholder="Nome della Stanza" onchange="saveConfig()">
-            <label>Password:</label><input type="password" id="n_pass" placeholder="Codice d'accesso" onchange="saveConfig()">
-        </div>
+        <form onsubmit="return false;" class="grid-2">
+            <label>Tuo Nome:</label><input type="text" id="n_user" autocomplete="username" placeholder="Esempio:Nome" oninput="saveConfig(); updateLobbyPresence();">
+            <label>Stanza:</label><input type="text" id="n_room" autocomplete="off" placeholder="Nome della Stanza" onchange="saveConfig()">
+            <label>Password:</label><input type="password" id="n_pass" autocomplete="current-password" placeholder="Codice d'accesso" onchange="saveConfig()">
+        </form>
         <div style="display: flex; gap: 10px; margin-top: 15px;">
             <button id="btn-net-connect" class="btn-green" onclick="connectP2P()">🌐 CONNETTI P2P</button>
             <button id="btn-net-disconnect" class="btn-red" onclick="disconnectP2P()">🛑 DISCONNETTI</button>
@@ -311,8 +311,7 @@
     let audioCtx = null, peer = null, conn = null, port = null, serialWriter = null;
     let isTx = false, rxIsTx = false;
     let myPresenceRef = null;
-    let knownUsers = new Set();
-    let pendingInvite = null; // Variabile per gestire la Race Condition degli inviti
+    let pendingInvite = null; 
 
     let preOscLocal = null, preGainLocal = null;
     let preOscRemote = null, preGainRemote = null;
@@ -414,9 +413,8 @@
         document.getElementById('n_pass').value = randPass;
         saveConfig();
         
-        // Salviamo chi stiamo invitando, ma NON inviamo ancora il PM!
         pendingInvite = toUser;
-        connectP2P(); // Questo avvierà la creazione della stanza
+        connectP2P(); 
     }
     
     function acceptInvite(room, pass) {
@@ -510,32 +508,35 @@
                 sampleRate: 48000
             });
         }
+        
         if (audioCtx.state === 'suspended') {
             audioCtx.resume().catch(e => console.log("Audio resume:", e));
         }
 
-        if (!window.keepAliveOsc) {
-            window.keepAliveOsc = audioCtx.createOscillator();
-            const keepAliveGain = audioCtx.createGain();
-            keepAliveGain.gain.value = 0.0001; 
-            window.keepAliveOsc.connect(keepAliveGain).connect(audioCtx.destination);
-            window.keepAliveOsc.start();
-        }
+        if (audioCtx.state === 'running' || audioCtx.state === 'suspended') {
+            if (!window.keepAliveOsc) {
+                window.keepAliveOsc = audioCtx.createOscillator();
+                const keepAliveGain = audioCtx.createGain();
+                keepAliveGain.gain.value = 0.0001; 
+                window.keepAliveOsc.connect(keepAliveGain).connect(audioCtx.destination);
+                window.keepAliveOsc.start();
+            }
 
-        if (!preOscLocal) {
-            preOscLocal = audioCtx.createOscillator();
-            preGainLocal = audioCtx.createGain();
-            preOscLocal.connect(preGainLocal).connect(audioCtx.destination);
-            preGainLocal.gain.value = 0;
-            preOscLocal.start();
-        }
-        
-        if (!preOscRemote) {
-            preOscRemote = audioCtx.createOscillator();
-            preGainRemote = audioCtx.createGain();
-            preOscRemote.connect(preGainRemote).connect(audioCtx.destination);
-            preGainRemote.gain.value = 0;
-            preOscRemote.start();
+            if (!preOscLocal) {
+                preOscLocal = audioCtx.createOscillator();
+                preGainLocal = audioCtx.createGain();
+                preOscLocal.connect(preGainLocal).connect(audioCtx.destination);
+                preGainLocal.gain.value = 0;
+                preOscLocal.start();
+            }
+            
+            if (!preOscRemote) {
+                preOscRemote = audioCtx.createOscillator();
+                preGainRemote = audioCtx.createGain();
+                preOscRemote.connect(preGainRemote).connect(audioCtx.destination);
+                preGainRemote.gain.value = 0;
+                preOscRemote.start();
+            }
         }
     }
 
@@ -752,7 +753,8 @@
 
         if(!room || !pass || !user) return alert("Inserisci Nome, Stanza e Password!");
         
-        initAudioOptimized();
+        initAudioOptimized(); 
+        
         setStatus("Connessione al Server P2P...", "#f39c12");
         document.getElementById('btn-net-connect').style.display = 'none';
         document.getElementById('btn-net-disconnect').style.display = 'block';
@@ -761,6 +763,11 @@
 
         peer.on('open', (myId) => {
             setStatus("Verifica stanza...", "#3498db");
+            
+            // CORREZIONE RACE CONDITION: Mi metto subito in ascolto, prima ancora di scrivere su Firebase. 
+            // In questo modo, se B è molto veloce, non ci perdiamo la sua chiamata WebRTC.
+            peer.on('connection', (incoming) => setupDataChannel(incoming, user, false));
+
             const ref = db.ref('rooms/' + room);
             ref.once('value', (snap) => {
                 const data = snap.val();
@@ -789,9 +796,8 @@
                     // LA STANZA NON ESISTE -> La creo io
                     ref.set({ hostId: myId, hostName: user, password: pass }).then(() => {
                         setStatus(`In attesa in '${room}'...`, "#f1c40f");
-                        peer.on('connection', (incoming) => setupDataChannel(incoming, user, false));
                         
-                        // Solo ADESSO che la stanza è pronta, invio il messaggio di invito all'altro utente
+                        // Solo ora che la stanza esiste invio il messaggio all'altro
                         if (pendingInvite) {
                             db.ref('lobby/pms/' + pendingInvite).push({
                                 from: user, type: 'INVITE', room: room, pass: pass
@@ -810,10 +816,6 @@
             disconnectP2P();
         });
     }
-
-    document.getElementById('n_pass').addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); connectP2P(); }
-    });
 
     function setupDataChannel(c, myUser, isJoiner) {
         conn = c;
@@ -1160,9 +1162,10 @@
     // Avvio Iniziale
     window.onload = () => {
         loadConfig();
-        initAudioOptimized();
-        updateLobbyPresence(); // Registra subito la presenza all'avvio se c'è un nome salvato
-        listenToLobby();       // Ascolta i cambiamenti della lobby
+        // NON attivare l'audio qui per colpa di Autoplay Policy di Chrome. 
+        // Verrà attivato al primo clic o pressione di un tasto.
+        updateLobbyPresence(); 
+        listenToLobby();       
     };
 </script>
 </body>
