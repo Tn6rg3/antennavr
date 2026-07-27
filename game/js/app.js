@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.41"; // Versione incrementata
+const APP_VERSION = "20240521.42"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -889,7 +889,7 @@ if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
     currentTone = 600;
     isFixedSpeed = false;
     isEasyMode = false;
-    window.charSpaceWpm = 15;
+    window.charSpaceWpm = 0; // A 0 per seguire sempre la velocità dinamica
     window.wordSpaceMult = 1.0;
 
     roomCode = Math.floor(1000 + Math.random() * 9000).toString(); 
@@ -904,6 +904,8 @@ if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
         wordCount: requestedWordCount, 
         words: gameWords, 
         fixedSpeed: isFixedSpeed, 
+        charSpaceWpm: 0, // Aggiunto e salvato nel database
+        wordSpaceMult: 1.0, // Aggiunto e salvato nel database
         createdAt: firebase.database.ServerValue.TIMESTAMP, 
         hostId: myId 
     }).then(() => joinRoomLogic(false));
@@ -952,7 +954,10 @@ function joinRoomLogic(isReconnect = false) {
         listeners.room.on('value', snap => {
             if (!snap.exists()) return exitRoomCleanly(true); const rData = snap.val(); 
             currentMode = rData.mode; requestedWordCount = rData.wordCount; isSinglePlayer = rData.type === 'single'; isFixedSpeed = rData.fixedSpeed || false; roomHostId = rData.hostId;
-            window.charSpaceWpm = rData.charSpaceWpm || rData.wpm; window.wordSpaceMult = rData.wordSpaceMult || 1.0;
+            
+            // Correzione: usa !== undefined per accettare il valore 0 correttamente
+            window.charSpaceWpm = rData.charSpaceWpm !== undefined ? rData.charSpaceWpm : rData.wpm;
+            window.wordSpaceMult = rData.wordSpaceMult || 1.0;
             
             if (rData.status === 'playing' && !gameRunning) { currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone; if (rData.words) gameWords = rData.words; return resumeGameSequence(); }
             if (rData.status === 'countdown' && !gameRunning) { currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone; if (rData.words) gameWords = rData.words; return startCountdownSequence(); }
