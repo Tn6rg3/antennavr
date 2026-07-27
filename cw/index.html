@@ -312,6 +312,7 @@
     let isTx = false, rxIsTx = false;
     let myPresenceRef = null;
     let knownUsers = new Set();
+    let pendingInvite = null; // Variabile per gestire la Race Condition degli inviti
 
     let preOscLocal = null, preGainLocal = null;
     let preOscRemote = null, preGainRemote = null;
@@ -404,6 +405,8 @@
     }
 
     function sendInvite(toUser) {
+        if (conn || peer) disconnectP2P();
+        
         const randRoom = "cw-" + Math.random().toString(36).substr(2, 5);
         const randPass = Math.random().toString(36).substr(2, 4);
         
@@ -411,14 +414,9 @@
         document.getElementById('n_pass').value = randPass;
         saveConfig();
         
-        const myName = document.getElementById('n_user').value.trim();
-        db.ref('lobby/pms/' + toUser).push({
-            from: myName, type: 'INVITE', room: randRoom, pass: randPass
-        });
-        
-        switchChat('global');
-        appendChat("SISTEMA", `Invito inviato a ${toUser}. In attesa di accettazione...`, "chat-sys", "global");
-        connectP2P();
+        // Salviamo chi stiamo invitando, ma NON inviamo ancora il PM!
+        pendingInvite = toUser;
+        connectP2P(); // Questo avvierà la creazione della stanza
     }
     
     function acceptInvite(room, pass) {
@@ -755,29 +753,54 @@
         if(!room || !pass || !user) return alert("Inserisci Nome, Stanza e Password!");
         
         initAudioOptimized();
-        setStatus("Ricerca Stanza...", "#f39c12");
+        setStatus("Connessione al Server P2P...", "#f39c12");
         document.getElementById('btn-net-connect').style.display = 'none';
         document.getElementById('btn-net-disconnect').style.display = 'block';
 
         peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] } }); 
 
         peer.on('open', (myId) => {
+            setStatus("Verifica stanza...", "#3498db");
             const ref = db.ref('rooms/' + room);
             ref.once('value', (snap) => {
                 const data = snap.val();
+                
                 if (data && data.hostId) {
+                    // LA STANZA ESISTE -> Mi collego all'Host
                     if (data.password !== pass) { 
                         alert("Accesso negato: Password errata!"); 
                         disconnectP2P(); 
                         return; 
                     }
-                    setStatus("Password OK! Stabilendo P2P...", "#3498db");
+                    
+                    setStatus("Stanza trovata! Negoziazione WebRTC in corso...", "#3498db");
                     const call = peer.connect(data.hostId, { metadata: { user: user }, reliable: false });
                     setupDataChannel(call, user, true);
+                    
+                    // Timeout di sicurezza
+                    setTimeout(() => {
+                        if (conn && !conn.open) {
+                            setStatus("Timeout Negoziazione. Riprova.", "#e74c3c");
+                            disconnectP2P();
+                        }
+                    }, 10000);
+                    
                 } else {
-                    ref.set({ hostId: myId, hostName: user, password: pass });
-                    setStatus(`In attesa in '${room}'...`, "#f1c40f");
-                    peer.on('connection', (incoming) => setupDataChannel(incoming, user, false));
+                    // LA STANZA NON ESISTE -> La creo io
+                    ref.set({ hostId: myId, hostName: user, password: pass }).then(() => {
+                        setStatus(`In attesa in '${room}'...`, "#f1c40f");
+                        peer.on('connection', (incoming) => setupDataChannel(incoming, user, false));
+                        
+                        // Solo ADESSO che la stanza è pronta, invio il messaggio di invito all'altro utente
+                        if (pendingInvite) {
+                            db.ref('lobby/pms/' + pendingInvite).push({
+                                from: user, type: 'INVITE', room: room, pass: pass
+                            });
+                            switchChat('global');
+                            appendChat("SISTEMA", `Invito inviato a ${pendingInvite}. In attesa...`, "chat-sys", "global");
+                            pendingInvite = null;
+                        }
+                    });
                 }
             });
         });
