@@ -1143,8 +1143,23 @@ function finishGame() {
     if (currentMode === 'daily_challenge' && els.btnShareDaily) {
         els.btnShareDaily.style.display = 'inline-block';
         els.btnShareDaily.onclick = () => {
-            const txt = encodeURIComponent(`📻 Sfida Giornaliera CW!\nHo totalizzato ${totalScore} pt (Max Velocità: ${currentWpm} WPM).\nRiesci a fare di meglio?\nGioca qui: https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`);
-            tg.openTelegramLink(`https://t.me/share/url?url=&text=${txt}`);
+            // Separiamo correttamente il link dell'app dal testo del messaggio
+            const appUrl = encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`);
+            const textMsg = encodeURIComponent(`📻 Sfida Giornaliera CW!\nHo totalizzato ${totalScore} pt (Max Velocità: ${currentWpm} WPM).\nRiesci a fare di meglio?`);
+            
+            // Creiamo il link di condivisione standard di Telegram
+            const shareUrl = `https://t.me/share/url?url=${appUrl}&text=${textMsg}`;
+            
+            // Usiamo un fallback: se openTelegramLink fallisce su Web, apre una nuova scheda
+            try {
+                if (tg && tg.openTelegramLink) {
+                    tg.openTelegramLink(shareUrl);
+                } else {
+                    window.open(shareUrl, '_blank');
+                }
+            } catch (e) {
+                window.open(shareUrl, '_blank');
+            }
         };
     } else if(els.btnShareDaily) {
         els.btnShareDaily.style.display = 'none';
