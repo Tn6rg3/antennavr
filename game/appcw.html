@@ -32,7 +32,6 @@
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--hint-color); padding-bottom:5px; margin-bottom:5px;">
         <span id="chatTitle" style="font-weight:bold;">💬 Chat</span>
         <div style="display: flex; gap: 5px;">
-            <!-- TASTO PER SILENZIARE LE NOTIFICHE AGGIUNTO QUI -->
             <button id="muteGlobalChatBtn" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-secondary">🔊 Notifiche Attive</button>
             <button id="clearChatBtn" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-danger">Cancella</button>
             <button id="closeChatBtn" onclick="toggleChat()" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-secondary">Chiudi</button>
@@ -131,6 +130,26 @@
             </label>
         </div>
 
+        <!-- NUOVI CONTROLLI PER SPAZIATURA AVANZATA (SINGLE PLAYER) -->
+        <div id="advancedSpacingContainer" style="display:none; justify-content:center; align-items:center; gap:15px; margin-top:10px; font-size:0.85em;">
+            <div style="display:flex; flex-direction:column; align-items:center;">
+                <label style="color:var(--hint-color); font-weight:bold;">Spazio Caratt. (WPM)</label>
+                <input type="number" id="charSpaceInput" value="" placeholder="es: 10" min="5" max="50" style="width:70px; padding:4px; text-align:center;">
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center;">
+                <label style="color:var(--hint-color); font-weight:bold;">Spazio Parole</label>
+                <select id="wordSpaceSelect" style="width:80px; padding:4px;">
+                    <option value="1.0">1.0x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="2.0">2.0x</option>
+                    <option value="2.5">2.5x</option>
+                    <option value="3.0">3.0x</option>
+                    <option value="3.5">3.5x</option>
+                    <option value="4.0">4.0x</option>
+                </select>
+            </div>
+        </div>
+
         <div id="customDictControl" style="display:none; justify-content:center; margin-top:5px;">
             <button onclick="document.getElementById('customDictModal').style.display='flex'" class="btn-link" style="font-size:0.85em; margin:0; padding:2px;" id="txt_manage_custom_btn">⚙️ Gestisci Dizionario Personale</button>
         </div>
@@ -158,14 +177,11 @@
             </div>
         </div>
     </div>
-    
-    
 </div>
 
 <!-- PROFILO E STATISTICHE -->
 <div id="profileScreen" class="screen">
     <h2 id="txt_profile_title" style="color: var(--link-color); margin-bottom: 10px;">👤 Profilo e Statistiche</h2>
-
     <div class="box-panel" style="margin-bottom:8px; flex-shrink:0;">
         <h3 id="txt_alias_title" style="color:var(--link-color); margin-bottom:5px;">🏷️ Il tuo Alias</h3>
         <div style="display:flex; gap:5px;">
@@ -173,14 +189,12 @@
             <button id="saveAliasBtn" class="action-btn-small btn-success" style="width:auto; margin:0;">Salva</button>
         </div>
         <p id="txt_alias_hint" style="font-size:0.75em; color:var(--hint-color); margin-top:3px;">L'alias sostituirà il tuo nome Telegram nelle classifiche e nelle squadre.</p>
-
         <div style="display:flex; align-items:center; gap:10px; margin-top:10px; background:rgba(0,0,0,0.05); padding:8px; border-radius:8px;">
             <input type="checkbox" id="privacyUsernameCheckbox" style="width:20px; height:20px; cursor:pointer;">
             <label for="privacyUsernameCheckbox" id="txt_privacy_label" style="font-size:0.85em; cursor:pointer; font-weight:bold;">Nascondi mio username Telegram</label>
         </div>
         <p id="txt_privacy_hint" style="font-size:0.7em; color:var(--hint-color); margin-top:5px; font-style:italic;">Se attivo, nessuno potrà cliccare sul tuo nome per vedere il tuo profilo. L'Alias diventa obbligatorio.</p>
     </div>
-
     <div style="display: flex; gap: 5px; width: 100%; flex-shrink: 0; max-height: 180px;">
         <div class="box-panel" style="flex: 1; overflow:hidden;">
             <h3 id="txt_wrong_chars_title">📈 Caratteri più sbagliati</h3>
@@ -195,7 +209,6 @@
             </div>
         </div>
     </div>
-
     <div class="box-panel" style="flex-grow: 1; min-height:0; margin-bottom:0; margin-top: 5px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
             <h3 id="txt_match_history_title" style="margin:0;">📜 Storico Partite</h3>
@@ -203,21 +216,18 @@
         </div>
         <ul id="matchHistoryList" class="data-list"></ul>
     </div>
-
     <button onclick="goBackToMenu()" id="txt_back_btn" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
-<!-- SCHERMATA SQUADRE E TORNEI -->
+<!-- LEADERBOARD E TUTTO IL RESTO UGUALE ... -->
 <div id="teamsScreen" class="screen">
     <h2 style="color: var(--champ-color); margin-bottom: 5px;">🏆 Area Tornei</h2>
-
+    <!-- (Rimane identico a come me lo hai inviato) -->
     <div class="tab-buttons" style="margin-bottom: 5px;">
         <button id="tabTeamGestBtn" class="tab-btn active-tab" onclick="switchTeamTab('gest')">La mia Squadra</button>
         <button id="tabAllTeamsBtn" class="tab-btn" onclick="switchTeamTab('allteams')">Tutte le Squadre</button>
         <button id="tabTournamentsBtn" class="tab-btn" onclick="switchTeamTab('tournaments')">I Tornei</button>
     </div>
-
-    <!-- VISTA: L'utente NON ha una squadra (si trova nel tab "La mia Squadra") -->
     <div id="noTeamView" style="width: 100%; display: none; flex-direction: column; flex-grow: 1; min-height: 0;">
         <p style="text-align:center; font-size:0.9em; margin-top:0;">Per partecipare ai tornei devi essere in una squadra.</p>
         <div class="box-panel" style="flex-shrink: 0;">
@@ -230,8 +240,6 @@
             <ul id="openTeamsList" class="data-list"></ul>
         </div>
     </div>
-
-    <!-- VISTA: L'utente HA una squadra (tab "La mia Squadra") -->
     <div id="myTeamView" style="width: 100%; display: none; flex-direction:column; flex-grow: 1; min-height: 0;">
         <div class="box-panel" style="flex-shrink: 0; padding: 10px 5px;">
             <div style="display:flex; justify-content:space-between; align-items:center; padding: 0 5px;">
@@ -239,7 +247,6 @@
                 <button id="leaveTeamBtn" class="btn-danger action-btn-small">Abbandona</button>
             </div>
             <p style="text-align:center; margin: 5px 0; font-size:0.85em; font-weight:bold;" id="teamStatusText"></p>
-
             <div id="teamMembersArea" style="background: var(--bg-color); border-radius: 8px; padding: 8px; margin: 5px 0;">
                 <div id="teamCaptainInfo" style="text-align: center; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px; margin-bottom: 5px;">
                     <small style="color: var(--hint-color); display: block; font-weight: bold; text-transform: uppercase; font-size: 0.7em;">Capitano</small>
@@ -247,13 +254,11 @@
                 </div>
                 <div id="teamOthersList" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; font-size: 0.85em;"></div>
             </div>
-
             <button id="inviteTeamBtn" class="btn-link" style="margin:0; padding:2px; font-weight:bold; text-align: center; width: 100%;">📢 Condividi Link d'Invito Squadra</button>
             <div id="captainActions" style="display:none; margin-top:5px; text-align:center;">
                 <button id="toggleTeamLockBtn" class="btn-secondary action-btn-small">Chiudi Adesioni</button>
             </div>
         </div>
-
         <div class="box-panel" style="flex-grow:1; min-height:0; display:flex; flex-direction:column; padding:5px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; padding: 0 5px;">
                 <h3 style="margin:0; font-size:0.9em; color:var(--hint-color);">💬 Chat di Squadra</h3>
@@ -266,18 +271,13 @@
             </div>
         </div>
     </div>
-
-    <!-- TAB 2: Tutte le Squadre -->
     <div id="allTeamsArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
         <div class="box-panel" style="flex-grow:1; min-height:0; overflow-y:auto;">
             <h3 style="margin-top:0;">Elenco Globale Squadre</h3>
             <ul id="globalAllTeamsList" class="data-list"></ul>
         </div>
     </div>
-
-    <!-- TAB 3: Tornei (Lista, Creazione, Tabellone) -->
     <div id="tournamentsArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
-
         <div id="trnLobbyArea" style="display:flex; flex-direction:column; flex-grow:1; min-height:0;">
             <div class="box-panel" id="createTrnPanel" style="flex-shrink:0; display:none;">
                 <h3>Organizza un Torneo</h3>
@@ -293,15 +293,12 @@
                 <ul id="pastTournamentsList" class="data-list"></ul>
             </div>
         </div>
-
         <div id="trnActiveArea" style="display:none; flex-direction:column; flex-grow:1; min-height:0;">
             <h3 id="activeTrnTitle" style="color:var(--champ-color); text-align:center; margin: 0 0 5px 0;">Nome Torneo</h3>
-
             <div style="display:flex; justify-content:center; gap:10px; margin-bottom:5px;">
                 <button id="editTrnNameBtn" class="action-btn-small btn-secondary" style="display:none; margin:0;">✏️ Modifica Nome</button>
                 <button id="leaveTrnBtn" class="action-btn-small btn-danger" style="display:none; margin:0;">🏃 Ritira Squadra</button>
             </div>
-
             <div class="box-panel" style="flex-shrink:0; max-height:130px; overflow-y:auto; padding:5px;">
                 <h3 style="margin-bottom:2px; font-size:0.9em;">Classifica (Parziale/Finale)</h3>
                 <table style="font-size:0.85em;">
@@ -309,7 +306,6 @@
                     <tbody id="trnStandingsBody"></tbody>
                 </table>
             </div>
-
             <div id="trnHostControls" class="box-panel" style="display:none; flex-shrink:0; text-align:center; border-color:var(--champ-color);">
                 <p style="margin:0 0 5px 0; font-size:0.85em;">Sei l'organizzatore.</p>
                 <p id="trnTeamCountTxt" style="font-size:0.8em; font-weight:bold; color:var(--hint-color); margin:0 0 5px 0;"></p>
@@ -317,7 +313,6 @@
                 <button id="finishTrnBtn" class="btn-champ action-btn-small" style="display:none; margin-top:5px;">Concludi Torneo</button>
                 <button id="deleteTrnBtn" class="btn-danger action-btn-small">Elimina Torneo</button>
             </div>
-
             <div class="box-panel" style="flex-grow:1; min-height:0; overflow-y:auto; padding:5px;">
                 <h3 style="margin-bottom:5px; color:var(--champ-color);">🥊 Tabellone Incontri</h3>
                 <div id="trnBracketContainer" style="display:flex; flex-direction:column; gap:8px;">
@@ -326,40 +321,29 @@
             </div>
         </div>
     </div>
-
     <button onclick="goBackToMenu()" style="margin-top: 5px; flex-shrink: 0;">Torna al Menu Principale</button>
-
     <div style="margin-top: auto; padding: 10px 0; text-align: center; font-size: 0.7em; color: var(--hint-color); opacity: 0.6;">
         Build: <span id="appVersionDisplay">--</span>
     </div>
 </div>
 
-<!-- INFO, REGOLE E PRIVACY -->
 <div id="privacyScreen" class="screen">
     <h2 style="margin-bottom: 5px;">📜 Regolamento e Privacy</h2>
-
-    <!-- QUI DENTRO VERRÀ INIETTATO IL FILE ESTERNO -->
     <div id="regolamentoContainer" class="box-panel" style="text-align: left; font-size: 0.9em; flex-grow: 1; overflow-y: auto; padding-right: 10px; margin-bottom: 0;">
         <p style="text-align:center; color:var(--hint-color);">Caricamento regolamento...</p>
     </div>
-
     <button id="deleteDataBtn" class="btn-danger" style="margin-top: 8px; flex-shrink: 0;">🗑️ Elimina Definitivamente i miei Dati</button>
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
-<!-- LOBBY GIOCO LIBERO -->
 <div id="lobbyScreen" class="screen">
     <h2 id="lobbyTitleText">Lobby Stanza</h2>
     <p id="lobbyTimerText" style="text-align: center; font-weight: bold; color: #ff9800; margin-top: 2px; margin-bottom: 5px;"></p>
-
     <div class="box-panel" style="flex-shrink:0; margin-bottom:5px;">
         <h3 id="txt_lobby_players" style="margin:0 0 5px 0; font-size:0.9em;">Giocatori presenti:</h3>
         <ul id="playersList" class="data-list" style="max-height: 80px;"></ul>
     </div>
-
     <button id="inviteFriendsBtn" class="btn-link" style="font-weight: bold; font-size: 0.9em; margin: 2px 0; text-align: center;">📢 Invita Amici su Telegram</button>
-
-    <!-- CHAT INTEGRATA NELLA LOBBY -->
     <div class="box-panel" style="flex-grow:1; min-height:0; display:flex; flex-direction:column; padding:5px; margin-bottom:5px;">
         <h3 id="txt_lobby_chat_title" style="margin-bottom:2px; font-size:0.9em; color:var(--hint-color);">💬 Chat di Stanza</h3>
         <div id="lobbyChatMessages" style="flex-grow:1; overflow-y:auto; font-size:0.85em; padding:5px; background:var(--bg-color); border-radius:6px; margin-bottom:5px;"></div>
@@ -368,14 +352,11 @@
             <button id="sendLobbyChatBtn" style="width:auto; padding:8px 12px; margin:0;">Invia</button>
         </div>
     </div>
-
     <div style="margin-top: 0; width: 100%; flex-shrink: 0;">
         <p id="statusInfoText" style="text-align: center; color: var(--hint-color); font-style: italic; margin-bottom: 5px; font-size: 0.85em;">Verifica ruolo...</p>
-
         <button id="readyBtn" style="display:none;" class="btn-success">SONO PRONTO ✅</button>
         <button id="startMultiplayerBtn" style="display:none;" class="btn-success">AVVIA PARTITA</button>
         <button id="deleteRoomBtn" style="display:none; padding:8px; font-size:0.85em;" class="btn-danger">ELIMINA STANZA</button>
-
         <p id="waitingHostText" style="display:none; font-style: italic; text-align: center; font-size: 0.85em; margin-bottom: 5px;">In attesa che l'Host avvii...</p>
         <button id="leaveLobbyBtn" class="btn-secondary" style="margin-top: 5px; padding:8px;">Esci dalla Stanza</button>
     </div>
@@ -387,21 +368,17 @@
     <div style="margin-top: auto;"></div>
 </div>
 
-<!-- AREA GIOCO -->
 <div id="gameArea" class="screen">
     <div class="header-stats">
         <div id="wpmDisplay">WPM: 20</div>
         <div id="scoreDisplay">Punti: 0</div>
     </div>
-
     <div class="table-wrapper" id="tableWrapper">
         <table id="gameTable">
             <thead><tr><th id="txt_th_typed">Scritto</th><th id="txt_th_real">Reale</th><th id="txt_th_pts">Punti</th></tr></thead>
             <tbody id="tableBody"></tbody>
         </table>
     </div>
-
-    <!-- SEZIONE PING PONG -->
     <div id="pingPongSendArea" style="display: none; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0; flex-direction:column;">
         <div id="pingPongTimerBar" style="width:100%; height:4px; background:rgba(0,0,0,0.1); border-radius:2px; margin-bottom:5px; overflow:hidden;">
             <div id="pingPongTimerProgress" style="width:100%; height:100%; background:#ff9800; transition: width 0.1s linear;"></div>
@@ -411,7 +388,6 @@
             <button id="btnSendPingPong" class="btn-secondary" style="width: auto; margin: 0; padding: 10px;">Invia (Tu)</button>
         </div>
     </div>
-
     <div id="gameInputArea" style="display: flex; flex-direction:column; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
         <div id="easyModeHint" style="display:none; text-align:center; font-size:1.4em; font-weight:bold; color:var(--champ-color); background:var(--sec-bg-color); padding:5px; border-radius:8px; letter-spacing: 2px;"></div>
         <div style="display:flex; gap:5px; width:100%;">
@@ -419,66 +395,44 @@
             <button id="replayWordBtn" class="btn-secondary" style="width: auto; margin: 0; padding: 10px; font-size: 0.9em;">🔁 Riascolta</button>
         </div>
     </div>
-
     <div style="display:flex; gap:5px; width:100%;">
         <button onclick="toggleChat()" class="btn-secondary" style="margin-top: 0; flex:1;" id="txt_game_chat_btn">💬 Chat</button>
         <button id="quitGameBtn" class="btn-danger" style="margin-top: 0; flex:1;">Abbandona</button>
     </div>
 </div>
 
-<!-- AREA QUIZ -->
 <div id="quizArea" class="screen">
     <div class="header-stats">
         <div id="quizWpmDisplay">WPM: 20</div>
         <div id="quizScoreDisplay">Punti: 0</div>
     </div>
-
     <div class="box-panel" style="flex-grow: 1; justify-content: center; align-items: center; gap: 15px;">
         <div id="quizTimerBar" style="width:100%; height:8px; background:rgba(0,0,0,0.1); border-radius:4px; overflow:hidden;">
             <div id="quizTimerProgress" style="width:100%; height:100%; background:#4caf50; transition: width 0.1s linear;"></div>
         </div>
-
         <div id="quizQuestionBox" style="text-align: center; font-size: 1.2em; font-weight: bold; min-height: 50px;">
             In attesa della domanda...
         </div>
-
         <button id="quizReplayQ" class="btn-secondary" style="width: auto; padding: 8px 15px;">🔁 Riascolta Domanda</button>
-
         <div id="quizOptionsContainer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%;">
-            <div style="display: flex; gap: 5px; align-items: center;">
-                <button id="btnQuizA" class="quiz-opt-btn" style="flex: 1;">A</button>
-                <button id="replayA" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
-            </div>
-            <div style="display: flex; gap: 5px; align-items: center;">
-                <button id="btnQuizB" class="quiz-opt-btn" style="flex: 1;">B</button>
-                <button id="replayB" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
-            </div>
-            <div style="display: flex; gap: 5px; align-items: center;">
-                <button id="btnQuizC" class="quiz-opt-btn" style="flex: 1;">C</button>
-                <button id="replayC" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
-            </div>
-            <div style="display: flex; gap: 5px; align-items: center;">
-                <button id="btnQuizD" class="quiz-opt-btn" style="flex: 1;">D</button>
-                <button id="replayD" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button>
-            </div>
+            <div style="display: flex; gap: 5px; align-items: center;"><button id="btnQuizA" class="quiz-opt-btn" style="flex: 1;">A</button><button id="replayA" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button></div>
+            <div style="display: flex; gap: 5px; align-items: center;"><button id="btnQuizB" class="quiz-opt-btn" style="flex: 1;">B</button><button id="replayB" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button></div>
+            <div style="display: flex; gap: 5px; align-items: center;"><button id="btnQuizC" class="quiz-opt-btn" style="flex: 1;">C</button><button id="replayC" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button></div>
+            <div style="display: flex; gap: 5px; align-items: center;"><button id="btnQuizD" class="quiz-opt-btn" style="flex: 1;">D</button><button id="replayD" class="action-btn-small btn-secondary" style="width: 40px; padding: 10px 0;">🔊</button></div>
         </div>
-
         <button id="quizBuzzer" class="btn-champ" style="display: none; height: 80px; font-size: 1.5em; border-radius: 50%; box-shadow: 0 5px 15px rgba(156, 39, 176, 0.4);">PREMIMI! 🚨</button>
         <div id="buzzerWinner" style="text-align: center; font-weight: bold; color: var(--champ-color); min-height: 20px;"></div>
     </div>
-
     <div style="display:flex; gap:5px; width:100%; margin-top: 10px;">
         <button onclick="toggleChat()" class="btn-secondary" style="margin-top: 0; flex:1;">💬 Chat</button>
         <button id="quitQuizBtn" class="btn-danger" style="margin-top: 0; flex:1;">Abbandona</button>
     </div>
 </div>
 
-<!-- LEADERBOARD -->
 <div id="leaderboardScreen" class="screen">
     <h2 style="margin-bottom: 5px;">🏆 Risultati</h2>
     <div id="roomWinnerBanner" style="text-align:center; font-weight:bold; color:var(--champ-color); margin-bottom:5px;"></div>
     <p id="waitingOthersText" style="text-align: center; font-style: italic; color: #ff9800; display: none; font-weight: bold; margin-bottom: 5px;">⏳ In attesa degli altri...</p>
-
     <div class="tab-buttons" id="leaderboardTabs" style="display: none;">
         <button id="tabRoomBtn" class="tab-btn active-tab" style="width: 100%;">Questa Partita</button>
         <button id="tabGlobalTournamentBtn" class="tab-btn">Classifica Tornei</button>
@@ -487,7 +441,6 @@
         <button id="tabGlobalStandardMultiBtn" class="tab-btn">Parole (Multi)</button>
         <button id="tabGlobalStandardSingleBtn" class="tab-btn">Parole (Single)</button>
     </div>
-
     <div id="lbModeSelectorArea" style="width:100%; margin-bottom:10px;">
         <select id="lbModeSelect" style="padding: 10px; font-weight: bold; border: 2px solid var(--link-color);">
             <option value="room" id="opt_lb_room">Questa Partita</option>
@@ -502,12 +455,10 @@
             <option value="quiz_single" id="opt_lb_quiz_single">Quiz (Single)</option>
         </select>
     </div>
-
     <div id="trnSubTabs" style="display:none; width:100%; gap:5px; margin-top:5px; flex-shrink: 0;">
         <button id="btnTrnGlobalLB" class="tab-btn active-tab" style="font-size:0.75em; padding:6px;">🏆 Globale</button>
         <button id="btnTrnActiveLB" class="tab-btn" style="font-size:0.75em; padding:6px;">🥊 In Corso</button>
     </div>
-
     <div id="lbFilterArea" style="display:none; width:100%; text-align:center; margin-bottom:5px; flex-shrink: 0;">
         <label style="font-size:0.9em; font-weight:bold;">Filtra per Q.ta: </label>
         <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px; font-size: 0.9em;">
@@ -518,33 +469,27 @@
             <option value="50">50 Stringhe</option>
         </select>
     </div>
-
     <div id="leaderboardContainer" style="width: 100%; flex-grow: 1; overflow-y: auto; margin-top: 5px; border-top: 1px solid var(--hint-color); padding-top: 5px;"></div>
-
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
 <div id="participationScreen" class="screen">
     <h2 style="color: var(--champ-color); margin-bottom: 10px;">🏅 Partecipazione e Attività</h2>
-
     <div class="tab-buttons" style="margin-bottom: 10px;">
         <button id="tabDailyAct" class="tab-btn active-tab" onclick="switchActTab('daily')">Oggi</button>
         <button id="tabWeeklyAct" class="tab-btn" onclick="switchActTab('weekly')">Settimana</button>
         <button id="tabMonthlyAct" class="tab-btn" onclick="switchActTab('monthly')">Mese</button>
     </div>
-
     <div class="box-panel" style="flex-grow: 1; min-height:0; overflow-y:auto; padding:5px;">
         <h3 id="actListTitle">Classifica Attività</h3>
         <ul id="activityRankList" class="data-list"></ul>
     </div>
-
     <div class="box-panel" style="flex-shrink:0; margin-top:5px; padding:8px;">
         <h3 style="font-size:0.9em; margin-bottom:5px;">🎖️ Le Mie Medaglie</h3>
         <div id="myMedalsContainer" style="display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:1.5em;">
             <span style="font-size:0.6em; color:var(--hint-color);">Nessuna medaglia ancora.</span>
         </div>
     </div>
-
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
@@ -624,19 +569,16 @@
     <h3 style="color:var(--champ-color); margin-bottom:10px;">Partecipa ai Tornei!</h3>
     <p style="font-size:0.95em; margin-bottom:15px;">Fonda una squadra o unisciti a una esistente per scalare la classifica mondiale e vincere medaglie!</p>
     <button onclick="goToTournamentsFromPopup()" class="btn-champ">SCOPRI L'AREA TORNEI</button>
-
     <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:15px;">
         <input type="checkbox" id="stopShowingTrnPopup" style="width:16px; height:16px; cursor:pointer;">
         <label for="stopShowingTrnPopup" style="font-size:0.8em; cursor:pointer; color:var(--hint-color);">Non mostrare più all'avvio</label>
     </div>
-
     <button onclick="closeTrnWelcomeModal()" class="btn-secondary" style="margin-top: 15px; padding:8px; font-size:0.9em; width:auto;">Più tardi</button>
 </div>
 
 <div id="customDictModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; max-height: 70%; background: var(--bg-color); z-index: 4000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
     <h3 style="margin-top:0; text-align: center; color: var(--champ-color);" id="txt_custom_dict_title">Dizionario Personale 📖</h3>
     <p style="text-align: center; font-size: 0.85em; color: var(--hint-color);" id="txt_custom_dict_desc">Carica un file di testo (.txt) con le tue parole personalizzate.</p>
-
     <div style="background: var(--sec-bg-color); padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 15px;">
         <input type="file" id="customDictFileInput" accept=".txt" style="display: none;">
         <button onclick="document.getElementById('customDictFileInput').click()" class="btn-success" style="width: auto; padding: 10px 20px;" id="txt_select_file_btn">Scegli File .txt</button>
@@ -644,7 +586,6 @@
             Nessun file caricato.
         </div>
     </div>
-
     <div style="font-size: 0.8em; color: var(--hint-color); margin-bottom: 15px;">
         <ul style="padding-left: 20px; margin: 5px 0;">
             <li id="txt_custom_hint1">Le parole possono essere separate da spazio, virgola o a capo.</li>
@@ -652,16 +593,13 @@
             <li id="txt_custom_hint3">Il dizionario rimarrà salvato in locale.</li>
         </ul>
     </div>
-
     <div style="display: flex; gap: 10px; margin-top: auto;">
         <button onclick="document.getElementById('customDictModal').style.display='none'" class="btn-secondary" style="flex: 1;" id="txt_close_custom_btn">Chiudi</button>
     </div>
 </div>
 
-<!-- Richiamo dello script esterno aggiornato -->
-
-<script src="js/app.js?v=20240521.38"></script>
-<script src="js/quiz_data.js?v=20240521.38"></script>
+<script src="js/app.js?v=20240521.39"></script>
+<script src="js/quiz_data.js?v=20240521.39"></script>
 
 </body>
 </html>
