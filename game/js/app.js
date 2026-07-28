@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.49"; // Versione incrementata
+const APP_VERSION = "20240521.50"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -2203,6 +2203,34 @@ function checkBattleTime() {
         startBattleRoyaleSystem();
     }
 }
+// Click su Partecipa
+if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
+    // Se usi il bottone di test "T", genera il codice stanza al volo!
+    if (!brRoomCode) {
+        const now = new Date();
+        const dKey = now.toISOString().split('T')[0].replace(/-/g, '');
+        brRoomCode = "BR_" + dKey;
+    }
+
+    if(els.brBanner) els.brBanner.style.display = 'none';
+    activeTab = "br_lobby";
+    showScreen('brScreen');
+    
+    // Crea la stanza o si unisce
+    db.ref(`rooms/${brRoomCode}`).once('value', snap => {
+        if (!snap.exists()) {
+            db.ref(`rooms/${brRoomCode}`).set({
+                status: 'enrolling', type: 'battle_royale', wpm: 25, round: 0,
+                hostId: myId, createdAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+        // Registra il giocatore
+        db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
+            name: myName, lives: 3, status: 'In attesa', answered: false
+        });
+        listenToBattleRoyaleRoom();
+    });
+});
 // === LOGICA DI GIOCO BATTAGLIA REALE ===
 function listenToBattleRoyaleRoom() {
     db.ref(`rooms/${brRoomCode}`).on('value', snap => {
