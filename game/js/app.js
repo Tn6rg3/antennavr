@@ -2219,7 +2219,6 @@ if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
         // Nasconde il banner dopo l'iscrizione così non dà fastidio
         if(els.brBanner) els.brBanner.style.display = 'none';
     });
-});
     // Crea la stanza o si unisce
     db.ref(`rooms/${brRoomCode}`).once('value', snap => {
         if (!snap.exists()) {
