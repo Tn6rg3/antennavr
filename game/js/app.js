@@ -2154,7 +2154,7 @@ function renderQuizUI(state) {
 }
 
 // === BATTAGLIA REALE SERALE ===
-const BR_H = 09; const BR_M_START = 30; const BR_M_BANNER = 40;
+const BR_H = 9; const BR_M_START = 30; const BR_M_BANNER = 40;
 let brRoomCode = "";
 let brCheckInterval = null, brTimerInterval = null;
 let brIsPlaying = false, brAmIAlive = true;
