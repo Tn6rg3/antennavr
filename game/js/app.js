@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.45"; // Versione incrementata
+const APP_VERSION = "20240521.46"; // Versione incrementata per forzare la cache
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -98,7 +98,7 @@ function showScreen(screenId) {
     if(els.matchDetailsModal) els.matchDetailsModal.style.display = 'none';
 
     if (db && myId) {
-        const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea'].includes(screenId);
+        const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen'].includes(screenId);
         db.ref(`presence/${myId}`).update({ status: isPlayingScreen ? 'playing' : 'online' });
     }
 
@@ -375,7 +375,9 @@ function initGame() {
 
         checkActivityAndAwardMedals(); checkTournamentPopup();
         listenToRooms(); listenToOnlineUsers(); listenToInvites(); listenToInviteAccepted();
+        
         initBattleRoyaleScheduler(); 
+        
         loadRegolamento();
 
         if(els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
@@ -881,7 +883,6 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
 });
 
 if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
-    // Abbiamo rimosso il salvataggio in localStorage da qui!
     els.dailyChallengeModal.style.display = 'none';
 
     currentMode = 'daily_challenge';
@@ -908,12 +909,13 @@ if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
         wordCount: requestedWordCount, 
         words: gameWords, 
         fixedSpeed: isFixedSpeed, 
-        charSpaceWpm: 0, // Aggiunto e salvato
-        wordSpaceMult: 1.0, // Aggiunto e salvato
+        charSpaceWpm: 0, 
+        wordSpaceMult: 1.0, 
         createdAt: firebase.database.ServerValue.TIMESTAMP, 
         hostId: myId 
     }).then(() => joinRoomLogic(false));
 });
+
 if(els.btnPlayDailyLater) els.btnPlayDailyLater.addEventListener('click', () => {
     els.dailyChallengeModal.style.display = 'none';
 });
@@ -958,7 +960,6 @@ function joinRoomLogic(isReconnect = false) {
             if (!snap.exists()) return exitRoomCleanly(true); const rData = snap.val(); 
             currentMode = rData.mode; requestedWordCount = rData.wordCount; isSinglePlayer = rData.type === 'single'; isFixedSpeed = rData.fixedSpeed || false; roomHostId = rData.hostId;
             
-            // Correzione: usa !== undefined per accettare il valore 0 correttamente
             window.charSpaceWpm = rData.charSpaceWpm !== undefined ? rData.charSpaceWpm : rData.wpm;
             window.wordSpaceMult = rData.wordSpaceMult || 1.0;
             
@@ -973,6 +974,7 @@ function joinRoomLogic(isReconnect = false) {
         });
     });
 }
+
 if(els.inviteFriendsBtn) els.inviteFriendsBtn.addEventListener('click', () => tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=room_${roomCode}`)}&text=${encodeURIComponent(`Sfida in Telegrafia! Entra nella mia stanza: #${roomCode}`)}`));
 
 function renderPlayersList(playersData, hostId) {
@@ -1146,14 +1148,11 @@ function finishGame() {
     if (currentMode === 'daily_challenge' && els.btnShareDaily) {
         els.btnShareDaily.style.display = 'inline-block';
         els.btnShareDaily.onclick = () => {
-            // Separiamo correttamente il link dell'app dal testo del messaggio
             const appUrl = encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`);
             const textMsg = encodeURIComponent(`📻 Sfida Giornaliera CW!\nHo totalizzato ${totalScore} pt (Max Velocità: ${currentWpm} WPM).\nRiesci a fare di meglio?`);
             
-            // Creiamo il link di condivisione standard di Telegram
             const shareUrl = `https://t.me/share/url?url=${appUrl}&text=${textMsg}`;
             
-            // Usiamo un fallback: se openTelegramLink fallisce su Web, apre una nuova scheda
             try {
                 if (tg && tg.openTelegramLink) {
                     tg.openTelegramLink(shareUrl);
@@ -1203,7 +1202,6 @@ function finishGame() {
     }
 
     if (currentMode === 'daily_challenge') {
-        // SALVATAGGIO SPOSTATO QUI: La partita è ufficialmente conclusa!
         let todayStr = new Date().toISOString().split('T')[0];
         localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
         
@@ -2154,13 +2152,13 @@ function renderQuizUI(state) {
     }
 }
 
-// === COSTANTI BATTAGLIA REALE ===
+// === BATTAGLIA REALE SERALE ===
 const BR_H = 21; const BR_M_START = 30; const BR_M_BANNER = 20;
 let brRoomCode = "";
 let brCheckInterval = null, brTimerInterval = null;
 let brIsPlaying = false, brAmIAlive = true;
 
-// Inizializza il controllo dell'orologio (da chiamare dentro initGame)
+// Inizializza il controllo dell'orologio (chiamato dentro initGame)
 function initBattleRoyaleScheduler() {
     brCheckInterval = setInterval(checkBattleTime, 10000); // Controlla ogni 10 sec
 }
@@ -2179,10 +2177,10 @@ function checkBattleTime() {
         // Ascolta il numero di iscritti in tempo reale
         db.ref(`rooms/${brRoomCode}/players`).on('value', snap => {
             const count = snap.exists() ? Object.keys(snap.val()).length : 0;
-            els.brEnrolledCount.textContent = count;
+            if(els.brEnrolledCount) els.brEnrolledCount.textContent = count;
         });
     } else {
-        els.brBanner.style.display = 'none';
+        if(els.brBanner) els.brBanner.style.display = 'none';
         db.ref(`rooms/${brRoomCode}/players`).off('value');
     }
 
@@ -2214,10 +2212,14 @@ if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
     });
 });
 
-// === LOGICA DI GIOCO ===
+// === LOGICA DI GIOCO BATTAGLIA REALE ===
 function listenToBattleRoyaleRoom() {
     db.ref(`rooms/${brRoomCode}`).on('value', snap => {
-        if (!snap.exists()) { showScreen('setupScreen'); alert("La Battaglia è stata annullata."); return; }
+        if (!snap.exists()) { 
+            showScreen('setupScreen'); 
+            alert("La Battaglia è stata annullata o è terminata."); 
+            return; 
+        }
         const rData = snap.val();
         
         renderBRPlayers(rData.players || {});
@@ -2240,22 +2242,30 @@ function listenToBattleRoyaleRoom() {
                 handleBRRound(rData);
             }
         }
+        
+        if (rData.status === 'finished') {
+            brIsPlaying = false;
+            els.brStatusText.textContent = `Partita Conclusa! Vincitore: ${rData.winner || 'Nessuno'}`;
+            els.brInputArea.style.display = 'none';
+            els.brTimerContainer.style.display = 'none';
+        }
     });
 }
 
 function renderBRPlayers(players) {
+    if(!els.brPlayersList) return;
     els.brPlayersList.innerHTML = "";
     Object.values(players).forEach(p => {
         const li = document.createElement('li');
-        li.style.cssText = "display:flex; justify-content:space-between; padding:5px; border-bottom:1px dashed #444;";
+        li.style.cssText = "display:flex; justify-content:space-between; padding:5px; border-bottom:1px dashed rgba(255,255,255,0.1);";
         
         const info = document.createElement('span');
         let icon = p.lives > 0 ? "❤️".repeat(p.lives) : "💀";
-        info.innerHTML = `<b>${p.name}</b> <small>${icon}</small>`;
+        info.innerHTML = `<b style="color:var(--link-color);">${escapeHTML(p.name)}</b> <small>${icon}</small>`;
         
         const status = document.createElement('span');
         status.style.fontSize = "0.85em";
-        status.style.color = p.status === 'Corretto!' ? '#4caf50' : (p.status === 'Eliminato' ? '#e53935' : 'var(--hint-color)');
+        status.style.color = p.status === 'Corretto!' ? '#4caf50' : (p.status === 'Eliminato' || p.status === 'Errore!' ? '#e53935' : 'var(--hint-color)');
         status.textContent = p.status;
         
         li.appendChild(info); li.appendChild(status);
@@ -2267,7 +2277,7 @@ function renderBRPlayers(players) {
 function startBattleRoyaleSystem() {
     db.ref(`rooms/${brRoomCode}`).once('value', snap => {
         const rData = snap.val();
-        if (rData.hostId === myId) {
+        if (rData && rData.hostId === myId) {
             const pCount = Object.keys(rData.players || {}).length;
             if (pCount < 5) {
                 db.ref(`rooms/${brRoomCode}/status`).set('cancelled');
@@ -2325,14 +2335,16 @@ function handleBRRound(rData) {
         const left = rData.roundEndTime - Date.now();
         if (left <= 0) {
             clearInterval(brTimerInterval);
-            els.brTimerProgress.style.width = '0%';
+            if(els.brTimerProgress) els.brTimerProgress.style.width = '0%';
             if (brAmIAlive && !rData.players[myId].answered) submitBRAnswer(rData.currentWord, true);
         } else {
-            els.brTimerProgress.style.width = (left / 30000 * 100) + '%';
-            // Aggiorna gradiente barra in base al tempo (verde -> giallo -> rosso)
-            if (left < 10000) els.brTimerProgress.style.background = '#e53935';
-            else if (left < 20000) els.brTimerProgress.style.background = '#ff9800';
-            else els.brTimerProgress.style.background = '#4caf50';
+            if(els.brTimerProgress) {
+                els.brTimerProgress.style.width = (left / 30000 * 100) + '%';
+                // Aggiorna gradiente barra in base al tempo (verde -> giallo -> rosso)
+                if (left < 10000) els.brTimerProgress.style.background = '#e53935';
+                else if (left < 20000) els.brTimerProgress.style.background = '#ff9800';
+                else els.brTimerProgress.style.background = '#4caf50';
+            }
         }
     }, 100);
 }
@@ -2393,20 +2405,6 @@ function checkBRRoundResults(currentWpm, currentRound) {
             // Fine partita
             db.ref(`rooms/${brRoomCode}/status`).set('finished');
             db.ref(`rooms/${brRoomCode}/winner`).set(aliveCount === 1 ? lastAliveName : 'Nessuno');
-            // Nota: Qui puoi aggiungere l'assegnazione dei punti in Classifica o Medaglia
-            alert(`Partita Conclusa! Vincitore: ${aliveCount === 1 ? lastAliveName : 'Nessuno'}`);
-        } else {
-            // Prossimo round (WPM + 1)
-            hostNextBRRound(rData, currentWpm + 1, currentRound + 1);
-        }
-    });
-}
-if (aliveCount <= 1) {
-            // Fine partita
-            db.ref(`rooms/${brRoomCode}/status`).set('finished');
-            db.ref(`rooms/${brRoomCode}/winner`).set(aliveCount === 1 ? lastAliveName : 'Nessuno');
-            // Nota: Qui puoi aggiungere l'assegnazione dei punti in Classifica o Medaglia
-            alert(`Partita Conclusa! Vincitore: ${aliveCount === 1 ? lastAliveName : 'Nessuno'}`);
         } else {
             // Prossimo round (WPM + 1)
             hostNextBRRound(rData, currentWpm + 1, currentRound + 1);
