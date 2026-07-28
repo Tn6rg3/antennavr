@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.47"; // Versione incrementata
+const APP_VERSION = "20240521.48"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -2155,7 +2155,7 @@ function renderQuizUI(state) {
 
 // === BATTAGLIA REALE SERALE ===
 const BR_H_BANNER = 9;   // Ora comparsa banner (9 del mattino)
-const BR_M_BANNER = 45;   // Minuto comparsa banner (00)
+const BR_M_BANNER = 54;   // Minuto comparsa banner (00)
 const BR_H_START = 21;   // Ora inizio partita (21 di sera)
 const BR_M_START = 30;    // Minuto inizio partita (00)
 
