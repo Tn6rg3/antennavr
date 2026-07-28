@@ -2203,19 +2203,23 @@ function checkBattleTime() {
         startBattleRoyaleSystem();
     }
 }
-// Click su Partecipa
+// Click su Partecipa (Ora registra solo l'iscrizione e ti lascia nel menu)
 if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
-    // Se usi il bottone di test "T", genera il codice stanza al volo!
     if (!brRoomCode) {
         const now = new Date();
         const dKey = now.toISOString().split('T')[0].replace(/-/g, '');
         brRoomCode = "BR_" + dKey;
     }
-
-    if(els.brBanner) els.brBanner.style.display = 'none';
-    activeTab = "br_lobby";
-    showScreen('brScreen');
     
+    // Registra il giocatore nel database senza cambiare schermata
+    db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
+        name: myName, lives: 3, status: 'Iscritto ⏳', answered: false
+    }).then(() => {
+        showToast("⚔️ Iscrizione registrata! Ti avviseremo all'orario della sfida.");
+        // Nasconde il banner dopo l'iscrizione così non dà fastidio
+        if(els.brBanner) els.brBanner.style.display = 'none';
+    });
+});
     // Crea la stanza o si unisce
     db.ref(`rooms/${brRoomCode}`).once('value', snap => {
         if (!snap.exists()) {
