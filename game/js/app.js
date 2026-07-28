@@ -2236,7 +2236,7 @@ function listenToBattleRoyaleRoom() {
             
             const myData = rData.players[myId];
             brAmIAlive = myData && myData.lives > 0;
-            els.brLivesDisplay.textContent = brAmIAlive ? "❤️".repeat(myData.lives) : "💀 ELIMINATO";
+            els.brLivesDisplay.textContent = brAmIAlive ? "❤️".repeat(Math.max(0, Math.min(5, myData.lives))) : "💀 ELIMINATO";
             
             if (rData.roundEndTime && rData.currentWord) {
                 handleBRRound(rData);
@@ -2260,7 +2260,8 @@ function renderBRPlayers(players) {
         li.style.cssText = "display:flex; justify-content:space-between; padding:5px; border-bottom:1px dashed rgba(255,255,255,0.1);";
         
         const info = document.createElement('span');
-        let icon = p.lives > 0 ? "❤️".repeat(p.lives) : "💀";
+        // SECURITY FIX: Anche qui, limitiamo a 5 cuori massimo
+        let icon = p.lives > 0 ? "❤️".repeat(Math.max(0, Math.min(5, p.lives))) : "💀";
         info.innerHTML = `<b style="color:var(--link-color);">${escapeHTML(p.name)}</b> <small>${icon}</small>`;
         
         const status = document.createElement('span');
