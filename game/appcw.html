@@ -27,6 +27,7 @@
     🚀 Nuova Versione Disponibile!
     <button onclick="window.location.href = window.location.pathname + '?v=' + Date.now();" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em;">Aggiorna ora</button>
 </div>
+
 <!-- ========================================== -->
 <!-- BANNER BATTAGLIA SERALE (appare alle 21:20) -->
 <!-- ========================================== -->
@@ -39,7 +40,6 @@
         Partecipa alla Sfida
     </button>
 </div>
-
     
 <!-- CONTENITORE NOTIFICHE TOAST -->
 <div id="toastContainer"></div>
@@ -586,17 +586,40 @@
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
-<!-- INCOLLA QUI LA NUOVA SCHERMATA BATTAGLIA REALE -->
-    <div id="brScreen" class="screen">
-        <div style="background:var(--sec-bg-color); padding:10px; border-radius:8px; text-align:center; margin-bottom:15px;">
-            <h2 style="margin:0; color:#e53935;">BATTAGLIA SERALE</h2>
-            <div style="display:flex; justify-content:space-around; margin-top:10px; font-weight:bold;">
-                <span>Vite: <span id="brLivesDisplay" style="color:#e53935;">❤️❤️❤️</span></span>
-                <span>Velocità: <span id="brWpmDisplay" style="color:var(--link-color);">25 WPM</span></span>
-            </div>
+<!-- SCHERMATA BATTAGLIA REALE -->
+<div id="brScreen" class="screen">
+    <div style="background:var(--sec-bg-color); padding:10px; border-radius:8px; text-align:center; margin-bottom:15px;">
+        <h2 style="margin:0; color:#e53935;">BATTAGLIA SERALE</h2>
+        <div style="display:flex; justify-content:space-around; margin-top:10px; font-weight:bold;">
+            <span>Vite: <span id="brLivesDisplay" style="color:#e53935;">❤️❤️❤️</span></span>
+            <span>Velocità: <span id="brWpmDisplay" style="color:var(--link-color);">25 WPM</span></span>
         </div>
+    </div>
 
-    
+    <!-- Barra del tempo 30 secondi -->
+    <div id="brTimerContainer" style="width:100%; height:15px; background:var(--bg-color); border:1px solid var(--hint-color); border-radius:10px; overflow:hidden; margin-bottom:15px; display:none;">
+        <div id="brTimerProgress" style="width:100%; height:100%; background:#4caf50; transition: width 0.1s linear;"></div>
+    </div>
+
+    <h3 id="brStatusText" style="text-align:center; color:var(--text-color);">In attesa delle 21:30...</h3>
+
+    <div id="brInputArea" style="display:none; flex-direction:column; gap:10px; margin-bottom:20px;">
+        <input type="text" id="brInput" placeholder="Decodifica e scrivi qui..." autocomplete="off" autocapitalize="none">
+        <button id="btnSendBr" class="btn-success">INVIA</button>
+    </div>
+
+    <div class="br-players-list">
+        <h4 style="border-bottom:1px solid var(--hint-color); padding-bottom:5px;">Partecipanti e Stato</h4>
+        <ul id="brPlayersList" style="list-style:none; padding:0; margin:0;">
+            <!-- Riempito dinamicamente da JS -->
+        </ul>
+    </div>
+
+    <!-- TASTO ABBANDONA AGGIUNTO QUI IN FONDO ALLA SCHERMATA -->
+    <button id="btnLeaveBR" class="btn-danger" style="margin-top:15px;">Abbandona Battaglia</button>
+</div>
+<!-- FINE SCHERMATA BATTAGLIA -->
+
 <!-- MODAL: DETTAGLI PARTITA -->
 <div id="matchDetailsModal" style="display: none; position: fixed; top: 10%; left: 5%; width: 90%; height: 80%; background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color); border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
     <h3 style="margin-top:0; text-align: center; color: var(--link-color);">Dettagli Partita</h3>
