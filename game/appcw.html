@@ -27,7 +27,20 @@
     🚀 Nuova Versione Disponibile!
     <button onclick="window.location.href = window.location.pathname + '?v=' + Date.now();" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em;">Aggiorna ora</button>
 </div>
+<!-- ========================================== -->
+<!-- BANNER BATTAGLIA SERALE (appare alle 21:20) -->
+<!-- ========================================== -->
+<div id="brBanner" class="update-banner" style="display:none; background-color:#e53935; text-align:center;">
+    <h3 style="margin:0 0 5px 0; color:#fff;">⚔️ LA BATTAGLIA DELLE 21:30 ⚔️</h3>
+    <p style="margin:0 0 10px 0; font-size:0.9em; color:#fff;">
+        Iscritti attuali: <b id="brEnrolledCount">0</b> (Minimo 5 per iniziare)
+    </p>
+    <button id="btnJoinBR" class="action-btn-small" style="background:#fff; color:#e53935; font-weight:bold;">
+        Partecipa alla Sfida
+    </button>
+</div>
 
+    
 <!-- CONTENITORE NOTIFICHE TOAST -->
 <div id="toastContainer"></div>
 
@@ -573,6 +586,17 @@
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
+<!-- INCOLLA QUI LA NUOVA SCHERMATA BATTAGLIA REALE -->
+    <div id="brScreen" class="screen">
+        <div style="background:var(--sec-bg-color); padding:10px; border-radius:8px; text-align:center; margin-bottom:15px;">
+            <h2 style="margin:0; color:#e53935;">BATTAGLIA SERALE</h2>
+            <div style="display:flex; justify-content:space-around; margin-top:10px; font-weight:bold;">
+                <span>Vite: <span id="brLivesDisplay" style="color:#e53935;">❤️❤️❤️</span></span>
+                <span>Velocità: <span id="brWpmDisplay" style="color:var(--link-color);">25 WPM</span></span>
+            </div>
+        </div>
+
+    
 <!-- MODAL: DETTAGLI PARTITA -->
 <div id="matchDetailsModal" style="display: none; position: fixed; top: 10%; left: 5%; width: 90%; height: 80%; background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color); border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
     <h3 style="margin-top:0; text-align: center; color: var(--link-color);">Dettagli Partita</h3>
@@ -695,8 +719,8 @@
 </div>
 
 <!-- SCRIPT PRINCIPALI -->
-<script src="js/app.js?v=20240521.44"></script>
-<script src="js/quiz_data.js?v=20240521.44"></script>
+<script src="js/app.js?v=20240521.45"></script>
+<script src="js/quiz_data.js?v=20240521.45"></script>
 
 </body>
 </html>
