@@ -2154,7 +2154,11 @@ function renderQuizUI(state) {
 }
 
 // === BATTAGLIA REALE SERALE ===
-const BR_H = 21; const BR_M_START = 30; const BR_M_BANNER = 20;
+const BR_H_BANNER = 9;   // Ora comparsa banner (9 del mattino)
+const BR_M_BANNER = 45;   // Minuto comparsa banner (00)
+const BR_H_START = 21;   // Ora inizio partita (21 di sera)
+const BR_M_START = 30;    // Minuto inizio partita (00)
+
 let brRoomCode = "";
 let brCheckInterval = null, brTimerInterval = null;
 let brIsPlaying = false, brAmIAlive = true;
@@ -2168,13 +2172,22 @@ function checkBattleTime() {
     if (gameRunning || brIsPlaying) return; // Non disturbare se già gioca
     
     const now = new Date();
-    const isTime = (now.getHours() === BR_H && now.getMinutes() >= BR_M_BANNER && now.getMinutes() < BR_M_START);
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    // Calcoliamo i minuti totali trascorsi da mezzanotte per fare un confronto facile
+    const currentTotalMinutes = currentHour * 60 + currentMinute;
+    const bannerTotalMinutes = BR_H_BANNER * 60 + BR_M_BANNER;
+    const startTotalMinutes = BR_H_START * 60 + BR_M_START;
+    
+    // Il banner è visibile tra l'orario di comparsa e l'orario di inizio
+    const isTime = (currentTotalMinutes >= bannerTotalMinutes && currentTotalMinutes < startTotalMinutes);
     
     const dKey = now.toISOString().split('T')[0].replace(/-/g, '');
     brRoomCode = "BR_" + dKey;
 
     if (isTime) {
-        els.brBanner.style.display = 'block';
+        if(els.brBanner) els.brBanner.style.display = 'block';
         // Ascolta il numero di iscritti in tempo reale
         db.ref(`rooms/${brRoomCode}/players`).on('value', snap => {
             const count = snap.exists() ? Object.keys(snap.val()).length : 0;
@@ -2185,34 +2198,11 @@ function checkBattleTime() {
         db.ref(`rooms/${brRoomCode}/players`).off('value');
     }
 
-    // Forza lo start alle 21:30 esatte per chi è nella stanza
-    if (now.getHours() === BR_H && now.getMinutes() === BR_M_START && activeTab === "br_lobby") {
+    // Forza lo start all'ora esatta di inizio per chi è nella stanza
+    if (currentHour === BR_H_START && currentMinute === BR_M_START && activeTab === "br_lobby") {
         startBattleRoyaleSystem();
     }
 }
-
-// Click su Partecipa
-if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
-    els.brBanner.style.display = 'none';
-    activeTab = "br_lobby";
-    showScreen('brScreen');
-    
-    // Crea la stanza o si unisce
-    db.ref(`rooms/${brRoomCode}`).once('value', snap => {
-        if (!snap.exists()) {
-            db.ref(`rooms/${brRoomCode}`).set({
-                status: 'enrolling', type: 'battle_royale', wpm: 25, round: 0,
-                hostId: myId, createdAt: firebase.database.ServerValue.TIMESTAMP
-            });
-        }
-        // Registra il giocatore
-        db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
-            name: myName, lives: 3, status: 'In attesa', answered: false
-        });
-        listenToBattleRoyaleRoom();
-    });
-});
-
 // === LOGICA DI GIOCO BATTAGLIA REALE ===
 function listenToBattleRoyaleRoom() {
     db.ref(`rooms/${brRoomCode}`).on('value', snap => {
