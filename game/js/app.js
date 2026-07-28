@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.51"; // Versione incrementata
+const APP_VERSION = "20240521.52"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -2165,6 +2165,7 @@ let brIsPlaying = false, brAmIAlive = true;
 
 // Inizializza il controllo dell'orologio (chiamato dentro initGame)
 function initBattleRoyaleScheduler() {
+    checkBattleTime(); // Controllo immediato all'apertura dell'app
     brCheckInterval = setInterval(checkBattleTime, 10000); // Controlla ogni 10 sec
 }
 
@@ -2198,11 +2199,19 @@ function checkBattleTime() {
         db.ref(`rooms/${brRoomCode}/players`).off('value');
     }
 
-    // Forza lo start all'ora esatta di inizio per chi è nella stanza
-    if (currentHour === BR_H_START && currentMinute === BR_M_START && activeTab === "br_lobby") {
-        startBattleRoyaleSystem();
+    // Se scatta l'ora esatta d'inizio, se sei iscritto ti porta dentro la schermata di gioco automaticamente!
+    if (currentHour === BR_H_START && currentMinute === BR_M_START) {
+        db.ref(`rooms/${brRoomCode}/players/${myId}`).once('value', snap => {
+            if (snap.exists() && activeTab !== "br_playing") {
+                activeTab = "br_playing";
+                showScreen('brScreen');
+                listenToBattleRoyaleRoom();
+            }
+        });
+        startBattleRoyaleSystem(); // L'host avvia il round
     }
 }
+
 // Click su Partecipa (Ora registra solo l'iscrizione e ti lascia nel menu)
 if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
     if (!brRoomCode) {
@@ -2211,15 +2220,7 @@ if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
         brRoomCode = "BR_" + dKey;
     }
     
-    // Registra il giocatore nel database senza cambiare schermata
-    db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
-        name: myName, lives: 3, status: 'Iscritto ⏳', answered: false
-    }).then(() => {
-        showToast("⚔️ Iscrizione registrata! Ti avviseremo all'orario della sfida.");
-        // Nasconde il banner dopo l'iscrizione così non dà fastidio
-        if(els.brBanner) els.brBanner.style.display = 'none';
-    });
-    // Crea la stanza o si unisce
+    // Crea la stanza se non esiste, così abbiamo l'host impostato
     db.ref(`rooms/${brRoomCode}`).once('value', snap => {
         if (!snap.exists()) {
             db.ref(`rooms/${brRoomCode}`).set({
@@ -2227,13 +2228,18 @@ if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
                 hostId: myId, createdAt: firebase.database.ServerValue.TIMESTAMP
             });
         }
-        // Registra il giocatore
+        
+        // Registra il giocatore nel database senza cambiare schermata
         db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
-            name: myName, lives: 3, status: 'In attesa', answered: false
+            name: myName, lives: 3, status: 'Iscritto ⏳', answered: false
+        }).then(() => {
+            showToast("⚔️ Iscrizione registrata! Ti avviseremo all'orario della sfida.");
+            // Nasconde il banner dopo l'iscrizione così non dà fastidio
+            if(els.brBanner) els.brBanner.style.display = 'none';
         });
-        listenToBattleRoyaleRoom();
     });
 });
+
 // === LOGICA DI GIOCO BATTAGLIA REALE ===
 function listenToBattleRoyaleRoom() {
     db.ref(`rooms/${brRoomCode}`).on('value', snap => {
@@ -2258,7 +2264,13 @@ function listenToBattleRoyaleRoom() {
             
             const myData = rData.players[myId];
             brAmIAlive = myData && myData.lives > 0;
-            els.brLivesDisplay.textContent = brAmIAlive ? "❤️".repeat(Math.max(0, Math.min(5, myData.lives))) : "💀 ELIMINATO";
+            
+            // SECURITY FIX DEFINITIVO: array fisso al posto di .repeat()
+            const hearts = ["💀 ELIMINATO", "❤️", "❤️❤️", "❤️❤️❤️", "❤️❤️❤️❤️", "❤️❤️❤️❤️❤️"];
+            let safeLives = myData && myData.lives ? parseInt(myData.lives) : 0;
+            if (safeLives < 0) safeLives = 0;
+            if (safeLives > 5) safeLives = 5;
+            els.brLivesDisplay.textContent = brAmIAlive ? hearts[safeLives] : "💀 ELIMINATO";
             
             if (rData.roundEndTime && rData.currentWord) {
                 handleBRRound(rData);
@@ -2282,7 +2294,14 @@ function renderBRPlayers(players) {
         li.style.cssText = "display:flex; justify-content:space-between; padding:5px; border-bottom:1px dashed rgba(255,255,255,0.1);";
         
         const info = document.createElement('span');
-        let icon = p.lives > 0 ? "❤️".repeat(Math.max(0, Math.min(5, p.lives))) : "💀";
+        
+        // SECURITY FIX DEFINITIVO: array fisso al posto di .repeat()
+        const heartsList = ["💀", "❤️", "❤️❤️", "❤️❤️❤️", "❤️❤️❤️❤️", "❤️❤️❤️❤️❤️"];
+        let safePLives = p.lives ? parseInt(p.lives) : 0;
+        if (safePLives < 0) safePLives = 0;
+        if (safePLives > 5) safePLives = 5;
+        let icon = heartsList[safePLives];
+        
         info.innerHTML = `<b style="color:var(--link-color);">${escapeHTML(p.name)}</b> <small>${icon}</small>`;
         
         const status = document.createElement('span');
