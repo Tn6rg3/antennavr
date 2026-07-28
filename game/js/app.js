@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.46"; // Versione incrementata per forzare la cache
+const APP_VERSION = "20240521.47"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -455,7 +455,6 @@ function playNotificationSound() {
 
 function playMorseAudio(text, wpm) {
     return new Promise(resolve => {
-        // CORREZIONE: Controlla sia gameRunning che brIsPlaying
         if (!audioCtx || (!gameRunning && !brIsPlaying)) { resolve(); return; }
 
         let charUnit = 1.2 / wpm;
@@ -467,7 +466,6 @@ function playMorseAudio(text, wpm) {
         let time = audioCtx.currentTime + 0.05;
 
         for (let char of text) {
-            // CORREZIONE: Controlla l'interruzione per entrambe le modalità
             if (!gameRunning && !brIsPlaying) break;
             
             if (morseDict[char]) {
@@ -857,7 +855,10 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
     if (gameMode === 'custom' && customDictionary.length === 0) { els.customDictModal.style.display = 'flex'; return showToast("Carica prima un file di testo!"); }
 
     isChallenging = false; if (currentInviterId) db.ref(`invites/${currentInviterId}`).once('value', s => { if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove(); });
-    db.ref(`invite_accepted/${myId}`).remove(); currentMode = gameMode; isSinglePlayer = gameType === 'single'; currentWpm = currentMode==='callsign' ? 25 : parseInt(els.startWpmInput.value); baseWpm = currentWpm; requestedWordCount = currentMode==='callsign' ? 25 : Math.min(200, Math.max(1, parseInt(els.wordCountInput.value) || 10));
+    db.ref(`invite_accepted/${myId}`).remove(); currentMode = gameMode; isSinglePlayer = gameType === 'single'; currentWpm = currentMode==='callsign' ? 25 : parseInt(els.startWpmInput.value); baseWpm = currentWpm; 
+    requestedWordCount = currentMode==='callsign' ? 25 : Math.min(200, Math.max(1, parseInt(els.wordCountInput.value) || 10)); 
+    currentTone = parseInt(els.toneInput.value); isFixedSpeed = els.fixedSpeedCheckbox.checked; isEasyMode = els.easyModeCheckbox.checked;
+    
     let cSpace = (els.charSpaceInput && els.charSpaceInput.value) ? parseInt(els.charSpaceInput.value) : currentWpm;
     let wSpace = (els.wordSpaceSelect && els.wordSpaceSelect.value) ? parseFloat(els.wordSpaceSelect.value) : 1.0;
     window.charSpaceWpm = cSpace;
@@ -892,7 +893,6 @@ if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
     isFixedSpeed = false;
     isEasyMode = false;
     
-    // Impostiamo a 0 per far seguire dinamicamente la velocità
     window.charSpaceWpm = 0; 
     window.wordSpaceMult = 1.0;
 
@@ -1007,6 +1007,7 @@ if(els.permanentGameInput) {
 
 function handleWordSubmission(userWord) {
     if (userWord) userWord = userWord.substring(0, 50);
+
     inputActive = false; const currentWord = gameWords[wordIndex].toUpperCase(); let points = 0, scoreColor = ""; const reactionMs = Date.now() - lastWordStartTime; const levDist = getLevenshteinDistance(currentWord, userWord);
     if (currentMode === 'chars') { if (userWord === currentWord) { points = Math.max(100, Math.floor(1000 - (reactionMs / 2))); scoreColor = "#4caf50"; } else { points = 0; scoreColor = "#d32f2f"; } } 
     else {
@@ -2260,7 +2261,6 @@ function renderBRPlayers(players) {
         li.style.cssText = "display:flex; justify-content:space-between; padding:5px; border-bottom:1px dashed rgba(255,255,255,0.1);";
         
         const info = document.createElement('span');
-        // SECURITY FIX: Anche qui, limitiamo a 5 cuori massimo
         let icon = p.lives > 0 ? "❤️".repeat(Math.max(0, Math.min(5, p.lives))) : "💀";
         info.innerHTML = `<b style="color:var(--link-color);">${escapeHTML(p.name)}</b> <small>${icon}</small>`;
         
@@ -2373,6 +2373,7 @@ function submitBRAnswer(realWord, isTimeout) {
     clearInterval(brTimerInterval);
     els.brInputArea.style.display = 'none';
     
+    // SECURITY FIX: Limite a 50 caratteri
     const typed = els.brInput.value.trim().toUpperCase().substring(0, 50);
     const isCorrect = !isTimeout && (typed === realWord);
     
