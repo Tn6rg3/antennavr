@@ -857,8 +857,7 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
     if (gameMode === 'custom' && customDictionary.length === 0) { els.customDictModal.style.display = 'flex'; return showToast("Carica prima un file di testo!"); }
 
     isChallenging = false; if (currentInviterId) db.ref(`invites/${currentInviterId}`).once('value', s => { if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove(); });
-    db.ref(`invite_accepted/${myId}`).remove(); currentMode = gameMode; isSinglePlayer = gameType === 'single'; currentWpm = currentMode==='callsign' ? 25 : parseInt(els.startWpmInput.value); baseWpm = currentWpm; requestedWordCount = currentMode==='callsign' ? 25 : Math.max(1, parseInt(els.wordCountInput.value)); currentTone = parseInt(els.toneInput.value); isFixedSpeed = els.fixedSpeedCheckbox.checked; isEasyMode = els.easyModeCheckbox.checked;
-    
+    db.ref(`invite_accepted/${myId}`).remove(); currentMode = gameMode; isSinglePlayer = gameType === 'single'; currentWpm = currentMode==='callsign' ? 25 : parseInt(els.startWpmInput.value); baseWpm = currentWpm; requestedWordCount = currentMode==='callsign' ? 25 : Math.min(200, Math.max(1, parseInt(els.wordCountInput.value) || 10));
     let cSpace = (els.charSpaceInput && els.charSpaceInput.value) ? parseInt(els.charSpaceInput.value) : currentWpm;
     let wSpace = (els.wordSpaceSelect && els.wordSpaceSelect.value) ? parseFloat(els.wordSpaceSelect.value) : 1.0;
     window.charSpaceWpm = cSpace;
@@ -1007,6 +1006,7 @@ if(els.permanentGameInput) {
 }
 
 function handleWordSubmission(userWord) {
+    if (userWord) userWord = userWord.substring(0, 50);
     inputActive = false; const currentWord = gameWords[wordIndex].toUpperCase(); let points = 0, scoreColor = ""; const reactionMs = Date.now() - lastWordStartTime; const levDist = getLevenshteinDistance(currentWord, userWord);
     if (currentMode === 'chars') { if (userWord === currentWord) { points = Math.max(100, Math.floor(1000 - (reactionMs / 2))); scoreColor = "#4caf50"; } else { points = 0; scoreColor = "#d32f2f"; } } 
     else {
@@ -2372,7 +2372,7 @@ function submitBRAnswer(realWord, isTimeout) {
     clearInterval(brTimerInterval);
     els.brInputArea.style.display = 'none';
     
-    const typed = els.brInput.value.trim().toUpperCase();
+    const typed = els.brInput.value.trim().toUpperCase().substring(0, 50);
     const isCorrect = !isTimeout && (typed === realWord);
     
     db.ref(`rooms/${brRoomCode}/players/${myId}`).transaction(p => {
