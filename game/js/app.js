@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.44"; // Versione incrementata
+const APP_VERSION = "20240521.45"; // Versione incrementata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -2150,3 +2150,254 @@ function renderQuizUI(state) {
         els.buzzerWinner.textContent = ""; els.quizBuzzer.style.display = inputActive ? 'block' : 'none'; els.quizOptionsContainer.style.opacity = '0.5'; disableQuizButtons(true);
     }
 }
+
+// === COSTANTI BATTAGLIA REALE ===
+const BR_H = 21; const BR_M_START = 30; const BR_M_BANNER = 20;
+let brRoomCode = "";
+let brCheckInterval = null, brTimerInterval = null;
+let brIsPlaying = false, brAmIAlive = true;
+
+// Inizializza il controllo dell'orologio (da chiamare dentro initGame)
+function initBattleRoyaleScheduler() {
+    brCheckInterval = setInterval(checkBattleTime, 10000); // Controlla ogni 10 sec
+}
+
+function checkBattleTime() {
+    if (gameRunning || brIsPlaying) return; // Non disturbare se già gioca
+    
+    const now = new Date();
+    const isTime = (now.getHours() === BR_H && now.getMinutes() >= BR_M_BANNER && now.getMinutes() < BR_M_START);
+    
+    const dKey = now.toISOString().split('T')[0].replace(/-/g, '');
+    brRoomCode = "BR_" + dKey;
+
+    if (isTime) {
+        els.brBanner.style.display = 'block';
+        // Ascolta il numero di iscritti in tempo reale
+        db.ref(`rooms/${brRoomCode}/players`).on('value', snap => {
+            const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+            els.brEnrolledCount.textContent = count;
+        });
+    } else {
+        els.brBanner.style.display = 'none';
+        db.ref(`rooms/${brRoomCode}/players`).off('value');
+    }
+
+    // Forza lo start alle 21:30 esatte per chi è nella stanza
+    if (now.getHours() === BR_H && now.getMinutes() === BR_M_START && activeTab === "br_lobby") {
+        startBattleRoyaleSystem();
+    }
+}
+
+// Click su Partecipa
+if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
+    els.brBanner.style.display = 'none';
+    activeTab = "br_lobby";
+    showScreen('brScreen');
+    
+    // Crea la stanza o si unisce
+    db.ref(`rooms/${brRoomCode}`).once('value', snap => {
+        if (!snap.exists()) {
+            db.ref(`rooms/${brRoomCode}`).set({
+                status: 'enrolling', type: 'battle_royale', wpm: 25, round: 0,
+                hostId: myId, createdAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+        // Registra il giocatore
+        db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
+            name: myName, lives: 3, status: 'In attesa', answered: false
+        });
+        listenToBattleRoyaleRoom();
+    });
+});
+
+// === LOGICA DI GIOCO ===
+function listenToBattleRoyaleRoom() {
+    db.ref(`rooms/${brRoomCode}`).on('value', snap => {
+        if (!snap.exists()) { showScreen('setupScreen'); alert("La Battaglia è stata annullata."); return; }
+        const rData = snap.val();
+        
+        renderBRPlayers(rData.players || {});
+        
+        if (rData.status === 'cancelled') {
+            els.brStatusText.textContent = "Annullata: Giocatori insufficienti (<5).";
+            setTimeout(() => { showScreen('setupScreen'); activeTab = "room"; }, 4000);
+            return;
+        }
+
+        if (rData.status === 'playing') {
+            brIsPlaying = true;
+            els.brWpmDisplay.textContent = rData.wpm + " WPM";
+            
+            const myData = rData.players[myId];
+            brAmIAlive = myData && myData.lives > 0;
+            els.brLivesDisplay.textContent = brAmIAlive ? "❤️".repeat(myData.lives) : "💀 ELIMINATO";
+            
+            if (rData.roundEndTime && rData.currentWord) {
+                handleBRRound(rData);
+            }
+        }
+    });
+}
+
+function renderBRPlayers(players) {
+    els.brPlayersList.innerHTML = "";
+    Object.values(players).forEach(p => {
+        const li = document.createElement('li');
+        li.style.cssText = "display:flex; justify-content:space-between; padding:5px; border-bottom:1px dashed #444;";
+        
+        const info = document.createElement('span');
+        let icon = p.lives > 0 ? "❤️".repeat(p.lives) : "💀";
+        info.innerHTML = `<b>${p.name}</b> <small>${icon}</small>`;
+        
+        const status = document.createElement('span');
+        status.style.fontSize = "0.85em";
+        status.style.color = p.status === 'Corretto!' ? '#4caf50' : (p.status === 'Eliminato' ? '#e53935' : 'var(--hint-color)');
+        status.textContent = p.status;
+        
+        li.appendChild(info); li.appendChild(status);
+        els.brPlayersList.appendChild(li);
+    });
+}
+
+// Avvio alle 21:30 in punto (eseguito solo dall'Host per gestire il DB)
+function startBattleRoyaleSystem() {
+    db.ref(`rooms/${brRoomCode}`).once('value', snap => {
+        const rData = snap.val();
+        if (rData.hostId === myId) {
+            const pCount = Object.keys(rData.players || {}).length;
+            if (pCount < 5) {
+                db.ref(`rooms/${brRoomCode}/status`).set('cancelled');
+            } else {
+                db.ref(`rooms/${brRoomCode}/status`).set('playing');
+                hostNextBRRound(rData, 25, 1);
+            }
+        }
+    });
+}
+
+// L'Host genera la parola e fa partire i 30 secondi
+function hostNextBRRound(rData, wpm, roundNum) {
+    const word = masterDictionary[Math.floor(Math.random() * masterDictionary.length)].toUpperCase();
+    const endTime = Date.now() + 30000; // 30 secondi
+    
+    // Resetta le risposte dei giocatori vivi
+    let updates = {};
+    Object.keys(rData.players || {}).forEach(pid => {
+        if (rData.players[pid].lives > 0) {
+            updates[`players/${pid}/answered`] = false;
+            updates[`players/${pid}/status`] = 'Ascolto...';
+        }
+    });
+    updates['currentWord'] = word;
+    updates['wpm'] = wpm;
+    updates['round'] = roundNum;
+    updates['roundEndTime'] = endTime;
+    
+    db.ref(`rooms/${brRoomCode}`).update(updates);
+    
+    // Controlla la fine del tempo tra 30 secondi
+    setTimeout(() => checkBRRoundResults(wpm, roundNum), 31000);
+}
+
+// Gestione Client: Audio e Timer
+function handleBRRound(rData) {
+    if (brTimerInterval) clearInterval(brTimerInterval);
+    
+    els.brStatusText.textContent = `Round ${rData.round}! Attenzione...`;
+    
+    if (brAmIAlive && !rData.players[myId].answered) {
+        els.brInputArea.style.display = 'flex';
+        els.brInput.value = '';
+        els.brInput.focus();
+        els.brTimerContainer.style.display = 'block';
+        playMorseAudio(rData.currentWord, rData.wpm);
+    } else {
+        els.brInputArea.style.display = 'none';
+        els.brTimerContainer.style.display = 'none';
+    }
+
+    // Gestione barra 30 sec
+    brTimerInterval = setInterval(() => {
+        const left = rData.roundEndTime - Date.now();
+        if (left <= 0) {
+            clearInterval(brTimerInterval);
+            els.brTimerProgress.style.width = '0%';
+            if (brAmIAlive && !rData.players[myId].answered) submitBRAnswer(rData.currentWord, true);
+        } else {
+            els.brTimerProgress.style.width = (left / 30000 * 100) + '%';
+            // Aggiorna gradiente barra in base al tempo (verde -> giallo -> rosso)
+            if (left < 10000) els.brTimerProgress.style.background = '#e53935';
+            else if (left < 20000) els.brTimerProgress.style.background = '#ff9800';
+            else els.brTimerProgress.style.background = '#4caf50';
+        }
+    }, 100);
+}
+
+// Stato: Sta scrivendo...
+if (els.brInput) els.brInput.addEventListener('input', () => {
+    if (els.brInput.value.trim().length === 1 && brAmIAlive) {
+        db.ref(`rooms/${brRoomCode}/players/${myId}/status`).set('Sta scrivendo...');
+    }
+});
+
+// Invio parola
+if (els.brInput) els.brInput.addEventListener('keypress', e => {
+    if (e.key === 'Enter') els.btnSendBr.click();
+});
+
+if (els.btnSendBr) els.btnSendBr.addEventListener('click', () => {
+    db.ref(`rooms/${brRoomCode}/currentWord`).once('value', s => {
+        submitBRAnswer(s.val(), false);
+    });
+});
+
+function submitBRAnswer(realWord, isTimeout) {
+    if (!brAmIAlive) return;
+    clearInterval(brTimerInterval);
+    els.brInputArea.style.display = 'none';
+    
+    const typed = els.brInput.value.trim().toUpperCase();
+    const isCorrect = !isTimeout && (typed === realWord);
+    
+    db.ref(`rooms/${brRoomCode}/players/${myId}`).transaction(p => {
+        if (!p) return p;
+        p.answered = true;
+        if (isCorrect) {
+            p.status = 'Corretto!';
+        } else {
+            p.lives -= 1;
+            p.status = p.lives === 0 ? 'Eliminato' : 'Errore!';
+        }
+        return p;
+    });
+}
+
+// Risoluzione Host: Controlla chi è vivo e fa partire il round successivo
+function checkBRRoundResults(currentWpm, currentRound) {
+    db.ref(`rooms/${brRoomCode}`).once('value', snap => {
+        const rData = snap.val();
+        if (rData.hostId !== myId) return; // Solo l'host decide
+        
+        let aliveCount = 0;
+        let lastAliveName = "";
+        
+        Object.values(rData.players || {}).forEach(p => {
+            if (p.lives > 0) { aliveCount++; lastAliveName = p.name; }
+        });
+
+        if (aliveCount <= 1) {
+            // Fine partita
+            db.ref(`rooms/${brRoomCode}/status`).set('finished');
+            db.ref(`rooms/${brRoomCode}/winner`).set(aliveCount === 1 ? lastAliveName : 'Nessuno');
+            // Nota: Qui puoi aggiungere l'assegnazione dei punti in Classifica o Medaglia
+            alert(`Partita Conclusa! Vincitore: ${aliveCount === 1 ? lastAliveName : 'Nessuno'}`);
+        } else {
+            // Prossimo round (WPM + 1)
+            hostNextBRRound(rData, currentWpm + 1, currentRound + 1);
+        }
+    });
+}
+
+// Inizializza il timer all'avvio
+initBattleRoyaleScheduler();
