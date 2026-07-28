@@ -2189,10 +2189,32 @@ function checkBattleTime() {
 
     if (isTime) {
         if(els.brBanner) els.brBanner.style.display = 'block';
-        // Ascolta il numero di iscritti in tempo reale
+        // Ascolta il numero di iscritti in tempo reale e cambia colore al banner
         db.ref(`rooms/${brRoomCode}/players`).on('value', snap => {
-            const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+            const players = snap.val() || {};
+            const count = Object.keys(players).length;
             if(els.brEnrolledCount) els.brEnrolledCount.textContent = count;
+            
+            // Seleziona i colori se sono iscritto o meno
+            if (players[myId]) {
+                if(els.brBanner) {
+                    els.brBanner.style.backgroundColor = '#4caf50'; // Verde
+                    els.brBanner.style.borderColor = '#81c784';
+                }
+                if(els.btnJoinBR) {
+                    els.btnJoinBR.textContent = 'RITIRATI DALLA SFIDA';
+                    els.btnJoinBR.style.color = '#4caf50';
+                }
+            } else {
+                if(els.brBanner) {
+                    els.brBanner.style.backgroundColor = '#e53935'; // Rosso
+                    els.brBanner.style.borderColor = '#ff5252';
+                }
+                if(els.btnJoinBR) {
+                    els.btnJoinBR.textContent = 'PARTECIPA ALLA SFIDA';
+                    els.btnJoinBR.style.color = '#e53935';
+                }
+            }
         });
     } else {
         if(els.brBanner) els.brBanner.style.display = 'none';
@@ -2212,7 +2234,7 @@ function checkBattleTime() {
     }
 }
 
-// Click su Partecipa (Ora registra solo l'iscrizione e ti lascia nel menu)
+// Click su Partecipa (Gestisce Iscrizione / Ritiro)
 if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
     if (!brRoomCode) {
         const now = new Date();
@@ -2220,26 +2242,32 @@ if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
         brRoomCode = "BR_" + dKey;
     }
     
-    // Crea la stanza se non esiste, così abbiamo l'host impostato
-    db.ref(`rooms/${brRoomCode}`).once('value', snap => {
-        if (!snap.exists()) {
-            db.ref(`rooms/${brRoomCode}`).set({
-                status: 'enrolling', type: 'battle_royale', wpm: 25, round: 0,
-                hostId: myId, createdAt: firebase.database.ServerValue.TIMESTAMP
+    // Controlla se sono già iscritto
+    db.ref(`rooms/${brRoomCode}/players/${myId}`).once('value', pSnap => {
+        if (pSnap.exists()) {
+            // ❌ GIA' ISCRITTO -> Mi ritiro
+            db.ref(`rooms/${brRoomCode}/players/${myId}`).remove().then(() => {
+                showToast("Ti sei ritirato dalla sfida serale.");
+            });
+        } else {
+            // ✅ NON ISCRITTO -> Mi iscrivo
+            db.ref(`rooms/${brRoomCode}`).once('value', snap => {
+                if (!snap.exists()) {
+                    db.ref(`rooms/${brRoomCode}`).set({
+                        status: 'enrolling', type: 'battle_royale', wpm: 25, round: 0,
+                        hostId: myId, createdAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+                
+                db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
+                    name: myName, lives: 3, status: 'Iscritto ⏳', answered: false
+                }).then(() => {
+                    showToast("⚔️ Iscrizione registrata! Il banner diventerà verde.");
+                });
             });
         }
-        
-        // Registra il giocatore nel database senza cambiare schermata
-        db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
-            name: myName, lives: 3, status: 'Iscritto ⏳', answered: false
-        }).then(() => {
-            showToast("⚔️ Iscrizione registrata! Ti avviseremo all'orario della sfida.");
-            // Nasconde il banner dopo l'iscrizione così non dà fastidio
-            if(els.brBanner) els.brBanner.style.display = 'none';
-        });
     });
 });
-
 // === LOGICA DI GIOCO BATTAGLIA REALE ===
 function listenToBattleRoyaleRoom() {
     db.ref(`rooms/${brRoomCode}`).on('value', snap => {
