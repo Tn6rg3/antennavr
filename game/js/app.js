@@ -375,6 +375,7 @@ function initGame() {
 
         checkActivityAndAwardMedals(); checkTournamentPopup();
         listenToRooms(); listenToOnlineUsers(); listenToInvites(); listenToInviteAccepted();
+        initBattleRoyaleScheduler(); 
         loadRegolamento();
 
         if(els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
@@ -452,7 +453,8 @@ function playNotificationSound() {
 
 function playMorseAudio(text, wpm) {
     return new Promise(resolve => {
-        if (!audioCtx || !gameRunning) { resolve(); return; }
+        // CORREZIONE: Controlla sia gameRunning che brIsPlaying
+        if (!audioCtx || (!gameRunning && !brIsPlaying)) { resolve(); return; }
 
         let charUnit = 1.2 / wpm;
         
@@ -463,11 +465,12 @@ function playMorseAudio(text, wpm) {
         let time = audioCtx.currentTime + 0.05;
 
         for (let char of text) {
-            if (!gameRunning) break;
+            // CORREZIONE: Controlla l'interruzione per entrambe le modalità
+            if (!gameRunning && !brIsPlaying) break;
             
             if (morseDict[char]) {
                 for (let i = 0; i < morseDict[char].length; i++) {
-                    if (!gameRunning) break;
+                    if (!gameRunning && !brIsPlaying) break;
                     let symbol = morseDict[char][i];
                     
                     const osc = audioCtx.createOscillator(); 
@@ -2398,6 +2401,26 @@ function checkBRRoundResults(currentWpm, currentRound) {
         }
     });
 }
+if (aliveCount <= 1) {
+            // Fine partita
+            db.ref(`rooms/${brRoomCode}/status`).set('finished');
+            db.ref(`rooms/${brRoomCode}/winner`).set(aliveCount === 1 ? lastAliveName : 'Nessuno');
+            // Nota: Qui puoi aggiungere l'assegnazione dei punti in Classifica o Medaglia
+            alert(`Partita Conclusa! Vincitore: ${aliveCount === 1 ? lastAliveName : 'Nessuno'}`);
+        } else {
+            // Prossimo round (WPM + 1)
+            hostNextBRRound(rData, currentWpm + 1, currentRound + 1);
+        }
+    });
+}
 
-// Inizializza il timer all'avvio
-initBattleRoyaleScheduler();
+// === TASTO USCITA BATTAGLIA REALE ===
+if(els.btnLeaveBR) els.btnLeaveBR.addEventListener('click', () => {
+    if(confirm("Vuoi abbandonare la Battaglia Serale?")) {
+        brIsPlaying = false;
+        activeTab = "room";
+        if(brTimerInterval) clearInterval(brTimerInterval);
+        db.ref(`rooms/${brRoomCode}/players/${myId}`).remove(); // Ti rimuove dalla lista
+        showScreen('setupScreen'); // Torna alla home
+    }
+});
