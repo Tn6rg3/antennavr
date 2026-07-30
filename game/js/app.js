@@ -38,7 +38,9 @@ let gameWords = [], wordIndex = 0, currentWpm = 20, baseWpm = 20, currentTone = 
 let totalScore = 0, currentStreak = 0, usedReplay = false, matchDetailsArray = [];
 let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
-
+let isChatCwEnabled = false;
+let chatCwWpm = 20;
+let chatCwTone = 600;
 // TIMERS SISTEMA & PULIZIA
 let lobbyTimerInterval = null, quizTimerInterval = null, ppTimerInterval = null;
 let brCheckInterval = null, brTimerInterval = null;
@@ -325,7 +327,15 @@ if (!tgUser) { els.loadingScreen.classList.remove('active-screen'); els.errorScr
 else { myName = tgUser.first_name; myId = tgUser.id.toString(); initGame(); }
 
 function initGame() {
-    const firebaseConfig = { apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk", authDomain: "telegrafiabot.firebaseapp.com", databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app", projectId: "telegrafiabot", storageBucket: "telegrafiabot.firebasestorage.app", messagingSenderId: "575790683327", appId: "1:575790683327:web:db333b0316c8e8ec63a20a" };
+    const firebaseConfig = { 
+        apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk", 
+        authDomain: "telegrafiabot.firebaseapp.com", 
+        databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app", 
+        projectId: "telegrafiabot", 
+        storageBucket: "telegrafiabot.firebasestorage.app", 
+        messagingSenderId: "575790683327", 
+        appId: "1:575790683327:web:db333b0316c8e8ec63a20a" 
+    };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
     db = firebase.database(); 
@@ -333,37 +343,80 @@ function initGame() {
 
     isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
 
+    // Ripristino preferenze di gioco da localStorage
     if (els.startWpmInput && localStorage.getItem(STORAGE_PREF_WPM)) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM);
     if (els.wordCountInput && localStorage.getItem(STORAGE_PREF_WORDS)) els.wordCountInput.value = localStorage.getItem(STORAGE_PREF_WORDS);
     if (els.toneInput && localStorage.getItem(STORAGE_PREF_TONE)) els.toneInput.value = localStorage.getItem(STORAGE_PREF_TONE);
     if (els.charSpaceInput && localStorage.getItem(STORAGE_PREF_CHAR_SPACE)) els.charSpaceInput.value = localStorage.getItem(STORAGE_PREF_CHAR_SPACE);
     if (els.wordSpaceSelect && localStorage.getItem(STORAGE_PREF_WORD_SPACE)) els.wordSpaceSelect.value = localStorage.getItem(STORAGE_PREF_WORD_SPACE);
 
+    // --- EVENT LISTENER NUOVA MODALITÀ CW CHAT ---
+    if (els.toggleChatCwBtn) {
+        els.toggleChatCwBtn.addEventListener('click', () => {
+            isChatCwEnabled = !isChatCwEnabled;
+            if (isChatCwEnabled) {
+                els.toggleChatCwBtn.textContent = "📻 CW: ON";
+                els.toggleChatCwBtn.classList.remove('btn-secondary');
+                els.toggleChatCwBtn.classList.add('btn-success');
+                if (els.chatCwSettingsPanel) els.chatCwSettingsPanel.style.display = 'block';
+                showToast("Modalità CW Chat Attivata!");
+            } else {
+                els.toggleChatCwBtn.textContent = "📻 CW: OFF";
+                els.toggleChatCwBtn.classList.remove('btn-success');
+                els.toggleChatCwBtn.classList.add('btn-secondary');
+                if (els.chatCwSettingsPanel) els.chatCwSettingsPanel.style.display = 'none';
+                showToast("Modalità CW Chat Disattivata.");
+            }
+            listenToChat();
+        });
+    }
+    if (els.chatCwWpmInput) {
+        els.chatCwWpmInput.addEventListener('change', (e) => {
+            chatCwWpm = Math.max(5, Math.min(50, parseInt(e.target.value) || 20));
+        });
+    }
+    if (els.chatCwToneInput) {
+        els.chatCwToneInput.addEventListener('change', (e) => {
+            chatCwTone = Math.max(400, Math.min(1000, parseInt(e.target.value) || 600));
+        });
+    }
+
+    // Autenticazione anonima e caricamento dati utente
     auth.signInAnonymously().then(async () => {
         try {
             const userData = (await db.ref(`users/${myId}`).once('value')).val() || {};
             if (userData.alias) myName = userData.alias;
-            myPrivacy = userData.privacyUsername || false; els.privacyUsernameCheckbox.checked = myPrivacy;
+            myPrivacy = userData.privacyUsername || false; 
+            if (els.privacyUsernameCheckbox) els.privacyUsernameCheckbox.checked = myPrivacy;
         } catch(e) {}
 
-        els.playerName.textContent = myName; els.userAliasInput.value = (myName !== tgUser.first_name) ? myName : "";
-        els.loadingText.style.display = 'none'; els.createRoomBtn.disabled = false;
+        if (els.playerName) els.playerName.textContent = myName; 
+        if (els.userAliasInput) els.userAliasInput.value = (myName !== tgUser.first_name) ? myName : "";
+        if (els.loadingText) els.loadingText.style.display = 'none'; 
+        if (els.createRoomBtn) els.createRoomBtn.disabled = false;
 
         // SINCRONIZZAZIONE OROLOGIO SERVER FIREBASE
         db.ref('.info/serverTimeOffset').on('value', (snap) => {
             serverTimeOffset = snap.val() || 0;
         });
 
+        // Gestione presenza online/offline
         db.ref('.info/connected').on('value', (snap) => {
             if (snap.val() === false) return;
             const pRef = db.ref(`presence/${myId}`);
             pRef.onDisconnect().remove();
-            pRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, status: 'online', ts: firebase.database.ServerValue.TIMESTAMP });
+            pRef.set({ 
+                name: myName, 
+                username: myPrivacy ? "" : tgUsername, 
+                status: 'online', 
+                ts: firebase.database.ServerValue.TIMESTAMP 
+            });
             if (roomCode) joinRoomLogic(true);
         });
 
         checkYesterdayDailyMedal();
 
+        // Gestione parametri di avvio (inviti squadra o stanza)
         if (startParam) {
             if (startParam.startsWith('team_')) processTeamInvite(startParam.replace('team_', ''));
             else if (startParam.startsWith('room_')) window.joinSpecificRoom(startParam.replace('room_', ''));
@@ -372,13 +425,20 @@ function initGame() {
             if (lastRoom) {
                 db.ref(`rooms/${lastRoom}`).once('value', snap => {
                     if (snap.exists() && snap.val().status !== 'finished') {
-                        roomCode = lastRoom; els.rejoinContainer.style.display = 'block'; els.rejoinGameBtn.onclick = () => { isRejoining = true; joinRoomLogic(false); }; showScreen('setupScreen');
-                    } else { localStorage.removeItem(STORAGE_ROOM_KEY); showScreen('setupScreen'); }
+                        roomCode = lastRoom; 
+                        if (els.rejoinContainer) els.rejoinContainer.style.display = 'block'; 
+                        if (els.rejoinGameBtn) els.rejoinGameBtn.onclick = () => { isRejoining = true; joinRoomLogic(false); }; 
+                        showScreen('setupScreen');
+                    } else { 
+                        localStorage.removeItem(STORAGE_ROOM_KEY); 
+                        showScreen('setupScreen'); 
+                    }
                 });
             } else showScreen('setupScreen');
         }
 
-        const savedLang = localStorage.getItem('gameLang'); if (savedLang) setLanguage(savedLang);
+        const savedLang = localStorage.getItem('gameLang'); 
+        if (savedLang) setLanguage(savedLang);
         else updateMuteBtnUI();
         
         loadDictionaries().then(() => {
@@ -390,31 +450,47 @@ function initGame() {
         });
 
         const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);
-        if (savedCustom) { try { customDictionary = JSON.parse(savedCustom); updateCustomDictStatus(); } catch(e) {} }
+        if (savedCustom) { 
+            try { 
+                customDictionary = JSON.parse(savedCustom); 
+                updateCustomDictStatus(); 
+            } catch(e) {} 
+        }
 
-        checkActivityAndAwardMedals(); checkTournamentPopup();
-        listenToRooms(); listenToOnlineUsers(); listenToInvites(); listenToInviteAccepted();
+        checkActivityAndAwardMedals(); 
+        checkTournamentPopup();
+        listenToRooms(); 
+        listenToOnlineUsers(); 
+        listenToInvites(); 
+        listenToInviteAccepted();
         
         initBattleRoyaleScheduler(); 
-        
         loadRegolamento();
 
         if(els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
         if(els.appVersionFooter) els.appVersionFooter.textContent = APP_VERSION;
 
+        // Controllo nuova versione per mostrare banner arancione in cima
         db.ref('appConfig/latestVersion').on('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
             const currentStr = String(APP_VERSION).trim();
-            if (latestStr && latestStr !== currentStr) els.updateBanner.style.display = 'block'; else els.updateBanner.style.display = 'none';
+            if (latestStr && latestStr !== currentStr) {
+                if (els.updateBanner) els.updateBanner.style.display = 'block';
+            } else {
+                if (els.updateBanner) els.updateBanner.style.display = 'none';
+            }
         });
 
     }).catch(e => {
-        if (els.loadingText) { els.loadingText.textContent = "Errore di Connessione."; els.loadingText.style.color = "red"; els.loadingText.style.fontWeight = "bold"; }
+        if (els.loadingText) { 
+            els.loadingText.textContent = "Errore di Connessione."; 
+            els.loadingText.style.color = "red"; 
+            els.loadingText.style.fontWeight = "bold"; 
+        }
     });
 
     checkGameTypeUI();
 }
-
 async function checkYesterdayDailyMedal() {
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
     const checkRef = db.ref(`users/${myId}/daily_medals_awarded/${yesterday}`);
@@ -560,60 +636,62 @@ function setupChat(chatRef, containerId, alertBtnId) {
     const container = els[containerId]; if (!container) return;
     if (listeners.activeChat[containerId]) listeners.activeChat[containerId].ref.off('value', listeners.activeChat[containerId].callback);
     let initialLoad = true, lastTs = Date.now();
+    
     const callback = chatRef.limitToLast(40).on('value', snapshot => {
         container.innerHTML = ''; let newMsgsCount = 0, latestMsg = null, maxTs = lastTs;
+        
         snapshot.forEach(child => {
             const msg = child.val(); const div = document.createElement('div'); div.style.marginBottom = '6px';
+            
+            // Orario del messaggio
             if(msg.ts) {
                 const d = new Date(msg.ts); const dateSmall = document.createElement('small');
                 dateSmall.style.color = 'var(--hint-color)'; dateSmall.style.fontSize = '0.75em';
                 dateSmall.textContent = `[${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}] `;
                 div.appendChild(dateSmall); if(msg.ts > maxTs) maxTs = msg.ts;
             }
-            const nameB = document.createElement('b'); nameB.style.color = 'var(--link-color)'; nameB.textContent = msg.name + ":";
-            div.appendChild(nameB); div.appendChild(document.createTextNode(" " + msg.text)); container.appendChild(div);
+            
+            // Nome utente
+            const nameB = document.createElement('b'); nameB.style.color = 'var(--link-color)'; nameB.textContent = msg.name + ": ";
+            div.appendChild(nameB);
+            
+            // --- GESTIONE TESTO (NORMALE O MASCHERATO CW) ---
+            const textSpan = document.createElement('span');
+            if (isChatCwEnabled) {
+                textSpan.className = 'cw-spoiler';
+                textSpan.textContent = msg.text;
+                textSpan.title = "Clicca per svelare il testo";
+                textSpan.onclick = function() {
+                    this.classList.toggle('revealed');
+                };
+            } else {
+                textSpan.textContent = msg.text;
+            }
+            div.appendChild(textSpan);
+            
+            container.appendChild(div);
             if (!initialLoad && msg.ts && msg.ts > lastTs && msg.name !== myName) { newMsgsCount++; latestMsg = msg; }
         });
+        
         lastTs = maxTs; container.scrollTop = container.scrollHeight;
         
-        if (!initialLoad && newMsgsCount > 0) {
-            if (alertBtnId && !isChatDrawerOpen && els[alertBtnId]) els[alertBtnId].style.backgroundColor = '#4caf50';
-            if (latestMsg) {
-                if (chatRef.key === 'globalChat') {
-                    if (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global')) {
-                        showToast(`🌎 ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
-                        if (typeof playNotificationSound === 'function') playNotificationSound();
-                    }
-                } else {
-                    if (!isChatDrawerOpen || chatRef.key !== (activeChatContext === 'room' ? roomCode : myTeamId)) {
-                        showToast(`💬 ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
-                        if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound(); 
-                    }
-                }
+        // --- RIPRODUZIONE AUDIO NUOVO MESSAGGIO IN MORSE ---
+        if (!initialLoad && newMsgsCount > 0 && latestMsg) {
+            if (isChatCwEnabled) {
+                // Riproduce in codice Morse il testo del messaggio ricevuto usando WPM e Tono scelti
+                const savedTone = currentTone;
+                currentTone = chatCwTone;
+                playMorseAudio(latestMsg.text.toUpperCase(), chatCwWpm).then(() => {
+                    currentTone = savedTone; // Ripristina il tono di gioco
+                });
+            } else {
+                if (alertBtnId && !isChatDrawerOpen && els[alertBtnId]) els[alertBtnId].style.backgroundColor = '#4caf50';
+                if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound();
             }
         }
         initialLoad = false;
     });
     listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
-}
-
-if(els.sendChatBtn) els.sendChatBtn.addEventListener('click', () => {
-    const txt = els.chatInput.value.trim(); if (!txt) return;
-    let msgRef = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
-    msgRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP })
-        .catch(e => showToast("Errore invio: " + e.message)); 
-    els.chatInput.value = '';
-});
-if(els.chatInput) els.chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') els.sendChatBtn.click(); });
-if(els.clearChatBtn) els.clearChatBtn.addEventListener('click', () => { if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).remove(); else db.ref('globalChat').remove(); } });
-
-if (els.muteGlobalChatBtn) {
-    els.muteGlobalChatBtn.addEventListener('click', () => {
-        isGlobalChatMuted = !isGlobalChatMuted;
-        localStorage.setItem(STORAGE_CHAT_MUTED_KEY, isGlobalChatMuted);
-        if (typeof updateMuteBtnUI === 'function') updateMuteBtnUI();
-        showToast(isGlobalChatMuted ? (currentLang==='it'?"Notifiche Chat silenziate.":"Chat notifications muted.") : (currentLang==='it'?"Notifiche Chat riattivate.":"Chat notifications unmuted."));
-    });
 }
 
 function checkGameTypeUI() {
