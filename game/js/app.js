@@ -2158,7 +2158,7 @@ function renderQuizUI(state) {
     }
 }
 
-// === BATTAGLIA REALE SERALE (OTTIMIZZATA CON SERVER TIMESTAMPS) ===
+// === BATTAGLIA REALE SERALE ===
 const BR_H_BANNER = 9;    // Ora comparsa banner (9 del mattino)
 const BR_M_BANNER = 54;    // Minuto comparsa banner (00)
 const BR_H_START = 21;    // Ora inizio partita (21 di sera)
@@ -2176,7 +2176,7 @@ function initBattleRoyaleScheduler() {
 function checkBattleTime() {
     if (gameRunning || brIsPlaying) return; 
     
-    // ORA SYNC CON IL TIMESTMAP FIREBASE SERVER
+    // SYNC CON L'OROLOGIO SERVER DI FIREBASE
     const now = new Date(Date.now() + serverTimeOffset);
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
@@ -2203,4 +2203,271 @@ function checkBattleTime() {
                     els.brBanner.style.borderColor = '#81c784';
                 }
                 if(els.btnJoinBR) {
-                    els.btnJoinBR.textContent = 'RITIRATI DI seem to be encountering an error. Can I try something else for you?
+                    els.btnJoinBR.textContent = 'RITIRATI DALLA SFIDA';
+                    els.btnJoinBR.style.color = '#4caf50';
+                }
+            } else {
+                if(els.brBanner) {
+                    els.brBanner.style.backgroundColor = '#e53935'; 
+                    els.brBanner.style.borderColor = '#ff5252';
+                }
+                if(els.btnJoinBR) {
+                    els.btnJoinBR.textContent = 'PARTECIPA ALLA SFIDA';
+                    els.btnJoinBR.style.color = '#e53935';
+                }
+            }
+        });
+    } else {
+        if(els.brBanner) els.brBanner.style.display = 'none';
+        db.ref(`rooms/${brRoomCode}/players`).off('value');
+    }
+
+    if (currentHour === BR_H_START && currentMinute === BR_M_START) {
+        db.ref(`rooms/${brRoomCode}/players/${myId}`).once('value', snap => {
+            if (snap.exists() && activeTab !== "br_playing") {
+                activeTab = "br_playing";
+                showScreen('brScreen');
+                listenToBattleRoyaleRoom();
+            }
+        });
+        startBattleRoyaleSystem(); 
+    }
+}
+
+if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
+    if (!brRoomCode) {
+        const now = new Date(Date.now() + serverTimeOffset);
+        const dKey = now.toISOString().split('T')[0].replace(/-/g, '');
+        brRoomCode = "BR_" + dKey;
+    }
+    
+    db.ref(`rooms/${brRoomCode}/players/${myId}`).once('value', pSnap => {
+        if (pSnap.exists()) {
+            db.ref(`rooms/${brRoomCode}/players/${myId}`).remove().then(() => {
+                showToast("Ti sei ritirato dalla sfida serale.");
+            });
+        } else {
+            db.ref(`rooms/${brRoomCode}`).once('value', snap => {
+                if (!snap.exists()) {
+                    db.ref(`rooms/${brRoomCode}`).set({
+                        status: 'enrolling', type: 'battle_royale', wpm: 25, round: 0,
+                        hostId: myId, createdAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+                
+                db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
+                    name: myName, lives: 3, status: 'Iscritto ⏳', answered: false
+                }).then(() => {
+                    showToast("⚔️ Iscrizione registrata! Il banner diventerà verde.");
+                });
+            });
+        }
+    });
+});
+
+function listenToBattleRoyaleRoom() {
+    db.ref(`rooms/${brRoomCode}`).on('value', snap => {
+        if (!snap.exists()) { 
+            showScreen('setupScreen'); 
+            alert("La Battaglia è stata annullata o è terminata."); 
+            return; 
+        }
+        const rData = snap.val();
+        
+        renderBRPlayers(rData.players || {});
+        
+        if (rData.status === 'cancelled') {
+            els.brStatusText.textContent = "Annullata: Giocatori insufficienti (<5).";
+            setTimeout(() => { showScreen('setupScreen'); activeTab = "room"; }, 4000);
+            return;
+        }
+
+        if (rData.status === 'playing') {
+            brIsPlaying = true;
+            els.brWpmDisplay.textContent = rData.wpm + " WPM";
+            
+            const myData = rData.players[myId];
+            brAmIAlive = myData && myData.lives > 0;
+            
+            const hearts = ["💀 ELIMINATO", "❤️", "❤️❤️", "❤️❤️❤️", "❤️❤️❤️❤️", "❤️❤️❤️❤️❤️"];
+            let safeLives = myData && myData.lives ? parseInt(myData.lives) : 0;
+            if (safeLives < 0) safeLives = 0;
+            if (safeLives > 5) safeLives = 5;
+            els.brLivesDisplay.textContent = brAmIAlive ? hearts[safeLives] : "💀 ELIMINATO";
+            
+            if (rData.roundEndTime && rData.currentWord) {
+                handleBRRound(rData);
+            }
+        }
+        
+        if (rData.status === 'finished') {
+            brIsPlaying = false;
+            els.brStatusText.textContent = `Partita Conclusa! Vincitore: ${rData.winner || 'Nessuno'}`;
+            els.brInputArea.style.display = 'none';
+            els.brTimerContainer.style.display = 'none';
+        }
+    });
+}
+
+function renderBRPlayers(players) {
+    if(!els.brPlayersList) return;
+    els.brPlayersList.innerHTML = "";
+    Object.values(players).forEach(p => {
+        const li = document.createElement('li');
+        li.style.cssText = "display:flex; justify-content:space-between; padding:5px; border-bottom:1px dashed rgba(255,255,255,0.1);";
+        
+        const info = document.createElement('span');
+        const heartsList = ["💀", "❤️", "❤️❤️", "❤️❤️❤️", "❤️❤️❤️❤️", "❤️❤️❤️❤️❤️"];
+        let safePLives = p.lives ? parseInt(p.lives) : 0;
+        if (safePLives < 0) safePLives = 0;
+        if (safePLives > 5) safePLives = 5;
+        let icon = heartsList[safePLives];
+        
+        info.innerHTML = `<b style="color:var(--link-color);">${escapeHTML(p.name)}</b> <small>${icon}</small>`;
+        
+        const status = document.createElement('span');
+        status.style.fontSize = "0.85em";
+        status.style.color = p.status === 'Corretto!' ? '#4caf50' : (p.status === 'Eliminato' || p.status === 'Errore!' ? '#e53935' : 'var(--hint-color)');
+        status.textContent = p.status;
+        
+        li.appendChild(info); li.appendChild(status);
+        els.brPlayersList.appendChild(li);
+    });
+}
+
+function startBattleRoyaleSystem() {
+    db.ref(`rooms/${brRoomCode}`).once('value', snap => {
+        const rData = snap.val();
+        if (rData && rData.hostId === myId) {
+            const pCount = Object.keys(rData.players || {}).length;
+            if (pCount < 5) {
+                db.ref(`rooms/${brRoomCode}/status`).set('cancelled');
+            } else {
+                db.ref(`rooms/${brRoomCode}/status`).set('playing');
+                hostNextBRRound(rData, 25, 1);
+            }
+        }
+    });
+}
+
+function hostNextBRRound(rData, wpm, roundNum) {
+    const word = masterDictionary[Math.floor(Math.random() * masterDictionary.length)].toUpperCase();
+    const endTime = Date.now() + 30000; 
+    
+    let updates = {};
+    Object.keys(rData.players || {}).forEach(pid => {
+        if (rData.players[pid].lives > 0) {
+            updates[`players/${pid}/answered`] = false;
+            updates[`players/${pid}/status`] = 'Ascolto...';
+        }
+    });
+    updates['currentWord'] = word;
+    updates['wpm'] = wpm;
+    updates['round'] = roundNum;
+    updates['roundEndTime'] = endTime;
+    
+    db.ref(`rooms/${brRoomCode}`).update(updates);
+    
+    setTimeout(() => checkBRRoundResults(wpm, roundNum), 31000);
+}
+
+function handleBRRound(rData) {
+    if (brTimerInterval) clearInterval(brTimerInterval);
+    
+    els.brStatusText.textContent = `Round ${rData.round}! Attenzione...`;
+    
+    if (brAmIAlive && !rData.players[myId].answered) {
+        els.brInputArea.style.display = 'flex';
+        els.brInput.value = '';
+        els.brInput.focus();
+        els.brTimerContainer.style.display = 'block';
+        playMorseAudio(rData.currentWord, rData.wpm);
+    } else {
+        els.brInputArea.style.display = 'none';
+        els.brTimerContainer.style.display = 'none';
+    }
+
+    brTimerInterval = setInterval(() => {
+        const left = rData.roundEndTime - Date.now();
+        if (left <= 0) {
+            clearInterval(brTimerInterval);
+            if(els.brTimerProgress) els.brTimerProgress.style.width = '0%';
+            if (brAmIAlive && !rData.players[myId].answered) submitBRAnswer(rData.currentWord, true);
+        } else {
+            if(els.brTimerProgress) {
+                els.brTimerProgress.style.width = (left / 30000 * 100) + '%';
+                if (left < 10000) els.brTimerProgress.style.background = '#e53935';
+                else if (left < 20000) els.brTimerProgress.style.background = '#ff9800';
+                else els.brTimerProgress.style.background = '#4caf50';
+            }
+        }
+    }, 100);
+}
+
+if (els.brInput) els.brInput.addEventListener('input', () => {
+    if (els.brInput.value.trim().length === 1 && brAmIAlive) {
+        db.ref(`rooms/${brRoomCode}/players/${myId}/status`).set('Sta scrivendo...');
+    }
+});
+
+if (els.brInput) els.brInput.addEventListener('keypress', e => {
+    if (e.key === 'Enter') els.btnSendBr.click();
+});
+
+if (els.btnSendBr) els.btnSendBr.addEventListener('click', () => {
+    db.ref(`rooms/${brRoomCode}/currentWord`).once('value', s => {
+        submitBRAnswer(s.val(), false);
+    });
+});
+
+function submitBRAnswer(realWord, isTimeout) {
+    if (!brAmIAlive) return;
+    clearInterval(brTimerInterval);
+    els.brInputArea.style.display = 'none';
+    
+    const typed = els.brInput.value.trim().toUpperCase().substring(0, 50);
+    const isCorrect = !isTimeout && (typed === realWord);
+    
+    db.ref(`rooms/${brRoomCode}/players/${myId}`).transaction(p => {
+        if (!p) return p;
+        p.answered = true;
+        if (isCorrect) {
+            p.status = 'Corretto!';
+        } else {
+            p.lives -= 1;
+            p.status = p.lives === 0 ? 'Eliminato' : 'Errore!';
+        }
+        return p;
+    });
+}
+
+function checkBRRoundResults(currentWpm, currentRound) {
+    db.ref(`rooms/${brRoomCode}`).once('value', snap => {
+        const rData = snap.val();
+        if (rData.hostId !== myId) return;
+        
+        let aliveCount = 0;
+        let lastAliveName = "";
+        
+        Object.values(rData.players || {}).forEach(p => {
+            if (p.lives > 0) { aliveCount++; lastAliveName = p.name; }
+        });
+
+        if (aliveCount <= 1) {
+            db.ref(`rooms/${brRoomCode}/status`).set('finished');
+            db.ref(`rooms/${brRoomCode}/winner`).set(aliveCount === 1 ? lastAliveName : 'Nessuno');
+        } else {
+            hostNextBRRound(rData, currentWpm + 1, currentRound + 1);
+        }
+    });
+}
+
+if(els.btnLeaveBR) els.btnLeaveBR.addEventListener('click', () => {
+    if(confirm("Vuoi abbandonare la Battaglia Serale?")) {
+        brIsPlaying = false;
+        activeTab = "room";
+        if(brTimerInterval) clearInterval(brTimerInterval);
+        db.ref(`rooms/${brRoomCode}/players/${myId}`).remove();
+        showScreen('setupScreen'); 
+    }
+});
