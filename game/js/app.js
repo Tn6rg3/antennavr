@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.54"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20240521.55"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -14,6 +14,9 @@ const startParam = tg.initDataUnsafe?.start_param;
 const els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
 
 // --- COSTANTI ---
+const STORAGE_CHAT_CW_ENABLED = "cwgame_chat_cw_enabled";
+const STORAGE_CHAT_CW_WPM = "cwgame_chat_cw_wpm";
+const STORAGE_CHAT_CW_TONE = "cwgame_chat_cw_tone";
 const STORAGE_ROOM_KEY = "cwgame_last_room";
 const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
 const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted"; 
@@ -350,10 +353,30 @@ function initGame() {
     if (els.charSpaceInput && localStorage.getItem(STORAGE_PREF_CHAR_SPACE)) els.charSpaceInput.value = localStorage.getItem(STORAGE_PREF_CHAR_SPACE);
     if (els.wordSpaceSelect && localStorage.getItem(STORAGE_PREF_WORD_SPACE)) els.wordSpaceSelect.value = localStorage.getItem(STORAGE_PREF_WORD_SPACE);
 
-    // --- EVENT LISTENER NUOVA MODALITÀ CW CHAT ---
+    // --- RIPRISTINO PREFERENZE CW CHAT DA LOCALSTORAGE ---
+    isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
+    if (localStorage.getItem(STORAGE_CHAT_CW_WPM)) {
+        chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;
+        if (els.chatCwWpmInput) els.chatCwWpmInput.value = chatCwWpm;
+    }
+    if (localStorage.getItem(STORAGE_CHAT_CW_TONE)) {
+        chatCwTone = parseInt(localStorage.getItem(STORAGE_CHAT_CW_TONE)) || 600;
+        if (els.chatCwToneInput) els.chatCwToneInput.value = chatCwTone;
+    }
+
+    // Applica subito l'interfaccia se il CW in chat era rimasto attivo
     if (els.toggleChatCwBtn) {
+        if (isChatCwEnabled) {
+            els.toggleChatCwBtn.textContent = "📻 CW: ON";
+            els.toggleChatCwBtn.classList.remove('btn-secondary');
+            els.toggleChatCwBtn.classList.add('btn-success');
+            if (els.chatCwSettingsPanel) els.chatCwSettingsPanel.style.display = 'block';
+        }
+
         els.toggleChatCwBtn.addEventListener('click', () => {
             isChatCwEnabled = !isChatCwEnabled;
+            localStorage.setItem(STORAGE_CHAT_CW_ENABLED, isChatCwEnabled); // Salva stato
+            
             if (isChatCwEnabled) {
                 els.toggleChatCwBtn.textContent = "📻 CW: ON";
                 els.toggleChatCwBtn.classList.remove('btn-secondary');
@@ -370,14 +393,17 @@ function initGame() {
             listenToChat();
         });
     }
+
     if (els.chatCwWpmInput) {
         els.chatCwWpmInput.addEventListener('change', (e) => {
             chatCwWpm = Math.max(5, Math.min(50, parseInt(e.target.value) || 20));
+            localStorage.setItem(STORAGE_CHAT_CW_WPM, chatCwWpm); // Salva WPM
         });
     }
     if (els.chatCwToneInput) {
         els.chatCwToneInput.addEventListener('change', (e) => {
             chatCwTone = Math.max(400, Math.min(1000, parseInt(e.target.value) || 600));
+            localStorage.setItem(STORAGE_CHAT_CW_TONE, chatCwTone); // Salva Tono
         });
     }
 
