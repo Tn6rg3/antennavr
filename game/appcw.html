@@ -48,22 +48,42 @@
 </div>
 
 <!-- CHAT GLOBALE (DRAWER) -->
-<div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:45%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
+<div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:50%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--hint-color); padding-bottom:5px; margin-bottom:5px;">
         <span id="chatTitle" style="font-weight:bold;">💬 Chat</span>
-        <div style="display: flex; gap: 5px;">
+        <div style="display: flex; gap: 5px; align-items: center;">
+            <!-- NUOVO TASTO ATTIVAZIONE CW CHAT -->
+            <button id="toggleChatCwBtn" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-secondary">📻 CW: OFF</button>
             <button id="muteGlobalChatBtn" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-secondary">🔊 Notifiche Attive</button>
             <button id="clearChatBtn" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-danger">Cancella</button>
             <button id="closeChatBtn" onclick="toggleChat()" style="width:auto; padding:5px 10px; margin:0; font-size:0.8em;" class="btn-secondary">Chiudi</button>
         </div>
     </div>
+
+    <!-- NUOVO PANNELLO IMPOSTAZIONI CW CHAT -->
+    <div id="chatCwSettingsPanel" style="display:none; background:var(--bg-color); border:1px solid var(--champ-color); border-radius:8px; padding:8px; margin-bottom:5px; font-size:0.85em;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <b style="color:var(--champ-color);">⚙️ Impostazioni CW Chat</b>
+            <button onclick="els.chatCwSettingsPanel.style.display='none'" style="width:auto; padding:2px 8px; margin:0; font-size:0.75em;" class="btn-danger">❌ Chiudi</button>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; justify-content:space-around;">
+            <div>
+                <label>WPM: </label>
+                <input type="number" id="chatCwWpmInput" value="20" min="5" max="50" style="width:55px; padding:4px; text-align:center;">
+            </div>
+            <div>
+                <label>Tono (Hz): </label>
+                <input type="number" id="chatCwToneInput" value="600" min="400" max="1000" step="50" style="width:65px; padding:4px; text-align:center;">
+            </div>
+        </div>
+    </div>
+
     <div id="chatMessages" style="flex-grow:1; overflow-y:auto; text-align:left; font-size:0.9em; margin-bottom:5px; padding:8px; background:var(--bg-color); border-radius:8px;"></div>
     <div style="display:flex; gap:5px;">
         <input type="text" id="chatInput" placeholder="Scrivi un messaggio..." style="flex-grow:1; padding:10px; font-size:1em; margin:0;">
         <button id="sendChatBtn" style="width:auto; margin:0; padding:10px 15px;">Invia</button>
     </div>
 </div>
-
 <!-- SCHERMATA CARICAMENTO -->
 <div id="loadingScreen" class="screen active-screen">
     <h2 style="margin-top: 40px;">Caricamento... 📻</h2>
@@ -745,8 +765,8 @@
 </div>
 
 <!-- SCRIPT PRINCIPALI -->
-<script src="js/app.js?v=20240521.53"></script>
-<script src="js/quiz_data.js?v=20240521.53"></script>
+<script src="js/app.js?v=20240521.54"></script>
+<script src="js/quiz_data.js?v=20240521.54"></script>
 
 </body>
 </html>
