@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.55"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20240521.56"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -574,9 +574,11 @@ function playNotificationSound() {
     setTimeout(() => playBeep(1100, 0.1), 120);
 }
 
-function playMorseAudio(text, wpm) {
+function playMorseAudio(text, wpm, forcePlay = false) {
     return new Promise(resolve => {
-        if (!audioCtx || (!gameRunning && !brIsPlaying)) { resolve(); return; }
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        if (!forcePlay && (!gameRunning && !brIsPlaying)) { resolve(); return; }
 
         let charUnit = 1.2 / wpm;
         
@@ -587,11 +589,11 @@ function playMorseAudio(text, wpm) {
         let time = audioCtx.currentTime + 0.05;
 
         for (let char of text) {
-            if (!gameRunning && !brIsPlaying) break;
+            if (!forcePlay && !gameRunning && !brIsPlaying) break;
             
             if (morseDict[char]) {
                 for (let i = 0; i < morseDict[char].length; i++) {
-                    if (!gameRunning && !brIsPlaying) break;
+                    if (!forcePlay && !gameRunning && !brIsPlaying) break;
                     let symbol = morseDict[char][i];
                     
                     const osc = audioCtx.createOscillator(); 
@@ -674,7 +676,7 @@ if(els.lobbyChatInput) els.lobbyChatInput.addEventListener('keypress', e => {
     if (e.key === 'Enter') els.sendLobbyChatBtn.click(); 
 });
 
-// Funzione principale della Chat (con supporto CW e mascheramento testo)
+// Funzione principale della Chat (con Toast notifiche ripristinate e audio CW/Normale)
 function setupChat(chatRef, containerId, alertBtnId) {
     const container = els[containerId]; if (!container) return;
     if (listeners.activeChat[containerId]) {
@@ -723,18 +725,42 @@ function setupChat(chatRef, containerId, alertBtnId) {
         
         lastTs = maxTs; container.scrollTop = container.scrollHeight;
         
-        // --- RIPRODUZIONE AUDIO NUOVO MESSAGGIO IN MORSE ---
+        // --- GESTIONE AUDIO E NOTIFICHE TOAST (quando arriva un nuovo messaggio) ---
         if (!initialLoad && newMsgsCount > 0 && latestMsg) {
+            if (alertBtnId && !isChatDrawerOpen && els[alertBtnId]) {
+                els[alertBtnId].style.backgroundColor = '#4caf50';
+            }
+
+            const isGlobal = (chatRef.key === 'globalChat');
+            const shouldNotify = isGlobal
+                ? (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global'))
+                : (!isChatDrawerOpen || chatRef.key !== (activeChatContext === 'room' ? roomCode : myTeamId));
+
+            // 1. Caso CW ON attivo
             if (isChatCwEnabled) {
-                // Riproduce in codice Morse il testo del messaggio ricevuto
-                const savedTone = currentTone;
-                currentTone = chatCwTone;
-                playMorseAudio(latestMsg.text.toUpperCase(), chatCwWpm).then(() => {
-                    currentTone = savedTone; // Ripristina il tono di gioco
-                });
-            } else {
-                if (alertBtnId && !isChatDrawerOpen && els[alertBtnId]) els[alertBtnId].style.backgroundColor = '#4caf50';
-                if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound();
+                // Se la chat è chiusa (o sei in altra schermata), mostra il Toast con avviso Morse
+                if (shouldNotify) {
+                    const prefix = isGlobal ? "🌎" : "💬";
+                    showToast(`${prefix} ${latestMsg.name}: [📻 Messaggio CW...]`);
+                }
+                // Suona in Morse (il terzo parametro 'true' forza l'uscita audio anche fuori da gameRunning)
+                if (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room'))) {
+                    const savedTone = currentTone;
+                    currentTone = chatCwTone;
+                    playMorseAudio(latestMsg.text.toUpperCase(), chatCwWpm, true).then(() => {
+                        currentTone = savedTone;
+                    });
+                }
+            } 
+            // 2. Caso CW OFF (funzionamento classico)
+            else {
+                if (shouldNotify) {
+                    const prefix = isGlobal ? "🌎" : "💬";
+                    showToast(`${prefix} ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
+                    if (!isGlobalChatMuted && typeof playNotificationSound === 'function') {
+                        playNotificationSound();
+                    }
+                }
             }
         }
         initialLoad = false;
@@ -759,7 +785,7 @@ if(els.chatInput) {
     });
 }
 
-// Evento Cancella Cronologia Chat (Ripristinato e corretto)
+// Evento Cancella Cronologia Chat
 if(els.clearChatBtn) {
     els.clearChatBtn.addEventListener('click', () => { 
         if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { 
