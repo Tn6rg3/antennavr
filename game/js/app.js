@@ -636,31 +636,50 @@ window.toggleChat = function() {
 
 function hideChat() {
     if(els.chatDrawer) els.chatDrawer.style.display = 'none'; isChatDrawerOpen = false;
-    Object.keys(listeners.activeChat).forEach(key => { listeners.activeChat[key].ref.off('value', listeners.activeChat[key].callback); delete listeners.activeChat[key]; });
+    Object.keys(listeners.activeChat).forEach(key => { 
+        listeners.activeChat[key].ref.off('value', listeners.activeChat[key].callback); 
+        delete listeners.activeChat[key]; 
+    });
 }
 
 function listenToChat() {
     if (activeChatContext === 'room' && roomCode) {
-        setupChat(db.ref(`rooms/${roomCode}/chat`), 'lobbyChatMessages', null); setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', null);
+        setupChat(db.ref(`rooms/${roomCode}/chat`), 'lobbyChatMessages', null); 
+        setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', null);
         if(els.chatTitle) els.chatTitle.textContent = "💬 Chat Stanza";
-        if (els.gameArea && els.gameArea.classList.contains('active-screen')) { els.chatDrawer.style.display = 'none'; isChatDrawerOpen = false; }
+        if (els.gameArea && els.gameArea.classList.contains('active-screen')) { 
+            els.chatDrawer.style.display = 'none'; 
+            isChatDrawerOpen = false; 
+        }
     } else {
-        setupChat(db.ref('globalChat'), 'chatMessages', null); if(els.chatTitle) els.chatTitle.textContent = "🌎 Chat Globale";
+        setupChat(db.ref('globalChat'), 'chatMessages', null); 
+        if(els.chatTitle) els.chatTitle.textContent = "🌎 Chat Globale";
     }
 }
 
-window.openGlobalChat = function() { activeChatContext = 'global'; listenToChat(); toggleChat(); }
+window.openGlobalChat = function() { 
+    activeChatContext = 'global'; 
+    listenToChat(); 
+    toggleChat(); 
+}
 
 if(els.sendLobbyChatBtn) els.sendLobbyChatBtn.addEventListener('click', () => {
     const txt = els.lobbyChatInput.value.trim(); if (!txt || !roomCode) return;
     const msgRef = db.ref(`rooms/${roomCode}/chat`).push(); msgRef.onDisconnect().remove();
-    msgRef.set({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP }); els.lobbyChatInput.value = '';
+    msgRef.set({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP }); 
+    els.lobbyChatInput.value = '';
 });
-if(els.lobbyChatInput) els.lobbyChatInput.addEventListener('keypress', e => { if (e.key === 'Enter') els.sendLobbyChatBtn.click(); });
 
+if(els.lobbyChatInput) els.lobbyChatInput.addEventListener('keypress', e => { 
+    if (e.key === 'Enter') els.sendLobbyChatBtn.click(); 
+});
+
+// Funzione principale della Chat (con supporto CW e mascheramento testo)
 function setupChat(chatRef, containerId, alertBtnId) {
     const container = els[containerId]; if (!container) return;
-    if (listeners.activeChat[containerId]) listeners.activeChat[containerId].ref.off('value', listeners.activeChat[containerId].callback);
+    if (listeners.activeChat[containerId]) {
+        listeners.activeChat[containerId].ref.off('value', listeners.activeChat[containerId].callback);
+    }
     let initialLoad = true, lastTs = Date.now();
     
     const callback = chatRef.limitToLast(40).on('value', snapshot => {
@@ -696,7 +715,10 @@ function setupChat(chatRef, containerId, alertBtnId) {
             div.appendChild(textSpan);
             
             container.appendChild(div);
-            if (!initialLoad && msg.ts && msg.ts > lastTs && msg.name !== myName) { newMsgsCount++; latestMsg = msg; }
+            if (!initialLoad && msg.ts && msg.ts > lastTs && msg.name !== myName) { 
+                newMsgsCount++; 
+                latestMsg = msg; 
+            }
         });
         
         lastTs = maxTs; container.scrollTop = container.scrollHeight;
@@ -704,7 +726,7 @@ function setupChat(chatRef, containerId, alertBtnId) {
         // --- RIPRODUZIONE AUDIO NUOVO MESSAGGIO IN MORSE ---
         if (!initialLoad && newMsgsCount > 0 && latestMsg) {
             if (isChatCwEnabled) {
-                // Riproduce in codice Morse il testo del messaggio ricevuto usando WPM e Tono scelti
+                // Riproduce in codice Morse il testo del messaggio ricevuto
                 const savedTone = currentTone;
                 currentTone = chatCwTone;
                 playMorseAudio(latestMsg.text.toUpperCase(), chatCwWpm).then(() => {
@@ -718,6 +740,49 @@ function setupChat(chatRef, containerId, alertBtnId) {
         initialLoad = false;
     });
     listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
+}
+
+// Evento Invio Messaggio in Chat
+if(els.sendChatBtn) {
+    els.sendChatBtn.addEventListener('click', () => {
+        const txt = els.chatInput.value.trim(); if (!txt) return;
+        let msgRef = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
+        msgRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP })
+            .catch(e => showToast("Errore invio: " + e.message)); 
+        els.chatInput.value = '';
+    });
+}
+
+if(els.chatInput) {
+    els.chatInput.addEventListener('keypress', e => { 
+        if (e.key === 'Enter') els.sendChatBtn.click(); 
+    });
+}
+
+// Evento Cancella Cronologia Chat (Ripristinato e corretto)
+if(els.clearChatBtn) {
+    els.clearChatBtn.addEventListener('click', () => { 
+        if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { 
+            if (activeChatContext === 'room' && roomCode) {
+                db.ref(`rooms/${roomCode}/chat`).remove(); 
+            } else if (activeChatContext === 'team' && myTeamId) {
+                db.ref(`teams/${myTeamId}/chat`).remove();
+            } else {
+                db.ref('globalChat').remove(); 
+            }
+            showToast("Chat cancellata per tutti.");
+        } 
+    });
+}
+
+// Evento Muto/Notifiche Chat
+if (els.muteGlobalChatBtn) {
+    els.muteGlobalChatBtn.addEventListener('click', () => {
+        isGlobalChatMuted = !isGlobalChatMuted;
+        localStorage.setItem(STORAGE_CHAT_MUTED_KEY, isGlobalChatMuted);
+        if (typeof updateMuteBtnUI === 'function') updateMuteBtnUI();
+        showToast(isGlobalChatMuted ? (currentLang==='it'?"Notifiche Chat silenziate.":"Chat notifications muted.") : (currentLang==='it'?"Notifiche Chat riattivate.":"Chat notifications unmuted."));
+    });
 }
 
 function checkGameTypeUI() {
