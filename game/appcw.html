@@ -141,18 +141,13 @@
             <div>
                 <label id="txt_mode_label">Modo:</label>
                 <select id="gameModeInput">
-                    <option value="standard" id="txt_opt_std">Parole</option>
-                    <option value="callsign" id="txt_opt_call">Nominativi</option>
-                    <option value="pingpong" id="txt_opt_pp">Ping Pong</option>
-                    <option value="chars" id="txt_opt_chars">Caratteri</option>
-                    <option value="quiz" id="txt_opt_quiz">Quiz</option>
-                    <option value="custom" id="txt_opt_custom">Personale</option>
-                    <optgroup label="🏆 Tornei" id="trn_opt_group" style="display:none;">
-                        <option value="trn_create_team">Fonda Squadra</option>
-                        <option value="trn_join_team">Unisciti a Squadra</option>
-                        <option value="trn_create_trn">Crea Nuovo Torneo</option>
-                    </optgroup>
-                </select>
+    <!-- Le opzioni di gioco verranno generate dinamicamente da app.js leggendo games_config.js -->
+    <optgroup label="🏆 Tornei" id="trn_opt_group" style="display:none;">
+        <option value="trn_create_team">Fonda Squadra</option>
+        <option value="trn_join_team">Unisciti a Squadra</option>
+        <option value="trn_create_trn">Crea Nuovo Torneo</option>
+    </optgroup>
+</select>
             </div>
         </div>
 
@@ -765,8 +760,9 @@
 </div>
 
 <!-- SCRIPT PRINCIPALI -->
-<script src="js/app.js?v=20240521.56"></script>
-<script src="js/quiz_data.js?v=20240521.56"></script>
+<script src="js/quiz_data.js?v=105"></script>
+<script src="js/games_config.js?v=105"></script>
+<script src="js/app.js?v=105"></script>
 
 </body>
 </html>
