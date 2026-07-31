@@ -217,18 +217,26 @@
         </div>
     </div>
 <!-- ========================================== -->
-    <!-- NUOVO BANNER BATTAGLIA SERALE (IN BASSO)   -->
-    <!-- ========================================== -->
-    <div id="brBanner" style="display:none; background-color:#e53935; border-radius:8px; text-align:center; padding: 15px; margin-top: 10px; box-sizing: border-box; border: 2px solid #ff5252; box-shadow: 0 4px 10px rgba(0,0,0,0.3); flex-shrink: 0;">
-        <h3 style="margin:0 0 5px 0; color:#fff; font-size: 1.2em; letter-spacing: 1px;">⚔️ LA BATTAGLIA DELLE 21:30 ⚔️</h3>
-        <p style="margin:0 0 10px 0; font-size:0.9em; color:#fff;">
-            Iscritti attuali: <b id="brEnrolledCount" style="font-size: 1.3em; color: #ffeb3b;">0</b> (Min. 5 per iniziare)
+<!-- BANNER BATTAGLIA SERALE (COMPATTO / ESTESO) -->
+<!-- ========================================== -->
+<div id="brBanner" style="display:none; background-color:#e53935; border-radius:8px; text-align:center; padding: 15px; margin-top: 10px; box-sizing: border-box; border: 2px solid #ff5252; box-shadow: 0 4px 10px rgba(0,0,0,0.3); flex-shrink: 0; transition: all 0.2s ease;">
+    <!-- Testo esteso (visibile solo quando NON sei iscritto) -->
+    <div id="brBannerFullText">
+        <h3 style="margin:0 0 5px 0; color:#fff; font-size: 1.1em; letter-spacing: 1px;">⚔️ LA BATTAGLIA DELLE 21:30 ⚔️</h3>
+        <p style="margin:0 0 10px 0; font-size:0.85em; color:#fff;">
+            Iscritti attuali: <b id="brEnrolledCount" style="font-size: 1.2em; color: #ffeb3b;">0</b> (Min. 5 per iniziare)
         </p>
-        <button id="btnJoinBR" class="btn-success" style="background:#fff; color:#e53935; font-weight:bold; width: 100%; padding: 12px; font-size: 1.1em; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+    </div>
+    
+    <!-- Contenitore pulsante e contatore compatto (affiancati quando iscritto) -->
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <span id="brCompactCountText" style="display:none; color:#fff; font-size:0.9em; font-weight:bold; white-space:nowrap;">
+            ⚔️ Iscritti: <b id="brEnrolledCountCompact" style="color:#ffeb3b; font-size:1.1em;">0</b>
+        </span>
+        <button id="btnJoinBR" class="btn-success" style="background:#fff; color:#e53935; font-weight:bold; width: 100%; padding: 10px 15px; font-size: 0.9em; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); margin:0;">
             PARTECIPA ALLA SFIDA
         </button>
     </div>
-
 </div>
 
 <!-- PROFILO E STATISTICHE -->
