@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260731.105"; // Versione incrementata e collegata a games_config.js
+const APP_VERSION = "20260731.106"; // Versione incrementata e collegata a games_config.js
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
