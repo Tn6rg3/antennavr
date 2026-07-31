@@ -767,10 +767,27 @@
     </div>
 </div>
 
-<!-- SCRIPT PRINCIPALI -->
-<script src="js/quiz_data.js?v=106"></script>
-<script src="js/games_config.js?v=106"></script>
-<script src="js/app.js?v=106"></script>
+<!-- CARICAMENTO DINAMICO ANTI-CACHE PER TELEGRAM MOBILE -->
+<script>
+    (function() {
+        // Puoi cambiare questo numero di build quando fai un aggiornamento importante,
+        // oppure usare Date.now() durante i test per bypassare SEMPRE la cache al 100%
+        const BUILD_VERSION = "20260731.1"; 
+        
+        const scripts = [
+            "js/quiz_data.js",
+            "js/games_config.js",
+            "js/app.js"
+        ];
+
+        scripts.forEach(function(src) {
+            const script = document.createElement("script");
+            script.src = src + "?v=" + BUILD_VERSION;
+            script.async = false; // Mantiene l'ordine corretto di esecuzione
+            document.body.appendChild(script);
+        });
+    })();
+</script>
 
 </body>
 </html>
