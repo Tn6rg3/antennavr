@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260731.106"; // Versione incrementata e collegata a games_config.js
+const APP_VERSION = "20260731.107"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -117,7 +117,9 @@ function showScreen(screenId) {
 
     if (db && myId) {
         const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen'].includes(screenId);
-        db.ref(`presence/${myId}`).update({ status: isPlayingScreen ? 'playing' : 'online' });
+        try {
+            db.ref(`presence/${myId}`).update({ status: isPlayingScreen ? 'playing' : 'online' });
+        } catch(e) {}
     }
 
     if (screenId === 'setupScreen') {
@@ -1029,7 +1031,9 @@ if(els.sendInviteBtn) els.sendInviteBtn.addEventListener('click', () => {
     db.ref(`invites/${tId}`).set({ fromId: myId, fromName: myName, mode: els.inviteModeInput.value, wpm: parseInt(els.inviteWpmInput.value), wordCount: parseInt(els.inviteWordCountInput.value), ts: firebase.database.ServerValue.TIMESTAMP, status: 'pending' }).then(() => {
         showToast("Invito inviato! In attesa..."); 
         els.inviteModal.style.display = 'none';
-        db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
+        try {
+            db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
+        } catch(e) {}
 
         if (listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite);
         listeners.outgoingInvite = db.ref(`invites/${tId}`).on('value', snap => { 
@@ -1037,7 +1041,9 @@ if(els.sendInviteBtn) els.sendInviteBtn.addEventListener('click', () => {
                 if (isChallenging) { 
                     showToast("Rifiutato o scaduto."); 
                     isChallenging = false; currentInviterId = null; 
-                    db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
+                    try {
+                        db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
+                    } catch(e) {}
                     if(listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite); 
                 } 
             }, 1000); 
@@ -2429,6 +2435,7 @@ function initBattleRoyaleScheduler() {
     if (brCheckInterval) clearInterval(brCheckInterval);
     brCheckInterval = setInterval(checkBattleTime, 10000); 
 }
+
 // --- GESTIONE SICURA ISCRIZIONE / RITIRO BATTAGLIA REALE ---
 window.toggleBattleRoyaleJoin = function() {
     if (!brRoomCode) {
