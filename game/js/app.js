@@ -2429,7 +2429,6 @@ function initBattleRoyaleScheduler() {
     if (brCheckInterval) clearInterval(brCheckInterval);
     brCheckInterval = setInterval(checkBattleTime, 10000); 
 }
-
 function checkBattleTime() {
     if (gameRunning || brIsPlaying) return; 
     
@@ -2452,25 +2451,42 @@ function checkBattleTime() {
         db.ref(`rooms/${brRoomCode}/players`).on('value', snap => {
             const players = snap.val() || {};
             const count = Object.keys(players).length;
-            if(els.brEnrolledCount) els.brEnrolledCount.textContent = count;
+            
+            // Aggiorna entrambi i contatori (esteso e compatto)
+            if (els.brEnrolledCount) els.brEnrolledCount.textContent = count;
+            if (els.brEnrolledCountCompact) els.brEnrolledCountCompact.textContent = count;
             
             if (players[myId]) {
-                if(els.brBanner) {
+                // === MODALITÀ ISCRITTO (BANNER COMPATTO) ===
+                if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#4caf50'; 
                     els.brBanner.style.borderColor = '#81c784';
+                    els.brBanner.style.padding = '8px 12px'; // Riduciamo l'altezza
                 }
-                if(els.btnJoinBR) {
+                if (els.brBannerFullText) els.brBannerFullText.style.display = 'none'; // Nasconde titolo e sottotitolo
+                if (els.brCompactCountText) els.brCompactCountText.style.display = 'inline-block'; // Mostra "⚔️ Iscritti: X" a lato
+                
+                if (els.btnJoinBR) {
                     els.btnJoinBR.textContent = 'RITIRATI DALLA SFIDA';
                     els.btnJoinBR.style.color = '#4caf50';
+                    els.btnJoinBR.style.width = 'auto';
+                    els.btnJoinBR.style.flexGrow = '1';
                 }
             } else {
-                if(els.brBanner) {
+                // === MODALITÀ NON ISCRITTO (BANNER ESTESO) ===
+                if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#e53935'; 
                     els.brBanner.style.borderColor = '#ff5252';
+                    els.brBanner.style.padding = '15px'; // Ripristina altezza
                 }
-                if(els.btnJoinBR) {
+                if (els.brBannerFullText) els.brBannerFullText.style.display = 'block'; // Mostra titolo
+                if (els.brCompactCountText) els.brCompactCountText.style.display = 'none'; // Nasconde contatore laterale
+                
+                if (els.btnJoinBR) {
                     els.btnJoinBR.textContent = 'PARTECIPA ALLA SFIDA';
                     els.btnJoinBR.style.color = '#e53935';
+                    els.btnJoinBR.style.width = '100%';
+                    els.btnJoinBR.style.flexGrow = '0';
                 }
             }
         });
@@ -2490,37 +2506,6 @@ function checkBattleTime() {
         startBattleRoyaleSystem(); 
     }
 }
-
-if(els.btnJoinBR) els.btnJoinBR.addEventListener('click', () => {
-    if (!brRoomCode) {
-        const now = new Date(Date.now() + serverTimeOffset);
-        const dKey = now.toISOString().split('T')[0].replace(/-/g, '');
-        brRoomCode = "BR_" + dKey;
-    }
-    
-    db.ref(`rooms/${brRoomCode}/players/${myId}`).once('value', pSnap => {
-        if (pSnap.exists()) {
-            db.ref(`rooms/${brRoomCode}/players/${myId}`).remove().then(() => {
-                showToast("Ti sei ritirato dalla sfida serale.");
-            });
-        } else {
-            db.ref(`rooms/${brRoomCode}`).once('value', snap => {
-                if (!snap.exists()) {
-                    db.ref(`rooms/${brRoomCode}`).set({
-                        status: 'enrolling', type: 'battle_royale', wpm: 25, round: 0,
-                        hostId: myId, createdAt: firebase.database.ServerValue.TIMESTAMP
-                    });
-                }
-                
-                db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
-                    name: myName, lives: 3, status: 'Iscritto ⏳', answered: false
-                }).then(() => {
-                    showToast("⚔️ Iscrizione registrata! Il banner diventerà verde.");
-                });
-            });
-        }
-    });
-});
 
 function listenToBattleRoyaleRoom() {
     db.ref(`rooms/${brRoomCode}`).on('value', snap => {
