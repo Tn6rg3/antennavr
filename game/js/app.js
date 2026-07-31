@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20240521.56"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260731.105"; // Versione incrementata e collegata a games_config.js
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -14,9 +14,6 @@ const startParam = tg.initDataUnsafe?.start_param;
 const els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
 
 // --- COSTANTI ---
-const STORAGE_CHAT_CW_ENABLED = "cwgame_chat_cw_enabled";
-const STORAGE_CHAT_CW_WPM = "cwgame_chat_cw_wpm";
-const STORAGE_CHAT_CW_TONE = "cwgame_chat_cw_tone";
 const STORAGE_ROOM_KEY = "cwgame_last_room";
 const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
 const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted"; 
@@ -26,6 +23,9 @@ const STORAGE_PREF_TONE = "cwgame_pref_tone";
 const STORAGE_PREF_CHAR_SPACE = "cwgame_pref_char_space";
 const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space";
 const STORAGE_DAILY_SHOWN = "cwgame_daily_shown";
+const STORAGE_CHAT_CW_ENABLED = "cwgame_chat_cw_enabled";
+const STORAGE_CHAT_CW_WPM = "cwgame_chat_cw_wpm";
+const STORAGE_CHAT_CW_TONE = "cwgame_chat_cw_tone";
 
 // --- STATO GLOBALE ---
 let myName, myId, myPrivacy = false;
@@ -33,6 +33,7 @@ let myTeamId = null, myTeamName = "", isTeamCaptain = false;
 let db, auth, currentLang = 'it';
 let activeChatContext = null, activeTab = "room", isChatDrawerOpen = false;
 let isGlobalChatMuted = false;
+let isChatCwEnabled = false, chatCwWpm = 20, chatCwTone = 600;
 let isChallenging = false, isRejoining = false, currentInviterId = null;
 let roomCode = "", roomHostId = null, activeTrnId = null;
 let lastPlayerCount = 0, gameStartPlayerCount = 0;
@@ -41,9 +42,7 @@ let gameWords = [], wordIndex = 0, currentWpm = 20, baseWpm = 20, currentTone = 
 let totalScore = 0, currentStreak = 0, usedReplay = false, matchDetailsArray = [];
 let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
-let isChatCwEnabled = false;
-let chatCwWpm = 20;
-let chatCwTone = 600;
+
 // TIMERS SISTEMA & PULIZIA
 let lobbyTimerInterval = null, quizTimerInterval = null, ppTimerInterval = null;
 let brCheckInterval = null, brTimerInterval = null;
@@ -135,6 +134,34 @@ function showScreen(screenId) {
 window.goBackToMenu = function() {
     if(activeChatContext !== 'team') hideChat();
     showScreen('setupScreen');
+}
+
+// --- POPOLAMENTO E GESTIONE DINAMICA DEL MENU DI GIOCO ---
+function populateGameModesUI() {
+    if (!els.gameModeInput || !window.GAME_MODES) return;
+    const select = els.gameModeInput;
+    const trnGroup = els.trn_opt_group;
+    
+    const currentVal = select.value || 'standard';
+    select.innerHTML = '';
+    
+    Object.values(window.GAME_MODES).forEach(mode => {
+        const opt = document.createElement('option');
+        opt.value = mode.id;
+        opt.id = 'txt_opt_' + mode.id;
+        opt.textContent = currentLang === 'en' ? mode.titleEn : mode.titleIt;
+        select.appendChild(opt);
+    });
+    
+    if (trnGroup) {
+        select.appendChild(trnGroup);
+    }
+    
+    if (window.GAME_MODES[currentVal]) {
+        select.value = currentVal;
+    } else {
+        select.value = 'standard';
+    }
 }
 
 // --- DIZIONARI E TESTI MULTILINGUA ---
@@ -248,6 +275,7 @@ function setLanguage(lang) {
     if(els.lobbyChatInput) els.lobbyChatInput.placeholder = t.chat_placeholder;
     if(els.permanentGameInput) els.permanentGameInput.placeholder = t.input_placeholder;
 
+    populateGameModesUI();
     checkGameTypeUI();
     updateMuteBtnUI();
     if (activeTrnId) db.ref(`tournaments/${activeTrnId}`).once('value', snap => { if(snap.exists()) renderActiveTournament(snap); });
@@ -375,7 +403,7 @@ function initGame() {
 
         els.toggleChatCwBtn.addEventListener('click', () => {
             isChatCwEnabled = !isChatCwEnabled;
-            localStorage.setItem(STORAGE_CHAT_CW_ENABLED, isChatCwEnabled); // Salva stato
+            localStorage.setItem(STORAGE_CHAT_CW_ENABLED, isChatCwEnabled);
             
             if (isChatCwEnabled) {
                 els.toggleChatCwBtn.textContent = "📻 CW: ON";
@@ -397,13 +425,13 @@ function initGame() {
     if (els.chatCwWpmInput) {
         els.chatCwWpmInput.addEventListener('change', (e) => {
             chatCwWpm = Math.max(5, Math.min(50, parseInt(e.target.value) || 20));
-            localStorage.setItem(STORAGE_CHAT_CW_WPM, chatCwWpm); // Salva WPM
+            localStorage.setItem(STORAGE_CHAT_CW_WPM, chatCwWpm);
         });
     }
     if (els.chatCwToneInput) {
         els.chatCwToneInput.addEventListener('change', (e) => {
             chatCwTone = Math.max(400, Math.min(1000, parseInt(e.target.value) || 600));
-            localStorage.setItem(STORAGE_CHAT_CW_TONE, chatCwTone); // Salva Tono
+            localStorage.setItem(STORAGE_CHAT_CW_TONE, chatCwTone);
         });
     }
 
@@ -496,7 +524,6 @@ function initGame() {
         if(els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
         if(els.appVersionFooter) els.appVersionFooter.textContent = APP_VERSION;
 
-        // Controllo nuova versione per mostrare banner arancione in cima
         db.ref('appConfig/latestVersion').on('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
             const currentStr = String(APP_VERSION).trim();
@@ -515,8 +542,10 @@ function initGame() {
         }
     });
 
+    populateGameModesUI();
     checkGameTypeUI();
 }
+
 async function checkYesterdayDailyMedal() {
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
     const checkRef = db.ref(`users/${myId}/daily_medals_awarded/${yesterday}`);
@@ -676,7 +705,6 @@ if(els.lobbyChatInput) els.lobbyChatInput.addEventListener('keypress', e => {
     if (e.key === 'Enter') els.sendLobbyChatBtn.click(); 
 });
 
-// Funzione principale della Chat (con Toast notifiche ripristinate e audio CW/Normale)
 function setupChat(chatRef, containerId, alertBtnId) {
     const container = els[containerId]; if (!container) return;
     if (listeners.activeChat[containerId]) {
@@ -690,7 +718,6 @@ function setupChat(chatRef, containerId, alertBtnId) {
         snapshot.forEach(child => {
             const msg = child.val(); const div = document.createElement('div'); div.style.marginBottom = '6px';
             
-            // Orario del messaggio
             if(msg.ts) {
                 const d = new Date(msg.ts); const dateSmall = document.createElement('small');
                 dateSmall.style.color = 'var(--hint-color)'; dateSmall.style.fontSize = '0.75em';
@@ -698,11 +725,9 @@ function setupChat(chatRef, containerId, alertBtnId) {
                 div.appendChild(dateSmall); if(msg.ts > maxTs) maxTs = msg.ts;
             }
             
-            // Nome utente
             const nameB = document.createElement('b'); nameB.style.color = 'var(--link-color)'; nameB.textContent = msg.name + ": ";
             div.appendChild(nameB);
             
-            // --- GESTIONE TESTO (NORMALE O MASCHERATO CW) ---
             const textSpan = document.createElement('span');
             if (isChatCwEnabled) {
                 textSpan.className = 'cw-spoiler';
@@ -725,7 +750,6 @@ function setupChat(chatRef, containerId, alertBtnId) {
         
         lastTs = maxTs; container.scrollTop = container.scrollHeight;
         
-        // --- GESTIONE AUDIO E NOTIFICHE TOAST (quando arriva un nuovo messaggio) ---
         if (!initialLoad && newMsgsCount > 0 && latestMsg) {
             if (alertBtnId && !isChatDrawerOpen && els[alertBtnId]) {
                 els[alertBtnId].style.backgroundColor = '#4caf50';
@@ -736,14 +760,11 @@ function setupChat(chatRef, containerId, alertBtnId) {
                 ? (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global'))
                 : (!isChatDrawerOpen || chatRef.key !== (activeChatContext === 'room' ? roomCode : myTeamId));
 
-            // 1. Caso CW ON attivo
             if (isChatCwEnabled) {
-                // Se la chat è chiusa (o sei in altra schermata), mostra il Toast con avviso Morse
                 if (shouldNotify) {
                     const prefix = isGlobal ? "🌎" : "💬";
                     showToast(`${prefix} ${latestMsg.name}: [📻 Messaggio CW...]`);
                 }
-                // Suona in Morse (il terzo parametro 'true' forza l'uscita audio anche fuori da gameRunning)
                 if (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room'))) {
                     const savedTone = currentTone;
                     currentTone = chatCwTone;
@@ -751,9 +772,7 @@ function setupChat(chatRef, containerId, alertBtnId) {
                         currentTone = savedTone;
                     });
                 }
-            } 
-            // 2. Caso CW OFF (funzionamento classico)
-            else {
+            } else {
                 if (shouldNotify) {
                     const prefix = isGlobal ? "🌎" : "💬";
                     showToast(`${prefix} ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
@@ -768,7 +787,6 @@ function setupChat(chatRef, containerId, alertBtnId) {
     listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
 }
 
-// Evento Invio Messaggio in Chat
 if(els.sendChatBtn) {
     els.sendChatBtn.addEventListener('click', () => {
         const txt = els.chatInput.value.trim(); if (!txt) return;
@@ -785,7 +803,6 @@ if(els.chatInput) {
     });
 }
 
-// Evento Cancella Cronologia Chat
 if(els.clearChatBtn) {
     els.clearChatBtn.addEventListener('click', () => { 
         if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { 
@@ -801,7 +818,6 @@ if(els.clearChatBtn) {
     });
 }
 
-// Evento Muto/Notifiche Chat
 if (els.muteGlobalChatBtn) {
     els.muteGlobalChatBtn.addEventListener('click', () => {
         isGlobalChatMuted = !isGlobalChatMuted;
@@ -811,20 +827,49 @@ if (els.muteGlobalChatBtn) {
     });
 }
 
+// --- CONTROLLO UI INTELLIGENTE PER I GIOCHI ---
 function checkGameTypeUI() {
     const isSingle = els.gameTypeInput.value === 'single';
     const isTrn = els.gameTypeInput.value === 'tournament';
-    const isCustom = els.gameModeInput.value === 'custom';
-    const isChars = els.gameModeInput.value === 'chars';
-    const isPP = els.gameModeInput.value === 'pingpong';
+    const selectedMode = els.gameModeInput.value;
+    const isCustom = selectedMode === 'custom';
+    
+    // Leggi configurazione del gioco da GAME_MODES (se esiste)
+    const modeCfg = window.GAME_MODES ? window.GAME_MODES[selectedMode] : null;
 
     els.timeoutDiv.style.display = isSingle || isTrn ? 'none' : 'block';
     
-    els.fixedSpeedContainer.style.display = isSingle ? 'flex' : 'none';
-    els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
-    
-    if (els.advancedSpacingContainer) {
-        els.advancedSpacingContainer.style.display = (isSingle && !isChars && !isPP) ? 'flex' : 'none';
+    // Controlli legati al singolo gioco o flag flessibili
+    if (modeCfg) {
+        els.fixedSpeedContainer.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
+        els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
+        
+        if (els.advancedSpacingContainer) {
+            els.advancedSpacingContainer.style.display = (isSingle && modeCfg.spacingConfigurable) ? 'flex' : 'none';
+        }
+        
+        // Attivazione o disattivazione cambi parametri
+        if (els.startWpmInput) {
+            els.startWpmInput.disabled = (modeCfg.wpmConfigurable === false);
+            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) {
+                els.startWpmInput.value = modeCfg.defaultWpm;
+            }
+        }
+        if (els.wordCountInput) {
+            els.wordCountInput.disabled = (modeCfg.wordCountConfigurable === false);
+            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) {
+                els.wordCountInput.value = modeCfg.defaultWordCount;
+            }
+        }
+    } else {
+        // Fallback per vecchie logiche
+        const isChars = selectedMode === 'chars';
+        const isPP = selectedMode === 'pingpong';
+        els.fixedSpeedContainer.style.display = isSingle ? 'flex' : 'none';
+        els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
+        if (els.advancedSpacingContainer) {
+            els.advancedSpacingContainer.style.display = (isSingle && !isChars && !isPP) ? 'flex' : 'none';
+        }
     }
 
     els.customDictControl.style.display = (isSingle && isCustom) ? 'flex' : 'none';
@@ -849,20 +894,33 @@ function checkGameTypeUI() {
 }
 
 if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => {
-    const isC = e.target.value === 'callsign', isPP = e.target.value === 'pingpong';
-    if (isPP) { els.gameTypeInput.value = 'multi'; els.gameTypeInput.disabled = true; checkGameTypeUI(); } else els.gameTypeInput.disabled = false;
+    const mode = e.target.value;
+    const modeCfg = window.GAME_MODES ? window.GAME_MODES[mode] : null;
+    const isPP = mode === 'pingpong';
+    
+    if (isPP) { els.gameTypeInput.value = 'multi'; els.gameTypeInput.disabled = true; checkGameTypeUI(); } 
+    else els.gameTypeInput.disabled = false;
     
     ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => { 
-        els[id].disabled = isC; 
-        if (isC && id !== 'toneInput') {
-            els[id].value = 25; 
-        } else if (!isC && id !== 'toneInput') {
-            if (id === 'startWpmInput' && localStorage.getItem(STORAGE_PREF_WPM)) els[id].value = localStorage.getItem(STORAGE_PREF_WPM);
-            if (id === 'wordCountInput' && localStorage.getItem(STORAGE_PREF_WORDS)) els[id].value = localStorage.getItem(STORAGE_PREF_WORDS);
+        if (modeCfg) {
+            if (id === 'startWpmInput') {
+                els[id].disabled = !modeCfg.wpmConfigurable;
+                if (!modeCfg.wpmConfigurable) els[id].value = modeCfg.defaultWpm || 20;
+                else if (localStorage.getItem(STORAGE_PREF_WPM)) els[id].value = localStorage.getItem(STORAGE_PREF_WPM);
+            }
+            if (id === 'wordCountInput') {
+                els[id].disabled = !modeCfg.wordCountConfigurable;
+                if (!modeCfg.wordCountConfigurable) els[id].value = modeCfg.defaultWordCount || 10;
+                else if (localStorage.getItem(STORAGE_PREF_WORDS)) els[id].value = localStorage.getItem(STORAGE_PREF_WORDS);
+            }
         }
     });
     
-    els.fixedSpeedCheckbox.disabled = isC; if(isC) els.fixedSpeedCheckbox.checked = false; checkGameTypeUI();
+    if (modeCfg) {
+        els.fixedSpeedCheckbox.disabled = !modeCfg.fixedSpeedAllowed;
+        if(!modeCfg.fixedSpeedAllowed) els.fixedSpeedCheckbox.checked = false;
+    }
+    checkGameTypeUI();
 });
 if(els.gameTypeInput) els.gameTypeInput.addEventListener('change', checkGameTypeUI);
 
@@ -889,20 +947,12 @@ if (els.customDictFileInput) els.customDictFileInput.addEventListener('change', 
     }; reader.readAsText(file);
 });
 
-function generateCallsign() {
-    const prefixes = ["I", "IK", "IZ", "IN", "IT", "IS", "IU", "IW", "W", "K", "N", "A", "WA", "WB", "DL", "DJ", "DK", "DO", "EA", "EB", "EC", "F", "G", "M", "GW", "GM", "9A", "S5", "OK", "OM", "SP", "SQ", "UA", "UR", "EW", "ER", "YO", "YU", "HA", "LZ", "OE", "HB", "PA", "PB", "ON", "VE", "VK", "ZL", "JA", "PY", "LU", "CX"];
-    let callsign = prefixes[Math.floor(Math.random() * prefixes.length)] + Math.floor(Math.random() * 10);
-    let suffixLen = (Math.random() > 0.9) ? 1 : (Math.random() > 0.7) ? 2 : 3;
-    for(let i = 0; i < suffixLen; i++) callsign += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
-    if (Math.random() > 0.90) callsign += ["/QRP", "/P", "/M", "/AM", "/MM"][Math.floor(Math.random() * 5)]; return callsign;
-}
-
+// --- MOTORE PAROLE DEL GIOCO ---
 function getGameWords(num, mode) {
     if (mode === 'daily_challenge') return getDailyWords(num);
-    if (mode === 'callsign') return Array.from({length: num}, generateCallsign);
-    if (mode === 'pingpong') return [];
-    if (mode === 'chars') return Array.from({length: num}, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)]);
-    if (mode === 'custom' && customDictionary.length > 0) return [...customDictionary].sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
+    if (window.GAME_MODES && window.GAME_MODES[mode] && typeof window.GAME_MODES[mode].generateWords === 'function') {
+        return window.GAME_MODES[mode].generateWords(num, { master: masterDictionary, custom: customDictionary });
+    }
     return masterDictionary.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
 }
 
@@ -1220,15 +1270,27 @@ if(els.permanentGameInput) {
     els.permanentGameInput.addEventListener('keypress', function(e) { if (e.key === 'Enter' && inputActive && gameRunning && currentMode !== 'chars') { const val = els.permanentGameInput.value.trim().toUpperCase(); if (val) { handleWordSubmission(val); els.permanentGameInput.value = ""; } } });
 }
 
+// --- GESTIONE INVIO PAROLA CON DELEGA A GAMES_CONFIG ---
 function handleWordSubmission(userWord) {
     if (userWord) userWord = userWord.substring(0, 50);
 
-    inputActive = false; const currentWord = gameWords[wordIndex].toUpperCase(); let points = 0, scoreColor = ""; const reactionMs = Date.now() - lastWordStartTime; const levDist = getLevenshteinDistance(currentWord, userWord);
-    if (currentMode === 'chars') { if (userWord === currentWord) { points = Math.max(100, Math.floor(1000 - (reactionMs / 2))); scoreColor = "#4caf50"; } else { points = 0; scoreColor = "#d32f2f"; } } 
-    else {
-        const basePoints = (Math.pow(currentWpm, 2) * currentWord.length) / (10 * Math.pow(levDist + 1, 2)); const estimatedAudioMs = (currentWord.length * 60 / currentWpm) * 1000; let timeMultiplier = 1.0;
-        if (reactionMs > (estimatedAudioMs + 2000)) timeMultiplier = Math.max(0.5, 1.0 - ((reactionMs - (estimatedAudioMs + 2000)) / 20000)); else if (reactionMs < estimatedAudioMs && levDist === 0) timeMultiplier = 1.1;
-        points = Math.round(basePoints * timeMultiplier); if (levDist === 0) scoreColor = usedReplay ? "#999999" : "#4caf50"; else if (levDist === 1) scoreColor = "#ff9800"; else scoreColor = "#d32f2f"; if (usedReplay) points = Math.round(points * 0.2);
+    inputActive = false; const currentWord = gameWords[wordIndex].toUpperCase(); let points = 0, scoreColor = ""; 
+    const reactionMs = Date.now() - lastWordStartTime; 
+    const levDist = getLevenshteinDistance(currentWord, userWord);
+    
+    // Delego il calcolo del punteggio se presente il modulo esterno
+    if (typeof window.calculateGamePoints === 'function') {
+        const res = window.calculateGamePoints(currentMode, currentWord, userWord, currentWpm, reactionMs, levDist, usedReplay);
+        points = res.points;
+        scoreColor = res.scoreColor;
+    } else {
+        // Fallback classico
+        if (currentMode === 'chars') { if (userWord === currentWord) { points = Math.max(100, Math.floor(1000 - (reactionMs / 2))); scoreColor = "#4caf50"; } else { points = 0; scoreColor = "#d32f2f"; } } 
+        else {
+            const basePoints = (Math.pow(currentWpm, 2) * currentWord.length) / (10 * Math.pow(levDist + 1, 2)); const estimatedAudioMs = (currentWord.length * 60 / currentWpm) * 1000; let timeMultiplier = 1.0;
+            if (reactionMs > (estimatedAudioMs + 2000)) timeMultiplier = Math.max(0.5, 1.0 - ((reactionMs - (estimatedAudioMs + 2000)) / 20000)); else if (reactionMs < estimatedAudioMs && levDist === 0) timeMultiplier = 1.1;
+            points = Math.round(basePoints * timeMultiplier); if (levDist === 0) scoreColor = usedReplay ? "#999999" : "#4caf50"; else if (levDist === 1) scoreColor = "#ff9800"; else scoreColor = "#d32f2f"; if (usedReplay) points = Math.round(points * 0.2);
+        }
     }
 
     if (levDist > 0) {
