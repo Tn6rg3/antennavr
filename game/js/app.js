@@ -2429,6 +2429,40 @@ function initBattleRoyaleScheduler() {
     if (brCheckInterval) clearInterval(brCheckInterval);
     brCheckInterval = setInterval(checkBattleTime, 10000); 
 }
+// --- GESTIONE SICURA ISCRIZIONE / RITIRO BATTAGLIA REALE ---
+window.toggleBattleRoyaleJoin = function() {
+    if (!brRoomCode) {
+        const now = new Date(Date.now() + serverTimeOffset);
+        const dKey = now.toISOString().split('T')[0].replace(/-/g, '');
+        brRoomCode = "BR_" + dKey;
+    }
+    
+    db.ref(`rooms/${brRoomCode}/players/${myId}`).once('value', pSnap => {
+        if (pSnap.exists()) {
+            // SEI GIÀ ISCRITTO -> TI RITIRI
+            db.ref(`rooms/${brRoomCode}/players/${myId}`).remove().then(() => {
+                showToast("Ti sei ritirato dalla sfida serale.");
+            });
+        } else {
+            // NON SEI ISCRITTO -> TI ISCRIVI
+            db.ref(`rooms/${brRoomCode}`).once('value', snap => {
+                if (!snap.exists()) {
+                    db.ref(`rooms/${brRoomCode}`).set({
+                        status: 'enrolling', type: 'battle_royale', wpm: 25, round: 0,
+                        hostId: myId, createdAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+                
+                db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
+                    name: myName, lives: 3, status: 'Iscritto ⏳', answered: false
+                }).then(() => {
+                    showToast("⚔️ Iscrizione registrata! Il banner diventerà verde.");
+                });
+            });
+        }
+    });
+};
+
 function checkBattleTime() {
     if (gameRunning || brIsPlaying) return; 
     
@@ -2448,6 +2482,12 @@ function checkBattleTime() {
 
     if (isTime) {
         if(els.brBanner) els.brBanner.style.display = 'block';
+        
+        // AGGANCIO SICURO DEL PULSANTE PARTECIPA / RITIRATI
+        if(els.btnJoinBR) {
+            els.btnJoinBR.onclick = window.toggleBattleRoyaleJoin;
+        }
+
         db.ref(`rooms/${brRoomCode}/players`).on('value', snap => {
             const players = snap.val() || {};
             const count = Object.keys(players).length;
