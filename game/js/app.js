@@ -156,6 +156,50 @@ window.goBackToMenu = function() {
     showScreen('setupScreen');
 }
 
+// --- FUNZIONE CENTRALIZZATA SINCRONIZZAZIONE ALIAS UTENTE ---
+async function syncUserNameEverywhere(userId, newName, newUsername) {
+    await db.ref(`presence/${userId}`).update({ name: newName, username: newUsername });
+    if (roomCode) await db.ref(`rooms/${roomCode}/players/${userId}`).update({ name: newName, username: newUsername });
+    const now = new Date(); 
+    const dKey = now.toISOString().split('T')[0]; 
+    const wKey = getWeekNumber(now); 
+    const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+    for (const path of [`activity/daily/${dKey}`, `activity/weekly/${wKey}`, `activity/monthly/${mKey}`]) { 
+        const actRef = db.ref(`${path}/${userId}`); 
+        const actSnap = await actRef.once('value'); 
+        if (actSnap.exists()) await actRef.update({ name: newName }); 
+    }
+    if (myTeamId) await db.ref(`teams/${myTeamId}/members/${userId}`).update({ name: newName, username: newUsername });
+    
+    const trnsSnap = await db.ref('tournaments').once('value');
+    if (trnsSnap.exists()) {
+        const trns = trnsSnap.val();
+        for (let trnId in trns) {
+            if (trns[trnId].status !== 'finished' && trns[trnId].matches) {
+                for (let mId in trns[trnId].matches) {
+                    const m = trns[trnId].matches[mId];
+                    if (m.playerA && m.playerA.id === userId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerA`).update({ name: newName, username: newUsername });
+                    if (m.playerB && m.playerB.id === userId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerB`).update({ name: newName, username: newUsername });
+                }
+            }
+        }
+    }
+    for (const path of ['callsign/global', 'standard', 'pingpong', 'chars']) {
+        const snap = await db.ref(`leaderboard/${path}`).once('value');
+        if (snap.exists()) {
+            snap.forEach(subNode => { 
+                if (path === 'callsign/global') { 
+                    if (subNode.key === userId) subNode.ref.update({ name: newName, username: newUsername }); 
+                } else { 
+                    subNode.forEach(userRecord => { 
+                        if (userRecord.key === userId) userRecord.ref.update({ name: newName, username: newUsername }); 
+                    }); 
+                } 
+            });
+        }
+    }
+}
+
 // --- POPOLAMENTO E GESTIONE DINAMICA DEL MENU DI GIOCO ---
 function populateGameModesUI() {
     if (!els.gameModeInput || !window.GAME_MODES) return;
@@ -1573,6 +1617,7 @@ if(els.deleteDataBtn) els.deleteDataBtn.addEventListener('click', async () => {
     }
 });
 
+// USIAMO LA NUOVA HELPER FUNCTION SYNCUSERNAMEEVERYWHERE INVECE DELLA RIPETIZIONE
 if(els.saveAliasBtn) els.saveAliasBtn.addEventListener('click', async () => {
     const alias = els.userAliasInput.value.trim(); const privacy = els.privacyUsernameCheckbox.checked;
     if (privacy && !alias) return alert("L'Alias è obbligatorio se nascondi lo username Telegram!");
@@ -1582,28 +1627,10 @@ if(els.saveAliasBtn) els.saveAliasBtn.addEventListener('click', async () => {
     try {
         await db.ref(`users/${myId}`).update({ alias: alias || null, privacyUsername: privacy });
         myName = newName; myPrivacy = privacy; els.playerName.textContent = myName; showToast("Profilo aggiornato!");
-        await db.ref(`presence/${myId}`).update({ name: myName, username: currentUsername });
-        if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ name: myName, username: currentUsername });
-        const now = new Date(); const dKey = now.toISOString().split('T')[0]; const wKey = getWeekNumber(now); const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
-        for (const path of [`activity/daily/${dKey}`, `activity/weekly/${wKey}`, `activity/monthly/${mKey}`]) { const actRef = db.ref(`${path}/${myId}`); const actSnap = await actRef.once('value'); if (actSnap.exists()) await actRef.update({ name: myName }); }
-        if (myTeamId) await db.ref(`teams/${myTeamId}/members/${myId}`).update({ name: myName, username: currentUsername });
-        const trnsSnap = await db.ref('tournaments').once('value');
-        if (trnsSnap.exists()) {
-            const trns = trnsSnap.val();
-            for (let trnId in trns) if (trns[trnId].status !== 'finished' && trns[trnId].matches) {
-                for (let mId in trns[trnId].matches) {
-                    const m = trns[trnId].matches[mId];
-                    if (m.playerA && m.playerA.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerA`).update({ name: myName, username: currentUsername });
-                    if (m.playerB && m.playerB.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerB`).update({ name: myName, username: currentUsername });
-                }
-            }
-        }
-        for (const path of ['callsign/global', 'standard', 'pingpong', 'chars']) {
-            const snap = await db.ref(`leaderboard/${path}`).once('value');
-            if (snap.exists()) snap.forEach(subNode => { if (path === 'callsign/global') { if (subNode.key === myId) subNode.ref.update({ name: myName, username: currentUsername }); } else subNode.forEach(userRecord => { if (userRecord.key === myId) userRecord.ref.update({ name: myName, username: currentUsername }); }); });
-        }
+        await syncUserNameEverywhere(myId, newName, currentUsername);
     } catch(e) { alert("Errore durante il salvataggio."); }
 });
+
 if(els.resetStatsBtn) els.resetStatsBtn.addEventListener('click', async () => { if (confirm(currentLang === 'it' ? "Vuoi azzerare tutte le tue statistiche? Questa operazione non può essere annullata." : "Reset all your statistics? This cannot be undone.")) { try { await Promise.all([ db.ref(`users/${myId}/stats`).remove(), db.ref(`users/${myId}/history`).remove() ]); showToast("Statistiche azzerate correttamente!"); showProfileScreen(); } catch(e) { alert("Errore durante il reset delle statistiche."); } } });
 
 window.showProfileScreen = function() {
