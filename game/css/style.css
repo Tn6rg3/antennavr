@@ -75,6 +75,8 @@ button:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed
 .btn-champ { background-color: var(--champ-color); color: #fff; padding: 10px 15px; font-size: 1.1em; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(156, 39, 176, 0.4);}
 .btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 5px; font-size: 0.9em; margin-top: 5px; border: none; cursor: pointer; width: auto;}
 
+/* Permette ai campi di testo dentro i contenitori flex (come la chat) 
+   di ridimensionarsi correttamente lasciando spazio al bottone "Invia" */
 input[type="number"], input[type="text"], select {
     padding: 6px;
     font-size: 0.95em;
@@ -86,8 +88,10 @@ input[type="number"], input[type="text"], select {
     border-radius: 8px;
     background-color: var(--bg-color);
     color: var(--text-color);
-    flex-shrink: 0;
+    min-width: 0;
+    flex: 1 1 auto; /* Consente all'input di restringersi per far posto al bottone affiancato */
 }
+
 
 .settings-row { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin-bottom: 5px; gap: 4px; flex-wrap: nowrap; flex-shrink: 0;}
 .settings-row > div { flex: 1; min-width: 0; text-align: center; }
