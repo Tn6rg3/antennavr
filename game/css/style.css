@@ -26,8 +26,6 @@ html, body {
     box-sizing: border-box;
 }
 
-/* Ogni schermata si adatta verticalmente e protegge l'interfaccia 
-   usando le variabili CSS esposte nativamente da Telegram WebApp */
 .screen {
     display: none;
     flex-direction: column;
@@ -75,10 +73,10 @@ button:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed
 .btn-champ { background-color: var(--champ-color); color: #fff; padding: 10px 15px; font-size: 1.1em; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(156, 39, 176, 0.4);}
 .btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 5px; font-size: 0.9em; margin-top: 5px; border: none; cursor: pointer; width: auto;}
 
-/* Permette ai campi di testo dentro i contenitori flex (come la chat) 
-   di ridimensionarsi correttamente lasciando spazio al bottone "Invia" */
+/* PROTEZIONE ANTI-SBAVATURA PER GLI INPUT:
+   consente agli input dentro una riga flex di restringersi e non cacciare fuori i bottoni */
 input[type="number"], input[type="text"], select {
-    padding: 6px;
+    padding: 8px;
     font-size: 0.95em;
     width: 100%;
     box-sizing: border-box;
@@ -89,9 +87,8 @@ input[type="number"], input[type="text"], select {
     background-color: var(--bg-color);
     color: var(--text-color);
     min-width: 0;
-    flex: 1 1 auto; /* Consente all'input di restringersi per far posto al bottone affiancato */
+    flex: 1 1 auto;
 }
-
 
 .settings-row { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin-bottom: 5px; gap: 4px; flex-wrap: nowrap; flex-shrink: 0;}
 .settings-row > div { flex: 1; min-width: 0; text-align: center; }
@@ -103,7 +100,6 @@ input[type="number"], input[type="text"], select {
 .header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px; font-weight: bold; font-size: 1.1em; background: var(--sec-bg-color); padding: 8px 12px; border-radius: 8px; box-sizing: border-box; flex-shrink: 0;}
 #scoreDisplay { color: #4caf50; }
 
-/* Evita che la tabella deformi la pagina: si estende e si scorre al suo interno */
 .table-wrapper {
     flex-grow: 1;
     width: 100%;
@@ -139,7 +135,7 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
 
 .data-list { list-style: none; padding: 0; margin: 0; flex-grow: 1; overflow-y: auto; text-align: left; }
 .data-list li { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 4px; border-radius: 6px; font-size: 0.9em;}
-.action-btn-small { width: auto; padding: 6px 12px; font-size: 0.85em; margin: 0; }
+.action-btn-small { width: auto; padding: 6px 12px; font-size: 0.85em; margin: 0; flex-shrink: 0; }
 
 .leaderboard-row {
     display: flex;
@@ -159,7 +155,7 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
 #loadingText { font-style: italic; color: #ff9800; margin-bottom: 10px; font-weight: bold; text-align:center; font-size: 0.9em;}
 
 .tab-buttons { display: flex; width: 100%; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; justify-content: space-between; flex-shrink: 0;}
-.tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 8px; font-size: 0.8em; border-radius: 8px; flex: 1 1 30%; text-align: center; }
+.tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 8px; font-size: 0.8em; border-radius: 8px; flex: 1 1 30%; text-align: center; flex-shrink: 0; }
 .tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); box-shadow: inset 0 0 5px rgba(0,0,0,0.2);}
 #tabGlobalCWFreakBtn.active-tab { background-color: #9c27b0; }
 #tabGlobalCWFreakBtn { background-color: #ce93d8; color: #fff;}
@@ -274,7 +270,6 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
     display: inline-block;
 }
 
-/* Quando si clicca, la classe 'revealed' mostra il testo normale */
 .cw-spoiler.revealed {
     background-color: transparent;
     color: inherit !important;
@@ -283,28 +278,15 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
 #inviteModal, #roomEventModal, #tournamentWelcomeModal { height: auto; top: 20%; }
 .event-modal-icon { font-size: 4em; display: block; margin-bottom: 10px; }
 
-/* =========================================================
-   OTTIMIZZAZIONE PER SCHERMI PICCOLI / MOBILE (max-width: 400px)
-   ========================================================= */
+/* Ottimizzazioni aggiuntive per schermi piccoli (sotto i 400px) */
 @media screen and (max-width: 400px) {
-    /* Rimpicciolisce leggermente i bottoni nell'header e nella chat per farli stare tutti */
     .action-btn-small {
         padding: 5px 8px !important;
         font-size: 0.78em !important;
     }
-    
-    /* Evita che l'alias del giocatore rubi troppo spazio ai bottoni */
     #setupScreen h2 {
         font-size: 0.95em !important;
         max-width: 100%;
         margin-bottom: 4px !important;
-    }
-
-    /* Permette alle barre dei pulsanti di andare a capo in modo ordinato */
-    #setupScreen > div:first-child,
-    #chatDrawer > div:first-child {
-        flex-direction: row;
-        justify-content: center !important;
-        gap: 5px !important;
     }
 }
