@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260731.107"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260731.108"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -9,6 +9,20 @@ const tg = window.Telegram.WebApp;
 const tgUser = tg.initDataUnsafe?.user;
 const tgUsername = tgUser?.username || "";
 const startParam = tg.initDataUnsafe?.start_param;
+
+// --- GESTIONE SCHERMO RESIZE E TASTIERA MOBILE ---
+if (tg.isExpanded === false) {
+    tg.expand();
+}
+if (typeof tg.disableVerticalSwipes === 'function') {
+    tg.disableVerticalSwipes();
+}
+tg.onEvent('viewportChanged', function(eventData) {
+    if (eventData.isStateStable) {
+        document.body.style.height = `${tg.viewportStableHeight}px`;
+    }
+});
+document.body.style.height = `${tg.viewportStableHeight || window.innerHeight}px`;
 
 // --- MAPPA DOM DINAMICA (Proxy) ---
 const els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
@@ -34,6 +48,7 @@ let db, auth, currentLang = 'it';
 let activeChatContext = null, activeTab = "room", isChatDrawerOpen = false;
 let isGlobalChatMuted = false;
 let isChatCwEnabled = false, chatCwWpm = 20, chatCwTone = 600;
+let chatCwAudioQueue = [], isChatCwPlaying = false; // CODA AUDIO CHAT CW
 let isChallenging = false, isRejoining = false, currentInviterId = null;
 let roomCode = "", roomHostId = null, activeTrnId = null;
 let lastPlayerCount = 0, gameStartPlayerCount = 0;
@@ -109,6 +124,9 @@ window.openTelegramProfile = function(username) {
 
 function showScreen(screenId) {
     clearAllTimers();
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+    }
     document.querySelectorAll('.screen').forEach(el => el.classList.remove('active-screen'));
     if (els[screenId]) els[screenId].classList.add('active-screen');
 
@@ -406,6 +424,7 @@ function initGame() {
         els.toggleChatCwBtn.addEventListener('click', () => {
             isChatCwEnabled = !isChatCwEnabled;
             localStorage.setItem(STORAGE_CHAT_CW_ENABLED, isChatCwEnabled);
+            if (!isChatCwEnabled) chatCwAudioQueue = [];
             
             if (isChatCwEnabled) {
                 els.toggleChatCwBtn.textContent = "📻 CW: ON";
@@ -659,6 +678,36 @@ function playMorseAudio(text, wpm, forcePlay = false) {
     });
 }
 
+// --- CODA AUDIO CHAT CW (EVITA SOVRAPPOSIZIONI DI MESSAGGI) ---
+function enqueueChatCwAudio(text) {
+    if (!text || !isChatCwEnabled) return;
+    if (chatCwAudioQueue.length < 10) {
+        chatCwAudioQueue.push(text.toUpperCase());
+        processChatCwQueue();
+    }
+}
+
+async function processChatCwQueue() {
+    if (isChatCwPlaying || chatCwAudioQueue.length === 0) return;
+    isChatCwPlaying = true;
+    while (chatCwAudioQueue.length > 0 && isChatCwEnabled) {
+        const nextText = chatCwAudioQueue.shift();
+        const savedTone = currentTone;
+        currentTone = chatCwTone;
+        try {
+            await playMorseAudio(nextText, chatCwWpm, true);
+        } catch (e) {
+            console.error("Errore riproduzione Morse in chat:", e);
+        } finally {
+            currentTone = savedTone;
+        }
+        if (chatCwAudioQueue.length > 0 && isChatCwEnabled) {
+            await new Promise(r => setTimeout(r, 600));
+        }
+    }
+    isChatCwPlaying = false;
+}
+
 // --- CHAT ---
 window.toggleChat = function() {
     if (els.chatDrawer.style.display === 'none') {
@@ -669,6 +718,7 @@ window.toggleChat = function() {
 
 function hideChat() {
     if(els.chatDrawer) els.chatDrawer.style.display = 'none'; isChatDrawerOpen = false;
+    chatCwAudioQueue = []; // Svuota la coda audio se la chat viene chiusa
     Object.keys(listeners.activeChat).forEach(key => { 
         listeners.activeChat[key].ref.off('value', listeners.activeChat[key].callback); 
         delete listeners.activeChat[key]; 
@@ -768,11 +818,7 @@ function setupChat(chatRef, containerId, alertBtnId) {
                     showToast(`${prefix} ${latestMsg.name}: [📻 Messaggio CW...]`);
                 }
                 if (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room'))) {
-                    const savedTone = currentTone;
-                    currentTone = chatCwTone;
-                    playMorseAudio(latestMsg.text.toUpperCase(), chatCwWpm, true).then(() => {
-                        currentTone = savedTone;
-                    });
+                    enqueueChatCwAudio(latestMsg.text); // Messo in coda per non sovrapporre i suoni
                 }
             } else {
                 if (shouldNotify) {
@@ -841,7 +887,6 @@ function checkGameTypeUI() {
 
     els.timeoutDiv.style.display = isSingle || isTrn ? 'none' : 'block';
     
-    // Controlli legati al singolo gioco o flag flessibili
     if (modeCfg) {
         els.fixedSpeedContainer.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
         els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
@@ -850,7 +895,6 @@ function checkGameTypeUI() {
             els.advancedSpacingContainer.style.display = (isSingle && modeCfg.spacingConfigurable) ? 'flex' : 'none';
         }
         
-        // Attivazione o disattivazione cambi parametri
         if (els.startWpmInput) {
             els.startWpmInput.disabled = (modeCfg.wpmConfigurable === false);
             if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) {
@@ -864,7 +908,6 @@ function checkGameTypeUI() {
             }
         }
     } else {
-        // Fallback per vecchie logiche
         const isChars = selectedMode === 'chars';
         const isPP = selectedMode === 'pingpong';
         els.fixedSpeedContainer.style.display = isSingle ? 'flex' : 'none';
@@ -2508,10 +2551,10 @@ function checkBattleTime() {
                 if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#4caf50'; 
                     els.brBanner.style.borderColor = '#81c784';
-                    els.brBanner.style.padding = '8px 12px'; // Riduciamo l'altezza
+                    els.brBanner.style.padding = '8px 12px';
                 }
-                if (els.brBannerFullText) els.brBannerFullText.style.display = 'none'; // Nasconde titolo e sottotitolo
-                if (els.brCompactCountText) els.brCompactCountText.style.display = 'inline-block'; // Mostra "⚔️ Iscritti: X" a lato
+                if (els.brBannerFullText) els.brBannerFullText.style.display = 'none';
+                if (els.brCompactCountText) els.brCompactCountText.style.display = 'inline-block';
                 
                 if (els.btnJoinBR) {
                     els.btnJoinBR.textContent = 'RITIRATI DALLA SFIDA';
@@ -2524,10 +2567,10 @@ function checkBattleTime() {
                 if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#e53935'; 
                     els.brBanner.style.borderColor = '#ff5252';
-                    els.brBanner.style.padding = '15px'; // Ripristina altezza
+                    els.brBanner.style.padding = '15px';
                 }
-                if (els.brBannerFullText) els.brBannerFullText.style.display = 'block'; // Mostra titolo
-                if (els.brCompactCountText) els.brCompactCountText.style.display = 'none'; // Nasconde contatore laterale
+                if (els.brBannerFullText) els.brBannerFullText.style.display = 'block';
+                if (els.brCompactCountText) els.brCompactCountText.style.display = 'none';
                 
                 if (els.btnJoinBR) {
                     els.btnJoinBR.textContent = 'PARTECIPA ALLA SFIDA';
