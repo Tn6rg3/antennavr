@@ -46,12 +46,11 @@
 
 <!-- CHAT GLOBALE (DRAWER) -->
 <div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:55%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
-    <!-- INTESTAZIONE CHAT RESPONSIVE (Evita di tagliare i bottoni) -->
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--hint-color); padding-bottom:6px; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
         <span id="chatTitle" style="font-weight:bold; font-size:0.95em;">💬 Chat</span>
         <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
             <button id="toggleChatCwBtn" style="width:auto; padding:5px 8px; margin:0; font-size:0.75em;" class="btn-secondary">📻 CW: OFF</button>
-            <button id="muteGlobalChatBtn" style="width:auto; padding:5px 8px; margin:0; font-size:0.75em;" class="btn-secondary">🔊 Notifiche Attive</button>
+            <button id="muteGlobalChatBtn" style="width:auto; padding:5px 8px; margin:0; font-size:0.75em;" class="btn-secondary">🔊 ON</button>
             <button id="clearChatBtn" style="width:auto; padding:5px 8px; margin:0; font-size:0.75em;" class="btn-danger">Cancella</button>
             <button id="closeChatBtn" onclick="toggleChat()" style="width:auto; padding:5px 8px; margin:0; font-size:0.75em;" class="btn-secondary">Chiudi</button>
         </div>
@@ -76,9 +75,10 @@
     </div>
 
     <div id="chatMessages" style="flex-grow:1; overflow-y:auto; text-align:left; font-size:0.9em; margin-bottom:5px; padding:8px; background:var(--bg-color); border-radius:8px;"></div>
-    <div style="display:flex; gap:5px;">
-        <input type="text" id="chatInput" placeholder="Scrivi un messaggio..." style="flex-grow:1; padding:10px; font-size:1em; margin:0;">
-        <button id="sendChatBtn" style="width:auto; margin:0; padding:10px 15px;">Invia</button>
+    <!-- BARRA INVIO CHAT PROTETTA DA SBAVATURE -->
+    <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; flex-shrink:0; align-items:center; margin-top:4px;">
+        <input type="text" id="chatInput" placeholder="Scrivi un messaggio..." style="flex: 1 1 auto; min-width: 0; padding:10px; font-size:0.95em; margin:0;">
+        <button id="sendChatBtn" style="width:auto; margin:0; padding:10px 14px; flex-shrink:0;">Invia</button>
     </div>
 </div>
 
@@ -96,7 +96,6 @@
 
 <!-- MENU PRINCIPALE -->
 <div id="setupScreen" class="screen">
-    <!-- INTESTAZIONE RESPONSIVE CHE VA A CAPO SU SCHERMI STRETTI -->
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 8px; gap: 6px; flex-wrap: wrap;">
         <h2 style="margin: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 1.1em; flex-grow: 1;">
             <span id="txt_hello">Ciao</span> <span id="playerName">Giocatore</span>!
@@ -142,7 +141,6 @@
             <div>
                 <label id="txt_mode_label">Modo:</label>
                 <select id="gameModeInput">
-                    <!-- Le opzioni di gioco verranno generate dinamicamente da app.js leggendo games_config.js -->
                     <optgroup label="🏆 Tornei" id="trn_opt_group" style="display:none;">
                         <option value="trn_create_team">Fonda Squadra</option>
                         <option value="trn_join_team">Unisciti a Squadra</option>
@@ -247,9 +245,10 @@
     <h2 id="txt_profile_title" style="color: var(--link-color); margin-bottom: 10px;">👤 Profilo e Statistiche</h2>
     <div class="box-panel" style="margin-bottom:8px; flex-shrink:0;">
         <h3 id="txt_alias_title" style="color:var(--link-color); margin-bottom:5px;">🏷️ Il tuo Alias</h3>
-        <div style="display:flex; gap:5px;">
-            <input type="text" id="userAliasInput" placeholder="Scegli un alias..." maxlength="15" style="margin:0; padding:8px;">
-            <button id="saveAliasBtn" class="action-btn-small btn-success" style="width:auto; margin:0;">Salva</button>
+        <!-- RIGA ALIAS PROTETTA DA SBAVATURE -->
+        <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
+            <input type="text" id="userAliasInput" placeholder="Scegli un alias..." maxlength="15" style="flex: 1 1 auto; min-width: 0; margin:0; padding:8px;">
+            <button id="saveAliasBtn" class="action-btn-small btn-success" style="width:auto; margin:0; flex-shrink:0;">Salva</button>
         </div>
         <p id="txt_alias_hint" style="font-size:0.75em; color:var(--hint-color); margin-top:3px;">L'alias sostituirà il tuo nome Telegram nelle classifiche e nelle squadre.</p>
         <div style="display:flex; align-items:center; gap:10px; margin-top:10px; background:rgba(0,0,0,0.05); padding:8px; border-radius:8px;">
@@ -331,9 +330,10 @@
                 <button id="clearTeamChatBtn" class="btn-danger action-btn-small" style="padding: 2px 8px; font-size: 0.75em;">Cancella</button>
             </div>
             <div id="teamChatMessages" style="flex-grow:1; overflow-y:auto; font-size:0.85em; padding:5px; background:var(--bg-color); border-radius:6px; margin-bottom:5px;"></div>
-            <div style="display:flex; gap:5px;">
-                <input type="text" id="teamChatInput" placeholder="Messaggio..." style="padding:8px; margin:0;">
-                <button id="sendTeamChatBtn" style="width:auto; padding:8px 12px; margin:0;">Invia</button>
+            <!-- BARRA INVIO CHAT SQUADRA PROTETTA -->
+            <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
+                <input type="text" id="teamChatInput" placeholder="Messaggio..." style="flex: 1 1 auto; min-width: 0; padding:8px; margin:0;">
+                <button id="sendTeamChatBtn" style="width:auto; padding:8px 14px; margin:0; flex-shrink:0;">Invia</button>
             </div>
         </div>
     </div>
@@ -429,9 +429,10 @@
     <div class="box-panel" style="flex-grow:1; min-height:0; display:flex; flex-direction:column; padding:5px; margin-bottom:5px;">
         <h3 id="txt_lobby_chat_title" style="margin-bottom:2px; font-size:0.9em; color:var(--hint-color);">💬 Chat di Stanza</h3>
         <div id="lobbyChatMessages" style="flex-grow:1; overflow-y:auto; font-size:0.85em; padding:5px; background:var(--bg-color); border-radius:6px; margin-bottom:5px;"></div>
-        <div style="display:flex; gap:5px;">
-            <input type="text" id="lobbyChatInput" placeholder="Messaggio..." style="padding:8px; margin:0;">
-            <button id="sendLobbyChatBtn" style="width:auto; padding:8px 12px; margin:0;">Invia</button>
+        <!-- BARRA INVIO CHAT LOBBY PROTETTA -->
+        <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
+            <input type="text" id="lobbyChatInput" placeholder="Messaggio..." style="flex: 1 1 auto; min-width: 0; padding:8px; margin:0;">
+            <button id="sendLobbyChatBtn" style="width:auto; padding:8px 14px; margin:0; flex-shrink:0;">Invia</button>
         </div>
     </div>
 
@@ -473,18 +474,20 @@
         <div id="pingPongTimerBar" style="width:100%; height:4px; background:rgba(0,0,0,0.1); border-radius:2px; margin-bottom:5px; overflow:hidden;">
             <div id="pingPongTimerProgress" style="width:100%; height:100%; background:#ff9800; transition: width 0.1s linear;"></div>
         </div>
-        <div style="display:flex; gap:5px; width:100%;">
-            <input type="text" id="pingPongWordToSend" placeholder="Scrivi la parola da inviare..." autocomplete="off" autocapitalize="none" style="flex-grow: 1; padding: 10px; font-size: 1.1em; margin: 0; border: 2px solid #ff9800;">
-            <button id="btnSendPingPong" class="btn-secondary" style="width: auto; margin: 0; padding: 10px;">Invia (Tu)</button>
+        <!-- RIGA PING PONG PROTETTA DA SBAVATURE -->
+        <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
+            <input type="text" id="pingPongWordToSend" placeholder="Scrivi la parola da inviare..." autocomplete="off" autocapitalize="none" style="flex: 1 1 auto; min-width: 0; padding: 10px; font-size: 1.1em; margin: 0; border: 2px solid #ff9800;">
+            <button id="btnSendPingPong" class="btn-secondary" style="width: auto; margin: 0; padding: 10px 14px; flex-shrink:0;">Invia (Tu)</button>
         </div>
     </div>
 
     <!-- SEZIONE INPUT NORMALE -->
     <div id="gameInputArea" style="display: flex; flex-direction:column; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
         <div id="easyModeHint" style="display:none; text-align:center; font-size:1.4em; font-weight:bold; color:var(--champ-color); background:var(--sec-bg-color); padding:5px; border-radius:8px; letter-spacing: 2px;"></div>
-        <div style="display:flex; gap:5px; width:100%;">
-            <input type="text" id="permanentGameInput" placeholder="Digita qui..." autocomplete="off" autocapitalize="none" style="flex-grow: 1; padding: 10px; font-size: 1.1em; margin: 0;">
-            <button id="replayWordBtn" class="btn-secondary" style="width: auto; margin: 0; padding: 10px; font-size: 0.9em;">🔁 Riascolta</button>
+        <!-- RIGA DI GIOCO STANDARD PROTETTA DA SBAVATURE -->
+        <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
+            <input type="text" id="permanentGameInput" placeholder="Digita qui..." autocomplete="off" autocapitalize="none" style="flex: 1 1 auto; min-width: 0; padding: 10px; font-size: 1.1em; margin: 0;">
+            <button id="replayWordBtn" class="btn-secondary" style="width: auto; margin: 0; padding: 10px 14px; font-size: 0.9em; flex-shrink:0;">🔁 Riascolta</button>
         </div>
     </div>
 
@@ -545,7 +548,7 @@
 <div id="leaderboardScreen" class="screen">
     <h2 style="margin-bottom: 5px;">🏆 Risultati</h2>
     
-    <!-- TASTO DI CONDIVISIONE SFIDA GIORNALIERA (nascosto di default) -->
+    <!-- TASTO DI CONDIVISIONE SFIDA GIORNALIERA -->
     <button id="btnShareDaily" class="btn-link" style="display:none; background:#ff9800; color:white; font-weight:bold; margin-bottom: 10px; padding: 10px; border-radius: 8px; text-decoration: none;">📢 Condividi Risultato su Telegram!</button>
 
     <div id="roomWinnerBanner" style="text-align:center; font-weight:bold; color:var(--champ-color); margin-bottom:5px;"></div>
@@ -625,7 +628,6 @@
         </div>
     </div>
 
-    <!-- Barra del tempo 30 secondi -->
     <div id="brTimerContainer" style="width:100%; height:15px; background:var(--bg-color); border:1px solid var(--hint-color); border-radius:10px; overflow:hidden; margin-bottom:15px; display:none;">
         <div id="brTimerProgress" style="width:100%; height:100%; background:#4caf50; transition: width 0.1s linear;"></div>
     </div>
@@ -633,21 +635,20 @@
     <h3 id="brStatusText" style="text-align:center; color:var(--text-color);">In attesa delle 21:30...</h3>
 
     <div id="brInputArea" style="display:none; flex-direction:column; gap:10px; margin-bottom:20px;">
-        <input type="text" id="brInput" placeholder="Decodifica e scrivi qui..." autocomplete="off" autocapitalize="none">
-        <button id="btnSendBr" class="btn-success">INVIA</button>
+        <!-- RIGA INPUT BATTAGLIA REALE PROTETTA -->
+        <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
+            <input type="text" id="brInput" placeholder="Decodifica e scrivi qui..." autocomplete="off" autocapitalize="none" style="flex: 1 1 auto; min-width: 0; padding:10px; margin:0;">
+            <button id="btnSendBr" class="btn-success" style="width:auto; padding:10px 14px; margin:0; flex-shrink:0;">INVIA</button>
+        </div>
     </div>
 
     <div class="br-players-list">
         <h4 style="border-bottom:1px solid var(--hint-color); padding-bottom:5px;">Partecipanti e Stato</h4>
-        <ul id="brPlayersList" style="list-style:none; padding:0; margin:0;">
-            <!-- Riempito dinamicamente da JS -->
-        </ul>
+        <ul id="brPlayersList" style="list-style:none; padding:0; margin:0;"></ul>
     </div>
 
-    <!-- TASTO ABBANDONA AGGIUNTO QUI IN FONDO ALLA SCHERMATA -->
     <button id="btnLeaveBR" class="btn-danger" style="margin-top:15px;">Abbandona Battaglia</button>
 </div>
-<!-- FINE SCHERMATA BATTAGLIA -->
 
 <!-- MODAL: DETTAGLI PARTITA -->
 <div id="matchDetailsModal" style="display: none; position: fixed; top: 10%; left: 5%; width: 90%; height: 80%; background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color); border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
@@ -773,7 +774,6 @@
 <!-- CARICAMENTO DINAMICO ANTI-CACHE PER TELEGRAM MOBILE -->
 <script>
     (function() {
-        // Genera una build dinamica per eliminare definitivamente il rischio di vecchie cache in Telegram Mobile
         const BUILD_VERSION = Date.now(); 
         
         const scripts = [
@@ -785,7 +785,7 @@
         scripts.forEach(function(src) {
             const script = document.createElement("script");
             script.src = src + "?v=" + BUILD_VERSION;
-            script.async = false; // Preserva rigorosamente l'ordine esecutivo degli script
+            script.async = false;
             document.body.appendChild(script);
         });
     })();
