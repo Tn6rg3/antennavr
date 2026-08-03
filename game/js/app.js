@@ -2993,19 +2993,25 @@ function listenToCoopState() {
             }
         });
 
-        // Aggiorna parola locale solo se si ha una frequenza attiva
+        // Aggiorna parola locale e riproduce UNA SOLA VOLTA quando cambia su Firebase
         if (coopActiveFreqIndex > 0 && state.activeWords && state.activeWords.length === 3) {
             const currentFreqWord = state.activeWords[coopActiveFreqIndex - 1];
             if (currentFreqWord && currentFreqWord !== gameWords[0]) {
                 gameWords[0] = currentFreqWord;
                 inputActive = true; // ABILITA LA SCRITTURA
-                playMorseAudio(currentFreqWord, currentWpm);
+                // Piccolo ritardo di 500ms per non sovrapporre il Morse al Beep sonoro
+                setTimeout(() => {
+                    if (gameRunning && isCoopMode && gameWords[0] === currentFreqWord) {
+                        playMorseAudio(currentFreqWord, currentWpm);
+                    }
+                }, 500);
                 els.permanentGameInput.value = "";
                 els.permanentGameInput.focus();
             }
         }
     });
 }
+
 
 function setupCoopFreqButtons() {
     const labels = ["🟢 FREQ 1 (3-4 car.)", "🟡 FREQ 2 (5-6 car.)", "🔴 FREQ 3 (7+ car.)"];
@@ -3083,7 +3089,7 @@ handleWordSubmission = function(userWord) {
     const gain = coopActiveFreqIndex === 1 ? 4 : (coopActiveFreqIndex === 2 ? 7 : 12);
     const penalty = coopActiveFreqIndex === 1 ? 2 : (coopActiveFreqIndex === 2 ? 3 : 5);
 
-    // Blocca input e invii multipli per 2 secondi di cooldown
+    // Blocca input per 2 secondi di cooldown
     inputActive = false;
     els.permanentGameInput.disabled = true;
 
@@ -3118,9 +3124,14 @@ handleWordSubmission = function(userWord) {
         els.permanentGameInput.value = "";
         els.permanentGameInput.focus();
         inputActive = true; // RIABILITA INVIO E SCRITTURA DOPO I 2 SECONDI
-        if (gameWords[0]) playMorseAudio(gameWords[0], currentWpm);
+        
+        // RIPRODUCE L'AUDIO QUI SOLO SE HAI SBAGLIATO (per riprovare la stessa parola)
+        if (!isCorrect && gameWords[0]) {
+            playMorseAudio(gameWords[0], currentWpm);
+        }
     }, 2000);
 };
+
 
 function finishCoopGame(won) {
     gameRunning = false;
