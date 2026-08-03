@@ -970,41 +970,79 @@ if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => {
     }
     checkGameTypeUI();
 });
-// --- CONTROLLO UI INTELLIGENTE PER I GIOCHI ---
+
+// --- CONTROLLO UI INTELLIGENTE PER I GIOCHI (RICOSTRUZIONE MENU PER CELLULARI) ---
 function checkGameTypeUI() {
     const isSingle = els.gameTypeInput.value === 'single';
     const isTrn = els.gameTypeInput.value === 'tournament';
     const isCoop = els.gameTypeInput.value === 'coop';
-    const selectedMode = els.gameModeInput.value;
-    const isCustom = selectedMode === 'custom';
+    const select = els.gameModeInput;
+    const currentVal = select.value;
     
+    // 1. SVUOTIAMO E RICOSTRUIAMO DINAMICAMENTE LE OPZIONI (Risolve il bug dei menu cellulari)
+    select.innerHTML = '';
+    
+    if (isCoop) {
+        // PER CO-OP: INSERISCE ESCLUSIVAMENTE CONQUISTA
+        const opt = document.createElement('option');
+        opt.value = "conquest";
+        opt.textContent = currentLang === 'en' ? "Conquest (Co-op) ⚔️" : "Conquista (Co-op) ⚔️";
+        select.appendChild(opt);
+        select.value = "conquest";
+    } else if (isTrn) {
+        // PER TORNEI: INSERISCE SOLO LE AZIONI SQUADRA
+        const trnOptions = [
+            { val: "trn_create_team", it: "Fonda Squadra", en: "Create Team" },
+            { val: "trn_join_team", it: "Unisciti a Squadra", en: "Join Team" },
+            { val: "trn_create_trn", it: "Crea Nuovo Torneo", en: "Create Tournament" }
+        ];
+        trnOptions.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = item.val;
+            opt.textContent = currentLang === 'en' ? item.en : item.it;
+            select.appendChild(opt);
+        });
+        if (!currentVal.startsWith('trn_')) select.value = "trn_join_team";
+        else select.value = currentVal;
+    } else {
+        // PER SOLO E MULTI: INSERISCE TUTTI I GIOCHI TRANNE TASSATIVAMENTE CONQUISTA
+        Object.values(window.GAME_MODES || {}).forEach(mode => {
+            if (mode.id !== 'conquest') { // ESCLUSIONE TOTALE DI CONQUISTA
+                const opt = document.createElement('option');
+                opt.value = mode.id;
+                opt.id = 'txt_opt_' + mode.id;
+                opt.textContent = currentLang === 'en' ? mode.titleEn : mode.titleIt;
+                select.appendChild(opt);
+            }
+        });
+        if (currentVal === 'conquest' || currentVal.startsWith('trn_')) select.value = 'standard';
+        else select.value = currentVal || 'standard';
+    }
+
+    // 2. GESTIONE CONTROLLI E PULSANTI SOTTO IL MENU
+    const selectedMode = select.value;
     const modeCfg = window.GAME_MODES ? window.GAME_MODES[selectedMode] : null;
+    const isCustom = selectedMode === 'custom';
+    const isChars = selectedMode === 'chars';
+    const isPP = selectedMode === 'pingpong';
 
     els.timeoutDiv.style.display = isSingle || isTrn ? 'none' : 'block';
     
     if (modeCfg) {
         els.fixedSpeedContainer.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
         els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
-        
         if (els.advancedSpacingContainer) {
             els.advancedSpacingContainer.style.display = (isSingle && modeCfg.spacingConfigurable) ? 'flex' : 'none';
         }
-        
         if (els.startWpmInput) {
             els.startWpmInput.disabled = (modeCfg.wpmConfigurable === false);
-            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) {
-                els.startWpmInput.value = modeCfg.defaultWpm;
-            }
+            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) els.startWpmInput.value = modeCfg.defaultWpm;
         }
         if (els.wordCountInput) {
             els.wordCountInput.disabled = (modeCfg.wordCountConfigurable === false);
-            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) {
-                els.wordCountInput.value = modeCfg.defaultWordCount;
-            }
+            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) els.wordCountInput.value = modeCfg.defaultWordCount;
         }
     } else {
-        const isChars = selectedMode === 'chars';
-        const isPP = selectedMode === 'pingpong';
         els.fixedSpeedContainer.style.display = isSingle ? 'flex' : 'none';
         els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
         if (els.advancedSpacingContainer) {
@@ -1014,45 +1052,20 @@ function checkGameTypeUI() {
 
     els.customDictControl.style.display = (isSingle && isCustom) ? 'flex' : 'none';
 
-    const gameModes = els.gameModeInput.querySelectorAll('option:not([value^="trn_"])');
-    const trnModes = els.trn_opt_group ? els.trn_opt_group.querySelectorAll('option') : [];
-
     if (isCoop) {
-        // 1. SE SEI IN COOPERATIVA -> Mostra SOLO "Conquista"
-        gameModes.forEach(opt => {
-            const isConquest = opt.value === 'conquest';
-            opt.style.display = isConquest ? 'block' : 'none';
-            opt.disabled = !isConquest;
-        });
-        if (els.trn_opt_group) els.trn_opt_group.style.display = 'none';
-        trnModes.forEach(opt => { opt.style.display = 'none'; opt.disabled = true; });
-        els.gameModeInput.value = 'conquest';
         els.createRoomBtn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
     } else if (isTrn) {
-        // 2. SE SEI IN TORNEO -> Nascondi i giochi normali e Conquista
-        gameModes.forEach(opt => { opt.style.display = 'none'; opt.disabled = true; });
-        if (els.trn_opt_group) els.trn_opt_group.style.display = 'block';
-        trnModes.forEach(opt => { opt.style.display = 'block'; opt.disabled = false; });
-        if (!els.gameModeInput.value.startsWith('trn_')) els.gameModeInput.value = 'trn_join_team';
         els.createRoomBtn.textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
     } else {
-        // 3. SE SEI IN SOLO O MULTIPLAYER -> Mostra tutti i giochi TRANNE "Conquista"
-        gameModes.forEach(opt => {
-            const isConquest = opt.value === 'conquest';
-            opt.style.display = isConquest ? 'none' : 'block';
-            opt.disabled = isConquest;
-        });
-        if (els.trn_opt_group) els.trn_opt_group.style.display = 'none';
-        trnModes.forEach(opt => { opt.style.display = 'none'; opt.disabled = true; });
-        
-        // Se stavi guardando Conquista o un Torneo, riporta il menu su "standard"
-        if (els.gameModeInput.value.startsWith('trn_') || els.gameModeInput.value === 'conquest') {
-            els.gameModeInput.value = 'standard';
-        }
         els.createRoomBtn.textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
     }
-    if(!isSingle) { els.fixedSpeedCheckbox.checked = false; els.easyModeCheckbox.checked = false; }
+    
+    if(!isSingle) { 
+        if(els.fixedSpeedCheckbox) els.fixedSpeedCheckbox.checked = false; 
+        if(els.easyModeCheckbox) els.easyModeCheckbox.checked = false; 
+    }
 }
+
 
 
 if(els.gameTypeInput) els.gameTypeInput.addEventListener('change', checkGameTypeUI);
