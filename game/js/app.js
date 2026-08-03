@@ -939,6 +939,37 @@ if (els.muteGlobalChatBtn) {
     });
 }
 
+
+
+if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => {
+    const mode = e.target.value;
+    const modeCfg = window.GAME_MODES ? window.GAME_MODES[mode] : null;
+    const isPP = mode === 'pingpong';
+    
+    if (isPP) { els.gameTypeInput.value = 'multi'; els.gameTypeInput.disabled = true; checkGameTypeUI(); } 
+    else els.gameTypeInput.disabled = false;
+    
+    ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => { 
+        if (modeCfg) {
+            if (id === 'startWpmInput') {
+                els[id].disabled = !modeCfg.wpmConfigurable;
+                if (!modeCfg.wpmConfigurable) els[id].value = modeCfg.defaultWpm || 20;
+                else if (localStorage.getItem(STORAGE_PREF_WPM)) els[id].value = localStorage.getItem(STORAGE_PREF_WPM);
+            }
+            if (id === 'wordCountInput') {
+                els[id].disabled = !modeCfg.wordCountConfigurable;
+                if (!modeCfg.wordCountConfigurable) els[id].value = modeCfg.defaultWordCount || 10;
+                else if (localStorage.getItem(STORAGE_PREF_WORDS)) els[id].value = localStorage.getItem(STORAGE_PREF_WORDS);
+            }
+        }
+    });
+    
+    if (modeCfg) {
+        els.fixedSpeedCheckbox.disabled = !modeCfg.fixedSpeedAllowed;
+        if(!modeCfg.fixedSpeedAllowed) els.fixedSpeedCheckbox.checked = false;
+    }
+    checkGameTypeUI();
+});
 // --- CONTROLLO UI INTELLIGENTE PER I GIOCHI ---
 function checkGameTypeUI() {
     const isSingle = els.gameTypeInput.value === 'single';
@@ -947,7 +978,6 @@ function checkGameTypeUI() {
     const selectedMode = els.gameModeInput.value;
     const isCustom = selectedMode === 'custom';
     
-    // Leggi configurazione del gioco da GAME_MODES (se esiste)
     const modeCfg = window.GAME_MODES ? window.GAME_MODES[selectedMode] : null;
 
     els.timeoutDiv.style.display = isSingle || isTrn ? 'none' : 'block';
@@ -988,6 +1018,7 @@ function checkGameTypeUI() {
     const trnModes = els.trn_opt_group ? els.trn_opt_group.querySelectorAll('option') : [];
 
     if (isCoop) {
+        // 1. SE SEI IN COOPERATIVA -> Mostra SOLO "Conquista"
         gameModes.forEach(opt => {
             const isConquest = opt.value === 'conquest';
             opt.style.display = isConquest ? 'block' : 'none';
@@ -998,50 +1029,32 @@ function checkGameTypeUI() {
         els.gameModeInput.value = 'conquest';
         els.createRoomBtn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
     } else if (isTrn) {
+        // 2. SE SEI IN TORNEO -> Nascondi i giochi normali e Conquista
         gameModes.forEach(opt => { opt.style.display = 'none'; opt.disabled = true; });
         if (els.trn_opt_group) els.trn_opt_group.style.display = 'block';
         trnModes.forEach(opt => { opt.style.display = 'block'; opt.disabled = false; });
         if (!els.gameModeInput.value.startsWith('trn_')) els.gameModeInput.value = 'trn_join_team';
         els.createRoomBtn.textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
     } else {
-        gameModes.forEach(opt => { opt.style.display = 'block'; opt.disabled = false; });
+        // 3. SE SEI IN SOLO O MULTIPLAYER -> Mostra tutti i giochi TRANNE "Conquista"
+        gameModes.forEach(opt => {
+            const isConquest = opt.value === 'conquest';
+            opt.style.display = isConquest ? 'none' : 'block';
+            opt.disabled = isConquest;
+        });
         if (els.trn_opt_group) els.trn_opt_group.style.display = 'none';
         trnModes.forEach(opt => { opt.style.display = 'none'; opt.disabled = true; });
-        if (els.gameModeInput.value.startsWith('trn_')) els.gameModeInput.value = 'standard';
+        
+        // Se stavi guardando Conquista o un Torneo, riporta il menu su "standard"
+        if (els.gameModeInput.value.startsWith('trn_') || els.gameModeInput.value === 'conquest') {
+            els.gameModeInput.value = 'standard';
+        }
         els.createRoomBtn.textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
     }
     if(!isSingle) { els.fixedSpeedCheckbox.checked = false; els.easyModeCheckbox.checked = false; }
 }
 
-if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => {
-    const mode = e.target.value;
-    const modeCfg = window.GAME_MODES ? window.GAME_MODES[mode] : null;
-    const isPP = mode === 'pingpong';
-    
-    if (isPP) { els.gameTypeInput.value = 'multi'; els.gameTypeInput.disabled = true; checkGameTypeUI(); } 
-    else els.gameTypeInput.disabled = false;
-    
-    ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => { 
-        if (modeCfg) {
-            if (id === 'startWpmInput') {
-                els[id].disabled = !modeCfg.wpmConfigurable;
-                if (!modeCfg.wpmConfigurable) els[id].value = modeCfg.defaultWpm || 20;
-                else if (localStorage.getItem(STORAGE_PREF_WPM)) els[id].value = localStorage.getItem(STORAGE_PREF_WPM);
-            }
-            if (id === 'wordCountInput') {
-                els[id].disabled = !modeCfg.wordCountConfigurable;
-                if (!modeCfg.wordCountConfigurable) els[id].value = modeCfg.defaultWordCount || 10;
-                else if (localStorage.getItem(STORAGE_PREF_WORDS)) els[id].value = localStorage.getItem(STORAGE_PREF_WORDS);
-            }
-        }
-    });
-    
-    if (modeCfg) {
-        els.fixedSpeedCheckbox.disabled = !modeCfg.fixedSpeedAllowed;
-        if(!modeCfg.fixedSpeedAllowed) els.fixedSpeedCheckbox.checked = false;
-    }
-    checkGameTypeUI();
-});
+
 if(els.gameTypeInput) els.gameTypeInput.addEventListener('change', checkGameTypeUI);
 
 if (els.startWpmInput) els.startWpmInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_WPM, e.target.value));
