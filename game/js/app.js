@@ -1207,23 +1207,11 @@ function listenToRooms() {
             if (code.startsWith("TRN_") || (room.expiresAt && Date.now() > room.expiresAt)) { if(Date.now() > room.expiresAt) db.ref(`rooms/${code}`).remove(); return; }
             if (room.status === 'waiting' && room.type !== 'single') {
                 wCount++; const pCount = room.players ? Object.keys(room.players).length : 0; const li = document.createElement('li');
-                
-                // Riconoscimento corretto dell'icona e del nome modalità
-                let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' 
-                             : room.mode === 'pingpong' ? '🏓 Ping Pong' 
-                             : room.mode === 'quiz' ? '❓ Quiz' 
-                             : (room.mode === 'conquest' || room.type === 'coop') ? '⚔️ Conquista (Co-op)' 
-                             : '🔤 Parole';
+                let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : room.mode === 'pingpong' ? '🏓 Ping Pong' : room.mode === 'quiz' ? '❓ Quiz' : '🔤 Parole';
                 
                 const span = document.createElement('span');
                 const bTitle = document.createElement('b'); bTitle.textContent = `#${code} - ${modeIcon}`;
-                
-                // Se è una partita cooperativa mostra il tempo (5 min) invece del numero di parole (Test)
-                const infoText = (room.mode === 'conquest' || room.type === 'coop')
-                    ? `${pCount} Gioc. | ${room.wpm} WPM | 5 min`
-                    : `${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test`;
-                    
-                const smallInfo = document.createElement('small'); smallInfo.textContent = infoText;
+                const smallInfo = document.createElement('small'); smallInfo.textContent = `${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test`;
                 span.appendChild(bTitle); span.appendChild(document.createElement('br')); span.appendChild(smallInfo);
                 li.appendChild(span);
                 
@@ -1233,7 +1221,84 @@ function listenToRooms() {
         if (wCount === 0) els.waitingRoomsList.innerHTML = '<li style="justify-content:center; color:var(--hint-color); background:none; border:none;">Nessuna sfida.</li>';
     });
 }
+window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
 
+if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
+    const gameType = els.gameTypeInput.value, gameMode = els.gameModeInput.value;
+    if (gameType === 'tournament') { showScreen('teamsScreen'); if (gameMode === 'trn_create_team') switchTeamTab('gest'); else if (gameMode === 'trn_join_team') switchTeamTab('allteams'); else if (gameMode === 'trn_create_trn') switchTeamTab('tournaments'); return; }
+    if (gameMode === 'custom' && customDictionary.length === 0) { els.customDictModal.style.display = 'flex'; return showToast("Carica prima un file di testo!"); }
+
+    isChallenging = false; if (currentInviterId) db.ref(`invites/${currentInviterId}`).once('value', s => { if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove(); });
+    db.ref(`invite_accepted/${myId}`).remove(); currentMode = gameMode; isSinglePlayer = gameType === 'single'; currentWpm = currentMode==='callsign' ? 25 : parseInt(els.startWpmInput.value); baseWpm = currentWpm; 
+    requestedWordCount = currentMode==='callsign' ? 25 : Math.min(200, Math.max(1, parseInt(els.wordCountInput.value) || 10)); 
+    currentTone = parseInt(els.toneInput.value); isFixedSpeed = els.fixedSpeedCheckbox.checked; isEasyMode = els.easyModeCheckbox.checked;
+    
+    // In multiplayer o torneo, la spaziatura tra caratteri e tra le parole viene forzata standard
+    let cSpace = isSinglePlayer && (els.charSpaceInput && els.charSpaceInput.value) ? parseInt(els.charSpaceInput.value) : currentWpm;
+    let wSpace = isSinglePlayer && (els.wordSpaceSelect && els.wordSpaceSelect.value) ? parseFloat(els.wordSpaceSelect.value) : 1.0;
+    window.charSpaceWpm = cSpace;
+    window.wordSpaceMult = wSpace;
+
+    roomCode = Math.floor(1000 + Math.random() * 9000).toString(); gameWords = getGameWords(requestedWordCount, currentMode);
+    db.ref('rooms/' + roomCode).set({ 
+        status: isSinglePlayer ? 'countdown' : 'waiting', 
+        type: isSinglePlayer ? 'single' : (gameType === 'coop' ? 'coop' : 'multi'), 
+        mode: currentMode, 
+        wpm: currentWpm, 
+        tone: currentTone, 
+        wordCount: requestedWordCount, 
+        words: gameWords, 
+        fixedSpeed: isFixedSpeed, 
+        charSpaceWpm: cSpace,
+        wordSpaceMult: wSpace,
+        createdAt: firebase.database.ServerValue.TIMESTAMP, 
+        expiresAt: isSinglePlayer ? null : Date.now() + (Math.max(1, parseInt(els.roomTimerInput.value)) * 60000), 
+        hostId: myId 
+    }).then(() => joinRoomLogic(false));
+});
+
+if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
+    els.dailyChallengeModal.style.display = 'none';
+
+    currentMode = 'daily_challenge';
+    isSinglePlayer = true;
+    currentWpm = 15; baseWpm = 15;
+    requestedWordCount = 20;
+    currentTone = 600;
+    isFixedSpeed = false;
+    isEasyMode = false;
+    
+    window.charSpaceWpm = 0; 
+    window.wordSpaceMult = 1.0;
+
+    roomCode = Math.floor(1000 + Math.random() * 9000).toString(); 
+    gameWords = getGameWords(requestedWordCount, currentMode);
+    
+    db.ref('rooms/' + roomCode).set({ 
+        status: 'countdown', 
+        type: 'single', 
+        mode: currentMode, 
+        wpm: currentWpm, 
+        tone: currentTone, 
+        wordCount: requestedWordCount, 
+        words: gameWords, 
+        fixedSpeed: isFixedSpeed, 
+        charSpaceWpm: 0, 
+        wordSpaceMult: 1.0, 
+        createdAt: firebase.database.ServerValue.TIMESTAMP, 
+        hostId: myId 
+    }).then(() => joinRoomLogic(false));
+});
+
+if(els.btnPlayDailyLater) els.btnPlayDailyLater.addEventListener('click', () => {
+    els.dailyChallengeModal.style.display = 'none';
+});
+
+if(els.btnDeclineDaily) els.btnDeclineDaily.addEventListener('click', () => {
+    let todayStr = new Date().toISOString().split('T')[0];
+    localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
+    els.dailyChallengeModal.style.display = 'none';
+});
 
 function exitRoomCleanly(roomWasDeletedByHost = false) {
     clearAllTimers();
