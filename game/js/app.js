@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260731.109"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260803.110"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -184,7 +184,7 @@ async function syncUserNameEverywhere(userId, newName, newUsername) {
             }
         }
     }
-    for (const path of ['callsign/global', 'standard', 'pingpong', 'chars']) {
+    for (const path of ['callsign/global', 'standard', 'pingpong', 'chars', 'quiz']) {
         const snap = await db.ref(`leaderboard/${path}`).once('value');
         if (snap.exists()) {
             snap.forEach(subNode => { 
@@ -918,7 +918,6 @@ if (els.muteGlobalChatBtn) {
         showToast(isGlobalChatMuted ? (currentLang==='it'?"Notifiche Chat silenziate.":"Chat notifications muted.") : (currentLang==='it'?"Notifiche Chat riattivate.":"Chat notifications unmuted."));
     });
 }
-
 // --- CONTROLLO UI INTELLIGENTE PER I GIOCHI ---
 function checkGameTypeUI() {
     const isSingle = els.gameTypeInput.value === 'single';
@@ -1216,8 +1215,9 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
     requestedWordCount = currentMode==='callsign' ? 25 : Math.min(200, Math.max(1, parseInt(els.wordCountInput.value) || 10)); 
     currentTone = parseInt(els.toneInput.value); isFixedSpeed = els.fixedSpeedCheckbox.checked; isEasyMode = els.easyModeCheckbox.checked;
     
-    let cSpace = (els.charSpaceInput && els.charSpaceInput.value) ? parseInt(els.charSpaceInput.value) : currentWpm;
-    let wSpace = (els.wordSpaceSelect && els.wordSpaceSelect.value) ? parseFloat(els.wordSpaceSelect.value) : 1.0;
+    // In multiplayer o torneo, la spaziatura tra caratteri e tra le parole viene forzata standard
+    let cSpace = isSinglePlayer && (els.charSpaceInput && els.charSpaceInput.value) ? parseInt(els.charSpaceInput.value) : currentWpm;
+    let wSpace = isSinglePlayer && (els.wordSpaceSelect && els.wordSpaceSelect.value) ? parseFloat(els.wordSpaceSelect.value) : 1.0;
     window.charSpaceWpm = cSpace;
     window.wordSpaceMult = wSpace;
 
@@ -1541,7 +1541,9 @@ function finishGame() {
                 let todayStr = new Date().toISOString().split('T')[0];
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${myId}`;
             } else {
-                dbPath = `leaderboard/${currentMode === 'callsign' ? 'callsign/global' : `${currentMode === 'quiz' ? 'quiz' : currentMode === 'chars' ? 'chars' : currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}`}/${myId}`;
+                // MODIFICA QUI: Mappatura corretta e dedicata alle classifiche per il Quiz
+                const modeFolder = currentMode === 'callsign' ? 'callsign/global' : `${currentMode === 'quiz' ? 'quiz' : currentMode === 'chars' ? 'chars' : currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}`;
+                dbPath = `leaderboard/${modeFolder}/${myId}`;
             }
 
             db.ref(dbPath).once('value', s => { 
@@ -1573,10 +1575,10 @@ function finishGame() {
     else if (roomCode && roomCode.startsWith("TRN_")) { activeTab="room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
     else if (isSinglePlayer && currentMode === 'callsign') { activeTab = "cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); }
     else if (isSinglePlayer && currentMode === 'pingpong') { activeTab = "pingpong"; showLeaderboardTab('tabGlobalPingPongBtn'); }
+    else if (isSinglePlayer && currentMode === 'quiz') { activeTab = "quiz_single"; showLeaderboardTab('tabGlobalQuizSingleBtn'); }
     else if (isSinglePlayer) { activeTab = "std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); }
     else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
 }
-
 if(els.quitGameBtn) els.quitGameBtn.addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
 if(els.startMultiplayerBtn) els.startMultiplayerBtn.addEventListener('click', () => {
     db.ref(`rooms/${roomCode}/players`).once('value', snap => {
@@ -1675,7 +1677,7 @@ window.showProfileScreen = function() {
         if (userMatchHistory.length === 0) { const li = document.createElement('li'); li.style.justifyContent = 'center'; li.style.color = 'var(--hint-color)'; li.textContent = 'Nessuna partita giocata.'; els.matchHistoryList.appendChild(li); return; }
         userMatchHistory.forEach(match => {
             const d = new Date(match.date || Date.now()); const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
-            let modeIcon = match.mode === 'callsign' ? '🎙️ Nom.' : match.mode === 'pingpong' ? '🏓 Ping Pong' : match.mode === 'chars' ? '⌨️ Carat.' : (match.mode === 'daily_challenge' ? '📅 Daily' : '🔤 Parole');
+            let modeIcon = match.mode === 'callsign' ? '🎙️ Nom.' : match.mode === 'pingpong' ? '🏓 Ping Pong' : match.mode === 'chars' ? '⌨️ Carat.' : (match.mode === 'daily_challenge' ? '📅 Daily' : match.mode === 'quiz' ? '❓ Quiz' : '🔤 Parole');
             const li = document.createElement('li'); li.style.flexDirection = 'column'; li.style.alignItems = 'flex-start';
             
             const topDiv = document.createElement('div'); topDiv.style.cssText = "display:flex; justify-content:space-between; width:100%; margin-bottom:5px;";
@@ -1735,15 +1737,16 @@ function showLeaderboardTab(tabId) {
         populateDynamicFilters('pingpong', ''); fetchAndRenderGlobalLeaderboard('pingpong', els.lbWordFilter.value);
     } else {
         els.lbFilterArea.style.display = 'block'; els.roomWinnerBanner.style.display = 'none'; els.waitingOthersText.style.display = 'none';
-        let type = modeValue === 'std_multi' ? 'multi' : 'single';
-        populateDynamicFilters(type === 'multi' ? 'recent_matches/standard_multi' : 'standard', type === 'single' ? 'single' : '');
-        fetchAndRenderGlobalLeaderboard(`standard_${type}`, els.lbWordFilter.value);
+        let type = modeValue.endsWith('_multi') ? 'multi' : 'single';
+        let baseMode = modeValue.startsWith('quiz') ? 'quiz' : (modeValue.startsWith('chars') ? 'chars' : 'standard');
+        populateDynamicFilters(type === 'multi' ? `recent_matches/${baseMode}_multi` : baseMode, type === 'single' ? 'single' : '');
+        fetchAndRenderGlobalLeaderboard(modeValue, els.lbWordFilter.value);
     }
 }
 if(els.lbModeSelect) els.lbModeSelect.addEventListener('change', e => { activeTab = e.target.value; showLeaderboardTab(e.target.value); });
 if(els.btnTrnGlobalLB) els.btnTrnGlobalLB.addEventListener('click', () => { document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab')); els.btnTrnGlobalLB.classList.add('active-tab'); fetchAndRenderGlobalLeaderboard('tournaments', null); });
 if(els.btnTrnActiveLB) els.btnTrnActiveLB.addEventListener('click', () => { document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab')); els.btnTrnActiveLB.classList.add('active-tab'); fetchAndRenderGlobalLeaderboard('active_tournament', null); });
-if(els.lbWordFilter) els.lbWordFilter.addEventListener('change', () => { if (['std_multi','std_single','pingpong'].includes(activeTab)) showLeaderboardTab(activeTab === 'std_multi' ? 'tabGlobalStandardMultiBtn' : activeTab === 'std_single' ? 'tabGlobalStandardSingleBtn' : 'tabGlobalPingPongBtn'); });
+if(els.lbWordFilter) els.lbWordFilter.addEventListener('change', () => { showLeaderboardTab(activeTab); });
 
 function populateDynamicFilters(modePath, subTypeFilter = "") {
     const currentValue = els.lbWordFilter.value;
@@ -1981,9 +1984,8 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         return;
     }
 
-    let isStandard = tabType.startsWith('standard');
-    let isChars = tabType.startsWith('chars');
     let isQuiz = tabType.startsWith('quiz');
+    let isChars = tabType.startsWith('chars');
     let modePath = isQuiz ? 'quiz' : (isChars ? 'chars' : 'standard');
     let subType = isQuiz ? tabType.replace('quiz_', '') : (isChars ? tabType.replace('chars_', '') : tabType.replace('standard_', ''));
 
@@ -2395,7 +2397,7 @@ function renderActivityRankings(period, key) {
         els.activityRankList.innerHTML = ''; 
         const errLi = document.createElement('li'); errLi.style.cssText = "justify-content:center; color:var(--hint-color); flex-direction:column; text-align:center;";
         const eSpan = document.createElement('span'); eSpan.textContent = "Errore nel caricamento."; errLi.appendChild(eSpan);
-        const eSmall = document.createElement('small'); eSmall.style.cssText = "font-size:0.7em; opacity:0.7;"; eSmall.textContent = err.message; errLi.appendChild(eSmall);
+        const eSmall = document.style.cssText = "font-size:0.7em; opacity:0.7;"; eSmall.textContent = err.message; errLi.appendChild(eSmall);
         els.activityRankList.appendChild(errLi);
     });
 }
