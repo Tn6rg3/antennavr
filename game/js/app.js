@@ -918,6 +918,7 @@ if (els.muteGlobalChatBtn) {
         showToast(isGlobalChatMuted ? (currentLang==='it'?"Notifiche Chat silenziate.":"Chat notifications muted.") : (currentLang==='it'?"Notifiche Chat riattivate.":"Chat notifications unmuted."));
     });
 }
+
 // --- CONTROLLO UI INTELLIGENTE PER I GIOCHI ---
 function checkGameTypeUI() {
     const isSingle = els.gameTypeInput.value === 'single';
@@ -1541,7 +1542,6 @@ function finishGame() {
                 let todayStr = new Date().toISOString().split('T')[0];
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${myId}`;
             } else {
-                // MODIFICA QUI: Mappatura corretta e dedicata alle classifiche per il Quiz
                 const modeFolder = currentMode === 'callsign' ? 'callsign/global' : `${currentMode === 'quiz' ? 'quiz' : currentMode === 'chars' ? 'chars' : currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}`;
                 dbPath = `leaderboard/${modeFolder}/${myId}`;
             }
@@ -1576,9 +1576,11 @@ function finishGame() {
     else if (isSinglePlayer && currentMode === 'callsign') { activeTab = "cwfreak"; showLeaderboardTab('tabGlobalCWFreakBtn'); }
     else if (isSinglePlayer && currentMode === 'pingpong') { activeTab = "pingpong"; showLeaderboardTab('tabGlobalPingPongBtn'); }
     else if (isSinglePlayer && currentMode === 'quiz') { activeTab = "quiz_single"; showLeaderboardTab('tabGlobalQuizSingleBtn'); }
+    else if (isSinglePlayer && currentMode === 'chars') { activeTab = "chars_single"; showLeaderboardTab('tabGlobalCharsSingleBtn'); }
     else if (isSinglePlayer) { activeTab = "std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); }
     else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
 }
+
 if(els.quitGameBtn) els.quitGameBtn.addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
 if(els.startMultiplayerBtn) els.startMultiplayerBtn.addEventListener('click', () => {
     db.ref(`rooms/${roomCode}/players`).once('value', snap => {
@@ -1711,9 +1713,23 @@ window.openMatchDetails = function(matchKey) {
 }
 window.deleteHistoryItem = function(key) { if(confirm("Eliminare questa partita?")) db.ref(`users/${myId}/history/${key}`).remove().then(() => showProfileScreen()); }
 
+// --- GESTIONE SCHEDE CLASSIFICA ---
 function showLeaderboardTab(tabId) {
-    const mapping = { 'tabRoomBtn': 'room', 'opt_lb_daily': 'daily_challenge', 'tabGlobalTournamentBtn': 'trn_global', 'tabGlobalCWFreakBtn': 'cwfreak', 'tabGlobalPingPongBtn': 'pingpong', 'tabGlobalStandardMultiBtn': 'std_multi', 'tabGlobalStandardSingleBtn': 'std_single', 'tabGlobalCharsMultiBtn': 'chars_multi', 'tabGlobalCharsSingleBtn': 'chars_single', 'tabGlobalQuizMultiBtn': 'quiz_multi', 'tabGlobalQuizSingleBtn': 'quiz_single' };
-    let modeValue = mapping[tabId] || tabId; if(els.lbModeSelect) els.lbModeSelect.value = modeValue;
+    const mapping = {
+        'tabRoomBtn': 'room',
+        'opt_lb_daily': 'daily_challenge',
+        'tabGlobalTournamentBtn': 'trn_global',
+        'tabGlobalCWFreakBtn': 'cwfreak',
+        'tabGlobalPingPongBtn': 'pingpong',
+        'tabGlobalStandardMultiBtn': 'std_multi',
+        'tabGlobalStandardSingleBtn': 'std_single',
+        'tabGlobalCharsMultiBtn': 'chars_multi',
+        'tabGlobalCharsSingleBtn': 'chars_single',
+        'tabGlobalQuizMultiBtn': 'quiz_multi',
+        'tabGlobalQuizSingleBtn': 'quiz_single'
+    };
+    let modeValue = mapping[tabId] || tabId;
+    if (els.lbModeSelect) els.lbModeSelect.value = modeValue;
 
     els.trnSubTabs.style.display = 'none';
     if (modeValue === 'room') {
@@ -1727,20 +1743,28 @@ function showLeaderboardTab(tabId) {
         els.lbFilterArea.style.display = 'none'; els.roomWinnerBanner.style.display = 'none'; els.waitingOthersText.style.display = 'none'; els.trnSubTabs.style.display = 'flex';
         document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab')); els.btnTrnGlobalLB.classList.add('active-tab'); fetchAndRenderGlobalLeaderboard('tournaments', null);
     } else if (modeValue === 'cwfreak') {
-        els.lbFilterArea.style.display = 'none'; els.roomWinnerBanner.style.display = 'none'; els.waitingOthersText.style.display = 'none'; fetchAndRenderGlobalLeaderboard('callsign', null);
-    } else if (['chars_multi', 'quiz_multi'].includes(modeValue)) {
-        els.lbFilterArea.style.display = 'block'; els.roomWinnerBanner.style.display = 'none'; els.waitingOthersText.style.display = 'none';
-        populateDynamicFilters(`recent_matches/${modeValue}`, '');
-        fetchAndRenderGlobalLeaderboard(modeValue, els.lbWordFilter.value);
+        els.lbFilterArea.style.display = 'none'; els.roomWinnerBanner.style.display = 'none'; els.waitingOthersText.style.display = 'none';
+        fetchAndRenderGlobalLeaderboard('callsign', null);
     } else if (modeValue === 'pingpong') {
         els.lbFilterArea.style.display = 'block'; els.roomWinnerBanner.style.display = 'none'; els.waitingOthersText.style.display = 'none';
-        populateDynamicFilters('pingpong', ''); fetchAndRenderGlobalLeaderboard('pingpong', els.lbWordFilter.value);
+        populateDynamicFilters('pingpong', '');
+        fetchAndRenderGlobalLeaderboard('pingpong', els.lbWordFilter.value);
     } else {
+        // GESTIONE UNIFICATA PER TUTTI I GIOCHI: Parole (standard), Caratteri (chars) e Quiz
         els.lbFilterArea.style.display = 'block'; els.roomWinnerBanner.style.display = 'none'; els.waitingOthersText.style.display = 'none';
-        let type = modeValue.endsWith('_multi') ? 'multi' : 'single';
-        let baseMode = modeValue.startsWith('quiz') ? 'quiz' : (modeValue.startsWith('chars') ? 'chars' : 'standard');
-        populateDynamicFilters(type === 'multi' ? `recent_matches/${baseMode}_multi` : baseMode, type === 'single' ? 'single' : '');
-        fetchAndRenderGlobalLeaderboard(modeValue, els.lbWordFilter.value);
+        
+        let isMulti = modeValue.endsWith('_multi');
+        let type = isMulti ? 'multi' : 'single';
+        
+        let baseMode = 'standard';
+        if (modeValue.startsWith('chars')) baseMode = 'chars';
+        if (modeValue.startsWith('quiz')) baseMode = 'quiz';
+        
+        let filterPath = isMulti ? `recent_matches/${baseMode}_multi` : baseMode;
+        populateDynamicFilters(filterPath, isMulti ? '' : 'single');
+        
+        // Passiamo sempre la categoria estesa ('standard_single', 'standard_multi', 'quiz_single', ecc.)
+        fetchAndRenderGlobalLeaderboard(`${baseMode}_${type}`, els.lbWordFilter.value);
     }
 }
 if(els.lbModeSelect) els.lbModeSelect.addEventListener('change', e => { activeTab = e.target.value; showLeaderboardTab(e.target.value); });
@@ -2397,7 +2421,7 @@ function renderActivityRankings(period, key) {
         els.activityRankList.innerHTML = ''; 
         const errLi = document.createElement('li'); errLi.style.cssText = "justify-content:center; color:var(--hint-color); flex-direction:column; text-align:center;";
         const eSpan = document.createElement('span'); eSpan.textContent = "Errore nel caricamento."; errLi.appendChild(eSpan);
-        const eSmall = document.style.cssText = "font-size:0.7em; opacity:0.7;"; eSmall.textContent = err.message; errLi.appendChild(eSmall);
+        const eSmall = document.createElement('small'); eSmall.style.cssText = "font-size:0.7em; opacity:0.7;"; eSmall.textContent = err.message; errLi.appendChild(eSmall);
         els.activityRankList.appendChild(errLi);
     });
 }
