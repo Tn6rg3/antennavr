@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260803.110"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260803.111"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -58,6 +58,10 @@ let totalScore = 0, currentStreak = 0, usedReplay = false, matchDetailsArray = [
 let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
 
+// STATO GLOBALE CO-OP (CONQUISTA - TIRO ALLA FUNE ESCLUSIVO)
+let isCoopMode = false, coopActiveFreqIndex = 0;
+let coopTimerInterval = null, coopDecayInterval = null;
+
 // TIMERS SISTEMA & PULIZIA
 let lobbyTimerInterval = null, quizTimerInterval = null, ppTimerInterval = null;
 let brCheckInterval = null, brTimerInterval = null;
@@ -86,6 +90,8 @@ function clearAllTimers() {
     if (quizTimerInterval) { clearInterval(quizTimerInterval); quizTimerInterval = null; }
     if (ppTimerInterval) { clearInterval(ppTimerInterval); ppTimerInterval = null; }
     if (brTimerInterval) { clearInterval(brTimerInterval); brTimerInterval = null; }
+    if (coopTimerInterval) { clearInterval(coopTimerInterval); coopTimerInterval = null; }
+    if (coopDecayInterval) { clearInterval(coopDecayInterval); coopDecayInterval = null; }
 }
 
 // --- FORZATURA AGGIORNAMENTO CACHE ---
@@ -923,6 +929,7 @@ if (els.muteGlobalChatBtn) {
 function checkGameTypeUI() {
     const isSingle = els.gameTypeInput.value === 'single';
     const isTrn = els.gameTypeInput.value === 'tournament';
+    const isCoop = els.gameTypeInput.value === 'coop';
     const selectedMode = els.gameModeInput.value;
     const isCustom = selectedMode === 'custom';
     
@@ -966,7 +973,17 @@ function checkGameTypeUI() {
     const gameModes = els.gameModeInput.querySelectorAll('option:not([value^="trn_"])');
     const trnModes = els.trn_opt_group ? els.trn_opt_group.querySelectorAll('option') : [];
 
-    if (isTrn) {
+    if (isCoop) {
+        gameModes.forEach(opt => {
+            const isConquest = opt.value === 'conquest';
+            opt.style.display = isConquest ? 'block' : 'none';
+            opt.disabled = !isConquest;
+        });
+        if (els.trn_opt_group) els.trn_opt_group.style.display = 'none';
+        trnModes.forEach(opt => { opt.style.display = 'none'; opt.disabled = true; });
+        els.gameModeInput.value = 'conquest';
+        els.createRoomBtn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
+    } else if (isTrn) {
         gameModes.forEach(opt => { opt.style.display = 'none'; opt.disabled = true; });
         if (els.trn_opt_group) els.trn_opt_group.style.display = 'block';
         trnModes.forEach(opt => { opt.style.display = 'block'; opt.disabled = false; });
@@ -1225,7 +1242,7 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
     roomCode = Math.floor(1000 + Math.random() * 9000).toString(); gameWords = getGameWords(requestedWordCount, currentMode);
     db.ref('rooms/' + roomCode).set({ 
         status: isSinglePlayer ? 'countdown' : 'waiting', 
-        type: isSinglePlayer ? 'single' : 'multi', 
+        type: isSinglePlayer ? 'single' : (gameType === 'coop' ? 'coop' : 'multi'), 
         mode: currentMode, 
         wpm: currentWpm, 
         tone: currentTone, 
@@ -1448,7 +1465,7 @@ function startCountdownSequence() {
         else {
             clearInterval(interval); if (myId === roomHostId) db.ref(`rooms/${roomCode}`).update({ status: 'playing' });
             if(els.countdownNumber) els.countdownNumber.textContent = (currentLang === 'en' ? 'GO!' : 'VIA!'); playBeep(800, 0.3);
-            setTimeout(() => { if (!gameRunning) return; if (currentMode === 'quiz') return startQuizSequence(); showScreen('gameArea'); if (currentMode === 'pingpong') setupPingPongListener(); else { setTimeout(() => els.permanentGameInput && els.permanentGameInput.focus(), 200); setTimeout(() => { if (gameRunning) playNextWord(); }, 800); } }, 500);
+            setTimeout(() => { if (!gameRunning) return; if (currentMode === 'conquest') return startCoopSequence(); if (currentMode === 'quiz') return startQuizSequence(); showScreen('gameArea'); if (currentMode === 'pingpong') setupPingPongListener(); else { setTimeout(() => els.permanentGameInput && els.permanentGameInput.focus(), 200); setTimeout(() => { if (gameRunning) playNextWord(); }, 800); } }, 500);
         }
     }, 1000);
 }
@@ -1467,7 +1484,7 @@ function resumeGameSequence() {
             tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); els.tableBody.appendChild(tr);
         });
     }
-    if (currentMode === 'quiz') startQuizSequence(); else { showScreen('gameArea'); if (currentMode === 'pingpong') setupPingPongListener(); else { setTimeout(() => els.permanentGameInput && els.permanentGameInput.focus(), 200); setTimeout(() => { if (gameRunning) playNextWord(); }, 800); } }
+    if (currentMode === 'conquest') startCoopSequence(); else if (currentMode === 'quiz') startQuizSequence(); else { showScreen('gameArea'); if (currentMode === 'pingpong') setupPingPongListener(); else { setTimeout(() => els.permanentGameInput && els.permanentGameInput.focus(), 200); setTimeout(() => { if (gameRunning) playNextWord(); }, 800); } }
 }
 
 function setupPingPongListener() {
@@ -1505,6 +1522,256 @@ function sendAutoPingPongWord() {
     const randomWord = masterDictionary[Math.floor(Math.random() * masterDictionary.length)].toUpperCase();
     db.ref(`rooms/${roomCode}/pingpong`).transaction(d => { if (d && !d.word) { d.word = randomWord; d.wordId = (d.wordId || 0) + 1; } return d; });
     showToast(currentLang==='it'?"Tempo scaduto! Parola inviata automaticamente.":"Time's up! Word sent automatically.");
+}
+
+// =========================================================
+// MOTORE GIOCO COLLABORATIVO: CONQUISTA (TIRO ALLA FUNE ESCLUSIVO)
+// =========================================================
+
+function startCoopSequence() {
+    isCoopMode = true;
+    showScreen('gameArea');
+    els.coopArea.style.display = 'flex';
+    els.gameInputArea.style.display = 'flex';
+    els.pingPongSendArea.style.display = 'none';
+    els.tableWrapper.style.display = 'none'; // In co-op nascondiamo la tabella classica
+    
+    els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
+    els.scoreDisplay.textContent = "Obiettivo: 100%";
+    
+    coopActiveFreqIndex = 0; // Default: Nessuna frequenza selezionata
+    els.coopActiveFreqLabel.textContent = "Canale: Nessuno selezionato";
+    els.btnCoopReleaseFreq.style.display = 'none';
+
+    if (myId === roomHostId) {
+        const initialWords = generateCoopTripleWords();
+        db.ref(`rooms/${roomCode}/coop_state`).set({
+            progress: 10,
+            timeRemaining: 300,
+            status: 'playing',
+            activeWords: initialWords,
+            freqOwners: { 1: null, 2: null, 3: null }
+        });
+        startCoopHostTimers();
+    }
+
+    listenToCoopState();
+    setupCoopFreqButtons();
+}
+
+function generateCoopTripleWords() {
+    const wEasy = masterDictionary.filter(w => w.length >= 3 && w.length <= 4);
+    const wMed  = masterDictionary.filter(w => w.length >= 5 && w.length <= 6);
+    const wHard = masterDictionary.filter(w => w.length >= 7);
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]?.toUpperCase() || "RADIO";
+    return [pick(wEasy), pick(wMed), pick(wHard)];
+}
+
+function startCoopHostTimers() {
+    if (coopTimerInterval) clearInterval(coopTimerInterval);
+    if (coopDecayInterval) clearInterval(coopDecayInterval);
+
+    coopTimerInterval = setInterval(() => {
+        db.ref(`rooms/${roomCode}/coop_state/timeRemaining`).transaction(t => {
+            if (t === null || t <= 0) return 0;
+            return t - 1;
+        });
+    }, 1000);
+
+    coopDecayInterval = setInterval(() => {
+        db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
+            if (!state || state.status !== 'playing') return state;
+            state.progress = Math.max(0, (state.progress || 0) - 1);
+            if (state.timeRemaining <= 0) state.status = 'lost';
+            return state;
+        });
+    }, 2000);
+}
+
+function listenToCoopState() {
+    db.ref(`rooms/${roomCode}/coop_state`).on('value', snap => {
+        const state = snap.val();
+        if (!state || !gameRunning) return;
+
+        els.coopProgressBar.style.width = `${state.progress}%`;
+        els.coopProgressText.textContent = `Conquista: ${state.progress}%`;
+        
+        const mins = Math.floor(state.timeRemaining / 60).toString().padStart(2, '0');
+        const secs = (state.timeRemaining % 60).toString().padStart(2, '0');
+        els.coopTimeDisplay.textContent = `⏱️ ${mins}:${secs}`;
+
+        if (state.progress >= 100 && state.status !== 'won') {
+            if (myId === roomHostId) db.ref(`rooms/${roomCode}/coop_state/status`).set('won');
+            finishCoopGame(true);
+            return;
+        } else if (state.timeRemaining <= 0 || state.status === 'lost') {
+            finishCoopGame(false);
+            return;
+        }
+
+        // Sincronizza stato pulsanti / proprietari frequenza (Lock-in)
+        const owners = state.freqOwners || { 1: null, 2: null, 3: null };
+        [1, 2, 3].forEach(num => {
+            const btn = els[`btnCoopFreq${num}`];
+            const ownerDiv = els[`coopOwner${num}`];
+            const ownerId = owners[num];
+
+            if (!ownerId) {
+                btn.disabled = false;
+                btn.style.opacity = "1";
+                ownerDiv.textContent = "LIBERA";
+                ownerDiv.style.color = "var(--hint-color)";
+            } else if (ownerId === myId) {
+                btn.disabled = false;
+                btn.style.opacity = "1";
+                ownerDiv.textContent = "🔒 IN USO DA TE";
+                ownerDiv.style.color = "#4caf50";
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = "0.4";
+                db.ref(`rooms/${roomCode}/players/${ownerId}/name`).once('value', s => {
+                    ownerDiv.textContent = `🔒 ${s.val() || 'ALTRO'}`;
+                });
+                ownerDiv.style.color = "#ff9800";
+            }
+        });
+
+        // Aggiorna parola locale solo se si ha una frequenza attiva
+        if (coopActiveFreqIndex > 0 && state.activeWords && state.activeWords.length === 3) {
+            const currentFreqWord = state.activeWords[coopActiveFreqIndex - 1];
+            if (currentFreqWord && currentFreqWord !== gameWords[0]) {
+                gameWords[0] = currentFreqWord;
+                playMorseAudio(currentFreqWord, currentWpm);
+                els.permanentGameInput.value = "";
+                els.permanentGameInput.focus();
+            }
+        }
+    });
+}
+
+function setupCoopFreqButtons() {
+    const labels = ["🟢 FREQ 1 (3-4 car.)", "🟡 FREQ 2 (5-6 car.)", "🔴 FREQ 3 (7+ car.)"];
+    
+    [1, 2, 3].forEach(num => {
+        const btn = els[`btnCoopFreq${num}`];
+        if (!btn) return;
+        btn.onclick = () => {
+            db.ref(`rooms/${roomCode}/coop_state/freqOwners`).transaction(owners => {
+                if (!owners) owners = { 1: null, 2: null, 3: null };
+                if (owners[num] && owners[num] !== myId) return undefined; // Già presa da altri
+                // Rilascia la frequenza precedente
+                [1, 2, 3].forEach(n => { if (owners[n] === myId) owners[n] = null; });
+                owners[num] = myId;
+                return owners;
+            }, (error, committed) => {
+                if (committed) {
+                    coopActiveFreqIndex = num;
+                    els.coopActiveFreqLabel.textContent = `Canale: ${labels[num - 1]}`;
+                    els.btnCoopReleaseFreq.style.display = 'inline-block';
+                    db.ref(`rooms/${roomCode}/coop_state/activeWords`).once('value', s => {
+                        const words = s.val();
+                        if (words && words[num - 1]) {
+                            gameWords[0] = words[num - 1];
+                            playMorseAudio(words[num - 1], currentWpm);
+                            els.permanentGameInput.focus();
+                        }
+                    });
+                } else {
+                    showToast("⚠️ Frequenza occupata da un compagno!");
+                }
+            });
+        };
+    });
+
+    if (els.btnCoopReleaseFreq) {
+        els.btnCoopReleaseFreq.onclick = () => {
+            db.ref(`rooms/${roomCode}/coop_state/freqOwners`).transaction(owners => {
+                if (!owners) return owners;
+                [1, 2, 3].forEach(n => { if (owners[n] === myId) owners[n] = null; });
+                return owners;
+            }, () => {
+                coopActiveFreqIndex = 0;
+                els.coopActiveFreqLabel.textContent = "Canale: Nessuno selezionato";
+                els.btnCoopReleaseFreq.style.display = 'none';
+                showToast("🔓 Canale rilasciato per i compagni.");
+            });
+        };
+    }
+}
+
+// Override per l'invio della parola con WPM Dinamico, Penalità e Pausa di 2 secondi
+const originalHandleWordSubmission = handleWordSubmission;
+handleWordSubmission = function(userWord) {
+    if (currentMode !== 'conquest') {
+        return originalHandleWordSubmission(userWord);
+    }
+
+    if (coopActiveFreqIndex === 0) {
+        return showToast("⚠️ Seleziona prima una Frequenza!");
+    }
+
+    const currentWord = gameWords[0];
+    const isCorrect = userWord.trim().toUpperCase() === currentWord;
+    const gain = coopActiveFreqIndex === 1 ? 4 : (coopActiveFreqIndex === 2 ? 7 : 12);
+    const penalty = coopActiveFreqIndex === 1 ? 2 : (coopActiveFreqIndex === 2 ? 3 : 5);
+
+    // Blocca input per 2 secondi di cooldown
+    els.permanentGameInput.disabled = true;
+
+    if (isCorrect) {
+        currentWpm += 2;
+        els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
+        showToast(`✅ CORRETTO! +${gain}% (Velocità -> ${currentWpm} WPM)`);
+        playBeep(880, 0.1);
+
+        db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
+            if (!state || state.status !== 'playing') return state;
+            state.progress = Math.min(100, (state.progress || 0) + gain);
+            state.activeWords = generateCoopTripleWords();
+            return state;
+        });
+    } else {
+        currentWpm = Math.max(10, currentWpm - 2);
+        els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
+        showToast(`❌ ERRORE! -${penalty}% (Velocità -> ${currentWpm} WPM)`);
+        playBeep(300, 0.25);
+
+        db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
+            if (!state || state.status !== 'playing') return state;
+            state.progress = Math.max(0, (state.progress || 0) - penalty);
+            return state;
+        });
+    }
+
+    setTimeout(() => {
+        if (!gameRunning) return;
+        els.permanentGameInput.disabled = false;
+        els.permanentGameInput.value = "";
+        els.permanentGameInput.focus();
+        if (gameWords[0]) playMorseAudio(gameWords[0], currentWpm);
+    }, 2000);
+};
+
+function finishCoopGame(won) {
+    gameRunning = false;
+    clearAllTimers();
+    db.ref(`rooms/${roomCode}/coop_state`).off();
+
+    showScreen('leaderboardScreen');
+    els.tableWrapper.style.display = 'block';
+    els.coopArea.style.display = 'none';
+
+    if (won) {
+        showToast("🏆 VITTORIA DI SQUADRA! Territorio Conquistato!");
+        els.roomWinnerBanner.textContent = "🏆 MISSIONE COMPIUTA: TERRITORIO CONQUISTATO!";
+        els.roomWinnerBanner.style.color = "#4caf50";
+        updateActivity(true);
+    } else {
+        showToast("💀 TEMPO SCADUTO! Il disturbo nemico ha vinto.");
+        els.roomWinnerBanner.textContent = "💀 MISSIONE FALLITA: TEMPO SCADUTO";
+        els.roomWinnerBanner.style.color = "#d32f2f";
+        updateActivity(false);
+    }
 }
 
 function finishGame() {
