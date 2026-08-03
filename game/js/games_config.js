@@ -16,6 +16,21 @@ window.GAME_MODES = {
             return dicts.master.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
         }
     },
+    "conquest": {
+        id: "conquest",
+        titleIt: "Conquista (Tiro alla Fune)",
+        titleEn: "Conquest (Tug of War)",
+        icon: "⚔️",
+        defaultWpm: 20,
+        defaultWordCount: 50,
+        wpmConfigurable: true,
+        wordCountConfigurable: false,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: true,
+        generateWords: function(num, dicts) {
+            return dicts.master.sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
+        }
+    },
     "callsign": {
         id: "callsign",
         titleIt: "Nominativi (CW Freak)",
