@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260803.111"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260803.112"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -208,10 +208,30 @@ async function syncUserNameEverywhere(userId, newName, newUsername) {
 
 // --- POPOLAMENTO E GESTIONE DINAMICA DEL MENU DI GIOCO ---
 function populateGameModesUI() {
-    if (!els.gameModeInput || !window.GAME_MODES) return;
+    if (!els.gameModeInput) return;
+    if (!window.GAME_MODES) window.GAME_MODES = {};
+    
+    // Auto-iniezione modalità Conquista
+    if (!window.GAME_MODES["conquest"]) {
+        window.GAME_MODES["conquest"] = {
+            id: "conquest",
+            titleIt: "Conquista (Co-op)",
+            titleEn: "Conquest (Co-op)",
+            icon: "⚔️",
+            defaultWpm: 20,
+            defaultWordCount: 50,
+            wpmConfigurable: true,
+            wordCountConfigurable: false,
+            fixedSpeedAllowed: false,
+            spacingConfigurable: true,
+            generateWords: function(num, dicts) {
+                return (dicts.master || []).sort(() => 0.5 - Math.random()).slice(0, num).map(w => w.toUpperCase());
+            }
+        };
+    }
+
     const select = els.gameModeInput;
     const trnGroup = els.trn_opt_group;
-    
     const currentVal = select.value || 'standard';
     select.innerHTML = '';
     
@@ -223,15 +243,9 @@ function populateGameModesUI() {
         select.appendChild(opt);
     });
     
-    if (trnGroup) {
-        select.appendChild(trnGroup);
-    }
-    
-    if (window.GAME_MODES[currentVal]) {
-        select.value = currentVal;
-    } else {
-        select.value = 'standard';
-    }
+    if (trnGroup) select.appendChild(trnGroup);
+    if (window.GAME_MODES[currentVal]) select.value = currentVal;
+    else select.value = 'standard';
 }
 
 // --- DIZIONARI E TESTI MULTILINGUA ---
@@ -1199,6 +1213,7 @@ function listenToInviteAccepted() {
     listeners.inviteAccepted = db.ref(`invite_accepted/${myId}`).on('value', snap => { const d = snap.val(); if (d && d.roomCode) { db.ref(`invite_accepted/${myId}`).remove(); isChallenging = false; window.closeInviteModal(); roomCode = d.roomCode; joinRoomLogic(false); } });
 }
 
+// --- VISUALIZZAZIONE STANZE IN ATTESA (CON SUPPORTO E ICONA CO-OP CONQUISTA) ---
 function listenToRooms() {
     db.ref('rooms').on('value', snap => {
         if(!els.waitingRoomsList) return; els.waitingRoomsList.innerHTML = ''; let wCount = 0;
@@ -1207,11 +1222,21 @@ function listenToRooms() {
             if (code.startsWith("TRN_") || (room.expiresAt && Date.now() > room.expiresAt)) { if(Date.now() > room.expiresAt) db.ref(`rooms/${code}`).remove(); return; }
             if (room.status === 'waiting' && room.type !== 'single') {
                 wCount++; const pCount = room.players ? Object.keys(room.players).length : 0; const li = document.createElement('li');
-                let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' : room.mode === 'pingpong' ? '🏓 Ping Pong' : room.mode === 'quiz' ? '❓ Quiz' : '🔤 Parole';
+                
+                let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.' 
+                             : room.mode === 'pingpong' ? '🏓 Ping Pong' 
+                             : room.mode === 'quiz' ? '❓ Quiz' 
+                             : (room.mode === 'conquest' || room.type === 'coop') ? '⚔️ Conquista (Co-op)' 
+                             : '🔤 Parole';
                 
                 const span = document.createElement('span');
                 const bTitle = document.createElement('b'); bTitle.textContent = `#${code} - ${modeIcon}`;
-                const smallInfo = document.createElement('small'); smallInfo.textContent = `${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test`;
+                
+                const infoText = (room.mode === 'conquest' || room.type === 'coop')
+                    ? `${pCount} Gioc. | ${room.wpm} WPM | 5 min`
+                    : `${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test`;
+                    
+                const smallInfo = document.createElement('small'); smallInfo.textContent = infoText;
                 span.appendChild(bTitle); span.appendChild(document.createElement('br')); span.appendChild(smallInfo);
                 li.appendChild(span);
                 
@@ -1223,23 +1248,42 @@ function listenToRooms() {
 }
 window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
 
+// --- CREAZIONE STANZA BLINDATA ANTI-NAN ---
 if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
     const gameType = els.gameTypeInput.value, gameMode = els.gameModeInput.value;
     if (gameType === 'tournament') { showScreen('teamsScreen'); if (gameMode === 'trn_create_team') switchTeamTab('gest'); else if (gameMode === 'trn_join_team') switchTeamTab('allteams'); else if (gameMode === 'trn_create_trn') switchTeamTab('tournaments'); return; }
     if (gameMode === 'custom' && customDictionary.length === 0) { els.customDictModal.style.display = 'flex'; return showToast("Carica prima un file di testo!"); }
 
-    isChallenging = false; if (currentInviterId) db.ref(`invites/${currentInviterId}`).once('value', s => { if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove(); });
-    db.ref(`invite_accepted/${myId}`).remove(); currentMode = gameMode; isSinglePlayer = gameType === 'single'; currentWpm = currentMode==='callsign' ? 25 : parseInt(els.startWpmInput.value); baseWpm = currentWpm; 
-    requestedWordCount = currentMode==='callsign' ? 25 : Math.min(200, Math.max(1, parseInt(els.wordCountInput.value) || 10)); 
-    currentTone = parseInt(els.toneInput.value); isFixedSpeed = els.fixedSpeedCheckbox.checked; isEasyMode = els.easyModeCheckbox.checked;
+    isChallenging = false; 
+    if (currentInviterId) db.ref(`invites/${currentInviterId}`).once('value', s => { if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove(); });
+    db.ref(`invite_accepted/${myId}`).remove(); 
+
+    currentMode = gameMode || 'standard'; 
+    isSinglePlayer = (gameType === 'single'); 
+    currentWpm = currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20); 
+    baseWpm = currentWpm; 
+    requestedWordCount = currentMode === 'callsign' ? 25 : Math.min(200, Math.max(1, parseInt(els.wordCountInput?.value) || 10)); 
+    currentTone = parseInt(els.toneInput?.value) || 600; 
+    isFixedSpeed = els.fixedSpeedCheckbox?.checked || false; 
+    isEasyMode = els.easyModeCheckbox?.checked || false;
     
-    // In multiplayer o torneo, la spaziatura tra caratteri e tra le parole viene forzata standard
-    let cSpace = isSinglePlayer && (els.charSpaceInput && els.charSpaceInput.value) ? parseInt(els.charSpaceInput.value) : currentWpm;
-    let wSpace = isSinglePlayer && (els.wordSpaceSelect && els.wordSpaceSelect.value) ? parseFloat(els.wordSpaceSelect.value) : 1.0;
+    let cSpace = isSinglePlayer && (els.charSpaceInput && els.charSpaceInput.value) ? (parseInt(els.charSpaceInput.value) || currentWpm) : currentWpm;
+    let wSpace = isSinglePlayer && (els.wordSpaceSelect && els.wordSpaceSelect.value) ? (parseFloat(els.wordSpaceSelect.value) || 1.0) : 1.0;
     window.charSpaceWpm = cSpace;
     window.wordSpaceMult = wSpace;
 
-    roomCode = Math.floor(1000 + Math.random() * 9000).toString(); gameWords = getGameWords(requestedWordCount, currentMode);
+    roomCode = Math.floor(1000 + Math.random() * 9000).toString(); 
+    gameWords = getGameWords(requestedWordCount, currentMode);
+    
+    // Fallback di sicurezza per garantire che l'array parole non sia mai vuoto in co-op
+    if (!gameWords || gameWords.length === 0) {
+        const dict = (masterDictionary && masterDictionary.length > 0) ? masterDictionary : ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
+        gameWords = dict.sort(() => 0.5 - Math.random()).slice(0, requestedWordCount).map(w => w.toUpperCase());
+    }
+
+    const timerMinutes = parseInt(els.roomTimerInput?.value) || 5;
+    const expiresTimestamp = isSinglePlayer ? null : Date.now() + (timerMinutes * 60000);
+
     db.ref('rooms/' + roomCode).set({ 
         status: isSinglePlayer ? 'countdown' : 'waiting', 
         type: isSinglePlayer ? 'single' : (gameType === 'coop' ? 'coop' : 'multi'), 
@@ -1252,9 +1296,13 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
         charSpaceWpm: cSpace,
         wordSpaceMult: wSpace,
         createdAt: firebase.database.ServerValue.TIMESTAMP, 
-        expiresAt: isSinglePlayer ? null : Date.now() + (Math.max(1, parseInt(els.roomTimerInput.value)) * 60000), 
-        hostId: myId 
-    }).then(() => joinRoomLogic(false));
+        expiresAt: expiresTimestamp, 
+        hostId: myId || "anon" 
+    }).then(() => {
+        joinRoomLogic(false);
+    }).catch(err => {
+        alert("Errore Firebase durante la creazione: " + err.message);
+    });
 });
 
 if(els.btnPlayDailyNow) els.btnPlayDailyNow.addEventListener('click', () => {
@@ -3012,7 +3060,6 @@ function listenToCoopState() {
     });
 }
 
-
 function setupCoopFreqButtons() {
     const labels = ["🟢 FREQ 1 (3-4 car.)", "🟡 FREQ 2 (5-6 car.)", "🔴 FREQ 3 (7+ car.)"];
     
@@ -3131,7 +3178,6 @@ handleWordSubmission = function(userWord) {
         }
     }, 2000);
 };
-
 
 function finishCoopGame(won) {
     gameRunning = false;
