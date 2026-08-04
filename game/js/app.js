@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260803.114"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260803.115"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -2098,71 +2098,100 @@ function saveMatchToGlobalHistory(players, roomData) {
     db.ref(`leaderboard/recent_matches/${modePath}/${roomData.wordCount || 'all'}/${matchId}`).set(matchData);
 }
 
+// --- CLASSIFICHE GLOBALI (OTTIMIZZATE A MAX 50 RECORD VIA SERVER) ---
 function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
     els.leaderboardContainer.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
     
+    // 1. SFIDA GIORNALIERA: scarica dal server solo i primi 50
     if (tabType === 'daily_challenge') {
         let todayStr = new Date().toISOString().split('T')[0];
-        db.ref(`leaderboard/daily_challenge/${todayStr}`).once('value', snapshot => {
+        db.ref(`leaderboard/daily_challenge/${todayStr}`)
+          .orderByChild('score')
+          .limitToLast(50)
+          .once('value', snapshot => {
             let players = [];
             if(snapshot.exists()) {
                 snapshot.forEach(child => { if (child.val()) players.push(child.val()); });
             }
             players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
-            renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, false);
+            renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, false);
         });
         return;
     }
 
+    // 2. STORICO SFIDE MULTIPLAYER RECENTI (Limitato a 20 match)
     if (['standard_multi', 'chars_multi', 'quiz_multi'].includes(tabType)) {
         db.ref(`leaderboard/recent_matches/${tabType}`).once('value', snapshot => {
             let matches = [];
             snapshot.forEach(wcNode => { if (filterWordCount === 'all' || wcNode.key === filterWordCount) wcNode.forEach(mNode => matches.push(mNode.val())); });
-            matches.sort((a,b) => (b.ts || 0) - (a.ts || 0)); renderMatchesHistoryHTML(matches.slice(0, 30), els.leaderboardContainer);
+            matches.sort((a,b) => (b.ts || 0) - (a.ts || 0)); 
+            renderMatchesHistoryHTML(matches.slice(0, 20), els.leaderboardContainer);
         });
         return;
     }
 
+    // 3. PING PONG
     if (tabType === 'pingpong') {
-        db.ref(`leaderboard/pingpong`).once('value', snapshot => {
-            let players = [];
-            if(snapshot.exists()) {
-                snapshot.forEach(wordCountNode => {
-                    const key = wordCountNode.key;
-                    if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
-                    wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
-                });
-            }
-            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
-            renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, true);
-        });
+        if (filterWordCount !== 'all') {
+            db.ref(`leaderboard/pingpong/${filterWordCount}`)
+              .orderByChild('score')
+              .limitToLast(50)
+              .once('value', snapshot => {
+                let players = [];
+                if(snapshot.exists()) {
+                    snapshot.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
+                }
+                players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+                renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, true);
+            });
+        } else {
+            db.ref(`leaderboard/pingpong`).once('value', snapshot => {
+                let players = [];
+                if(snapshot.exists()) {
+                    snapshot.forEach(wordCountNode => {
+                        wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
+                    });
+                }
+                players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+                renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, true);
+            });
+        }
         return;
     }
 
+    // 4. NOMINATIVI (CW FREAK): scarica dal server solo i primi 50
     if (tabType === 'callsign') {
-        db.ref('leaderboard/callsign/global').once('value', snapshot => {
+        db.ref('leaderboard/callsign/global')
+          .orderByChild('score')
+          .limitToLast(50)
+          .once('value', snapshot => {
             let players = [];
             if (snapshot.exists()) {
                 snapshot.forEach(child => { if (child.val()) players.push(child.val()); });
             }
             players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
-            renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, false);
+            renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, false);
         });
         return;
     }
 
+    // 5. CLASSIFICA SQUADRE TORNEI: scarica solo le prime 50 squadre
     if (tabType === 'tournaments') {
-        db.ref('leaderboard/tournaments').once('value', snapshot => {
+        db.ref('leaderboard/tournaments')
+          .orderByChild('score')
+          .limitToLast(50)
+          .once('value', snapshot => {
             let teams = [];
             if (snapshot.exists()) {
                 snapshot.forEach(child => { if (child.val()) teams.push(child.val()); });
             }
             teams.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
-            renderPlayersListHTML(teams.slice(0, 100), els.leaderboardContainer, false, true);
+            renderPlayersListHTML(teams.slice(0, 50), els.leaderboardContainer, false, true);
         });
         return;
     }
 
+    // 6. TORNEO ATTIVO
     if (tabType === 'active_tournament') {
         if (!activeTrnId) {
             els.leaderboardContainer.innerHTML = '';
@@ -2182,7 +2211,7 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
                     let std = Object.entries(trn.standings).map(([id, data]) => ({ name: data.name, score: data.points, date: currentLang==='it'?"In corso":"In progress" }));
                     std.sort((a,b) => (Number(b.score) || 0) - (Number(a.score) || 0));
                     const listCont = document.createElement('div');
-                    renderPlayersListHTML(std, listCont, false, true);
+                    renderPlayersListHTML(std.slice(0, 50), listCont, false, true);
                     els.leaderboardContainer.appendChild(listCont);
                 } else {
                     els.leaderboardContainer.innerHTML = '';
@@ -2194,25 +2223,39 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         return;
     }
 
+    // 7. PAROLE, CARATTERI E QUIZ (con query mirata al server se selezioni una quantità specifica)
     let isQuiz = tabType.startsWith('quiz');
     let isChars = tabType.startsWith('chars');
     let modePath = isQuiz ? 'quiz' : (isChars ? 'chars' : 'standard');
     let subType = isQuiz ? tabType.replace('quiz_', '') : (isChars ? tabType.replace('chars_', '') : tabType.replace('standard_', ''));
 
-    db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
-        let players = [];
-        if(snapshot.exists()) {
-            snapshot.forEach(wordCountNode => {
-                const key = wordCountNode.key;
-                if (!key.startsWith(subType + "_")) return;
-                if (filterWordCount !== 'all' && !key.endsWith("_" + filterWordCount)) return;
-
-                wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
-            });
-        }
-        players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
-        renderPlayersListHTML(players.slice(0, 100), els.leaderboardContainer, true);
-    });
+    if (filterWordCount !== 'all') {
+        // Query diretta al sottonodo: fa scaricare solo i primi 50 al server!
+        db.ref(`leaderboard/${modePath}/${subType}_${filterWordCount}`)
+          .orderByChild('score')
+          .limitToLast(50)
+          .once('value', snapshot => {
+            let players = [];
+            if(snapshot.exists()) {
+                snapshot.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
+            }
+            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+            renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, true);
+        });
+    } else {
+        db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
+            let players = [];
+            if(snapshot.exists()) {
+                snapshot.forEach(wordCountNode => {
+                    const key = wordCountNode.key;
+                    if (!key.startsWith(subType + "_")) return;
+                    wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
+                });
+            }
+            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+            renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, true);
+        });
+    }
 }
 
 function renderMatchesHistoryHTML(matches, container) {
