@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260803.118"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260803.119"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -2814,7 +2814,9 @@ function initBattleRoyaleScheduler() {
     brCheckInterval = setInterval(checkBattleTime, 100000); 
 }
 
-// --- GESTIONE SICURA ISCRIZIONE / RITIRO BATTAGLIA REALE ---
+// ============================================================================
+// 1. ISCRIZIONE BATTAGLIA SERALE (Corretto con .update() per non cancellare gli iscritti)
+// ============================================================================
 window.toggleBattleRoyaleJoin = function() {
     if (!brRoomCode) {
         const now = new Date(Date.now() + serverTimeOffset);
@@ -2828,24 +2830,31 @@ window.toggleBattleRoyaleJoin = function() {
                 showToast("Ti sei ritirato dalla sfida serale.");
             });
         } else {
-            db.ref(`rooms/${brRoomCode}`).once('value', snap => {
-                if (!snap.exists()) {
-                    db.ref(`rooms/${brRoomCode}`).set({
-                        status: 'enrolling', type: 'battle_royale', wpm: 25, round: 0,
-                        hostId: myId, createdAt: firebase.database.ServerValue.TIMESTAMP
-                    });
-                }
-                
-                db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
-                    name: myName, lives: 3, status: 'Iscritto ⏳', answered: false
-                }).then(() => {
-                    showToast("⚔️ Iscrizione registrata! Il banner diventerà verde.");
-                });
+            // IMPORTANTE: Usiamo .update() sul padre per non sovrascrivere o cancellare i figli!
+            db.ref(`rooms/${brRoomCode}`).update({
+                status: 'enrolling',
+                type: 'battle_royale',
+                wpm: 25,
+                round: 0,
+                hostId: myId,
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            });
+            
+            db.ref(`rooms/${brRoomCode}/players/${myId}`).set({
+                name: myName,
+                lives: 3,
+                status: 'Iscritto ⏳',
+                answered: false
+            }).then(() => {
+                showToast("⚔️ Iscrizione registrata! Il banner è ora verde.");
             });
         }
     });
 };
 
+// ============================================================================
+// 2. CONTROLLO E GESTIONE BANNER SERALE (Con timer 10s e aggiornamento colore in tempo reale)
+// ============================================================================
 function checkBattleTime() {
     if (gameRunning || brIsPlaying || brBannerDismissedToday) return; 
     
@@ -2863,7 +2872,7 @@ function checkBattleTime() {
     brRoomCode = "BR_" + dKey;
 
     if (isTime) {
-        // Se il banner è nascosto, lo mostriamo e avviamo il timer di 10 secondi per la chiusura automatica
+        // Mostriamo il banner se non era ancora visibile e avviamo il timer di 10 secondi
         if (els.brBanner && els.brBanner.style.display === 'none') {
             els.brBanner.style.display = 'block';
             
@@ -2871,14 +2880,14 @@ function checkBattleTime() {
             brBannerTimeout = setTimeout(() => {
                 if (els.brBanner) els.brBanner.style.display = 'none';
                 brBannerDismissedToday = true;
-                db.ref(`rooms/${brRoomCode}/players`).off('value'); // Stacca il listener dopo i 10 secondi
-            }, 10000); // 10.000 ms = 10 secondi esatti
+                db.ref(`rooms/${brRoomCode}/players`).off('value'); // Stacca il listener al termine
+            }, 10000);
         }
         
         if (els.btnJoinBR) {
             els.btnJoinBR.onclick = () => {
                 window.toggleBattleRoyaleJoin();
-                // Anche cliccando sul tasto per iscriversi, facciamo sparire il banner dopo 10 secondi
+                // Anche cliccando sul tasto, prolunghiamo o riavviamo i 10s prima della scomparsa
                 if (brBannerTimeout) clearTimeout(brBannerTimeout);
                 brBannerTimeout = setTimeout(() => {
                     if (els.brBanner) els.brBanner.style.display = 'none';
@@ -2888,6 +2897,7 @@ function checkBattleTime() {
             };
         }
 
+        // Ascoltiamo in tempo reale chi è iscritto
         db.ref(`rooms/${brRoomCode}/players`).on('value', snap => {
             const players = snap.val() || {};
             const count = Object.keys(players).length;
@@ -2896,6 +2906,7 @@ function checkBattleTime() {
             if (els.brEnrolledCountCompact) els.brEnrolledCountCompact.textContent = count;
             
             if (players[myId]) {
+                // SE SEI ISCRITTO -> BANNER VERDE COMPATTO
                 if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#4caf50'; 
                     els.brBanner.style.borderColor = '#81c784';
@@ -2911,6 +2922,7 @@ function checkBattleTime() {
                     els.btnJoinBR.style.flexGrow = '1';
                 }
             } else {
+                // SE NON SEI ISCRITTO -> BANNER ROSSO ESTESO
                 if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#e53935'; 
                     els.brBanner.style.borderColor = '#ff5252';
@@ -2943,7 +2955,6 @@ function checkBattleTime() {
         startBattleRoyaleSystem(); 
     }
 }
-
 function listenToBattleRoyaleRoom() {
     db.ref(`rooms/${brRoomCode}`).on('value', snap => {
         if (!snap.exists()) { 
