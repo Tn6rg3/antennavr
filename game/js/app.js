@@ -1498,7 +1498,14 @@ if(els.btnDeclineDaily) els.btnDeclineDaily.addEventListener('click', () => {
     localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
     els.dailyChallengeModal.style.display = 'none';
 });
-
+if (els.btnCloseBRBanner) {
+    els.btnCloseBRBanner.addEventListener('click', () => {
+        if (els.brBanner) els.brBanner.style.display = 'none';
+        if (brBannerTimeout) clearTimeout(brBannerTimeout);
+        brBannerDismissedToday = true; // Impedisce che ricompaia a ogni controllo per il resto del giorno
+        db.ref(`rooms/${brRoomCode}/players`).off('value'); // Risparmia banda Firebase spegnendo il listener
+    });
+}
 function exitRoomCleanly(roomWasDeletedByHost = false) {
     clearAllTimers();
     let targetScreen = 'setupScreen'; const amIHost = (myId === roomHostId); localStorage.removeItem(STORAGE_ROOM_KEY); isRejoining = false; isChallenging = false; currentInviterId = null;
@@ -2836,7 +2843,7 @@ window.toggleBattleRoyaleJoin = function() {
 };
 
 function checkBattleTime() {
-    if (gameRunning || brIsPlaying) return; 
+    if (gameRunning || brIsPlaying || brBannerDismissedToday) return; 
     
     const now = new Date(Date.now() + serverTimeOffset);
     const currentHour = now.getHours();
@@ -2852,10 +2859,29 @@ function checkBattleTime() {
     brRoomCode = "BR_" + dKey;
 
     if (isTime) {
-        if(els.brBanner) els.brBanner.style.display = 'block';
+        // Se il banner è nascosto, lo mostriamo e avviamo il timer di 10 secondi per la chiusura automatica
+        if (els.brBanner && els.brBanner.style.display === 'none') {
+            els.brBanner.style.display = 'block';
+            
+            if (brBannerTimeout) clearTimeout(brBannerTimeout);
+            brBannerTimeout = setTimeout(() => {
+                if (els.brBanner) els.brBanner.style.display = 'none';
+                brBannerDismissedToday = true;
+                db.ref(`rooms/${brRoomCode}/players`).off('value'); // Stacca il listener dopo i 10 secondi
+            }, 10000); // 10.000 ms = 10 secondi esatti
+        }
         
-        if(els.btnJoinBR) {
-            els.btnJoinBR.onclick = window.toggleBattleRoyaleJoin;
+        if (els.btnJoinBR) {
+            els.btnJoinBR.onclick = () => {
+                window.toggleBattleRoyaleJoin();
+                // Anche cliccando sul tasto per iscriversi, facciamo sparire il banner dopo 10 secondi
+                if (brBannerTimeout) clearTimeout(brBannerTimeout);
+                brBannerTimeout = setTimeout(() => {
+                    if (els.brBanner) els.brBanner.style.display = 'none';
+                    brBannerDismissedToday = true;
+                    db.ref(`rooms/${brRoomCode}/players`).off('value');
+                }, 10000);
+            };
         }
 
         db.ref(`rooms/${brRoomCode}/players`).on('value', snap => {
@@ -2898,7 +2924,7 @@ function checkBattleTime() {
             }
         });
     } else {
-        if(els.brBanner) els.brBanner.style.display = 'none';
+        if (els.brBanner) els.brBanner.style.display = 'none';
         db.ref(`rooms/${brRoomCode}/players`).off('value');
     }
 
