@@ -1,17 +1,21 @@
-input[type="checkbox"] { transform: scale(1.2); }
+/* =========================================================
+   VARIABILI E COLORI DI BASE (FALLBACK TEMA SCURO OTTIMIZZATO)
+   ========================================================= */
 :root {
-    --bg-color: var(--tg-theme-bg-color, #ffffff);
-    --text-color: var(--tg-theme-text-color, #000000);
-    --hint-color: var(--tg-theme-hint-color, #999999);
-    --link-color: var(--tg-theme-link-color, #3390ec);
-    --btn-color: var(--tg-theme-button-color, #3390ec);
-    --btn-text-color: var(--tg-theme-button-text-color, #ffffff);
-    --sec-bg-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
-    --champ-color: #9c27b0;
+    --bg-color: var(--tg-theme-bg-color, #121212);
+    --text-color: var(--tg-theme-text-color, #ffffff);
+    --hint-color: var(--tg-theme-hint-color, #888888);
+    --link-color: var(--tg-theme-link-color, #64b5f6);
+    --btn-color: var(--tg-theme-button-color, #64b5f6);
+    --btn-text-color: var(--tg-theme-button-text-color, #000000);
+    --sec-bg-color: var(--tg-theme-secondary-bg-color, #1e1e1e);
+    --champ-color: #ffd700;
+    --danger-color: #e53935;
+    --success-color: #4caf50;
 }
 
 /* =========================================================
-   ADATTAMENTO DELLO SCHERMO E MARGINI DI SICUREZZA (SAFE AREA)
+   ADATTAMENTO SCHERMO E MARGINI DI SICUREZZA (SAFE AREA)
    ========================================================= */
 html, body {
     margin: 0;
@@ -48,8 +52,11 @@ html, body {
 
 .active-screen { display: flex !important; }
 
-h2 { margin-top: 0; text-align: center; font-size: 1.3em; flex-shrink: 0;}
+h2 { margin-top: 0; text-align: center; font-size: 1.3em; flex-shrink: 0; }
 
+/* =========================================================
+   BOTTONI & INPUT
+   ========================================================= */
 button {
     background-color: var(--btn-color);
     color: var(--btn-text-color);
@@ -61,20 +68,27 @@ button {
     margin-top: 5px;
     width: 100%;
     font-weight: bold;
-    transition: opacity 0.2s;
+    transition: opacity 0.2s, transform 0.1s;
     flex-shrink: 0;
 }
 button:active { opacity: 0.8; transform: scale(0.98); }
-button:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; opacity: 0.6; }
+button:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; opacity: 0.4; }
 
 .btn-secondary { background-color: #ff9800; color: #fff; }
-.btn-success { background-color: #4caf50; color: #fff; }
-.btn-danger { background-color: #d32f2f; color: #fff; }
-.btn-champ { background-color: var(--champ-color); color: #fff; padding: 10px 15px; font-size: 1.1em; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(156, 39, 176, 0.4);}
-.btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 5px; font-size: 0.9em; margin-top: 5px; border: none; cursor: pointer; width: auto;}
+.btn-success { background-color: var(--success-color); color: #fff; }
+.btn-danger { background-color: var(--danger-color); color: #fff; }
+.btn-champ { 
+    background-color: var(--champ-color); 
+    color: #000; 
+    padding: 10px 15px; 
+    font-size: 1.1em; 
+    border: 2px solid #fff; 
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+}
+.btn-link { background: none; color: var(--link-color); text-decoration: underline; padding: 5px; font-size: 0.9em; margin-top: 5px; border: none; cursor: pointer; width: auto; }
 
-/* PROTEZIONE ANTI-SBAVATURA PER GLI INPUT:
-   consente agli input dentro una riga flex di restringersi e non cacciare fuori i bottoni */
+input[type="checkbox"] { transform: scale(1.2); }
+
 input[type="number"], input[type="text"], select {
     padding: 8px;
     font-size: 0.95em;
@@ -84,22 +98,25 @@ input[type="number"], input[type="text"], select {
     margin: 2px 0;
     border: 1px solid var(--hint-color);
     border-radius: 8px;
-    background-color: var(--bg-color);
+    background-color: var(--sec-bg-color);
     color: var(--text-color);
     min-width: 0;
     flex: 1 1 auto;
 }
 
-.settings-row { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin-bottom: 5px; gap: 4px; flex-wrap: nowrap; flex-shrink: 0;}
+.settings-row { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin-bottom: 5px; gap: 4px; flex-wrap: nowrap; flex-shrink: 0; }
 .settings-row > div { flex: 1; min-width: 0; text-align: center; }
 .settings-row > div > label { font-size: 0.75em; font-weight: bold; color: var(--hint-color); display: block; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .settings-row.full-width > div { width: auto; }
 
 #countdownNumber { font-size: 6em; font-weight: bold; color: #ff9800; margin: auto 0; }
 
-.header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px; font-weight: bold; font-size: 1.1em; background: var(--sec-bg-color); padding: 8px 12px; border-radius: 8px; box-sizing: border-box; flex-shrink: 0;}
-#scoreDisplay { color: #4caf50; }
+.header-stats { display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px; font-weight: bold; font-size: 1.1em; background: var(--sec-bg-color); padding: 8px 12px; border-radius: 8px; box-sizing: border-box; flex-shrink: 0; }
+#scoreDisplay { color: var(--success-color); }
 
+/* =========================================================
+   TABELLE E TABELLONI PAROLE
+   ========================================================= */
 .table-wrapper {
     flex-grow: 1;
     width: 100%;
@@ -111,11 +128,11 @@ input[type="number"], input[type="text"], select {
     max-height: 100%;
     -webkit-overflow-scrolling: touch;
 }
-table { width: 100%; border-collapse: collapse; font-size: 0.9em;}
+table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
 th, td { border-bottom: 1px solid var(--hint-color); padding: 8px 5px; text-align: center; }
-th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
+th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10; }
 
-#permanentGameInput, #pingPongWordToSend { border: 2px solid var(--link-color); outline: none; margin: 0; font-weight: bold; text-transform: uppercase;}
+#permanentGameInput, #pingPongWordToSend { border: 2px solid var(--link-color); outline: none; margin: 0; font-weight: bold; text-transform: uppercase; }
 #permanentGameInput:focus, #pingPongWordToSend:focus { background-color: var(--sec-bg-color); }
 #pingPongWordToSend { border-color: #ff9800; }
 
@@ -131,10 +148,10 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
     flex-direction: column;
     flex-shrink: 0;
 }
-.box-panel h3 { margin-top: 0; margin-bottom: 5px; font-size: 1em; text-align: center;}
+.box-panel h3 { margin-top: 0; margin-bottom: 5px; font-size: 1em; text-align: center; }
 
 .data-list { list-style: none; padding: 0; margin: 0; flex-grow: 1; overflow-y: auto; text-align: left; }
-.data-list li { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 4px; border-radius: 6px; font-size: 0.9em;}
+.data-list li { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid var(--hint-color); background: var(--bg-color); margin-bottom: 4px; border-radius: 6px; font-size: 0.9em; }
 .action-btn-small { width: auto; padding: 6px 12px; font-size: 0.85em; margin: 0; flex-shrink: 0; }
 
 .leaderboard-row {
@@ -152,49 +169,118 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10;}
     flex-shrink: 0;
 }
 
-#loadingText { font-style: italic; color: #ff9800; margin-bottom: 10px; font-weight: bold; text-align:center; font-size: 0.9em;}
+#loadingText { font-style: italic; color: #ff9800; margin-bottom: 10px; font-weight: bold; text-align:center; font-size: 0.9em; }
 
-.tab-buttons { display: flex; width: 100%; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; justify-content: space-between; flex-shrink: 0;}
+/* =========================================================
+   TAB BAR, SCHEDE & OPZIONI DI GIOCO
+   ========================================================= */
+.tab-buttons { display: flex; width: 100%; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; justify-content: space-between; flex-shrink: 0; }
 .tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 8px; font-size: 0.8em; border-radius: 8px; flex: 1 1 30%; text-align: center; flex-shrink: 0; }
-.tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); box-shadow: inset 0 0 5px rgba(0,0,0,0.2);}
-#tabGlobalCWFreakBtn.active-tab { background-color: #9c27b0; }
-#tabGlobalCWFreakBtn { background-color: #ce93d8; color: #fff;}
-#tabGlobalPingPongBtn.active-tab { background-color: #f44336; }
-#tabGlobalPingPongBtn { background-color: #ef9a9a; color: #fff;}
+.tab-btn.active-tab { background-color: var(--link-color); color: #000; box-shadow: inset 0 0 5px rgba(0,0,0,0.2); font-weight: bold; }
 
-.match-card { background: var(--bg-color); border: 1px solid var(--hint-color); border-radius: 8px; padding: 8px; margin-bottom: 5px; display: flex; flex-direction: column; align-items: center; font-size: 0.9em; flex-shrink: 0;}
-.match-card-teams { display: flex; justify-content: space-between; width: 100%; align-items: center; margin-bottom: 8px; }
-.match-card-teams > div { flex: 1; text-align: center; }
-.match-vs { font-weight: bold; color: #ff9800; margin: 0 10px; font-size: 1.2em; }
-.slot-btn { background-color: var(--bg-color); color: var(--link-color); border: 1px dashed var(--link-color); padding: 5px; font-size: 0.8em; width: 100%; margin-top: 5px; }
-.slot-btn.filled { background-color: var(--link-color); color: #fff; border: 1px solid var(--link-color); }
-.slot-btn.filled-me { background-color: #4caf50; color: #fff; border: 1px solid #4caf50; }
+/* =========================================================
+   MODALITÀ CO-OP CONQUISTA
+   ========================================================= */
+.coop-freq-btn { 
+    flex: 1; 
+    padding: 6px 2px; 
+    font-size: 0.85em; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    gap: 4px; 
+    min-width: 0;
+}
+.coop-freq-btn button {
+    margin-top: 0;
+    padding: 8px 4px;
+    font-size: 0.85em;
+    line-height: 1.2;
+}
 
-hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0; width: 100%; opacity: 0.5; flex-shrink: 0;}
+/* =========================================================
+   TESTA A TESTA (H2H LEADERBOARD)
+   ========================================================= */
+.h2h-container { 
+    display: flex; 
+    gap: 10px; 
+    width: 100%; 
+    margin-bottom: 15px; 
+    justify-content: center; 
+    flex-wrap: wrap; 
+}
+.h2h-card { 
+    flex: 1; 
+    min-width: 140px; 
+    background: var(--sec-bg-color); 
+    border-radius: 12px; 
+    padding: 12px; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    text-align: center; 
+    border: 2px solid transparent; 
+    flex-shrink: 0; 
+}
+.h2h-card.winner { border-color: var(--success-color); background: rgba(76, 175, 80, 0.1); }
+.h2h-name { font-weight: bold; font-size: 1em; margin-bottom: 8px; color: var(--link-color); }
+.h2h-stat-row { display: flex; justify-content: space-between; font-size: 0.85em; width: 100%; }
+.h2h-hint { font-size: 0.7em; color: var(--hint-color); margin-top: 8px; }
+
+/* =========================================================
+   QUIZ MORSE
+   ========================================================= */
+.quiz-opt-btn {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border: 2px solid var(--link-color);
+    padding: 10px;
+    font-weight: bold;
+    border-radius: 10px;
+    font-size: 0.9em;
+    flex-shrink: 0;
+}
+.quiz-opt-btn.active-choice { background-color: var(--link-color); color: #000; }
+.quiz-opt-btn:disabled { opacity: 0.5; border-color: var(--hint-color); }
+
+/* =========================================================
+   SPOILER CHAT CW & ANIMAZIONI MODALI
+   ========================================================= */
+.cw-spoiler { 
+    background-color: var(--hint-color); 
+    color: transparent !important; 
+    border-radius: 4px; 
+    cursor: pointer; 
+    user-select: none; 
+    padding: 0 4px; 
+    display: inline-block; 
+}
+.cw-spoiler.revealed { background-color: transparent; color: inherit !important; }
+
+hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0; width: 100%; opacity: 0.5; flex-shrink: 0; }
 
 #toastContainer {
-    position: fixed; top: max(20px, var(--tg-safe-area-inset-top, 20px)); left: 50%; transform: translateX(-50%); z-index: 3000;
-    display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+    position: fixed; 
+    top: max(20px, var(--tg-safe-area-inset-top, 20px)); 
+    left: 50%; 
+    transform: translateX(-50%); 
+    z-index: 6000;
+    display: flex; 
+    flex-direction: column; 
+    gap: 10px; 
+    pointer-events: none;
 }
-.medal-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.85); z-index: 5000;
-    display: none; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; color: white; animation: fadeIn 0.5s;
-}
-.medal-box {
-    transform: scale(0); animation: zoomIn 0.6s 0.3s forwards;
-    background: var(--sec-bg-color); padding: 20px; border-radius: 20px;
-    border: 3px solid var(--champ-color); box-shadow: 0 0 20px var(--champ-color);
-    color: var(--text-color); max-width: 80%;
-}
-@keyframes zoomIn { to { transform: scale(1); } }
-.medal-icon { font-size: 5em; margin-bottom: 10px; display: block; }
+
 .toast {
-    background-color: rgba(0, 0, 0, 0.85); color: white; padding: 10px 20px;
-    border-radius: 20px; font-size: 0.95em; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-    animation: fadeInOut 4s forwards; white-space: nowrap;
-    pointer-events: none; border: 1px solid rgba(255,255,255,0.1);
+    background-color: rgba(0, 0, 0, 0.85); 
+    color: white; 
+    padding: 10px 20px;
+    border-radius: 20px; 
+    font-size: 0.95em; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    animation: fadeInOut 4s forwards; 
+    white-space: nowrap;
+    border: 1px solid rgba(255,255,255,0.1);
 }
 @keyframes fadeInOut {
     0% { opacity: 0; transform: translateY(-10px); }
@@ -209,155 +295,23 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
     100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
 }
 
-/* MODALI E FINESTRE POPUP (Accorpate e ottimizzate) */
-#matchDetailsModal, #inviteModal, #roomEventModal, #tournamentWelcomeModal {
-    display: none; 
-    position: fixed; 
-    top: 15%; 
-    left: 5%; 
-    width: 90%; 
-    max-height: 80%;
-    height: auto;
-    background: var(--bg-color); 
-    z-index: 4000; 
-    border: 2px solid var(--hint-color);
-    border-radius: 10px; 
-    padding: 15px; 
-    flex-direction: column; 
-    box-sizing: border-box;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+.medal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85); z-index: 5000;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: white;
 }
-
-/* Head to Head Leaderboard Styles */
-.h2h-container {
-    display: flex; gap: 10px; width: 100%; margin-bottom: 15px;
-    justify-content: center; flex-wrap: wrap;
+.medal-box {
+    background: var(--sec-bg-color); padding: 20px; border-radius: 20px;
+    border: 3px solid var(--champ-color); box-shadow: 0 0 20px var(--champ-color);
+    color: var(--text-color); max-width: 80%;
 }
-.h2h-card {
-    flex: 1; min-width: 140px; background: var(--sec-bg-color);
-    border-radius: 12px; padding: 12px; display: flex;
-    flex-direction: column; align-items: center; text-align: center;
-    border: 2px solid transparent; transition: transform 0.2s;
-    cursor: pointer; position: relative; flex-shrink: 0;
-}
-.h2h-card:active { transform: scale(0.97); }
-.h2h-card.winner { border-color: #4caf50; box-shadow: 0 0 10px rgba(76, 175, 80, 0.3); }
-.h2h-card.winner::after { content: '🏆'; position: absolute; top: -10px; right: -5px; font-size: 1.5em; }
-
-.h2h-name { font-weight: bold; font-size: 1em; margin-bottom: 8px; color: var(--link-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
-.h2h-stats { display: flex; flex-direction: column; gap: 4px; width: 100%; }
-.h2h-stat-row { display: flex; justify-content: space-between; font-size: 0.85em; width: 100%; }
-.h2h-val { font-weight: bold; }
-.h2h-hint { font-size: 0.7em; color: var(--hint-color); margin-top: 8px; }
-
-/* Quiz Area Styles */
-.quiz-opt-btn {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    border: 2px solid var(--link-color);
-    padding: 10px;
-    font-weight: bold;
-    border-radius: 10px;
-    font-size: 0.9em;
-    flex-shrink: 0;
-}
-.quiz-opt-btn.active-choice {
-    background-color: var(--link-color);
-    color: white;
-}
-.quiz-opt-btn:disabled {
-    opacity: 0.5;
-    border-color: var(--hint-color);
-}
-
-/* Effetto mascherato per i messaggi CW */
-.cw-spoiler {
-    background-color: var(--hint-color, #777);
-    color: transparent !important;
-    border-radius: 4px;
-    cursor: pointer;
-    user-select: none;
-    padding: 0 4px;
-    transition: all 0.2s ease;
-    display: inline-block;
-}
-
-.cw-spoiler.revealed {
-    background-color: transparent;
-    color: inherit !important;
-}
+.medal-icon { font-size: 5em; margin-bottom: 10px; display: block; }
 
 .event-modal-icon { font-size: 4em; display: block; margin-bottom: 10px; }
 
-/* Ottimizzazioni aggiuntive per schermi piccoli (sotto i 400px) */
+/* MEDIA QUERIES PER SCHERMI PICCOLI (< 400PX) */
 @media screen and (max-width: 400px) {
-    .action-btn-small {
-        padding: 5px 8px !important;
-        font-size: 0.78em !important;
-    }
-    #setupScreen h2 {
-        font-size: 0.95em !important;
-        max-width: 100%;
-        margin-bottom: 4px !important;
-    }
-
-/* --- MODALITÀ CO-OP CONQUISTA --- */
-.coop-freq-btn { 
-    flex: 1; 
-    padding: 12px 5px; 
-    font-size: 0.85em; 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    gap: 4px; 
+    .action-btn-small { padding: 5px 8px !important; font-size: 0.78em !important; }
+    #setupScreen h2 { font-size: 0.95em !important; max-width: 100%; margin-bottom: 4px !important; }
 }
-
-/* --- GRAFICA TESTA A TESTA (H2H) --- */
-.h2h-container { 
-    display: flex; 
-    gap: 10px; 
-    margin-bottom: 15px; 
-}
-.h2h-card { 
-    flex: 1; 
-    background: var(--sec-bg-color); 
-    padding: 12px; 
-    border-radius: 10px; 
-    text-align: center; 
-    border: 1px solid rgba(255,255,255,0.1); 
-}
-.h2h-card.winner { 
-    border-color: var(--success-color); 
-    background: rgba(76, 175, 80, 0.1); 
-}
-.h2h-name { 
-    font-weight: bold; 
-    margin-bottom: 8px; 
-    color: var(--link-color); 
-}
-.h2h-stat-row { 
-    display: flex; 
-    justify-content: space-between; 
-    font-size: 0.8em; 
-    margin: 4px 0; 
-}
-.h2h-hint { 
-    font-size: 0.7em; 
-    color: var(--hint-color); 
-    margin-top: 8px; 
-}
-
-/* --- SPOILER PER CHAT CW --- */
-.cw-spoiler { 
-    background: var(--sec-bg-color); 
-    color: transparent; 
-    cursor: pointer; 
-    padding: 2px 6px; 
-    border-radius: 4px; 
-    user-select: none; 
-}
-.cw-spoiler.revealed { 
-    color: var(--text-color); 
-    background: transparent; 
-}
-    }
