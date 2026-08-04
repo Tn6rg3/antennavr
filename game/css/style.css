@@ -300,4 +300,64 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
         max-width: 100%;
         margin-bottom: 4px !important;
     }
+
+/* --- MODALITÀ CO-OP CONQUISTA --- */
+.coop-freq-btn { 
+    flex: 1; 
+    padding: 12px 5px; 
+    font-size: 0.85em; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    gap: 4px; 
 }
+
+/* --- GRAFICA TESTA A TESTA (H2H) --- */
+.h2h-container { 
+    display: flex; 
+    gap: 10px; 
+    margin-bottom: 15px; 
+}
+.h2h-card { 
+    flex: 1; 
+    background: var(--sec-bg-color); 
+    padding: 12px; 
+    border-radius: 10px; 
+    text-align: center; 
+    border: 1px solid rgba(255,255,255,0.1); 
+}
+.h2h-card.winner { 
+    border-color: var(--success-color); 
+    background: rgba(76, 175, 80, 0.1); 
+}
+.h2h-name { 
+    font-weight: bold; 
+    margin-bottom: 8px; 
+    color: var(--link-color); 
+}
+.h2h-stat-row { 
+    display: flex; 
+    justify-content: space-between; 
+    font-size: 0.8em; 
+    margin: 4px 0; 
+}
+.h2h-hint { 
+    font-size: 0.7em; 
+    color: var(--hint-color); 
+    margin-top: 8px; 
+}
+
+/* --- SPOILER PER CHAT CW --- */
+.cw-spoiler { 
+    background: var(--sec-bg-color); 
+    color: transparent; 
+    cursor: pointer; 
+    padding: 2px 6px; 
+    border-radius: 4px; 
+    user-select: none; 
+}
+.cw-spoiler.revealed { 
+    color: var(--text-color); 
+    background: transparent; 
+}
+    }
