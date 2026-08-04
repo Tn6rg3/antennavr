@@ -158,12 +158,16 @@
             <div id="timeoutDiv" style="display: none;"><label id="txt_room_timeout">Scad.</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
         </div>
 
-        <div style="display:flex; justify-content:center; gap:15px; margin-top:5px;">
+        <!-- OPZIONI AGGIUNTIVE CON CASELLA SPETTATORI -->
+        <div style="display:flex; justify-content:center; flex-wrap:wrap; gap:15px; margin-top:5px;">
             <label id="fixedSpeedContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: var(--hint-color); cursor: pointer;">
                 <input type="checkbox" id="fixedSpeedCheckbox"> <span id="txt_fixed_speed">Fissa</span>
             </label>
             <label id="easyModeContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: var(--champ-color); cursor: pointer;">
                 <input type="checkbox" id="easyModeCheckbox"> <span id="txt_easy_mode">Semplice</span>
+            </label>
+            <label id="spectatorContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: #fbc02d; cursor: pointer;">
+                <input type="checkbox" id="allowSpectatorsCheckbox"> <span>👁️ Spettatori</span>
             </label>
         </div>
 
