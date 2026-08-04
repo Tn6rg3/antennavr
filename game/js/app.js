@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260803.113"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260803.114"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -139,27 +139,57 @@ function showScreen(screenId) {
     hideChat();
     if(els.matchDetailsModal) els.matchDetailsModal.style.display = 'none';
 
+    // 1. Identifichiamo se l'utente è in una schermata di GIOCO/LOBBY o di NAVIGAZIONE
+    const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen'].includes(screenId);
+
     if (db && myId) {
-        const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen'].includes(screenId);
         try {
             db.ref(`presence/${myId}`).update({ status: isPlayingScreen ? 'playing' : 'online' });
         } catch(e) {}
     }
 
+    // --- GESTIONE OTTIMIZZATA DEI LISTENER GENERLI ---
     if (screenId === 'setupScreen') {
         const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
         if (!lastRoom && els.rejoinContainer) els.rejoinContainer.style.display = 'none';
+        
+        // Nel menu principale accendiamo sia la bacheca stanze che gli utenti online
+        listenToOnlineUsers();
+        listenToRooms();
+    } else {
+        // In QUALSIASI altra schermata (gioco, profilo, classifica...) spegniamo le liste online
+        // per risparmiare traffico e banda
+        if (listeners.presence) { db.ref('presence').off('value', listeners.presence); listeners.presence = null; }
+        if (listeners.roomsList) { db.ref('rooms').off('value', listeners.roomsList); listeners.roomsList = null; }
     }
+    // -------------------------------------------------
 
-    if (screenId === 'teamsScreen') { activeChatContext = 'team'; checkMyTeamStatus(); }
-    else if (screenId === 'lobbyScreen' || screenId === 'gameArea') { activeChatContext = 'room'; listenToChat(); }
-    else if (screenId === 'participationScreen') { switchActTab('daily'); activeChatContext = null; }
-    else { activeChatContext = 'global'; listenToChat(); }
-}
-
-window.goBackToMenu = function() {
-    if(activeChatContext !== 'team') hideChat();
-    showScreen('setupScreen');
+    // --- GESTIONE CHAT E NOTIFICHE MIRATE ---
+    if (isPlayingScreen) {
+        // SE STAI GIOCANDO O SEI IN LOBBY:
+        // Spegniamo la chat globale (niente notifiche di disturbo e zero traffico sprecato)
+        if (listeners.activeChat['chatMessages']) {
+            listeners.activeChat['chatMessages'].ref.off('value', listeners.activeChat['chatMessages'].callback);
+            delete listeners.activeChat['chatMessages'];
+        }
+        // Attiviamo solo la chat di stanza se siamo in lobby o nell'area di gioco
+        if (screenId === 'lobbyScreen' || screenId === 'gameArea') {
+            activeChatContext = 'room';
+            listenToChat();
+        } else {
+            activeChatContext = null;
+        }
+    } else if (screenId === 'teamsScreen') {
+        // Nella schermata squadre si usa la chat di squadra
+        activeChatContext = 'team';
+        checkMyTeamStatus();
+    } else {
+        // NELLE SCHERMATE DI NAVIGAZIONE (setupScreen, profileScreen, leaderboardScreen, participationScreen, privacyScreen):
+        // Manteniamo attiva la Chat Globale così ricevi normalmente le notifiche!
+        if (screenId === 'participationScreen') { switchActTab('daily'); }
+        activeChatContext = 'global';
+        listenToChat();
+    }
 }
 
 // --- FUNZIONE CENTRALIZZATA SINCRONIZZAZIONE ALIAS UTENTE ---
@@ -828,7 +858,7 @@ function setupChat(chatRef, containerId, alertBtnId) {
     }
     let initialLoad = true, lastTs = Date.now();
     
-    const callback = chatRef.limitToLast(40).on('value', snapshot => {
+    const callback = chatRef.limitToLast(10).on('value', snapshot => {
         container.innerHTML = ''; let newMsgsCount = 0, latestMsg = null, maxTs = lastTs;
         
         snapshot.forEach(child => {
@@ -1109,8 +1139,12 @@ window.checkTournamentPopup = function() { if (localStorage.getItem('hideTrnWelc
 window.closeTrnWelcomeModal = function() { if (els.stopShowingTrnPopup && els.stopShowingTrnPopup.checked) localStorage.setItem('hideTrnWelcomePopup', 'true'); if(els.tournamentWelcomeModal) els.tournamentWelcomeModal.style.display = 'none'; }
 window.goToTournamentsFromPopup = function() { closeTrnWelcomeModal(); showScreen('teamsScreen'); }
 
+// --- UTENTI ONLINE (OTTIMIZZATA ANTI-SPRECO BANDA) ---
 function listenToOnlineUsers() {
-    db.ref('presence').on('value', snap => {
+    // Evita di agganciare il listener due volte se è già attivo
+    if (listeners.presence) return;
+
+    listeners.presence = db.ref('presence').on('value', snap => {
         if(!els.onlineUsersList) return; 
         els.onlineUsersList.innerHTML = ''; 
         let count = 0;
@@ -1278,8 +1312,12 @@ function listenToInviteAccepted() {
 }
 
 // --- VISUALIZZAZIONE STANZE IN ATTESA (CON ICONA CO-OP CONQUISTA) ---
+// --- VISUALIZZAZIONE STANZE IN ATTESA (OTTIMIZZATA ANTI-SPRECO BANDA) ---
 function listenToRooms() {
-    db.ref('rooms').on('value', snap => {
+    // Evita di agganciare il listener due volte se è già attivo
+    if (listeners.roomsList) return;
+
+    listeners.roomsList = db.ref('rooms').on('value', snap => {
         if(!els.waitingRoomsList) return; els.waitingRoomsList.innerHTML = ''; let wCount = 0;
         snap.forEach(child => {
             const room = child.val(); const code = child.key;
@@ -2677,7 +2715,7 @@ let brIsPlaying = false, brAmIAlive = true;
 function initBattleRoyaleScheduler() {
     checkBattleTime(); 
     if (brCheckInterval) clearInterval(brCheckInterval);
-    brCheckInterval = setInterval(checkBattleTime, 10000); 
+    brCheckInterval = setInterval(checkBattleTime, 100000); 
 }
 
 // --- GESTIONE SICURA ISCRIZIONE / RITIRO BATTAGLIA REALE ---
