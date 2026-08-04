@@ -62,10 +62,15 @@ let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
 let isCoopMode = false, coopActiveFreqIndex = 0;
 let coopTimerInterval = null, coopDecayInterval = null;
 
+
 // TIMERS SISTEMA & PULIZIA
 let lobbyTimerInterval = null, quizTimerInterval = null, ppTimerInterval = null;
 let brCheckInterval = null, brTimerInterval = null;
 let serverTimeOffset = 0;
+
+// AGGIUNGI QUESTE DUE RIGHE QUI:
+let brBannerTimeout = null;
+let brBannerDismissedToday = false;
 
 window.charSpaceWpm = 0;
 window.wordSpaceMult = 1.0;
