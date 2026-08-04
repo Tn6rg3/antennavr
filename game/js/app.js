@@ -939,38 +939,6 @@ if (els.muteGlobalChatBtn) {
     });
 }
 
-
-
-if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => {
-    const mode = e.target.value;
-    const modeCfg = window.GAME_MODES ? window.GAME_MODES[mode] : null;
-    const isPP = mode === 'pingpong';
-    
-    if (isPP) { els.gameTypeInput.value = 'multi'; els.gameTypeInput.disabled = true; checkGameTypeUI(); } 
-    else els.gameTypeInput.disabled = false;
-    
-    ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => { 
-        if (modeCfg) {
-            if (id === 'startWpmInput') {
-                els[id].disabled = !modeCfg.wpmConfigurable;
-                if (!modeCfg.wpmConfigurable) els[id].value = modeCfg.defaultWpm || 20;
-                else if (localStorage.getItem(STORAGE_PREF_WPM)) els[id].value = localStorage.getItem(STORAGE_PREF_WPM);
-            }
-            if (id === 'wordCountInput') {
-                els[id].disabled = !modeCfg.wordCountConfigurable;
-                if (!modeCfg.wordCountConfigurable) els[id].value = modeCfg.defaultWordCount || 10;
-                else if (localStorage.getItem(STORAGE_PREF_WORDS)) els[id].value = localStorage.getItem(STORAGE_PREF_WORDS);
-            }
-        }
-    });
-    
-    if (modeCfg) {
-        els.fixedSpeedCheckbox.disabled = !modeCfg.fixedSpeedAllowed;
-        if(!modeCfg.fixedSpeedAllowed) els.fixedSpeedCheckbox.checked = false;
-    }
-    checkGameTypeUI();
-});
-
 // --- CONTROLLO UI INTELLIGENTE PER I GIOCHI (RICOSTRUZIONE MENU PER CELLULARI) ---
 function checkGameTypeUI() {
     const isSingle = els.gameTypeInput.value === 'single';
@@ -1052,6 +1020,11 @@ function checkGameTypeUI() {
 
     els.customDictControl.style.display = (isSingle && isCustom) ? 'flex' : 'none';
 
+    // VISIBILITÀ OPZIONE SPETTATORE SOLO IN GIOCA DA SOLO
+    if (els.spectatorContainer) {
+        els.spectatorContainer.style.display = isSingle ? 'flex' : 'none';
+    }
+
     if (isCoop) {
         els.createRoomBtn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
     } else if (isTrn) {
@@ -1063,11 +1036,39 @@ function checkGameTypeUI() {
     if(!isSingle) { 
         if(els.fixedSpeedCheckbox) els.fixedSpeedCheckbox.checked = false; 
         if(els.easyModeCheckbox) els.easyModeCheckbox.checked = false; 
+        if(els.allowSpectatorsCheckbox) els.allowSpectatorsCheckbox.checked = false;
     }
 }
 
-
-
+if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => {
+    const mode = e.target.value;
+    const modeCfg = window.GAME_MODES ? window.GAME_MODES[mode] : null;
+    const isPP = mode === 'pingpong';
+    
+    if (isPP) { els.gameTypeInput.value = 'multi'; els.gameTypeInput.disabled = true; checkGameTypeUI(); } 
+    else els.gameTypeInput.disabled = false;
+    
+    ['startWpmInput', 'wordCountInput', 'toneInput'].forEach(id => { 
+        if (modeCfg) {
+            if (id === 'startWpmInput') {
+                els[id].disabled = !modeCfg.wpmConfigurable;
+                if (!modeCfg.wpmConfigurable) els[id].value = modeCfg.defaultWpm || 20;
+                else if (localStorage.getItem(STORAGE_PREF_WPM)) els[id].value = localStorage.getItem(STORAGE_PREF_WPM);
+            }
+            if (id === 'wordCountInput') {
+                els[id].disabled = !modeCfg.wordCountConfigurable;
+                if (!modeCfg.wordCountConfigurable) els[id].value = modeCfg.defaultWordCount || 10;
+                else if (localStorage.getItem(STORAGE_PREF_WORDS)) els[id].value = localStorage.getItem(STORAGE_PREF_WORDS);
+            }
+        }
+    });
+    
+    if (modeCfg) {
+        els.fixedSpeedCheckbox.disabled = !modeCfg.fixedSpeedAllowed;
+        if(!modeCfg.fixedSpeedAllowed) els.fixedSpeedCheckbox.checked = false;
+    }
+    checkGameTypeUI();
+});
 if(els.gameTypeInput) els.gameTypeInput.addEventListener('change', checkGameTypeUI);
 
 if (els.startWpmInput) els.startWpmInput.addEventListener('change', e => localStorage.setItem(STORAGE_PREF_WPM, e.target.value));
@@ -1110,26 +1111,63 @@ window.goToTournamentsFromPopup = function() { closeTrnWelcomeModal(); showScree
 
 function listenToOnlineUsers() {
     db.ref('presence').on('value', snap => {
-        if(!els.onlineUsersList) return; els.onlineUsersList.innerHTML = ''; let count = 0;
+        if(!els.onlineUsersList) return; 
+        els.onlineUsersList.innerHTML = ''; 
+        let count = 0;
+        
         snap.forEach(child => {
-            const u = child.val(); if (child.key === myId) return; count++; const li = document.createElement('li');
-            const isWaiting = (isChallenging && currentInviterId === child.key), isPlaying = (u.status === 'playing');
+            const u = child.val(); 
+            if (child.key === myId) return; 
+            count++; 
+            const li = document.createElement('li');
+            const isWaiting = (isChallenging && currentInviterId === child.key);
+            const isPlaying = (u.status === 'playing');
+            const canSpectate = (isPlaying && u.allowSpectators && u.activeRoomCode);
             
             const leftSpan = document.createElement('span'); 
-            const nameB = document.createElement('b'); nameB.textContent = u.name; nameB.style.cursor = 'pointer'; nameB.style.color = 'var(--link-color)'; nameB.style.textDecoration = 'underline';
+            const nameB = document.createElement('b'); 
+            nameB.textContent = u.name; 
+            nameB.style.cursor = 'pointer'; 
+            nameB.style.color = 'var(--link-color)'; 
+            nameB.style.textDecoration = 'underline';
             nameB.onclick = () => openTeamInviteModal(child.key, u.name); 
-            leftSpan.appendChild(nameB); leftSpan.appendChild(document.createElement('br'));
+            leftSpan.appendChild(nameB); 
+            leftSpan.appendChild(document.createElement('br'));
             
-            const statusSmall = document.createElement('small'); statusSmall.textContent = isPlaying ? "🟡 In Partita" : "🟢 Online"; leftSpan.appendChild(statusSmall);
+            const statusSmall = document.createElement('small'); 
+            statusSmall.textContent = canSpectate ? "🟡 In Partita (Osservabile)" : (isPlaying ? "🟡 In Partita" : "🟢 Online"); 
+            leftSpan.appendChild(statusSmall);
             
-            const btn = document.createElement('button'); btn.className = `action-btn-small ${isWaiting ? 'btn-danger' : 'btn-success'}`;
-            if (isPlaying) { btn.classList.add('btn-secondary'); btn.disabled = true; btn.textContent = "In partita"; }
-            else { if (isChallenging && !isWaiting) btn.disabled = true; btn.textContent = isWaiting ? 'In Attesa...' : 'Sfida'; btn.onclick = () => openInviteModal(child.key, u.name); }
-            li.appendChild(leftSpan); li.appendChild(btn); els.onlineUsersList.appendChild(li);
+            const btn = document.createElement('button'); 
+            
+            if (canSpectate) {
+                btn.className = "action-btn-small";
+                btn.style.backgroundColor = "#fbc02d";
+                btn.style.color = "#000";
+                btn.style.fontWeight = "bold";
+                btn.textContent = "👁️ Osserva";
+                btn.onclick = () => window.watchSpecificRoom(u.activeRoomCode, u.name);
+            } else if (isPlaying) { 
+                btn.className = "action-btn-small btn-secondary"; 
+                btn.disabled = true; 
+                btn.textContent = "In partita"; 
+            } else { 
+                btn.className = `action-btn-small ${isWaiting ? 'btn-danger' : 'btn-success'}`;
+                if (isChallenging && !isWaiting) btn.disabled = true; 
+                btn.textContent = isWaiting ? 'In Attesa...' : 'Sfida'; 
+                btn.onclick = () => openInviteModal(child.key, u.name); 
+            }
+            
+            li.appendChild(leftSpan); 
+            li.appendChild(btn); 
+            els.onlineUsersList.appendChild(li);
         });
+        
         if (count === 0) {
-            const emptyLi = document.createElement('li'); emptyLi.style.cssText = "justify-content:center; color:var(--hint-color); background:none; border:none;";
-            emptyLi.textContent = "Sei solo."; els.onlineUsersList.appendChild(emptyLi);
+            const emptyLi = document.createElement('li'); 
+            emptyLi.style.cssText = "justify-content:center; color:var(--hint-color); background:none; border:none;";
+            emptyLi.textContent = "Sei solo."; 
+            els.onlineUsersList.appendChild(emptyLi);
         }
     });
 }
@@ -1239,7 +1277,7 @@ function listenToInviteAccepted() {
     listeners.inviteAccepted = db.ref(`invite_accepted/${myId}`).on('value', snap => { const d = snap.val(); if (d && d.roomCode) { db.ref(`invite_accepted/${myId}`).remove(); isChallenging = false; window.closeInviteModal(); roomCode = d.roomCode; joinRoomLogic(false); } });
 }
 
-// --- VISUALIZZAZIONE STANZE IN ATTESA (CON SUPPORTO E ICONA CO-OP CONQUISTA) ---
+// --- VISUALIZZAZIONE STANZE IN ATTESA (CON ICONA CO-OP CONQUISTA) ---
 function listenToRooms() {
     db.ref('rooms').on('value', snap => {
         if(!els.waitingRoomsList) return; els.waitingRoomsList.innerHTML = ''; let wCount = 0;
@@ -1274,7 +1312,7 @@ function listenToRooms() {
 }
 window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
 
-// --- CREAZIONE STANZA BLINDATA ANTI-NAN ---
+// --- CREAZIONE STANZA BLINDATA ANTI-NAN (CON OPZIONE SPETTATORI) ---
 if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
     const gameType = els.gameTypeInput.value, gameMode = els.gameModeInput.value;
     if (gameType === 'tournament') { showScreen('teamsScreen'); if (gameMode === 'trn_create_team') switchTeamTab('gest'); else if (gameMode === 'trn_join_team') switchTeamTab('allteams'); else if (gameMode === 'trn_create_trn') switchTeamTab('tournaments'); return; }
@@ -1286,6 +1324,8 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
 
     currentMode = gameMode || 'standard'; 
     isSinglePlayer = (gameType === 'single'); 
+    const allowSpectators = (isSinglePlayer && els.allowSpectatorsCheckbox?.checked) || false;
+
     currentWpm = currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20); 
     baseWpm = currentWpm; 
     requestedWordCount = currentMode === 'callsign' ? 25 : Math.min(200, Math.max(1, parseInt(els.wordCountInput?.value) || 10)); 
@@ -1301,7 +1341,6 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
     roomCode = Math.floor(1000 + Math.random() * 9000).toString(); 
     gameWords = getGameWords(requestedWordCount, currentMode);
     
-    // Fallback di sicurezza per garantire che l'array parole non sia mai vuoto in co-op
     if (!gameWords || gameWords.length === 0) {
         const dict = (masterDictionary && masterDictionary.length > 0) ? masterDictionary : ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
         gameWords = dict.sort(() => 0.5 - Math.random()).slice(0, requestedWordCount).map(w => w.toUpperCase());
@@ -1325,6 +1364,12 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
         expiresAt: expiresTimestamp, 
         hostId: myId || "anon" 
     }).then(() => {
+        if (isSinglePlayer && allowSpectators) {
+            db.ref(`presence/${myId}`).update({
+                allowSpectators: true,
+                activeRoomCode: roomCode
+            });
+        }
         joinRoomLogic(false);
     }).catch(err => {
         alert("Errore Firebase durante la creazione: " + err.message);
@@ -1389,6 +1434,12 @@ function exitRoomCleanly(roomWasDeletedByHost = false) {
             db.ref(`rooms/${roomCode}`).once('value', snap => { if (snap.exists()) db.ref(`rooms/${roomCode}/players/${myId}`).remove(); }); roomCode = "";
         }
     } else { if (listeners.room) { listeners.room.off(); listeners.room = null; } }
+    
+    db.ref(`presence/${myId}`).update({
+        allowSpectators: false,
+        activeRoomCode: null
+    });
+
     hideChat(); showScreen(targetScreen);
 }
 
@@ -1509,6 +1560,10 @@ function playNextWord() {
     if (!gameRunning || currentMode === 'pingpong') return; if (wordIndex >= requestedWordCount) return finishGame();
     if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
     inputActive = true; usedReplay = false; const currentWord = gameWords[wordIndex].toUpperCase();
+    
+    // INVIO SEGNALE AUDIO LIVE PER GLI SPETTATORI
+    if (roomCode) db.ref(`rooms/${roomCode}/liveAudio`).set({ word: currentWord, wpm: currentWpm, ts: Date.now() });
+
     if (isEasyMode && isSinglePlayer && els.easyModeHint) { els.easyModeHint.textContent = currentWord.split('').sort(() => 0.5 - Math.random()).join(' '); els.easyModeHint.style.display = 'block'; } else if(els.easyModeHint) els.easyModeHint.style.display = 'none';
     playMorseAudio(currentWord, currentWpm); lastWordStartTime = Date.now(); if(els.permanentGameInput) els.permanentGameInput.focus();
 }
@@ -1605,6 +1660,11 @@ function finishGame() {
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
     localStorage.removeItem(STORAGE_ROOM_KEY); isRejoining = false; isChallenging = false; 
     
+    db.ref(`presence/${myId}`).update({
+        allowSpectators: false,
+        activeRoomCode: null
+    });
+
     showScreen('leaderboardScreen');
 
     if (currentMode === 'daily_challenge' && els.btnShareDaily) {
@@ -1840,7 +1900,6 @@ function showLeaderboardTab(tabId) {
         populateDynamicFilters('pingpong', '');
         fetchAndRenderGlobalLeaderboard('pingpong', els.lbWordFilter.value);
     } else {
-        // GESTIONE UNIFICATA PER TUTTI I GIOCHI: Parole (standard), Caratteri (chars) e Quiz
         els.lbFilterArea.style.display = 'block'; els.roomWinnerBanner.style.display = 'none'; els.waitingOthersText.style.display = 'none';
         
         let isMulti = modeValue.endsWith('_multi');
@@ -1853,7 +1912,6 @@ function showLeaderboardTab(tabId) {
         let filterPath = isMulti ? `recent_matches/${baseMode}_multi` : baseMode;
         populateDynamicFilters(filterPath, isMulti ? '' : 'single');
         
-        // Passiamo sempre la categoria estesa ('standard_single', 'standard_multi', 'quiz_single', ecc.)
         fetchAndRenderGlobalLeaderboard(`${baseMode}_${type}`, els.lbWordFilter.value);
     }
 }
@@ -2609,9 +2667,9 @@ function renderQuizUI(state) {
 
 // === BATTAGLIA REALE SERALE ===
 const BR_H_BANNER = 9;    // Ora comparsa banner (9 del mattino)
-const BR_M_BANNER = 54;    // Minuto comparsa banner (00)
+const BR_M_BANNER = 54;   // Minuto comparsa banner
 const BR_H_START = 21;    // Ora inizio partita (21 di sera)
-const BR_M_START = 30;     // Minuto inizio partita (00)
+const BR_M_START = 30;    // Minuto inizio partita
 
 let brRoomCode = "";
 let brIsPlaying = false, brAmIAlive = true;
@@ -2632,12 +2690,10 @@ window.toggleBattleRoyaleJoin = function() {
     
     db.ref(`rooms/${brRoomCode}/players/${myId}`).once('value', pSnap => {
         if (pSnap.exists()) {
-            // SEI GIÀ ISCRITTO -> TI RITIRI
             db.ref(`rooms/${brRoomCode}/players/${myId}`).remove().then(() => {
                 showToast("Ti sei ritirato dalla sfida serale.");
             });
         } else {
-            // NON SEI ISCRITTO -> TI ISCRIVI
             db.ref(`rooms/${brRoomCode}`).once('value', snap => {
                 if (!snap.exists()) {
                     db.ref(`rooms/${brRoomCode}`).set({
@@ -2659,7 +2715,6 @@ window.toggleBattleRoyaleJoin = function() {
 function checkBattleTime() {
     if (gameRunning || brIsPlaying) return; 
     
-    // SYNC CON L'OROLOGIO SERVER DI FIREBASE
     const now = new Date(Date.now() + serverTimeOffset);
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
@@ -2676,7 +2731,6 @@ function checkBattleTime() {
     if (isTime) {
         if(els.brBanner) els.brBanner.style.display = 'block';
         
-        // AGGANCIO SICURO DEL PULSANTE PARTECIPA / RITIRATI
         if(els.btnJoinBR) {
             els.btnJoinBR.onclick = window.toggleBattleRoyaleJoin;
         }
@@ -2685,12 +2739,10 @@ function checkBattleTime() {
             const players = snap.val() || {};
             const count = Object.keys(players).length;
             
-            // Aggiorna entrambi i contatori (esteso e compatto)
             if (els.brEnrolledCount) els.brEnrolledCount.textContent = count;
             if (els.brEnrolledCountCompact) els.brEnrolledCountCompact.textContent = count;
             
             if (players[myId]) {
-                // === MODALITÀ ISCRITTO (BANNER COMPATTO) ===
                 if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#4caf50'; 
                     els.brBanner.style.borderColor = '#81c784';
@@ -2706,7 +2758,6 @@ function checkBattleTime() {
                     els.btnJoinBR.style.flexGrow = '1';
                 }
             } else {
-                // === MODALITÀ NON ISCRITTO (BANNER ESTESO) ===
                 if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#e53935'; 
                     els.brBanner.style.borderColor = '#ff5252';
@@ -2948,6 +2999,60 @@ if(els.btnLeaveBR) els.btnLeaveBR.addEventListener('click', () => {
 });
 
 // =========================================================
+// MOTORE MODALITÀ SPETTATORE (OSSERVA PARTITA IN TEMPO REALE)
+// =========================================================
+
+window.watchSpecificRoom = function(code, targetName) {
+    roomCode = code;
+    showScreen('gameArea');
+    
+    if (els.permanentGameInput) {
+        els.permanentGameInput.disabled = true;
+        els.permanentGameInput.placeholder = `👁️ Stai osservando la partita di ${targetName}...`;
+        els.permanentGameInput.value = "";
+    }
+    els.wpmDisplay.textContent = "👁️ MODALITÀ SPETTATORE";
+    
+    db.ref(`rooms/${roomCode}/players`).on('value', snap => {
+        const players = snap.val() || {};
+        const hostData = Object.values(players)[0];
+        if (!hostData) return;
+
+        els.scoreDisplay.textContent = `Punti: ${hostData.score || 0} (${hostData.wpm || 0} WPM)`;
+        
+        if (els.tableBody && hostData.matchDetails) {
+            els.tableBody.innerHTML = "";
+            hostData.matchDetails.forEach(row => {
+                const tr = document.createElement('tr'); 
+                const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || "-";
+                const tdReal = document.createElement('td'); const bReal = document.createElement('b'); 
+                renderDiffSecure(bReal, row.real, row.typed || ""); 
+                tdReal.appendChild(bReal);
+                const tdPoints = document.createElement('td'); 
+                tdPoints.style.color = row.points > 0 ? "#4caf50" : "#d32f2f"; 
+                tdPoints.style.fontWeight = "bold"; 
+                tdPoints.textContent = row.points;
+                tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); 
+                els.tableBody.appendChild(tr);
+            });
+            if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
+        }
+
+        if (hostData.finished) {
+            showToast("🏁 La partita che stavi osservando è terminata!");
+            setTimeout(() => goBackToMenu(), 3000);
+        }
+    });
+
+    db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
+        const audioData = snap.val();
+        if (audioData && audioData.word) {
+            playMorseAudio(audioData.word, audioData.wpm || 20, true);
+        }
+    });
+};
+
+// =========================================================
 // MOTORE GIOCO COLLABORATIVO: CONQUISTA (TIRO ALLA FUNE ESCLUSIVO)
 // =========================================================
 
@@ -2957,16 +3062,15 @@ function startCoopSequence() {
     els.coopArea.style.display = 'flex';
     els.gameInputArea.style.display = 'flex';
     els.pingPongSendArea.style.display = 'none';
-    els.tableWrapper.style.display = 'none'; // In co-op nascondiamo la tabella classica
+    els.tableWrapper.style.display = 'none';
     
     els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
     els.scoreDisplay.textContent = "Obiettivo: 100%";
     
-    coopActiveFreqIndex = 0; // Default: Nessuna frequenza selezionata
+    coopActiveFreqIndex = 0;
     els.coopActiveFreqLabel.textContent = "Canale: Nessuno selezionato";
     els.btnCoopReleaseFreq.style.display = 'none';
 
-    // Disabilita l'input finché non si preme un pulsante di frequenza
     if (els.permanentGameInput) {
         els.permanentGameInput.disabled = true;
         els.permanentGameInput.placeholder = "Seleziona prima una Frequenza 🟢🟡🔴...";
@@ -3040,7 +3144,6 @@ function listenToCoopState() {
             return;
         }
 
-        // Sincronizza stato pulsanti / proprietari frequenza (Lock-in)
         const owners = state.freqOwners || { 1: null, 2: null, 3: null };
         [1, 2, 3].forEach(num => {
             const btn = els[`btnCoopFreq${num}`];
@@ -3067,13 +3170,11 @@ function listenToCoopState() {
             }
         });
 
-        // Aggiorna parola locale e riproduce UNA SOLA VOLTA quando cambia su Firebase
         if (coopActiveFreqIndex > 0 && state.activeWords && state.activeWords.length === 3) {
             const currentFreqWord = state.activeWords[coopActiveFreqIndex - 1];
             if (currentFreqWord && currentFreqWord !== gameWords[0]) {
                 gameWords[0] = currentFreqWord;
-                inputActive = true; // ABILITA LA SCRITTURA
-                // Piccolo ritardo di 500ms per non sovrapporre il Morse al Beep sonoro
+                inputActive = true;
                 setTimeout(() => {
                     if (gameRunning && isCoopMode && gameWords[0] === currentFreqWord) {
                         playMorseAudio(currentFreqWord, currentWpm);
@@ -3095,8 +3196,7 @@ function setupCoopFreqButtons() {
         btn.onclick = () => {
             db.ref(`rooms/${roomCode}/coop_state/freqOwners`).transaction(owners => {
                 if (!owners) owners = { 1: null, 2: null, 3: null };
-                if (owners[num] && owners[num] !== myId) return undefined; // Già presa da altri
-                // Rilascia la frequenza precedente
+                if (owners[num] && owners[num] !== myId) return undefined;
                 [1, 2, 3].forEach(n => { if (owners[n] === myId) owners[n] = null; });
                 owners[num] = myId;
                 return owners;
@@ -3106,7 +3206,6 @@ function setupCoopFreqButtons() {
                     els.coopActiveFreqLabel.textContent = `Canale: ${labels[num - 1]}`;
                     els.btnCoopReleaseFreq.style.display = 'inline-block';
                     
-                    // Sblocca input e attiva la possibilità di premere INVIO
                     els.permanentGameInput.disabled = false;
                     els.permanentGameInput.placeholder = "Digita qui...";
                     inputActive = true; 
@@ -3134,7 +3233,7 @@ function setupCoopFreqButtons() {
                 return owners;
             }, () => {
                 coopActiveFreqIndex = 0;
-                inputActive = false; // BLOCCA INVIO
+                inputActive = false;
                 els.permanentGameInput.disabled = true;
                 els.permanentGameInput.placeholder = "Seleziona prima una Frequenza 🟢🟡🔴...";
                 els.permanentGameInput.value = "";
@@ -3162,7 +3261,6 @@ handleWordSubmission = function(userWord) {
     const gain = coopActiveFreqIndex === 1 ? 4 : (coopActiveFreqIndex === 2 ? 7 : 12);
     const penalty = coopActiveFreqIndex === 1 ? 2 : (coopActiveFreqIndex === 2 ? 3 : 5);
 
-    // Blocca input per 2 secondi di cooldown
     inputActive = false;
     els.permanentGameInput.disabled = true;
 
@@ -3196,9 +3294,8 @@ handleWordSubmission = function(userWord) {
         els.permanentGameInput.disabled = false;
         els.permanentGameInput.value = "";
         els.permanentGameInput.focus();
-        inputActive = true; // RIABILITA INVIO E SCRITTURA DOPO I 2 SECONDI
+        inputActive = true;
         
-        // RIPRODUCE L'AUDIO QUI SOLO SE HAI SBAGLIATO (per riprovare la stessa parola)
         if (!isCorrect && gameWords[0]) {
             playMorseAudio(gameWords[0], currentWpm);
         }
@@ -3210,18 +3307,54 @@ function finishCoopGame(won) {
     clearAllTimers();
     db.ref(`rooms/${roomCode}/coop_state`).off();
 
+    // 1. SALVATAGGIO PARITA CONTRO AVVERSARIO IRREALE (AI)
+    db.ref(`rooms/${roomCode}/players`).once('value', snap => {
+        const players = snap.val() || {};
+        const namesList = Object.values(players).map(p => p.name).join(", ");
+        const finalScore = won ? 100 : 75;
+
+        const fakeHeadToHead = {
+            "team_real": {
+                id: myId,
+                name: `👥 ${namesList || "Squadra"}`,
+                score: finalScore,
+                wpm: currentWpm,
+                finished: true
+            },
+            "team_ai": {
+                id: "ai_enemy",
+                name: "🤖 Disturbo Nemico (AI)",
+                score: won ? 99 : 100,
+                wpm: currentWpm + 5,
+                finished: true
+            }
+        };
+
+        db.ref(`rooms/${roomCode}/players`).set(fakeHeadToHead);
+
+        const matchId = Date.now().toString();
+        const matchData = {
+            players: Object.values(fakeHeadToHead),
+            mode: "conquest",
+            wordCount: "Co-op",
+            date: new Date().toLocaleDateString('it-IT'),
+            ts: firebase.database.ServerValue.TIMESTAMP
+        };
+        db.ref(`leaderboard/recent_matches/conquest_multi/all/${matchId}`).set(matchData);
+    });
+
     showScreen('leaderboardScreen');
     els.tableWrapper.style.display = 'block';
     els.coopArea.style.display = 'none';
 
     if (won) {
         showToast("🏆 VITTORIA DI SQUADRA! Territorio Conquistato!");
-        els.roomWinnerBanner.textContent = "🏆 MISSIONE COMPIUTA: TERRITORIO CONQUISTATO!";
+        els.roomWinnerBanner.textContent = "🏆 MISSIONE COMPIUTA CONTRO IL DISTURBO NEMICO!";
         els.roomWinnerBanner.style.color = "#4caf50";
         updateActivity(true);
     } else {
         showToast("💀 TEMPO SCADUTO! Il disturbo nemico ha vinto.");
-        els.roomWinnerBanner.textContent = "💀 MISSIONE FALLITA: TEMPO SCADUTO";
+        els.roomWinnerBanner.textContent = "💀 MISSIONE FALLITA: HA VINTO L'AVVERSARIO IRREALE";
         els.roomWinnerBanner.style.color = "#d32f2f";
         updateActivity(false);
     }
