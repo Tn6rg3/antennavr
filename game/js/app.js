@@ -1498,14 +1498,13 @@ if(els.btnDeclineDaily) els.btnDeclineDaily.addEventListener('click', () => {
     localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
     els.dailyChallengeModal.style.display = 'none';
 });
-if (els.btnCloseBRBanner) {
-    els.btnCloseBRBanner.addEventListener('click', () => {
+if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
         if (els.brBanner) els.brBanner.style.display = 'none';
         if (brBannerTimeout) clearTimeout(brBannerTimeout);
         brBannerDismissedToday = true; // Impedisce che ricompaia a ogni controllo per il resto del giorno
         db.ref(`rooms/${brRoomCode}/players`).off('value'); // Risparmia banda Firebase spegnendo il listener
     });
-}
+
 function exitRoomCleanly(roomWasDeletedByHost = false) {
     clearAllTimers();
     let targetScreen = 'setupScreen'; const amIHost = (myId === roomHostId); localStorage.removeItem(STORAGE_ROOM_KEY); isRejoining = false; isChallenging = false; currentInviterId = null;
