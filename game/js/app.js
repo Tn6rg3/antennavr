@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.135";
+const APP_VERSION = "20260805.136";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -3870,19 +3870,35 @@ handleWordSubmission = function(userWord) {
 
     inputActive = false;
 
-    if (isCorrect) {
-        currentWpm += 2;
-        if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
-        showToast(`✅ CORRETTO! +${gain}% (Velocità -> ${currentWpm} WPM)`);
-        playBeep(880, 0.1);
+if (isCorrect) {
+    currentWpm += 2;
+    if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
+    showToast(`✅ CORRETTO! +${gain}% (Velocità -> ${currentWpm} WPM)`);
+    playBeep(880, 0.1);
 
-        db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
-            if (!state || state.status !== 'playing') return state;
-            state.progress = Math.min(100, (state.progress || 0) + gain);
+    db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
+        if (!state || state.status !== 'playing') return state;
+
+        state.progress = Math.min(100, (state.progress || 0) + gain);
+
+        // Se manca l'array, inizializziamo una sola volta
+        if (!Array.isArray(state.activeWords) || state.activeWords.length !== 3) {
             state.activeWords = generateCoopTripleWords();
             return state;
-        });
-    } else {
+        }
+
+        // Aggiorna SOLO la parola del canale attivo di questo giocatore
+        const idx = coopActiveFreqIndex - 1; // 0..2
+        if (idx >= 0 && idx < 3) {
+            const nextWords = generateCoopTripleWords();
+            state.activeWords[idx] = nextWords[idx];
+        }
+
+        return state;
+    });
+}
+        
+     else {
         currentWpm = Math.max(10, currentWpm - 2);
         if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
         showToast(`❌ ERRORE! -${penalty}% (Velocità -> ${currentWpm} WPM)`);
