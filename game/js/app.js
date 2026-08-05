@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.132";
+const APP_VERSION = "20260805.133";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1617,10 +1617,10 @@ function listenToRooms() {
 }
 
 
-// ============================================================================
-// 2. USCITA DALLA STANZA SENZA ELIMINARLA DAL DATABASE
-// ============================================================================
 
+// ============================================================================
+// 1. USCITA PULITA DALLA STANZA
+// ============================================================================
 function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     clearAllTimers();
     
@@ -1632,7 +1632,7 @@ function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     let targetScreen = 'setupScreen'; 
     const amIHost = (myId === roomHostId); 
 
-    // Stacchiamo i listener della stanza corrente per non sovraccaricare la memoria
+    // Stacchiamo i listener della stanza corrente
     if (listeners.players && roomCode) { db.ref(`rooms/${roomCode}/players`).off('value', listeners.players); listeners.players = null; }
     if (listeners.roomLb && roomCode) { db.ref(`rooms/${roomCode}`).off('value', listeners.roomLb); listeners.roomLb = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
@@ -1686,57 +1686,70 @@ function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     }
 }
 
-
 // ============================================================================
-// 3. LISTENER SEPARATI PER I PULSANTI DI AZIONE
-// ============================================================================
-
-// 1. Pulsante "Abbandona" durante una partita attiva -> isExplicitQuit = true
-if(els.quitGameBtn) els.quitGameBtn.addEventListener('click', () => { 
-    if (confirm("Vuoi abbandonare la partita?")) { 
-        gameRunning = false; 
-        exitRoomCleanly(false, true); 
-    } 
-});
-
-// 2. Pulsante "Elimina Stanza" nella lobby -> roomWasDeletedByHost = true (cancella la stanza)
-if(els.deleteRoomBtn) els.deleteRoomBtn.addEventListener('click', () => { 
-    if (confirm("Eliminare questa stanza?")) {
-        db.ref(`public_lobby_rooms/${roomCode}`).remove();
-        db.ref(`rooms/${roomCode}`).remove().then(() => exitRoomCleanly(true, false)); 
-    }
-});
-
-// 3. Pulsante "Esci dalla Stanza" nella lobby -> ENTRAMBI FALSE! 
-// Lascia intatta la stanza, permettendole di essere visualizzata nella Bacheca Sfide.
-if(els.leaveLobbyBtn) els.leaveLobbyBtn.addEventListener('click', () => {
-    exitRoomCleanly(false, false); 
-});
-// ============================================================================
-// LISTENER DEI PULSANTI DI USCITA
+// 2. GESTIONE PULSANTI DI AZIONE E USCITA (BLINDATA ANTI-DUPLICAZIONE)
 // ============================================================================
 
-// 1. Tasto "Abbandona" durante una partita in corso -> isExplicitQuit = true (forfait / chiusura)
-if(els.quitGameBtn) els.quitGameBtn.addEventListener('click', () => { 
-    if (confirm("Vuoi abbandonare la partita?")) { 
-        gameRunning = false; 
-        exitRoomCleanly(false, true); 
-    } 
-});
+// 1. Tasto "Abbandona" partita in corso -> isExplicitQuit = true
+if (els.quitGameBtn) {
+    els.quitGameBtn.onclick = function() { 
+        if (confirm("Vuoi abbandonare la partita?")) { 
+            gameRunning = false; 
+            exitRoomCleanly(false, true); 
+        } 
+    };
+}
 
-// 2. Tasto "Elimina Stanza" -> roomWasDeletedByHost = true (cancella da Firebase e da Bacheca)
-if(els.deleteRoomBtn) els.deleteRoomBtn.addEventListener('click', () => { 
-    if (confirm("Eliminare questa stanza?")) {
-        db.ref(`public_lobby_rooms/${roomCode}`).remove();
-        db.ref(`rooms/${roomCode}`).remove().then(() => exitRoomCleanly(true, true)); 
-    }
-});
+// 2. Tasto "Elimina Stanza" nella lobby -> roomWasDeletedByHost = true (con protezione anti-doppio clic)
+if (els.deleteRoomBtn) {
+    els.deleteRoomBtn.onclick = function() {
+        // Evita ripetizioni se l'eliminazione è già in corso
+        if (window.isDeletingRoom) return;
 
-// 3. Tasto "Esci dalla Stanza" in lobby -> ENTRAMBI FALSE!
-// La stanza rimane in Bacheca Sfide, ma non compare il banner di rientro automatico.
-if(els.leaveLobbyBtn) els.leaveLobbyBtn.addEventListener('click', () => {
-    exitRoomCleanly(false, false); 
-});
+        if (confirm("Eliminare questa stanza?")) {
+            window.isDeletingRoom = true;
+            els.deleteRoomBtn.disabled = true;
+
+            const currentCode = roomCode;
+            // 1. Puliamo prima l'interfaccia e spegniamo i listener per evitare reazioni a catena
+            exitRoomCleanly(true, false);
+
+            // 2. Eliminiamo i nodi da Firebase in sicurezza
+            if (currentCode) {
+                db.ref(`public_lobby_rooms/${currentCode}`).remove();
+                db.ref(`rooms/${currentCode}`).remove().finally(() => {
+                    window.isDeletingRoom = false;
+                    if (els.deleteRoomBtn) els.deleteRoomBtn.disabled = false;
+                });
+            } else {
+                window.isDeletingRoom = false;
+                if (els.deleteRoomBtn) els.deleteRoomBtn.disabled = false;
+            }
+        }
+    };
+}
+
+// 3. Tasto "Esci dalla Stanza" nella lobby -> ENTRAMBI FALSE! 
+// Lascia intatta la stanza su Firebase, permettendole di comparire nella Bacheca Sfide.
+if (els.leaveLobbyBtn) {
+    els.leaveLobbyBtn.onclick = function() {
+        exitRoomCleanly(false, false); 
+    };
+}
+
+// 4. Tasto "Avvia Partita" in multiplayer
+if (els.startMultiplayerBtn) {
+    els.startMultiplayerBtn.onclick = function() {
+        db.ref(`rooms/${roomCode}/players`).once('value', snap => {
+            if (currentMode === 'pingpong' && (snap.exists() ? Object.keys(snap.val()).length : 0) < 2) {
+                return alert("Ping Pong richiede almeno 2 giocatori in stanza per iniziare!");
+            }
+            db.ref(`rooms/${roomCode}`).update({ status: 'countdown', expiresAt: null });
+            db.ref(`public_lobby_rooms/${roomCode}`).remove();
+        });
+    };
+}
+
 
 function joinRoomLogic(isReconnect = false) {
     gameRunning = false; 
