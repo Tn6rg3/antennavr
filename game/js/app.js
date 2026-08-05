@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.126"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260805.127"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1920,15 +1920,23 @@ function sendAutoPingPongWord() {
 }
 
 function finishGame() {
-    gameRunning = false; inputActive = false; if(els.permanentGameInput) els.permanentGameInput.blur();
+    gameRunning = false; 
+    inputActive = false; 
+    if(els.permanentGameInput) els.permanentGameInput.blur();
     clearAllTimers();
+    
     if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
-    localStorage.removeItem(STORAGE_ROOM_KEY); isRejoining = false; isChallenging = false; 
+    
+    // Rimuoviamo la stanza dal localStorage al termine regolare della partita
+    localStorage.removeItem(STORAGE_ROOM_KEY); 
+    isRejoining = false; 
+    isChallenging = false; 
     
     db.ref(`presence/${myId}`).update({
         allowSpectators: false,
-        activeRoomCode: null
+        activeRoomCode: null,
+        status: 'online' // Riporta lo stato dell'utente a online e non più in partita
     });
 
     showScreen('leaderboardScreen');
@@ -1949,7 +1957,11 @@ function finishGame() {
         els.btnShareDaily.style.display = 'none';
     }
 
-    if (roomCode) { const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`); myPlayerRef.update({ finished: true, score: totalScore, wpm: currentWpm, matchDetails: matchDetailsArray }); myPlayerRef.onDisconnect().cancel(); }
+    if (roomCode) { 
+        const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`); 
+        myPlayerRef.update({ finished: true, score: totalScore, wpm: currentWpm, matchDetails: matchDetailsArray }); 
+        myPlayerRef.onDisconnect().cancel(); 
+    }
     
     if (totalScore > 0 && !roomCode.startsWith("TRN_")) {
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
@@ -1997,7 +2009,15 @@ function finishGame() {
     else if (isSinglePlayer) { activeTab = "std_single"; showLeaderboardTab('tabGlobalStandardSingleBtn'); }
     else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
 }
-if(els.quitGameBtn) els.quitGameBtn.addEventListener('click', () => { if (confirm("Vuoi abbandonare la partita?")) { gameRunning = false; exitRoomCleanly(); } });
+
+// GESTIONE DEI PULSANTI DI AZIONE E USCITA
+if(els.quitGameBtn) els.quitGameBtn.addEventListener('click', () => { 
+    if (confirm("Vuoi abbandonare la partita?")) { 
+        gameRunning = false; 
+        exitRoomCleanly(false, true); // (roomWasDeletedByHost = false, isExplicitQuit = true)
+    } 
+});
+
 if(els.startMultiplayerBtn) els.startMultiplayerBtn.addEventListener('click', () => {
     db.ref(`rooms/${roomCode}/players`).once('value', snap => {
         if (currentMode === 'pingpong' && (snap.exists() ? Object.keys(snap.val()).length : 0) < 2) return alert("Ping Pong richiede almeno 2 giocatori in stanza per iniziare!");
@@ -2005,13 +2025,18 @@ if(els.startMultiplayerBtn) els.startMultiplayerBtn.addEventListener('click', ()
         db.ref(`public_lobby_rooms/${roomCode}`).remove();
     });
 });
+
 if(els.deleteRoomBtn) els.deleteRoomBtn.addEventListener('click', () => { 
     if (confirm("Eliminare questa stanza?")) {
         db.ref(`public_lobby_rooms/${roomCode}`).remove();
-        db.ref(`rooms/${roomCode}`).remove().then(() => exitRoomCleanly(true)); 
+        db.ref(`rooms/${roomCode}`).remove().then(() => exitRoomCleanly(true, true)); 
     }
 });
-if(els.leaveLobbyBtn) els.leaveLobbyBtn.addEventListener('click', () => exitRoomCleanly());
+
+if(els.leaveLobbyBtn) els.leaveLobbyBtn.addEventListener('click', () => {
+    exitRoomCleanly(false, true); // isExplicitQuit = true 
+});
+
 if(els.deleteDataBtn) els.deleteDataBtn.addEventListener('click', async () => {
     if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati. Confermi?")) {
         try {
