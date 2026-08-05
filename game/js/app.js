@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.122"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260805.123"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1281,8 +1281,9 @@ function listenToInviteAccepted() {
     listeners.inviteAccepted = db.ref(`invite_accepted/${myId}`).on('value', snap => { const d = snap.val(); if (d && d.roomCode) { db.ref(`invite_accepted/${myId}`).remove(); isChallenging = false; window.closeInviteModal(); roomCode = d.roomCode; joinRoomLogic(false); } });
 }
 
+
 // ============================================================================
-// 1. SHOW SCREEN (Con reset corretto dei listener e gestione Chat Globale)
+// 1. SHOW SCREEN (Gestione navigazione, spegnimento listener e tasto Rientra)
 // ============================================================================
 function showScreen(screenId) {
     clearAllTimers();
@@ -1304,26 +1305,42 @@ function showScreen(screenId) {
         } catch(e) {}
     }
 
-    // --- GESTIONE OTTIMIZZATA DEI LISTENER GENERALI ---
+    // --- GESTIONE OTTIMIZZATA DEI LISTENER E DEL TASTO RIENTRA ---
     if (screenId === 'setupScreen') {
         const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
-        if (!lastRoom && els.rejoinContainer) els.rejoinContainer.style.display = 'none';
+        if (!lastRoom && els.rejoinContainer) {
+            els.rejoinContainer.style.display = 'none';
+        } else if (lastRoom && els.rejoinContainer) {
+            // Se c'è una stanza attiva salvata in memoria, mostriamo il tasto per rientrare in lobby
+            els.rejoinContainer.style.display = 'block';
+            if (els.rejoinGameBtn) {
+                els.rejoinGameBtn.onclick = () => {
+                    roomCode = lastRoom;
+                    isRejoining = true;
+                    joinRoomLogic(false);
+                };
+            }
+        }
         
-        // Riaccendiamo sempre le liste nel menu principale
+        // Riaccendiamo sempre le liste di Presenza e Bacheca nel menu principale
         listenToOnlineUsers();
         listenToRooms();
     } else {
         // Nelle altre schermate spegniamo i listener pesanti E AZZERIAMO LA VARIABILE
         if (listeners.presence) {
-            listeners.presence.ref.off('child_added', listeners.presence.onAdded);
-            listeners.presence.ref.off('child_changed', listeners.presence.onChanged);
-            listeners.presence.ref.off('child_removed', listeners.presence.onRemoved);
+            if (listeners.presence.ref) {
+                listeners.presence.ref.off('child_added', listeners.presence.onAdded);
+                listeners.presence.ref.off('child_changed', listeners.presence.onChanged);
+                listeners.presence.ref.off('child_removed', listeners.presence.onRemoved);
+            }
             listeners.presence = null;
         }
         if (listeners.roomsList) {
-            listeners.roomsList.ref.off('child_added', listeners.roomsList.onAdded);
-            listeners.roomsList.ref.off('child_changed', listeners.roomsList.onChanged);
-            listeners.roomsList.ref.off('child_removed', listeners.roomsList.onRemoved);
+            if (listeners.roomsList.ref) {
+                listeners.roomsList.ref.off('child_added', listeners.roomsList.onAdded);
+                listeners.roomsList.ref.off('child_changed', listeners.roomsList.onChanged);
+                listeners.roomsList.ref.off('child_removed', listeners.roomsList.onRemoved);
+            }
             listeners.roomsList = null;
         }
     }
@@ -1355,6 +1372,7 @@ function showScreen(screenId) {
         }
     }
 }
+
 
 // ============================================================================
 // 2. GO BACK TO MENU (Sblocca modali e forza il ritorno alla home)
@@ -1591,55 +1609,67 @@ function exitRoomCleanly(roomWasDeletedByHost = false) {
 
     let targetScreen = 'setupScreen'; 
     const amIHost = (myId === roomHostId); 
-    localStorage.removeItem(STORAGE_ROOM_KEY); 
-    isRejoining = false; 
-    isChallenging = false; 
-    currentInviterId = null;
 
+    // Sganciamo i listener in tempo reale della stanza corrente
     if (listeners.players && roomCode) { db.ref(`rooms/${roomCode}/players`).off('value', listeners.players); listeners.players = null; }
     if (listeners.roomLb && roomCode) { db.ref(`rooms/${roomCode}`).off('value', listeners.roomLb); listeners.roomLb = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
+    if (listeners.room) { listeners.room.off(); listeners.room = null; }
+    if (listeners.pingPong && roomCode) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     
     if (roomCode) {
         if (roomCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
         
-        // 2. SE SEI L'HOST CHE ABBANDONA: Elimina la stanza e la lobby per far disconnettere subito gli spettatori
-        if (amIHost && !roomCode.startsWith("TRN_")) {
+        // 2. SE L'HOST HA CLICCATO ESPLICITAMENTE "ELIMINA STANZA" (roomWasDeletedByHost === true)
+        if (roomWasDeletedByHost) {
             db.ref(`rooms/${roomCode}`).remove();
             db.ref(`public_lobby_rooms/${roomCode}`).remove();
-        } else if (!roomWasDeletedByHost) {
-            if (listeners.room) { listeners.room.off(); listeners.room = null; }
-            if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
-            db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
-            db.ref(`rooms/${roomCode}`).once('value', snap => { 
-                if (snap.exists()) {
-                    db.ref(`rooms/${roomCode}/players/${myId}`).remove();
-                    // Aggiorniamo il contatore dei giocatori rimanenti nella lobby
-                    const pCount = Math.max(0, Object.keys(snap.val().players || {}).length - 1);
-                    if (pCount === 0) {
-                        db.ref(`public_lobby_rooms/${roomCode}`).remove();
-                    } else {
-                        db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(pCount);
-                    }
-                } 
-            });
+            localStorage.removeItem(STORAGE_ROOM_KEY);
+            roomCode = "";
+        } 
+        // 3. SE INVECE L'UTENTE ESCE TEMPORANEAMENTE DALLA STANZA ("Esci dalla Stanza" o navigazione)
+        else {
+            if (amIHost && !roomCode.startsWith("TRN_")) {
+                // SE SEI L'HOST: La stanza NON viene toccata e resta in bacheca per gli altri giocatori!
+                // Manteniamo STORAGE_ROOM_KEY in localStorage così appare il tasto "🔄 RIENTRA NELLA PARTITA"
+                db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
+            } else {
+                // SE SEI UN OSPITE: Rimuoviamo l'ospite dalla stanza e aggiorniamo il contatore in bacheca
+                db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
+                const currentRoomCode = roomCode;
+                db.ref(`rooms/${currentRoomCode}`).once('value', snap => { 
+                    if (snap.exists()) {
+                        db.ref(`rooms/${currentRoomCode}/players/${myId}`).remove();
+                        const pCount = Math.max(0, Object.keys(snap.val().players || {}).length - 1);
+                        if (pCount === 0) {
+                            db.ref(`public_lobby_rooms/${currentRoomCode}`).remove();
+                            db.ref(`rooms/${currentRoomCode}`).remove();
+                        } else {
+                            db.ref(`public_lobby_rooms/${currentRoomCode}/pCount`).set(pCount);
+                        }
+                    } 
+                });
+                localStorage.removeItem(STORAGE_ROOM_KEY);
+                roomCode = "";
+            }
         }
-        roomCode = "";
     } else { 
         if (listeners.room) { listeners.room.off(); listeners.room = null; } 
     }
     
-    // 3. RESET STATO LOCALE E PRESENZA ONLINE
+    // 4. RESET STATO LOCALE E PRESENZA ONLINE
     db.ref(`presence/${myId}`).update({
         allowSpectators: false,
-        activeRoomCode: null
+        activeRoomCode: null,
+        status: 'online'
     });
 
     hideChat(); 
     showScreen(targetScreen);
 }
 
-
+    
+    
 function joinRoomLogic(isReconnect = false) {
     gameRunning = false; localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
     const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
