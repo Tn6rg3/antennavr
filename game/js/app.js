@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.123"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260805.124"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -3351,7 +3351,9 @@ window.watchSpecificRoom = function(code, targetName) {
         els.permanentGameInput.placeholder = `👁️ Stai osservando la partita di ${targetName}...`;
         els.permanentGameInput.value = "";
     }
-    els.wpmDisplay.textContent = "👁️ MODALITÀ SPETTATORE";
+    
+    // Impostazione iniziale WPM
+    els.wpmDisplay.textContent = "👁️ SPETTATORE | WPM: --";
     if (els.spectatorsCountDisplay) els.spectatorsCountDisplay.style.display = 'none';
 
     // 1. Registriamo la nostra presenza come "spettatore" nel sottonodo della stanza
@@ -3359,11 +3361,10 @@ window.watchSpecificRoom = function(code, targetName) {
     mySpectatorRef.set({ name: myName, ts: firebase.database.ServerValue.TIMESTAMP });
     mySpectatorRef.onDisconnect().remove();
     
-    // 2. Controllo di Stato del Giocatore / Partita
+    // 2. Ascolto di Stato del Giocatore e Tabellone Parole
     const roomRef = db.ref(`rooms/${roomCode}`);
     const onRoomChange = roomRef.on('value', snap => {
         if (!snap.exists()) {
-            // Se l'host ha cancellato la stanza o è uscito
             showToast("⚠️ Il giocatore ha terminato o abbandonato la partita.");
             stopWatchingCleanly();
             return;
@@ -3379,44 +3380,74 @@ window.watchSpecificRoom = function(code, targetName) {
             return;
         }
 
-        // Aggiorniamo punti e velocità del giocatore osservato
-        els.scoreDisplay.textContent = `Punti: ${hostData.score || 0} (${hostData.wpm || 0} WPM)`;
+        // Aggiorniamo Punti e Velocità base del giocatore
+        const currentSpeed = hostData.wpm || roomData.wpm || 20;
+        els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${currentSpeed}`;
+        els.scoreDisplay.textContent = `Punti: ${hostData.score || 0}`;
         
-        // Aggiorniamo il tabellone con le parole tentate dall'host
+        // Aggiorniamo il tabellone con le parole giocate e FORZIAMO LO SCORRIMENTO
         if (els.tableBody && hostData.matchDetails) {
             els.tableBody.innerHTML = "";
             hostData.matchDetails.forEach(row => {
                 const tr = document.createElement('tr'); 
-                const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || "-";
-                const tdReal = document.createElement('td'); const bReal = document.createElement('b'); 
+                const tdTyped = document.createElement('td'); 
+                tdTyped.textContent = row.typed || "-";
+                
+                const tdReal = document.createElement('td'); 
+                const bReal = document.createElement('b'); 
                 renderDiffSecure(bReal, row.real, row.typed || ""); 
                 tdReal.appendChild(bReal);
+                
                 const tdPoints = document.createElement('td'); 
                 tdPoints.style.color = row.points > 0 ? "#4caf50" : "#d32f2f"; 
                 tdPoints.style.fontWeight = "bold"; 
                 tdPoints.textContent = row.points;
-                tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); 
+                
+                tr.appendChild(tdTyped); 
+                tr.appendChild(tdReal); 
+                tr.appendChild(tdPoints); 
                 els.tableBody.appendChild(tr);
             });
-            if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
+
+            // RITARDO DI 50ms PER PERMETTERE AL BROWSER DI RICALCOLARE L'ALTEZZA E SCORRERE IN FONDO
+            setTimeout(() => {
+                if (els.tableWrapper) {
+                    els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
+                }
+            }, 50);
         }
     });
 
-    // 3. Riproduzione Audio Live per lo Spettatore
+    // 3. Riproduzione Audio Live e WPM in tempo reale della parola in trasmissione
     const onAudioChange = db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
         const audioData = snap.val();
         if (audioData && audioData.word) {
-            playMorseAudio(audioData.word, audioData.wpm || 20, true);
+            const liveWpm = audioData.wpm || 20;
+            // Mostriamo il WPM istantaneo della parola che sta suonando in questo momento
+            els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm}`;
+            playMorseAudio(audioData.word, liveWpm, true);
         }
     });
 
-    // Supporto per sganciare i listener se si clicca su "Abbandona"
+    // Supporto per sganciare i listener in caso di uscita
     window.currentSpectatorCleanup = function() {
         roomRef.off('value', onRoomChange);
         db.ref(`rooms/${roomCode}/liveAudio`).off('value', onAudioChange);
         mySpectatorRef.remove();
     };
 };
+
+function stopWatchingCleanly() {
+    if (typeof window.currentSpectatorCleanup === 'function') {
+        window.currentSpectatorCleanup();
+        window.currentSpectatorCleanup = null;
+    }
+    setTimeout(() => {
+        roomCode = "";
+        goBackToMenu();
+    }, 2500);
+}
+
 
 function stopWatchingCleanly() {
     if (typeof window.currentSpectatorCleanup === 'function') {
