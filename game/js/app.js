@@ -1582,20 +1582,39 @@ if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
 
 function exitRoomCleanly(roomWasDeletedByHost = false) {
     clearAllTimers();
-    let targetScreen = 'setupScreen'; const amIHost = (myId === roomHostId); localStorage.removeItem(STORAGE_ROOM_KEY); isRejoining = false; isChallenging = false; currentInviterId = null;
+    
+    // 1. SGANCIO PULITO SE SI ERA IN MODALITÀ SPETTATORE
+    if (typeof window.currentSpectatorCleanup === 'function') {
+        window.currentSpectatorCleanup();
+        window.currentSpectatorCleanup = null;
+    }
+
+    let targetScreen = 'setupScreen'; 
+    const amIHost = (myId === roomHostId); 
+    localStorage.removeItem(STORAGE_ROOM_KEY); 
+    isRejoining = false; 
+    isChallenging = false; 
+    currentInviterId = null;
+
     if (listeners.players && roomCode) { db.ref(`rooms/${roomCode}/players`).off('value', listeners.players); listeners.players = null; }
     if (listeners.roomLb && roomCode) { db.ref(`rooms/${roomCode}`).off('value', listeners.roomLb); listeners.roomLb = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
+    
     if (roomCode) {
         if (roomCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
-        if (!roomWasDeletedByHost && amIHost && !roomCode.startsWith("TRN_")) {} else {
+        
+        // 2. SE SEI L'HOST CHE ABBANDONA: Elimina la stanza e la lobby per far disconnettere subito gli spettatori
+        if (amIHost && !roomCode.startsWith("TRN_")) {
+            db.ref(`rooms/${roomCode}`).remove();
+            db.ref(`public_lobby_rooms/${roomCode}`).remove();
+        } else if (!roomWasDeletedByHost) {
             if (listeners.room) { listeners.room.off(); listeners.room = null; }
             if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
             db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
             db.ref(`rooms/${roomCode}`).once('value', snap => { 
                 if (snap.exists()) {
                     db.ref(`rooms/${roomCode}/players/${myId}`).remove();
-                    // Aggiorniamo il contatore dei giocatori nell'indice
+                    // Aggiorniamo il contatore dei giocatori rimanenti nella lobby
                     const pCount = Math.max(0, Object.keys(snap.val().players || {}).length - 1);
                     if (pCount === 0) {
                         db.ref(`public_lobby_rooms/${roomCode}`).remove();
@@ -1603,17 +1622,24 @@ function exitRoomCleanly(roomWasDeletedByHost = false) {
                         db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(pCount);
                     }
                 } 
-            }); roomCode = "";
+            });
         }
-    } else { if (listeners.room) { listeners.room.off(); listeners.room = null; } }
+        roomCode = "";
+    } else { 
+        if (listeners.room) { listeners.room.off(); listeners.room = null; } 
+    }
     
+    // 3. RESET STATO LOCALE E PRESENZA ONLINE
     db.ref(`presence/${myId}`).update({
         allowSpectators: false,
         activeRoomCode: null
     });
 
-    hideChat(); showScreen(targetScreen);
+    hideChat(); 
+    showScreen(targetScreen);
 }
+
+
 function joinRoomLogic(isReconnect = false) {
     gameRunning = false; localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
     const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
@@ -1766,6 +1792,25 @@ function startCountdownSequence() {
         });
     }
     if(els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`; if(els.scoreDisplay) els.scoreDisplay.textContent = `Punti: 0`;
+
+    // --- LOGICA CONTATORE SPETTATORI IN GIOCO ---
+    if (isSinglePlayer && els.allowSpectatorsCheckbox && els.allowSpectatorsCheckbox.checked) {
+        if (els.spectatorsCountDisplay) {
+            els.spectatorsCountDisplay.style.display = 'inline-block';
+            els.spectatorsCountDisplay.textContent = '👁️ 0';
+        }
+        // Ascolta in tempo reale quanti spettatori entrano nella partita
+        db.ref(`rooms/${roomCode}/spectators`).on('value', snap => {
+            const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+            if (els.spectatorsCountDisplay) {
+                els.spectatorsCountDisplay.textContent = `👁️ ${count}`;
+            }
+        });
+    } else {
+        if (els.spectatorsCountDisplay) els.spectatorsCountDisplay.style.display = 'none';
+    }
+    // --------------------------------------------
+
     if (!isRejoining) { totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0; usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = []; }
     if(els.tableBody) els.tableBody.innerHTML = ""; window.lastPlayedWordId = 0; window.lastSeenGuessId = 0;
     if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
@@ -3277,14 +3322,37 @@ window.watchSpecificRoom = function(code, targetName) {
         els.permanentGameInput.value = "";
     }
     els.wpmDisplay.textContent = "👁️ MODALITÀ SPETTATORE";
-    
-    db.ref(`rooms/${roomCode}/players`).on('value', snap => {
-        const players = snap.val() || {};
-        const hostData = Object.values(players)[0];
-        if (!hostData) return;
+    if (els.spectatorsCountDisplay) els.spectatorsCountDisplay.style.display = 'none';
 
+    // 1. Registriamo la nostra presenza come "spettatore" nel sottonodo della stanza
+    const mySpectatorRef = db.ref(`rooms/${roomCode}/spectators/${myId}`);
+    mySpectatorRef.set({ name: myName, ts: firebase.database.ServerValue.TIMESTAMP });
+    mySpectatorRef.onDisconnect().remove();
+    
+    // 2. Controllo di Stato del Giocatore / Partita
+    const roomRef = db.ref(`rooms/${roomCode}`);
+    const onRoomChange = roomRef.on('value', snap => {
+        if (!snap.exists()) {
+            // Se l'host ha cancellato la stanza o è uscito
+            showToast("⚠️ Il giocatore ha terminato o abbandonato la partita.");
+            stopWatchingCleanly();
+            return;
+        }
+
+        const roomData = snap.val();
+        const players = roomData.players || {};
+        const hostData = Object.values(players)[0];
+
+        if (!hostData || hostData.finished) {
+            showToast("🏁 La partita che stavi osservando è terminata!");
+            stopWatchingCleanly();
+            return;
+        }
+
+        // Aggiorniamo punti e velocità del giocatore osservato
         els.scoreDisplay.textContent = `Punti: ${hostData.score || 0} (${hostData.wpm || 0} WPM)`;
         
+        // Aggiorniamo il tabellone con le parole tentate dall'host
         if (els.tableBody && hostData.matchDetails) {
             els.tableBody.innerHTML = "";
             hostData.matchDetails.forEach(row => {
@@ -3302,20 +3370,34 @@ window.watchSpecificRoom = function(code, targetName) {
             });
             if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
         }
-
-        if (hostData.finished) {
-            showToast("🏁 La partita che stavi osservando è terminata!");
-            setTimeout(() => goBackToMenu(), 3000);
-        }
     });
 
-    db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
+    // 3. Riproduzione Audio Live per lo Spettatore
+    const onAudioChange = db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
         const audioData = snap.val();
         if (audioData && audioData.word) {
             playMorseAudio(audioData.word, audioData.wpm || 20, true);
         }
     });
+
+    // Supporto per sganciare i listener se si clicca su "Abbandona"
+    window.currentSpectatorCleanup = function() {
+        roomRef.off('value', onRoomChange);
+        db.ref(`rooms/${roomCode}/liveAudio`).off('value', onAudioChange);
+        mySpectatorRef.remove();
+    };
 };
+
+function stopWatchingCleanly() {
+    if (typeof window.currentSpectatorCleanup === 'function') {
+        window.currentSpectatorCleanup();
+        window.currentSpectatorCleanup = null;
+    }
+    setTimeout(() => {
+        roomCode = "";
+        goBackToMenu();
+    }, 2500);
+}
 
 // =========================================================
 // MOTORE GIOCO COLLABORATIVO: CONQUISTA (TIRO ALLA FUNE ESCLUSIVO)
