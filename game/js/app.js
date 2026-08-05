@@ -1,10 +1,6 @@
-// ============================================================================
-// APP.JS - PARTE 1 DI 2
-// ============================================================================
-
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.137";
+const APP_VERSION = "20260805.201";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1191,75 +1187,174 @@ function sendRecruitmentInvite(type) {
 
 window.closeInviteModal = function() { els.inviteModal.style.display = 'none'; currentInviterId = null; }
 
-if(els.sendInviteBtn) els.sendInviteBtn.addEventListener('click', () => {
-    if (isChallenging) return; isChallenging = true; const tId = currentInviterId;
-    db.ref(`invites/${tId}`).set({ fromId: myId, fromName: myName, mode: els.inviteModeInput.value, wpm: parseInt(els.inviteWpmInput.value), wordCount: parseInt(els.inviteWordCountInput.value), ts: firebase.database.ServerValue.TIMESTAMP, status: 'pending' }).then(() => {
-        showToast("Invito inviato! In attesa..."); 
-        els.inviteModal.style.display = 'none';
-        try {
-            db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
-        } catch(e) {}
+if (els.sendInviteBtn) {
+    els.sendInviteBtn.addEventListener('click', () => {
+        if (isChallenging) return; 
+        isChallenging = true; 
+        const tId = currentInviterId;
 
-        if (listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite);
-        listeners.outgoingInvite = db.ref(`invites/${tId}`).on('value', snap => { 
-            if (!snap.exists() && isChallenging) setTimeout(() => { 
-                if (isChallenging) { 
-                    showToast("Rifiutato o scaduto."); 
-                    isChallenging = false; currentInviterId = null; 
-                    try {
-                        db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
-                    } catch(e) {}
-                    if(listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite); 
-                } 
-            }, 1000); 
+        db.ref(`invites/${tId}`).set({ 
+            fromId: myId, 
+            fromName: myName, 
+            mode: els.inviteModeInput.value, 
+            wpm: parseInt(els.inviteWpmInput.value), 
+            wordCount: parseInt(els.inviteWordCountInput.value), 
+            ts: firebase.database.ServerValue.TIMESTAMP, 
+            status: 'pending' 
+        }).then(() => {
+            showToast("Invito inviato! In attesa..."); 
+            els.inviteModal.style.display = 'none';
+
+            // 1. FORZA SUBITO L'AGGIORNAMENTO DEL BOTTONE LOCALE IN "IN ATTESA..."
+            db.ref(`presence/${tId}`).once('value', s => {
+                if (s.exists()) renderOrUpdateUserListItem(tId, s.val());
+            });
+
+            try {
+                db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
+            } catch(e) {}
+
+            if (listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite);
+            
+            listeners.outgoingInvite = db.ref(`invites/${tId}`).on('value', snap => { 
+                if (!snap.exists() && isChallenging) {
+                    setTimeout(() => { 
+                        if (isChallenging) { 
+                            showToast("Rifiutato o scaduto."); 
+                            isChallenging = false; 
+                            currentInviterId = null; 
+
+                            // 2. RIPRISTINA IL BOTTONE LOCALE IN "SFIDA" SE SCADE O VIENE RIFIUTATO
+                            db.ref(`presence/${tId}`).once('value', s => {
+                                if (s.exists()) renderOrUpdateUserListItem(tId, s.val());
+                            });
+
+                            try {
+                                db.ref(`presence/${myId}/ts`).set(firebase.database.ServerValue.TIMESTAMP);
+                            } catch(e) {}
+
+                            if (listeners.outgoingInvite) db.ref(`invites/${tId}`).off('value', listeners.outgoingInvite); 
+                        } 
+                    }, 1000);
+                }
+            });
         });
     });
-});
-
+}
 function listenToInvites() {
     db.ref(`invites/${myId}`).on('value', snap => {
-        const inv = snap.val(); if (!inv || roomCode || gameRunning) return;
+        const inv = snap.val(); 
+        if (!inv || roomCode || gameRunning) return;
         if (Date.now() - inv.ts > 60000) return db.ref(`invites/${myId}`).remove();
         
-        els.inviteModalText.innerHTML = '';
+        if (els.inviteModalText) els.inviteModalText.innerHTML = '';
+
         if (inv.type === 'team') {
-            els.inviteModalTitle.textContent = inv.teamId ? "🚀 INVITO SQUADRA" : "💡 SUGGERIMENTO SQUADRA";
-            if (inv.teamId) {
-                els.inviteModalText.appendChild(document.createTextNode(inv.fromName + " ti ha invitato ad unirti alla squadra "));
-                const bTeam = document.createElement('b'); bTeam.textContent = inv.teamName; els.inviteModalText.appendChild(bTeam);
-                els.inviteModalText.appendChild(document.createTextNode("."));
-            } else els.inviteModalText.appendChild(document.createTextNode(inv.fromName + " ti suggerisce di creare una tua squadra!"));
+            if (els.inviteModalTitle) els.inviteModalTitle.textContent = inv.teamId ? "🚀 INVITO SQUADRA" : "💡 SUGGERIMENTO SQUADRA";
+            if (els.inviteModalText) {
+                if (inv.teamId) {
+                    els.inviteModalText.appendChild(document.createTextNode(inv.fromName + " ti ha invitato ad unirti alla squadra "));
+                    const bTeam = document.createElement('b'); bTeam.textContent = inv.teamName; els.inviteModalText.appendChild(bTeam);
+                    els.inviteModalText.appendChild(document.createTextNode("."));
+                } else {
+                    els.inviteModalText.appendChild(document.createTextNode(inv.fromName + " ti suggerisce di creare una tua squadra!"));
+                }
+            }
             
-            els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'none'; els.incomingTeamInviteArea.style.display = 'block'; els.outgoingInviteArea.style.display = 'none';
-            els.acceptTeamInviteBtn.textContent = inv.teamId ? "UNISCITI ✅" : "VAI ALLA CREAZIONE 🛠️"; els.acceptTeamInviteBtn.onclick = () => { db.ref(`invites/${myId}`).remove(); window.closeInviteModal(); if (inv.teamId) joinTeam(inv.teamId); else showScreen('teamsScreen'); };
+            if (els.inviteSettings) els.inviteSettings.style.display = 'none'; 
+            if (els.teamInviteSettings) els.teamInviteSettings.style.display = 'none'; 
+            if (els.incomingInviteArea) els.incomingInviteArea.style.display = 'none'; 
+            if (els.incomingTeamInviteArea) els.incomingTeamInviteArea.style.display = 'block'; 
+            if (els.outgoingInviteArea) els.outgoingInviteArea.style.display = 'none';
+
+            if (els.acceptTeamInviteBtn) {
+                els.acceptTeamInviteBtn.textContent = inv.teamId ? "UNISCITI ✅" : "VAI ALLA CREAZIONE 🛠️"; 
+                els.acceptTeamInviteBtn.onclick = () => { 
+                    db.ref(`invites/${myId}`).remove(); 
+                    window.closeInviteModal(); 
+                    if (inv.teamId) joinTeam(inv.teamId); 
+                    else showScreen('teamsScreen'); 
+                };
+            }
         } else {
-            els.inviteModalTitle.textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
-            els.inviteModalText.appendChild(document.createTextNode("Ti ha invitato a giocare:"));
-            els.inviteModalText.appendChild(document.createElement('br'));
-            const bMode = document.createElement('b'); bMode.textContent = inv.mode.toUpperCase(); els.inviteModalText.appendChild(bMode);
-            els.inviteModalText.appendChild(document.createTextNode(" a "));
-            const bWpm = document.createElement('b'); bWpm.textContent = inv.wpm; els.inviteModalText.appendChild(bWpm);
-            els.inviteModalText.appendChild(document.createTextNode(" WPM ("));
-            const bCount = document.createElement('b'); bCount.textContent = inv.wordCount; els.inviteModalText.appendChild(bCount);
-            els.inviteModalText.appendChild(document.createTextNode(" test)."));
+            if (els.inviteModalTitle) els.inviteModalTitle.textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
+            if (els.inviteModalText) {
+                els.inviteModalText.appendChild(document.createTextNode("Ti ha invitato a giocare:"));
+                els.inviteModalText.appendChild(document.createElement('br'));
+                const bMode = document.createElement('b'); bMode.textContent = inv.mode.toUpperCase(); els.inviteModalText.appendChild(bMode);
+                els.inviteModalText.appendChild(document.createTextNode(" a "));
+                const bWpm = document.createElement('b'); bWpm.textContent = inv.wpm; els.inviteModalText.appendChild(bWpm);
+                els.inviteModalText.appendChild(document.createTextNode(" WPM ("));
+                const bCount = document.createElement('b'); bCount.textContent = inv.wordCount; els.inviteModalText.appendChild(bCount);
+                els.inviteModalText.appendChild(document.createTextNode(" test)."));
+            }
             
-            els.inviteSettings.style.display = 'none'; els.teamInviteSettings.style.display = 'none'; els.incomingInviteArea.style.display = 'block'; els.incomingTeamInviteArea.style.display = 'none'; els.outgoingInviteArea.style.display = 'none';
+            if (els.inviteSettings) els.inviteSettings.style.display = 'none'; 
+            if (els.teamInviteSettings) els.teamInviteSettings.style.display = 'none'; 
+            if (els.incomingInviteArea) els.incomingInviteArea.style.display = 'block'; 
+            if (els.incomingTeamInviteArea) els.incomingTeamInviteArea.style.display = 'none'; 
+            if (els.outgoingInviteArea) els.outgoingInviteArea.style.display = 'none';
         }
-        els.inviteModal.style.display = 'flex'; currentInviterId = inv.fromId; window.lastIncomingInvite = inv;
+
+        if (els.inviteModal) els.inviteModal.style.display = 'flex'; 
+        currentInviterId = inv.fromId; 
+        window.lastIncomingInvite = inv;
     });
 }
-if(els.declineTeamInviteBtn) els.declineTeamInviteBtn.addEventListener('click', () => { db.ref(`invites/${myId}`).remove(); window.closeInviteModal(); });
-if(els.declineInviteBtn) els.declineInviteBtn.addEventListener('click', () => { db.ref(`invites/${myId}`).remove(); window.closeInviteModal(); });
-if(els.acceptInviteBtn) els.acceptInviteBtn.addEventListener('click', () => {
-    const inv = window.lastIncomingInvite; db.ref(`invites/${myId}`).remove(); window.closeInviteModal(); const rCode = Math.floor(1000 + Math.random() * 9000).toString();
-    db.ref(`rooms/${rCode}`).set({ status: 'waiting', type: 'multi', mode: inv.mode, wpm: inv.wpm, tone: 600, wordCount: inv.wordCount, words: getGameWords(inv.wordCount, inv.mode), createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + 600000, hostId: inv.fromId }).then(() => { 
-        db.ref(`public_lobby_rooms/${rCode}`).set({ mode: inv.mode, pCount: 1, wpm: inv.wpm, wordCount: inv.wordCount, status: 'waiting', expiresAt: Date.now() + 600000 });
-        db.ref(`invite_accepted/${inv.fromId}`).set({ roomCode: rCode }); 
-        roomCode = rCode; 
-        joinRoomLogic(false); 
-    });
-});
+// ============================================================================
+// ---> INSERISCI QUI IL BLOCCO MANCANTE PER ACCETTARE O RIFIUTARE GLI INVITI <---
+// ============================================================================
 
+if (els.declineTeamInviteBtn) {
+    els.declineTeamInviteBtn.addEventListener('click', () => { 
+        db.ref(`invites/${myId}`).remove(); 
+        window.closeInviteModal(); 
+    });
+}
+
+if (els.declineInviteBtn) {
+    els.declineInviteBtn.addEventListener('click', () => { 
+        db.ref(`invites/${myId}`).remove(); 
+        window.closeInviteModal(); 
+    });
+}
+
+if (els.acceptInviteBtn) {
+    els.acceptInviteBtn.addEventListener('click', () => {
+        const inv = window.lastIncomingInvite; 
+        if (!inv) return;
+        
+        db.ref(`invites/${myId}`).remove(); 
+        window.closeInviteModal(); 
+        
+        const rCode = Math.floor(1000 + Math.random() * 9000).toString();
+        
+        db.ref(`rooms/${rCode}`).set({ 
+            status: 'waiting', 
+            type: 'multi', 
+            mode: inv.mode, 
+            wpm: inv.wpm, 
+            tone: 600, 
+            wordCount: inv.wordCount, 
+            words: getGameWords(inv.wordCount, inv.mode), 
+            createdAt: firebase.database.ServerValue.TIMESTAMP, 
+            expiresAt: Date.now() + 600000, 
+            hostId: inv.fromId 
+        }).then(() => { 
+            db.ref(`public_lobby_rooms/${rCode}`).set({ 
+                mode: inv.mode, 
+                pCount: 1, 
+                wpm: inv.wpm, 
+                wordCount: inv.wordCount, 
+                status: 'waiting', 
+                expiresAt: Date.now() + 600000 
+            });
+            db.ref(`invite_accepted/${inv.fromId}`).set({ roomCode: rCode }); 
+            roomCode = rCode; 
+            joinRoomLogic(false); 
+        });
+    });
+}
 function listenToInviteAccepted() {
     if (listeners.inviteAccepted) db.ref(`invite_accepted/${myId}`).off('value', listeners.inviteAccepted);
     listeners.inviteAccepted = db.ref(`invite_accepted/${myId}`).on('value', snap => { const d = snap.val(); if (d && d.roomCode) { db.ref(`invite_accepted/${myId}`).remove(); isChallenging = false; window.closeInviteModal(); roomCode = d.roomCode; joinRoomLogic(false); } });
@@ -2174,7 +2269,6 @@ if(els.resetStatsBtn) els.resetStatsBtn.addEventListener('click', async () => {
         } 
     } 
 });
-if(els.resetStatsBtn) els.resetStatsBtn.addEventListener('click', async () => { if (confirm(currentLang === 'it' ? "Vuoi azzerare tutte le tue statistiche? Questa operazione non può essere annullata." : "Reset all your statistics? This cannot be undone.")) { try { await Promise.all([ db.ref(`users/${myId}/stats`).remove(), db.ref(`users/${myId}/history`).remove() ]); showToast("Statistiche azzerate correttamente!"); showProfileScreen(); } catch(e) { alert("Errore durante il reset delle statistiche."); } } });
 
 window.showProfileScreen = function() {
     showScreen('profileScreen'); els.errorChartContainer.textContent = 'Caricamento...'; els.wpmErrorChartContainer.textContent = 'Caricamento...'; els.matchHistoryList.textContent = 'Caricamento...';
