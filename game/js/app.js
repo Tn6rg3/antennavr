@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.136";
+const APP_VERSION = "20260805.137";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -2116,31 +2116,8 @@ function finishGame() {
     else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
 }
 
-if(els.quitGameBtn) els.quitGameBtn.addEventListener('click', () => { 
-    if (confirm("Vuoi abbandonare la partita?")) { 
-        gameRunning = false; 
-        exitRoomCleanly(false, true); 
-    } 
-});
-
-if(els.startMultiplayerBtn) els.startMultiplayerBtn.addEventListener('click', () => {
-    db.ref(`rooms/${roomCode}/players`).once('value', snap => {
-        if (currentMode === 'pingpong' && (snap.exists() ? Object.keys(snap.val()).length : 0) < 2) return alert("Ping Pong richiede almeno 2 giocatori in stanza per iniziare!");
-        db.ref(`rooms/${roomCode}`).update({ status: 'countdown', expiresAt: null });
-        db.ref(`public_lobby_rooms/${roomCode}`).remove();
-    });
-});
-
-if(els.deleteRoomBtn) els.deleteRoomBtn.addEventListener('click', () => { 
-    if (confirm("Eliminare questa stanza?")) {
-        db.ref(`public_lobby_rooms/${roomCode}`).remove();
-        db.ref(`rooms/${roomCode}`).remove().then(() => exitRoomCleanly(true, true)); 
-    }
-});
-
-if(els.leaveLobbyBtn) els.leaveLobbyBtn.addEventListener('click', () => {
-    exitRoomCleanly(false, true);
-});
+// NOTA: i listener di quit/start/delete/leave sono già definiti nella sezione "BLINDATA ANTI-DUPLICAZIONE".
+// Qui NON vanno rimessi, altrimenti si duplicano i click-handler.
 
 if(els.deleteDataBtn) els.deleteDataBtn.addEventListener('click', async () => {
     if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati. Confermi?")) {
@@ -2186,6 +2163,17 @@ if(els.saveAliasBtn) els.saveAliasBtn.addEventListener('click', async () => {
     } catch(e) { alert("Errore durante il salvataggio."); }
 });
 
+if(els.resetStatsBtn) els.resetStatsBtn.addEventListener('click', async () => { 
+    if (confirm(currentLang === 'it' ? "Vuoi azzerare tutte le tue statistiche? Questa operazione non può essere annullata." : "Reset all your statistics? This cannot be undone.")) { 
+        try { 
+            await Promise.all([ db.ref(`users/${myId}/stats`).remove(), db.ref(`users/${myId}/history`).remove() ]); 
+            showToast("Statistiche azzerate correttamente!"); 
+            showProfileScreen(); 
+        } catch(e) { 
+            alert("Errore durante il reset delle statistiche."); 
+        } 
+    } 
+});
 if(els.resetStatsBtn) els.resetStatsBtn.addEventListener('click', async () => { if (confirm(currentLang === 'it' ? "Vuoi azzerare tutte le tue statistiche? Questa operazione non può essere annullata." : "Reset all your statistics? This cannot be undone.")) { try { await Promise.all([ db.ref(`users/${myId}/stats`).remove(), db.ref(`users/${myId}/history`).remove() ]); showToast("Statistiche azzerate correttamente!"); showProfileScreen(); } catch(e) { alert("Errore durante il reset delle statistiche."); } } });
 
 window.showProfileScreen = function() {
