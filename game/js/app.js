@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.124"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260805.126"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1598,7 +1598,7 @@ if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
         db.ref(`rooms/${brRoomCode}/players`).off('value'); // Risparmia banda Firebase spegnendo il listener
     });
 
-function exitRoomCleanly(roomWasDeletedByHost = false) {
+function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     clearAllTimers();
     
     // 1. SGANCIO PULITO SE SI ERA IN MODALITÀ SPETTATORE
@@ -1620,21 +1620,17 @@ function exitRoomCleanly(roomWasDeletedByHost = false) {
     if (roomCode) {
         if (roomCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
         
-        // 2. SE L'HOST HA CLICCATO ESPLICITAMENTE "ELIMINA STANZA" (roomWasDeletedByHost === true)
-        if (roomWasDeletedByHost) {
-            db.ref(`rooms/${roomCode}`).remove();
-            db.ref(`public_lobby_rooms/${roomCode}`).remove();
+        // 2. SE L'UTENTE HA ABBANDONATO VOLONTARIAMENTE O LA STANZA È CANCELLATA
+        if (roomWasDeletedByHost || isExplicitQuit) {
+            // CANCELLIAMO SEMPRE LA MEMORIA LOCALE: MAI PIÙ TASTO "RIENTRA"!
             localStorage.removeItem(STORAGE_ROOM_KEY);
-            roomCode = "";
-        } 
-        // 3. SE INVECE L'UTENTE ESCE TEMPORANEAMENTE DALLA STANZA ("Esci dalla Stanza" o navigazione)
-        else {
+
             if (amIHost && !roomCode.startsWith("TRN_")) {
-                // SE SEI L'HOST: La stanza NON viene toccata e resta in bacheca per gli altri giocatori!
-                // Manteniamo STORAGE_ROOM_KEY in localStorage così appare il tasto "🔄 RIENTRA NELLA PARTITA"
-                db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
+                // Se l'Host abbandona la partita, la stanza viene chiusa e terminata per tutti
+                db.ref(`rooms/${roomCode}`).remove();
+                db.ref(`public_lobby_rooms/${roomCode}`).remove();
             } else {
-                // SE SEI UN OSPITE: Rimuoviamo l'ospite dalla stanza e aggiorniamo il contatore in bacheca
+                // Se un partecipante abbandona, viene rimosso dai giocatori della stanza
                 db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
                 const currentRoomCode = roomCode;
                 db.ref(`rooms/${currentRoomCode}`).once('value', snap => { 
@@ -1649,8 +1645,16 @@ function exitRoomCleanly(roomWasDeletedByHost = false) {
                         }
                     } 
                 });
-                localStorage.removeItem(STORAGE_ROOM_KEY);
-                roomCode = "";
+            }
+            roomCode = "";
+        } 
+        // 3. SE INVECE È UNA USCITA TEMPORANEA (es. semplice navigazione senza abbandonare)
+        else {
+            if (amIHost && !roomCode.startsWith("TRN_")) {
+                // La stanza non si tocca e mantieni STORAGE_ROOM_KEY per poter rientrare
+                db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
+            } else {
+                db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
             }
         }
     } else { 
