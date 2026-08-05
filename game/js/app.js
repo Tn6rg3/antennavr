@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.134";
+const APP_VERSION = "20260805.135";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1516,10 +1516,11 @@ if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
     brBannerDismissedToday = true;
     if (brRoomCode) db.ref(`rooms/${brRoomCode}/players`).off('value');
 });
+// ============================================================================
+// BACHECA SFIDE CON NOTIFICA AUTOMATICA SE SEI FUORI DALLA TUA STANZA
+// ============================================================================
 
-// ============================================================================
-// 1. BACHECA SFIDE: LETTURA E AGGIORNAMENTO CARDE (Sorgente unica 'rooms')
-// ============================================================================
+window.lastKnownRoomPlayersCount = window.lastKnownRoomPlayersCount || {};
 
 function addOrUpdateRoomCard(code, room) {
     if (!els.waitingRoomsList || !room) return;
@@ -1547,7 +1548,38 @@ function addOrUpdateRoomCard(code, room) {
                  : '🔤 Parole';
 
     // Calcoliamo i giocatori realmente presenti in stanza
-    const pCount = room.players ? Object.keys(room.players).length : (room.pCount || 1);
+    const playersObj = room.players || {};
+    const pCount = Object.keys(playersObj).length || (room.pCount || 1);
+
+    // --- TRIGGER NOTIFICA: AVVISO SE SEI AL MENU E QUALCUNO ENTRA NELLA TUA STANZA ---
+    const prevCount = window.lastKnownRoomPlayersCount[code] || 1;
+    const isMyRoom = (room.hostId === myId);
+    const isOutsideRoom = (roomCode !== code || !els.lobbyScreen.classList.contains('active-screen'));
+
+    // Se tu sei l'Host, il numero di giocatori sale ad almeno 2, e non sei già in lobby:
+    if (isMyRoom && pCount > prevCount && pCount >= 2 && isOutsideRoom) {
+        showToast(`👤 Un giocatore è appena entrato nella tua stanza #${code}!`);
+        if (typeof playNotificationSound === 'function') playNotificationSound();
+        if (typeof playBeep === 'function') {
+            playBeep(600, 0.15);
+            setTimeout(() => playBeep(880, 0.25), 180);
+        }
+
+        // Configura e apri il popup modale
+        if (els.roomEventTitle) els.roomEventTitle.textContent = "Qualcuno è entrato!";
+        if (els.roomEventText) els.roomEventText.textContent = `Un giocatore sta aspettando nella tua stanza #${code}.`;
+        if (els.roomEventModal) els.roomEventModal.style.display = 'flex';
+
+        // Il bottone "ENTRA NELLA STANZA" ti ci porta all'istante
+        if (els.goToRoomBtn) {
+            els.goToRoomBtn.onclick = function() {
+                if (els.roomEventModal) els.roomEventModal.style.display = 'none';
+                window.joinSpecificRoom(code);
+            };
+        }
+    }
+    window.lastKnownRoomPlayersCount[code] = pCount;
+    // ---------------------------------------------------------------------------------
 
     const span = document.createElement('span');
     const bTitle = document.createElement('b'); 
@@ -1570,6 +1602,7 @@ function addOrUpdateRoomCard(code, room) {
     btn.onclick = () => window.joinSpecificRoom(code); 
     li.appendChild(btn);
 }
+
 
 function removeRoomCard(code) {
     if (!els.waitingRoomsList) return;
