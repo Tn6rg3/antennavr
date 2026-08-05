@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.133";
+const APP_VERSION = "20260805.134";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -3597,6 +3597,92 @@ function startCoopHostTimers() {
     }, 2000);
 }
 
+
+// ============================================================================
+// GESTIONE AUDIO MORSE CON ARRESTO AUTOMATICO ANTI-SOVRAPPOSIZIONE
+// ============================================================================
+
+window.activeOscillators = window.activeOscillators || [];
+window.morsePlayToken = 0;
+
+function stopAllMorseAudio() {
+    window.morsePlayToken++;
+    if (window.activeOscillators && window.activeOscillators.length > 0) {
+        window.activeOscillators.forEach(osc => {
+            try { 
+                osc.stop(); 
+                osc.disconnect(); 
+            } catch(e) {}
+        });
+        window.activeOscillators = [];
+    }
+}
+
+function playMorseAudio(text, wpm, forcePlay = false) {
+    return new Promise(resolve => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        if (!forcePlay && !gameRunning && !brIsPlaying) { resolve(); return; }
+
+        // INTERROMPE SUBITO QUALSIASI TRACCIA MORSE PRECEDENTE
+        stopAllMorseAudio();
+        const currentToken = window.morsePlayToken;
+
+        let charUnit = 1.2 / wpm;
+        let effSpaceWpm = (window.charSpaceWpm && window.charSpaceWpm < wpm) ? window.charSpaceWpm : wpm;
+        let spaceUnit = 1.2 / effSpaceWpm;
+        let wordMult = window.wordSpaceMult || 1.0;
+
+        let time = audioCtx.currentTime + 0.05;
+
+        for (let char of text) {
+            if (currentToken !== window.morsePlayToken || (!forcePlay && !gameRunning && !brIsPlaying)) break;
+            
+            if (morseDict[char]) {
+                for (let i = 0; i < morseDict[char].length; i++) {
+                    if (currentToken !== window.morsePlayToken || (!forcePlay && !gameRunning && !brIsPlaying)) break;
+                    let symbol = morseDict[char][i];
+                    
+                    const osc = audioCtx.createOscillator(); 
+                    const gain = audioCtx.createGain();
+                    osc.frequency.value = currentTone; 
+                    osc.connect(gain); 
+                    gain.connect(audioCtx.destination);
+                    
+                    const duration = (symbol === '-') ? (3 * charUnit) : charUnit;
+                    
+                    gain.gain.setValueAtTime(0, time); 
+                    gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
+                    gain.gain.setValueAtTime(0.5, time + duration - 0.005); 
+                    gain.gain.linearRampToValueAtTime(0, time + duration);
+                    
+                    osc.start(time); 
+                    osc.stop(time + duration);
+                    
+                    // Salviamo l'oscillatore per poterlo bloccare all'istante se serve
+                    window.activeOscillators.push(osc);
+                    
+                    time += duration;
+                    if (i < morseDict[char].length - 1) {
+                        time += charUnit;
+                    }
+                }
+                time += (3 * spaceUnit);
+            } else if (char === ' ') {
+                let totalWordSpace = (7 * spaceUnit) * wordMult;
+                let remainingSpace = totalWordSpace - (3 * spaceUnit);
+                time += Math.max(0, remainingSpace);
+            }
+        }
+        setTimeout(() => {
+            if (currentToken === window.morsePlayToken) resolve();
+        }, Math.max(0, (time - audioCtx.currentTime) * 1000));
+    });
+}
+// ============================================================================
+// MOTORE CONQUISTA CO-OP CON ISOLAMENTO CANALE E AUDIO INDIPENDENTE
+// ============================================================================
+
 function listenToCoopState() {
     db.ref(`rooms/${roomCode}/coop_state`).on('value', snap => {
         const state = snap.val();
@@ -3644,26 +3730,28 @@ function listenToCoopState() {
             }
         });
 
-        if (coopActiveFreqIndex > 0 && state.activeWords && state.activeWords.length === 3) {
+        // REGOLE DI ISOLAMENTO AUDIO:
+        // 1. Deve essere attiva una frequenza (coopActiveFreqIndex > 0)
+        // 2. Il giocatore DEVE ESSERE IL PROPRIETARIO su Firebase (owners[coopActiveFreqIndex] === myId)
+        // 3. La parola è cambiata rispetto all'ultima riprodotta
+        if (coopActiveFreqIndex > 0 && owners[coopActiveFreqIndex] === myId && state.activeWords && state.activeWords.length === 3) {
             const currentFreqWord = state.activeWords[coopActiveFreqIndex - 1];
             if (currentFreqWord && currentFreqWord !== gameWords[0]) {
                 gameWords[0] = currentFreqWord;
                 inputActive = true;
-                // BUG 2 CORRETTO: Riproduce il suono CW solo in locale per chi controlla il canale
-                setTimeout(() => {
-                    if (gameRunning && isCoopMode && gameWords[0] === currentFreqWord && owners[coopActiveFreqIndex] === myId) {
-                        playMorseAudio(currentFreqWord, currentWpm);
-                    }
-                }, 300);
-                els.permanentGameInput.value = "";
-                els.permanentGameInput.focus();
+                
+                // Interrompe all'istante l'audio precedente e riproduce SOLO la parola del canale posseduto
+                stopAllMorseAudio();
+                playMorseAudio(currentFreqWord, currentWpm);
+                
+                if (els.permanentGameInput) {
+                    els.permanentGameInput.value = "";
+                    els.permanentGameInput.focus();
+                }
             }
         }
     });
 }
-// ============================================================================
-// APP.JS - PARTE FINALE (da setupCoopFreqButtons in poi)
-// ============================================================================
 
 function setupCoopFreqButtons() {
     const labels = ["🟢 FREQ 1 (3-4 car.)", "🟡 FREQ 2 (5-6 car.)", "🔴 FREQ 3 (7+ car.)"];
@@ -3678,13 +3766,13 @@ function setupCoopFreqButtons() {
                 [1, 2, 3].forEach(n => { if (owners[n] === myId) owners[n] = null; });
                 owners[num] = myId;
                 return owners;
-            }, (error, committed) => {
+            }, (error, committed, snapshot) => {
                 if (committed) {
+                    const latestOwners = snapshot.val() || {};
                     coopActiveFreqIndex = num;
                     if (els.coopActiveFreqLabel) els.coopActiveFreqLabel.textContent = `Canale: ${labels[num - 1]}`;
                     if (els.btnCoopReleaseFreq) els.btnCoopReleaseFreq.style.display = 'inline-block';
                     
-                    // CORREZIONE TASTIERA: manteniamo sempre il campo abilitato e in focus
                     if (els.permanentGameInput) {
                         els.permanentGameInput.disabled = false;
                         els.permanentGameInput.placeholder = "Digita qui...";
@@ -3694,9 +3782,10 @@ function setupCoopFreqButtons() {
                     
                     db.ref(`rooms/${roomCode}/coop_state/activeWords`).once('value', s => {
                         const words = s.val();
-                        if (words && words[num - 1]) {
+                        // Suona il Morse SOLO se il database conferma che questa frequenza appartiene a myId
+                        if (words && words[num - 1] && latestOwners[num] === myId) {
                             gameWords[0] = words[num - 1];
-                            // CORREZIONE AUDIO INDIPENDENTE: suona il Morse del canale SOLO per me che l'ho attivato
+                            stopAllMorseAudio();
                             playMorseAudio(words[num - 1], currentWpm);
                             if (els.permanentGameInput) els.permanentGameInput.focus();
                         }
@@ -3717,7 +3806,7 @@ function setupCoopFreqButtons() {
             }, () => {
                 coopActiveFreqIndex = 0;
                 inputActive = false;
-                // Manteniamo l'input non disabilitato in modo traumatico, cambiamo solo il placeholder per evitare che si chiuda la tastiera
+                stopAllMorseAudio(); // Interrompe il suono del canale rilasciato
                 if (els.permanentGameInput) {
                     els.permanentGameInput.placeholder = "Seleziona prima una Frequenza 🟢🟡🔴...";
                     els.permanentGameInput.value = "";
@@ -3730,7 +3819,7 @@ function setupCoopFreqButtons() {
     }
 }
 
-// Override per l'invio della parola con WPM Dinamico, Penalità e mantenimento tastiera aperta in Co-op
+// Override per l'invio parola in Conquista (con stop audio in caso di errore)
 const originalHandleWordSubmission = handleWordSubmission;
 handleWordSubmission = function(userWord) {
     if (currentMode !== 'conquest') {
@@ -3747,7 +3836,6 @@ handleWordSubmission = function(userWord) {
     const penalty = coopActiveFreqIndex === 1 ? 2 : (coopActiveFreqIndex === 2 ? 3 : 5);
 
     inputActive = false;
-    // CORREZIONE TASTIERA: NON disabilitiamo els.permanentGameInput per impedire la chiusura della tastiera di sistema
 
     if (isCorrect) {
         currentWpm += 2;
@@ -3782,12 +3870,14 @@ handleWordSubmission = function(userWord) {
         }
         inputActive = true; 
         
-        // CORREZIONE AUDIO INDIPENDENTE: la parola fallita o la nuova parola ripartono in Morse solo nel client locale di chi ha sbagliato
+        // In caso di errore, riproduce di nuovo la parola SOLO per il giocatore che ha sbagliato
         if (!isCorrect && gameWords[0]) {
+            stopAllMorseAudio();
             playMorseAudio(gameWords[0], currentWpm);
         }
     }, 1500);
 };
+
 
 function finishCoopGame(won) {
     gameRunning = false;
