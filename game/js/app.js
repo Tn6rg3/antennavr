@@ -1,6 +1,10 @@
+// ============================================================================
+// APP.JS - PARTE 1 DI 2
+// ============================================================================
+
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.129"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260805.130";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -48,7 +52,9 @@ let db, auth, currentLang = 'it';
 let activeChatContext = null, activeTab = "room", isChatDrawerOpen = false;
 let isGlobalChatMuted = false;
 let isChatCwEnabled = false, chatCwWpm = 20, chatCwTone = 600;
-let chatCwAudioQueue = [], isChatCwPlaying = false; // CODA AUDIO CHAT CW
+let chatCwAudioQueue = [], isChatCwPlaying = false;
+window.lastPlayedCwMsgTs = 0; // TRACKER ANTI-DOPPIO AUDIO CW CHAT
+
 let isChallenging = false, isRejoining = false, currentInviterId = null;
 let roomCode = "", roomHostId = null, activeTrnId = null;
 let lastPlayerCount = 0, gameStartPlayerCount = 0;
@@ -58,17 +64,18 @@ let totalScore = 0, currentStreak = 0, usedReplay = false, matchDetailsArray = [
 let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
 
-// STATO GLOBALE CO-OP (CONQUISTA - TIRO ALLA FUNE ESCLUSIVO)
+// STATO GLOBALE CO-OP (CONQUISTA)
 let isCoopMode = false, coopActiveFreqIndex = 0;
 let coopTimerInterval = null, coopDecayInterval = null;
 
-// TIMERS SISTEMA & PULIZIA
+// TIMERS SISTEMA
 let lobbyTimerInterval = null, quizTimerInterval = null, ppTimerInterval = null;
 let brCheckInterval = null, brTimerInterval = null;
 let serverTimeOffset = 0;
 
 let brBannerTimeout = null;
 let brBannerDismissedToday = false;
+let lastBRRoundPlayed = -1;
 
 window.charSpaceWpm = 0;
 window.wordSpaceMult = 1.0;
@@ -97,7 +104,6 @@ function clearAllTimers() {
     if (coopDecayInterval) { clearInterval(coopDecayInterval); coopDecayInterval = null; }
 }
 
-// --- FORZATURA AGGIORNAMENTO CACHE ---
 window.forceAppUpdate = function() {
     showToast("Aggiornamento in corso...");
     if ('caches' in window) caches.keys().then(names => names.forEach(name => caches.delete(name)));
@@ -111,7 +117,6 @@ window.forceAppUpdate = function() {
 
 if (els.updateBannerBtn) els.updateBannerBtn.addEventListener('click', window.forceAppUpdate);
 
-// --- FUNZIONI DI SUPPORTO ---
 function escapeHTML(str) {
     if (!str && str !== 0) return "";
     return String(str).replace(/[&<>'"]/g, match => {
@@ -131,7 +136,6 @@ window.openTelegramProfile = function(username) {
     else tg.showAlert("Questo utente ha impostato la privacy o non ha uno username pubblico.");
 }
 
-// --- FUNZIONE CENTRALIZZATA SINCRONIZZAZIONE ALIAS UTENTE ---
 async function syncUserNameEverywhere(userId, newName, newUsername) {
     await db.ref(`presence/${userId}`).update({ name: newName, username: newUsername });
     if (roomCode) await db.ref(`rooms/${roomCode}/players/${userId}`).update({ name: newName, username: newUsername });
@@ -175,12 +179,10 @@ async function syncUserNameEverywhere(userId, newName, newUsername) {
     }
 }
 
-// --- POPOLAMENTO E GESTIONE DINAMICA DEL MENU DI GIOCO ---
 function populateGameModesUI() {
     if (!els.gameModeInput) return;
     if (!window.GAME_MODES) window.GAME_MODES = {};
     
-    // Auto-iniezione modalità Conquista
     if (!window.GAME_MODES["conquest"]) {
         window.GAME_MODES["conquest"] = {
             id: "conquest",
@@ -217,7 +219,6 @@ function populateGameModesUI() {
     else select.value = 'standard';
 }
 
-// --- DIZIONARI E TESTI MULTILINGUA ---
 const i18n = {
     it: {
         hello: "Ciao", lb: "Classifica", profile: "Profilo", activity: "Attività", conn_secure: "Connessione sicura in corso...",
@@ -384,7 +385,6 @@ const morseDict = {
     'À': '.--.-', 'È': '..-..', 'É': '..-..', 'Ì': '.---.', 'Ò': '---.', 'Ù': '..--','?': '..--..' 
 };
 
-// GENERATORE SEED PER SFIDA GIORNALIERA
 function mulberry32(a) {
     return function() {
       var t = a += 0x6D2B79F5;
@@ -406,7 +406,6 @@ function getDailyWords(num) {
     return dict.slice(0, num).map(w => w.toUpperCase());
 }
 
-// INIZIALIZZAZIONE
 if (!tgUser) { els.loadingScreen.classList.remove('active-screen'); els.errorScreen.classList.add('active-screen'); } 
 else { myName = tgUser.first_name; myId = tgUser.id.toString(); initGame(); }
 
@@ -427,14 +426,12 @@ function initGame() {
 
     isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
 
-    // Ripristino preferenze di gioco da localStorage
     if (els.startWpmInput && localStorage.getItem(STORAGE_PREF_WPM)) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM);
     if (els.wordCountInput && localStorage.getItem(STORAGE_PREF_WORDS)) els.wordCountInput.value = localStorage.getItem(STORAGE_PREF_WORDS);
     if (els.toneInput && localStorage.getItem(STORAGE_PREF_TONE)) els.toneInput.value = localStorage.getItem(STORAGE_PREF_TONE);
     if (els.charSpaceInput && localStorage.getItem(STORAGE_PREF_CHAR_SPACE)) els.charSpaceInput.value = localStorage.getItem(STORAGE_PREF_CHAR_SPACE);
     if (els.wordSpaceSelect && localStorage.getItem(STORAGE_PREF_WORD_SPACE)) els.wordSpaceSelect.value = localStorage.getItem(STORAGE_PREF_WORD_SPACE);
 
-    // --- RIPRISTINO PREFERENZE CW CHAT DA LOCALSTORAGE ---
     isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
     if (localStorage.getItem(STORAGE_CHAT_CW_WPM)) {
         chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;
@@ -445,7 +442,6 @@ function initGame() {
         if (els.chatCwToneInput) els.chatCwToneInput.value = chatCwTone;
     }
 
-    // Applica subito l'interfaccia se il CW in chat era rimasto attivo
     if (els.toggleChatCwBtn) {
         if (isChatCwEnabled) {
             els.toggleChatCwBtn.textContent = "📻 CW: ON";
@@ -489,7 +485,6 @@ function initGame() {
         });
     }
 
-    // Autenticazione anonima e caricamento dati utente
     auth.signInAnonymously().then(async () => {
         try {
             const userData = (await db.ref(`users/${myId}`).once('value')).val() || {};
@@ -503,12 +498,10 @@ function initGame() {
         if (els.loadingText) els.loadingText.style.display = 'none'; 
         if (els.createRoomBtn) els.createRoomBtn.disabled = false;
 
-        // SINCRONIZZAZIONE OROLOGIO SERVER FIREBASE
         db.ref('.info/serverTimeOffset').on('value', (snap) => {
             serverTimeOffset = snap.val() || 0;
         });
 
-        // Gestione presenza online/offline
         db.ref('.info/connected').on('value', (snap) => {
             if (snap.val() === false) return;
             const pRef = db.ref(`presence/${myId}`);
@@ -524,7 +517,6 @@ function initGame() {
 
         checkYesterdayDailyMedal();
 
-        // Gestione parametri di avvio (inviti squadra o stanza)
         if (startParam) {
             if (startParam.startsWith('team_')) processTeamInvite(startParam.replace('team_', ''));
             else if (startParam.startsWith('room_')) window.joinSpecificRoom(startParam.replace('room_', ''));
@@ -664,7 +656,6 @@ function playMorseAudio(text, wpm, forcePlay = false) {
         if (!forcePlay && (!gameRunning && !brIsPlaying)) { resolve(); return; }
 
         let charUnit = 1.2 / wpm;
-        
         let effSpaceWpm = (window.charSpaceWpm && window.charSpaceWpm < wpm) ? window.charSpaceWpm : wpm;
         let spaceUnit = 1.2 / effSpaceWpm;
         let wordMult = window.wordSpaceMult || 1.0;
@@ -711,7 +702,6 @@ function playMorseAudio(text, wpm, forcePlay = false) {
     });
 }
 
-// --- CODA AUDIO CHAT CW (EVITA SOVRAPPOSIZIONI DI MESSAGGI) ---
 function enqueueChatCwAudio(text) {
     if (!text || !isChatCwEnabled) return;
     if (chatCwAudioQueue.length < 10) {
@@ -741,7 +731,6 @@ async function processChatCwQueue() {
     isChatCwPlaying = false;
 }
 
-// --- CHAT ---
 window.toggleChat = function() {
     if (els.chatDrawer.style.display === 'none') {
         els.chatDrawer.style.display = 'flex'; isChatDrawerOpen = true;
@@ -751,7 +740,7 @@ window.toggleChat = function() {
 
 function hideChat() {
     if(els.chatDrawer) els.chatDrawer.style.display = 'none'; isChatDrawerOpen = false;
-    chatCwAudioQueue = []; // Svuota la coda audio se la chat viene chiusa
+    chatCwAudioQueue = [];
     Object.keys(listeners.activeChat).forEach(key => { 
         listeners.activeChat[key].ref.off('value', listeners.activeChat[key].callback); 
         delete listeners.activeChat[key]; 
@@ -790,6 +779,7 @@ if(els.lobbyChatInput) els.lobbyChatInput.addEventListener('keypress', e => {
     if (e.key === 'Enter') els.sendLobbyChatBtn.click(); 
 });
 
+// BUG 1 CORRETTO: Aggiunta verifica window.lastPlayedCwMsgTs per impedire l'accodamento doppio di audio CW in co-op
 function setupChat(chatRef, containerId, alertBtnId) {
     const container = els[containerId]; if (!container) return;
     if (listeners.activeChat[containerId]) {
@@ -851,7 +841,11 @@ function setupChat(chatRef, containerId, alertBtnId) {
                     showToast(`${prefix} ${latestMsg.name}: [📻 Messaggio CW...]`);
                 }
                 if (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room'))) {
-                    enqueueChatCwAudio(latestMsg.text); // Messo in coda per non sovrapporre i suoni
+                    // CONTROLLO ANTI-DOPPIO AUDIO CW CHAT: Viene messo in coda solo se non è già stato suonato per questo timestamp
+                    if (latestMsg.ts > (window.lastPlayedCwMsgTs || 0)) {
+                        window.lastPlayedCwMsgTs = latestMsg.ts;
+                        enqueueChatCwAudio(latestMsg.text);
+                    }
                 }
             } else {
                 if (shouldNotify) {
@@ -908,7 +902,6 @@ if (els.muteGlobalChatBtn) {
     });
 }
 
-// --- CONTROLLO UI INTELLIGENTE PER I GIOCHI (RICOSTRUZIONE MENU PER CELLULARI) ---
 function checkGameTypeUI() {
     const isSingle = els.gameTypeInput.value === 'single';
     const isTrn = els.gameTypeInput.value === 'tournament';
@@ -916,18 +909,15 @@ function checkGameTypeUI() {
     const select = els.gameModeInput;
     const currentVal = select.value;
     
-    // 1. SVUOTIAMO E RICOSTRUIAMO DINAMICAMENTE LE OPZIONI (Risolve il bug dei menu cellulari)
     select.innerHTML = '';
     
     if (isCoop) {
-        // PER CO-OP: INSERISCE ESCLUSIVAMENTE CONQUISTA
         const opt = document.createElement('option');
         opt.value = "conquest";
         opt.textContent = currentLang === 'en' ? "Conquest (Co-op) ⚔️" : "Conquista (Co-op) ⚔️";
         select.appendChild(opt);
         select.value = "conquest";
     } else if (isTrn) {
-        // PER TORNEI: INSERISCE SOLO LE AZIONI SQUADRA
         const trnOptions = [
             { val: "trn_create_team", it: "Fonda Squadra", en: "Create Team" },
             { val: "trn_join_team", it: "Unisciti a Squadra", en: "Join Team" },
@@ -942,9 +932,8 @@ function checkGameTypeUI() {
         if (!currentVal.startsWith('trn_')) select.value = "trn_join_team";
         else select.value = currentVal;
     } else {
-        // PER SOLO E MULTI: INSERISCE TUTTI I GIOCHI TRANNE TASSATIVAMENTE CONQUISTA
         Object.values(window.GAME_MODES || {}).forEach(mode => {
-            if (mode.id !== 'conquest') { // ESCLUSIONE TOTALE DI CONQUISTA
+            if (mode.id !== 'conquest') {
                 const opt = document.createElement('option');
                 opt.value = mode.id;
                 opt.id = 'txt_opt_' + mode.id;
@@ -956,7 +945,6 @@ function checkGameTypeUI() {
         else select.value = currentVal || 'standard';
     }
 
-    // 2. GESTIONE CONTROLLI E PULSANTI SOTTO IL MENU
     const selectedMode = select.value;
     const modeCfg = window.GAME_MODES ? window.GAME_MODES[selectedMode] : null;
     const isCustom = selectedMode === 'custom';
@@ -989,7 +977,6 @@ function checkGameTypeUI() {
 
     els.customDictControl.style.display = (isSingle && isCustom) ? 'flex' : 'none';
 
-    // VISIBILITÀ OPZIONE SPETTATORE SOLO IN GIOCA DA SOLO
     if (els.spectatorContainer) {
         els.spectatorContainer.style.display = isSingle ? 'flex' : 'none';
     }
@@ -1063,7 +1050,6 @@ if (els.customDictFileInput) els.customDictFileInput.addEventListener('change', 
     }; reader.readAsText(file);
 });
 
-// --- MOTORE PAROLE DEL GIOCO ---
 function getGameWords(num, mode) {
     if (mode === 'daily_challenge') return getDailyWords(num);
     if (window.GAME_MODES && window.GAME_MODES[mode] && typeof window.GAME_MODES[mode].generateWords === 'function') {
@@ -1078,7 +1064,6 @@ window.checkTournamentPopup = function() { if (localStorage.getItem('hideTrnWelc
 window.closeTrnWelcomeModal = function() { if (els.stopShowingTrnPopup && els.stopShowingTrnPopup.checked) localStorage.setItem('hideTrnWelcomePopup', 'true'); if(els.tournamentWelcomeModal) els.tournamentWelcomeModal.style.display = 'none'; }
 window.goToTournamentsFromPopup = function() { closeTrnWelcomeModal(); showScreen('teamsScreen'); }
 
-// --- UTENTI ONLINE (OTTIMIZZATA O(1) CON LISTENER ATOMICI) ---
 function renderOrUpdateUserListItem(userId, u) {
     if (!els.onlineUsersList || userId === myId) return;
 
@@ -1091,7 +1076,7 @@ function renderOrUpdateUserListItem(userId, u) {
         if (emptyMsg) emptyMsg.remove();
     }
 
-    li.innerHTML = ''; // Risettiamo il contenuto
+    li.innerHTML = '';
 
     const isWaiting = (isChallenging && currentInviterId === userId);
     const isPlaying = (u.status === 'playing');
@@ -1268,7 +1253,6 @@ if(els.declineInviteBtn) els.declineInviteBtn.addEventListener('click', () => { 
 if(els.acceptInviteBtn) els.acceptInviteBtn.addEventListener('click', () => {
     const inv = window.lastIncomingInvite; db.ref(`invites/${myId}`).remove(); window.closeInviteModal(); const rCode = Math.floor(1000 + Math.random() * 9000).toString();
     db.ref(`rooms/${rCode}`).set({ status: 'waiting', type: 'multi', mode: inv.mode, wpm: inv.wpm, tone: 600, wordCount: inv.wordCount, words: getGameWords(inv.wordCount, inv.mode), createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + 600000, hostId: inv.fromId }).then(() => { 
-        // Aggiorna anche l'indice leggero
         db.ref(`public_lobby_rooms/${rCode}`).set({ mode: inv.mode, pCount: 1, wpm: inv.wpm, wordCount: inv.wordCount, status: 'waiting', expiresAt: Date.now() + 600000 });
         db.ref(`invite_accepted/${inv.fromId}`).set({ roomCode: rCode }); 
         roomCode = rCode; 
@@ -1281,10 +1265,6 @@ function listenToInviteAccepted() {
     listeners.inviteAccepted = db.ref(`invite_accepted/${myId}`).on('value', snap => { const d = snap.val(); if (d && d.roomCode) { db.ref(`invite_accepted/${myId}`).remove(); isChallenging = false; window.closeInviteModal(); roomCode = d.roomCode; joinRoomLogic(false); } });
 }
 
-
-// ============================================================================
-// 1. SHOW SCREEN (Gestione navigazione, spegnimento listener e tasto Rientra)
-// ============================================================================
 function showScreen(screenId) {
     clearAllTimers();
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
@@ -1296,7 +1276,6 @@ function showScreen(screenId) {
     hideChat();
     if (els.matchDetailsModal) els.matchDetailsModal.style.display = 'none';
 
-    // Identifichiamo se l'utente è in una schermata di GIOCO/LOBBY
     const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen'].includes(screenId);
 
     if (db && myId) {
@@ -1305,13 +1284,11 @@ function showScreen(screenId) {
         } catch(e) {}
     }
 
-    // --- GESTIONE OTTIMIZZATA DEI LISTENER E DEL TASTO RIENTRA ---
     if (screenId === 'setupScreen') {
         const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
         if (!lastRoom && els.rejoinContainer) {
             els.rejoinContainer.style.display = 'none';
         } else if (lastRoom && els.rejoinContainer) {
-            // Se c'è una stanza attiva salvata in memoria, mostriamo il tasto per rientrare in lobby
             els.rejoinContainer.style.display = 'block';
             if (els.rejoinGameBtn) {
                 els.rejoinGameBtn.onclick = () => {
@@ -1322,11 +1299,9 @@ function showScreen(screenId) {
             }
         }
         
-        // Riaccendiamo sempre le liste di Presenza e Bacheca nel menu principale
         listenToOnlineUsers();
         listenToRooms();
     } else {
-        // Nelle altre schermate spegniamo i listener pesanti E AZZERIAMO LA VARIABILE
         if (listeners.presence) {
             if (listeners.presence.ref) {
                 listeners.presence.ref.off('child_added', listeners.presence.onAdded);
@@ -1345,14 +1320,11 @@ function showScreen(screenId) {
         }
     }
 
-    // --- GESTIONE CHAT E NOTIFICHE MIRATE ---
     if (isPlayingScreen) {
-        // Durante il gioco spegniamo la chat globale
         if (listeners.activeChat['chatMessages']) {
             listeners.activeChat['chatMessages'].ref.off('value', listeners.activeChat['chatMessages'].callback);
             delete listeners.activeChat['chatMessages'];
         }
-        // Attiviamo solo la chat di stanza se siamo in lobby o nell'area di gioco
         if (screenId === 'lobbyScreen' || screenId === 'gameArea') {
             activeChatContext = 'room';
             listenToChat();
@@ -1363,8 +1335,6 @@ function showScreen(screenId) {
         activeChatContext = 'team';
         checkMyTeamStatus();
     } else {
-        // NELLE SCHERMATE DI NAVIGAZIONE (setupScreen, profileScreen, leaderboardScreen, etc.):
-        // Manteniamo attiva la Chat Globale per continuare a ricevere le notifiche
         if (screenId === 'participationScreen') { switchActTab('daily'); }
         if (activeChatContext !== 'global') {
             activeChatContext = 'global';
@@ -1373,25 +1343,17 @@ function showScreen(screenId) {
     }
 }
 
-
-// ============================================================================
-// 2. GO BACK TO MENU (Sblocca modali e forza il ritorno alla home)
-// ============================================================================
 window.goBackToMenu = function() {
-    // Svuotiamo stati secondari e chiudiamo pop-up sovrapposti
     if (activeChatContext !== 'team') hideChat();
     if (els.matchDetailsModal) els.matchDetailsModal.style.display = 'none';
     if (els.inviteModal) els.inviteModal.style.display = 'none';
     
-    // Riavvia in modo pulito il menu principale
     showScreen('setupScreen');
 };
 
-// --- GESTIONE BACHECA STANZE IN ATTESA ---
 function addOrUpdateRoomCard(code, room) {
     if (!els.waitingRoomsList || !room) return;
     
-    // Mostriamo in bacheca SOLO le stanze in attesa ('waiting') e non singleplayer
     if (code.startsWith("TRN_") || (room.expiresAt && Date.now() > room.expiresAt) || room.status !== 'waiting' || room.type === 'single') {
         removeRoomCard(code);
         return;
@@ -1413,7 +1375,6 @@ function addOrUpdateRoomCard(code, room) {
                  : (room.mode === 'conquest' || room.type === 'coop') ? '⚔️ Conquista (Co-op)' 
                  : '🔤 Parole';
 
-    // Calcoliamo i giocatori realmente presenti in stanza
     const pCount = room.players ? Object.keys(room.players).length : 1;
 
     const span = document.createElement('span');
@@ -1456,47 +1417,6 @@ function listenToRooms() {
     if (listeners.roomsList) return;
 
     if (els.waitingRoomsList) els.waitingRoomsList.innerHTML = '';
-    
-    // Ascoltiamo direttamente 'rooms' filtrando solo le partite con status 'waiting'
-    const lobbyQuery = db.ref('rooms').orderByChild('status').equalTo('waiting').limitToLast(20);
-
-    const onAdded = lobbyQuery.on('child_added', snap => {
-        addOrUpdateRoomCard(snap.key, snap.val());
-    });
-
-    const onChanged = lobbyQuery.on('child_changed', snap => {
-        addOrUpdateRoomCard(snap.key, snap.val());
-    });
-
-    const onRemoved = lobbyQuery.on('child_removed', snap => {
-        removeRoomCard(snap.key);
-    });
-
-    listeners.roomsList = { ref: lobbyQuery, onAdded, onChanged, onRemoved };
-}
-
-
-function removeRoomCard(code) {
-    if (!els.waitingRoomsList) return;
-    const li = document.getElementById(`room_list_item_${code}`);
-    if (li) li.remove();
-
-    if (els.waitingRoomsList.children.length === 0) {
-        const emptyLi = document.createElement('li');
-        emptyLi.className = 'empty-rooms-msg';
-        emptyLi.style.cssText = "justify-content:center; color:var(--hint-color); background:none; border:none;";
-        emptyLi.textContent = "Nessuna sfida.";
-        els.waitingRoomsList.appendChild(emptyLi);
-    }
-}
-
-// ============================================================================
-// 3. LISTEN TO ROOMS (Ottimizzazione con public_lobby_rooms)
-// ============================================================================
-function listenToRooms() {
-    if (listeners.roomsList) return;
-
-    if (els.waitingRoomsList) els.waitingRoomsList.innerHTML = '';
     const lobbyRef = db.ref('public_lobby_rooms').orderByChild('status').equalTo('waiting').limitToLast(20);
 
     const onAdded = lobbyRef.on('child_added', snap => {
@@ -1513,10 +1433,13 @@ function listenToRooms() {
 
     listeners.roomsList = { ref: lobbyRef, onAdded, onChanged, onRemoved };
 }
+// ============================================================================
+// APP.JS - PARTE 2 DI 2
+// ============================================================================
 
 window.joinSpecificRoom = function(code) { roomCode = code; joinRoomLogic(false); }
 
-// --- CREAZIONE STANZA BLINDATA ANTI-NAN (CON OPZIONE SPETTATORI) ---
+// --- CREAZIONE STANZA ---
 if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
     const gameType = els.gameTypeInput.value, gameMode = els.gameModeInput.value;
     if (gameType === 'tournament') { showScreen('teamsScreen'); if (gameMode === 'trn_create_team') switchTeamTab('gest'); else if (gameMode === 'trn_join_team') switchTeamTab('allteams'); else if (gameMode === 'trn_create_trn') switchTeamTab('tournaments'); return; }
@@ -1568,7 +1491,6 @@ if(els.createRoomBtn) els.createRoomBtn.addEventListener('click', () => {
         expiresAt: expiresTimestamp, 
         hostId: myId || "anon" 
     }).then(() => {
-        // Scriviamo anche sul nodo indicizzato leggero
         if (!isSinglePlayer) {
             db.ref(`public_lobby_rooms/${roomCode}`).set({
                 mode: currentMode,
@@ -1634,18 +1556,18 @@ if(els.btnDeclineDaily) els.btnDeclineDaily.addEventListener('click', () => {
     localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
     els.dailyChallengeModal.style.display = 'none';
 });
+
 if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
-        if (els.brBanner) els.brBanner.style.display = 'none';
-        if (brBannerTimeout) clearTimeout(brBannerTimeout);
-        brBannerDismissedToday = true; // Impedisce che ricompaia a ogni controllo per il resto del giorno
-        db.ref(`rooms/${brRoomCode}/players`).off('value'); // Risparmia banda Firebase spegnendo il listener
-    });
+    if (els.brBanner) els.brBanner.style.display = 'none';
+    if (brBannerTimeout) clearTimeout(brBannerTimeout);
+    brBannerDismissedToday = true;
+    if (brRoomCode) db.ref(`rooms/${brRoomCode}/players`).off('value');
+});
 
-
- function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
+// --- USCITA PULITA DALLA STANZA ---
+function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     clearAllTimers();
     
-    // 1. SGANCIO PULITO SE SI ERA IN MODALITÀ SPETTATORE
     if (typeof window.currentSpectatorCleanup === 'function') {
         window.currentSpectatorCleanup();
         window.currentSpectatorCleanup = null;
@@ -1654,7 +1576,6 @@ if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
     let targetScreen = 'setupScreen'; 
     const amIHost = (myId === roomHostId); 
 
-    // Sganciamo i listener in tempo reale della stanza corrente
     if (listeners.players && roomCode) { db.ref(`rooms/${roomCode}/players`).off('value', listeners.players); listeners.players = null; }
     if (listeners.roomLb && roomCode) { db.ref(`rooms/${roomCode}`).off('value', listeners.roomLb); listeners.roomLb = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
@@ -1664,12 +1585,11 @@ if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
     if (roomCode) {
         if (roomCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
         
-        // 2. SE L'UTENTE HA PREMUTO "ELIMINA STANZA" OPPURE HA ABBANDONATO LA PARTITA IN CORSO ("Abbandona")
-        if (roomWasDeletedByHost || isExplicitQuit) {
-            localStorage.removeItem(STORAGE_ROOM_KEY);
+        // BUG 4 CORRETTO: In TUTTI i casi di uscita manuale o eliminazione, si pulisce il localStorage
+        localStorage.removeItem(STORAGE_ROOM_KEY);
 
+        if (roomWasDeletedByHost || isExplicitQuit) {
             if (amIHost && !roomCode.startsWith("TRN_")) {
-                // Elimina definitivamente la stanza da Firebase
                 db.ref(`rooms/${roomCode}`).remove();
                 db.ref(`public_lobby_rooms/${roomCode}`).remove();
             } else {
@@ -1677,19 +1597,13 @@ if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
                 db.ref(`rooms/${roomCode}/players/${myId}`).remove();
             }
             roomCode = "";
-        } 
-        // 3. SE INVECE È UNA USCITA TEMPORANEA DALLA LOBBY ("Esci dalla Stanza")
-        else {
-            // PULIAMO SEMPRE STORAGE_ROOM_KEY: Niente più banner inutile "RIENTRA NA PARTITA"!
-            // Per rientrare basta cliccare comodamente "Entra" dalla Bacheca Sfide.
-            localStorage.removeItem(STORAGE_ROOM_KEY);
+        } else {
             db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
         }
     } else { 
         if (listeners.room) { listeners.room.off(); listeners.room = null; } 
     }
     
-    // 4. RESET STATO LOCALE E PRESENZA ONLINE
     db.ref(`presence/${myId}`).update({
         allowSpectators: false,
         activeRoomCode: null,
@@ -1700,9 +1614,8 @@ if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
     showScreen(targetScreen);
 }
 
-    
 function joinRoomLogic(isReconnect = false) {
-    gameRunning = false; localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
+    gameRunning = false; 
     const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
     playerRef.once('value', snapshot => {
         const pData = snapshot.val();
@@ -1712,7 +1625,6 @@ function joinRoomLogic(isReconnect = false) {
         playerRef.onDisconnect().update({ online: false }); 
         if (!pData) {
             playerRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, score: 0, wpm: 0, finished: false, teamId: myTeamId, ready: false, online: true }).then(() => {
-                // Aggiorniamo il numero di giocatori nell'indice leggero
                 if (!isSinglePlayer && !roomCode.startsWith("TRN_")) {
                     db.ref(`rooms/${roomCode}/players`).once('value', s => {
                         const count = s.exists() ? Object.keys(s.val()).length : 1;
@@ -1731,6 +1643,11 @@ function joinRoomLogic(isReconnect = false) {
             window.charSpaceWpm = rData.charSpaceWpm !== undefined ? rData.charSpaceWpm : rData.wpm;
             window.wordSpaceMult = rData.wordSpaceMult || 1.0;
             
+            // BUG 4 CORRETTO: La partita viene salvata sul localStorage solo quando inizia il gioco!
+            if (rData.status === 'playing' || rData.status === 'countdown') {
+                localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
+            }
+
             if (rData.status === 'playing' && !gameRunning) { currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone; if (rData.words) gameWords = rData.words; return resumeGameSequence(); }
             if (rData.status === 'countdown' && !gameRunning) { currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone; if (rData.words) gameWords = rData.words; return startCountdownSequence(); }
             if (rData.status === 'waiting') {
@@ -1777,7 +1694,6 @@ if(els.permanentGameInput) {
     els.permanentGameInput.addEventListener('keypress', function(e) { if (e.key === 'Enter' && inputActive && gameRunning && currentMode !== 'chars') { const val = els.permanentGameInput.value.trim().toUpperCase(); if (val) { handleWordSubmission(val); els.permanentGameInput.value = ""; } } });
 }
 
-// --- GESTIONE INVIO PAROLA CON DELEGA A GAMES_CONFIG ---
 function handleWordSubmission(userWord) {
     if (userWord) userWord = userWord.substring(0, 50);
 
@@ -1785,13 +1701,11 @@ function handleWordSubmission(userWord) {
     const reactionMs = Date.now() - lastWordStartTime; 
     const levDist = getLevenshteinDistance(currentWord, userWord);
     
-    // Delego il calcolo del punteggio se presente il modulo esterno
     if (typeof window.calculateGamePoints === 'function') {
         const res = window.calculateGamePoints(currentMode, currentWord, userWord, currentWpm, reactionMs, levDist, usedReplay);
         points = res.points;
         scoreColor = res.scoreColor;
     } else {
-        // Fallback classico
         if (currentMode === 'chars') { if (userWord === currentWord) { points = Math.max(100, Math.floor(1000 - (reactionMs / 2))); scoreColor = "#4caf50"; } else { points = 0; scoreColor = "#d32f2f"; } } 
         else {
             const basePoints = (Math.pow(currentWpm, 2) * currentWord.length) / (10 * Math.pow(levDist + 1, 2)); const estimatedAudioMs = (currentWord.length * 60 / currentWpm) * 1000; let timeMultiplier = 1.0;
@@ -1832,7 +1746,6 @@ function playNextWord() {
     if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
     inputActive = true; usedReplay = false; const currentWord = gameWords[wordIndex].toUpperCase();
     
-    // INVIO SEGNALE AUDIO LIVE PER GLI SPETTATORI
     if (roomCode) db.ref(`rooms/${roomCode}/liveAudio`).set({ word: currentWord, wpm: currentWpm, ts: Date.now() });
 
     if (isEasyMode && isSinglePlayer && els.easyModeHint) { els.easyModeHint.textContent = currentWord.split('').sort(() => 0.5 - Math.random()).join(' '); els.easyModeHint.style.display = 'block'; } else if(els.easyModeHint) els.easyModeHint.style.display = 'none';
@@ -1854,13 +1767,11 @@ function startCountdownSequence() {
     }
     if(els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`; if(els.scoreDisplay) els.scoreDisplay.textContent = `Punti: 0`;
 
-    // --- LOGICA CONTATORE SPETTATORI IN GIOCO ---
     if (isSinglePlayer && els.allowSpectatorsCheckbox && els.allowSpectatorsCheckbox.checked) {
         if (els.spectatorsCountDisplay) {
             els.spectatorsCountDisplay.style.display = 'inline-block';
             els.spectatorsCountDisplay.textContent = '👁️ 0';
         }
-        // Ascolta in tempo reale quanti spettatori entrano nella partita
         db.ref(`rooms/${roomCode}/spectators`).on('value', snap => {
             const count = snap.exists() ? Object.keys(snap.val()).length : 0;
             if (els.spectatorsCountDisplay) {
@@ -1870,7 +1781,6 @@ function startCountdownSequence() {
     } else {
         if (els.spectatorsCountDisplay) els.spectatorsCountDisplay.style.display = 'none';
     }
-    // --------------------------------------------
 
     if (!isRejoining) { totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0; usedReplay = false; sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = []; }
     if(els.tableBody) els.tableBody.innerHTML = ""; window.lastPlayedWordId = 0; window.lastSeenGuessId = 0;
@@ -1955,7 +1865,6 @@ function finishGame() {
     if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
     
-    // Rimuoviamo la stanza dal localStorage al termine regolare della partita
     localStorage.removeItem(STORAGE_ROOM_KEY); 
     isRejoining = false; 
     isChallenging = false; 
@@ -1963,7 +1872,7 @@ function finishGame() {
     db.ref(`presence/${myId}`).update({
         allowSpectators: false,
         activeRoomCode: null,
-        status: 'online' // Riporta lo stato dell'utente a online e non più in partita
+        status: 'online'
     });
 
     showScreen('leaderboardScreen');
@@ -2037,11 +1946,10 @@ function finishGame() {
     else { activeTab = "room"; showLeaderboardTab('tabRoomBtn'); listenToRoomLeaderboard(); }
 }
 
-// GESTIONE DEI PULSANTI DI AZIONE E USCITA
 if(els.quitGameBtn) els.quitGameBtn.addEventListener('click', () => { 
     if (confirm("Vuoi abbandonare la partita?")) { 
         gameRunning = false; 
-        exitRoomCleanly(false, true); // (roomWasDeletedByHost = false, isExplicitQuit = true)
+        exitRoomCleanly(false, true); 
     } 
 });
 
@@ -2061,7 +1969,7 @@ if(els.deleteRoomBtn) els.deleteRoomBtn.addEventListener('click', () => {
 });
 
 if(els.leaveLobbyBtn) els.leaveLobbyBtn.addEventListener('click', () => {
-    exitRoomCleanly(false, false); // isExplicitQuit = true 
+    exitRoomCleanly(false, true);
 });
 
 if(els.deleteDataBtn) els.deleteDataBtn.addEventListener('click', async () => {
@@ -2095,7 +2003,6 @@ if(els.deleteDataBtn) els.deleteDataBtn.addEventListener('click', async () => {
     }
 });
 
-// USIAMO LA NUOVA HELPER FUNCTION SYNCUSERNAMEEVERYWHERE INVECE DELLA RIPETIZIONE
 if(els.saveAliasBtn) els.saveAliasBtn.addEventListener('click', async () => {
     const alias = els.userAliasInput.value.trim(); const privacy = els.privacyUsernameCheckbox.checked;
     if (privacy && !alias) return alert("L'Alias è obbligatorio se nascondi lo username Telegram!");
@@ -2384,11 +2291,10 @@ function saveMatchToGlobalHistory(players, roomData) {
     db.ref(`leaderboard/recent_matches/${modePath}/${roomData.wordCount || 'all'}/${matchId}`).set(matchData);
 }
 
-// --- CLASSIFICHE GLOBALI (OTTIMIZZATE A MAX 50 RECORD VIA SERVER) ---
+// --- CLASSIFICHE GLOBALI ---
 function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
     els.leaderboardContainer.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
     
-    // 1. SFIDA GIORNALIERA: scarica dal server solo i primi 50
     if (tabType === 'daily_challenge') {
         let todayStr = new Date().toISOString().split('T')[0];
         db.ref(`leaderboard/daily_challenge/${todayStr}`)
@@ -2405,7 +2311,6 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         return;
     }
 
-    // 2. STORICO SFIDE MULTIPLAYER RECENTI (Limitato a 20 match)
     if (['standard_multi', 'chars_multi', 'quiz_multi'].includes(tabType)) {
         db.ref(`leaderboard/recent_matches/${tabType}`).once('value', snapshot => {
             let matches = [];
@@ -2416,7 +2321,6 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         return;
     }
 
-    // 3. PING PONG
     if (tabType === 'pingpong') {
         if (filterWordCount !== 'all') {
             db.ref(`leaderboard/pingpong/${filterWordCount}`)
@@ -2445,7 +2349,6 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         return;
     }
 
-    // 4. NOMINATIVI (CW FREAK): scarica dal server solo i primi 50
     if (tabType === 'callsign') {
         db.ref('leaderboard/callsign/global')
           .orderByChild('score')
@@ -2461,7 +2364,6 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         return;
     }
 
-    // 5. CLASSIFICA SQUADRE TORNEI: scarica solo le prime 50 squadre
     if (tabType === 'tournaments') {
         db.ref('leaderboard/tournaments')
           .orderByChild('score')
@@ -2477,7 +2379,6 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         return;
     }
 
-    // 6. TORNEO ATTIVO
     if (tabType === 'active_tournament') {
         if (!activeTrnId) {
             els.leaderboardContainer.innerHTML = '';
@@ -2509,14 +2410,12 @@ function fetchAndRenderGlobalLeaderboard(tabType, filterWordCount) {
         return;
     }
 
-    // 7. PAROLE, CARATTERI E QUIZ (con query mirata al server se selezioni una quantità specifica)
     let isQuiz = tabType.startsWith('quiz');
     let isChars = tabType.startsWith('chars');
     let modePath = isQuiz ? 'quiz' : (isChars ? 'chars' : 'standard');
     let subType = isQuiz ? tabType.replace('quiz_', '') : (isChars ? tabType.replace('chars_', '') : tabType.replace('standard_', ''));
 
     if (filterWordCount !== 'all') {
-        // Query diretta al sottonodo: fa scaricare solo i primi 50 al server!
         db.ref(`leaderboard/${modePath}/${subType}_${filterWordCount}`)
           .orderByChild('score')
           .limitToLast(50)
@@ -3033,10 +2932,10 @@ function renderQuizUI(state) {
 }
 
 // === BATTAGLIA REALE SERALE ===
-const BR_H_BANNER = 9;    // Ora comparsa banner (9 del mattino)
-const BR_M_BANNER = 54;   // Minuto comparsa banner
-const BR_H_START = 21;    // Ora inizio partita (21 di sera)
-const BR_M_START = 30;    // Minuto inizio partita
+const BR_H_BANNER = 9;    
+const BR_M_BANNER = 54;   
+const BR_H_START = 21;    
+const BR_M_START = 30;    
 
 let brRoomCode = "";
 let brIsPlaying = false, brAmIAlive = true;
@@ -3047,9 +2946,6 @@ function initBattleRoyaleScheduler() {
     brCheckInterval = setInterval(checkBattleTime, 100000); 
 }
 
-// ============================================================================
-// 1. ISCRIZIONE BATTAGLIA SERALE (Corretto con .update() per non cancellare gli iscritti)
-// ============================================================================
 window.toggleBattleRoyaleJoin = function() {
     if (!brRoomCode) {
         const now = new Date(Date.now() + serverTimeOffset);
@@ -3063,7 +2959,6 @@ window.toggleBattleRoyaleJoin = function() {
                 showToast("Ti sei ritirato dalla sfida serale.");
             });
         } else {
-            // IMPORTANTE: Usiamo .update() sul padre per non sovrascrivere o cancellare i figli!
             db.ref(`rooms/${brRoomCode}`).update({
                 status: 'enrolling',
                 type: 'battle_royale',
@@ -3085,9 +2980,6 @@ window.toggleBattleRoyaleJoin = function() {
     });
 };
 
-// ============================================================================
-// 2. CONTROLLO E GESTIONE BANNER SERALE (Con timer 10s e aggiornamento colore in tempo reale)
-// ============================================================================
 function checkBattleTime() {
     if (gameRunning || brIsPlaying || brBannerDismissedToday) return; 
     
@@ -3105,7 +2997,6 @@ function checkBattleTime() {
     brRoomCode = "BR_" + dKey;
 
     if (isTime) {
-        // Mostriamo il banner se non era ancora visibile e avviamo il timer di 10 secondi
         if (els.brBanner && els.brBanner.style.display === 'none') {
             els.brBanner.style.display = 'block';
             
@@ -3113,14 +3004,13 @@ function checkBattleTime() {
             brBannerTimeout = setTimeout(() => {
                 if (els.brBanner) els.brBanner.style.display = 'none';
                 brBannerDismissedToday = true;
-                db.ref(`rooms/${brRoomCode}/players`).off('value'); // Stacca il listener al termine
+                db.ref(`rooms/${brRoomCode}/players`).off('value'); 
             }, 10000);
         }
         
         if (els.btnJoinBR) {
             els.btnJoinBR.onclick = () => {
                 window.toggleBattleRoyaleJoin();
-                // Anche cliccando sul tasto, prolunghiamo o riavviamo i 10s prima della scomparsa
                 if (brBannerTimeout) clearTimeout(brBannerTimeout);
                 brBannerTimeout = setTimeout(() => {
                     if (els.brBanner) els.brBanner.style.display = 'none';
@@ -3130,7 +3020,6 @@ function checkBattleTime() {
             };
         }
 
-        // Ascoltiamo in tempo reale chi è iscritto
         db.ref(`rooms/${brRoomCode}/players`).on('value', snap => {
             const players = snap.val() || {};
             const count = Object.keys(players).length;
@@ -3139,7 +3028,6 @@ function checkBattleTime() {
             if (els.brEnrolledCountCompact) els.brEnrolledCountCompact.textContent = count;
             
             if (players[myId]) {
-                // SE SEI ISCRITTO -> BANNER VERDE COMPATTO
                 if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#4caf50'; 
                     els.brBanner.style.borderColor = '#81c784';
@@ -3155,7 +3043,6 @@ function checkBattleTime() {
                     els.btnJoinBR.style.flexGrow = '1';
                 }
             } else {
-                // SE NON SEI ISCRITTO -> BANNER ROSSO ESTESO
                 if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#e53935'; 
                     els.brBanner.style.borderColor = '#ff5252';
@@ -3181,6 +3068,7 @@ function checkBattleTime() {
         db.ref(`rooms/${brRoomCode}/players/${myId}`).once('value', snap => {
             if (snap.exists() && activeTab !== "br_playing") {
                 activeTab = "br_playing";
+                lastBRRoundPlayed = -1;
                 showScreen('brScreen');
                 listenToBattleRoyaleRoom();
             }
@@ -3188,6 +3076,7 @@ function checkBattleTime() {
         startBattleRoyaleSystem(); 
     }
 }
+
 function listenToBattleRoyaleRoom() {
     db.ref(`rooms/${brRoomCode}`).on('value', snap => {
         if (!snap.exists()) { 
@@ -3218,13 +3107,15 @@ function listenToBattleRoyaleRoom() {
             if (safeLives > 5) safeLives = 5;
             els.brLivesDisplay.textContent = brAmIAlive ? hearts[safeLives] : "💀 ELIMINATO";
             
-            if (rData.roundEndTime && rData.currentWord) {
+            if (rData.roundEndTime && rData.currentWord && rData.round !== lastBRRoundPlayed) {
+                lastBRRoundPlayed = rData.round;
                 handleBRRound(rData);
             }
         }
         
         if (rData.status === 'finished') {
             brIsPlaying = false;
+            lastBRRoundPlayed = -1;
             els.brStatusText.textContent = `Partita Conclusa! Vincitore: ${rData.winner || 'Nessuno'}`;
             els.brInputArea.style.display = 'none';
             els.brTimerContainer.style.display = 'none';
@@ -3294,6 +3185,7 @@ function hostNextBRRound(rData, wpm, roundNum) {
     setTimeout(() => checkBRRoundResults(wpm, roundNum), 31000);
 }
 
+// BUG 3 CORRETTO: In Battaglia Reale non disabilitiamo l'input per mantenere la tastiera aperta
 function handleBRRound(rData) {
     if (brTimerInterval) clearInterval(brTimerInterval);
     
@@ -3301,6 +3193,8 @@ function handleBRRound(rData) {
     
     if (brAmIAlive && !rData.players[myId].answered) {
         els.brInputArea.style.display = 'flex';
+        els.brInput.disabled = false;
+        els.brInput.placeholder = "Decodifica e scrivi qui...";
         els.brInput.value = '';
         els.brInput.focus();
         els.brTimerContainer.style.display = 'block';
@@ -3327,11 +3221,6 @@ function handleBRRound(rData) {
     }, 100);
 }
 
-// OTTIMIZZATO: Rimossa la scrittura real-time 'Sta scrivendo...' su DB che causava O(N^2) spam al digitare
-if (els.brInput) els.brInput.addEventListener('input', () => {
-    // La UI locale può mantenere un feedback visivo se necessario, ma non si invia ad ogni bit a Firebase!
-});
-
 if (els.brInput) els.brInput.addEventListener('keypress', e => {
     if (e.key === 'Enter') els.btnSendBr.click();
 });
@@ -3345,7 +3234,11 @@ if (els.btnSendBr) els.btnSendBr.addEventListener('click', () => {
 function submitBRAnswer(realWord, isTimeout) {
     if (!brAmIAlive) return;
     clearInterval(brTimerInterval);
-    els.brInputArea.style.display = 'none';
+    
+    // BUG 3 CORRETTO: Teniamo abilitato l'input per lasciare aperta la tastiera mobile
+    els.brInput.placeholder = isTimeout ? "Tempo scaduto!" : "Risposta inviata! Attendi...";
+    els.brInput.value = '';
+    els.brInput.focus();
     
     const typed = els.brInput.value.trim().toUpperCase().substring(0, 50);
     const isCorrect = !isTimeout && (typed === realWord);
@@ -3387,6 +3280,7 @@ function checkBRRoundResults(currentWpm, currentRound) {
 if(els.btnLeaveBR) els.btnLeaveBR.addEventListener('click', () => {
     if(confirm("Vuoi abbandonare la Battaglia Serale?")) {
         brIsPlaying = false;
+        lastBRRoundPlayed = -1;
         activeTab = "room";
         if(brTimerInterval) clearInterval(brTimerInterval);
         db.ref(`rooms/${brRoomCode}/players/${myId}`).remove();
@@ -3395,7 +3289,7 @@ if(els.btnLeaveBR) els.btnLeaveBR.addEventListener('click', () => {
 });
 
 // =========================================================
-// MOTORE MODALITÀ SPETTATORE (OSSERVA PARTITA IN TEMPO REALE)
+// MOTORE MODALITÀ SPETTATORE
 // =========================================================
 
 window.watchSpecificRoom = function(code, targetName) {
@@ -3408,16 +3302,13 @@ window.watchSpecificRoom = function(code, targetName) {
         els.permanentGameInput.value = "";
     }
     
-    // Impostazione iniziale WPM
     els.wpmDisplay.textContent = "👁️ SPETTATORE | WPM: --";
     if (els.spectatorsCountDisplay) els.spectatorsCountDisplay.style.display = 'none';
 
-    // 1. Registriamo la nostra presenza come "spettatore" nel sottonodo della stanza
     const mySpectatorRef = db.ref(`rooms/${roomCode}/spectators/${myId}`);
     mySpectatorRef.set({ name: myName, ts: firebase.database.ServerValue.TIMESTAMP });
     mySpectatorRef.onDisconnect().remove();
     
-    // 2. Ascolto di Stato del Giocatore e Tabellone Parole
     const roomRef = db.ref(`rooms/${roomCode}`);
     const onRoomChange = roomRef.on('value', snap => {
         if (!snap.exists()) {
@@ -3436,12 +3327,10 @@ window.watchSpecificRoom = function(code, targetName) {
             return;
         }
 
-        // Aggiorniamo Punti e Velocità base del giocatore
         const currentSpeed = hostData.wpm || roomData.wpm || 20;
         els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${currentSpeed}`;
         els.scoreDisplay.textContent = `Punti: ${hostData.score || 0}`;
         
-        // Aggiorniamo il tabellone con le parole giocate e FORZIAMO LO SCORRIMENTO
         if (els.tableBody && hostData.matchDetails) {
             els.tableBody.innerHTML = "";
             hostData.matchDetails.forEach(row => {
@@ -3465,7 +3354,6 @@ window.watchSpecificRoom = function(code, targetName) {
                 els.tableBody.appendChild(tr);
             });
 
-            // RITARDO DI 50ms PER PERMETTERE AL BROWSER DI RICALCOLARE L'ALTEZZA E SCORRERE IN FONDO
             setTimeout(() => {
                 if (els.tableWrapper) {
                     els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
@@ -3474,18 +3362,15 @@ window.watchSpecificRoom = function(code, targetName) {
         }
     });
 
-    // 3. Riproduzione Audio Live e WPM in tempo reale della parola in trasmissione
     const onAudioChange = db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
         const audioData = snap.val();
         if (audioData && audioData.word) {
             const liveWpm = audioData.wpm || 20;
-            // Mostriamo il WPM istantaneo della parola che sta suonando in questo momento
             els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm}`;
             playMorseAudio(audioData.word, liveWpm, true);
         }
     });
 
-    // Supporto per sganciare i listener in caso di uscita
     window.currentSpectatorCleanup = function() {
         roomRef.off('value', onRoomChange);
         db.ref(`rooms/${roomCode}/liveAudio`).off('value', onAudioChange);
@@ -3504,20 +3389,8 @@ function stopWatchingCleanly() {
     }, 2500);
 }
 
-
-function stopWatchingCleanly() {
-    if (typeof window.currentSpectatorCleanup === 'function') {
-        window.currentSpectatorCleanup();
-        window.currentSpectatorCleanup = null;
-    }
-    setTimeout(() => {
-        roomCode = "";
-        goBackToMenu();
-    }, 2500);
-}
-
 // =========================================================
-// MOTORE GIOCO COLLABORATIVO: CONQUISTA (TIRO ALLA FUNE ESCLUSIVO)
+// MOTORE GIOCO COLLABORATIVO: CONQUISTA (CO-OP)
 // =========================================================
 
 function startCoopSequence() {
@@ -3536,7 +3409,7 @@ function startCoopSequence() {
     els.btnCoopReleaseFreq.style.display = 'none';
 
     if (els.permanentGameInput) {
-        els.permanentGameInput.disabled = true;
+        els.permanentGameInput.disabled = false; // BUG 3 CORRETTO: Nessun blocco input
         els.permanentGameInput.placeholder = "Seleziona prima una Frequenza 🟢🟡🔴...";
         els.permanentGameInput.value = "";
     }
@@ -3639,17 +3512,21 @@ function listenToCoopState() {
             if (currentFreqWord && currentFreqWord !== gameWords[0]) {
                 gameWords[0] = currentFreqWord;
                 inputActive = true;
+                // BUG 2 CORRETTO: Riproduce il suono CW solo in locale per chi controlla il canale
                 setTimeout(() => {
-                    if (gameRunning && isCoopMode && gameWords[0] === currentFreqWord) {
+                    if (gameRunning && isCoopMode && gameWords[0] === currentFreqWord && owners[coopActiveFreqIndex] === myId) {
                         playMorseAudio(currentFreqWord, currentWpm);
                     }
-                }, 500);
+                }, 300);
                 els.permanentGameInput.value = "";
                 els.permanentGameInput.focus();
             }
         }
     });
 }
+// ============================================================================
+// APP.JS - PARTE FINALE (da setupCoopFreqButtons in poi)
+// ============================================================================
 
 function setupCoopFreqButtons() {
     const labels = ["🟢 FREQ 1 (3-4 car.)", "🟡 FREQ 2 (5-6 car.)", "🔴 FREQ 3 (7+ car.)"];
@@ -3667,19 +3544,24 @@ function setupCoopFreqButtons() {
             }, (error, committed) => {
                 if (committed) {
                     coopActiveFreqIndex = num;
-                    els.coopActiveFreqLabel.textContent = `Canale: ${labels[num - 1]}`;
-                    els.btnCoopReleaseFreq.style.display = 'inline-block';
+                    if (els.coopActiveFreqLabel) els.coopActiveFreqLabel.textContent = `Canale: ${labels[num - 1]}`;
+                    if (els.btnCoopReleaseFreq) els.btnCoopReleaseFreq.style.display = 'inline-block';
                     
-                    els.permanentGameInput.disabled = false;
-                    els.permanentGameInput.placeholder = "Digita qui...";
+                    // CORREZIONE TASTIERA: manteniamo sempre il campo abilitato e in focus
+                    if (els.permanentGameInput) {
+                        els.permanentGameInput.disabled = false;
+                        els.permanentGameInput.placeholder = "Digita qui...";
+                        els.permanentGameInput.focus();
+                    }
                     inputActive = true; 
                     
                     db.ref(`rooms/${roomCode}/coop_state/activeWords`).once('value', s => {
                         const words = s.val();
                         if (words && words[num - 1]) {
                             gameWords[0] = words[num - 1];
+                            // CORREZIONE AUDIO INDIPENDENTE: suona il Morse del canale SOLO per me che l'ho attivato
                             playMorseAudio(words[num - 1], currentWpm);
-                            els.permanentGameInput.focus();
+                            if (els.permanentGameInput) els.permanentGameInput.focus();
                         }
                     });
                 } else {
@@ -3698,18 +3580,20 @@ function setupCoopFreqButtons() {
             }, () => {
                 coopActiveFreqIndex = 0;
                 inputActive = false;
-                els.permanentGameInput.disabled = true;
-                els.permanentGameInput.placeholder = "Seleziona prima una Frequenza 🟢🟡🔴...";
-                els.permanentGameInput.value = "";
-                els.coopActiveFreqLabel.textContent = "Canale: Nessuno selezionato";
-                els.btnCoopReleaseFreq.style.display = 'none';
+                // Manteniamo l'input non disabilitato in modo traumatico, cambiamo solo il placeholder per evitare che si chiuda la tastiera
+                if (els.permanentGameInput) {
+                    els.permanentGameInput.placeholder = "Seleziona prima una Frequenza 🟢🟡🔴...";
+                    els.permanentGameInput.value = "";
+                }
+                if (els.coopActiveFreqLabel) els.coopActiveFreqLabel.textContent = "Canale: Nessuno selezionato";
+                if (els.btnCoopReleaseFreq) els.btnCoopReleaseFreq.style.display = 'none';
                 showToast("🔓 Canale rilasciato per i compagni.");
             });
         };
     }
 }
 
-// Override per l'invio della parola con WPM Dinamico, Penalità e Pausa di 2 secondi
+// Override per l'invio della parola con WPM Dinamico, Penalità e mantenimento tastiera aperta in Co-op
 const originalHandleWordSubmission = handleWordSubmission;
 handleWordSubmission = function(userWord) {
     if (currentMode !== 'conquest') {
@@ -3726,11 +3610,11 @@ handleWordSubmission = function(userWord) {
     const penalty = coopActiveFreqIndex === 1 ? 2 : (coopActiveFreqIndex === 2 ? 3 : 5);
 
     inputActive = false;
-    els.permanentGameInput.disabled = true;
+    // CORREZIONE TASTIERA: NON disabilitiamo els.permanentGameInput per impedire la chiusura della tastiera di sistema
 
     if (isCorrect) {
         currentWpm += 2;
-        els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
+        if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
         showToast(`✅ CORRETTO! +${gain}% (Velocità -> ${currentWpm} WPM)`);
         playBeep(880, 0.1);
 
@@ -3742,7 +3626,7 @@ handleWordSubmission = function(userWord) {
         });
     } else {
         currentWpm = Math.max(10, currentWpm - 2);
-        els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
+        if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
         showToast(`❌ ERRORE! -${penalty}% (Velocità -> ${currentWpm} WPM)`);
         playBeep(300, 0.25);
 
@@ -3755,71 +3639,79 @@ handleWordSubmission = function(userWord) {
 
     setTimeout(() => {
         if (!gameRunning) return;
-        els.permanentGameInput.disabled = false;
-        els.permanentGameInput.value = "";
-        els.permanentGameInput.focus();
-        inputActive = true;
+        if (els.permanentGameInput) {
+            els.permanentGameInput.value = "";
+            els.permanentGameInput.focus();
+        }
+        inputActive = true; 
         
+        // CORREZIONE AUDIO INDIPENDENTE: la parola fallita o la nuova parola ripartono in Morse solo nel client locale di chi ha sbagliato
         if (!isCorrect && gameWords[0]) {
             playMorseAudio(gameWords[0], currentWpm);
         }
-    }, 2000);
+    }, 1500);
 };
 
 function finishCoopGame(won) {
     gameRunning = false;
     clearAllTimers();
-    db.ref(`rooms/${roomCode}/coop_state`).off();
+    if (roomCode) db.ref(`rooms/${roomCode}/coop_state`).off();
 
-    // 1. SALVATAGGIO PARITA CONTRO AVVERSARIO IRREALE (AI)
-    db.ref(`rooms/${roomCode}/players`).once('value', snap => {
-        const players = snap.val() || {};
-        const namesList = Object.values(players).map(p => p.name).join(", ");
-        const finalScore = won ? 100 : 75;
+    // 1. SALVATAGGIO PARTITA CONTRO AVVERSARIO IRREALE (AI)
+    if (roomCode) {
+        db.ref(`rooms/${roomCode}/players`).once('value', snap => {
+            const players = snap.val() || {};
+            const namesList = Object.values(players).map(p => p.name).join(", ");
+            const finalScore = won ? 100 : 75;
 
-        const fakeHeadToHead = {
-            "team_real": {
-                id: myId,
-                name: `👥 ${namesList || "Squadra"}`,
-                score: finalScore,
-                wpm: currentWpm,
-                finished: true
-            },
-            "team_ai": {
-                id: "ai_enemy",
-                name: "🤖 Disturbo Nemico (AI)",
-                score: won ? 99 : 100,
-                wpm: currentWpm + 5,
-                finished: true
-            }
-        };
+            const fakeHeadToHead = {
+                "team_real": {
+                    id: myId,
+                    name: `👥 ${namesList || "Squadra"}`,
+                    score: finalScore,
+                    wpm: currentWpm,
+                    finished: true
+                },
+                "team_ai": {
+                    id: "ai_enemy",
+                    name: "🤖 Disturbo Nemico (AI)",
+                    score: won ? 99 : 100,
+                    wpm: currentWpm + 5,
+                    finished: true
+                }
+            };
 
-        db.ref(`rooms/${roomCode}/players`).set(fakeHeadToHead);
+            db.ref(`rooms/${roomCode}/players`).set(fakeHeadToHead);
 
-        const matchId = Date.now().toString();
-        const matchData = {
-            players: Object.values(fakeHeadToHead),
-            mode: "conquest",
-            wordCount: "Co-op",
-            date: new Date().toLocaleDateString('it-IT'),
-            ts: firebase.database.ServerValue.TIMESTAMP
-        };
-        db.ref(`leaderboard/recent_matches/conquest_multi/all/${matchId}`).set(matchData);
-    });
+            const matchId = Date.now().toString();
+            const matchData = {
+                players: Object.values(fakeHeadToHead),
+                mode: "conquest",
+                wordCount: "Co-op",
+                date: new Date().toLocaleDateString('it-IT'),
+                ts: firebase.database.ServerValue.TIMESTAMP
+            };
+            db.ref(`leaderboard/recent_matches/conquest_multi/all/${matchId}`).set(matchData);
+        });
+    }
 
     showScreen('leaderboardScreen');
-    els.tableWrapper.style.display = 'block';
-    els.coopArea.style.display = 'none';
+    if (els.tableWrapper) els.tableWrapper.style.display = 'block';
+    if (els.coopArea) els.coopArea.style.display = 'none';
 
     if (won) {
         showToast("🏆 VITTORIA DI SQUADRA! Territorio Conquistato!");
-        els.roomWinnerBanner.textContent = "🏆 MISSIONE COMPIUTA CONTRO IL DISTURBO NEMICO!";
-        els.roomWinnerBanner.style.color = "#4caf50";
+        if (els.roomWinnerBanner) {
+            els.roomWinnerBanner.textContent = "🏆 MISSIONE COMPIUTA CONTRO IL DISTURBO NEMICO!";
+            els.roomWinnerBanner.style.color = "#4caf50";
+        }
         updateActivity(true);
     } else {
         showToast("💀 TEMPO SCADUTO! Il disturbo nemico ha vinto.");
-        els.roomWinnerBanner.textContent = "💀 MISSIONE FALLITA: HA VINTO L'AVVERSARIO IRREALE";
-        els.roomWinnerBanner.style.color = "#d32f2f";
+        if (els.roomWinnerBanner) {
+            els.roomWinnerBanner.textContent = "💀 MISSIONE FALLITA: HA VINTO L'AVVERSARIO IRREALE";
+            els.roomWinnerBanner.style.color = "#d32f2f";
+        }
         updateActivity(false);
     }
 }
