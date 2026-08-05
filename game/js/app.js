@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.128"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260805.129"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1680,8 +1680,9 @@ if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
         } 
         // 3. SE INVECE È UNA USCITA TEMPORANEA DALLA LOBBY ("Esci dalla Stanza")
         else {
-            // NON eliminiamo la stanza e NON cancelliamo STORAGE_ROOM_KEY!
-            // La partita resta visibile in bacheca con status 'waiting'
+            // PULIAMO SEMPRE STORAGE_ROOM_KEY: Niente più banner inutile "RIENTRA NA PARTITA"!
+            // Per rientrare basta cliccare comodamente "Entra" dalla Bacheca Sfide.
+            localStorage.removeItem(STORAGE_ROOM_KEY);
             db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
         }
     } else { 
@@ -1698,7 +1699,7 @@ if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
     hideChat(); 
     showScreen(targetScreen);
 }
-   
+
     
 function joinRoomLogic(isReconnect = false) {
     gameRunning = false; localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
