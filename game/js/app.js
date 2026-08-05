@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.201";
+const APP_VERSION = "20260805.202";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -2959,16 +2959,49 @@ function renderActiveTournament(trnSnap) {
 if(els.editTrnNameBtn) els.editTrnNameBtn.addEventListener('click', () => { let n = prompt("Nuovo nome:"); if (n && n.trim() !== "") db.ref(`tournaments/${activeTrnId}/name`).set(n.trim()); });
 if(els.leaveTrnBtn) els.leaveTrnBtn.addEventListener('click', () => { if (!isTeamCaptain) return; if (confirm("Ritirare la squadra?")) { db.ref(`tournaments/${activeTrnId}/teams/${myTeamId}`).remove(); db.ref(`tournaments/${activeTrnId}/standings/${myTeamId}`).remove(); } });
 if(els.deleteTrnBtn) els.deleteTrnBtn.addEventListener('click', () => { if(confirm("Eliminare definitivamente il torneo?")) db.ref(`tournaments/${activeTrnId}`).remove(); });
-if(els.startTrnBtn) els.startTrnBtn.addEventListener('click', () => {
-    if (!activeTrnId) return;
-    db.ref(`tournaments/${activeTrnId}/teams`).once('value', snap => {
-        let teams = []; snap.forEach(child => teams.push({ id: child.key, name: child.val().name }));
-        if (teams.length < 2) return alert("Servono almeno 2 squadre per iniziare!");
-        let matches = {}; let matchIndex = 1;
-        for(let i=0; i<teams.length; i++) for(let j=i+1; j<teams.length; j++) matches[`m${matchIndex++}`] = { teamA: teams[i].id, teamAName: teams[i].name, teamB: teams[j].id, teamBName: teams[j].name, status: 'waiting' };
-        db.ref(`tournaments/${activeTrnId}`).update({ status: 'playing', matches: matches }).then(() => showToast("Tabellone generato con successo!")).catch(err => alert("Errore: " + err.message));
+if (els.startTrnBtn) {
+    els.startTrnBtn.addEventListener('click', () => {
+        if (!activeTrnId) return;
+        
+        db.ref(`tournaments/${activeTrnId}/teams`).once('value', snap => {
+            const teamsObj = snap.val() || {};
+            // Converte direttamente l'oggetto Firebase in array in modo sicuro
+            const teams = Object.entries(teamsObj).map(([id, data]) => ({
+                id: id,
+                name: data.name || "Squadra"
+            }));
+
+            if (teams.length < 2) {
+                return alert("Servono almeno 2 squadre per iniziare!");
+            }
+
+            let matches = {};
+            let matchIndex = 1;
+
+            // Genera gli incontri (Girone all'italiana / tutti contro tutti)
+            for (let i = 0; i < teams.length; i++) {
+                for (let j = i + 1; j < teams.length; j++) {
+                    matches[`m${matchIndex++}`] = {
+                        teamA: teams[i].id,
+                        teamAName: teams[i].name,
+                        teamB: teams[j].id,
+                        teamBName: teams[j].name,
+                        status: 'waiting'
+                    };
+                }
+            }
+
+            db.ref(`tournaments/${activeTrnId}`).update({
+                status: 'playing',
+                matches: matches
+            }).then(() => {
+                showToast("Tabellone generato con successo!");
+            }).catch(err => {
+                alert("Errore: " + err.message);
+            });
+        });
     });
-});
+}
 window.toggleTrnSlot = function(matchId, side, teamId) {
     if (teamId !== myTeamId) return alert("Non appartieni a questa squadra!");
     const slotRef = db.ref(`tournaments/${activeTrnId}/matches/${matchId}/player${side}`);
