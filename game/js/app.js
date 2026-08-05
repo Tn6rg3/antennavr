@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.130";
+const APP_VERSION = "20260805.131";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1576,6 +1576,7 @@ function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     let targetScreen = 'setupScreen'; 
     const amIHost = (myId === roomHostId); 
 
+    // Stacchiamo i listener della stanza corrente
     if (listeners.players && roomCode) { db.ref(`rooms/${roomCode}/players`).off('value', listeners.players); listeners.players = null; }
     if (listeners.roomLb && roomCode) { db.ref(`rooms/${roomCode}`).off('value', listeners.roomLb); listeners.roomLb = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
@@ -1585,9 +1586,11 @@ function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     if (roomCode) {
         if (roomCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
         
-        // BUG 4 CORRETTO: In TUTTI i casi di uscita manuale o eliminazione, si pulisce il localStorage
+        // Rimuoviamo sempre la chiave dal localStorage quando si esce volontariamente:
+        // così il banner arancione "RIENTRA NELLA PARTITA" non compare indebitamente.
         localStorage.removeItem(STORAGE_ROOM_KEY);
 
+        // 1. SE LA STANZA È STATA ELIMINATA O SI ABBANDONA UNA PARTITA IN CORSO
         if (roomWasDeletedByHost || isExplicitQuit) {
             if (amIHost && !roomCode.startsWith("TRN_")) {
                 db.ref(`rooms/${roomCode}`).remove();
@@ -1597,7 +1600,10 @@ function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
                 db.ref(`rooms/${roomCode}/players/${myId}`).remove();
             }
             roomCode = "";
-        } else {
+        } 
+        // 2. SE SI ESCE TEMPORANEAMENTE DALLA LOBBY IN ATTESA ("Esci dalla Stanza")
+        else {
+            // NON cancelliamo la stanza da Firebase! Resta su "waiting" e visibile in Bacheca Sfide.
             db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
         }
     } else { 
@@ -1613,6 +1619,32 @@ function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     hideChat(); 
     showScreen(targetScreen);
 }
+
+// ============================================================================
+// LISTENER DEI PULSANTI DI USCITA
+// ============================================================================
+
+// 1. Tasto "Abbandona" durante una partita in corso -> isExplicitQuit = true (forfait / chiusura)
+if(els.quitGameBtn) els.quitGameBtn.addEventListener('click', () => { 
+    if (confirm("Vuoi abbandonare la partita?")) { 
+        gameRunning = false; 
+        exitRoomCleanly(false, true); 
+    } 
+});
+
+// 2. Tasto "Elimina Stanza" -> roomWasDeletedByHost = true (cancella da Firebase e da Bacheca)
+if(els.deleteRoomBtn) els.deleteRoomBtn.addEventListener('click', () => { 
+    if (confirm("Eliminare questa stanza?")) {
+        db.ref(`public_lobby_rooms/${roomCode}`).remove();
+        db.ref(`rooms/${roomCode}`).remove().then(() => exitRoomCleanly(true, true)); 
+    }
+});
+
+// 3. Tasto "Esci dalla Stanza" in lobby -> ENTRAMBI FALSE!
+// La stanza rimane in Bacheca Sfide, ma non compare il banner di rientro automatico.
+if(els.leaveLobbyBtn) els.leaveLobbyBtn.addEventListener('click', () => {
+    exitRoomCleanly(false, false); 
+});
 
 function joinRoomLogic(isReconnect = false) {
     gameRunning = false; 
