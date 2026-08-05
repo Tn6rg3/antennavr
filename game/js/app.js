@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.127"; // Versione incrementata e ottimizzata
+const APP_VERSION = "20260805.128"; // Versione incrementata e ottimizzata
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1387,10 +1387,12 @@ window.goBackToMenu = function() {
     showScreen('setupScreen');
 };
 
-// --- GESTIONE INDICIZZATA STANZE IN ATTESA ---
+// --- GESTIONE BACHECA STANZE IN ATTESA ---
 function addOrUpdateRoomCard(code, room) {
-    if (!els.waitingRoomsList) return;
-    if (code.startsWith("TRN_") || (room.expiresAt && Date.now() > room.expiresAt) || room.status !== 'waiting') {
+    if (!els.waitingRoomsList || !room) return;
+    
+    // Mostriamo in bacheca SOLO le stanze in attesa ('waiting') e non singleplayer
+    if (code.startsWith("TRN_") || (room.expiresAt && Date.now() > room.expiresAt) || room.status !== 'waiting' || room.type === 'single') {
         removeRoomCard(code);
         return;
     }
@@ -1411,13 +1413,16 @@ function addOrUpdateRoomCard(code, room) {
                  : (room.mode === 'conquest' || room.type === 'coop') ? '⚔️ Conquista (Co-op)' 
                  : '🔤 Parole';
 
+    // Calcoliamo i giocatori realmente presenti in stanza
+    const pCount = room.players ? Object.keys(room.players).length : 1;
+
     const span = document.createElement('span');
     const bTitle = document.createElement('b'); 
     bTitle.textContent = `#${code} - ${modeIcon}`;
 
     const infoText = (room.mode === 'conquest' || room.type === 'coop')
-        ? `${room.pCount || 1} Gioc. | ${room.wpm} WPM | 5 min`
-        : `${room.pCount || 1} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test`;
+        ? `${pCount} Gioc. | ${room.wpm} WPM | 5 min`
+        : `${pCount} Gioc. | ${room.wpm} WPM | ${room.wordCount} Test`;
 
     const smallInfo = document.createElement('small'); 
     smallInfo.textContent = infoText;
@@ -1428,10 +1433,48 @@ function addOrUpdateRoomCard(code, room) {
 
     const btn = document.createElement('button'); 
     btn.className = 'action-btn-small'; 
-    btn.textContent = 'Entra'; 
+    btn.textContent = currentLang === 'en' ? 'Join' : 'Entra'; 
     btn.onclick = () => window.joinSpecificRoom(code); 
     li.appendChild(btn);
 }
+
+function removeRoomCard(code) {
+    if (!els.waitingRoomsList) return;
+    const li = document.getElementById(`room_list_item_${code}`);
+    if (li) li.remove();
+
+    if (els.waitingRoomsList.children.length === 0) {
+        const emptyLi = document.createElement('li');
+        emptyLi.className = 'empty-rooms-msg';
+        emptyLi.style.cssText = "justify-content:center; color:var(--hint-color); background:none; border:none;";
+        emptyLi.textContent = currentLang === 'en' ? "No challenges." : "Nessuna sfida.";
+        els.waitingRoomsList.appendChild(emptyLi);
+    }
+}
+
+function listenToRooms() {
+    if (listeners.roomsList) return;
+
+    if (els.waitingRoomsList) els.waitingRoomsList.innerHTML = '';
+    
+    // Ascoltiamo direttamente 'rooms' filtrando solo le partite con status 'waiting'
+    const lobbyQuery = db.ref('rooms').orderByChild('status').equalTo('waiting').limitToLast(20);
+
+    const onAdded = lobbyQuery.on('child_added', snap => {
+        addOrUpdateRoomCard(snap.key, snap.val());
+    });
+
+    const onChanged = lobbyQuery.on('child_changed', snap => {
+        addOrUpdateRoomCard(snap.key, snap.val());
+    });
+
+    const onRemoved = lobbyQuery.on('child_removed', snap => {
+        removeRoomCard(snap.key);
+    });
+
+    listeners.roomsList = { ref: lobbyQuery, onAdded, onChanged, onRemoved };
+}
+
 
 function removeRoomCard(code) {
     if (!els.waitingRoomsList) return;
@@ -1598,7 +1641,8 @@ if (els.btnCloseBRBanner) els.btnCloseBRBanner.addEventListener('click', () => {
         db.ref(`rooms/${brRoomCode}/players`).off('value'); // Risparmia banda Firebase spegnendo il listener
     });
 
-function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
+
+ function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     clearAllTimers();
     
     // 1. SGANCIO PULITO SE SI ERA IN MODALITÀ SPETTATORE
@@ -1620,42 +1664,25 @@ function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     if (roomCode) {
         if (roomCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
         
-        // 2. SE L'UTENTE HA ABBANDONATO VOLONTARIAMENTE O LA STANZA È CANCELLATA
+        // 2. SE L'UTENTE HA PREMUTO "ELIMINA STANZA" OPPURE HA ABBANDONATO LA PARTITA IN CORSO ("Abbandona")
         if (roomWasDeletedByHost || isExplicitQuit) {
-            // CANCELLIAMO SEMPRE LA MEMORIA LOCALE: MAI PIÙ TASTO "RIENTRA"!
             localStorage.removeItem(STORAGE_ROOM_KEY);
 
             if (amIHost && !roomCode.startsWith("TRN_")) {
-                // Se l'Host abbandona la partita, la stanza viene chiusa e terminata per tutti
+                // Elimina definitivamente la stanza da Firebase
                 db.ref(`rooms/${roomCode}`).remove();
                 db.ref(`public_lobby_rooms/${roomCode}`).remove();
             } else {
-                // Se un partecipante abbandona, viene rimosso dai giocatori della stanza
                 db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
-                const currentRoomCode = roomCode;
-                db.ref(`rooms/${currentRoomCode}`).once('value', snap => { 
-                    if (snap.exists()) {
-                        db.ref(`rooms/${currentRoomCode}/players/${myId}`).remove();
-                        const pCount = Math.max(0, Object.keys(snap.val().players || {}).length - 1);
-                        if (pCount === 0) {
-                            db.ref(`public_lobby_rooms/${currentRoomCode}`).remove();
-                            db.ref(`rooms/${currentRoomCode}`).remove();
-                        } else {
-                            db.ref(`public_lobby_rooms/${currentRoomCode}/pCount`).set(pCount);
-                        }
-                    } 
-                });
+                db.ref(`rooms/${roomCode}/players/${myId}`).remove();
             }
             roomCode = "";
         } 
-        // 3. SE INVECE È UNA USCITA TEMPORANEA (es. semplice navigazione senza abbandonare)
+        // 3. SE INVECE È UNA USCITA TEMPORANEA DALLA LOBBY ("Esci dalla Stanza")
         else {
-            if (amIHost && !roomCode.startsWith("TRN_")) {
-                // La stanza non si tocca e mantieni STORAGE_ROOM_KEY per poter rientrare
-                db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
-            } else {
-                db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
-            }
+            // NON eliminiamo la stanza e NON cancelliamo STORAGE_ROOM_KEY!
+            // La partita resta visibile in bacheca con status 'waiting'
+            db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
         }
     } else { 
         if (listeners.room) { listeners.room.off(); listeners.room = null; } 
@@ -1671,8 +1698,7 @@ function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     hideChat(); 
     showScreen(targetScreen);
 }
-
-    
+   
     
 function joinRoomLogic(isReconnect = false) {
     gameRunning = false; localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
@@ -2034,7 +2060,7 @@ if(els.deleteRoomBtn) els.deleteRoomBtn.addEventListener('click', () => {
 });
 
 if(els.leaveLobbyBtn) els.leaveLobbyBtn.addEventListener('click', () => {
-    exitRoomCleanly(false, true); // isExplicitQuit = true 
+    exitRoomCleanly(false, false); // isExplicitQuit = true 
 });
 
 if(els.deleteDataBtn) els.deleteDataBtn.addEventListener('click', async () => {
