@@ -1,6 +1,6 @@
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.202";
+const APP_VERSION = "20260805.203";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -10,19 +10,33 @@ const tgUser = tg.initDataUnsafe?.user;
 const tgUsername = tgUser?.username || "";
 const startParam = tg.initDataUnsafe?.start_param;
 
-// --- GESTIONE SCHERMO RESIZE E TASTIERA MOBILE ---
-if (tg.isExpanded === false) {
-    tg.expand();
-}
+// --- GESTIONE SCHERMO RESIZE E TASTIERA MOBILE (RISOLUZIONE TAGLIO SCHERMO) ---
+tg.ready();
+tg.expand();
+
 if (typeof tg.disableVerticalSwipes === 'function') {
     tg.disableVerticalSwipes();
 }
-tg.onEvent('viewportChanged', function(eventData) {
-    if (eventData.isStateStable) {
-        document.body.style.height = `${tg.viewportStableHeight}px`;
+
+function updateViewportHeight() {
+    if (!tg.isExpanded) {
+        tg.expand();
     }
+    const height = tg.viewportHeight || tg.viewportStableHeight || window.innerHeight;
+    document.documentElement.style.height = `${height}px`;
+    document.body.style.height = `${height}px`;
+    document.body.style.minHeight = `${height}px`;
+}
+
+updateViewportHeight();
+
+tg.onEvent('viewportChanged', function() {
+    updateViewportHeight();
 });
-document.body.style.height = `${tg.viewportStableHeight || window.innerHeight}px`;
+
+window.addEventListener('resize', updateViewportHeight);
+window.addEventListener('focus', updateViewportHeight);
+
 
 // --- MAPPA DOM DINAMICA (Proxy) ---
 const els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
