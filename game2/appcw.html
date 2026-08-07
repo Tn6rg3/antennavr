@@ -43,7 +43,20 @@
         <button id="btnDeclineDaily" class="btn-danger">Rifiuta per oggi</button>
     </div>
 </div>
-
+<!-- POPUP BENVENUTO NUOVO UTENTE (SOLO PRIMO ACCESSO) -->
+<div id="welcomeNewUserModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 6000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+    <span style="font-size: 3.5em; margin-bottom: 10px;">📻</span>
+    <h2 style="color: var(--champ-color); margin: 0 0 10px 0;">Benvenuto in Sfida Telegrafia!</h2>
+    <p style="font-size: 0.9em; margin-bottom: 15px; line-height: 1.4;">
+        Sembra che questo sia il tuo primo accesso! Qui potrai allenare la tua decodifica del <b>codice Morse</b> in tempo reale, sfidare altri operatori e partecipare ai tornei a squadre.
+    </p>
+    <div style="background: var(--sec-bg-color); padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; text-align: left;">
+        💡 <b>Suggerimento rapido:</b><br>
+        • Inizia dalla modalità <b>Parole Comuni</b> per fare pratica.<br>
+        • Se vuoi, imposta un <b>Alias</b> nella sezione Profilo.
+    </div>
+    <button id="btnCloseWelcomeModal" class="btn-champ">INIZIA AD ALLENARTI 🚀</button>
+</div>
 <!-- CHAT GLOBALE (DRAWER) -->
 <div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:55%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--hint-color); padding-bottom:6px; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
