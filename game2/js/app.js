@@ -5,7 +5,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.208";
+const APP_VERSION = "20260807.211";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -385,9 +385,32 @@ function stopAllMorseAudio() {
         window.activeOscillators = [];
     }
 }
+window.btKeepAliveOsc = null;
 
+function startBluetoothKeepAlive() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    if (window.btKeepAliveOsc) return;
+
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 30; // Frequenza infrasuono (non udibile)
+        gain.gain.value = 0.0005; // Volume impercettibile ma sufficiente per il chip BT
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+
+        window.btKeepAliveOsc = osc;
+    } catch(e) {}
+}
 function playBeep(freq, duration) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    startBluetoothKeepAlive(); // Mantiene le cuffie BT sveglie
+
     try {
         const osc = audioCtx.createOscillator(); 
         const gain = audioCtx.createGain();
@@ -403,7 +426,6 @@ function playBeep(freq, duration) {
         osc.stop(time + duration);
     } catch(e) {}
 }
-
 function playNotificationSound() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -416,6 +438,7 @@ function playMorseAudio(text, wpm, forcePlay = false) {
     return new Promise(resolve => {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        startBluetoothKeepAlive();
         if (!forcePlay && !gameRunning && !brIsPlaying) { resolve(); return; }
 
         stopAllMorseAudio();
@@ -5053,7 +5076,7 @@ document.addEventListener('visibilitychange', () => {
         if (audioCtx && audioCtx.state === 'suspended') {
             audioCtx.resume();
         }
-
+        startBluetoothKeepAlive();
         // Se l'utente era nel mezzo di una parola/carattere quando ha spento lo schermo
         if (gameRunning && window.lostFocusDuringWord) {
             window.lostFocusDuringWord = false;
