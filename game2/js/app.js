@@ -5,7 +5,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.204";
+const APP_VERSION = "20260805.203";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1533,12 +1533,19 @@ function exitRoomCleanly(roomWasDeletedByHost = false, isExplicitQuit = false) {
     let targetScreen = 'setupScreen'; 
     const amIHost = (myId === roomHostId); 
 
+    // --- SPEGNIMENTO DI TUTTI I LISTENER (INCLUSO CO-OP) ---
     if (listeners.players && roomCode) { db.ref(`rooms/${roomCode}/players`).off('value', listeners.players); listeners.players = null; }
     if (listeners.roomLb && roomCode) { db.ref(`rooms/${roomCode}`).off('value', listeners.roomLb); listeners.roomLb = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
     if (listeners.room) { listeners.room.off(); listeners.room = null; }
     if (listeners.pingPong && roomCode) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
+    if (roomCode) { db.ref(`rooms/${roomCode}/coop_state`).off(); } // <-- AGGIUNTO SPEGNIMENTO CO-OP!
     
+    // --- RESET DELLO STATO E DELL'INTERFACCIA ---
+    isCoopMode = false;
+    if (els.coopArea) els.coopArea.style.display = 'none';
+    if (els.tableWrapper) els.tableWrapper.style.display = 'block';
+
     if (roomCode) {
         if (roomCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
         localStorage.removeItem(STORAGE_ROOM_KEY);
@@ -2233,8 +2240,15 @@ function startCountdownSequence() {
             playBeep(800, 0.3);
             setTimeout(() => { 
                 if (!gameRunning) return; 
+                
+                // --- PULIZIA PREVENTIVA PER EVITARE SOVRAPPOSIZIONI ---
+                isCoopMode = (currentMode === 'conquest');
+                if (els.coopArea) els.coopArea.style.display = 'none';
+                if (els.tableWrapper) els.tableWrapper.style.display = 'block';
+
                 if (currentMode === 'conquest') return startCoopSequence(); 
                 if (currentMode === 'quiz') return startQuizSequence(); 
+                
                 showScreen('gameArea'); 
                 if (currentMode === 'pingpong') {
                     setupPingPongListener(); 
@@ -2251,6 +2265,12 @@ function resumeGameSequence() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     gameRunning = true; 
     isRejoining = false;
+    
+    // --- PULIZIA PREVENTIVA ---
+    isCoopMode = (currentMode === 'conquest');
+    if (els.coopArea) els.coopArea.style.display = 'none';
+    if (els.tableWrapper) els.tableWrapper.style.display = 'block';
+
     if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`; 
     if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
     
