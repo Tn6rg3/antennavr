@@ -5,7 +5,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.206";
+const APP_VERSION = "20260807.207";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -2931,10 +2931,10 @@ function finishCoopGame(won) {
     }
 }
 // ============================================================================
-// --- QUIZ MORSE (CON FALLBACK DI SICUREZZA E FIX ARRAY DOMANDE) ---
+// --- QUIZ MORSE (CON SHUFFLE RISPOSTE A/B/C/D E FISHER-YATES) ---
 // ============================================================================
 
-// Domande di emergenza se quiz_data.js non è raggiungibile o non carica
+// Domande di emergenza se quiz_data.js non è raggiungibile
 const FALLBACK_QUIZ_QUESTIONS = [
     { q: "SOS", a: ["Segnale di soccorso", "Saluti operativi", "Fine trasmissione", "Stazione radio"], correct: 0 },
     { q: "CQ", a: ["Chiamata a tutti", "Conferma ricezione", "Cambio frequenza", "Codice segreto"], correct: 0 },
@@ -2948,7 +2948,7 @@ const FALLBACK_QUIZ_QUESTIONS = [
     { q: "QRV", a: ["Sei pronto?", "Sono occupato", "Aumenta potenza", "Chiudi stazione"], correct: 0 }
 ];
 
-// Funzione sicura per recuperare le domande disponibili
+// Funzione per recuperare le domande disponibili
 function getAvailableQuizQuestions() {
     if (typeof QUIZ_QUESTIONS !== 'undefined' && Array.isArray(QUIZ_QUESTIONS) && QUIZ_QUESTIONS.length > 0) {
         return QUIZ_QUESTIONS;
@@ -2957,6 +2957,26 @@ function getAvailableQuizQuestions() {
         return window.QUIZ_QUESTIONS;
     }
     return FALLBACK_QUIZ_QUESTIONS;
+}
+
+// Funzione che mescola le opzioni (A, B, C, D) di una singola domanda
+function prepareShuffledQuestion(rawQuestion) {
+    if (!rawQuestion || !Array.isArray(rawQuestion.a)) return rawQuestion;
+    
+    // Identifichiamo il testo esatto della risposta corretta originale
+    const correctText = rawQuestion.a[rawQuestion.correct || 0];
+    
+    // Mescoliamo le 4 risposte con Fisher-Yates
+    const shuffledOptions = fisherYatesShuffle([...rawQuestion.a]);
+    
+    // Troviamo il nuovo indice (0=A, 1=B, 2=C, 3=D) della risposta corretta
+    const newCorrectIndex = shuffledOptions.indexOf(correctText);
+    
+    return {
+        q: rawQuestion.q,
+        a: shuffledOptions,
+        correct: newCorrectIndex >= 0 ? newCorrectIndex : 0
+    };
 }
 
 function startQuizSequence() {
@@ -2977,14 +2997,12 @@ function startQuizSequence() {
             
             const newIndex = state.questionIndex || 0;
             
-            // Sincronizziamo l'ordine delle domande dall'Host
             if (state.questionsOrder && Array.isArray(state.questionsOrder)) {
                 randomizedQuizQuestions = state.questionsOrder.map(idx => availableQuestions[idx % availableQuestions.length]);
             } else {
                 randomizedQuizQuestions = availableQuestions;
             }
 
-            // Se l'indice della domanda è cambiato, carichiamo la nuova domanda
             if (newIndex !== lastLoadedQuizIndex) { 
                 lastLoadedQuizIndex = newIndex; 
                 quizQuestionIndex = newIndex; 
@@ -2994,9 +3012,9 @@ function startQuizSequence() {
             renderQuizUI(state);
         });
 
-        // Solo l'Host inizializza la partita sul database
         if (myId === roomHostId) {
-            const order = Array.from({length: availableQuestions.length}, (_, i) => i).sort(() => Math.random() - 0.5);
+            // Usiamo Fisher-Yates per un ordine domande 100% casuale
+            const order = fisherYatesShuffle(Array.from({length: availableQuestions.length}, (_, i) => i));
             db.ref(`rooms/${roomCode}/quiz_state`).set({ 
                 questionIndex: 0, 
                 activeBuzzerId: null, 
@@ -3005,7 +3023,8 @@ function startQuizSequence() {
             });
         }
     } else { 
-        randomizedQuizQuestions = [...availableQuestions].sort(() => Math.random() - 0.5); 
+        // Singleplayer: Fisher-Yates su tutte le domande
+        randomizedQuizQuestions = fisherYatesShuffle(availableQuestions); 
         quizQuestionIndex = 0; 
         loadNextQuizQuestion(); 
     }
@@ -3017,18 +3036,19 @@ function loadNextQuizQuestion() {
         return finishGame();
     }
     
-    currentQuizQuestion = randomizedQuizQuestions[quizQuestionIndex]; 
+    const rawQ = randomizedQuizQuestions[quizQuestionIndex];
     
-    // --- CONTROLLO DI SICUREZZA MULTIPLAYER ---
-    // Se la domanda non è ancora arrivata dall'Host, attendiamo 400ms e riproviamo!
-    if (!currentQuizQuestion || !currentQuizQuestion.q) {
+    // Controllo sicurezza per il Multiplayer se il dato tarda ad arrivare
+    if (!rawQ || !rawQ.q) {
         setTimeout(() => {
             if (gameRunning) loadNextQuizQuestion();
         }, 400);
         return;
     }
 
-    // Piccolo respiro di 300ms prima di avviare l'audio per garantire che il browser sia pronto
+    // Mescoliamo dinamicamente A, B, C e D prima di giocarla!
+    currentQuizQuestion = prepareShuffledQuestion(rawQ);
+    
     setTimeout(() => {
         if (gameRunning) playQuizAudioSequence();
     }, 300);
@@ -3037,9 +3057,7 @@ function loadNextQuizQuestion() {
 async function playQuizAudioSequence() {
     if (!gameRunning || !currentQuizQuestion) return;
     
-    // Ferma qualsiasi suono precedente prima di iniziare la nuova domanda
     stopAllMorseAudio();
-    
     inputActive = false; 
     disableQuizButtons(true);
     ['A', 'B', 'C', 'D'].forEach(l => { 
@@ -3048,12 +3066,10 @@ async function playQuizAudioSequence() {
     
     if (els.quizQuestionBox) els.quizQuestionBox.textContent = "Ascolta la domanda...";
     
-    // 1. Suona la domanda (Q)
     await playMorseAudio(currentQuizQuestion.q, currentWpm);
     if (!gameRunning) return; 
     await new Promise(r => setTimeout(r, 1500));
     
-    // 2. Suona le 4 opzioni (A, B, C, D)
     for (let i = 0; i < 4; i++) {
         const letter = ["A", "B", "C", "D"][i];
         if (!gameRunning) return; 
