@@ -756,7 +756,72 @@ function initGame() {
     checkGameTypeUI();
 }
 
+// ============================================================================
+// GESTIONE PULSANTI MODALE SFIDA GIORNALIERA E BANNER
+// ============================================================================
 
+// 1. Tasto "ACCETTA LA SFIDA" -> Chiude il popup, crea la stanza e avvia il gioco
+if (els.btnPlayDailyNow) {
+    els.btnPlayDailyNow.addEventListener('click', () => {
+        els.dailyChallengeModal.style.display = 'none';
+
+        currentMode = 'daily_challenge';
+        isSinglePlayer = true;
+        currentWpm = 15; 
+        baseWpm = 15;
+        requestedWordCount = 20;
+        currentTone = 600;
+        isFixedSpeed = false;
+        isEasyMode = false;
+        
+        window.charSpaceWpm = 0; 
+        window.wordSpaceMult = 1.0;
+
+        roomCode = Math.floor(1000 + Math.random() * 9000).toString(); 
+        gameWords = getGameWords(requestedWordCount, currentMode);
+        
+        db.ref('rooms/' + roomCode).set({ 
+            status: 'countdown', 
+            type: 'single', 
+            mode: currentMode, 
+            wpm: currentWpm, 
+            tone: currentTone, 
+            wordCount: requestedWordCount, 
+            words: gameWords, 
+            fixedSpeed: isFixedSpeed, 
+            charSpaceWpm: 0, 
+            wordSpaceMult: 1.0, 
+            createdAt: firebase.database.ServerValue.TIMESTAMP, 
+            hostId: myId 
+        }).then(() => joinRoomLogic(false));
+    });
+}
+
+// 2. Tasto "Più Tardi" -> Chiude solo il popup senza salvare nel localStorage
+if (els.btnPlayDailyLater) {
+    els.btnPlayDailyLater.addEventListener('click', () => {
+        els.dailyChallengeModal.style.display = 'none';
+    });
+}
+
+// 3. Tasto "Rifiuta per oggi" -> Chiude il popup e memorizza la data per non mostrarlo più oggi
+if (els.btnDeclineDaily) {
+    els.btnDeclineDaily.addEventListener('click', () => {
+        let todayStr = new Date().toISOString().split('T')[0];
+        localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
+        els.dailyChallengeModal.style.display = 'none';
+    });
+}
+
+// 4. Tasto di chiusura "X" del banner Battaglia Serale (per sicurezza)
+if (els.btnCloseBRBanner) {
+    els.btnCloseBRBanner.addEventListener('click', () => {
+        if (els.brBanner) els.brBanner.style.display = 'none';
+        if (brBannerTimeout) clearTimeout(brBannerTimeout);
+        brBannerDismissedToday = true;
+        if (brRoomCode) db.ref(`rooms/${brRoomCode}/players`).off('value');
+    });
+}
 // --- LISTE E BACHECA SFIDE (SENZA DUPLICATI) ---
 window.lastKnownRoomPlayersCount = window.lastKnownRoomPlayersCount || {};
 
