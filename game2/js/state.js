@@ -2,7 +2,7 @@
 // STATE.JS - STATO CENTRALE DELL'APPLICAZIONE
 // ============================================================================
 
-export const APP_VERSION = "20260807.208";
+export const APP_VERSION = "20260807.209";
 export const BOT_USERNAME = "cwappgame_bot";
 export const WEBAPP_NAME = "cwgame";
 
