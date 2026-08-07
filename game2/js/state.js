@@ -1,5 +1,5 @@
 // ============================================================================
-// STATE.JS - STATO CENTRALE DELL'APPLICAZIONE E UTILITY
+// STATE.JS - STATO CENTRALE DELL'APPLICAZIONE
 // ============================================================================
 
 export const APP_VERSION = "20260807.208";
@@ -42,7 +42,10 @@ export const appState = {
     masterDictionary: [],
     itDictionary: [],
     enDictionary: [],
-    customDictionary: []
+    customDictionary: [],
+    userMatchHistory: [],
+    sessionCharErrors: Object.create(null),
+    sessionErrorsByWpm: Object.create(null)
 };
 
 export const gameState = {
@@ -69,6 +72,8 @@ export const gameState = {
     wordSpaceMult: 1.0,
     lastPlayedWordId: 0,
     lastSeenGuessId: 0,
+    gameStartPlayerCount: 0,
+    lastPlayerCount: 0,
     
     // Conquista (Co-op)
     isCoopMode: false,
@@ -80,6 +85,11 @@ export const gameState = {
     randomizedQuizQuestions: [],
     currentQuizQuestion: null,
     lastLoadedQuizIndex: -1,
+
+    // Battaglia Reale
+    brRoomCode: "",
+    brIsPlaying: false,
+    brAmIAlive: true,
 
     // Timers
     intervals: {
@@ -108,13 +118,12 @@ export const chatState = {
 export const uiState = {
     activeTab: "room",
     activeTrnId: null,
-    lastPlayerCount: 0,
-    gameStartPlayerCount: 0,
     lastBRRoundPlayed: -1,
     lostFocusDuringWord: false,
     isChallenging: false,
     isRejoining: false,
-    currentInviterId: null
+    currentInviterId: null,
+    brBannerDismissedToday: false
 };
 
 export const listeners = {
