@@ -322,6 +322,47 @@ function updateDictionary() {
     masterDictionary = (currentLang === 'en' && enDictionary.length > 0) ? enDictionary : itDictionary; 
 }
 
+// --- CARICAMENTO REGOLAMENTO E PRIVACY ---
+async function loadRegolamento() {
+    if (!els.regolamentoContainer) return;
+    try {
+        const response = await fetch('regolamento.html');
+        if (!response.ok) throw new Error("File regolamento non trovato");
+        els.regolamentoContainer.innerHTML = await response.text();
+        
+        // Riattiva il bottone feedback se presente all'interno dell'HTML caricato
+        if (els.sendFeedbackBtn) {
+            els.sendFeedbackBtn.onclick = function() {
+                const text = encodeURIComponent("💡 Suggerimento per Sfida Telegrafia: \n\n[Scrivi qui il tuo messaggio...]");
+                const shareUrl = `https://t.me/share/url?text=${text}`;
+                if (tg && tg.openTelegramLink) {
+                    tg.openTelegramLink(shareUrl);
+                } else {
+                    window.open(shareUrl, '_blank');
+                }
+            };
+        }
+    } catch (e) {
+        // Fallback di sicurezza in caso di errore di rete o file mancante
+        els.regolamentoContainer.innerHTML = `
+            <div style="text-align:center; padding: 15px;">
+                <h3 style="color: var(--champ-color); margin-top:0;">📜 Regole di Gioco</h3>
+                <p style="font-size:0.9em;">Decodifica il codice Morse nel minor tempo possibile e scala le classifiche!</p>
+                <ul style="text-align:left; font-size:0.85em; color: var(--text-color); margin-top:10px;">
+                    <li><b>Parole Comuni & Nominativi:</b> Più sei veloce e preciso, più punti ottieni.</li>
+                    <li><b>Conquista (Co-op):</b> Collabora con la tua squadra per portare la barra al 100%.</li>
+                    <li><b>Battaglia Serale:</b> Ogni giorno alle 21:30 ad eliminazione diretta (3 vite).</li>
+                </ul>
+                <hr style="border:0; border-top:1px dashed var(--hint-color); margin:15px 0;">
+                <p style="font-size:0.75em; color:var(--hint-color);">
+                    <i>Nota: Impossibile caricare il file regolamento.html esteso (${e.message}).</i>
+                </p>
+            </div>
+        `;
+    }
+}
+
+
 // --- MORSE ENGINE CON ARRESTO ANTISOVRAPPOSIZIONE UNIFICATO ---
 const morseDict = {
     'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..',
