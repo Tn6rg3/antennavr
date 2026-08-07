@@ -2930,8 +2930,35 @@ function finishCoopGame(won) {
         updateActivity(false);
     }
 }
+// ============================================================================
+// --- QUIZ MORSE (CON FALLBACK DI SICUREZZA E FIX ARRAY DOMANDE) ---
+// ============================================================================
 
-// --- QUIZ MORSE ---
+// Domande di emergenza se quiz_data.js non è raggiungibile o non carica
+const FALLBACK_QUIZ_QUESTIONS = [
+    { q: "SOS", a: ["Segnale di soccorso", "Saluti operativi", "Fine trasmissione", "Stazione radio"], correct: 0 },
+    { q: "CQ", a: ["Chiamata a tutti", "Conferma ricezione", "Cambio frequenza", "Codice segreto"], correct: 0 },
+    { q: "QTH", a: ["La mia posizione è...", "Qual è il tuo nome?", "Chiudi la trasmissione", "Segnale disturbato"], correct: 0 },
+    { q: "QRS", a: ["Trasmetti più lentamente", "Aumenta velocità", "Frequenza occupata", "Ripeti messaggio"], correct: 0 },
+    { q: "QRZ", a: ["Chi mi chiama?", "Come mi ricevi?", "Pronto a trasmettere", "Fine lavoro"], correct: 0 },
+    { q: "QSL", a: ["Confermo ricezione", "Negativo", "In attesa", "Disturbo atmosferico"], correct: 0 },
+    { q: "73", a: ["Cordiali saluti", "Buona fortuna", "A presto", "Grazie di tutto"], correct: 0 },
+    { q: "88", a: ["Amore e baci", "Saluti formali", "Arrivederci", "Codice di chiusura"], correct: 0 },
+    { q: "QRT", a: ["Sospendo le trasmissioni", "Inizio trasmissioni", "Cambio canale", "Ripeti di nuovo"], correct: 0 },
+    { q: "QRV", a: ["Sei pronto?", "Sono occupato", "Aumenta potenza", "Chiudi stazione"], correct: 0 }
+];
+
+// Funzione sicura per recuperare le domande disponibili
+function getAvailableQuizQuestions() {
+    if (typeof QUIZ_QUESTIONS !== 'undefined' && Array.isArray(QUIZ_QUESTIONS) && QUIZ_QUESTIONS.length > 0) {
+        return QUIZ_QUESTIONS;
+    }
+    if (typeof window.QUIZ_QUESTIONS !== 'undefined' && Array.isArray(window.QUIZ_QUESTIONS) && window.QUIZ_QUESTIONS.length > 0) {
+        return window.QUIZ_QUESTIONS;
+    }
+    return FALLBACK_QUIZ_QUESTIONS;
+}
+
 function startQuizSequence() {
     showScreen('quizArea'); 
     gameRunning = true; 
@@ -2939,13 +2966,17 @@ function startQuizSequence() {
     if (els.quizWpmDisplay) els.quizWpmDisplay.textContent = `WPM: ${currentWpm}`; 
     if (els.quizScoreDisplay) els.quizScoreDisplay.textContent = `Punti: ${totalScore}`;
     
+    const availableQuestions = getAvailableQuizQuestions();
+
     if (roomCode && !isSinglePlayer) {
         if (listeners.quizState) db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState);
         listeners.quizState = db.ref(`rooms/${roomCode}/quiz_state`).on('value', snap => {
             const state = snap.val(); 
             if (!state) return;
             const newIndex = state.questionIndex || 0;
-            randomizedQuizQuestions = state.questionsOrder ? state.questionsOrder.map(idx => window.QUIZ_QUESTIONS[idx]) : window.QUIZ_QUESTIONS;
+            randomizedQuizQuestions = state.questionsOrder 
+                ? state.questionsOrder.map(idx => availableQuestions[idx % availableQuestions.length]) 
+                : availableQuestions;
             if (newIndex !== lastLoadedQuizIndex) { 
                 lastLoadedQuizIndex = newIndex; 
                 quizQuestionIndex = newIndex; 
@@ -2959,18 +2990,20 @@ function startQuizSequence() {
                 questionIndex: 0, 
                 activeBuzzerId: null, 
                 status: 'playing', 
-                questionsOrder: Array.from({length: window.QUIZ_QUESTIONS.length}, (_, i) => i).sort(() => Math.random() - 0.5) 
+                questionsOrder: Array.from({length: availableQuestions.length}, (_, i) => i).sort(() => Math.random() - 0.5) 
             });
         }
     } else { 
-        randomizedQuizQuestions = [...(window.QUIZ_QUESTIONS || [])].sort(() => Math.random() - 0.5); 
+        randomizedQuizQuestions = [...availableQuestions].sort(() => Math.random() - 0.5); 
         quizQuestionIndex = 0; 
         loadNextQuizQuestion(); 
     }
 }
 
 function loadNextQuizQuestion() {
-    if (quizQuestionIndex >= requestedWordCount || quizQuestionIndex >= randomizedQuizQuestions.length) {
+    // Evitiamo che richiesto > disponibili provochi la chiusura anticipata
+    const maxQuestions = Math.min(requestedWordCount, randomizedQuizQuestions.length);
+    if (quizQuestionIndex >= maxQuestions || quizQuestionIndex >= randomizedQuizQuestions.length) {
         return finishGame();
     }
     currentQuizQuestion = randomizedQuizQuestions[quizQuestionIndex]; 
