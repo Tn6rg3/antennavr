@@ -647,16 +647,45 @@ function initGame() {
 
     auth.signInAnonymously().then(async () => {
         try {
-            const userData = (await db.ref(`users/${myId}`).once('value')).val() || {};
+            const userRef = db.ref(`users/${myId}`);
+            const userSnap = await userRef.once('value');
+            const userData = userSnap.val() || {};
+
             if (userData.alias) myName = userData.alias;
             myPrivacy = userData.privacyUsername || false; 
             if (els.privacyUsernameCheckbox) els.privacyUsernameCheckbox.checked = myPrivacy;
+
+            // --- [NUOVO] CONTROLLO PRIMO ACCESSO ASSOLUTO ---
+            if (!userSnap.exists() || !userData.welcomed) {
+                // Registra che l'utente è entrato ed è stato accolto
+                await userRef.update({
+                    name: myName,
+                    welcomed: true,
+                    createdAt: firebase.database.ServerValue.TIMESTAMP
+                });
+
+                // 1. Toast personale di benvenuto (dopo 1.5 secondi dall'apertura)
+                setTimeout(() => {
+                    showToast(`📻 Benvenuto in Sfida Telegrafia, ${myName}! Buon divertimento!`);
+                    if (typeof playNotificationSound === 'function') playNotificationSound();
+                }, 1500);
+
+                // 2. (OPZIONALE) Annuncio di benvenuto automatico in Chat Globale
+                db.ref('globalChat').push().set({
+                    name: "🤖 Sistema",
+                    text: `🎉 Diamo il benvenuto a un nuovo telegrafista: ${myName}!`,
+                    ts: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+            // ------------------------------------------------
         } catch(e) {}
 
         if (els.playerName) els.playerName.textContent = myName; 
         if (els.userAliasInput) els.userAliasInput.value = (myName !== tgUser.first_name) ? myName : "";
         if (els.loadingText) els.loadingText.style.display = 'none'; 
         if (els.createRoomBtn) els.createRoomBtn.disabled = false;
+        
+        
 
         db.ref('.info/serverTimeOffset').on('value', (snap) => {
             serverTimeOffset = snap.val() || 0;
