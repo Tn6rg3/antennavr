@@ -851,6 +851,28 @@ if (els.btnCloseBRBanner) {
         if (brRoomCode) db.ref(`rooms/${brRoomCode}/players`).off('value');
     });
 }
+// ============================================================================
+// CONDIVISIONE APP GLOBALE (INDISTRUTTIBILE)
+// ============================================================================
+window.shareAppToFriends = function() {
+    showToast("📢 Apertura condivisione Telegram...");
+    
+    const appUrl = `https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`;
+    const textMsg = `📻 Unisciti a me su Sfida Telegrafia! Impara il codice Morse, sfida altri operatori e scala la classifica!`;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(appUrl)}&text=${encodeURIComponent(textMsg)}`;
+    
+    setTimeout(() => {
+        try {
+            if (tg && typeof tg.openTelegramLink === 'function') {
+                tg.openTelegramLink(shareUrl);
+            } else {
+                window.open(shareUrl, '_blank');
+            }
+        } catch (e) {
+            window.open(shareUrl, '_blank');
+        }
+    }, 200);
+};
 // --- LISTE E BACHECA SFIDE (SENZA DUPLICATI) ---
 window.lastKnownRoomPlayersCount = window.lastKnownRoomPlayersCount || {};
 
