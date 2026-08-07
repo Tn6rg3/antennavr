@@ -1,5 +1,5 @@
 // ============================================================================
-// AUDIO.JS - MOTORE MORSE E RI-SINCRONIZZAZIONE
+// AUDIO.JS - MOTORE WEB AUDIO API E CW
 // ============================================================================
 
 import { gameState, morseDict } from './state.js';
@@ -50,7 +50,7 @@ export function playMorseAudio(text, wpm, forcePlay = false) {
     return new Promise(resolve => {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-        if (!forcePlay && !gameState.running) { resolve(); return; }
+        if (!forcePlay && !gameState.running && !gameState.brIsPlaying) { resolve(); return; }
 
         stopAllMorseAudio();
         const currentToken = morsePlayToken;
@@ -63,11 +63,11 @@ export function playMorseAudio(text, wpm, forcePlay = false) {
         let time = audioCtx.currentTime + 0.05;
 
         for (let char of text) {
-            if (currentToken !== morsePlayToken || (!forcePlay && !gameState.running)) break;
+            if (currentToken !== morsePlayToken || (!forcePlay && !gameState.running && !gameState.brIsPlaying)) break;
             
             if (morseDict[char]) {
                 for (let i = 0; i < morseDict[char].length; i++) {
-                    if (currentToken !== morsePlayToken || (!forcePlay && !gameState.running)) break;
+                    if (currentToken !== morsePlayToken || (!forcePlay && !gameState.running && !gameState.brIsPlaying)) break;
                     let symbol = morseDict[char][i];
                     
                     const osc = audioCtx.createOscillator(); 
