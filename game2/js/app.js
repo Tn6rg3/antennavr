@@ -5,7 +5,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.205";
+const APP_VERSION = "20260807.206";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -2970,13 +2970,21 @@ function startQuizSequence() {
 
     if (roomCode && !isSinglePlayer) {
         if (listeners.quizState) db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState);
+        
         listeners.quizState = db.ref(`rooms/${roomCode}/quiz_state`).on('value', snap => {
             const state = snap.val(); 
-            if (!state) return;
+            if (!state || !gameRunning) return;
+            
             const newIndex = state.questionIndex || 0;
-            randomizedQuizQuestions = state.questionsOrder 
-                ? state.questionsOrder.map(idx => availableQuestions[idx % availableQuestions.length]) 
-                : availableQuestions;
+            
+            // Sincronizziamo l'ordine delle domande dall'Host
+            if (state.questionsOrder && Array.isArray(state.questionsOrder)) {
+                randomizedQuizQuestions = state.questionsOrder.map(idx => availableQuestions[idx % availableQuestions.length]);
+            } else {
+                randomizedQuizQuestions = availableQuestions;
+            }
+
+            // Se l'indice della domanda è cambiato, carichiamo la nuova domanda
             if (newIndex !== lastLoadedQuizIndex) { 
                 lastLoadedQuizIndex = newIndex; 
                 quizQuestionIndex = newIndex; 
@@ -2985,12 +2993,15 @@ function startQuizSequence() {
             quizActiveBuzzerId = state.activeBuzzerId || null; 
             renderQuizUI(state);
         });
+
+        // Solo l'Host inizializza la partita sul database
         if (myId === roomHostId) {
+            const order = Array.from({length: availableQuestions.length}, (_, i) => i).sort(() => Math.random() - 0.5);
             db.ref(`rooms/${roomCode}/quiz_state`).set({ 
                 questionIndex: 0, 
                 activeBuzzerId: null, 
                 status: 'playing', 
-                questionsOrder: Array.from({length: availableQuestions.length}, (_, i) => i).sort(() => Math.random() - 0.5) 
+                questionsOrder: order
             });
         }
     } else { 
@@ -3001,37 +3012,61 @@ function startQuizSequence() {
 }
 
 function loadNextQuizQuestion() {
-    // Evitiamo che richiesto > disponibili provochi la chiusura anticipata
     const maxQuestions = Math.min(requestedWordCount, randomizedQuizQuestions.length);
     if (quizQuestionIndex >= maxQuestions || quizQuestionIndex >= randomizedQuizQuestions.length) {
         return finishGame();
     }
+    
     currentQuizQuestion = randomizedQuizQuestions[quizQuestionIndex]; 
-    playQuizAudioSequence();
+    
+    // --- CONTROLLO DI SICUREZZA MULTIPLAYER ---
+    // Se la domanda non è ancora arrivata dall'Host, attendiamo 400ms e riproviamo!
+    if (!currentQuizQuestion || !currentQuizQuestion.q) {
+        setTimeout(() => {
+            if (gameRunning) loadNextQuizQuestion();
+        }, 400);
+        return;
+    }
+
+    // Piccolo respiro di 300ms prima di avviare l'audio per garantire che il browser sia pronto
+    setTimeout(() => {
+        if (gameRunning) playQuizAudioSequence();
+    }, 300);
 }
 
 async function playQuizAudioSequence() {
+    if (!gameRunning || !currentQuizQuestion) return;
+    
+    // Ferma qualsiasi suono precedente prima di iniziare la nuova domanda
+    stopAllMorseAudio();
+    
     inputActive = false; 
     disableQuizButtons(true);
     ['A', 'B', 'C', 'D'].forEach(l => { 
         if (els['btnQuiz'+l]) els['btnQuiz'+l].classList.remove('active-choice'); 
     });
+    
     if (els.quizQuestionBox) els.quizQuestionBox.textContent = "Ascolta la domanda...";
     
+    // 1. Suona la domanda (Q)
     await playMorseAudio(currentQuizQuestion.q, currentWpm);
     if (!gameRunning) return; 
     await new Promise(r => setTimeout(r, 1500));
     
+    // 2. Suona le 4 opzioni (A, B, C, D)
     for (let i = 0; i < 4; i++) {
         const letter = ["A", "B", "C", "D"][i];
         if (!gameRunning) return; 
         if (els.quizQuestionBox) els.quizQuestionBox.textContent = `Opzione ${letter}...`;
         if (els['btnQuiz'+letter]) els['btnQuiz'+letter].classList.add('active-choice');
+        
         await playMorseAudio(`${letter} ${currentQuizQuestion.a[i]}`, currentWpm);
+        
         if (els['btnQuiz'+letter]) els['btnQuiz'+letter].classList.remove('active-choice');
         if (!gameRunning) return; 
         await new Promise(r => setTimeout(r, 1000));
     }
+    
     if (!gameRunning) return;
     if (els.quizQuestionBox) els.quizQuestionBox.textContent = "SCEGLI LA TUA RISPOSTA!"; 
     enableQuizControls(); 
