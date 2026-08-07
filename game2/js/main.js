@@ -1,16 +1,17 @@
 // ============================================================================
-// MAIN.JS - CORE DELLA PARTITA E BRIDGE HTML
+// MAIN.JS - AVVIO DELL'APPLICAZIONE E CONNESSIONE TRA I MODULI
 // ============================================================================
 
-import { appState, gameState, uiState, STORAGE_KEYS, fisherYatesShuffle } from './state.js';
-import { els, showScreen, showToast, loadRegolamento, loadDictionaries, updateMuteBtnUI, escapeHTML } from './ui.js';
-import { playMorseAudio, stopAllMorseAudio, playBeep } from './audio.js';
-import { hideChat } from './chat.js';
+import { appState, gameState, uiState } from './state.js';
+import { els, showScreen, showToast, loadRegolamento, loadDictionaries, updateMuteBtnUI } from './ui.js';
+import { stopAllMorseAudio } from './audio.js';
+import { initChatListeners, listenToChat, toggleChat } from './chat.js';
 import { listenToRooms, joinSpecificRoom, joinRoomLogic, exitRoomCleanly } from './lobby.js';
-import { startQuizSequence, submitQuizAnswer } from './quiz.js';
-import { checkMyTeamStatus, switchTeamTab, joinTeam } from './teams.js';
-import { switchActTab, updateActivity } from './leaderboard.js';
+import { initQuizListeners, submitQuizAnswer } from './quiz.js';
+import { checkMyTeamStatus, switchTeamTab, joinTeam, initTeamListeners } from './teams.js';
+import { switchActTab, showLeaderboardTab, showProfileScreen, syncUserNameEverywhere } from './leaderboard.js';
 import { listenToTournaments, viewTournament, toggleTrnSlot, startTrnMatch } from './tournaments.js';
+import { handleWordSubmission, playNextWord, startCountdownSequence, resumeGameSequence, finishGame, initBattleRoyaleScheduler, toggleBattleRoyaleJoin, submitBRAnswer } from './game.js';
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -29,11 +30,16 @@ function initGame() {
         appId: "1:575790683327:web:db333b0316c8e8ec63a20a" 
     };
     if (!window.firebase.apps.length) window.firebase.initializeApp(firebaseConfig);
+
     appState.db = window.firebase.database(); 
     appState.auth = window.firebase.auth();
 
     loadDictionaries();
     loadRegolamento();
+    initChatListeners();
+    initQuizListeners();
+    initTeamListeners();
+    initBattleRoyaleScheduler();
 
     appState.auth.signInAnonymously().then(async () => {
         try {
@@ -71,112 +77,7 @@ function initGame() {
     });
 }
 
-// --- LOGICA GAMELOOP PRINCIPALE E WORD SUBMISSION ---
-function handleWordSubmission(userWord) {
-    if (!userWord) return;
-    userWord = userWord.substring(0, 50).trim().toUpperCase();
-
-    // RAMO CONQUISTA CO-OP
-    if (gameState.mode === 'conquest') {
-        if (gameState.coopActiveFreqIndex === 0) return showToast("⚠️ Seleziona prima una Frequenza!");
-        const currentWord = gameState.words[0];
-        const isCorrect = userWord === currentWord;
-        const gain = gameState.coopActiveFreqIndex === 1 ? 4 : (gameState.coopActiveFreqIndex === 2 ? 7 : 12);
-        const penalty = gameState.coopActiveFreqIndex === 1 ? 2 : (gameState.coopActiveFreqIndex === 2 ? 3 : 5);
-        gameState.inputActive = false;
-
-        if (isCorrect) {
-            gameState.wpm += 2;
-            if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${gameState.wpm}`;
-            showToast(`✅ CORRETTO! +${gain}% (Velocità -> ${gameState.wpm} WPM)`);
-            playBeep(880, 0.1);
-            appState.db.ref(`rooms/${gameState.roomCode}/coop_state`).transaction(state => {
-                if (!state || state.status !== 'playing') return state;
-                state.progress = Math.min(100, (state.progress || 0) + gain);
-                return state;
-            });
-        } else {
-            gameState.wpm = Math.max(10, gameState.wpm - 2);
-            if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${gameState.wpm}`;
-            showToast(`❌ ERRORE! -${penalty}% (Velocità -> ${gameState.wpm} WPM)`);
-            playBeep(300, 0.25);
-            appState.db.ref(`rooms/${gameState.roomCode}/coop_state`).transaction(state => {
-                if (!state || state.status !== 'playing') return state;
-                state.progress = Math.max(0, (state.progress || 0) - penalty);
-                return state;
-            });
-        }
-        setTimeout(() => {
-            if (!gameState.running) return;
-            if (els.permanentGameInput) { els.permanentGameInput.value = ""; els.permanentGameInput.focus(); }
-            gameState.inputActive = true; 
-            if (!isCorrect && gameState.words[0]) playMorseAudio(gameState.words[0], gameState.wpm);
-        }, 1500);
-        return;
-    }
-
-    // RAMO STANDARD / PAROLE
-    gameState.inputActive = false; 
-    const currentWord = gameState.words[gameState.wordIndex].toUpperCase(); 
-    const reactionMs = Date.now() - gameState.lastWordStartTime; 
-    const isCorrect = (userWord === currentWord);
-    const points = isCorrect ? Math.round(100 + gameState.wpm * 2) : 0;
-    const scoreColor = isCorrect ? "#4caf50" : "#d32f2f";
-
-    if (isCorrect && !gameState.isFixedSpeed) gameState.wpm += 2;
-    else if (!isCorrect && !gameState.isFixedSpeed) gameState.wpm = Math.max(10, gameState.wpm - 2);
-
-    gameState.totalScore += points; 
-    gameState.matchDetails.push({ real: currentWord, typed: userWord, points: points, wpm: gameState.wpm, ms: reactionMs });
-
-    if (els.tableBody) {
-        const tr = document.createElement('tr');
-        const tdTyped = document.createElement('td'); tdTyped.textContent = userWord;
-        const tdReal = document.createElement('td'); tdReal.innerHTML = `<b>${escapeHTML(currentWord)}</b>`;
-        const tdPoints = document.createElement('td'); tdPoints.style.color = scoreColor; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = points;
-        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
-        els.tableBody.appendChild(tr);
-        if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
-    }
-    
-    if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${gameState.wpm}${gameState.isFixedSpeed ? ' (Fix)' : ''}`; 
-    if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${gameState.totalScore}`;
-    if (gameState.roomCode) appState.db.ref(`rooms/${gameState.roomCode}/players/${appState.myId}`).update({ score: gameState.totalScore, wpm: gameState.wpm, wordIndex: gameState.wordIndex + 1 });
-    
-    gameState.wordIndex++; 
-    setTimeout(playNextWord, 600);
-}
-
-window.playNextWord = function() {
-    if (!gameState.running || gameState.mode === 'pingpong') return; 
-    if (gameState.wordIndex >= gameState.wordCount) return finishGame();
-    gameState.inputActive = true; 
-    const currentWord = gameState.words[gameState.wordIndex].toUpperCase();
-    playMorseAudio(currentWord, gameState.wpm); 
-    gameState.lastWordStartTime = Date.now(); 
-    if (els.permanentGameInput) els.permanentGameInput.focus();
-};
-
-window.finishGame = function() {
-    gameState.running = false; 
-    gameState.inputActive = false; 
-    showScreen('leaderboardScreen');
-    if (gameState.roomCode) { 
-        appState.db.ref(`rooms/${gameState.roomCode}/players/${appState.myId}`).update({ finished: true, score: gameState.totalScore }); 
-    }
-    updateActivity(gameState.totalScore > 0);
-};
-
-if (els.permanentGameInput) {
-    els.permanentGameInput.addEventListener('keypress', function(e) { 
-        if (e.key === 'Enter' && gameState.inputActive && gameState.running) { 
-            const val = els.permanentGameInput.value.trim().toUpperCase(); 
-            if (val) { handleWordSubmission(val); els.permanentGameInput.value = ""; } 
-        } 
-    });
-}
-
-// --- GESTIONE SCHERMO STANDBY ---
+// --- GESTIONE SPEGNIMENTO SCHERMO DURANTE IL GIOCO ---
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         if (gameState.running && gameState.inputActive) {
@@ -188,32 +89,55 @@ document.addEventListener('visibilitychange', () => {
             uiState.lostFocusDuringWord = false;
             gameState.inputActive = false;
             showToast("⚠️ Schermo spento: parola considerata persa!");
+
             if (gameState.mode === 'quiz') {
                 submitQuizAnswer(-1);
             } else {
                 gameState.wpm = Math.max(10, gameState.wpm - 2);
                 if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${gameState.wpm}`;
                 gameState.wordIndex++;
-                setTimeout(() => { if (gameState.running) window.playNextWord(); }, 800);
+                setTimeout(() => { if (gameState.running) playNextWord(); }, 800);
             }
         }
     }
 });
 
-// --- BRIDGE PER I PULSANTI HTML (EXPORTS A WINDOW) ---
-window.toggleLanguage = () => { appState.currentLang = (appState.currentLang === 'it') ? 'en' : 'it'; showToast("Language changed"); };
+// --- LISTENER PER LA BATTAGLIA REALE ---
+if (els.brInput) {
+    els.brInput.addEventListener('keypress', e => { if (e.key === 'Enter' && els.btnSendBr) els.btnSendBr.click(); });
+}
+if (els.btnSendBr) {
+    els.btnSendBr.addEventListener('click', () => {
+        appState.db.ref(`rooms/${gameState.brRoomCode}/currentWord`).once('value', s => submitBRAnswer(s.val(), false));
+    });
+}
+
+// --- BRIDGE PER L'HTML (ESPOSIZIONE WINDOW) ---
+window.toggleLanguage = () => { appState.currentLang = (appState.currentLang === 'it') ? 'en' : 'it'; showToast("Lingua cambiata"); };
 window.goBackToMenu = () => showScreen('setupScreen');
+window.openGlobalChat = () => { listenToChat(); toggleChat(); };
 window.joinSpecificRoom = joinSpecificRoom;
 window.switchTeamTab = switchTeamTab;
 window.joinTeam = joinTeam;
 window.switchActTab = switchActTab;
+window.showLeaderboardTab = showLeaderboardTab;
+window.showProfileScreen = showProfileScreen;
 window.toggleTrnSlot = toggleTrnSlot;
 window.startTrnMatch = startTrnMatch;
 window.viewTournament = viewTournament;
+window.toggleBattleRoyaleJoin = toggleBattleRoyaleJoin;
+window.startCountdownSequence = startCountdownSequence;
+window.resumeGameSequence = resumeGameSequence;
+window.finishGame = finishGame;
+window.playNextWord = playNextWord;
 
+// --- AVVIO DELL'APP ---
 if (tgUser) { 
     appState.myName = tgUser.first_name; 
     appState.myId = tgUser.id.toString(); 
     appState.tgUsername = tgUser.username || "";
     initGame(); 
+} else {
+    if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen'); 
+    if (els.errorScreen) els.errorScreen.classList.add('active-screen');
 }
