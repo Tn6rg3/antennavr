@@ -1167,7 +1167,10 @@ async function processChatCwQueue() {
 
 
 
-// --- CONFIGURAZIONE E LISTENER CHAT (CON FIX AUDIO DOPPIO) ---
+// ============================================================================
+// MODULO CHAT UNIFICATO (SETUP + INVIO MESSAGGI + FIX AUDIO DOPPIO)
+// ============================================================================
+
 function setupChat(chatRef, containerId, alertBtnId) {
     const container = els[containerId]; 
     if (!container) return;
@@ -1219,7 +1222,7 @@ function setupChat(chatRef, containerId, alertBtnId) {
             if (!initialLoad && msg.ts && msg.ts > lastTs && msg.name !== myName) { 
                 newMsgsCount++; 
                 latestMsg = msg; 
-                latestMsgKey = child.key; // <--- CATTURIAMO LA CHIAVE UNIVOCA FIREBASE
+                latestMsgKey = child.key;
             }
         });
         
@@ -1231,9 +1234,11 @@ function setupChat(chatRef, containerId, alertBtnId) {
                 els[alertBtnId].style.backgroundColor = '#4caf50';
             }
 
+            // Controllo sicuro anti-crash per capire se il gioco o la BR sono attivi
+            const isPlayingBR = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
             const isGlobal = (chatRef.key === 'globalChat');
             const shouldNotify = isGlobal
-                ? (!isGlobalChatMuted && !gameRunning && !brIsPlaying && (!isChatDrawerOpen || activeChatContext !== 'global'))
+                ? (!isGlobalChatMuted && !gameRunning && !isPlayingBR && (!isChatDrawerOpen || activeChatContext !== 'global'))
                 : (!isChatDrawerOpen || chatRef.key !== (activeChatContext === 'room' ? roomCode : myTeamId));
 
             if (isChatCwEnabled) {
@@ -1241,8 +1246,7 @@ function setupChat(chatRef, containerId, alertBtnId) {
                     const prefix = isGlobal ? "🌎" : "💬";
                     showToast(`${prefix} ${latestMsg.name}: [📻 Messaggio CW...]`);
                 }
-                // Evitiamo sovrapposizioni: suona solo se non stiamo giocando e se la chiave non è mai stata riprodotta
-                if (!gameRunning && !brIsPlaying && (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room')))) {
+                if (!gameRunning && !isPlayingBR && (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room')))) {
                     if (latestMsgKey && latestMsgKey !== window.lastPlayedCwMsgKey) {
                         window.lastPlayedCwMsgKey = latestMsgKey;
                         enqueueChatCwAudio(latestMsg.text);
@@ -1261,6 +1265,67 @@ function setupChat(chatRef, containerId, alertBtnId) {
         initialLoad = false;
     });
     listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
+}
+
+// --- LISTENER PER INVIO MESSAGGI CHAT LOBBY ---
+if (els.sendLobbyChatBtn) {
+    els.sendLobbyChatBtn.onclick = function() {
+        const txt = els.lobbyChatInput ? els.lobbyChatInput.value.trim() : ""; 
+        if (!txt || !roomCode) return;
+        const msgRef = db.ref(`rooms/${roomCode}/chat`).push(); 
+        msgRef.onDisconnect().remove();
+        msgRef.set({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP }); 
+        if (els.lobbyChatInput) els.lobbyChatInput.value = '';
+    };
+}
+
+if (els.lobbyChatInput) {
+    els.lobbyChatInput.onkeypress = function(e) { 
+        if (e.key === 'Enter' && els.sendLobbyChatBtn) els.sendLobbyChatBtn.click(); 
+    };
+}
+
+// --- LISTENER PER INVIO MESSAGGI CHAT GLOBALE / STANZA ---
+if (els.sendChatBtn) {
+    els.sendChatBtn.onclick = function() {
+        const txt = els.chatInput ? els.chatInput.value.trim() : ""; 
+        if (!txt) return;
+        let msgRef = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
+        msgRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP })
+            .catch(e => showToast("Errore invio: " + e.message)); 
+        if (els.chatInput) els.chatInput.value = '';
+    };
+}
+
+if (els.chatInput) {
+    els.chatInput.onkeypress = function(e) { 
+        if (e.key === 'Enter' && els.sendChatBtn) els.sendChatBtn.click(); 
+    };
+}
+
+// --- PULSANTI CANCELLA CHAT E MUTO ---
+if (els.clearChatBtn) {
+    els.clearChatBtn.onclick = function() { 
+        if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { 
+            if (activeChatContext === 'room' && roomCode) {
+                db.ref(`rooms/${roomCode}/chat`).remove(); 
+            } else if (activeChatContext === 'team' && myTeamId) {
+                db.ref(`teams/${myTeamId}/chat`).remove();
+            } else {
+                db.ref('globalChat').remove(); 
+            }
+            showToast("Chat cancellata per tutti.");
+        } 
+    };
+}
+
+if (els.muteGlobalChatBtn) {
+    els.muteGlobalChatBtn.onclick = function() {
+        isGlobalChatMuted = !isGlobalChatMuted;
+        localStorage.setItem(STORAGE_CHAT_MUTED_KEY, isGlobalChatMuted);
+        if (typeof updateMuteBtnUI === 'function') updateMuteBtnUI();
+        showToast(isGlobalChatMuted ? (currentLang==='it'?"Notifiche Chat silenziate.":"Chat notifications muted.") : (currentLang==='it'?"Notifiche Chat riattivate.":"Chat notifications unmuted."));
+    };
 }
 
                     
