@@ -5,7 +5,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260805.204";
+const APP_VERSION = "20260805.205";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -696,37 +696,38 @@ function initGame() {
             myPrivacy = userData.privacyUsername || false; 
             if (els.privacyUsernameCheckbox) els.privacyUsernameCheckbox.checked = myPrivacy;
 
-            // --- [NUOVO] CONTROLLO PRIMO ACCESSO ASSOLUTO ---
+            // --- CONTROLLO PRIMO ACCESSO ASSOLUTO (SOLO PER IL NUOVO UTENTE) ---
             if (!userSnap.exists() || !userData.welcomed) {
-                // Registra che l'utente è entrato ed è stato accolto
+                // 1. Registra che l'utente è entrato ed è stato accolto
                 await userRef.update({
                     name: myName,
                     welcomed: true,
                     createdAt: firebase.database.ServerValue.TIMESTAMP
                 });
 
-                // 1. Toast personale di benvenuto (dopo 1.5 secondi dall'apertura)
-                setTimeout(() => {
-                    showToast(`📻 Benvenuto in Sfida Telegrafia, ${myName}! Buon divertimento!`);
-                    if (typeof playNotificationSound === 'function') playNotificationSound();
-                }, 1500);
-
-                // 2. (OPZIONALE) Annuncio di benvenuto automatico in Chat Globale
-                db.ref('globalChat').push().set({
-                    name: "🤖 Sistema",
-                    text: `🎉 Diamo il benvenuto a un nuovo telegrafista: ${myName}!`,
-                    ts: firebase.database.ServerValue.TIMESTAMP
-                });
+                // 2. Mostra la finestra modale di benvenuto ESCLUSIVAMENTE a lui
+                if (els.welcomeNewUserModal) {
+                    els.welcomeNewUserModal.style.display = 'flex';
+                    const btnClose = document.getElementById('btnCloseWelcomeModal');
+                    if (btnClose) {
+                        btnClose.onclick = () => {
+                            els.welcomeNewUserModal.style.display = 'none';
+                        };
+                    }
+                } else {
+                    // Fallback discreto se manca il modal nell'HTML: Toast di benvenuto privato
+                    setTimeout(() => {
+                        showToast(`📻 Benvenuto in Sfida Telegrafia, ${myName}! Buon divertimento!`);
+                    }, 1500);
+                }
             }
-            // ------------------------------------------------
+            // ------------------------------------------------------------------
         } catch(e) {}
 
         if (els.playerName) els.playerName.textContent = myName; 
         if (els.userAliasInput) els.userAliasInput.value = (myName !== tgUser.first_name) ? myName : "";
         if (els.loadingText) els.loadingText.style.display = 'none'; 
         if (els.createRoomBtn) els.createRoomBtn.disabled = false;
-        
-        
 
         db.ref('.info/serverTimeOffset').on('value', (snap) => {
             serverTimeOffset = snap.val() || 0;
@@ -825,7 +826,6 @@ function initGame() {
     populateGameModesUI();
     checkGameTypeUI();
 }
-
 // ============================================================================
 // GESTIONE PULSANTI MODALE SFIDA GIORNALIERA E BANNER
 // ============================================================================
@@ -4947,3 +4947,101 @@ async function syncUserNameEverywhere(userId, newName, newUsername) {
         }
     }
 }
+
+// ============================================================================
+// GESTIONE STANDBY / SPEGNIMENTO SCHERMO DURANTE IL GIOCO
+// ============================================================================
+
+window.lostFocusDuringWord = false;
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        // 1. Lo schermo si è spento o l'utente ha ridotto Telegram a icona
+        if (gameRunning && inputActive) {
+            window.lostFocusDuringWord = true;
+            stopAllMorseAudio(); // Zittisce immediatamente eventuali oscillatori appesi
+        }
+    } else {
+        // 2. Lo schermo si è riacceso
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+
+        // Se l'utente era nel mezzo di una parola/carattere quando ha spento lo schermo
+        if (gameRunning && window.lostFocusDuringWord) {
+            window.lostFocusDuringWord = false;
+            inputActive = false;
+            showToast("⚠️ Schermo spento: parola considerata persa!");
+
+            // Gestione specifica in base alla modalità di gioco
+            if (currentMode === 'conquest') {
+                // In Conquista (Co-op) applichiamo una piccola penalità e rigeneriamo la parola
+                db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
+                    if (!state || state.status !== 'playing') return state;
+                    state.progress = Math.max(0, (state.progress || 0) - 2);
+                    return state;
+                });
+                setTimeout(() => {
+                    if (gameRunning) startCoopSequence();
+                }, 1000);
+
+            } else if (currentMode === 'quiz') {
+                // In Quiz consideriamo la risposta errata per timeout
+                submitQuizAnswer(-1);
+
+            } else if (currentMode === 'pingpong') {
+                // In Ping Pong inviamo automaticamente una parola di timeout
+                sendAutoPingPongWord();
+
+            } else {
+                // PAROLE COMUNI, NOMINATIVI O CARATTERI:
+                // Non resettiamo currentWpm a baseWpm! Applichiamo solo la normale penalità (-2 WPM)
+                currentWpm = Math.max(10, currentWpm - 2);
+                if (els.wpmDisplay) {
+                    els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
+                }
+
+                const missedWord = gameWords[wordIndex] ? gameWords[wordIndex].toUpperCase() : "-";
+                
+                // Registriamo la parola persa nello storico della partita con 0 punti
+                matchDetailsArray.push({
+                    real: missedWord,
+                    typed: "TIMEOUT (SCHERMO)",
+                    points: 0,
+                    wpm: currentWpm,
+                    ms: 0
+                });
+
+                // Aggiungiamo una riga rossa visibile in tabella per indicare il timeout
+                if (els.tableBody) {
+                    const tr = document.createElement('tr');
+                    const tdTyped = document.createElement('td'); 
+                    tdTyped.textContent = "TIMEOUT";
+                    tdTyped.style.color = "#d32f2f";
+                    tdTyped.style.fontSize = "0.8em";
+                    
+                    const tdReal = document.createElement('td'); 
+                    tdReal.innerHTML = `<b>${escapeHTML(missedWord)}</b>`;
+                    
+                    const tdPoints = document.createElement('td'); 
+                    tdPoints.style.color = "#d32f2f"; 
+                    tdPoints.style.fontWeight = 'bold'; 
+                    tdPoints.textContent = "0";
+                    
+                    tr.appendChild(tdTyped); 
+                    tr.appendChild(tdReal); 
+                    tr.appendChild(tdPoints);
+                    els.tableBody.appendChild(tr);
+                    
+                    if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
+                }
+
+                // Passiamo direttamente alla parola successiva
+                wordIndex++;
+                setTimeout(() => {
+                    if (gameRunning) playNextWord();
+                }, 800);
+            }
+        }
+    }
+});
