@@ -593,8 +593,57 @@ function initGame() {
     if (els.wordSpaceSelect && localStorage.getItem(STORAGE_PREF_WORD_SPACE)) els.wordSpaceSelect.value = localStorage.getItem(STORAGE_PREF_WORD_SPACE);
 
     isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
-    if (localStorage.getItem(STORAGE_CHAT_CW_WPM)) chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;
-    if (localStorage.getItem(STORAGE_CHAT_CW_TONE)) chatCwTone = parseInt(localStorage.getItem(STORAGE_CHAT_CW_TONE)) || 600;
+    if (localStorage.getItem(STORAGE_CHAT_CW_WPM)) {
+        chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;
+        if (els.chatCwWpmInput) els.chatCwWpmInput.value = chatCwWpm;
+    }
+    if (localStorage.getItem(STORAGE_CHAT_CW_TONE)) {
+        chatCwTone = parseInt(localStorage.getItem(STORAGE_CHAT_CW_TONE)) || 600;
+        if (els.chatCwToneInput) els.chatCwToneInput.value = chatCwTone;
+    }
+
+    if (els.toggleChatCwBtn) {
+        if (isChatCwEnabled) {
+            els.toggleChatCwBtn.textContent = "📻 CW: ON";
+            els.toggleChatCwBtn.classList.remove('btn-secondary');
+            els.toggleChatCwBtn.classList.add('btn-success');
+            if (els.chatCwSettingsPanel) els.chatCwSettingsPanel.style.display = 'block';
+        }
+
+        els.toggleChatCwBtn.addEventListener('click', () => {
+            isChatCwEnabled = !isChatCwEnabled;
+            localStorage.setItem(STORAGE_CHAT_CW_ENABLED, isChatCwEnabled);
+            if (!isChatCwEnabled) chatCwAudioQueue = [];
+            
+            if (isChatCwEnabled) {
+                els.toggleChatCwBtn.textContent = "📻 CW: ON";
+                els.toggleChatCwBtn.classList.remove('btn-secondary');
+                els.toggleChatCwBtn.classList.add('btn-success');
+                if (els.chatCwSettingsPanel) els.chatCwSettingsPanel.style.display = 'block';
+                showToast("Modalità CW Chat Attivata!");
+            } else {
+                els.toggleChatCwBtn.textContent = "📻 CW: OFF";
+                els.toggleChatCwBtn.classList.remove('btn-success');
+                els.toggleChatCwBtn.classList.add('btn-secondary');
+                if (els.chatCwSettingsPanel) els.chatCwSettingsPanel.style.display = 'none';
+                showToast("Modalità CW Chat Disattivata.");
+            }
+            listenToChat();
+        });
+    }
+
+    if (els.chatCwWpmInput) {
+        els.chatCwWpmInput.addEventListener('change', (e) => {
+            chatCwWpm = Math.max(5, Math.min(50, parseInt(e.target.value) || 20));
+            localStorage.setItem(STORAGE_CHAT_CW_WPM, chatCwWpm);
+        });
+    }
+    if (els.chatCwToneInput) {
+        els.chatCwToneInput.addEventListener('change', (e) => {
+            chatCwTone = Math.max(400, Math.min(1000, parseInt(e.target.value) || 600));
+            localStorage.setItem(STORAGE_CHAT_CW_TONE, chatCwTone);
+        });
+    }
 
     auth.signInAnonymously().then(async () => {
         try {
@@ -609,8 +658,11 @@ function initGame() {
         if (els.loadingText) els.loadingText.style.display = 'none'; 
         if (els.createRoomBtn) els.createRoomBtn.disabled = false;
 
-        db.ref('.info/serverTimeOffset').on('value', snap => { serverTimeOffset = snap.val() || 0; });
-        db.ref('.info/connected').on('value', snap => {
+        db.ref('.info/serverTimeOffset').on('value', (snap) => {
+            serverTimeOffset = snap.val() || 0;
+        });
+
+        db.ref('.info/connected').on('value', (snap) => {
             if (snap.val() === false) return;
             const pRef = db.ref(`presence/${myId}`);
             pRef.onDisconnect().remove();
@@ -623,30 +675,87 @@ function initGame() {
             if (roomCode) joinRoomLogic(true);
         });
 
+        if (typeof checkYesterdayDailyMedal === 'function') checkYesterdayDailyMedal();
+
+        // --- BLOCCO ROUTING SCHERMATE REINTEGRATO ---
+        if (startParam) {
+            if (startParam.startsWith('team_')) processTeamInvite(startParam.replace('team_', ''));
+            else if (startParam.startsWith('room_')) window.joinSpecificRoom(startParam.replace('room_', ''));
+        } else {
+            const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
+            if (lastRoom) {
+                db.ref(`rooms/${lastRoom}`).once('value', snap => {
+                    if (snap.exists() && snap.val().status !== 'finished') {
+                        roomCode = lastRoom; 
+                        if (els.rejoinContainer) els.rejoinContainer.style.display = 'block'; 
+                        if (els.rejoinGameBtn) els.rejoinGameBtn.onclick = () => { isRejoining = true; joinRoomLogic(false); }; 
+                        showScreen('setupScreen');
+                    } else { 
+                        localStorage.removeItem(STORAGE_ROOM_KEY); 
+                        showScreen('setupScreen'); 
+                    }
+                });
+            } else {
+                showScreen('setupScreen');
+            }
+        }
+
         const savedLang = localStorage.getItem('gameLang'); 
         if (savedLang) setLanguage(savedLang);
         else updateMuteBtnUI();
         
-        loadDictionaries();
+        loadDictionaries().then(() => {
+            let todayStr = new Date().toISOString().split('T')[0];
+            let lastShown = localStorage.getItem(STORAGE_DAILY_SHOWN);
+            if (lastShown !== todayStr && !startParam) {
+                if (els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'flex';
+            }
+        });
+
+        const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);
+        if (savedCustom) { 
+            try { 
+                customDictionary = JSON.parse(savedCustom); 
+                updateCustomDictStatus(); 
+            } catch(e) {} 
+        }
+
+        if (typeof checkActivityAndAwardMedals === 'function') checkActivityAndAwardMedals(); 
+        if (typeof checkTournamentPopup === 'function') checkTournamentPopup();
         
         listenToRooms(); 
         listenToOnlineUsers(); 
         listenToInvites(); 
         listenToInviteAccepted();
         
+        if (typeof initBattleRoyaleScheduler === 'function') initBattleRoyaleScheduler(); 
+        if (typeof loadRegolamento === 'function') loadRegolamento();
+
         if (els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
         if (els.appVersionFooter) els.appVersionFooter.textContent = APP_VERSION;
+
+        db.ref('appConfig/latestVersion').on('value', snap => {
+            const latestStr = snap.val() ? String(snap.val()).trim() : "";
+            const currentStr = String(APP_VERSION).trim();
+            if (latestStr && latestStr !== currentStr) {
+                if (els.updateBanner) els.updateBanner.style.display = 'block';
+            } else {
+                if (els.updateBanner) els.updateBanner.style.display = 'none';
+            }
+        });
 
     }).catch(() => {
         if (els.loadingText) { 
             els.loadingText.textContent = "Errore di Connessione."; 
             els.loadingText.style.color = "red"; 
+            els.loadingText.style.fontWeight = "bold"; 
         }
     });
 
     populateGameModesUI();
     checkGameTypeUI();
 }
+
 
 // --- LISTE E BACHECA SFIDE (SENZA DUPLICATI) ---
 window.lastKnownRoomPlayersCount = window.lastKnownRoomPlayersCount || {};
