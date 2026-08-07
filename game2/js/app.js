@@ -4367,50 +4367,86 @@ window.joinTournament = function(tId) {
     db.ref(`tournaments/${tId}/standings/${myTeamId}`).set({ points: 0, name: myTeamName }); 
 };
 
+
+// --- RENDER TORNEO ATTIVO CON PULSANTI SQUADRA CHIARI ---
 function renderActiveTournament(trnSnap) {
     if (els.trnLobbyArea) els.trnLobbyArea.style.display = 'none'; 
     if (els.trnActiveArea) els.trnActiveArea.style.display = 'flex'; 
-    const trn = trnSnap.val(); if (!trn) return;
+    const trn = trnSnap.val(); 
+    if (!trn) return;
+
     const isFinished = trn.status === 'finished'; 
-    if (els.activeTrnTitle) els.activeTrnTitle.textContent = trn.name + (isFinished ? (currentLang === 'it' ? " (Concluso)" : " (Finished)") : "");
+    if (els.activeTrnTitle) {
+        els.activeTrnTitle.textContent = trn.name + (isFinished ? (currentLang === 'it' ? " (Concluso)" : " (Finished)") : "");
+    }
+
     const amIHost = (trn.hostId === myId); 
     if (els.editTrnNameBtn) els.editTrnNameBtn.style.display = (amIHost && !isFinished) ? 'block' : 'none'; 
     if (els.leaveTrnBtn) els.leaveTrnBtn.style.display = (isTeamCaptain && !isFinished) ? 'block' : 'none';
     
+    // 1. Render Tabella Classifica Torneo
     if (els.trnStandingsBody) {
         els.trnStandingsBody.innerHTML = ''; 
-        let std = Object.entries(trn.standings || {}).map(([id, data]) => ({ id, ...data })); std.sort((a,b) => b.points - a.points);
+        let std = Object.entries(trn.standings || {}).map(([id, data]) => ({ id, ...data })); 
+        std.sort((a, b) => b.points - a.points);
+        
         std.forEach((s, idx) => {
-            let med = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
-            const tr = document.createElement('tr'); const tdMed = document.createElement('td'); tdMed.textContent = med; const tdName = document.createElement('td'); const nameB = document.createElement('b'); nameB.textContent = s.name; tdName.appendChild(nameB);
+            let med = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`;
+            const tr = document.createElement('tr'); 
+            const tdMed = document.createElement('td'); tdMed.textContent = med; 
+            const tdName = document.createElement('td'); const nameB = document.createElement('b'); nameB.textContent = s.name; tdName.appendChild(nameB);
             if (s.id === myTeamId) tdName.appendChild(document.createTextNode(" " + (currentLang === 'it' ? '(Voi)' : '(You)')));
             const tdPts = document.createElement('td'); const ptsB = document.createElement('b'); ptsB.textContent = s.points; tdPts.appendChild(ptsB);
-            tr.appendChild(tdMed); tr.appendChild(tdName); tr.appendChild(tdPts); els.trnStandingsBody.appendChild(tr);
+            tr.appendChild(tdMed); tr.appendChild(tdName); tr.appendChild(tdPts); 
+            els.trnStandingsBody.appendChild(tr);
         });
     }
 
+    // 2. Controlli Organizzatore (Host)
     if (els.trnHostControls) els.trnHostControls.style.display = (amIHost && !isFinished) ? 'block' : 'none';
     if (els.finishTrnBtn) { 
         els.finishTrnBtn.style.display = (amIHost && trn.status === 'playing') ? 'block' : 'none'; 
-        els.finishTrnBtn.onclick = () => { if (confirm("Vuoi concludere manualmente il torneo?")) db.ref(`tournaments/${activeTrnId}/status`).set('finished'); }; 
+        els.finishTrnBtn.onclick = () => { 
+            if (confirm("Vuoi concludere manualmente il torneo?")) {
+                db.ref(`tournaments/${activeTrnId}/status`).set('finished'); 
+            }
+        }; 
     }
+    
     const teamCount = trn.teams ? Object.keys(trn.teams).length : 0; 
-    if (els.trnTeamCountTxt) els.trnTeamCountTxt.textContent = (currentLang === 'it' ? "Squadre Iscritte: " : "Enrolled Teams: ") + teamCount;
+    if (els.trnTeamCountTxt) {
+        els.trnTeamCountTxt.textContent = (currentLang === 'it' ? "Squadre Iscritte: " : "Enrolled Teams: ") + teamCount;
+    }
 
     if (els.startTrnBtn) { 
         els.startTrnBtn.disabled = teamCount < 2 || (trn.status !== 'open' && trn.status !== 'playing'); 
-        els.startTrnBtn.textContent = trn.status === 'playing' ? (currentLang === 'it' ? "Rigenera Tabellone (Attenzione!)" : "Regenerate Bracket (Warning!)") : (currentLang === 'it' ? "Genera Tabellone e Avvia" : "Generate Bracket and Start"); 
+        els.startTrnBtn.textContent = trn.status === 'playing' 
+            ? (currentLang === 'it' ? "Rigenera Tabellone (Attenzione!)" : "Regenerate Bracket (Warning!)") 
+            : (currentLang === 'it' ? "Genera Tabellone e Avvia" : "Generate Bracket and Start"); 
     }
     
+    // 3. Render Tabellone Incontri (Bracket)
     if (els.trnBracketContainer) {
         els.trnBracketContainer.innerHTML = '';
         if (trn.status === 'open') {
-            const waitP = document.createElement('p'); waitP.style.textAlign = 'center'; waitP.style.color = 'var(--hint-color)'; waitP.style.fontSize = '0.9em'; waitP.textContent = currentLang === 'it' ? "Il torneo è aperto, attendi l'avvio dall'organizzatore." : "The tournament is open, wait for the host to start."; els.trnBracketContainer.appendChild(waitP);
+            const waitP = document.createElement('p'); 
+            waitP.style.textAlign = 'center'; 
+            waitP.style.color = 'var(--hint-color)'; 
+            waitP.style.fontSize = '0.9em'; 
+            waitP.textContent = currentLang === 'it' ? "Il torneo è aperto, attendi l'avvio dall'organizzatore." : "The tournament is open, wait for the host to start."; 
+            els.trnBracketContainer.appendChild(waitP);
         } else if (trn.matches) {
             Object.entries(trn.matches).forEach(([mId, m]) => {
-                const isMyMatch = (m.teamA === myTeamId || m.teamB === myTeamId); const card = document.createElement('div'); card.className = 'match-card';
-                if (isMyMatch) { card.style.borderColor = "var(--champ-color)"; card.style.borderWidth = "2px"; }
-                let aColor = m.winnerTeamId === m.teamA ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)"); let bColor = m.winnerTeamId === m.teamB ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)");
+                const isMyMatch = (m.teamA === myTeamId || m.teamB === myTeamId); 
+                const card = document.createElement('div'); 
+                card.className = 'match-card';
+                if (isMyMatch) { 
+                    card.style.borderColor = "var(--champ-color)"; 
+                    card.style.borderWidth = "2px"; 
+                }
+                
+                let aColor = m.winnerTeamId === m.teamA ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)"); 
+                let bColor = m.winnerTeamId === m.teamB ? "#4caf50" : (m.winnerTeamId ? "#999" : "var(--text-color)");
                 
                 const matchCardTeams = document.createElement('div'); matchCardTeams.className = "match-card-teams";
                 const tA = document.createElement('div'); tA.style.color = aColor; const bA = document.createElement('b'); bA.textContent = m.teamAName; tA.appendChild(bA);
@@ -4420,15 +4456,50 @@ function renderActiveTournament(trnSnap) {
                 card.appendChild(matchCardTeams);
 
                 if (m.status !== 'finished') {
-                    const slotsDiv = document.createElement('div'); slotsDiv.style.display = 'flex'; slotsDiv.style.width = '100%'; slotsDiv.style.gap = '10px';
-                    const btnA = document.createElement('button'); btnA.className = 'slot-btn' + (m.playerA ? ' filled' : ''); btnA.textContent = m.playerA ? m.playerA.name : (currentLang === 'it' ? 'A: Libero' : 'A: Open'); btnA.onclick = () => window.toggleTrnSlot(mId, 'A', m.teamA);
-                    const btnB = document.createElement('button'); btnB.className = 'slot-btn' + (m.playerB ? ' filled' : ''); btnB.textContent = m.playerB ? m.playerB.name : (currentLang === 'it' ? 'B: Libero' : 'B: Open'); btnB.onclick = () => window.toggleTrnSlot(mId, 'B', m.teamB);
-                    slotsDiv.appendChild(btnA); slotsDiv.appendChild(btnB); card.appendChild(slotsDiv);
+                    const slotsDiv = document.createElement('div'); 
+                    slotsDiv.style.display = 'flex'; 
+                    slotsDiv.style.width = '100%'; 
+                    slotsDiv.style.gap = '10px';
+                    
+                    // --- PULSANTE SQUADRA A (con nome esplicito) ---
+                    const btnA = document.createElement('button'); 
+                    btnA.className = 'slot-btn' + (m.playerA ? ' filled' : ''); 
+                    btnA.innerHTML = m.playerA 
+                        ? `✅ <b>${escapeHTML(m.playerA.name)}</b><br><small>(${escapeHTML(m.teamAName)})</small>` 
+                        : `🟢 <b>Scegli per ${escapeHTML(m.teamAName)}</b><br><small>(Posto A)</small>`; 
+                    btnA.onclick = () => window.toggleTrnSlot(mId, 'A', m.teamA, m.teamAName);
+                    
+                    // --- PULSANTE SQUADRA B (con nome esplicito) ---
+                    const btnB = document.createElement('button'); 
+                    btnB.className = 'slot-btn' + (m.playerB ? ' filled' : ''); 
+                    btnB.innerHTML = m.playerB 
+                        ? `✅ <b>${escapeHTML(m.playerB.name)}</b><br><small>(${escapeHTML(m.teamBName)})</small>` 
+                        : `🟢 <b>Scegli per ${escapeHTML(m.teamBName)}</b><br><small>(Posto B)</small>`; 
+                    btnB.onclick = () => window.toggleTrnSlot(mId, 'B', m.teamB, m.teamBName);
+                    
+                    slotsDiv.appendChild(btnA); 
+                    slotsDiv.appendChild(btnB); 
+                    card.appendChild(slotsDiv);
+                    
+                    // --- PULSANTE ENTRA NELLA SFIDA (Appare se entrambi i posti sono occupati) ---
                     if (m.playerA && m.playerB && (m.playerA.id === myId || m.playerB.id === myId)) {
-                        const joinBtn = document.createElement('button'); joinBtn.className = 'btn-success'; joinBtn.style.fontSize = '0.85em'; joinBtn.style.padding = '6px'; joinBtn.style.marginTop = '8px'; joinBtn.textContent = currentLang === 'it' ? 'ENTRA NELLA SFIDA' : 'JOIN MATCH'; joinBtn.onclick = () => window.startTrnMatch(mId); card.appendChild(joinBtn);
+                        const joinBtn = document.createElement('button'); 
+                        joinBtn.className = 'btn-success'; 
+                        joinBtn.style.fontSize = '0.9em'; 
+                        joinBtn.style.padding = '8px'; 
+                        joinBtn.style.marginTop = '8px'; 
+                        joinBtn.textContent = currentLang === 'it' ? '⚡ ENTRA NELLA SFIDA' : '⚡ JOIN MATCH'; 
+                        joinBtn.onclick = () => window.startTrnMatch(mId); 
+                        card.appendChild(joinBtn);
                     }
                 } else { 
-                    const finDiv = document.createElement('div'); finDiv.style.fontSize = '0.85em'; finDiv.style.color = '#4caf50'; finDiv.style.fontWeight = 'bold'; finDiv.style.marginTop = '5px'; finDiv.textContent = currentLang === 'it' ? 'Concluso' : 'Finished'; card.appendChild(finDiv); 
+                    const finDiv = document.createElement('div'); 
+                    finDiv.style.fontSize = '0.85em'; 
+                    finDiv.style.color = '#4caf50'; 
+                    finDiv.style.fontWeight = 'bold'; 
+                    finDiv.style.marginTop = '5px'; 
+                    finDiv.textContent = currentLang === 'it' ? 'Concluso' : 'Finished'; 
+                    card.appendChild(finDiv); 
                 }
                 els.trnBracketContainer.appendChild(card);
             });
@@ -4436,83 +4507,42 @@ function renderActiveTournament(trnSnap) {
     }
 }
 
-if (els.editTrnNameBtn) {
-    els.editTrnNameBtn.addEventListener('click', () => { 
-        let n = prompt("Nuovo nome:"); 
-        if (n && n.trim() !== "") db.ref(`tournaments/${activeTrnId}/name`).set(n.trim()); 
-    });
-}
-if (els.leaveTrnBtn) {
-    els.leaveTrnBtn.addEventListener('click', () => { 
-        if (!isTeamCaptain) return; 
-        if (confirm("Ritirare la squadra?")) { 
-            db.ref(`tournaments/${activeTrnId}/teams/${myTeamId}`).remove(); 
-            db.ref(`tournaments/${activeTrnId}/standings/${myTeamId}`).remove(); 
-        } 
-    });
-}
-if (els.deleteTrnBtn) {
-    els.deleteTrnBtn.addEventListener('click', () => { 
-        if (confirm("Eliminare definitivamente il torneo?")) db.ref(`tournaments/${activeTrnId}`).remove(); 
-    });
-}
-if (els.startTrnBtn) {
-    els.startTrnBtn.addEventListener('click', () => {
-        if (!activeTrnId) return;
-        
-        db.ref(`tournaments/${activeTrnId}/teams`).once('value', snap => {
-            const teamsObj = snap.val() || {};
-            const teams = Object.entries(teamsObj).map(([id, data]) => ({
-                id: id,
-                name: data.name || "Squadra"
-            }));
-
-            if (teams.length < 2) {
-                return alert("Servono almeno 2 squadre per iniziare!");
-            }
-
-            let matches = {};
-            let matchIndex = 1;
-
-            for (let i = 0; i < teams.length; i++) {
-                for (let j = i + 1; j < teams.length; j++) {
-                    matches[`m${matchIndex++}`] = {
-                        teamA: teams[i].id,
-                        teamAName: teams[i].name,
-                        teamB: teams[j].id,
-                        teamBName: teams[j].name,
-                        status: 'waiting'
-                    };
-                }
-            }
-
-            db.ref(`tournaments/${activeTrnId}`).update({
-                status: 'playing',
-                matches: matches
-            }).then(() => {
-                showToast("Tabellone generato con successo!");
-            }).catch(err => {
-                alert("Errore: " + err.message);
-            });
-        });
-    });
-}
-window.toggleTrnSlot = function(matchId, side, teamId) {
-    if (teamId !== myTeamId) return alert("Non appartieni a questa squadra!");
+// --- CONTROLLO SLOT CON MESSAGGIO DI ERRORE ESPLICITO ---
+window.toggleTrnSlot = function(matchId, side, teamId, targetTeamName = "questa squadra") {
+    if (teamId !== myTeamId) {
+        return alert(`⚠️ Questo posto è riservato alla squadra "${targetTeamName}"!\n\nTu fai parte della squadra "${myTeamName || 'Nessuna'}": premi sul pulsante destinato alla tua squadra.`);
+    }
     const slotRef = db.ref(`tournaments/${activeTrnId}/matches/${matchId}/player${side}`);
     slotRef.once('value', snap => { 
-        if (!snap.exists()) slotRef.set({ id: myId, name: myName }); 
-        else if (snap.val().id === myId) slotRef.remove(); 
-        else alert("Posto occupato da " + snap.val().name); 
+        if (!snap.exists()) {
+            slotRef.set({ id: myId, name: myName }); 
+        } else if (snap.val().id === myId) {
+            slotRef.remove(); // Se ripremi sul tuo nome, ti rimuovi dallo slot
+        } else {
+            alert("⚠️ Questo posto è già stato occupato da " + snap.val().name); 
+        }
     });
 };
+
+// --- AVVIO DELL'INCONTRO DI TORNEO ---
 window.startTrnMatch = function(matchId) {
     const rc = "TRN_" + matchId;
     db.ref(`rooms/${rc}`).once('value', s => {
-        if (s.exists()) window.joinSpecificRoom(rc);
-        else {
-            db.ref('rooms/' + rc).set({ status: 'waiting', type: 'multi', mode: 'pingpong', wpm: 20, tone: 600, wordCount: 20, fixedSpeed: false, createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: Date.now() + 1800000, hostId: myId })
-              .then(() => window.joinSpecificRoom(rc));
+        if (s.exists()) {
+            window.joinSpecificRoom(rc);
+        } else {
+            db.ref('rooms/' + rc).set({ 
+                status: 'waiting', 
+                type: 'multi', 
+                mode: 'pingpong', 
+                wpm: 20, 
+                tone: 600, 
+                wordCount: 20, 
+                fixedSpeed: false, 
+                createdAt: firebase.database.ServerValue.TIMESTAMP, 
+                expiresAt: Date.now() + 1800000, 
+                hostId: myId 
+            }).then(() => window.joinSpecificRoom(rc));
         }
     });
 };
