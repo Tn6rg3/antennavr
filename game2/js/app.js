@@ -4369,6 +4369,7 @@ window.joinTournament = function(tId) {
 
 
 // --- RENDER TORNEO ATTIVO CON PULSANTI SQUADRA CHIARI ---
+// --- RENDER TORNEO ATTIVO CON PULSANTI SQUADRA AFFIANCATI E CHIARI ---
 function renderActiveTournament(trnSnap) {
     if (els.trnLobbyArea) els.trnLobbyArea.style.display = 'none'; 
     if (els.trnActiveArea) els.trnActiveArea.style.display = 'flex'; 
@@ -4459,19 +4460,29 @@ function renderActiveTournament(trnSnap) {
                     const slotsDiv = document.createElement('div'); 
                     slotsDiv.style.display = 'flex'; 
                     slotsDiv.style.width = '100%'; 
-                    slotsDiv.style.gap = '10px';
+                    slotsDiv.style.gap = '8px';
                     
-                    // --- PULSANTE SQUADRA A (con nome esplicito) ---
+                    // --- PULSANTE SQUADRA A (50% larghezza garantita) ---
                     const btnA = document.createElement('button'); 
-                    btnA.className = 'slot-btn' + (m.playerA ? ' filled' : ''); 
+                    btnA.className = 'slot-btn' + (m.playerA ? ' filled' : '');
+                    btnA.style.flex = "1";
+                    btnA.style.minWidth = "0";
+                    btnA.style.margin = "0";
+                    btnA.style.padding = "8px 4px";
+                    btnA.style.fontSize = "0.85em";
                     btnA.innerHTML = m.playerA 
                         ? `✅ <b>${escapeHTML(m.playerA.name)}</b><br><small>(${escapeHTML(m.teamAName)})</small>` 
                         : `🟢 <b>Scegli per ${escapeHTML(m.teamAName)}</b><br><small>(Posto A)</small>`; 
                     btnA.onclick = () => window.toggleTrnSlot(mId, 'A', m.teamA, m.teamAName);
                     
-                    // --- PULSANTE SQUADRA B (con nome esplicito) ---
+                    // --- PULSANTE SQUADRA B (50% larghezza garantita) ---
                     const btnB = document.createElement('button'); 
-                    btnB.className = 'slot-btn' + (m.playerB ? ' filled' : ''); 
+                    btnB.className = 'slot-btn' + (m.playerB ? ' filled' : '');
+                    btnB.style.flex = "1";
+                    btnB.style.minWidth = "0";
+                    btnB.style.margin = "0";
+                    btnB.style.padding = "8px 4px";
+                    btnB.style.fontSize = "0.85em";
                     btnB.innerHTML = m.playerB 
                         ? `✅ <b>${escapeHTML(m.playerB.name)}</b><br><small>(${escapeHTML(m.teamBName)})</small>` 
                         : `🟢 <b>Scegli per ${escapeHTML(m.teamBName)}</b><br><small>(Posto B)</small>`; 
@@ -4481,7 +4492,7 @@ function renderActiveTournament(trnSnap) {
                     slotsDiv.appendChild(btnB); 
                     card.appendChild(slotsDiv);
                     
-                    // --- PULSANTE ENTRA NELLA SFIDA (Appare se entrambi i posti sono occupati) ---
+                    // --- PULSANTE ENTRA NELLA SFIDA (Appare appena entrambi sono occupati) ---
                     if (m.playerA && m.playerB && (m.playerA.id === myId || m.playerB.id === myId)) {
                         const joinBtn = document.createElement('button'); 
                         joinBtn.className = 'btn-success'; 
@@ -4506,6 +4517,7 @@ function renderActiveTournament(trnSnap) {
         }
     }
 }
+
 
 // --- CONTROLLO SLOT CON MESSAGGIO DI ERRORE ESPLICITO ---
 window.toggleTrnSlot = function(matchId, side, teamId, targetTeamName = "questa squadra") {
