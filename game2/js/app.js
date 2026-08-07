@@ -5,7 +5,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.207";
+const APP_VERSION = "20260807.208";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -1329,7 +1329,7 @@ if (els.muteGlobalChatBtn) {
 }
 
                     
-// --- PRESENZA ONLINE E LISTE UTENTI ---
+// --- PRESENZA ONLINE E LISTE UTENTI (VERSIONE COMPATTA SU SINGOLA RIGA) ---
 function renderOrUpdateUserListItem(userId, u) {
     if (!els.onlineUsersList || userId === myId) return;
 
@@ -1343,26 +1343,29 @@ function renderOrUpdateUserListItem(userId, u) {
     }
 
     li.innerHTML = '';
+    // Stile compatto: riga singola con altezza ridotta
+    li.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:4px 8px; margin-bottom:3px;";
 
     const isWaiting = (isChallenging && currentInviterId === userId);
     const isPlaying = (u.status === 'playing');
     const canSpectate = (isPlaying && u.allowSpectators && u.activeRoomCode);
 
+    // Nome utente a sinistra (senza scritte di stato sotto)
     const leftSpan = document.createElement('span');
+    leftSpan.style.cssText = "white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60%; font-size:0.9em;";
+    
     const nameB = document.createElement('b');
-    nameB.textContent = u.name;
+    nameB.textContent = u.name || "Anonimo";
     nameB.style.cursor = 'pointer';
     nameB.style.color = 'var(--link-color)';
     nameB.style.textDecoration = 'underline';
     nameB.onclick = () => openTeamInviteModal(userId, u.name);
+    
     leftSpan.appendChild(nameB);
-    leftSpan.appendChild(document.createElement('br'));
 
-    const statusSmall = document.createElement('small');
-    statusSmall.textContent = canSpectate ? "🟡 In Partita (Osservabile)" : (isPlaying ? "🟡 In Partita" : "🟢 Online");
-    leftSpan.appendChild(statusSmall);
-
+    // Pulsante di stato/azione a destra
     const btn = document.createElement('button');
+    btn.style.cssText = "width:auto; padding:4px 10px; font-size:0.8em; margin:0; flex-shrink:0;";
 
     if (canSpectate) {
         btn.className = "action-btn-small";
