@@ -1165,6 +1165,9 @@ async function processChatCwQueue() {
     isChatCwPlaying = false;
 }
 
+
+
+// --- CONFIGURAZIONE E LISTENER CHAT (CON FIX AUDIO DOPPIO) ---
 function setupChat(chatRef, containerId, alertBtnId) {
     const container = els[containerId]; 
     if (!container) return;
@@ -1177,7 +1180,7 @@ function setupChat(chatRef, containerId, alertBtnId) {
     
     const callback = chatRef.limitToLast(10).on('value', snapshot => {
         container.innerHTML = ''; 
-        let newMsgsCount = 0, latestMsg = null, maxTs = lastTs;
+        let newMsgsCount = 0, latestMsg = null, latestMsgKey = null, maxTs = lastTs;
         
         snapshot.forEach(child => {
             const msg = child.val(); 
@@ -1216,6 +1219,7 @@ function setupChat(chatRef, containerId, alertBtnId) {
             if (!initialLoad && msg.ts && msg.ts > lastTs && msg.name !== myName) { 
                 newMsgsCount++; 
                 latestMsg = msg; 
+                latestMsgKey = child.key; // <--- CATTURIAMO LA CHIAVE UNIVOCA FIREBASE
             }
         });
         
@@ -1229,7 +1233,7 @@ function setupChat(chatRef, containerId, alertBtnId) {
 
             const isGlobal = (chatRef.key === 'globalChat');
             const shouldNotify = isGlobal
-                ? (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global'))
+                ? (!isGlobalChatMuted && !gameRunning && !brIsPlaying && (!isChatDrawerOpen || activeChatContext !== 'global'))
                 : (!isChatDrawerOpen || chatRef.key !== (activeChatContext === 'room' ? roomCode : myTeamId));
 
             if (isChatCwEnabled) {
@@ -1237,9 +1241,10 @@ function setupChat(chatRef, containerId, alertBtnId) {
                     const prefix = isGlobal ? "🌎" : "💬";
                     showToast(`${prefix} ${latestMsg.name}: [📻 Messaggio CW...]`);
                 }
-                if (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room'))) {
-                    if (latestMsg.ts > (window.lastPlayedCwMsgTs || 0)) {
-                        window.lastPlayedCwMsgTs = latestMsg.ts;
+                // Evitiamo sovrapposizioni: suona solo se non stiamo giocando e se la chiave non è mai stata riprodotta
+                if (!gameRunning && !brIsPlaying && (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room')))) {
+                    if (latestMsgKey && latestMsgKey !== window.lastPlayedCwMsgKey) {
+                        window.lastPlayedCwMsgKey = latestMsgKey;
                         enqueueChatCwAudio(latestMsg.text);
                     }
                 }
@@ -1258,64 +1263,7 @@ function setupChat(chatRef, containerId, alertBtnId) {
     listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
 }
 
-if (els.sendLobbyChatBtn) {
-    els.sendLobbyChatBtn.addEventListener('click', () => {
-        const txt = els.lobbyChatInput.value.trim(); 
-        if (!txt || !roomCode) return;
-        const msgRef = db.ref(`rooms/${roomCode}/chat`).push(); 
-        msgRef.onDisconnect().remove();
-        msgRef.set({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP }); 
-        els.lobbyChatInput.value = '';
-    });
-}
-
-if (els.lobbyChatInput) {
-    els.lobbyChatInput.addEventListener('keypress', e => { 
-        if (e.key === 'Enter' && els.sendLobbyChatBtn) els.sendLobbyChatBtn.click(); 
-    });
-}
-
-if (els.sendChatBtn) {
-    els.sendChatBtn.addEventListener('click', () => {
-        const txt = els.chatInput.value.trim(); 
-        if (!txt) return;
-        let msgRef = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
-        msgRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP })
-            .catch(e => showToast("Errore invio: " + e.message)); 
-        els.chatInput.value = '';
-    });
-}
-
-if (els.chatInput) {
-    els.chatInput.addEventListener('keypress', e => { 
-        if (e.key === 'Enter' && els.sendChatBtn) els.sendChatBtn.click(); 
-    });
-}
-
-if (els.clearChatBtn) {
-    els.clearChatBtn.addEventListener('click', () => { 
-        if (confirm('Vuoi cancellare per tutti l\'intera cronologia della chat?')) { 
-            if (activeChatContext === 'room' && roomCode) {
-                db.ref(`rooms/${roomCode}/chat`).remove(); 
-            } else if (activeChatContext === 'team' && myTeamId) {
-                db.ref(`teams/${myTeamId}/chat`).remove();
-            } else {
-                db.ref('globalChat').remove(); 
-            }
-            showToast("Chat cancellata per tutti.");
-        } 
-    });
-}
-
-if (els.muteGlobalChatBtn) {
-    els.muteGlobalChatBtn.addEventListener('click', () => {
-        isGlobalChatMuted = !isGlobalChatMuted;
-        localStorage.setItem(STORAGE_CHAT_MUTED_KEY, isGlobalChatMuted);
-        if (typeof updateMuteBtnUI === 'function') updateMuteBtnUI();
-        showToast(isGlobalChatMuted ? (currentLang==='it'?"Notifiche Chat silenziate.":"Chat notifications muted.") : (currentLang==='it'?"Notifiche Chat riattivate.":"Chat notifications unmuted."));
-    });
-}
-
+                    
 // --- PRESENZA ONLINE E LISTE UTENTI ---
 function renderOrUpdateUserListItem(userId, u) {
     if (!els.onlineUsersList || userId === myId) return;
