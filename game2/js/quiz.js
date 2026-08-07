@@ -1,5 +1,5 @@
 // ============================================================================
-// QUIZ.JS - QUIZ MORSE CON SHUFFLE OPZIONI E FISHER-YATES
+// QUIZ.JS - QUIZ MORSE CON SHUFFLE RISPOSTE E FISHER-YATES
 // ============================================================================
 
 import { appState, gameState, listeners, fisherYatesShuffle } from './state.js';
@@ -49,18 +49,15 @@ export function startQuizSequence() {
 
     if (gameState.roomCode && !gameState.isSinglePlayer) {
         if (listeners.quizState) appState.db.ref(`rooms/${gameState.roomCode}/quiz_state`).off('value', listeners.quizState);
-        
         listeners.quizState = appState.db.ref(`rooms/${gameState.roomCode}/quiz_state`).on('value', snap => {
             const state = snap.val(); 
             if (!state || !gameState.running) return;
             const newIndex = state.questionIndex || 0;
-            
             if (state.questionsOrder && Array.isArray(state.questionsOrder)) {
                 gameState.randomizedQuizQuestions = state.questionsOrder.map(idx => availableQuestions[idx % availableQuestions.length]);
             } else {
                 gameState.randomizedQuizQuestions = availableQuestions;
             }
-
             if (newIndex !== gameState.lastLoadedQuizIndex) { 
                 gameState.lastLoadedQuizIndex = newIndex; 
                 gameState.quizQuestionIndex = newIndex; 
@@ -91,33 +88,25 @@ export function loadNextQuizQuestion() {
     if (gameState.quizQuestionIndex >= maxQuestions || gameState.quizQuestionIndex >= gameState.randomizedQuizQuestions.length) {
         return window.finishGame && window.finishGame();
     }
-    
     const rawQ = gameState.randomizedQuizQuestions[gameState.quizQuestionIndex];
     if (!rawQ || !rawQ.q) {
         setTimeout(() => { if (gameState.running) loadNextQuizQuestion(); }, 400);
         return;
     }
-
     gameState.currentQuizQuestion = prepareShuffledQuestion(rawQ);
     setTimeout(() => { if (gameState.running) playQuizAudioSequence(); }, 300);
 }
 
 async function playQuizAudioSequence() {
     if (!gameState.running || !gameState.currentQuizQuestion) return;
-    
     stopAllMorseAudio();
     gameState.inputActive = false; 
     disableQuizButtons(true);
-    ['A', 'B', 'C', 'D'].forEach(l => { 
-        if (els['btnQuiz'+l]) els['btnQuiz'+l].classList.remove('active-choice'); 
-    });
-    
+    ['A', 'B', 'C', 'D'].forEach(l => { if (els['btnQuiz'+l]) els['btnQuiz'+l].classList.remove('active-choice'); });
     if (els.quizQuestionBox) els.quizQuestionBox.textContent = "Ascolta la domanda...";
-    
     await playMorseAudio(gameState.currentQuizQuestion.q, gameState.wpm);
     if (!gameState.running) return; 
     await new Promise(r => setTimeout(r, 1500));
-    
     for (let i = 0; i < 4; i++) {
         const letter = ["A", "B", "C", "D"][i];
         if (!gameState.running) return; 
@@ -128,7 +117,6 @@ async function playQuizAudioSequence() {
         if (!gameState.running) return; 
         await new Promise(r => setTimeout(r, 1000));
     }
-    
     if (!gameState.running) return;
     if (els.quizQuestionBox) els.quizQuestionBox.textContent = "SCEGLI LA TUA RISPOSTA!"; 
     enableQuizControls(); 
@@ -137,9 +125,8 @@ async function playQuizAudioSequence() {
 
 function enableQuizControls() {
     gameState.inputActive = true;
-    if (gameState.isSinglePlayer) {
-        disableQuizButtons(false);
-    } else { 
+    if (gameState.isSinglePlayer) disableQuizButtons(false);
+    else { 
         if (els.quizBuzzer) els.quizBuzzer.style.display = 'block'; 
         if (els.quizOptionsContainer) els.quizOptionsContainer.style.opacity = '0.5'; 
         disableQuizButtons(true); 
@@ -147,9 +134,7 @@ function enableQuizControls() {
 }
 
 function disableQuizButtons(disabled) { 
-    ['A', 'B', 'C', 'D'].forEach(l => { 
-        if (els['btnQuiz'+l]) els['btnQuiz'+l].disabled = disabled; 
-    }); 
+    ['A', 'B', 'C', 'D'].forEach(l => { if (els['btnQuiz'+l]) els['btnQuiz'+l].disabled = disabled; }); 
 }
 
 function startQuizTimer(seconds) {
@@ -234,13 +219,11 @@ export function initQuizListeners() {
             } 
         });
     }
-
     for (let i = 0; i < 4; i++) {
         const l = ["A", "B", "C", "D"][i];
         if (els['btnQuiz'+l]) els['btnQuiz'+l].onclick = () => submitQuizAnswer(i);
         if (els['replay'+l]) els['replay'+l].onclick = () => { if (gameState.currentQuizQuestion) playMorseAudio(gameState.currentQuizQuestion.a[i], gameState.wpm); };
     }
-
     if (els.quizReplayQ) {
         els.quizReplayQ.onclick = () => { 
             if (gameState.currentQuizQuestion) playMorseAudio(gameState.currentQuizQuestion.q, gameState.wpm); 
