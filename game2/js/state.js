@@ -1,8 +1,32 @@
 // ============================================================================
-// STATE.JS - STATO CENTRALE DELL'APPLICAZIONE
+// STATE.JS - STATO CENTRALE DELL'APPLICAZIONE E UTILITY
 // ============================================================================
 
-// 1. STATO APP (Utente, Firebase, Team, Configurazione)
+export const APP_VERSION = "20260807.208";
+export const BOT_USERNAME = "cwappgame_bot";
+export const WEBAPP_NAME = "cwgame";
+
+export const STORAGE_KEYS = {
+    ROOM: "cwgame_last_room",
+    CUSTOM_DICT: "cwgame_custom_dict",
+    CHAT_MUTED: "cwgame_chat_muted",
+    PREF_WPM: "cwgame_pref_wpm",
+    PREF_WORDS: "cwgame_pref_words",
+    PREF_TONE: "cwgame_pref_tone",
+    PREF_CHAR_SPACE: "cwgame_pref_char_space",
+    PREF_WORD_SPACE: "cwgame_pref_word_space",
+    DAILY_SHOWN: "cwgame_daily_shown",
+    CHAT_CW_ENABLED: "cwgame_chat_cw_enabled",
+    CHAT_CW_WPM: "cwgame_chat_cw_wpm",
+    CHAT_CW_TONE: "cwgame_chat_cw_tone"
+};
+
+export const morseDict = {
+    'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..',
+    '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.','/': '-..-.',
+    'À': '.--.-', 'È': '..-..', 'É': '..-..', 'Ì': '.---.', 'Ò': '---.', 'Ù': '..--','?': '..--..' 
+};
+
 export const appState = {
     db: null,
     auth: null,
@@ -14,10 +38,13 @@ export const appState = {
     myTeamName: "",
     isTeamCaptain: false,
     currentLang: "it",
-    serverTimeOffset: 0
+    serverTimeOffset: 0,
+    masterDictionary: [],
+    itDictionary: [],
+    enDictionary: [],
+    customDictionary: []
 };
 
-// 2. STATO PARTITA (WPM, Parole, Punteggi, Timers, Flag di gioco)
 export const gameState = {
     running: false,
     inputActive: false,
@@ -29,6 +56,8 @@ export const gameState = {
     words: [],
     wordIndex: 0,
     totalScore: 0,
+    currentStreak: 0,
+    usedReplay: false,
     matchDetails: [],
     isSinglePlayer: false,
     isFixedSpeed: false,
@@ -36,6 +65,10 @@ export const gameState = {
     roomCode: "",
     roomHostId: null,
     lastWordStartTime: 0,
+    charSpaceWpm: 0,
+    wordSpaceMult: 1.0,
+    lastPlayedWordId: 0,
+    lastSeenGuessId: 0,
     
     // Conquista (Co-op)
     isCoopMode: false,
@@ -45,21 +78,23 @@ export const gameState = {
     quizQuestionIndex: 0,
     quizActiveBuzzerId: null,
     randomizedQuizQuestions: [],
-    
+    currentQuizQuestion: null,
+    lastLoadedQuizIndex: -1,
+
     // Timers
     intervals: {
         lobby: null,
         quiz: null,
         pingPong: null,
-        battleRoyale: null,
+        brCheck: null,
+        brTimer: null,
         coopTimer: null,
         coopDecay: null
     }
 };
 
-// 3. STATO CHAT (Audio CW, Muto, Cronologia audio)
 export const chatState = {
-    activeContext: null, // 'global', 'room', 'team'
+    activeContext: null,
     isDrawerOpen: false,
     isMuted: false,
     cwEnabled: false,
@@ -70,35 +105,34 @@ export const chatState = {
     lastPlayedMsgKey: null
 };
 
-// 4. STATO INTERFACCIA (Schermate, Modali, Tracker visivi)
 export const uiState = {
     activeTab: "room",
     activeTrnId: null,
     lastPlayerCount: 0,
+    gameStartPlayerCount: 0,
     lastBRRoundPlayed: -1,
-    lostFocusDuringWord: false
+    lostFocusDuringWord: false,
+    isChallenging: false,
+    isRejoining: false,
+    currentInviterId: null
 };
 
-// 5. REGISTRO CENTRALE DEI LISTENER FIREBASE (Per evitare memory leak)
 export const listeners = {
-    room: null,
-    chat: null,
-    pingPong: null,
-    players: null,
-    quizState: null,
-    roomLb: null,
-    presence: null,
-    roomsList: null,
-    invites: null,
-    inviteAccepted: null,
-    outgoingInvite: null,
-    team: null,
-    allTeams: null,
-    trn: null,
-    activeChat: {}
+    room: null, chat: null, pingPong: null, players: null, quizState: null,
+    roomLb: null, presence: null, roomsList: null, invites: null, inviteAccepted: null,
+    outgoingInvite: null, team: null, allTeams: null, trn: null, activeChat: {}
 };
 
-// --- HELPER PER LA PULIZIA DEI TIMER ---
+export function fisherYatesShuffle(array) {
+    if (!Array.isArray(array)) return [];
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
 export function clearAllTimers() {
     Object.keys(gameState.intervals).forEach(key => {
         if (gameState.intervals[key]) {
