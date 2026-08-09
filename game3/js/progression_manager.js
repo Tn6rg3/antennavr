@@ -61,11 +61,13 @@ window.getXPForNextLevel = function(level) {
 
 window.renderXPBar = function() {
     const data = window.userProgression || { xp: 0, level: 1 };
-    const needed = window.getXPForNextLevel(data.level);
-    const perc = Math.min(100, (data.xp / needed) * 100);
+    const level = data.level || 1;
+    const xp = data.xp || 0;
+    const needed = window.getXPForNextLevel(level);
+    const perc = Math.min(100, (xp / needed) * 100);
 
     const reversedTitles = [...OPERATOR_TITLES].reverse();
-    const titleObj = reversedTitles.find(t => data.level >= t.level) || OPERATOR_TITLES[0];
+    const titleObj = reversedTitles.find(t => level >= t.level) || OPERATOR_TITLES[0];
     const titleText = currentLang === 'it' ? titleObj.it : titleObj.en;
 
     const fill = document.getElementById('xpBarFill');
@@ -74,9 +76,9 @@ window.renderXPBar = function() {
     const xpDisp = document.getElementById('xpTextDisplay');
 
     if (fill) fill.style.width = perc + "%";
-    if (lvDisp) lvDisp.textContent = `Liv. ${data.level}`;
+    if (lvDisp) lvDisp.textContent = `Liv. ${level}`;
     if (titleDisp) titleDisp.textContent = titleText;
-    if (xpDisp) xpDisp.textContent = `${Math.floor(data.xp)} / ${needed} XP`;
+    if (xpDisp) xpDisp.textContent = `${Math.floor(xp)} / ${needed} XP`;
 };
 
 window.showLevelUpOverlay = function(newLevel) {
@@ -205,7 +207,7 @@ window.updateMissionsBadge = function() {
     const pendingCount = missions.filter(m => !m.completed).length;
 
     if (pendingCount > 0) {
-        badge.style.display = 'flex';
+        badge.style.setProperty('display', 'flex', 'important');
         badge.textContent = pendingCount;
     } else {
         badge.style.display = 'none';
