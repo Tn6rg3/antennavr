@@ -249,8 +249,10 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
     const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
     for (const path of [`activity/daily/${dKey}`, `activity/weekly/${wKey}`, `activity/monthly/${mKey}`]) {
         const actRef = db.ref(`${path}/${userId}`);
-        const actSnap = await actRef.once('value');
-        if (actSnap.exists()) await actRef.update({ name: newName });
+        try {
+            const actSnap = await actRef.once('value');
+            if (actSnap.exists()) await actRef.update({ name: newName });
+        } catch(e) { console.warn("Update activity name failed:", e); }
     }
     if (myTeamId) await db.ref(`teams/${myTeamId}/members/${userId}`).update({ name: newName, username: newUsername });
 
@@ -353,9 +355,10 @@ if (els.saveAliasBtn) {
             myName = newName; myPrivacy = privacy;
             if (els.playerName) els.playerName.textContent = myName;
             showToast("Profilo aggiornato!");
-            await window.syncUserNameEverywhere(myId, newName, currentUsername);
+            window.syncUserNameEverywhere(myId, newName, currentUsername);
         } catch(e) {
-            alert("Errore durante il salvataggio.");
+            console.error("Save alias error:", e);
+            alert("Errore durante il salvataggio: " + e.message);
         }
     });
 }
