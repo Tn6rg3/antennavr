@@ -118,9 +118,9 @@
             <button onclick="toggleLanguage()" class="action-btn-small btn-secondary" style="width:36px; padding:6px 0;" id="langBtn">IT</button>
             <button class="action-btn-small btn-secondary" onclick="showScreen('privacyScreen')" id="txt_info_btn">Info</button>
             <button class="action-btn-small" style="position:relative; overflow:visible;" onclick="showScreen('participationScreen'); switchActTab('daily');" id="txt_act_btn">🏅 Attività</button>
-            <button class="action-btn-small" style="position:relative; overflow:visible;" onclick="showProfileScreen()" id="txt_profile_btn">
+            <button class="action-btn-small" onclick="showProfileScreen()" id="txt_profile_btn">
                 👤 Profilo
-                <span id="missionsBadge" style="display:none; position:absolute; top:-5px; right:-5px; background:#e53935; color:white; border-radius:50%; width:18px; height:18px; font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; border:2px solid var(--bg-color); box-shadow:0 2px 4px rgba(0,0,0,0.3); z-index:10000;">0</span>
+                <span id="missionsBadge" class="badge-counter">0</span>
             </button>
             <button class="action-btn-small" onclick="showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn');" id="txt_lb_btn">🏆 Classifica</button>
         </div>
