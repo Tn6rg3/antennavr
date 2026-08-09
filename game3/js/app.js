@@ -233,6 +233,7 @@ function initGame() {
     }
 
     auth.signInAnonymously().then(async () => {
+        console.log("CW Game: Auth success, UID:", myId);
         const userRef = db.ref(`users/${myId}`);
         const snap = await userRef.once('value');
         const data = snap.val() || {};
@@ -245,8 +246,13 @@ function initGame() {
         }
 
         if (els.playerName) els.playerName.textContent = myName;
-        if (els.createRoomBtn) els.createRoomBtn.disabled = false;
+
+        // --- SBLOCCO UI CRITICO ---
         if (els.loadingText) els.loadingText.style.display = 'none';
+        if (els.createRoomBtn) {
+            els.createRoomBtn.disabled = false;
+            console.log("CW Game: UI Unlocked.");
+        }
 
         db.ref('.info/connected').on('value', s => {
             if (!s.val()) return;
@@ -290,7 +296,19 @@ function initGame() {
         window.initBattleRoyaleScheduler?.();
         window.loadRegolamento();
 
+        // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         if (els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
+        if (els.appVersionFooter) els.appVersionFooter.textContent = APP_VERSION;
+
+        db.ref('appConfig/latestVersion').on('value', snap => {
+            const latestStr = snap.val() ? String(snap.val()).trim() : "";
+            const currentStr = String(APP_VERSION).trim();
+            if (latestStr && latestStr !== currentStr) {
+                if (els.updateBanner) els.updateBanner.style.display = 'block';
+            } else {
+                if (els.updateBanner) els.updateBanner.style.display = 'none';
+            }
+        });
     });
 
     window.populateGameModesUI?.();

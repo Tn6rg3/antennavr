@@ -581,26 +581,6 @@ window.finishGame = function() {
     else { activeTab = "room"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn'); if (typeof window.listenToRoomLeaderboard === 'function') window.listenToRoomLeaderboard(); }
 };
 
-window.getGameWords = function(num, mode) {
-    if (mode === 'daily_challenge') return window.getDailyWords(num);
-    if (window.GAME_MODES && window.GAME_MODES[mode] && typeof window.GAME_MODES[mode].generateWords === 'function') {
-        return window.GAME_MODES[mode].generateWords(num, { master: masterDictionary, custom: customDictionary });
-    }
-    return fisherYatesShuffle(masterDictionary).slice(0, num).map(w => w.toUpperCase());
-};
-
-window.getDailyWords = function(num) {
-    let todayStr = new Date().toISOString().split('T')[0];
-    let seed = parseInt(todayStr.replace(/-/g, ''));
-    let prng = mulberry32(seed);
-    let dict = [...masterDictionary];
-    for (let i = dict.length - 1; i > 0; i--) {
-        const j = Math.floor(prng() * (i + 1));
-        [dict[i], dict[j]] = [dict[j], dict[i]];
-    }
-    return dict.slice(0, num).map(w => w.toUpperCase());
-};
-
 window.getLevenshteinDistance = function(a, b) {
     const matrix = [];
     for (let i = 0; i <= b.length; i++) matrix[i] = [i];
@@ -897,7 +877,7 @@ window.startPingPongTimer = function() {
 
 window.sendAutoPingPongWord = function() {
     if (!gameRunning || currentMode !== 'pingpong') return;
-    const randomWord = masterDictionary[Math.floor(Math.random() * masterDictionary.length)].toUpperCase();
+    const randomWord = window.masterDictionary[Math.floor(Math.random() * window.masterDictionary.length)].toUpperCase();
     db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
         if (d && !d.word) {
             d.word = randomWord;
@@ -1013,23 +993,6 @@ if (els.quitGameBtn) {
     };
 }
 
-// --- AVVIO APP (SICUREZZA DOM E MODULI) ---
-function bootApp() {
-    console.log("CW Game: Booting app...");
-    if (typeof window.startApp === 'function') {
-        window.startApp();
-    } else {
-        console.error("CW Game: startApp not found, retrying...");
-        setTimeout(bootApp, 200);
-    }
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(bootApp, 100));
-} else {
-    setTimeout(bootApp, 100);
-}
-
 if (els.deleteRoomBtn) {
     els.deleteRoomBtn.onclick = function() {
         if (window.isDeletingRoom) return;
@@ -1052,44 +1015,10 @@ if (els.deleteRoomBtn) {
     };
 }
 
-// --- AVVIO APP (SICUREZZA DOM E MODULI) ---
-function bootApp() {
-    console.log("CW Game: Booting app...");
-    if (typeof window.startApp === 'function') {
-        window.startApp();
-    } else {
-        console.error("CW Game: startApp not found, retrying...");
-        setTimeout(bootApp, 200);
-    }
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(bootApp, 100));
-} else {
-    setTimeout(bootApp, 100);
-}
-
 if (els.leaveLobbyBtn) {
     els.leaveLobbyBtn.onclick = function() {
         window.exitRoomCleanly(false, false);
     };
-}
-
-// --- AVVIO APP (SICUREZZA DOM E MODULI) ---
-function bootApp() {
-    console.log("CW Game: Booting app...");
-    if (typeof window.startApp === 'function') {
-        window.startApp();
-    } else {
-        console.error("CW Game: startApp not found, retrying...");
-        setTimeout(bootApp, 200);
-    }
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(bootApp, 100));
-} else {
-    setTimeout(bootApp, 100);
 }
 
 if (els.startMultiplayerBtn) {
@@ -1102,23 +1031,6 @@ if (els.startMultiplayerBtn) {
             db.ref(`public_lobby_rooms/${roomCode}`).remove();
         });
     };
-}
-
-// --- AVVIO APP (SICUREZZA DOM E MODULI) ---
-function bootApp() {
-    console.log("CW Game: Booting app...");
-    if (typeof window.startApp === 'function') {
-        window.startApp();
-    } else {
-        console.error("CW Game: startApp not found, retrying...");
-        setTimeout(bootApp, 200);
-    }
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(bootApp, 100));
-} else {
-    setTimeout(bootApp, 100);
 }
 
 if (els.readyBtn) {
@@ -1226,8 +1138,8 @@ function bootApp() {
     if (typeof window.startApp === 'function') {
         window.startApp();
     } else {
-        console.error("CW Game: startApp not found, retrying...");
-        setTimeout(bootApp, 200);
+        console.warn("CW Game: startApp not found, retrying...");
+        setTimeout(bootApp, 300);
     }
 }
 
