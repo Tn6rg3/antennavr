@@ -322,24 +322,30 @@
     <!-- SEZIONE 2: ANALISI ERRORI AVANZATA -->
     <div id="profileStatsArea" style="width:100%; display: none; flex-direction: column; flex-grow:1; min-height:0;">
         <!-- Errori per WPM -->
-        <div class="box-panel" style="max-height: 140px; margin-bottom:8px;">
-            <h3 style="font-size: 0.9em; margin-bottom:5px;">⚠️ Errori per Velocità (WPM)</h3>
-            <div id="wpmErrorChartContainer" style="overflow-y:auto; font-size: 0.85em;"></div>
+        <div class="box-panel" style="max-height: 120px; margin-bottom:8px; padding: 5px;">
+            <h3 style="font-size: 0.85em; margin-bottom:4px;">⚠️ Errori per Velocità (WPM)</h3>
+            <div id="wpmErrorChartContainer" style="overflow-y:auto; font-size: 0.8em;"></div>
         </div>
 
         <div style="display: flex; gap: 8px; width: 100%; flex-grow: 1; min-height: 0;">
             <!-- Bigrammi Sbagliati -->
-            <div class="box-panel" style="flex: 1; min-height: 0;">
-                <h3 style="font-size: 0.9em; margin-bottom:5px;">🔗 Coppie Difficili</h3>
-                <p style="font-size:0.7em; color:var(--hint-color); margin-top:0; text-align:center;">Caratteri consecutivi errati</p>
-                <div id="bigramErrorsContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.9em;"></div>
+            <div class="box-panel" style="flex: 1; min-height: 0; padding: 5px;">
+                <h3 style="font-size: 0.85em; margin-bottom:2px;">🔗 Coppie</h3>
+                <div style="display:flex; align-items:center; justify-content:center; gap:4px; margin-bottom:5px;">
+                    <small style="font-size:0.65em;">Soglia:</small>
+                    <input type="number" id="bigramThresholdInput" value="3" min="1" max="50" style="width:40px; padding:2px; font-size:0.8em; height:22px;">
+                </div>
+                <div id="bigramErrorsContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.85em;"></div>
             </div>
 
             <!-- Parole Ricorrenti -->
-            <div class="box-panel" style="flex: 1; min-height: 0;">
-                <h3 style="font-size: 0.9em; margin-bottom:5px;">🔤 Parole Critiche</h3>
-                <p style="font-size:0.7em; color:var(--hint-color); margin-top:0; text-align:center;">Sbagliate almeno 3 volte</p>
-                <div id="wordErrorsContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.9em;"></div>
+            <div class="box-panel" style="flex: 1; min-height: 0; padding: 5px;">
+                <h3 style="font-size: 0.85em; margin-bottom:2px;">🔤 Parole</h3>
+                <div style="display:flex; align-items:center; justify-content:center; gap:4px; margin-bottom:5px;">
+                    <small style="font-size:0.65em;">Soglia:</small>
+                    <input type="number" id="wordThresholdInput" value="3" min="1" max="50" style="width:40px; padding:2px; font-size:0.8em; height:22px;">
+                </div>
+                <div id="wordErrorsContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.85em;"></div>
             </div>
         </div>
 
