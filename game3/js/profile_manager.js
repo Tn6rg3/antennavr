@@ -132,97 +132,142 @@ window.renderActivityRankings = function(period, key) {
     });
 };
 
-window.showProfileScreen = function() {
-    window.showScreen('profileScreen');
-    if (els.errorChartContainer) els.errorChartContainer.textContent = 'Caricamento...';
-    if (els.wpmErrorChartContainer) els.wpmErrorChartContainer.textContent = 'Caricamento...';
-    if (els.matchHistoryList) els.matchHistoryList.textContent = 'Caricamento...';
+// --- NUOVA GESTIONE PROFILO E STATISTICHE ANALITICHE ---
 
-    db.ref(`users/${myId}/stats/charErrors`).once('value').then(snap => {
-        if (!els.errorChartContainer) return;
-        const errors = snap.val() || {};
-        els.errorChartContainer.innerHTML = '';
-        const sorted = Object.entries(errors).sort((a,b) => b[1] - a[1]);
-        if (sorted.length === 0) {
-            const p = document.createElement('p'); p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)'; p.textContent = 'Nessun errore.'; els.errorChartContainer.appendChild(p);
-        } else {
-            let maxErr = sorted[0][1];
-            sorted.forEach(([char, count]) => {
-                const row = document.createElement('div'); row.style.cssText = "display:flex; align-items:center; margin-bottom:4px;";
-                const spanChar = document.createElement('span'); spanChar.style.cssText = "width:20px; font-weight:bold;"; spanChar.textContent = char;
-                const barWrap = document.createElement('div'); barWrap.style.cssText = "flex-grow:1; background:var(--bg-color); border:1px solid var(--hint-color); border-radius:4px; height:12px; margin:0 5px; overflow:hidden;";
-                const barFill = document.createElement('div'); barFill.style.cssText = `width:${(count / maxErr) * 100}%; background:#d32f2f; height:100%;`;
-                barWrap.appendChild(barFill);
-                const spanCount = document.createElement('span'); spanCount.style.cssText = "width:25px; text-align:right; font-size:0.9em; font-weight:bold;"; spanCount.textContent = count;
-                row.appendChild(spanChar); row.appendChild(barWrap); row.appendChild(spanCount);
-                els.errorChartContainer.appendChild(row);
-            });
-        }
-    });
+window.switchProfileTab = function(tabId) {
+    const infoBtn = document.getElementById('btnTabProfile');
+    const statsBtn = document.getElementById('btnTabStats');
+    const infoArea = document.getElementById('profileInfoArea');
+    const statsArea = document.getElementById('profileStatsArea');
 
-    db.ref(`users/${myId}/stats/errorsByWpm`).once('value').then(snap => {
-        if (!els.wpmErrorChartContainer) return;
-        const wpmErrors = snap.val() || {};
-        els.wpmErrorChartContainer.innerHTML = '';
-        if (Object.keys(wpmErrors).length === 0) {
-            const p = document.createElement('p'); p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)'; p.textContent = 'Nessun errore per WPM.'; els.wpmErrorChartContainer.appendChild(p);
-            return;
-        }
-        Object.keys(wpmErrors).sort((a,b) => parseInt(b) - parseInt(a)).forEach(wpm => {
-            let charsAtWpm = wpmErrors[wpm];
-            let totalErrs = Object.values(charsAtWpm).reduce((acc, curr) => acc + curr, 0);
-            let topChar = Object.entries(charsAtWpm).sort((a,b) => b[1] - a[1])[0];
-            const row = document.createElement('div'); row.style.cssText = "margin-bottom:8px; border-bottom:1px solid var(--hint-color); padding-bottom:4px;";
-            const divTop = document.createElement('div'); divTop.style.cssText = "display:flex; justify-content:space-between; font-weight:bold; color:var(--link-color);";
-            const spanWpm = document.createElement('span'); spanWpm.textContent = `${wpm} WPM`;
-            const spanTot = document.createElement('span'); spanTot.textContent = `Tot: ${totalErrs} err`;
-            divTop.appendChild(spanWpm); divTop.appendChild(spanTot);
-            const divBot = document.createElement('div'); divBot.style.cssText = "font-size:0.85em; color:var(--text-color);";
-            divBot.appendChild(document.createTextNode("Peggior lettera: "));
-            const bChar = document.createElement('b'); bChar.textContent = topChar[0]; divBot.appendChild(bChar); divBot.appendChild(document.createTextNode(` (${topChar[1]} volte)`));
-            row.appendChild(divTop); row.appendChild(divBot);
-            els.wpmErrorChartContainer.appendChild(row);
-        });
-    });
+    if (tabId === 'info') {
+        infoBtn.classList.add('active-tab');
+        statsBtn.classList.remove('active-tab');
+        infoArea.style.display = 'flex';
+        statsArea.style.display = 'none';
+        window.loadProfileInfo();
+    } else {
+        infoBtn.classList.remove('active-tab');
+        statsBtn.classList.add('active-tab');
+        infoArea.style.display = 'none';
+        statsArea.style.display = 'flex';
+        window.loadAdvancedStats();
+    }
+};
 
-    db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(30).once('value').then(snap => {
+window.loadProfileInfo = function() {
+    if (els.matchHistoryList) els.matchHistoryList.innerHTML = '<li style="justify-content:center;">Caricamento...</li>';
+
+    db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(20).once('value').then(snap => {
         if (!els.matchHistoryList) return;
         els.matchHistoryList.innerHTML = '';
         userMatchHistory = [];
         snap.forEach(child => { userMatchHistory.push({ key: child.key, ...child.val() }); });
         userMatchHistory.reverse();
+
         if (userMatchHistory.length === 0) {
-            const li = document.createElement('li'); li.style.justifyContent = 'center'; li.style.color = 'var(--hint-color)'; li.textContent = 'Nessuna partita giocata.'; els.matchHistoryList.appendChild(li);
+            els.matchHistoryList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna partita.</li>';
             return;
         }
+
         userMatchHistory.forEach(match => {
             const d = new Date(match.date || Date.now());
             const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
-            let modeIcon = match.mode === 'callsign' ? '🎙️ Nom.' : match.mode === 'pingpong' ? '🏓 Ping Pong' : match.mode === 'chars' ? '⌨️ Carat.' : (match.mode === 'daily_challenge' ? '📅 Daily' : match.mode === 'quiz' ? '❓ Quiz' : '🔤 Parole');
-            const li = document.createElement('li'); li.style.flexDirection = 'column'; li.style.alignItems = 'flex-start';
+            let modeIcon = match.mode === 'callsign' ? '🎙️' : match.mode === 'pingpong' ? '🏓' : match.mode === 'chars' ? '⌨️' : (match.mode === 'daily_challenge' ? '📅' : '🔤');
 
-            const topDiv = document.createElement('div'); topDiv.style.cssText = "display:flex; justify-content:space-between; width:100%; margin-bottom:5px;";
-            const spanLeft = document.createElement('span'); spanLeft.style.cssText = "font-size:0.85em; font-weight:bold;"; spanLeft.textContent = `${modeIcon} (${match.type})`;
-            const spanRight = document.createElement('span'); spanRight.style.cssText = "font-size:0.8em; color:var(--hint-color);"; spanRight.textContent = dateStr;
-            topDiv.appendChild(spanLeft); topDiv.appendChild(spanRight);
-
-            const botDiv = document.createElement('div'); botDiv.style.cssText = "display:flex; justify-content:space-between; width:100%; align-items:center;";
-            const spanScore = document.createElement('span'); const bScore = document.createElement('b'); bScore.textContent = `${match.score} pt`; const smallWpm = document.createElement('small'); smallWpm.textContent = ` (${match.wpm} WPM)`;
-            spanScore.appendChild(bScore); spanScore.appendChild(smallWpm);
-
-            const btnDiv = document.createElement('div'); btnDiv.style.display = 'flex'; btnDiv.style.gap = '5px';
-            const vBtn = document.createElement('button'); vBtn.className = "action-btn-small btn-secondary"; vBtn.textContent = "Vedi"; vBtn.onclick = () => window.openMatchDetails(match.key);
-            const dBtn = document.createElement('button'); dBtn.className = "action-btn-small btn-danger"; dBtn.textContent = "X"; dBtn.onclick = () => window.deleteHistoryItem(match.key);
-            btnDiv.appendChild(vBtn); btnDiv.appendChild(dBtn); botDiv.appendChild(spanScore); botDiv.appendChild(btnDiv);
-            li.appendChild(topDiv); li.appendChild(botDiv); els.matchHistoryList.appendChild(li);
+            const li = document.createElement('li');
+            li.style.cssText = "flex-direction:column; align-items:flex-start; padding:8px;";
+            li.innerHTML = `
+                <div style="display:flex; justify-content:space-between; width:100%; font-size:0.85em;">
+                    <b>${modeIcon} ${match.mode.toUpperCase()}</b>
+                    <span style="color:var(--hint-color)">${dateStr}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; width:100%; margin-top:5px; align-items:center;">
+                    <span><b>${match.score} pt</b> <small>(${match.wpm} WPM)</small></span>
+                    <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${match.key}')" style="width:auto; padding:2px 10px;">Vedi</button>
+                </div>
+            `;
+            els.matchHistoryList.appendChild(li);
         });
     });
+};
+
+window.loadAdvancedStats = function() {
+    const wpmContainer = document.getElementById('wpmErrorChartContainer');
+    const bigramContainer = document.getElementById('bigramErrorsContainer');
+    const wordContainer = document.getElementById('wordErrorsContainer');
+
+    if (wpmContainer) wpmContainer.innerHTML = 'Caricamento...';
+    if (bigramContainer) bigramContainer.innerHTML = 'Caricamento...';
+    if (wordContainer) wordContainer.innerHTML = 'Caricamento...';
+
+    db.ref(`users/${myId}/stats`).once('value', snap => {
+        const stats = snap.val() || {};
+
+        // 1. Errori per WPM
+        if (wpmContainer) {
+            wpmContainer.innerHTML = '';
+            const wpmErrs = stats.errorsByWpm || {};
+            const sortedWpm = Object.keys(wpmErrs).sort((a,b) => parseInt(b) - parseInt(a));
+            if (sortedWpm.length === 0) wpmContainer.innerHTML = '<p style="text-align:center; opacity:0.6;">Nessun dato.</p>';
+            sortedWpm.forEach(wpm => {
+                const total = Object.values(wpmErrs[wpm]).reduce((a,b) => a+b, 0);
+                const div = document.createElement('div');
+                div.style.cssText = "display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:4px 0;";
+                div.innerHTML = `<b>${wpm} WPM</b> <span style="color:#d32f2f">${total} err.</span>`;
+                wpmContainer.appendChild(div);
+            });
+        }
+
+        // 2. Bigrammi (Coppie) Sbagliate
+        if (bigramContainer) {
+            bigramContainer.innerHTML = '';
+            const bigrams = stats.bigramErrors || {};
+            const sortedBigrams = Object.entries(bigrams).sort((a,b) => b[1] - a[1]).slice(0, 15);
+            if (sortedBigrams.length === 0) bigramContainer.innerHTML = '<p style="text-align:center; opacity:0.6; font-size:0.8em;">Nessuna coppia rilevata.</p>';
+            sortedBigrams.forEach(([pair, count]) => {
+                const div = document.createElement('div');
+                div.className = 'leaderboard-row';
+                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.9em;";
+                div.innerHTML = `
+                    <span><b>${pair}</b> (${count})</span>
+                    <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${pair}', 18, true)" style="width:30px; padding:2px 0;">🔊</button>
+                `;
+                bigramContainer.appendChild(div);
+            });
+        }
+
+        // 3. Parole Critiche (> 3 volte)
+        if (wordContainer) {
+            wordContainer.innerHTML = '';
+            const words = stats.wordErrors || {};
+            const criticalWords = Object.entries(words).filter(e => e[1] >= 3).sort((a,b) => b[1] - a[1]);
+            if (criticalWords.length === 0) wordContainer.innerHTML = '<p style="text-align:center; opacity:0.6; font-size:0.8em;">Nessuna parola ricorrente.</p>';
+            criticalWords.forEach(([word, count]) => {
+                const div = document.createElement('div');
+                div.className = 'leaderboard-row';
+                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.9em;";
+                div.innerHTML = `
+                    <span style="overflow:hidden; text-overflow:ellipsis;"><b>${word}</b> (${count})</span>
+                    <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${word}', 20, true)" style="width:30px; padding:2px 0;">🔊</button>
+                `;
+                wordContainer.appendChild(div);
+            });
+        }
+    });
+};
+
+window.showProfileScreen = function() {
+    window.showScreen('profileScreen');
+    window.switchProfileTab('info');
 };
 
 window.openMatchDetails = function(matchKey) {
     const match = userMatchHistory.find(m => m.key === matchKey);
     if (!match || !els.matchDetailsBody || !els.matchDetailsModal) return;
     els.matchDetailsBody.innerHTML = '';
+    const h3 = els.matchDetailsModal.querySelector('h3');
+    if (h3) h3.textContent = `Dettagli Match - ${match.mode.toUpperCase()}`;
     (match.details || []).forEach(row => {
         const tr = document.createElement('tr');
         let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
@@ -236,7 +281,7 @@ window.openMatchDetails = function(matchKey) {
 
 window.deleteHistoryItem = function(key) {
     if (confirm("Eliminare questa partita?")) {
-        db.ref(`users/${myId}/history/${key}`).remove().then(() => window.showProfileScreen());
+        db.ref(`users/${myId}/history/${key}`).remove().then(() => window.loadProfileInfo());
     }
 };
 
@@ -255,101 +300,49 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
         } catch(e) { console.warn("Update activity name failed:", e); }
     }
     if (myTeamId) await db.ref(`teams/${myTeamId}/members/${userId}`).update({ name: newName, username: newUsername });
-
-    const trnsSnap = await db.ref('tournaments').once('value');
-    if (trnsSnap.exists()) {
-        const trns = trnsSnap.val();
-        for (let trnId in trns) {
-            if (trns[trnId].status !== 'finished' && trns[trnId].matches) {
-                for (let mId in trns[trnId].matches) {
-                    const m = trns[trnId].matches[mId];
-                    if (m.playerA && m.playerA.id === userId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerA`).update({ name: newName, username: newUsername });
-                    if (m.playerB && m.playerB.id === userId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerB`).update({ name: newName, username: newUsername });
-                }
-            }
-        }
-    }
-    for (const path of ['callsign/global', 'standard', 'pingpong', 'chars', 'quiz']) {
-        const snap = await db.ref(`leaderboard/${path}`).once('value');
-        if (snap.exists()) {
-            snap.forEach(subNode => {
-                if (path === 'callsign/global') {
-                    if (subNode.key === userId) subNode.ref.update({ name: newName, username: newUsername });
-                } else {
-                    subNode.forEach(userRecord => {
-                        if (userRecord.key === userId) userRecord.ref.update({ name: newName, username: newUsername });
-                    });
-                }
-            });
-        }
-    }
 };
 
-if (els.deleteDataBtn) {
-    els.deleteDataBtn.addEventListener('click', async () => {
-        if (confirm("⚠️ Eliminerai per sempre TUTTI i tuoi dati. Confermi?")) {
-            try {
-                await db.ref(`leaderboard`).once('value', s => {
-                    s.forEach(mode => {
-                        mode.forEach(type => {
-                            type.forEach(r => {
-                                if (r.key === myId || r.key.startsWith(myId + "_")) r.ref.remove();
-                            });
-                        });
-                    });
-                });
-                const teamsSnap = await db.ref('teams').once('value');
-                if (teamsSnap.exists()) {
-                    const teams = teamsSnap.val();
-                    for (let tId in teams) {
-                        if (teams[tId].members && teams[tId].members[myId]) {
-                            if (teams[tId].captainId === myId) {
-                                let others = Object.keys(teams[tId].members).filter(k => k !== myId);
-                                if (others.length === 0) {
-                                    await db.ref(`teams/${tId}/status`).set('retired');
-                                    await db.ref(`teams/${tId}/members/${myId}`).remove();
-                                } else {
-                                    await db.ref(`teams/${tId}/captainId`).set(others[0]);
-                                    await db.ref(`teams/${tId}/members/${myId}`).remove();
-                                }
-                            } else {
-                                await db.ref(`teams/${tId}/members/${myId}`).remove();
-                            }
-                        }
-                    }
-                }
-                const trnsSnap = await db.ref('tournaments').once('value');
-                if (trnsSnap.exists()) {
-                    const trns = trnsSnap.val();
-                    for (let trnId in trns) {
-                        if (trns[trnId].matches) {
-                            for (let mId in trns[trnId].matches) {
-                                const m = trns[trnId].matches[mId];
-                                if (m.playerA && m.playerA.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerA`).remove();
-                                if (m.playerB && m.playerB.id === myId) await db.ref(`tournaments/${trnId}/matches/${mId}/playerB`).remove();
-                            }
-                        }
-                    }
-                }
-                await db.ref(`users/${myId}`).remove();
-                alert("Dati eliminati.");
-                window.Telegram.WebApp.close();
-            } catch (e) {
-                alert("Errore: " + e.message);
+// --- LOGICA SALVATAGGIO ERRORI AVANZATI (Chiamata da game_core.js) ---
+
+window.trackAdvancedErrors = function(realWord, userWord, wpm) {
+    if (!myId) return;
+    const statsRef = db.ref(`users/${myId}/stats`);
+
+    statsRef.once('value', snap => {
+        let stats = snap.val() || {};
+        if (!stats.bigramErrors) stats.bigramErrors = {};
+        if (!stats.wordErrors) stats.wordErrors = {};
+
+        const real = realWord.toUpperCase();
+        const typed = userWord.toUpperCase();
+
+        // 1. Tracciamento Bigrammi (coppie consecutive sbagliate)
+        for (let i = 0; i < real.length - 1; i++) {
+            const pair = real.substring(i, i + 2);
+            // Se la coppia nel punto i e i+1 è stata digitata male
+            if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
+                stats.bigramErrors[pair] = (stats.bigramErrors[pair] || 0) + 1;
             }
         }
+
+        // 2. Tracciamento Parola Intera
+        if (real !== typed) {
+            stats.wordErrors[real] = (stats.wordErrors[real] || 0) + 1;
+        }
+
+        statsRef.update(stats);
     });
-}
+};
+
+// --- AZIONI PULSANTI ---
 
 if (els.saveAliasBtn) {
     els.saveAliasBtn.addEventListener('click', async () => {
         const alias = els.userAliasInput ? els.userAliasInput.value.trim() : "";
         const privacy = els.privacyUsernameCheckbox ? els.privacyUsernameCheckbox.checked : false;
         if (privacy && !alias) return alert("L'Alias è obbligatorio se nascondi lo username Telegram!");
-        if (alias.length > 15) return alert("Alias troppo lungo (max 15 caratteri).");
         const newName = alias || tgUser.first_name;
         const currentUsername = privacy ? "" : tgUsername;
-
         try {
             await db.ref(`users/${myId}`).update({ alias: alias || null, privacyUsername: privacy });
             myName = newName; myPrivacy = privacy;
@@ -357,7 +350,6 @@ if (els.saveAliasBtn) {
             showToast("Profilo aggiornato!");
             window.syncUserNameEverywhere(myId, newName, currentUsername);
         } catch(e) {
-            console.error("Save alias error:", e);
             alert("Errore durante il salvataggio: " + e.message);
         }
     });
@@ -365,14 +357,31 @@ if (els.saveAliasBtn) {
 
 if (els.resetStatsBtn) {
     els.resetStatsBtn.addEventListener('click', async () => {
-        if (confirm(currentLang === 'it' ? "Vuoi azzerare tutte le tue statistiche? Questa operazione non può essere annullata." : "Reset all your statistics? This cannot be undone.")) {
+        if (confirm("Vuoi azzerare tutte le tue statistiche?")) {
             try {
                 await Promise.all([ db.ref(`users/${myId}/stats`).remove(), db.ref(`users/${myId}/history`).remove() ]);
-                showToast("Statistiche azzerate correttamente!");
-                window.showProfileScreen();
-            } catch(e) {
-                alert("Errore durante il reset delle statistiche.");
-            }
+                showToast("Dati azzerati!");
+                window.loadProfileInfo();
+            } catch(e) { alert("Errore."); }
         }
     });
 }
+
+document.getElementById('btnCreateErrorDict')?.addEventListener('click', () => {
+    db.ref(`users/${myId}/stats/wordErrors`).once('value', snap => {
+        const words = snap.val() || {};
+        const critical = Object.entries(words).filter(e => e[1] >= 3).map(e => e[0]);
+        if (critical.length === 0) return showToast("Non hai ancora abbastanza parole critiche (min. 3 errori).");
+
+        window.customDictionary = critical;
+        localStorage.setItem(STORAGE_CUSTOM_DICT_KEY, JSON.stringify(critical));
+        showToast(`✅ Creato dizionario con ${critical.length} parole difficili!`);
+        showScreen('setupScreen');
+        // Impostiamo automaticamente il tipo Solo e modo Personale
+        if (els.gameTypeInput) els.gameTypeInput.value = 'single';
+        if (els.gameModeInput) {
+            els.gameModeInput.value = 'custom';
+            window.checkGameTypeUI();
+        }
+    });
+});

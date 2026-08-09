@@ -773,6 +773,11 @@ window.handleWordSubmission = function(userWord) {
     }
 
     if (levDist > 0) {
+        // --- NUOVO: TRACCIAMENTO ERRORI AVANZATO ---
+        if (typeof window.trackAdvancedErrors === 'function') {
+            window.trackAdvancedErrors(currentWord, userWord, currentWpm);
+        }
+
         let wrongChars = [];
         for (let i = 0; i < Math.max(currentWord.length, userWord.length); i++) {
             if (userWord[i] !== currentWord[i] && currentWord[i] && !['__proto__','constructor','prototype'].includes(currentWord[i])) {
