@@ -76,7 +76,9 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         window.startBluetoothKeepAlive();
-        if (!forcePlay && !gameRunning && !brIsPlaying) { resolve(); return; }
+
+        const isBrActive = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
+        if (!forcePlay && !gameRunning && !isBrActive) { resolve(); return; }
 
         window.stopAllMorseAudio();
         const currentToken = window.morsePlayToken;
@@ -89,11 +91,11 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
         let time = audioCtx.currentTime + 0.05;
 
         for (let char of text) {
-            if (currentToken !== window.morsePlayToken || (!forcePlay && !gameRunning && !brIsPlaying)) break;
+            if (currentToken !== window.morsePlayToken || (!forcePlay && !gameRunning && !isBrActive)) break;
 
             if (window.morseDict[char]) {
                 for (let i = 0; i < window.morseDict[char].length; i++) {
-                    if (currentToken !== window.morsePlayToken || (!forcePlay && !gameRunning && !brIsPlaying)) break;
+                    if (currentToken !== window.morsePlayToken || (!forcePlay && !gameRunning && !isBrActive)) break;
                     let symbol = window.morseDict[char][i];
 
                     const osc = audioCtx.createOscillator();

@@ -547,6 +547,13 @@ window.finishGame = function() {
     if (matchDetailsArray.length > 0) {
         db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: currentMode, score: totalScore, wpm: currentWpm, type: isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
         if (typeof window.updateActivity === 'function') window.updateActivity(totalScore > 0);
+
+        // --- ASSEGNAZIONE XP FINALE (RPG) ---
+        if (typeof window.addXP === 'function') {
+            const xpGain = Math.floor(totalScore / 10) + 50; // XP base + bonus partita
+            window.addXP(xpGain, "Match Finished");
+        }
+
         if (Object.keys(sessionCharErrors).length > 0) {
             db.ref(`users/${myId}/stats/charErrors`).once('value', s => {
                 let curr = s.val() || {};
