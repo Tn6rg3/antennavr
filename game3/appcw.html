@@ -639,7 +639,7 @@
 
 <!-- LEADERBOARD / RISULTATI -->
 <div id="leaderboardScreen" class="screen">
-    <h2 style="margin-bottom: 5px;">🏆 Risultati</h2>
+    <h2 style="margin-bottom: 5px;">🏆 Classifiche Globali</h2>
     
     <!-- TASTO DI CONDIVISIONE SFIDA GIORNALIERA -->
     <button id="btnShareDaily" class="btn-link" style="display:none; background:#ff9800; color:white; font-weight:bold; margin-bottom: 10px; padding: 10px; border-radius: 8px; text-decoration: none;">📢 Condividi Risultato su Telegram!</button>
@@ -647,42 +647,40 @@
     <div id="roomWinnerBanner" style="text-align:center; font-weight:bold; color:var(--champ-color); margin-bottom:5px;"></div>
     <p id="waitingOthersText" style="text-align: center; font-style: italic; color: #ff9800; display: none; font-weight: bold; margin-bottom: 5px;">⏳ In attesa degli altri...</p>
 
-    <!-- Menu Classifiche -->
-    <div id="lbModeSelectorArea" style="width:100%; margin-bottom:10px;">
-        <select id="lbModeSelect" style="padding: 10px; font-weight: bold; border: 2px solid var(--link-color);">
-            <option value="room" id="opt_lb_room">Questa Partita</option>
-            <option value="daily_challenge" id="opt_lb_daily" style="font-weight: bold; color: var(--champ-color);">📅 Sfida Giornaliera</option>
-            <option value="trn_global" id="opt_lb_trn">Classifica Tornei</option>
-            <option value="cwfreak" id="opt_lb_call">Nominativi (CW Freak)</option>
-            <option value="pingpong" id="opt_lb_pp">Ping Pong (Sfide)</option>
-            <option value="std_multi" id="opt_lb_multi">Parole (Multi - Sfide)</option>
-            <option value="std_single" id="opt_lb_single">Parole (Single)</option>
-            <option value="chars_multi" id="opt_lb_chars_multi">Caratteri (Multi - Sfide)</option>
-            <option value="chars_single" id="opt_lb_chars_single">Caratteri (Single)</option>
-            <option value="quiz_multi" id="opt_lb_quiz_multi">Quiz (Multi - Sfide)</option>
-            <option value="quiz_single" id="opt_lb_quiz_single">Quiz (Single)</option>
+    <!-- NUOVA STRUTTURA CATEGORIE CLASSIFICA -->
+    <div id="lbCategoryTabs" style="display:flex; gap:5px; width:100%; margin-bottom:10px; flex-wrap:nowrap; overflow-x:auto; padding-bottom:5px;">
+        <button id="tabDailyLB" class="tab-btn active-tab" onclick="switchLBGroup('daily')" style="flex:1; min-width:80px; font-size:0.8em; padding:8px 4px;">📅 Daily</button>
+        <button id="tabMultiLB" class="tab-btn" onclick="switchLBGroup('multi')" style="flex:1; min-width:80px; font-size:0.8em; padding:8px 4px;">⚔️ Sfide</button>
+        <button id="tabSingleLB" class="tab-btn" onclick="switchLBGroup('single')" style="flex:1; min-width:80px; font-size:0.8em; padding:8px 4px;">👤 Solo</button>
+        <button id="tabSpecialLB" class="tab-btn" onclick="switchLBGroup('special')" style="flex:1; min-width:80px; font-size:0.8em; padding:8px 4px;">🎙️ Special</button>
+    </div>
+
+    <!-- Selettore Sotto-Modo Dinamico -->
+    <div id="lbSubModeArea" style="width:100%; margin-bottom:8px;">
+        <select id="lbModeSelect" style="padding: 10px; font-weight: bold; border: 2px solid var(--link-color); width:100%; border-radius:8px; background:var(--sec-bg-color); color:var(--text-color);">
+            <!-- Popolato dinamicamente da leaderboard_manager.js -->
         </select>
     </div>
 
-    <!-- Sotto-tab Tornei -->
-    <div id="trnSubTabs" style="display:none; width:100%; gap:5px; margin-top:5px; flex-shrink: 0;">
-        <button id="btnTrnGlobalLB" class="tab-btn active-tab" style="font-size:0.75em; padding:6px;">🏆 Globale</button>
-        <button id="btnTrnActiveLB" class="tab-btn" style="font-size:0.75em; padding:6px;">🥊 In Corso</button>
+    <!-- Sotto-tab Tornei (Appare solo se selezionato trn_global) -->
+    <div id="trnSubTabs" style="display:none; width:100%; gap:5px; margin-bottom:8px; flex-shrink: 0;">
+        <button id="btnTrnGlobalLB" class="tab-btn active-tab" style="font-size:0.75em; padding:6px; flex:1;">🏆 Globale</button>
+        <button id="btnTrnActiveLB" class="tab-btn" style="font-size:0.75em; padding:6px; flex:1;">🥊 In Corso</button>
     </div>
 
-    <!-- Filtri Parole -->
-    <div id="lbFilterArea" style="display:none; width:100%; text-align:center; margin-bottom:5px; flex-shrink: 0;">
-        <label style="font-size:0.9em; font-weight:bold;">Filtra per Q.ta: </label>
-        <select id="lbWordFilter" style="width:auto; padding:5px; border-radius: 5px; font-size: 0.9em;">
-            <option value="all">Tutte le categorie</option>
-            <option value="10">10 Stringhe</option>
-            <option value="20">20 Stringhe</option>
-            <option value="30">30 Stringhe</option>
-            <option value="50">50 Stringhe</option>
+    <!-- Filtri Quantità (Appare solo per modalità a stringhe) -->
+    <div id="lbFilterArea" style="display:none; width:100%; text-align:center; margin-bottom:8px; flex-shrink: 0; background:rgba(0,0,0,0.1); padding:5px; border-radius:8px;">
+        <label style="font-size:0.85em; font-weight:bold;">Test da: </label>
+        <select id="lbWordFilter" style="width:auto; padding:4px 8px; border-radius: 5px; font-size: 0.85em;">
+            <option value="all">Tutte</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
         </select>
     </div>
 
-    <div id="leaderboardContainer" style="width: 100%; flex-grow: 1; overflow-y: auto; margin-top: 5px; border-top: 1px solid var(--hint-color); padding-top: 5px;"></div>
+    <div id="leaderboardContainer" style="width: 100%; flex-grow: 1; overflow-y: auto; border-top: 1px solid var(--hint-color); padding-top: 5px;"></div>
 
     <button onclick="goBackToMenu()" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>

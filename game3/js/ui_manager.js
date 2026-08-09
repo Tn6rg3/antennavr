@@ -72,22 +72,35 @@ window.checkGameTypeUI = function() {
 
     const isCustom = selectedMode === 'custom';
 
-    if (els.timeoutDiv) els.timeoutDiv.style.display = (isSingle || isTrn) ? 'none' : 'block';
+    if (els.timeoutDiv) els.timeoutDiv.style.display = (isSingle || isTrn || isCoop) ? 'none' : 'block';
 
     if (modeCfg) {
-        if (els.fixedSpeedContainer) els.fixedSpeedContainer.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
-        if (els.easyModeContainer) els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
+        if (els.fixedSpeedContainer) {
+            els.fixedSpeedContainer.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
+        }
+        if (els.easyModeContainer) {
+            els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
+        }
         if (els.advancedSpacingContainer) {
             els.advancedSpacingContainer.style.display = (isSingle && modeCfg.spacingConfigurable) ? 'flex' : 'none';
         }
         if (els.startWpmInput) {
             els.startWpmInput.disabled = (modeCfg.wpmConfigurable === false);
-            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) els.startWpmInput.value = modeCfg.defaultWpm;
+            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) {
+                els.startWpmInput.value = modeCfg.defaultWpm;
+            }
         }
         if (els.wordCountInput) {
             els.wordCountInput.disabled = (modeCfg.wordCountConfigurable === false);
-            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) els.wordCountInput.value = modeCfg.defaultWordCount;
+            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) {
+                els.wordCountInput.value = modeCfg.defaultWordCount;
+            }
         }
+    } else {
+        // Fallback per modalità speciali o se config non caricata
+        if (els.fixedSpeedContainer) els.fixedSpeedContainer.style.display = 'none';
+        if (els.easyModeContainer) els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
+        if (els.advancedSpacingContainer) els.advancedSpacingContainer.style.display = 'none';
     }
 
     if (els.customDictControl) els.customDictControl.style.display = (isSingle && isCustom) ? 'flex' : 'none';

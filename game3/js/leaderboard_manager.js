@@ -1,71 +1,89 @@
 // js/leaderboard_manager.js
 
-window.showLeaderboardTab = function(tabId) {
-    const mapping = {
-        'tabRoomBtn': 'room',
-        'opt_lb_daily': 'daily_challenge',
-        'tabGlobalTournamentBtn': 'trn_global',
-        'tabGlobalCWFreakBtn': 'cwfreak',
-        'tabGlobalPingPongBtn': 'pingpong',
-        'tabGlobalStandardMultiBtn': 'std_multi',
-        'tabGlobalStandardSingleBtn': 'std_single',
-        'tabGlobalCharsMultiBtn': 'chars_multi',
-        'tabGlobalCharsSingleBtn': 'chars_single',
-        'tabGlobalQuizMultiBtn': 'quiz_multi',
-        'tabGlobalQuizSingleBtn': 'quiz_single'
-    };
-    let modeValue = mapping[tabId] || tabId;
-    if (els.lbModeSelect) els.lbModeSelect.value = modeValue;
+window.lbGroups = {
+    daily: [
+        { val: 'daily_challenge', it: '📅 Sfida Giornaliera', en: '📅 Daily Challenge' },
+        { val: 'room', it: '🏁 Risultati Ultima Partita', en: '🏁 Last Match Results' }
+    ],
+    multi: [
+        { val: 'std_multi', it: '⚔️ Sfide Parole (Multi)', en: '⚔️ Words Challenges' },
+        { val: 'chars_multi', it: '⚔️ Sfide Caratteri (Multi)', en: '⚔️ Chars Challenges' },
+        { val: 'quiz_multi', it: '⚔️ Sfide Quiz (Multi)', en: '⚔️ Quiz Challenges' },
+        { val: 'pingpong', it: '🏓 Sfide Ping Pong', en: '🏓 Ping Pong Challenges' },
+        { val: 'trn_global', it: '🏆 Classifica Tornei (Team)', en: '🏆 Tournament Standings' }
+    ],
+    single: [
+        { val: 'std_single', it: '👤 Allenamento Parole', en: '👤 Words Practice' },
+        { val: 'chars_single', it: '👤 Allenamento Caratteri', en: '👤 Chars Practice' },
+        { val: 'quiz_single', it: '👤 Allenamento Quiz', en: '👤 Quiz Practice' }
+    ],
+    special: [
+        { val: 'cwfreak', it: '🎙️ Nominativi (CW Freak)', en: '🎙️ Callsigns (CW Freak)' }
+    ]
+};
 
+window.switchLBGroup = function(groupId) {
+    // Aggiorna UI tab
+    document.querySelectorAll('#lbCategoryTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
+    const activeBtn = document.getElementById('tab' + groupId.charAt(0).toUpperCase() + groupId.slice(1) + 'LB');
+    if (activeBtn) activeBtn.classList.add('active-tab');
+
+    // Popola select sotto-modi
+    const select = document.getElementById('lbModeSelect');
+    if (!select) return;
+
+    select.innerHTML = '';
+    const modes = window.lbGroups[groupId] || [];
+    modes.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.val;
+        opt.textContent = currentLang === 'it' ? m.it : m.en;
+        select.appendChild(opt);
+    });
+
+    // Avvia caricamento del primo modo del gruppo
+    if (modes.length > 0) {
+        select.value = modes[0].val;
+        window.showLeaderboardTab(modes[0].val);
+    }
+};
+
+window.showLeaderboardTab = function(modeValue) {
     if (els.trnSubTabs) els.trnSubTabs.style.display = 'none';
+    if (els.lbFilterArea) els.lbFilterArea.style.display = 'none';
+    if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'none';
+    if (els.waitingOthersText) els.waitingOthersText.style.display = 'none';
+
     if (modeValue === 'room') {
-        if (els.lbFilterArea) els.lbFilterArea.style.display = 'none';
-        if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'block';
-        if (els.leaderboardContainer) els.leaderboardContainer.innerHTML = '';
-        if (roomCode) db.ref(`rooms/${roomCode}/players`).once('value', snap => window.renderRoomLeaderboard(snap.val() || {}));
-        else {
-            if (els.leaderboardContainer) els.leaderboardContainer.innerHTML = '<p style="text-align:center;">Nessuna partita attiva.</p>';
-            if (els.waitingOthersText) els.waitingOthersText.style.display = 'none';
+        els.roomWinnerBanner.style.display = 'block';
+        els.leaderboardContainer.innerHTML = '';
+        if (roomCode) {
+            db.ref(`rooms/${roomCode}/players`).once('value', snap => window.renderRoomLeaderboard(snap.val() || {}));
+        } else {
+            els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Nessuna partita attiva.':'No active match.'}</p>`;
         }
     } else if (modeValue === 'daily_challenge') {
-        if (els.lbFilterArea) els.lbFilterArea.style.display = 'none';
-        if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'none';
-        if (els.waitingOthersText) els.waitingOthersText.style.display = 'none';
         window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
     } else if (modeValue === 'trn_global') {
-        if (els.lbFilterArea) els.lbFilterArea.style.display = 'none';
-        if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'none';
-        if (els.waitingOthersText) els.waitingOthersText.style.display = 'none';
-        if (els.trnSubTabs) els.trnSubTabs.style.display = 'flex';
+        els.trnSubTabs.style.display = 'flex';
         document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
         if (els.btnTrnGlobalLB) els.btnTrnGlobalLB.classList.add('active-tab');
         window.fetchAndRenderGlobalLeaderboard('tournaments', null);
     } else if (modeValue === 'cwfreak') {
-        if (els.lbFilterArea) els.lbFilterArea.style.display = 'none';
-        if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'none';
-        if (els.waitingOthersText) els.waitingOthersText.style.display = 'none';
         window.fetchAndRenderGlobalLeaderboard('callsign', null);
     } else if (modeValue === 'pingpong') {
-        if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
-        if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'none';
-        if (els.waitingOthersText) els.waitingOthersText.style.display = 'none';
+        els.lbFilterArea.style.display = 'block';
         window.populateDynamicFilters('pingpong', '');
         window.fetchAndRenderGlobalLeaderboard('pingpong', els.lbWordFilter ? els.lbWordFilter.value : 'all');
     } else {
-        if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
-        if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'none';
-        if (els.waitingOthersText) els.waitingOthersText.style.display = 'none';
-
+        // Modalità standard (multi/single)
+        els.lbFilterArea.style.display = 'block';
         let isMulti = modeValue.endsWith('_multi');
         let type = isMulti ? 'multi' : 'single';
-
-        let baseMode = 'standard';
-        if (modeValue.startsWith('chars')) baseMode = 'chars';
-        if (modeValue.startsWith('quiz')) baseMode = 'quiz';
+        let baseMode = modeValue.split('_')[0]; // standard, chars, quiz
 
         let filterPath = isMulti ? `recent_matches/${baseMode}_multi` : baseMode;
         window.populateDynamicFilters(filterPath, isMulti ? '' : 'single');
-
         window.fetchAndRenderGlobalLeaderboard(`${baseMode}_${type}`, els.lbWordFilter ? els.lbWordFilter.value : 'all');
     }
 };
@@ -74,7 +92,7 @@ window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
     if (!els.lbWordFilter) return;
     const currentValue = els.lbWordFilter.value;
     db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
-        let options = ['<option value="all">Tutte le categorie</option>'];
+        let options = [`<option value="all">${currentLang==='it'?'Tutte le categorie':'All categories'}</option>`];
         let counts = [];
         snapshot.forEach(wordCountNode => {
             const key = wordCountNode.key;
@@ -87,7 +105,7 @@ window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
                 }
             }
         });
-        counts.sort((a,b) => parseInt(a) - parseInt(b)).forEach(c => options.push(`<option value="${c}">${c} Stringhe</option>`));
+        counts.sort((a,b) => parseInt(a) - parseInt(b)).forEach(c => options.push(`<option value="${c}">${c} ${currentLang==='it'?'Stringhe':'Strings'}</option>`));
         els.lbWordFilter.innerHTML = options.join('');
         if (counts.includes(currentValue) || currentValue === 'all') els.lbWordFilter.value = currentValue;
     });
@@ -99,7 +117,7 @@ window.listenToRoomLeaderboard = function() {
     listeners.roomLb = db.ref(`rooms/${roomCode}`).on('value', snap => {
         if (!snap.exists()) return;
         const roomData = snap.val(), players = roomData.players || {};
-        if (activeTab === "room") window.renderRoomLeaderboard(players);
+        if (document.getElementById('lbModeSelect')?.value === "room") window.renderRoomLeaderboard(players);
 
         let allFinished = true;
         Object.values(players).forEach(p => { if (!p.finished) allFinished = false; });
@@ -258,7 +276,7 @@ window.saveMatchToGlobalHistory = function(players, roomData) {
 
 window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     if (!els.leaderboardContainer) return;
-    els.leaderboardContainer.innerHTML = '<p style="text-align:center;">Caricamento...</p>';
+    els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento classifica...':'Loading standings...'}</p>`;
 
     if (tabType === 'daily_challenge') {
         let todayStr = new Date().toISOString().split('T')[0];
@@ -351,7 +369,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     if (tabType === 'active_tournament') {
         if (!activeTrnId) {
             els.leaderboardContainer.innerHTML = '';
-            const p = document.createElement('p'); p.style.cssText = "text-align:center; color:var(--hint-color);"; p.textContent = currentLang === 'it' ? "Non sei iscritto a nessun torneo attivo." : "You are not enrolled in any active tournament.";
+            const p = document.createElement('p'); p.style.cssText = "text-align:center; color:var(--hint-color); padding:20px;"; p.textContent = currentLang === 'it' ? "Non sei iscritto a nessun torneo attivo." : "You are not enrolled in any active tournament.";
             els.leaderboardContainer.appendChild(p);
         } else {
             db.ref(`tournaments/${activeTrnId}`).once('value', snap => {
@@ -371,7 +389,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
                     els.leaderboardContainer.appendChild(listCont);
                 } else {
                     els.leaderboardContainer.innerHTML = '';
-                    const p = document.createElement('p'); p.style.cssText = "text-align:center; color:var(--hint-color);"; p.textContent = currentLang === 'it' ? 'Dati torneo non disponibili.' : 'Tournament data unavailable.';
+                    const p = document.createElement('p'); p.style.cssText = "text-align:center; color:var(--hint-color); padding:20px;"; p.textContent = currentLang === 'it' ? 'Dati torneo non disponibili.' : 'Tournament data unavailable.';
                     els.leaderboardContainer.appendChild(p);
                 }
             });
@@ -379,43 +397,26 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
-    let isQuiz = tabType.startsWith('quiz');
-    let isChars = tabType.startsWith('chars');
-    let modePath = isQuiz ? 'quiz' : (isChars ? 'chars' : 'standard');
-    let subType = isQuiz ? tabType.replace('quiz_', '') : (isChars ? tabType.replace('chars_', '') : tabType.replace('standard_', ''));
-
-    if (filterWordCount !== 'all') {
-        db.ref(`leaderboard/${modePath}/${subType}_${filterWordCount}`)
-          .orderByChild('score')
-          .limitToLast(50)
-          .once('value', snapshot => {
-            let players = [];
-            if (snapshot.exists()) {
-                snapshot.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
-            }
-            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
-            window.renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, true);
-        });
-    } else {
-        db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
-            let players = [];
-            if (snapshot.exists()) {
-                snapshot.forEach(wordCountNode => {
-                    const key = wordCountNode.key;
-                    if (!key.startsWith(subType + "_")) return;
+    // Modalità standard singolo
+    let baseMode = tabType.split('_')[0];
+    db.ref(`leaderboard/${baseMode}`).once('value', snapshot => {
+        let players = [];
+        if (snapshot.exists()) {
+            snapshot.forEach(wordCountNode => {
+                if (filterWordCount === 'all' || wordCountNode.key === 'single_' + filterWordCount) {
                     wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
-                });
-            }
-            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
-            window.renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, true);
-        });
-    }
+                }
+            });
+        }
+        players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+        window.renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, true);
+    });
 };
 
 window.renderMatchesHistoryHTML = function(matches, container) {
     container.innerHTML = '';
     if (matches.length === 0) {
-        const p = document.createElement('p'); p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)'; p.textContent = currentLang === 'it' ? 'Nessuna sfida recente trovata.' : 'No recent challenges found.'; container.appendChild(p); return;
+        const p = document.createElement('p'); p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)'; p.style.padding = '20px'; p.textContent = currentLang === 'it' ? 'Nessuna sfida recente trovata.' : 'No recent challenges found.'; container.appendChild(p); return;
     }
     matches.forEach(match => {
         const mw = document.createElement('div'); mw.style.marginBottom = "25px"; mw.style.borderBottom = "1px dashed var(--hint-color)"; mw.style.paddingBottom = "15px";
@@ -428,8 +429,8 @@ window.renderMatchesHistoryHTML = function(matches, container) {
 window.renderPlayersListHTML = function(players, container, showWordCount, isTeam = false) {
     container.innerHTML = '';
     if (players.length === 0) {
-        const p = document.createElement('p'); p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)';
-        p.textContent = currentLang === 'it' ? 'Nessun record trovato per questa categoria.' : 'No records found for this category.';
+        const p = document.createElement('p'); p.style.textAlign = 'center'; p.style.color = 'var(--hint-color)'; p.style.padding = '20px';
+        p.textContent = currentLang === 'it' ? 'Nessun record trovato.' : 'No records found.';
         container.appendChild(p); return;
     }
 
@@ -472,7 +473,12 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
     });
 };
 
-if (els.lbModeSelect) els.lbModeSelect.addEventListener('change', e => { activeTab = e.target.value; window.showLeaderboardTab(e.target.value); });
+// Listeners eventi UI
+if (document.getElementById('lbModeSelect')) {
+    document.getElementById('lbModeSelect').addEventListener('change', e => {
+        window.showLeaderboardTab(e.target.value);
+    });
+}
 if (els.btnTrnGlobalLB) {
     els.btnTrnGlobalLB.addEventListener('click', () => {
         document.querySelectorAll('#trnSubTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
@@ -487,4 +493,16 @@ if (els.btnTrnActiveLB) {
         window.fetchAndRenderGlobalLeaderboard('active_tournament', null);
     });
 }
-if (els.lbWordFilter) els.lbWordFilter.addEventListener('change', () => { window.showLeaderboardTab(activeTab); });
+if (els.lbWordFilter) {
+    els.lbWordFilter.addEventListener('change', () => {
+        const currentMode = document.getElementById('lbModeSelect')?.value;
+        if (currentMode) window.showLeaderboardTab(currentMode);
+    });
+}
+
+// Inizializzazione predefinita all'apertura dello schermo
+setTimeout(() => {
+    if (document.getElementById('lbCategoryTabs')) {
+        window.switchLBGroup('daily');
+    }
+}, 500);
