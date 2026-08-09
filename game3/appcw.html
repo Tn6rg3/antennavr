@@ -117,12 +117,16 @@
         <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
             <button onclick="toggleLanguage()" class="action-btn-small btn-secondary" style="width:36px; padding:6px 0;" id="langBtn">IT</button>
             <button class="action-btn-small btn-secondary" onclick="showScreen('privacyScreen')" id="txt_info_btn">Info</button>
-            <button class="action-btn-small" style="position:relative; overflow:visible;" onclick="showScreen('participationScreen'); switchActTab('daily');" id="txt_act_btn">🏅 Attività</button>
+            <button class="action-btn-small" onclick="showScreen('participationScreen'); switchActTab('daily');" id="txt_act_btn">
+                <span id="txt_act_btn_label">🏅 Attività</span>
+            </button>
             <button class="action-btn-small" onclick="showProfileScreen()" id="txt_profile_btn">
-                👤 Profilo
+                <span id="txt_profile_btn_label">👤 Profilo</span>
                 <span id="missionsBadge" class="badge-counter">0</span>
             </button>
-            <button class="action-btn-small" onclick="showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn');" id="txt_lb_btn">🏆 Classifica</button>
+            <button class="action-btn-small" onclick="showScreen('leaderboardScreen'); showLeaderboardTab('tabGlobalCWFreakBtn');" id="txt_lb_btn">
+                <span id="txt_lb_btn_label">🏆 Classifica</span>
+            </button>
         </div>
     </div>
 
