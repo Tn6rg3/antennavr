@@ -269,67 +269,85 @@
     </div>
 </div>
 
-<!-- PROFILO E STATISTICHE -->
+<!-- PROFILO E STATISTICHE (RIORGANIZZATO) -->
 <div id="profileScreen" class="screen">
-    <h2 id="txt_profile_title" style="color: var(--link-color); margin-bottom: 10px;">👤 Profilo e Statistiche</h2>
-
-    <!-- NUOVO: SEZIONE LIVELLO E XP -->
-    <div class="box-panel" style="margin-bottom: 8px; border-color: var(--champ-color); background: linear-gradient(180deg, var(--sec-bg-color) 0%, var(--bg-color) 100%);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <div>
-                <b id="userLevelDisplay" style="font-size:1.2em; color:var(--champ-color);">Liv. 1</b>
-                <div id="userTitleDisplay" style="font-size:0.75em; color:var(--hint-color); text-transform:uppercase; letter-spacing:1px;">Recluta Morse</div>
-            </div>
-            <div id="xpTextDisplay" style="font-size:0.85em; font-weight:bold;">0 / 500 XP</div>
-        </div>
-        <div style="width:100%; height:12px; background:var(--bg-color); border-radius:6px; overflow:hidden; border:1px solid var(--hint-color);">
-            <div id="xpBarFill" style="width:0%; height:100%; background: linear-gradient(90deg, #9c27b0, #e91e63); transition: width 0.5s ease-out;"></div>
-        </div>
+    <div style="display: flex; gap: 6px; width: 100%; margin-bottom: 15px; flex-shrink:0;">
+        <button id="btnTabProfile" class="tab-btn active-tab" onclick="switchProfileTab('info')" style="flex:1;">👤 Profilo</button>
+        <button id="btnTabStats" class="tab-btn" onclick="switchProfileTab('stats')" style="flex:1;">📊 Analisi Errori</button>
     </div>
 
-    <!-- NUOVO: SEZIONE MISSIONI GIORNALIERE -->
-    <div class="box-panel" style="margin-bottom: 8px;">
-        <h3 style="color:var(--link-color); margin-bottom:8px; font-size:0.95em;">🎯 Missioni Giornaliere</h3>
-        <div id="missionsContainer">
-            <p style="text-align:center; color:var(--hint-color); font-size:0.8em;">Caricamento missioni...</p>
+    <!-- SEZIONE 1: INFO PROFILO E MISSIONI -->
+    <div id="profileInfoArea" style="width:100%; display: flex; flex-direction: column; flex-grow:1; min-height:0;">
+        <div class="box-panel" style="margin-bottom: 8px; border-color: var(--champ-color); background: linear-gradient(180deg, var(--sec-bg-color) 0%, var(--bg-color) 100%);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div>
+                    <b id="userLevelDisplay" style="font-size:1.2em; color:var(--champ-color);">Liv. 1</b>
+                    <div id="userTitleDisplay" style="font-size:0.75em; color:var(--hint-color); text-transform:uppercase; letter-spacing:1px;">Recluta Morse</div>
+                </div>
+                <div id="xpTextDisplay" style="font-size:0.85em; font-weight:bold;">0 / 500 XP</div>
+            </div>
+            <div style="width:100%; height:12px; background:var(--bg-color); border-radius:6px; overflow:hidden; border:1px solid var(--hint-color);">
+                <div id="xpBarFill" style="width:0%; height:100%; background: linear-gradient(90deg, #9c27b0, #e91e63); transition: width 0.5s ease-out;"></div>
+            </div>
+        </div>
+
+        <div class="box-panel" style="margin-bottom: 8px;">
+            <h3 style="color:var(--link-color); margin-bottom:8px; font-size:0.95em;">🎯 Missioni Giornaliere</h3>
+            <div id="missionsContainer">
+                <p style="text-align:center; color:var(--hint-color); font-size:0.8em;">Caricamento missioni...</p>
+            </div>
+        </div>
+
+        <div class="box-panel" style="margin-bottom:8px; flex-shrink:0;">
+            <h3 id="txt_alias_title" style="color:var(--link-color); margin-bottom:5px;">🏷️ Il tuo Alias</h3>
+            <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
+                <input type="text" id="userAliasInput" placeholder="Scegli un alias..." maxlength="15" style="flex: 1 1 auto; min-width: 0; margin:0; padding:8px;">
+                <button id="saveAliasBtn" class="action-btn-small btn-success" style="width:auto; margin:0; flex-shrink:0;">Salva</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:10px; background:rgba(0,0,0,0.05); padding:8px; border-radius:8px;">
+                <input type="checkbox" id="privacyUsernameCheckbox" style="width:20px; height:20px; cursor:pointer;">
+                <label for="privacyUsernameCheckbox" id="txt_privacy_label" style="font-size:0.85em; cursor:pointer; font-weight:bold;">Nascondi mio username Telegram</label>
+            </div>
+        </div>
+
+        <div class="box-panel" style="flex-grow: 1; min-height:0; margin-bottom:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <h3 id="txt_match_history_title" style="margin:0;">📜 Storico Partite</h3>
+                <button id="resetStatsBtn" class="action-btn-small btn-danger" style="width:auto; padding:4px 8px; font-size:0.75em;">🗑️ Reset</button>
+            </div>
+            <ul id="matchHistoryList" class="data-list"></ul>
         </div>
     </div>
 
-    <div class="box-panel" style="margin-bottom:8px; flex-shrink:0;">
-        <h3 id="txt_alias_title" style="color:var(--link-color); margin-bottom:5px;">🏷️ Il tuo Alias</h3>
-        <!-- RIGA ALIAS PROTETTA DA SBAVATURE -->
-        <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
-            <input type="text" id="userAliasInput" placeholder="Scegli un alias..." maxlength="15" style="flex: 1 1 auto; min-width: 0; margin:0; padding:8px;">
-            <button id="saveAliasBtn" class="action-btn-small btn-success" style="width:auto; margin:0; flex-shrink:0;">Salva</button>
+    <!-- SEZIONE 2: ANALISI ERRORI AVANZATA -->
+    <div id="profileStatsArea" style="width:100%; display: none; flex-direction: column; flex-grow:1; min-height:0;">
+        <!-- Errori per WPM -->
+        <div class="box-panel" style="max-height: 140px; margin-bottom:8px;">
+            <h3 style="font-size: 0.9em; margin-bottom:5px;">⚠️ Errori per Velocità (WPM)</h3>
+            <div id="wpmErrorChartContainer" style="overflow-y:auto; font-size: 0.85em;"></div>
         </div>
-        <p id="txt_alias_hint" style="font-size:0.75em; color:var(--hint-color); margin-top:3px;">L'alias sostituirà il tuo nome Telegram nelle classifiche e nelle squadre.</p>
-        <div style="display:flex; align-items:center; gap:10px; margin-top:10px; background:rgba(0,0,0,0.05); padding:8px; border-radius:8px;">
-            <input type="checkbox" id="privacyUsernameCheckbox" style="width:20px; height:20px; cursor:pointer;">
-            <label for="privacyUsernameCheckbox" id="txt_privacy_label" style="font-size:0.85em; cursor:pointer; font-weight:bold;">Nascondi mio username Telegram</label>
-        </div>
-        <p id="txt_privacy_hint" style="font-size:0.7em; color:var(--hint-color); margin-top:5px; font-style:italic;">Se attivo, nessuno potrà cliccare sul tuo nome per vedere il tuo profilo. L'Alias diventa obbligatorio.</p>
-    </div>
-    <div style="display: flex; gap: 5px; width: 100%; flex-shrink: 0; max-height: 180px;">
-        <div class="box-panel" style="flex: 1; overflow:hidden;">
-            <h3 id="txt_wrong_chars_title">📈 Caratteri più sbagliati</h3>
-            <div id="errorChartContainer" style="width:100%; height:100%; overflow-y:auto; padding-right:5px; font-size: 0.9em;">
-                <p style="text-align:center;color:var(--hint-color)" id="txt_loading_stats">Caricamento...</p>
+
+        <div style="display: flex; gap: 8px; width: 100%; flex-grow: 1; min-height: 0;">
+            <!-- Bigrammi Sbagliati -->
+            <div class="box-panel" style="flex: 1; min-height: 0;">
+                <h3 style="font-size: 0.9em; margin-bottom:5px;">🔗 Coppie Difficili</h3>
+                <p style="font-size:0.7em; color:var(--hint-color); margin-top:0; text-align:center;">Caratteri consecutivi errati</p>
+                <div id="bigramErrorsContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.9em;"></div>
+            </div>
+
+            <!-- Parole Ricorrenti -->
+            <div class="box-panel" style="flex: 1; min-height: 0;">
+                <h3 style="font-size: 0.9em; margin-bottom:5px;">🔤 Parole Critiche</h3>
+                <p style="font-size:0.7em; color:var(--hint-color); margin-top:0; text-align:center;">Sbagliate almeno 3 volte</p>
+                <div id="wordErrorsContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.9em;"></div>
             </div>
         </div>
-        <div class="box-panel" style="flex: 1; overflow:hidden;">
-            <h3 id="txt_wpm_error_title">⚠️ Errori per WPM</h3>
-            <div id="wpmErrorChartContainer" style="width:100%; height:100%; overflow-y:auto; padding-right:5px; font-size: 0.9em;">
-                <p style="text-align:center;color:var(--hint-color)" id="txt_loading_stats2">Caricamento...</p>
-            </div>
+
+        <div class="box-panel" style="margin-top:8px; flex-shrink:0;">
+            <button id="btnCreateErrorDict" class="btn-success" style="font-size:0.85em; padding:10px;">🛠️ Crea Allenamento su Parole Critiche</button>
         </div>
     </div>
-    <div class="box-panel" style="flex-grow: 1; min-height:0; margin-bottom:0; margin-top: 5px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-            <h3 id="txt_match_history_title" style="margin:0;">📜 Storico Partite</h3>
-            <button id="resetStatsBtn" class="action-btn-small btn-danger" style="width:auto; padding:4px 8px; font-size:0.75em;">🗑️ Reset Statistiche</button>
-        </div>
-        <ul id="matchHistoryList" class="data-list"></ul>
-    </div>
+
     <button onclick="goBackToMenu()" id="txt_back_btn" style="margin-top: 10px; flex-shrink: 0;">Torna al Menu Principale</button>
 </div>
 
