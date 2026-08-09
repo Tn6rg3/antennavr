@@ -316,7 +316,7 @@ function checkGameTypeUI() {
             opt.textContent = currentLang === 'en' ? item.en : item.it;
             select.appendChild(opt);
         });
-        select.value = currentVal.startsWith('trn_') ? currentVal : "trn_join_team";
+        select.value = (currentVal && currentVal.startsWith('trn_')) ? currentVal : "trn_join_team";
     } else {
         Object.values(window.GAME_MODES || {}).forEach(mode => {
             if (mode.id !== 'conquest') {
@@ -327,11 +327,15 @@ function checkGameTypeUI() {
                 select.appendChild(opt);
             }
         });
-        select.value = (currentVal === 'conquest' || currentVal.startsWith('trn_')) ? 'standard' : (currentVal || 'standard');
+        select.value = (currentVal === 'conquest' || (currentVal && currentVal.startsWith('trn_'))) ? 'standard' : (currentVal || 'standard');
+    }
     }
 
     const selectedMode = select.value;
     const modeCfg = window.GAME_MODES ? window.GAME_MODES[selectedMode] : null;
+    if (!modeCfg && selectedMode !== 'conquest' && !selectedMode.startsWith('trn_')) {
+        console.warn("Mode config not found for:", selectedMode);
+    }
     const isCustom = selectedMode === 'custom';
     const isChars = selectedMode === 'chars';
     const isPP = selectedMode === 'pingpong';
@@ -871,7 +875,94 @@ if (els.muteGlobalChatBtn) {
 // Gestito in game_core.js
 
 // --- CREAZIONE E INGRESSO IN STANZA ---
-// Gestito in game_core.js
+if (els.createRoomBtn) {
+    els.createRoomBtn.addEventListener('click', () => {
+        const gameType = els.gameTypeInput.value, gameMode = els.gameModeInput.value;
+        if (gameType === 'tournament') {
+            window.showScreen('teamsScreen');
+            if (gameMode === 'trn_create_team') if (typeof switchTeamTab === 'function') switchTeamTab('gest');
+            else if (gameMode === 'trn_join_team') if (typeof switchTeamTab === 'function') switchTeamTab('allteams');
+            else if (gameMode === 'trn_create_trn') if (typeof switchTeamTab === 'function') switchTeamTab('tournaments');
+            return;
+        }
+        if (gameMode === 'custom' && window.customDictionary.length === 0) {
+            els.customDictModal.style.display = 'flex';
+            return showToast("Carica prima un file di testo!");
+        }
+
+        isChallenging = false;
+        if (currentInviterId) {
+            db.ref(`invites/${currentInviterId}`).once('value', s => {
+                if (s.exists() && s.val().fromId === myId) db.ref(`invites/${currentInviterId}`).remove();
+            });
+        }
+        db.ref(`invite_accepted/${myId}`).remove();
+
+        currentMode = gameMode || 'standard';
+        isSinglePlayer = (gameType === 'single');
+        const allowSpectators = (isSinglePlayer && els.allowSpectatorsCheckbox?.checked) || false;
+
+        currentWpm = currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20);
+        baseWpm = currentWpm;
+        requestedWordCount = currentMode === 'callsign' ? 25 : Math.min(200, Math.max(1, parseInt(els.wordCountInput?.value) || 10));
+        currentTone = parseInt(els.toneInput?.value) || 600;
+        isFixedSpeed = els.fixedSpeedCheckbox?.checked || false;
+        isEasyMode = els.easyModeCheckbox?.checked || false;
+
+        let cSpace = isSinglePlayer && (els.charSpaceInput && els.charSpaceInput.value) ? (parseInt(els.charSpaceInput.value) || currentWpm) : currentWpm;
+        let wSpace = isSinglePlayer && (els.wordSpaceSelect && els.wordSpaceSelect.value) ? (parseFloat(els.wordSpaceSelect.value) || 1.0) : 1.0;
+        window.charSpaceWpm = cSpace;
+        window.wordSpaceMult = wSpace;
+
+        roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+        gameWords = window.getGameWords(requestedWordCount, currentMode);
+
+        if (!gameWords || gameWords.length === 0) {
+            const dict = (window.masterDictionary && window.masterDictionary.length > 0) ? window.masterDictionary : ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
+            gameWords = fisherYatesShuffle(dict).slice(0, requestedWordCount).map(w => w.toUpperCase());
+        }
+
+        const timerMinutes = parseInt(els.roomTimerInput?.value) || 5;
+        const expiresTimestamp = isSinglePlayer ? null : Date.now() + (timerMinutes * 60000);
+
+        db.ref('rooms/' + roomCode).set({
+            status: isSinglePlayer ? 'countdown' : 'waiting',
+            type: isSinglePlayer ? 'single' : (gameType === 'coop' ? 'coop' : 'multi'),
+            mode: currentMode,
+            wpm: currentWpm,
+            tone: currentTone,
+            wordCount: requestedWordCount,
+            words: gameWords,
+            fixedSpeed: isFixedSpeed,
+            charSpaceWpm: cSpace,
+            wordSpaceMult: wSpace,
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+            expiresAt: expiresTimestamp,
+            hostId: myId || "anon"
+        }).then(() => {
+            if (!isSinglePlayer) {
+                db.ref(`public_lobby_rooms/${roomCode}`).set({
+                    mode: currentMode,
+                    type: gameType === 'coop' ? 'coop' : 'multi',
+                    pCount: 1,
+                    wpm: currentWpm,
+                    wordCount: requestedWordCount,
+                    status: 'waiting',
+                    expiresAt: expiresTimestamp
+                });
+            }
+            if (isSinglePlayer && allowSpectators) {
+                db.ref(`presence/${myId}`).update({
+                    allowSpectators: true,
+                    activeRoomCode: roomCode
+                });
+            }
+            if (typeof window.joinRoomLogic === 'function') window.joinRoomLogic(false);
+        }).catch(err => {
+            alert("Errore Firebase durante la creazione: " + err.message);
+        });
+    });
+}
 
 // --- GAMELOOP, VERIFICA E PUNTEGGI ---
 // Gestito in game_core.js
