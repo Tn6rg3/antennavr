@@ -336,6 +336,13 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
 
 .event-modal-icon { font-size: 4em; display: block; margin-bottom: 10px; }
 
+/* =========================================================
+   CONTENITORI OPZIONI DINAMICHE
+   ========================================================= */
+#fixedSpeedContainer, #easyModeContainer, #advancedSpacingContainer, #spectatorContainer, #customDictControl {
+    display: none;
+}
+
 /* MEDIA QUERIES PER SCHERMI PICCOLI (< 400PX) */
 @media screen and (max-width: 400px) {
     .action-btn-small { padding: 5px 8px !important; font-size: 0.78em !important; }
