@@ -368,7 +368,6 @@ function checkGameTypeUI() {
     } else {
         if (els.createRoomBtn) els.createRoomBtn.textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
     }
-}
 
 if(els.gameModeInput) els.gameModeInput.addEventListener('change', e => checkGameTypeUI());
 if(els.gameTypeInput) els.gameTypeInput.addEventListener('change', checkGameTypeUI);
