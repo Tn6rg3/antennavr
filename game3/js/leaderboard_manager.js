@@ -136,18 +136,24 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
 
     // 2. SFIDE MULTIPLAYER (Cronologia Match)
     if (tabType.endsWith('_multi') || tabType === 'pingpong') {
-        let baseMode = tabType.replace('_multi', '');
         const dbPath = `leaderboard/recent_matches/${tabType}`;
-        console.log("LB: Fetching Multi from:", dbPath);
+        console.log("LB: Fetching Multi from:", dbPath, "Filter:", filterWordCount);
 
         db.ref(dbPath).once('value', snapshot => {
             let matches = [];
-            snapshot.forEach(wcNode => {
-                if (filterWordCount === 'all' || wcNode.key === filterWordCount) {
-                    wcNode.forEach(mNode => matches.push(mNode.val()));
-                }
-            });
+            if (snapshot.exists()) {
+                snapshot.forEach(wcNode => {
+                    // wcNode.key è '10', '20', 'all', ecc.
+                    if (filterWordCount === 'all' || wcNode.key === filterWordCount) {
+                        wcNode.forEach(mNode => {
+                            const val = mNode.val();
+                            if (val) matches.push(val);
+                        });
+                    }
+                });
+            }
             matches.sort((a,b) => (b.ts || 0) - (a.ts || 0));
+            console.log("LB: Matches found:", matches.length);
             window.renderMatchesHistoryHTML(matches.slice(0, 20), els.leaderboardContainer);
         });
         return;
