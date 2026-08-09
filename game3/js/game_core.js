@@ -230,7 +230,8 @@ window.joinRoomLogic = function(isReconnect = false) {
             currentMode = rData.mode;
             requestedWordCount = rData.wordCount;
             isSinglePlayer = rData.type === 'single';
-            isFixedSpeed = rData.fixedSpeed || false;
+            isFixedSpeed = !!rData.fixedSpeed;
+            isEasyMode = !!rData.easyMode;
             roomHostId = rData.hostId;
 
             window.charSpaceWpm = rData.charSpaceWpm !== undefined ? rData.charSpaceWpm : rData.wpm;
@@ -490,7 +491,7 @@ window.playNextWord = function() {
 
     if (roomCode) db.ref(`rooms/${roomCode}/liveAudio`).set({ word: currentWord, wpm: currentWpm, ts: Date.now() });
 
-    if (isEasyMode && isSinglePlayer && els.easyModeHint) {
+    if (isEasyMode && els.easyModeHint) {
         els.easyModeHint.textContent = currentWord.split('').sort(() => 0.5 - Math.random()).join(' ');
         els.easyModeHint.style.display = 'block';
     } else if (els.easyModeHint) {
