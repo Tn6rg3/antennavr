@@ -137,7 +137,8 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     // 2. SFIDE MULTIPLAYER (Cronologia Match)
     if (tabType.endsWith('_multi') || tabType === 'pingpong') {
         // Correzione Radice: i dati sono in leaderboard/recent_matches/MODE/WORDCOUNT/MATCHID
-        const dbPath = `leaderboard/recent_matches/${tabType}`;
+        let baseMode = tabType.includes('std') ? 'standard' : (tabType.includes('chars') ? 'chars' : (tabType.includes('quiz') ? 'quiz' : 'pingpong'));
+        const dbPath = `leaderboard/recent_matches/${baseMode}${tabType !== 'pingpong' ? '_multi' : ''}`;
         console.log("LB: Fetching Multi from:", dbPath, "Filter:", filterWordCount);
 
         db.ref(dbPath).once('value', snapshot => {
