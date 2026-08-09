@@ -202,21 +202,31 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10; }
 
 /* Fix specifico per evitare che il select copra i tab */
 #lbCategoryTabs {
-    padding: 2px 0;
-    z-index: 10;
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    margin-bottom: 20px !important;
+    overflow-x: auto;
+    padding: 10px 2px;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+    z-index: 100;
 }
 #lbSubModeArea {
-    margin-top: 5px;
+    margin-top: 10px;
     position: relative;
-    z-index: 5;
+    z-index: 50;
+    width: 100%;
 }
 #lbModeSelect {
     margin: 5px 0;
     border: 2px solid var(--link-color);
-    background: var(--bg-color);
+    background: var(--sec-bg-color);
     color: var(--text-color);
-    border-radius: 8px;
-    padding: 10px;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 1em;
 }
 
 /* =========================================================
