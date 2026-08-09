@@ -401,17 +401,44 @@ if (els.createRoomBtn) {
         requestedWordCount = (currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         currentTone = parseInt(els.toneInput?.value) || 600;
 
+        // --- LETTURA OPZIONI AVANZATE ---
+        const isFixed = isSinglePlayer && els.fixedSpeedCheckbox?.checked;
+        const isEasy = isSinglePlayer && els.easyModeCheckbox?.checked;
+        const allowSpectators = isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
+
+        let cSpace = isSinglePlayer && els.charSpaceInput?.value ? parseInt(els.charSpaceInput.value) : currentWpm;
+        let wSpace = isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
+
         roomCode = Math.floor(1000 + Math.random() * 9000).toString();
         gameWords = window.getGameWords(requestedWordCount, currentMode);
 
         const expires = isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
+
         db.ref('rooms/' + roomCode).set({
             status: isSinglePlayer ? 'countdown' : 'waiting',
             type: isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
-            mode: currentMode, wpm: currentWpm, tone: currentTone, wordCount: requestedWordCount,
-            words: gameWords, createdAt: firebase.database.ServerValue.TIMESTAMP, expiresAt: expires, hostId: myId
+            mode: currentMode,
+            wpm: currentWpm,
+            tone: currentTone,
+            wordCount: requestedWordCount,
+            words: gameWords,
+            fixedSpeed: !!isFixed,
+            easyMode: !!isEasy,
+            charSpaceWpm: cSpace,
+            wordSpaceMult: wSpace,
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+            expiresAt: expires,
+            hostId: myId
         }).then(() => {
             if (!isSinglePlayer) db.ref(`public_lobby_rooms/${roomCode}`).set({ mode: currentMode, pCount: 1, wpm: currentWpm, status: 'waiting', expiresAt: expires });
+
+            if (isSinglePlayer && allowSpectators) {
+                db.ref(`presence/${myId}`).update({
+                    allowSpectators: true,
+                    activeRoomCode: roomCode
+                });
+            }
+
             window.joinRoomLogic?.(false);
         });
     };

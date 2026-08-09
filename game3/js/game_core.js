@@ -114,13 +114,32 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
                 db.ref(`public_lobby_rooms/${roomCode}`).remove();
             } else {
                 db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
-                db.ref(`rooms/${roomCode}/players/${myId}`).remove();
+                db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
+                    // Decrementa conteggio pubblico se la stanza esiste ancora
+                    if (roomCode && !roomCode.startsWith("TRN_")) {
+                        db.ref(`rooms/${roomCode}/players`).once('value', s => {
+                            if (s.exists()) {
+                                db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(Object.keys(s.val()).length);
+                            }
+                        });
+                    }
+                });
             }
             roomCode = "";
         }
         else if (isExplicitQuit) {
             db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
-            db.ref(`rooms/${roomCode}/players/${myId}`).remove();
+            db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
+                if (roomCode && !roomCode.startsWith("TRN_")) {
+                    db.ref(`rooms/${roomCode}/players`).once('value', s => {
+                        if (s.exists()) {
+                            db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(Object.keys(s.val()).length);
+                        } else if (!amIHost) {
+                            db.ref(`public_lobby_rooms/${roomCode}`).remove();
+                        }
+                    });
+                }
+            });
             roomCode = "";
         }
         else {
@@ -193,6 +212,13 @@ window.joinRoomLogic = function(isReconnect = false) {
             });
         } else {
             playerRef.update({ online: true, name: myName, username: myPrivacy ? "" : tgUsername });
+            // Aggiorna conteggio anche al rientro per sicurezza
+            if (!isSinglePlayer && !roomCode.startsWith("TRN_")) {
+                db.ref(`rooms/${roomCode}/players`).once('value', s => {
+                    const count = s.exists() ? Object.keys(s.val()).length : 1;
+                    db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(count);
+                });
+            }
         }
 
         if (typeof window.listenToChat === 'function') window.listenToChat();
