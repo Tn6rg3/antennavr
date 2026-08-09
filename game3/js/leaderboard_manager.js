@@ -77,6 +77,8 @@ window.showLeaderboardTab = function(modeValue) {
         let baseMode = modeValue.includes('std') ? 'standard' : (modeValue.includes('chars') ? 'chars' : (modeValue.includes('quiz') ? 'quiz' : 'pingpong'));
         let isMulti = modeValue.endsWith('_multi') || modeValue === 'pingpong';
 
+        console.log("LB: BaseMode determined:", baseMode, "isMulti:", isMulti);
+
         if (isMulti) {
             // Le "Sfide" Multi mostrano la cronologia dei match (recent_matches)
             window.populateDynamicFilters(`recent_matches/${baseMode}${isMulti?'_multi':''}`, '');
@@ -135,7 +137,10 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     // 2. SFIDE MULTIPLAYER (Cronologia Match)
     if (tabType.endsWith('_multi') || tabType === 'pingpong') {
         let baseMode = tabType.replace('_multi', '');
-        db.ref(`leaderboard/recent_matches/${tabType}`).once('value', snapshot => {
+        const dbPath = `leaderboard/recent_matches/${tabType}`;
+        console.log("LB: Fetching Multi from:", dbPath);
+
+        db.ref(dbPath).once('value', snapshot => {
             let matches = [];
             snapshot.forEach(wcNode => {
                 if (filterWordCount === 'all' || wcNode.key === filterWordCount) {
@@ -172,7 +177,12 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
 
     // 5. SOLO PRACTICE (Record Individuali)
     let baseMode = tabType.replace('_single', '');
-    db.ref(`leaderboard/${baseMode}`).once('value', snapshot => {
+    if (baseMode === 'std') baseMode = 'standard';
+
+    const dbPath = `leaderboard/${baseMode}`;
+    console.log("LB: Fetching Solo from:", dbPath);
+
+    db.ref(dbPath).once('value', snapshot => {
         let players = [];
         snapshot.forEach(wordCountNode => {
             const key = wordCountNode.key;
