@@ -245,6 +245,9 @@ function initGame() {
         }
 
         if (els.playerName) els.playerName.textContent = myName;
+        if (els.createRoomBtn) els.createRoomBtn.disabled = false;
+        if (els.loadingText) els.loadingText.style.display = 'none';
+
         db.ref('.info/connected').on('value', s => {
             if (!s.val()) return;
             const pRef = db.ref(`presence/${myId}`);
