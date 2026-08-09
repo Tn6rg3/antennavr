@@ -229,17 +229,14 @@ window.renderMissionsUI = function() {
 window.updateMissionsBadge = function() {
     const badge = document.getElementById('missionsBadge');
     if (!badge) return;
+
     const missions = window.userProgression?.dailyMissions?.list || [];
     const pendingCount = missions.filter(m => !m.completed).length;
 
     if (pendingCount > 0) {
-        badge.style.display = 'flex';
-        badge.style.position = 'absolute';
-        badge.style.top = '-5px';
-        badge.style.right = '-5px';
-        badge.style.zIndex = '999';
         badge.textContent = pendingCount;
+        badge.classList.add('badge-active');
     } else {
-        badge.style.display = 'none';
+        badge.classList.remove('badge-active');
     }
 };
