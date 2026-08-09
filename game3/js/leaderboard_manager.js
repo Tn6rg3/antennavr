@@ -269,6 +269,116 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
     });
 };
 
+window.renderRoomLeaderboard = function(players) {
+    if (!els.leaderboardContainer) return;
+    els.leaderboardContainer.innerHTML = '';
+    let allFinished = true;
+    const playersArray = Object.entries(players).map(([id, data]) => ({
+        id,
+        name: data.name || "Sconosciuto",
+        username: data.username,
+        score: data.score || 0,
+        wpm: data.wpm || 0,
+        finished: data.finished,
+        matchDetails: data.matchDetails || []
+    }));
+    if (playersArray.length === 0) return;
+    playersArray.forEach(p => { if (!p.finished) allFinished = false; });
+    if (els.waitingOthersText) els.waitingOthersText.style.display = allFinished ? 'none' : 'block';
+
+    if (allFinished && (roomCode && (roomCode.startsWith("TRN_") || currentMode === 'pingpong' || playersArray.length > 1))) {
+        window.renderHeadToHeadView(playersArray, els.leaderboardContainer);
+    } else {
+        playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm)).forEach((player, index) => {
+            const row = document.createElement('div'); row.className = 'leaderboard-row';
+            let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+            const leftSpan = document.createElement('span'); leftSpan.appendChild(document.createTextNode(medal + " "));
+            if (player.username && String(player.username).trim() !== "") {
+                const nameLink = document.createElement('span');
+                nameLink.style.color = 'var(--link-color)';
+                nameLink.style.cursor = 'pointer';
+                nameLink.style.textDecoration = 'underline';
+                nameLink.textContent = player.name;
+                nameLink.onclick = () => openTelegramProfile(player.username);
+                leftSpan.appendChild(nameLink);
+            } else {
+                leftSpan.appendChild(document.createTextNode(player.name));
+            }
+            leftSpan.appendChild(document.createElement('br'));
+            const wpmSmall = document.createElement('small');
+            wpmSmall.style.color = 'var(--hint-color)';
+            wpmSmall.textContent = `(${player.wpm || 0} WPM)`;
+            leftSpan.appendChild(wpmSmall);
+            const rightSpan = document.createElement('span');
+            const scoreB = document.createElement('b'); scoreB.textContent = `${player.score} pt`; rightSpan.appendChild(scoreB);
+            row.appendChild(leftSpan); row.appendChild(rightSpan); els.leaderboardContainer.appendChild(row);
+        });
+    }
+    if (allFinished && playersArray.length > 0 && els.roomWinnerBanner) {
+        els.roomWinnerBanner.textContent = roomCode.startsWith("TRN_") ? `🏆 Vince il match: ${playersArray[0].name}` : `🏆 Vincitore: ${playersArray[0].name}`;
+    }
+};
+
+window.renderHeadToHeadView = function(players, container) {
+    const h2h = document.createElement('div'); h2h.className = 'h2h-container';
+    players.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
+    const maxScore = players[0].score;
+    players.forEach((p) => {
+        const card = document.createElement('div');
+        card.className = 'h2h-card' + (p.score === maxScore && maxScore > 0 ? ' winner' : '');
+
+        const nameDiv = document.createElement('div'); nameDiv.className = 'h2h-name'; nameDiv.textContent = p.name;
+        if (p.id === myId) {
+            const meSmall = document.createElement('small'); meSmall.textContent = ` (${currentLang === 'it' ? 'Tu' : 'You'})`; nameDiv.appendChild(meSmall);
+        }
+        card.appendChild(nameDiv);
+
+        const statsDiv = document.createElement('div'); statsDiv.className = 'h2h-stats';
+
+        const rowPt = document.createElement('div'); rowPt.className = 'h2h-stat-row';
+        const sPtLbl = document.createElement('span'); sPtLbl.textContent = currentLang === 'it' ? 'Punti:' : 'Points:';
+        const sPtVal = document.createElement('span'); sPtVal.className = 'h2h-val'; sPtVal.style.color = '#4caf50'; sPtVal.textContent = p.score;
+        rowPt.appendChild(sPtLbl); rowPt.appendChild(sPtVal); statsDiv.appendChild(rowPt);
+
+        const rowSp = document.createElement('div'); rowSp.className = 'h2h-stat-row';
+        const sSpLbl = document.createElement('span'); sSpLbl.textContent = currentLang === 'it' ? 'Velocità:' : 'Speed:';
+        const sSpVal = document.createElement('span'); sSpVal.className = 'h2h-val'; sSpVal.style.color = 'var(--link-color)'; sSpVal.textContent = `${p.wpm} WPM`;
+        rowSp.appendChild(sSpLbl); rowSp.appendChild(sSpVal); statsDiv.appendChild(rowSp);
+
+        card.appendChild(statsDiv);
+
+        const hintDiv = document.createElement('div'); hintDiv.className = 'h2h-hint';
+        hintDiv.textContent = p.id === myId ? (currentLang === 'it' ? 'Clicca per dettagli' : 'Click for details') : (currentLang === 'it' ? 'Dettagli privati' : 'Details are private');
+        card.appendChild(hintDiv);
+
+        if (p.id !== myId) hintDiv.style.opacity = "0.5";
+        card.onclick = () => {
+            if (p.id !== myId) return showToast(currentLang === 'it' ? "Puoi vedere solo i tuoi dettagli." : "You can only view your own details.");
+            if (p.matchDetails && p.matchDetails.length > 0) window.showPlayerDetailsModal(p.name, p.matchDetails);
+            else if (p.id === myId && matchDetailsArray.length > 0) window.showPlayerDetailsModal(p.name, matchDetailsArray);
+            else showToast(currentLang === 'it' ? "Dettagli non disponibili" : "Details not available");
+        };
+        h2h.appendChild(card);
+    });
+    container.appendChild(h2h);
+};
+
+window.showPlayerDetailsModal = function(name, details) {
+    if (!els.matchDetailsBody || !els.matchDetailsModal) return;
+    els.matchDetailsBody.innerHTML = '';
+    const h3 = els.matchDetailsModal.querySelector('h3');
+    if (h3) h3.textContent = `${currentLang === 'it' ? 'Dettagli Partita di' : 'Match Details for'} ${name}`;
+    details.forEach(row => {
+        const tr = document.createElement('tr');
+        let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
+        const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || '-';
+        const tdReal = document.createElement('td'); const bReal = document.createElement('b'); if (typeof renderDiffSecure === 'function') renderDiffSecure(bReal, row.real, row.typed || ''); else bReal.textContent = row.real; tdReal.appendChild(bReal);
+        const tdPoints = document.createElement('td'); tdPoints.style.color = color; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = row.points;
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); els.matchDetailsBody.appendChild(tr);
+    });
+    els.matchDetailsModal.style.display = 'flex';
+};
+
 window.listenToRoomLeaderboard = function() {
     if (!roomCode) return;
     const ref = db.ref(`rooms/${roomCode}`);
