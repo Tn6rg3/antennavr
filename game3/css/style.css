@@ -43,12 +43,32 @@ html, body {
     padding-bottom: max(15px, var(--tg-safe-area-inset-bottom, 15px));
     padding-left: max(10px, var(--tg-safe-area-inset-left, 10px));
     padding-right: max(10px, var(--tg-safe-area-inset-right, 10px));
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden; /* Blocca scroll intera pagina */
     -webkit-overflow-scrolling: touch;
 }
 
 .active-screen { display: flex !important; }
+
+/* Contenitore scorrevole per il contenuto centrale */
+.screen-content {
+    flex-grow: 1;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 10px;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Contenitore fisso per i bottoni in fondo */
+.fixed-bottom-btns {
+    width: 100%;
+    padding: 5px 0;
+    background: var(--bg-color);
+    flex-shrink: 0;
+    border-top: 1px solid rgba(0,0,0,0.05);
+}
 
 h2 { margin-top: 0; text-align: center; font-size: 1.3em; flex-shrink: 0; }
 
