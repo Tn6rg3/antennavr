@@ -295,7 +295,9 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     }
 
     if (['standard_multi', 'chars_multi', 'quiz_multi'].includes(tabType)) {
-        db.ref(`leaderboard/recent_matches/${tabType}`).once('value', snapshot => {
+        let dbPath = `leaderboard/recent_matches/${tabType}`;
+        console.log("RPG: Fetching matches from:", dbPath, "with filter:", filterWordCount);
+        db.ref(dbPath).once('value', snapshot => {
             let matches = [];
             snapshot.forEach(wcNode => {
                 if (filterWordCount === 'all' || wcNode.key === filterWordCount) {
@@ -403,7 +405,15 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         let players = [];
         if (snapshot.exists()) {
             snapshot.forEach(wordCountNode => {
-                if (filterWordCount === 'all' || wordCountNode.key === 'single_' + filterWordCount) {
+                const key = wordCountNode.key;
+                // Se filterWordCount è 'all', prendiamo tutto quello che inizia con 'single_'
+                // Se è specifico, cerchiamo 'single_10', 'single_20' ecc.
+                const targetKeyPrefix = 'single_';
+                if (filterWordCount === 'all') {
+                    if (key.startsWith(targetKeyPrefix)) {
+                        wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
+                    }
+                } else if (key === targetKeyPrefix + filterWordCount) {
                     wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
                 }
             });
