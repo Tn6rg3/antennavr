@@ -181,6 +181,9 @@ window.loadRegolamento = async function() {
     }
 };
 
+if(document.getElementById('gameModeInput')) document.getElementById('gameModeInput').addEventListener('change', () => window.checkGameTypeUI?.());
+if(document.getElementById('gameTypeInput')) document.getElementById('gameTypeInput').addEventListener('change', () => window.checkGameTypeUI?.());
+
 // --- STARTUP ---
 function startApp() {
     if (!tgUser) {

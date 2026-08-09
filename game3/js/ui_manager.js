@@ -1,9 +1,11 @@
 // js/ui_manager.js
 
 window.populateGameModesUI = function() {
-    if (!els.gameModeInput) return;
-    const select = els.gameModeInput;
-    const trnGroup = els.trn_opt_group;
+    console.log("UI: Populating Game Modes...");
+    const select = document.getElementById('gameModeInput');
+    if (!select) return;
+
+    const trnGroup = document.getElementById('trn_opt_group');
     const currentVal = select.value || 'standard';
     select.innerHTML = '';
 
@@ -21,99 +23,80 @@ window.populateGameModesUI = function() {
 };
 
 window.checkGameTypeUI = function() {
-    if (!els.gameTypeInput || !els.gameModeInput) return;
+    console.log("UI: Checking Game Type UI...");
+    const typeInput = document.getElementById('gameTypeInput');
+    const modeInput = document.getElementById('gameModeInput');
+    if (!typeInput || !modeInput) return;
 
-    const isSingle = els.gameTypeInput.value === 'single';
-    const isTrn = els.gameTypeInput.value === 'tournament';
-    const isCoop = els.gameTypeInput.value === 'coop';
-    const select = els.gameModeInput;
-    const currentVal = select.value;
+    const isSingle = typeInput.value === 'single';
+    const isTrn = typeInput.value === 'tournament';
+    const isCoop = typeInput.value === 'coop';
 
-    select.innerHTML = '';
+    const selectedMode = modeInput.value;
+    console.log("UI: State -> Single:", isSingle, "Mode:", selectedMode);
 
+    // Gestione dinamica delle opzioni nel menu "Modo"
     if (isCoop) {
-        const opt = document.createElement('option');
-        opt.value = "conquest";
-        opt.textContent = currentLang === 'it' ? "Conquista (Co-op) ⚔️" : "Conquest (Co-op) ⚔️";
-        select.appendChild(opt);
-        select.value = "conquest";
+        modeInput.innerHTML = `<option value="conquest">${currentLang === 'it' ? "Conquista (Co-op) ⚔️" : "Conquest (Co-op) ⚔️"}</option>`;
+        modeInput.value = "conquest";
     } else if (isTrn) {
         const trnOptions = [
             { val: "trn_create_team", it: "Fonda Squadra", en: "Create Team" },
             { val: "trn_join_team", it: "Unisciti a Squadra", en: "Join Team" },
             { val: "trn_create_trn", it: "Crea Nuovo Torneo", en: "Create Tournament" }
         ];
-        trnOptions.forEach(item => {
-            const opt = document.createElement('option');
-            opt.value = item.val;
-            opt.textContent = currentLang === 'it' ? item.it : item.en;
-            select.appendChild(opt);
-        });
-        select.value = (currentVal && currentVal.startsWith('trn_')) ? currentVal : "trn_join_team";
+        modeInput.innerHTML = trnOptions.map(o => `<option value="${o.val}">${currentLang === 'it' ? o.it : o.en}</option>`).join('');
+        if (!modeInput.value.startsWith('trn_')) modeInput.value = "trn_join_team";
     } else {
-        Object.values(window.GAME_MODES || {}).forEach(mode => {
-            if (mode.id !== 'conquest') {
-                const opt = document.createElement('option');
-                opt.value = mode.id;
-                opt.id = 'txt_opt_' + mode.id;
-                opt.textContent = currentLang === 'it' ? mode.titleIt : mode.titleEn;
-                select.appendChild(opt);
-            }
-        });
-        select.value = (currentVal === 'conquest' || (currentVal && currentVal.startsWith('trn_'))) ? 'standard' : (currentVal || 'standard');
+        // Ripopolamento standard se non siamo in Co-op o Torneo
+        if (modeInput.options.length < 5) { // Evita ripopolamento continuo se già corretto
+            window.populateGameModesUI();
+        }
     }
 
-    const selectedMode = select.value;
-    const modeCfg = window.GAME_MODES ? window.GAME_MODES[selectedMode] : null;
+    const modeCfg = window.GAME_MODES ? window.GAME_MODES[modeInput.value] : null;
 
-    if (!modeCfg && selectedMode !== 'conquest' && !selectedMode.startsWith('trn_')) {
-        console.warn("Mode config not found for:", selectedMode);
-    }
+    // --- LOGICA VISIBILITÀ OPZIONI ---
+    const containers = {
+        timeout: document.getElementById('timeoutDiv'),
+        fixed: document.getElementById('fixedSpeedContainer'),
+        easy: document.getElementById('easyModeContainer'),
+        spacing: document.getElementById('advancedSpacingContainer'),
+        custom: document.getElementById('customDictControl'),
+        spectator: document.getElementById('spectatorContainer'),
+        btn: document.getElementById('createRoomBtn'),
+        startWpm: document.getElementById('startWpmInput'),
+        wordCount: document.getElementById('wordCountInput')
+    };
 
-    const isCustom = selectedMode === 'custom';
-
-    if (els.timeoutDiv) els.timeoutDiv.style.display = (isSingle || isTrn || isCoop) ? 'none' : 'block';
+    if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop) ? 'none' : 'block';
 
     if (modeCfg) {
-        if (els.fixedSpeedContainer) {
-            els.fixedSpeedContainer.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
+        if (containers.fixed) containers.fixed.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
+        if (containers.easy) containers.easy.style.display = isSingle ? 'flex' : 'none';
+        if (containers.spacing) containers.spacing.style.display = (isSingle && modeCfg.spacingConfigurable) ? 'flex' : 'none';
+
+        if (containers.startWpm) {
+            containers.startWpm.disabled = (modeCfg.wpmConfigurable === false);
+            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) containers.startWpm.value = modeCfg.defaultWpm;
         }
-        if (els.easyModeContainer) {
-            els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
-        }
-        if (els.advancedSpacingContainer) {
-            els.advancedSpacingContainer.style.display = (isSingle && modeCfg.spacingConfigurable) ? 'flex' : 'none';
-        }
-        if (els.startWpmInput) {
-            els.startWpmInput.disabled = (modeCfg.wpmConfigurable === false);
-            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) {
-                els.startWpmInput.value = modeCfg.defaultWpm;
-            }
-        }
-        if (els.wordCountInput) {
-            els.wordCountInput.disabled = (modeCfg.wordCountConfigurable === false);
-            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) {
-                els.wordCountInput.value = modeCfg.defaultWordCount;
-            }
+        if (containers.wordCount) {
+            containers.wordCount.disabled = (modeCfg.wordCountConfigurable === false);
+            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) containers.wordCount.value = modeCfg.defaultWordCount;
         }
     } else {
-        // Fallback per modalità speciali o se config non caricata
-        if (els.fixedSpeedContainer) els.fixedSpeedContainer.style.display = 'none';
-        if (els.easyModeContainer) els.easyModeContainer.style.display = isSingle ? 'flex' : 'none';
-        if (els.advancedSpacingContainer) els.advancedSpacingContainer.style.display = 'none';
+        if (containers.fixed) containers.fixed.style.display = 'none';
+        if (containers.easy) containers.easy.style.display = isSingle ? 'flex' : 'none';
+        if (containers.spacing) containers.spacing.style.display = 'none';
     }
 
-    if (els.customDictControl) els.customDictControl.style.display = (isSingle && isCustom) ? 'flex' : 'none';
-    if (els.spectatorContainer) els.spectatorContainer.style.display = isSingle ? 'flex' : 'none';
+    if (containers.custom) containers.custom.style.display = (isSingle && modeInput.value === 'custom') ? 'flex' : 'none';
+    if (containers.spectator) containers.spectator.style.display = isSingle ? 'flex' : 'none';
 
-    if (els.createRoomBtn) {
-        if (isCoop) {
-            els.createRoomBtn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
-        } else if (isTrn) {
-            els.createRoomBtn.textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
-        } else {
-            els.createRoomBtn.textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
-        }
+    if (containers.btn) {
+        if (isCoop) containers.btn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
+        else if (isTrn) containers.btn.textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
+        else containers.btn.textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
     }
 };
 
@@ -121,7 +104,9 @@ window.setLanguage = function(lang) {
     currentLang = lang;
     localStorage.setItem('gameLang', lang);
     const t = i18n[lang] || i18n.it;
-    if (els.langBtn) els.langBtn.textContent = lang.toUpperCase();
+
+    const langBtn = document.getElementById('langBtn');
+    if (langBtn) langBtn.textContent = lang.toUpperCase();
 
     const textMap = {
         txt_hello: t.hello, txt_free_challenge_title: t.free_challenge, txt_play_solo_title: t.play_solo,
@@ -147,12 +132,17 @@ window.setLanguage = function(lang) {
     };
 
     for (let key in textMap) {
-        if (els[key]) els[key].textContent = textMap[key];
+        const el = document.getElementById(key);
+        if (el) el.textContent = textMap[key];
     }
 
-    if (els.txt_lb_btn_label) els.txt_lb_btn_label.textContent = "🏆 " + t.lb;
-    if (els.txt_profile_btn_label) els.txt_profile_btn_label.textContent = "👤 " + t.profile;
-    if (els.txt_act_btn_label) els.txt_act_btn_label.textContent = "🏅 " + t.activity;
+    const lbBtnLabel = document.getElementById('txt_lb_btn_label');
+    const profileBtnLabel = document.getElementById('txt_profile_btn_label');
+    const actBtnLabel = document.getElementById('txt_act_btn_label');
+
+    if (lbBtnLabel) lbBtnLabel.textContent = "🏆 " + t.lb;
+    if (profileBtnLabel) profileBtnLabel.textContent = "👤 " + t.profile;
+    if (actBtnLabel) actBtnLabel.textContent = "🏅 " + t.activity;
 
     window.populateGameModesUI();
     window.checkGameTypeUI();
