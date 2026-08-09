@@ -141,7 +141,11 @@ window.switchProfileTab = function(tabId) {
     const statsArea = document.getElementById('profileStatsArea');
 
     if (tabId === 'info') {
-        // ... (info)
+        infoBtn.classList.add('active-tab');
+        statsBtn.classList.remove('active-tab');
+        infoArea.style.display = 'flex';
+        statsArea.style.display = 'none';
+        window.loadProfileInfo();
     } else {
         infoBtn.classList.remove('active-tab');
         statsBtn.classList.add('active-tab');
@@ -227,7 +231,10 @@ window.loadAdvancedStats = function() {
         if (bigramContainer) {
             bigramContainer.innerHTML = '';
             const bigrams = stats.bigramErrors || {};
-            const filteredBigrams = Object.entries(bigrams).filter(e => (e[1].count || e[1]) >= bigramTh).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 20);
+            const filteredBigrams = Object.entries(bigrams).filter(e => {
+                const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
+                return count >= bigramTh;
+            }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 20);
 
             if (filteredBigrams.length === 0) bigramContainer.innerHTML = '<p style="text-align:center; opacity:0.6; font-size:0.8em;">Sotto soglia.</p>';
             filteredBigrams.forEach(([pair, data]) => {
@@ -241,7 +248,7 @@ window.loadAdvancedStats = function() {
                         <span><b>${pair}</b> (${count})</span>
                         <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${pair}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
                     </div>
-                    <div style="font-size:0.7em; color:var(--hint-color);">Velocità errore: ${avgWpm} WPM</div>
+                    <div style="font-size:0.7em; color:var(--hint-color);">Velocità: ${avgWpm} WPM</div>
                 `;
                 bigramContainer.appendChild(div);
             });
@@ -251,7 +258,10 @@ window.loadAdvancedStats = function() {
         if (wordContainer) {
             wordContainer.innerHTML = '';
             const words = stats.wordErrors || {};
-            const criticalWords = Object.entries(words).filter(e => (e[1].count || e[1]) >= wordTh).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1]));
+            const criticalWords = Object.entries(words).filter(e => {
+                const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
+                return count >= wordTh;
+            }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1]));
 
             if (criticalWords.length === 0) wordContainer.innerHTML = '<p style="text-align:center; opacity:0.6; font-size:0.8em;">Sotto soglia.</p>';
             criticalWords.forEach(([word, data]) => {
@@ -265,7 +275,7 @@ window.loadAdvancedStats = function() {
                         <span style="overflow:hidden; text-overflow:ellipsis;"><b>${word}</b> (${count})</span>
                         <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${word}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
                     </div>
-                    <div style="font-size:0.7em; color:var(--hint-color);">Velocità errore: ${avgWpm} WPM</div>
+                    <div style="font-size:0.7em; color:var(--hint-color);">Velocità: ${avgWpm} WPM</div>
                 `;
                 wordContainer.appendChild(div);
             });
@@ -318,7 +328,7 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
     if (myTeamId) await db.ref(`teams/${myTeamId}/members/${userId}`).update({ name: newName, username: newUsername });
 };
 
-// --- LOGICA SALVATAGGIO ERRORI AVANZATI (Chiamata da game_core.js) ---
+// --- LOGICA SALVATAGGIO ERRORI AVANZATI ---
 
 window.trackAdvancedErrors = function(realWord, userWord, wpm) {
     if (!myId) return;
@@ -332,22 +342,29 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
         const real = realWord.toUpperCase();
         const typed = userWord.toUpperCase();
 
-        // 1. Tracciamento Bigrammi (coppie consecutive sbagliate)
+        // 1. Tracciamento Bigrammi
         for (let i = 0; i < real.length - 1; i++) {
             const pair = real.substring(i, i + 2);
             if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
                 const oldData = stats.bigramErrors[pair] || { count: 0, avgWpm: 0 };
-                const newCount = (oldData.count || (typeof oldData === 'number' ? oldData : 0)) + 1;
-                const newWpm = Math.round(((oldData.avgWpm || wpm) + wpm) / 2);
+                const oldCount = oldData.count || (typeof oldData === 'number' ? oldData : 0);
+                const oldWpm = oldData.avgWpm || wpm;
+
+                const newCount = oldCount + 1;
+                // Media mobile WPM
+                const newWpm = Math.round(((oldWpm * oldCount) + wpm) / newCount);
                 stats.bigramErrors[pair] = { count: newCount, avgWpm: newWpm };
             }
         }
 
-        // 2. Tracciamento Parola Intera
+        // 2. Tracciamento Parola
         if (real !== typed) {
             const oldData = stats.wordErrors[real] || { count: 0, avgWpm: 0 };
-            const newCount = (oldData.count || (typeof oldData === 'number' ? oldData : 0)) + 1;
-            const newWpm = Math.round(((oldData.avgWpm || wpm) + wpm) / 2);
+            const oldCount = oldData.count || (typeof oldData === 'number' ? oldData : 0);
+            const oldWpm = oldData.avgWpm || wpm;
+
+            const newCount = oldCount + 1;
+            const newWpm = Math.round(((oldWpm * oldCount) + wpm) / newCount);
             stats.wordErrors[real] = { count: newCount, avgWpm: newWpm };
         }
 
@@ -388,12 +405,25 @@ if (els.resetStatsBtn) {
     });
 }
 
+document.getElementById('btnResetErrorStats')?.addEventListener('click', () => {
+    if (confirm("Vuoi azzerare solo i dati analitici degli errori (Bigrammi e Parole)? Lo storico rimarrà intatto.")) {
+        db.ref(`users/${myId}/stats/bigramErrors`).remove();
+        db.ref(`users/${myId}/stats/wordErrors`).remove();
+        db.ref(`users/${myId}/stats/charErrors`).remove();
+        showToast("Dati errori azzerati!");
+        window.loadAdvancedStats();
+    }
+});
+
 document.getElementById('btnCreateErrorDict')?.addEventListener('click', () => {
     db.ref(`users/${myId}/stats/wordErrors`).once('value', snap => {
         const words = snap.val() || {};
         const wordTh = parseInt(document.getElementById('wordThresholdInput')?.value) || 3;
         const critical = Object.entries(words)
-            .filter(e => (e[1].count || e[1]) >= wordTh)
+            .filter(e => {
+                const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
+                return count >= wordTh;
+            })
             .map(e => e[0]);
 
         if (critical.length === 0) return showToast(`Non hai ancora abbastanza parole critiche (min. ${wordTh} errori).`);
@@ -402,7 +432,6 @@ document.getElementById('btnCreateErrorDict')?.addEventListener('click', () => {
         localStorage.setItem(STORAGE_CUSTOM_DICT_KEY, JSON.stringify(critical));
         showToast(`✅ Creato dizionario con ${critical.length} parole difficili!`);
         showScreen('setupScreen');
-        // Impostiamo automaticamente il tipo Solo e modo Personale
         if (els.gameTypeInput) els.gameTypeInput.value = 'single';
         if (els.gameModeInput) {
             els.gameModeInput.value = 'custom';

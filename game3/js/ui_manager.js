@@ -3,13 +3,22 @@
 window.populateGameModesUI = function() {
     console.log("UI: Populating Game Modes...");
     const select = document.getElementById('gameModeInput');
-    if (!select) return;
+    const typeInput = document.getElementById('gameTypeInput');
+    if (!select || !typeInput) return;
 
-    const trnGroup = document.getElementById('trn_opt_group');
+    const isSingle = typeInput.value === 'single';
+    const isMulti = typeInput.value === 'multi';
     const currentVal = select.value || 'standard';
+
     select.innerHTML = '';
 
     Object.values(window.GAME_MODES || {}).forEach(mode => {
+        // FILTRO 1: In Solo non mostriamo Ping Pong
+        if (isSingle && mode.id === 'pingpong') return;
+
+        // FILTRO 2: Conquest è solo per CO-OP (gestito in checkGameTypeUI)
+        if (mode.id === 'conquest') return;
+
         const opt = document.createElement('option');
         opt.value = mode.id;
         opt.id = 'txt_opt_' + mode.id;
@@ -17,9 +26,14 @@ window.populateGameModesUI = function() {
         select.appendChild(opt);
     });
 
-    if (trnGroup) select.appendChild(trnGroup);
-    if (window.GAME_MODES && window.GAME_MODES[currentVal]) select.value = currentVal;
-    else select.value = 'standard';
+    // Ripristiniamo il valore se ancora valido, altrimenti standard
+    if (window.GAME_MODES && window.GAME_MODES[currentVal]) {
+        // Se avevamo Ping Pong e passiamo a Solo, resettiamo a standard
+        if (isSingle && currentVal === 'pingpong') select.value = 'standard';
+        else select.value = currentVal;
+    } else {
+        select.value = 'standard';
+    }
 };
 
 window.checkGameTypeUI = function() {
@@ -32,8 +46,7 @@ window.checkGameTypeUI = function() {
     const isTrn = typeInput.value === 'tournament';
     const isCoop = typeInput.value === 'coop';
 
-    const selectedMode = modeInput.value;
-    console.log("UI: State -> Single:", isSingle, "Mode:", selectedMode);
+    const currentVal = modeInput.value;
 
     // Gestione dinamica delle opzioni nel menu "Modo"
     if (isCoop) {
@@ -48,13 +61,12 @@ window.checkGameTypeUI = function() {
         modeInput.innerHTML = trnOptions.map(o => `<option value="${o.val}">${currentLang === 'it' ? o.it : o.en}</option>`).join('');
         if (!modeInput.value.startsWith('trn_')) modeInput.value = "trn_join_team";
     } else {
-        // Ripopolamento standard se non siamo in Co-op o Torneo
-        if (modeInput.options.length < 5) { // Evita ripopolamento continuo se già corretto
-            window.populateGameModesUI();
-        }
+        // Multiplayer o Solo: popoliamo con le modalità standard applicando i filtri
+        window.populateGameModesUI();
     }
 
-    const modeCfg = window.GAME_MODES ? window.GAME_MODES[modeInput.value] : null;
+    const selectedMode = modeInput.value;
+    const modeCfg = window.GAME_MODES ? window.GAME_MODES[selectedMode] : null;
 
     // --- LOGICA VISIBILITÀ OPZIONI ---
     const containers = {
@@ -90,7 +102,7 @@ window.checkGameTypeUI = function() {
         if (containers.spacing) containers.spacing.style.display = 'none';
     }
 
-    if (containers.custom) containers.custom.style.display = (isSingle && modeInput.value === 'custom') ? 'flex' : 'none';
+    if (containers.custom) containers.custom.style.display = (isSingle && selectedMode === 'custom') ? 'flex' : 'none';
     if (containers.spectator) containers.spectator.style.display = isSingle ? 'flex' : 'none';
 
     if (containers.btn) {
