@@ -17,6 +17,11 @@ const OPERATOR_TITLES = [
 ];
 
 window.initProgression = function() {
+    if (!myId) {
+        console.warn("Progression: myId not ready, retrying...");
+        setTimeout(window.initProgression, 500);
+        return;
+    }
     db.ref(`users/${myId}/progression`).on('value', snap => {
         const data = snap.val() || { xp: 0, level: 1, dailyMissions: {} };
         window.userProgression = data;

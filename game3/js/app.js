@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.212";
+const APP_VERSION = "20260807.220";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -232,10 +232,10 @@ function initGame() {
         };
     }
 
-    auth.signInAnonymously().then(async (userCredential) => {
-        const user = userCredential.user;
-        myId = user.uid; // Assicura che l'UID sia quello ufficiale di Firebase
-        console.log("CW Game: Auth success, UID:", myId);
+    auth.signInAnonymously().then(async () => {
+        // Ripristiniamo l'ID Telegram come ID primario per coerenza profilo
+        myId = tgUser.id.toString();
+        console.log("CW Game: Auth success, Telegram ID:", myId);
         const userRef = db.ref(`users/${myId}`);
         const snap = await userRef.once('value');
         const data = snap.val() || {};
