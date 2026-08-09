@@ -62,6 +62,8 @@ window.showScreen = function(screenId) {
         } else {
             activeChatContext = null;
         }
+    } else if (screenId === 'leaderboardScreen') {
+        if (typeof window.switchLBGroup === 'function') window.switchLBGroup('daily');
     } else if (screenId === 'teamsScreen') {
         activeChatContext = 'team';
         if (typeof window.checkMyTeamStatus === 'function') window.checkMyTeamStatus();
