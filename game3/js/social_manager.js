@@ -273,6 +273,37 @@ window.openInviteModal = function(targetId, targetName) {
     if (els.incomingTeamInviteArea) els.incomingTeamInviteArea.style.display = 'none';
     if (els.outgoingInviteArea) els.outgoingInviteArea.style.display = 'block';
     if (els.inviteModal) els.inviteModal.style.display = 'flex';
+
+    // Rileghiamo il pulsante di invio per essere sicuri che usi i dati corretti
+    if (els.sendInviteBtn) {
+        els.sendInviteBtn.onclick = () => {
+            const modeInput = document.getElementById('inviteModeInput');
+            const wpmInput = document.getElementById('inviteWpmInput');
+            const wcInput = document.getElementById('inviteWordCountInput');
+
+            const mode = modeInput ? modeInput.value : 'standard';
+            const wpm = wpmInput ? parseInt(wpmInput.value) : 20;
+            const wordCount = wcInput ? parseInt(wcInput.value) : 10;
+
+            console.log("RPG: Sending Game Invite to:", targetId, "Mode:", mode);
+
+            db.ref(`invites/${targetId}`).set({
+                fromId: myId,
+                fromName: myName,
+                type: 'game',
+                mode: mode,
+                wpm: wpm,
+                wordCount: wordCount,
+                ts: firebase.database.ServerValue.TIMESTAMP
+            }).then(() => {
+                showToast("Sfida inviata a " + targetName + " 🚀");
+                isChallenging = true;
+                window.closeInviteModal();
+            }).catch(err => {
+                showToast("Errore invio: " + err.message);
+            });
+        };
+    }
 };
 
 window.openTeamInviteModal = async function(targetId, targetName) {
@@ -391,13 +422,14 @@ window.listenToInvites = function() {
         } else {
             if (els.inviteModalTitle) els.inviteModalTitle.textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
             if (els.inviteModalText) {
+                els.inviteModalText.innerHTML = '';
                 els.inviteModalText.appendChild(document.createTextNode("Ti ha invitato a giocare:"));
                 els.inviteModalText.appendChild(document.createElement('br'));
-                const bMode = document.createElement('b'); bMode.textContent = inv.mode.toUpperCase(); els.inviteModalText.appendChild(bMode);
+                const bMode = document.createElement('b'); bMode.textContent = (inv.mode || 'standard').toUpperCase(); els.inviteModalText.appendChild(bMode);
                 els.inviteModalText.appendChild(document.createTextNode(" a "));
-                const bWpm = document.createElement('b'); bWpm.textContent = inv.wpm; els.inviteModalText.appendChild(bWpm);
+                const bWpm = document.createElement('b'); bWpm.textContent = inv.wpm || 20; els.inviteModalText.appendChild(bWpm);
                 els.inviteModalText.appendChild(document.createTextNode(" WPM ("));
-                const bCount = document.createElement('b'); bCount.textContent = inv.wordCount; els.inviteModalText.appendChild(bCount);
+                const bCount = document.createElement('b'); bCount.textContent = inv.wordCount || 10; els.inviteModalText.appendChild(bCount);
                 els.inviteModalText.appendChild(document.createTextNode(" test)."));
             }
 
@@ -406,6 +438,40 @@ window.listenToInvites = function() {
             if (els.incomingInviteArea) els.incomingInviteArea.style.display = 'block';
             if (els.incomingTeamInviteArea) els.incomingTeamInviteArea.style.display = 'none';
             if (els.outgoingInviteArea) els.outgoingInviteArea.style.display = 'none';
+            if (els.acceptInviteBtn) {
+                els.acceptInviteBtn.onclick = () => {
+                    const roomCodeNew = Math.floor(1000 + Math.random() * 9000).toString();
+                    const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard');
+
+                    db.ref(`rooms/${roomCodeNew}`).set({
+                        status: 'countdown',
+                        type: 'multi',
+                        mode: inv.mode || 'standard',
+                        wpm: inv.wpm || 20,
+                        tone: 600,
+                        wordCount: inv.wordCount || 10,
+                        words: words,
+                        createdAt: firebase.database.ServerValue.TIMESTAMP,
+                        hostId: inv.fromId
+                    }).then(() => {
+                        db.ref(`invite_accepted/${inv.fromId}`).set({
+                            roomCode: roomCodeNew,
+                            ts: firebase.database.ServerValue.TIMESTAMP
+                        });
+                        db.ref(`invites/${myId}`).remove();
+                        window.closeInviteModal();
+                        roomCode = roomCodeNew;
+                        window.joinRoomLogic(false);
+                    });
+                };
+            }
+
+            if (els.declineInviteBtn) {
+                els.declineInviteBtn.onclick = () => {
+                    db.ref(`invites/${myId}`).remove();
+                    window.closeInviteModal();
+                };
+            }
         }
 
         if (els.inviteModal) els.inviteModal.style.display = 'flex';
