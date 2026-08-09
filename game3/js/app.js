@@ -297,8 +297,13 @@ function initGame() {
         window.loadRegolamento();
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
-        if (els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
-        if (els.appVersionFooter) els.appVersionFooter.textContent = APP_VERSION;
+        const updateVers = () => {
+            if (els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
+            const footer = document.getElementById('appVersionFooter');
+            if (footer) footer.textContent = APP_VERSION;
+        };
+        updateVers();
+        setTimeout(updateVers, 1500); // Forza dopo caricamento altri script
 
         db.ref('appConfig/latestVersion').on('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
