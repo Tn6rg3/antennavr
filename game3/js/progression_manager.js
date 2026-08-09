@@ -17,17 +17,22 @@ const OPERATOR_TITLES = [
 ];
 
 window.initProgression = function() {
+    console.log("RPG: Initializing progression for ID:", myId);
     if (!myId) {
-        console.warn("Progression: myId not ready, retrying...");
+        console.warn("RPG: myId not ready, retrying...");
         setTimeout(window.initProgression, 500);
         return;
     }
+
     db.ref(`users/${myId}/progression`).on('value', snap => {
         const data = snap.val() || { xp: 0, level: 1, dailyMissions: {} };
+        console.log("RPG: Data received from Firebase:", data);
         window.userProgression = data;
         window.renderXPBar();
         window.checkDailyMissionsStatus();
         window.updateMissionsBadge();
+    }, err => {
+        console.error("RPG: Firebase Permission/Read Error:", err);
     });
 };
 
@@ -37,7 +42,6 @@ window.addXP = function(amount, reason = "") {
         if (!curr) curr = { xp: 0, level: 1 };
         curr.xp = (curr.xp || 0) + amount;
 
-        // Calcolo Livello (Progressione Esponenziale semplice)
         let needed = window.getXPForNextLevel(curr.level);
         while (curr.xp >= needed) {
             curr.xp -= needed;
@@ -60,29 +64,26 @@ window.renderXPBar = function() {
     const needed = window.getXPForNextLevel(data.level);
     const perc = Math.min(100, (data.xp / needed) * 100);
 
-    const titleObj = [...OPERATOR_TITLES].reverse().find(t => data.level >= t.level);
+    const reversedTitles = [...OPERATOR_TITLES].reverse();
+    const titleObj = reversedTitles.find(t => data.level >= t.level) || OPERATOR_TITLES[0];
     const titleText = currentLang === 'it' ? titleObj.it : titleObj.en;
 
-    if (els.xpBarFill) {
-        els.xpBarFill.style.width = perc + "%";
-    }
-    if (els.userLevelDisplay) {
-        els.userLevelDisplay.textContent = `Liv. ${data.level}`;
-    }
-    if (els.userTitleDisplay) {
-        els.userTitleDisplay.textContent = titleText;
-    }
-    if (els.xpTextDisplay) {
-        els.xpTextDisplay.textContent = `${Math.floor(data.xp)} / ${needed} XP`;
-    }
+    const fill = document.getElementById('xpBarFill');
+    const lvDisp = document.getElementById('userLevelDisplay');
+    const titleDisp = document.getElementById('userTitleDisplay');
+    const xpDisp = document.getElementById('xpTextDisplay');
+
+    if (fill) fill.style.width = perc + "%";
+    if (lvDisp) lvDisp.textContent = `Liv. ${data.level}`;
+    if (titleDisp) titleDisp.textContent = titleText;
+    if (xpDisp) xpDisp.textContent = `${Math.floor(data.xp)} / ${needed} XP`;
 };
 
 window.showLevelUpOverlay = function(newLevel) {
-    const titleObj = [...OPERATOR_TITLES].reverse().find(t => newLevel >= t.level);
+    const reversedTitles = [...OPERATOR_TITLES].reverse();
+    const titleObj = reversedTitles.find(t => newLevel >= t.level) || OPERATOR_TITLES[0];
     const titleText = currentLang === 'it' ? titleObj.it : titleObj.en;
-
     showToast(`🆙 LIVELLO SUPERATO! Sei ora Livello ${newLevel}: ${titleText}`);
-    // Potremmo aggiungere un effetto grafico dedicato
 };
 
 // --- DAILY MISSIONS ---
@@ -164,12 +165,13 @@ window.checkDailyMissionsStatus = function() {
 };
 
 window.renderMissionsUI = function() {
-    if (!els.missionsContainer) return;
+    const container = document.getElementById('missionsContainer');
+    if (!container) return;
     const missions = window.userProgression?.dailyMissions?.list || [];
-    els.missionsContainer.innerHTML = '';
+    container.innerHTML = '';
 
     if (missions.length === 0) {
-        els.missionsContainer.innerHTML = '<p style="text-align:center; color:var(--hint-color); font-size:0.8em;">Nessuna missione disponibile.</p>';
+        container.innerHTML = '<p style="text-align:center; color:var(--hint-color); font-size:0.8em;">Nessuna missione disponibile.</p>';
         window.updateMissionsBadge();
         return;
     }
@@ -191,20 +193,21 @@ window.renderMissionsUI = function() {
             </div>
             <div style="text-align:right; font-size:0.7em; color:var(--hint-color); margin-top:2px;">${m.current}/${m.target}</div>
         `;
-        els.missionsContainer.appendChild(div);
+        container.appendChild(div);
     });
     window.updateMissionsBadge();
 };
 
 window.updateMissionsBadge = function() {
-    if (!els.missionsBadge) return;
+    const badge = document.getElementById('missionsBadge');
+    if (!badge) return;
     const missions = window.userProgression?.dailyMissions?.list || [];
     const pendingCount = missions.filter(m => !m.completed).length;
 
     if (pendingCount > 0) {
-        els.missionsBadge.style.display = 'flex';
-        els.missionsBadge.textContent = pendingCount;
+        badge.style.display = 'flex';
+        badge.textContent = pendingCount;
     } else {
-        els.missionsBadge.style.display = 'none';
+        badge.style.display = 'none';
     }
 };
