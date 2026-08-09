@@ -204,27 +204,42 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10; }
 #lbCategoryTabs {
     display: flex;
     flex-direction: row;
-    gap: 6px;
+    gap: 4px;
     width: 100%;
-    margin-bottom: 25px !important;
-    overflow-x: auto;
-    padding: 10px 2px;
-    flex-wrap: nowrap; /* Forza l'orizzontale */
-    -webkit-overflow-scrolling: touch;
+    margin-bottom: 20px !important;
+    padding: 2px 0;
+    flex-wrap: nowrap; /* Sempre affiancati */
     position: relative;
     z-index: 100;
 }
 #lbCategoryTabs .tab-btn {
-    flex: 1 0 auto; /* Impedisce che si rimpiccioliscano troppo */
-    min-width: 85px;
-    font-size: 0.8em;
-    padding: 8px 4px;
+    flex: 1; /* Distribuisce lo spazio equamente */
+    min-width: 0; /* Permette di restringersi se necessario */
+    font-size: 0.75em;
+    padding: 8px 2px;
+    white-space: nowrap;
 }
 #lbSubModeArea {
-    margin-top: 15px;
+    margin-top: 10px;
     position: relative;
     z-index: 50;
     width: 100%;
+    clear: both;
+}
+
+/* =========================================================
+   SCROLLING STORICO PARTITE (Profilo)
+   ========================================================= */
+#matchHistoryContainer {
+    max-height: 220px; /* Altezza per circa 3 partite */
+    overflow-y: auto;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.05);
+    padding: 2px;
+    -webkit-overflow-scrolling: touch;
+}
+.data-list#matchHistoryList li {
+    margin-bottom: 6px;
 }
 #lbModeSelect {
     margin: 5px 0;
