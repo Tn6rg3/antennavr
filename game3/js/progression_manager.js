@@ -100,6 +100,11 @@ window.generateDailyMissions = function() {
             db.ref(`users/${myId}/progression/dailyMissions`).set({
                 date: today,
                 list: missions
+            }).then(() => {
+                if (window.userProgression) {
+                    window.userProgression.dailyMissions = { date: today, list: missions };
+                    window.renderMissionsUI();
+                }
             });
         }
     });
@@ -153,14 +158,21 @@ window.checkDailyMissionsStatus = function() {
     const today = new Date().toISOString().split('T')[0];
     if (window.userProgression?.dailyMissions?.date !== today) {
         window.generateDailyMissions();
+    } else {
+        window.renderMissionsUI();
     }
-    window.renderMissionsUI();
 };
 
 window.renderMissionsUI = function() {
     if (!els.missionsContainer) return;
     const missions = window.userProgression?.dailyMissions?.list || [];
     els.missionsContainer.innerHTML = '';
+
+    if (missions.length === 0) {
+        els.missionsContainer.innerHTML = '<p style="text-align:center; color:var(--hint-color); font-size:0.8em;">Nessuna missione disponibile.</p>';
+        window.updateMissionsBadge();
+        return;
+    }
 
     missions.forEach(m => {
         const div = document.createElement('div');
