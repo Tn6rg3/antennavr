@@ -203,18 +203,25 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10; }
 /* Fix specifico per evitare che il select copra i tab */
 #lbCategoryTabs {
     display: flex;
+    flex-direction: row;
     gap: 6px;
     width: 100%;
-    margin-bottom: 20px !important;
+    margin-bottom: 25px !important;
     overflow-x: auto;
     padding: 10px 2px;
-    flex-wrap: nowrap;
+    flex-wrap: nowrap; /* Forza l'orizzontale */
     -webkit-overflow-scrolling: touch;
     position: relative;
     z-index: 100;
 }
+#lbCategoryTabs .tab-btn {
+    flex: 1 0 auto; /* Impedisce che si rimpiccioliscano troppo */
+    min-width: 85px;
+    font-size: 0.8em;
+    padding: 8px 4px;
+}
 #lbSubModeArea {
-    margin-top: 10px;
+    margin-top: 15px;
     position: relative;
     z-index: 50;
     width: 100%;
