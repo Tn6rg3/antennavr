@@ -349,8 +349,9 @@
             </div>
         </div>
 
-        <div class="box-panel" style="margin-top:8px; flex-shrink:0;">
-            <button id="btnCreateErrorDict" class="btn-success" style="font-size:0.85em; padding:10px;">🛠️ Crea Allenamento su Parole Critiche</button>
+        <div class="box-panel" style="margin-top:8px; flex-shrink:0; flex-direction:row; gap:6px;">
+            <button id="btnCreateErrorDict" class="btn-success" style="font-size:0.85em; padding:10px; flex:2;">🛠️ Allenamento Parole Critiche</button>
+            <button id="btnResetErrorStats" class="btn-danger" style="font-size:0.85em; padding:10px; flex:1;">🗑️ Reset Dati</button>
         </div>
     </div>
 
@@ -672,16 +673,16 @@
     <p id="waitingOthersText" style="text-align: center; font-style: italic; color: #ff9800; display: none; font-weight: bold; margin-bottom: 5px;">⏳ In attesa degli altri...</p>
 
     <!-- NUOVA STRUTTURA CATEGORIE CLASSIFICA -->
-    <div id="lbCategoryTabs" style="display:flex; gap:5px; width:100%; margin-bottom:10px; flex-wrap:nowrap; overflow-x:auto; padding-bottom:5px;">
-        <button id="tabDailyLB" class="tab-btn active-tab" onclick="switchLBGroup('daily')" style="flex:1; min-width:80px; font-size:0.8em; padding:8px 4px;">📅 Daily</button>
-        <button id="tabMultiLB" class="tab-btn" onclick="switchLBGroup('multi')" style="flex:1; min-width:80px; font-size:0.8em; padding:8px 4px;">⚔️ Sfide</button>
-        <button id="tabSingleLB" class="tab-btn" onclick="switchLBGroup('single')" style="flex:1; min-width:80px; font-size:0.8em; padding:8px 4px;">👤 Solo</button>
-        <button id="tabSpecialLB" class="tab-btn" onclick="switchLBGroup('special')" style="flex:1; min-width:80px; font-size:0.8em; padding:8px 4px;">🎙️ Special</button>
+    <div id="lbCategoryTabs">
+        <button id="tabDailyLB" class="tab-btn active-tab" onclick="switchLBGroup('daily')">📅 Daily</button>
+        <button id="tabMultiLB" class="tab-btn" onclick="switchLBGroup('multi')">⚔️ Sfide</button>
+        <button id="tabSingleLB" class="tab-btn" onclick="switchLBGroup('single')">👤 Solo</button>
+        <button id="tabSpecialLB" class="tab-btn" onclick="switchLBGroup('special')">🎙️ Special</button>
     </div>
 
     <!-- Selettore Sotto-Modo Dinamico -->
-    <div id="lbSubModeArea" style="width:100%; margin-bottom:8px;">
-        <select id="lbModeSelect" style="padding: 10px; font-weight: bold; border: 2px solid var(--link-color); width:100%; border-radius:8px; background:var(--sec-bg-color); color:var(--text-color);">
+    <div id="lbSubModeArea">
+        <select id="lbModeSelect">
             <!-- Popolato dinamicamente da leaderboard_manager.js -->
         </select>
     </div>
