@@ -197,12 +197,27 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10; }
    TAB BAR, SCHEDE & OPZIONI DI GIOCO
    ========================================================= */
 .tab-buttons { display: flex; width: 100%; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; justify-content: space-between; flex-shrink: 0; }
-.tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 8px; font-size: 0.8em; border-radius: 8px; flex: 1 1 30%; text-align: center; flex-shrink: 0; }
+.tab-btn { background-color: var(--hint-color); color: var(--bg-color); margin: 0; padding: 8px; font-size: 0.8em; border-radius: 8px; flex: 1 1 30%; text-align: center; flex-shrink: 0; border: none; cursor: pointer; }
 .tab-btn.active-tab { background-color: var(--btn-color); color: var(--btn-text-color); box-shadow: inset 0 0 5px rgba(0,0,0,0.2); }
-#tabGlobalCWFreakBtn.active-tab { background-color: #9c27b0; }
-#tabGlobalCWFreakBtn { background-color: #ce93d8; color: #fff; }
-#tabGlobalPingPongBtn.active-tab { background-color: #f44336; }
-#tabGlobalPingPongBtn { background-color: #ef9a9a; color: #fff; }
+
+/* Fix specifico per evitare che il select copra i tab */
+#lbCategoryTabs {
+    padding: 2px 0;
+    z-index: 10;
+}
+#lbSubModeArea {
+    margin-top: 5px;
+    position: relative;
+    z-index: 5;
+}
+#lbModeSelect {
+    margin: 5px 0;
+    border: 2px solid var(--link-color);
+    background: var(--bg-color);
+    color: var(--text-color);
+    border-radius: 8px;
+    padding: 10px;
+}
 
 /* =========================================================
    MODALITÀ CO-OP CONQUISTA
