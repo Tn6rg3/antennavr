@@ -28,6 +28,27 @@ window.initProgression = function() {
         const data = snap.val() || { xp: 0, level: 1, dailyMissions: {} };
         console.log("RPG: Data received from Firebase:", data);
         window.userProgression = data;
+
+        // --- LOGICA AUTO-LEVEL UP (Se XP > Needed) ---
+        let level = data.level || 1;
+        let xp = data.xp || 0;
+        let needed = window.getXPForNextLevel(level);
+        let changed = false;
+
+        while (xp >= needed && level < 100) {
+            xp -= (needed); // Sottraiamo l'XP usato per il livello attuale
+            level++;
+            needed = window.getXPForNextLevel(level);
+            changed = true;
+        }
+
+        if (changed) {
+            console.log("RPG: Auto-leveling user to:", level, "with remainder XP:", xp);
+            db.ref(`users/${myId}/progression`).update({ level: level, xp: xp });
+            window.showLevelUpOverlay(level);
+            return;
+        }
+
         window.renderXPBar();
         window.checkDailyMissionsStatus();
         window.updateMissionsBadge();
@@ -181,17 +202,22 @@ window.renderMissionsUI = function() {
     missions.forEach(m => {
         const div = document.createElement('div');
         div.className = 'mission-item' + (m.completed ? ' completed' : '');
-        div.style.cssText = "background:var(--sec-bg-color); padding:8px; border-radius:8px; margin-bottom:5px; border-left:4px solid " + (m.completed ? "#4caf50" : "#ff9800");
+
+        // Colore dinamico in base allo stato
+        const borderColor = m.completed ? "#4caf50" : "#ff9800";
+        const bgColor = m.completed ? "rgba(76, 175, 80, 0.1)" : "var(--sec-bg-color)";
+
+        div.style.cssText = `background:${bgColor}; padding:8px; border-radius:8px; margin-bottom:5px; border-left:4px solid ${borderColor}; transition: all 0.3s ease;`;
 
         const perc = Math.min(100, (m.current / m.target) * 100);
 
         div.innerHTML = `
-            <div style="display:flex; justify-content:space-between; font-size:0.85em; margin-bottom:4px;">
-                <span>${currentLang === 'it' ? m.it : m.en}</span>
-                <b style="color:var(--champ-color)">+${m.xp} XP</b>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.85em; margin-bottom:4px;">
+                <span style="${m.completed ? 'text-decoration: line-through; opacity: 0.7;' : ''}">${currentLang === 'it' ? m.it : m.en}</span>
+                <b style="color:${m.completed ? '#4caf50' : 'var(--champ-color)'}">${m.completed ? '✅ FATTO' : '+' + m.xp + ' XP'}</b>
             </div>
             <div style="width:100%; height:6px; background:var(--bg-color); border-radius:3px; overflow:hidden;">
-                <div style="width:${perc}%; height:100%; background:${m.completed ? "#4caf50" : "#ff9800"};"></div>
+                <div style="width:${perc}%; height:100%; background:${borderColor}; transition: width 0.5s ease;"></div>
             </div>
             <div style="text-align:right; font-size:0.7em; color:var(--hint-color); margin-top:2px;">${m.current}/${m.target}</div>
         `;
@@ -207,7 +233,11 @@ window.updateMissionsBadge = function() {
     const pendingCount = missions.filter(m => !m.completed).length;
 
     if (pendingCount > 0) {
-        badge.style.setProperty('display', 'flex', 'important');
+        badge.style.display = 'flex';
+        badge.style.position = 'absolute';
+        badge.style.top = '-5px';
+        badge.style.right = '-5px';
+        badge.style.zIndex = '999';
         badge.textContent = pendingCount;
     } else {
         badge.style.display = 'none';
