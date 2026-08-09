@@ -137,9 +137,9 @@ window.setLanguage = function(lang) {
         if (els[key]) els[key].textContent = textMap[key];
     }
 
-    if (els.txt_lb_btn) els.txt_lb_btn.textContent = "🏆 " + t.lb;
-    if (els.txt_profile_btn) els.txt_profile_btn.textContent = "👤 " + t.profile;
-    if (els.txt_act_btn) els.txt_act_btn.textContent = "🏅 " + t.activity;
+    if (els.txt_lb_btn_label) els.txt_lb_btn_label.textContent = "🏆 " + t.lb;
+    if (els.txt_profile_btn_label) els.txt_profile_btn_label.textContent = "👤 " + t.profile;
+    if (els.txt_act_btn_label) els.txt_act_btn_label.textContent = "🏅 " + t.activity;
 
     window.populateGameModesUI();
     window.checkGameTypeUI();

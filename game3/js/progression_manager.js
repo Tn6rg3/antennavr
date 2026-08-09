@@ -228,10 +228,15 @@ window.renderMissionsUI = function() {
 
 window.updateMissionsBadge = function() {
     const badge = document.getElementById('missionsBadge');
-    if (!badge) return;
+    if (!badge) {
+        console.warn("RPG: Badge element not found during update");
+        return;
+    }
 
     const missions = window.userProgression?.dailyMissions?.list || [];
     const pendingCount = missions.filter(m => !m.completed).length;
+
+    console.log("RPG: Updating badge, pending count:", pendingCount);
 
     if (pendingCount > 0) {
         badge.textContent = pendingCount;
