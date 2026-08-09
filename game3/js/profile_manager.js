@@ -141,16 +141,17 @@ window.switchProfileTab = function(tabId) {
     const statsArea = document.getElementById('profileStatsArea');
 
     if (tabId === 'info') {
-        infoBtn.classList.add('active-tab');
-        statsBtn.classList.remove('active-tab');
-        infoArea.style.display = 'flex';
-        statsArea.style.display = 'none';
-        window.loadProfileInfo();
+        // ... (info)
     } else {
         infoBtn.classList.remove('active-tab');
         statsBtn.classList.add('active-tab');
         infoArea.style.display = 'none';
         statsArea.style.display = 'flex';
+
+        // Listener per aggiornamento dinamico soglie
+        document.getElementById('bigramThresholdInput')?.addEventListener('change', window.loadAdvancedStats);
+        document.getElementById('wordThresholdInput')?.addEventListener('change', window.loadAdvancedStats);
+
         window.loadAdvancedStats();
     }
 };
@@ -197,6 +198,9 @@ window.loadAdvancedStats = function() {
     const bigramContainer = document.getElementById('bigramErrorsContainer');
     const wordContainer = document.getElementById('wordErrorsContainer');
 
+    const bigramTh = parseInt(document.getElementById('bigramThresholdInput')?.value) || 3;
+    const wordTh = parseInt(document.getElementById('wordThresholdInput')?.value) || 3;
+
     if (wpmContainer) wpmContainer.innerHTML = 'Caricamento...';
     if (bigramContainer) bigramContainer.innerHTML = 'Caricamento...';
     if (wordContainer) wordContainer.innerHTML = 'Caricamento...';
@@ -223,33 +227,45 @@ window.loadAdvancedStats = function() {
         if (bigramContainer) {
             bigramContainer.innerHTML = '';
             const bigrams = stats.bigramErrors || {};
-            const sortedBigrams = Object.entries(bigrams).sort((a,b) => b[1] - a[1]).slice(0, 15);
-            if (sortedBigrams.length === 0) bigramContainer.innerHTML = '<p style="text-align:center; opacity:0.6; font-size:0.8em;">Nessuna coppia rilevata.</p>';
-            sortedBigrams.forEach(([pair, count]) => {
+            const filteredBigrams = Object.entries(bigrams).filter(e => (e[1].count || e[1]) >= bigramTh).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 20);
+
+            if (filteredBigrams.length === 0) bigramContainer.innerHTML = '<p style="text-align:center; opacity:0.6; font-size:0.8em;">Sotto soglia.</p>';
+            filteredBigrams.forEach(([pair, data]) => {
+                const count = data.count || data;
+                const avgWpm = data.avgWpm || 20;
                 const div = document.createElement('div');
                 div.className = 'leaderboard-row';
-                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.9em;";
+                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start;";
                 div.innerHTML = `
-                    <span><b>${pair}</b> (${count})</span>
-                    <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${pair}', 18, true)" style="width:30px; padding:2px 0;">🔊</button>
+                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                        <span><b>${pair}</b> (${count})</span>
+                        <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${pair}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
+                    </div>
+                    <div style="font-size:0.7em; color:var(--hint-color);">Velocità errore: ${avgWpm} WPM</div>
                 `;
                 bigramContainer.appendChild(div);
             });
         }
 
-        // 3. Parole Critiche (> 3 volte)
+        // 3. Parole Critiche
         if (wordContainer) {
             wordContainer.innerHTML = '';
             const words = stats.wordErrors || {};
-            const criticalWords = Object.entries(words).filter(e => e[1] >= 3).sort((a,b) => b[1] - a[1]);
-            if (criticalWords.length === 0) wordContainer.innerHTML = '<p style="text-align:center; opacity:0.6; font-size:0.8em;">Nessuna parola ricorrente.</p>';
-            criticalWords.forEach(([word, count]) => {
+            const criticalWords = Object.entries(words).filter(e => (e[1].count || e[1]) >= wordTh).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1]));
+
+            if (criticalWords.length === 0) wordContainer.innerHTML = '<p style="text-align:center; opacity:0.6; font-size:0.8em;">Sotto soglia.</p>';
+            criticalWords.forEach(([word, data]) => {
+                const count = data.count || data;
+                const avgWpm = data.avgWpm || 20;
                 const div = document.createElement('div');
                 div.className = 'leaderboard-row';
-                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.9em;";
+                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start;";
                 div.innerHTML = `
-                    <span style="overflow:hidden; text-overflow:ellipsis;"><b>${word}</b> (${count})</span>
-                    <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${word}', 20, true)" style="width:30px; padding:2px 0;">🔊</button>
+                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                        <span style="overflow:hidden; text-overflow:ellipsis;"><b>${word}</b> (${count})</span>
+                        <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${word}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
+                    </div>
+                    <div style="font-size:0.7em; color:var(--hint-color);">Velocità errore: ${avgWpm} WPM</div>
                 `;
                 wordContainer.appendChild(div);
             });
@@ -319,15 +335,20 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
         // 1. Tracciamento Bigrammi (coppie consecutive sbagliate)
         for (let i = 0; i < real.length - 1; i++) {
             const pair = real.substring(i, i + 2);
-            // Se la coppia nel punto i e i+1 è stata digitata male
             if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
-                stats.bigramErrors[pair] = (stats.bigramErrors[pair] || 0) + 1;
+                const oldData = stats.bigramErrors[pair] || { count: 0, avgWpm: 0 };
+                const newCount = (oldData.count || (typeof oldData === 'number' ? oldData : 0)) + 1;
+                const newWpm = Math.round(((oldData.avgWpm || wpm) + wpm) / 2);
+                stats.bigramErrors[pair] = { count: newCount, avgWpm: newWpm };
             }
         }
 
         // 2. Tracciamento Parola Intera
         if (real !== typed) {
-            stats.wordErrors[real] = (stats.wordErrors[real] || 0) + 1;
+            const oldData = stats.wordErrors[real] || { count: 0, avgWpm: 0 };
+            const newCount = (oldData.count || (typeof oldData === 'number' ? oldData : 0)) + 1;
+            const newWpm = Math.round(((oldData.avgWpm || wpm) + wpm) / 2);
+            stats.wordErrors[real] = { count: newCount, avgWpm: newWpm };
         }
 
         statsRef.update(stats);
@@ -370,8 +391,12 @@ if (els.resetStatsBtn) {
 document.getElementById('btnCreateErrorDict')?.addEventListener('click', () => {
     db.ref(`users/${myId}/stats/wordErrors`).once('value', snap => {
         const words = snap.val() || {};
-        const critical = Object.entries(words).filter(e => e[1] >= 3).map(e => e[0]);
-        if (critical.length === 0) return showToast("Non hai ancora abbastanza parole critiche (min. 3 errori).");
+        const wordTh = parseInt(document.getElementById('wordThresholdInput')?.value) || 3;
+        const critical = Object.entries(words)
+            .filter(e => (e[1].count || e[1]) >= wordTh)
+            .map(e => e[0]);
+
+        if (critical.length === 0) return showToast(`Non hai ancora abbastanza parole critiche (min. ${wordTh} errori).`);
 
         window.customDictionary = critical;
         localStorage.setItem(STORAGE_CUSTOM_DICT_KEY, JSON.stringify(critical));
