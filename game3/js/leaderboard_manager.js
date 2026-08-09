@@ -81,7 +81,7 @@ window.showLeaderboardTab = function(modeValue) {
 
         if (isMulti) {
             // Le "Sfide" Multi mostrano la cronologia dei match (recent_matches)
-            window.populateDynamicFilters(`recent_matches/${baseMode}${isMulti?'_multi':''}`, '');
+            window.populateDynamicFilters(`recent_matches/${baseMode}${isMulti && baseMode !== 'pingpong' ? '_multi' : ''}`, '');
             window.fetchAndRenderGlobalLeaderboard(modeValue, filterVal);
         } else {
             // Le classifiche "Solo" mostrano i record individuali (leaderboard/MODE/single_COUNT)
@@ -136,6 +136,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
 
     // 2. SFIDE MULTIPLAYER (Cronologia Match)
     if (tabType.endsWith('_multi') || tabType === 'pingpong') {
+        // Correzione Radice: i dati sono in leaderboard/recent_matches/MODE/WORDCOUNT/MATCHID
         const dbPath = `leaderboard/recent_matches/${tabType}`;
         console.log("LB: Fetching Multi from:", dbPath, "Filter:", filterWordCount);
 
@@ -147,7 +148,11 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
                     if (filterWordCount === 'all' || wcNode.key === filterWordCount) {
                         wcNode.forEach(mNode => {
                             const val = mNode.val();
-                            if (val) matches.push(val);
+                            if (val) {
+                                // Aggiungiamo metadati per il rendering
+                                val.wordCount = wcNode.key;
+                                matches.push(val);
+                            }
                         });
                     }
                 });
