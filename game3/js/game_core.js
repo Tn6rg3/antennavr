@@ -1093,6 +1093,30 @@ if (els.readyBtn) {
     });
 }
 
+if (els.btnSendPingPong) {
+    els.btnSendPingPong.onclick = function() {
+        const input = document.getElementById('pingPongWordToSend');
+        const val = input ? input.value.trim().toUpperCase() : "";
+        if (!val) return;
+
+        db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
+            if (d && !d.word) {
+                d.word = val;
+                d.wordId = (d.wordId || 0) + 1;
+                d.senderId = myId;
+            }
+            return d;
+        });
+        if (input) input.value = "";
+    };
+}
+
+if (document.getElementById('pingPongWordToSend')) {
+    document.getElementById('pingPongWordToSend').onkeypress = function(e) {
+        if (e.key === 'Enter') els.btnSendPingPong.click();
+    };
+}
+
 window.lostFocusDuringWord = false;
 
 document.addEventListener('visibilitychange', () => {
@@ -1107,7 +1131,31 @@ document.addEventListener('visibilitychange', () => {
         }
         if (typeof startBluetoothKeepAlive === 'function') startBluetoothKeepAlive();
         if (gameRunning && window.lostFocusDuringWord) {
-            window.lostFocusDuringWord = false;
+            if (els.btnSendPingPong) {
+    els.btnSendPingPong.onclick = function() {
+        const input = document.getElementById('pingPongWordToSend');
+        const val = input ? input.value.trim().toUpperCase() : "";
+        if (!val) return;
+
+        db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
+            if (d && !d.word) {
+                d.word = val;
+                d.wordId = (d.wordId || 0) + 1;
+                d.senderId = myId;
+            }
+            return d;
+        });
+        if (input) input.value = "";
+    };
+}
+
+if (document.getElementById('pingPongWordToSend')) {
+    document.getElementById('pingPongWordToSend').onkeypress = function(e) {
+        if (e.key === 'Enter') els.btnSendPingPong.click();
+    };
+}
+
+window.lostFocusDuringWord = false;
             inputActive = false;
             showToast("⚠️ Schermo spento: parola considerata persa!");
 
