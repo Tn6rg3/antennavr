@@ -370,25 +370,23 @@ window.initCourseManager = function() {
 
 window.listenToCourseEnrollment = function() {
     console.log("Course: Listening to global enrollment count...");
-    db.ref('appConfig/courseEnrollmentCount').on('value', snap => {
+    const enrollmentRef = db.ref('appConfig/courseEnrollmentCount');
+    enrollmentRef.on('value', snap => {
         const count = snap.val() || 0;
         console.log("Course: Global enrollment count from DB:", count);
 
-        // Aggiorna tutti i badge possibili (Profilo tab e Menu principale)
-        const badgeIds = ['courseEnrollmentBadge', 'courseEnrollmentBadgeGlobal'];
-        badgeIds.forEach(id => {
-            const badge = document.getElementById(id);
-            if (badge) {
-                badge.textContent = count;
-                if (count > 0) {
-                    badge.style.display = 'flex';
-                    badge.classList.add('badge-active');
-                } else {
-                    badge.style.display = 'none';
-                    badge.classList.remove('badge-active');
-                }
+        const badge = document.getElementById('courseEnrollmentBadgeGlobal');
+        if (badge) {
+            badge.textContent = count;
+            if (count > 0) {
+                // Rimuoviamo display:none inline se presente e usiamo le classi CSS
+                badge.style.display = 'flex';
+                badge.classList.add('badge-active');
+            } else {
+                badge.style.display = 'none';
+                badge.classList.remove('badge-active');
             }
-        });
+        }
     });
 };
 
