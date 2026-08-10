@@ -27,12 +27,14 @@ window.getDefaultCourseData = function() {
         active_plan: false,
         settings: {
             days_per_week: 3,
-            start_wpm: 20,
+            start_wpm: 15,
             farnsworth_wpm: 12,
-            group_spacing: "2.0",
+            group_spacing: "3.0",
+            pause_interval: 60,
+            pause_duration: 10,
             minutes_z2: 10,
-            minutes_work: 15,
-            minutes_long: 30
+            minutes_work: 7,
+            minutes_long: 17
         },
         progress: {
             current_lesson: 2,
@@ -40,7 +42,7 @@ window.getDefaultCourseData = function() {
             last_session_date: "",
             total_xp: 0,
             char_stats: {},
-            last_z2_accuracy: 1.0 // Inizializzato a 100%
+            last_z2_accuracy: 1.0
         },
         current_day_session: null
     };
@@ -118,13 +120,25 @@ window.startCourseSessionSequence = function() {
     window.showScreen('gameArea');
     if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
 
+    window.courseSessionTotalSec = window.courseData.current_day_session.total_seconds;
+    window.courseSessionPauseDuration = parseInt(window.courseData.settings.pause_duration) || 0;
+    window.courseSessionPauseInterval = parseInt(window.courseData.settings.pause_interval) || 60;
+    window.courseSessionNextPauseTs = Date.now() + (window.courseSessionPauseInterval * 1000);
+    window.courseIsPaused = false;
+
     // Inizializziamo il timer della sessione
     window.updateCourseTimerUI();
     courseSessionTimer = setInterval(() => {
         if (!gameRunning || !window.courseData.current_day_session) return;
+        if (window.courseIsPaused) return;
 
         window.courseData.current_day_session.remaining_seconds--;
         window.updateCourseTimerUI();
+
+        // Controllo Trigger Pausa Ricorrente
+        if (window.courseSessionPauseDuration > 0 && Date.now() >= window.courseSessionNextPauseTs) {
+            window.triggerCoursePause();
+        }
 
         if (window.courseData.current_day_session.remaining_seconds <= 0) {
             clearInterval(courseSessionTimer);
@@ -134,6 +148,32 @@ window.startCourseSessionSequence = function() {
 
     setTimeout(() => { if (els.permanentGameInput) els.permanentGameInput.focus(); }, 200);
     setTimeout(() => { if (gameRunning) window.playNextCourseGroup(); }, 800);
+};
+
+window.triggerCoursePause = function() {
+    window.courseIsPaused = true;
+    inputActive = false;
+    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+
+    let timeLeft = window.courseSessionPauseDuration;
+    const updatePauseUI = () => {
+        if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<span style="color:#ff9800">☕ PAUSA: ${timeLeft}s</span>`;
+    };
+
+    updatePauseUI();
+    const pauseInt = setInterval(() => {
+        timeLeft--;
+        if (timeLeft <= 0) {
+            clearInterval(pauseInt);
+            window.courseIsPaused = false;
+            window.courseSessionNextPauseTs = Date.now() + (window.courseSessionPauseInterval * 1000);
+            if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
+            inputActive = true;
+            if (gameRunning) window.playNextCourseGroup();
+        } else {
+            updatePauseUI();
+        }
+    }, 1000);
 };
 
 window.updateCourseTimerUI = function() {
@@ -211,51 +251,72 @@ window.playNextCourseGroup = function() {
 };
 
 window.finishCourseSession = function() {
+    // Calcolo statistiche sessione corrente per il riepilogo
+    const stats = window.courseData.progress.char_stats || {};
+    const currentLesson = window.courseData.progress.current_lesson;
+    const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
+    let totalAttempts = 0, totalErrors = 0;
+    let worstChars = [];
+
+    activeChars.forEach(char => {
+        const s = stats[char] || { attempts: 0, errors: 0 };
+        totalAttempts += s.attempts;
+        totalErrors += s.errors;
+        if (s.attempts > 0 && (s.errors / s.attempts) > 0.2) {
+            worstChars.push({ char, rate: Math.round((s.errors / s.attempts) * 100) });
+        }
+    });
+
+    const accuracy = totalAttempts > 0 ? ((totalAttempts - totalErrors) / totalAttempts) : 1.0;
+
     if (window.courseData.current_day_session.type === 'Z2') {
-        // Calcolo accuratezza sessione per influenzare i prossimi 'Work'
-        const stats = window.courseData.progress.char_stats || {};
-        const activeChars = window.KOCH_SEQUENCE.slice(0, window.courseData.progress.current_lesson);
-        let totalAttempts = 0, totalErrors = 0;
-        activeChars.forEach(char => {
-            const s = stats[char] || { attempts: 0, errors: 0 };
-            totalAttempts += s.attempts;
-            totalErrors += s.errors;
-        });
-        window.courseData.progress.last_z2_accuracy = totalAttempts > 0 ? (totalAttempts - totalErrors) / totalAttempts : 1.0;
+        window.courseData.progress.last_z2_accuracy = accuracy;
     }
 
     window.courseData.current_day_session.completed = true;
     window.courseData.current_day_session.remaining_seconds = 0;
 
     // Segniamo come completato nel piano settimanale
-    const todayIdx = (new Date().getDay() + 6) % 7; // Lunedì = 0
+    const todayIdx = (new Date().getDay() + 6) % 7;
     if (window.courseData.weekly_schedule[todayIdx]) {
         window.courseData.weekly_schedule[todayIdx].completed = true;
     }
 
     // --- LOGICA DI AVANZAMENTO (KOCH) ---
-    const stats = window.courseData.progress.char_stats || {};
-    const currentLesson = window.courseData.progress.current_lesson;
-    const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
-
     let canAdvance = true;
     activeChars.forEach(char => {
         const s = stats[char] || { attempts: 0, errors: 0 };
-        if (s.attempts < 50) canAdvance = false; // Serve un campione minimo
-        else {
-            const accuracy = (s.attempts - s.errors) / s.attempts;
-            if (accuracy < 0.9) canAdvance = false;
-        }
+        if (s.attempts < 50 || (s.attempts - s.errors) / s.attempts < 0.9) canAdvance = false;
     });
 
+    let advanceMsg = "";
     if (canAdvance && currentLesson < window.KOCH_SEQUENCE.length) {
         window.courseData.progress.current_lesson++;
-        alert(`CONGRATULAZIONI! Hai dominato la lezione attuale.\nAggiunto nuovo carattere: ${window.KOCH_SEQUENCE[currentLesson]}`);
+        advanceMsg = `\n\n🚀 NUOVO CARATTERE SBLOCCATO: ${window.KOCH_SEQUENCE[window.courseData.progress.current_lesson - 1]}!`;
     }
 
     window.saveCourseState();
-    alert("Sessione completata! Ottimo lavoro.");
-    window.finishGame();
+
+    // --- MESSAGGIO MOTIVAZIONALE DI FINE SESSIONE ---
+    const quotes = [
+        "Ottimo lavoro! La costanza è la chiave del successo.",
+        "Stai costruendo i tuoi riflessi Morse, continua così!",
+        "Ogni minuto di pratica ti avvicina alla padronanza totale.",
+        "Il tuo 'orecchio' sta migliorando sessione dopo sessione!",
+        "Non mollare! Anche i grandi maestri hanno iniziato da qui."
+    ];
+    const quote = quotes[Math.floor(Math.random() * quotes.length)];
+
+    let focusMsg = "";
+    if (worstChars.length > 0) {
+        focusMsg = `\n\nFocus per la prossima volta: ${worstChars.slice(0,3).map(c => `${c.char} (${c.rate}% err)`).join(", ")}`;
+    }
+
+    setTimeout(() => {
+        const fullMsg = `🏆 SESSIONE COMPLETATA!\n\n${quote}\n\nAccuratezza: ${Math.round(accuracy * 100)}%${advanceMsg}${focusMsg}\n\nTorna domani per la prossima sfida!`;
+        alert(fullMsg);
+        window.finishGame();
+    }, 500);
 };
 
 window.checkWeeklyReview = function() {

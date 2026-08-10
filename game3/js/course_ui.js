@@ -37,7 +37,9 @@ window.renderCourseTabView = function() {
         if (document.getElementById('courseTabDaysInput')) document.getElementById('courseTabDaysInput').value = s.days_per_week;
         if (document.getElementById('courseTabWpmInput')) document.getElementById('courseTabWpmInput').value = s.start_wpm;
         if (document.getElementById('courseTabFarnsworthInput')) document.getElementById('courseTabFarnsworthInput').value = s.farnsworth_wpm;
-        if (document.getElementById('courseTabGroupSpacingInput')) document.getElementById('courseTabGroupSpacingInput').value = s.group_spacing || "2.0";
+        if (document.getElementById('courseTabGroupSpacingInput')) document.getElementById('courseTabGroupSpacingInput').value = s.group_spacing || "3.0";
+        if (document.getElementById('courseTabPauseIntervalInput')) document.getElementById('courseTabPauseIntervalInput').value = s.pause_interval || 60;
+        if (document.getElementById('courseTabPauseDurationInput')) document.getElementById('courseTabPauseDurationInput').value = s.pause_duration || 10;
         if (document.getElementById('courseTabMinZ2')) document.getElementById('courseTabMinZ2').value = s.minutes_z2;
     } else {
         if (initialPrompt) initialPrompt.style.display = 'block';
@@ -175,6 +177,8 @@ window.finishWizard = function() {
         start_wpm: document.getElementById('wizardWpm').value,
         farnsworth_wpm: document.getElementById('wizardFarnsworth').value,
         group_spacing: document.getElementById('wizardGroupSpacing').value,
+        pause_interval: parseInt(document.getElementById('wizardPauseInterval').value) || 60,
+        pause_duration: parseInt(document.getElementById('wizardPauseDuration').value) || 0,
         minutes_z2: z2,
         minutes_work: Math.round(z2 * (20/30)),
         minutes_long: Math.round(z2 * (50/30))
@@ -206,6 +210,8 @@ window.attachCourseEventListeners = function() {
             window.courseData.settings.start_wpm = document.getElementById('courseTabWpmInput').value;
             window.courseData.settings.farnsworth_wpm = document.getElementById('courseTabFarnsworthInput').value;
             window.courseData.settings.group_spacing = document.getElementById('courseTabGroupSpacingInput').value;
+            window.courseData.settings.pause_interval = parseInt(document.getElementById('courseTabPauseIntervalInput').value) || 60;
+            window.courseData.settings.pause_duration = parseInt(document.getElementById('courseTabPauseDurationInput').value) || 0;
             window.courseData.settings.minutes_z2 = z2;
             window.courseData.settings.minutes_work = Math.round(z2 * (20/30));
             window.courseData.settings.minutes_long = Math.round(z2 * (50/30));
