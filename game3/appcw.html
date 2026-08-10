@@ -134,7 +134,7 @@
                     <span id="txt_profile_btn_label">👤 Profilo</span>
                     <span id="missionsBadge" class="badge-counter" style="display: none;">0</span>
                 </button>
-                <button class="action-btn-small" onclick="showProfileScreen(); switchProfileTab('course');" id="txt_course_tab_btn" style="flex:1.2; position: relative; overflow: visible !important;">
+                <button class="action-btn-small" onclick="showScreen('profileScreen'); switchProfileTab('course');" id="txt_course_tab_btn" style="flex:1.2; position: relative; overflow: visible !important;">
                     <span id="txt_course_btn_label">📻 Corso</span>
                     <span id="courseEnrollmentBadgeGlobal" class="badge-counter" style="display: none;">0</span>
                 </button>
@@ -286,7 +286,7 @@
     <div style="display: flex; gap: 4px; width: 100%; margin-bottom: 15px; flex-shrink:0; flex-wrap: nowrap;">
         <button id="btnTabProfile" class="tab-btn active-tab" onclick="switchProfileTab('info')" style="flex:1; font-size: 0.8em; padding: 10px 2px;">👤 Profilo</button>
         <button id="btnTabStats" class="tab-btn" onclick="switchProfileTab('stats')" style="flex:1; font-size: 0.8em; padding: 10px 2px;">📊 Analisi Errori</button>
-        <div id="btnTabCourse" style="display:none;"></div> <!-- Nascondiamo il vecchio bottone tab -->
+        <button id="btnTabCourse" class="tab-btn" onclick="switchProfileTab('course')" style="flex:1; font-size: 0.8em; padding: 10px 2px;">📻 Corso CW</button>
     </div>
 
     <!-- SEZIONE 1: INFO PROFILO E MISSIONI -->
