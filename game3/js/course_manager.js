@@ -390,7 +390,11 @@ window.listenToCourseEnrollment = function() {
 };
 
 window.checkCourseStartupNotification = function() {
-    if (!window.courseData || !window.courseData.active_plan) return;
+    // Se il piano non è attivo, usciamo subito per evitare popup fantasma
+    if (!window.courseData || window.courseData.active_plan !== true) {
+        console.log("Course: No active plan found, skipping startup notification.");
+        return;
+    }
 
     const todayIdx = (new Date().getDay() + 6) % 7;
     const session = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;

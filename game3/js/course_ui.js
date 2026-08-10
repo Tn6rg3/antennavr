@@ -280,10 +280,22 @@ window.attachCourseEventListeners = function() {
     if (btnExit) {
         btnExit.onclick = () => {
             if (confirm("ATTENZIONE: Stai per ABBANDONARE il Corso CW. Tutti i tuoi progressi e le statistiche dei caratteri (Heatmap) verranno CANCELLATI DEFINITIVAMENTE. Vuoi procedere?")) {
+                const oldData = JSON.parse(JSON.stringify(window.courseData));
                 window.courseData = window.getDefaultCourseData();
-                window.saveCourseState();
-                window.renderCourseTabView();
-                showToast("Corso abbandonato e dati resettati.");
+                window.courseData.active_plan = false; // Forza false per sicurezza
+
+                // Salviamo lo stato "non attivo" su Firebase
+                db.ref(`users/${myId}/course`).set(window.courseData).then(() => {
+                    // Se era attivo, decrementiamo il contatore globale
+                    if (oldData && oldData.active_plan) {
+                        db.ref('appConfig/courseEnrollmentCount').transaction(current => {
+                            let next = (current || 0) - 1;
+                            return next < 0 ? 0 : next;
+                        });
+                    }
+                    window.renderCourseTabView();
+                    showToast("Corso abbandonato e dati resettati.");
+                });
             }
         };
     }
