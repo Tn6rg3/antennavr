@@ -351,24 +351,29 @@ window.renderPlayersList = function(playersData, hostId) {
 
     // Filtriamo i giocatori che hanno effettivamente accettato la sfida
     const playersArray = Object.entries(playersData);
+    const count = playersArray.length;
     const acceptedPlayers = playersArray.filter(([id, data]) => data.accepted);
-    const count = acceptedPlayers.length;
+    const acceptedCount = acceptedPlayers.length;
 
     if (count > lastPlayerCount && lastPlayerCount > 0) {
         if (typeof window.playBeep === 'function') window.playBeep(500, 0.1);
         setTimeout(() => { if (typeof window.playBeep === 'function') window.playBeep(700, 0.15); }, 150);
-        window.showToast("👤 Nuovo giocatore!");
+        window.showToast("👤 Qualcuno è entrato!");
     }
     lastPlayerCount = count;
     let allReady = true;
-    if (count < 2) allReady = false;
+    if (acceptedCount < 2) allReady = false;
 
-    // Mostriamo solo i giocatori accettati nella lista ufficiale
-    acceptedPlayers.forEach(([id, data]) => {
-        if (!data.ready) allReady = false;
+    // Mostriamo TUTTI i giocatori per visibilità, ma evidenziamo chi ha accettato
+    playersArray.forEach(([id, data]) => {
+        if (data.accepted && !data.ready) allReady = false;
         const li = document.createElement('li');
+        li.style.opacity = data.accepted ? "1" : "0.6"; // Più chiaro se non confermato
+
         const nSpan = document.createElement('span');
-        nSpan.textContent = `${data.ready ? '✅' : '⏳'} ${data.name}`;
+        let statusIcon = data.accepted ? (data.ready ? '✅' : '⏳') : '👀';
+        nSpan.textContent = `${statusIcon} ${data.name}`;
+
         if (data.username && String(data.username).trim() !== "") {
             nSpan.style.color = 'var(--link-color)';
             nSpan.style.cursor = 'pointer';
@@ -376,10 +381,16 @@ window.renderPlayersList = function(playersData, hostId) {
             nSpan.onclick = () => { if (typeof window.openTelegramProfile === 'function') window.openTelegramProfile(data.username); };
         }
         li.appendChild(nSpan);
+
         if (id === hostId) {
             const sHost = document.createElement('small');
             sHost.textContent = ' (HOST)';
             li.appendChild(sHost);
+        } else if (!data.accepted) {
+            const sWait = document.createElement('small');
+            sWait.style.fontStyle = 'italic';
+            sWait.textContent = ' (In attesa...)';
+            li.appendChild(sWait);
         }
         els.playersList.appendChild(li);
     });
