@@ -43,6 +43,18 @@
         <button id="btnDeclineDaily" class="btn-danger">Rifiuta per oggi</button>
     </div>
 </div>
+
+<!-- POPUP SESSIONE CORSO CW -->
+<div id="courseSessionModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 5500; border: 2px solid var(--link-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+    <span style="font-size: 3em; margin-bottom: 10px;">📻</span>
+    <h2 style="color: var(--link-color); margin: 0 0 10px 0;">Allenamento Corso CW</h2>
+    <p id="courseModalText" style="font-size: 0.9em; margin-bottom: 15px;">Oggi il tuo piano prevede una sessione...</p>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button id="btnPlayCourseNow" class="btn-success">INIZIA ALLENAMENTO 🚀</button>
+        <button id="btnPlayCourseLater" class="btn-secondary" onclick="document.getElementById('courseSessionModal').style.display='none'">Più Tardi</button>
+    </div>
+</div>
 <!-- POPUP BENVENUTO NUOVO UTENTE (SOLO PRIMO ACCESSO) -->
 <div id="welcomeNewUserModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 6000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
     <span style="font-size: 3.5em; margin-bottom: 10px;">📻</span>
@@ -270,9 +282,10 @@
 
 <!-- PROFILO E STATISTICHE -->
 <div id="profileScreen" class="screen">
-    <div style="display: flex; gap: 6px; width: 100%; margin-bottom: 15px; flex-shrink:0;">
-        <button id="btnTabProfile" class="tab-btn active-tab" onclick="switchProfileTab('info')" style="flex:1;">👤 Profilo</button>
-        <button id="btnTabStats" class="tab-btn" onclick="switchProfileTab('stats')" style="flex:1;">📊 Analisi Errori</button>
+    <div style="display: flex; gap: 4px; width: 100%; margin-bottom: 15px; flex-shrink:0; flex-wrap: wrap;">
+        <button id="btnTabProfile" class="tab-btn active-tab" onclick="switchProfileTab('info')" style="flex:1; font-size: 0.8em; padding: 10px 2px;">👤 Profilo</button>
+        <button id="btnTabStats" class="tab-btn" onclick="switchProfileTab('stats')" style="flex:1; font-size: 0.8em; padding: 10px 2px;">📊 Analisi Errori</button>
+        <button id="btnTabCourse" class="tab-btn" onclick="switchProfileTab('course')" style="flex:1.2; font-size: 0.8em; padding: 10px 2px;">📻 Corso CW</button>
     </div>
 
     <!-- SEZIONE 1: INFO PROFILO E MISSIONI -->
@@ -297,11 +310,11 @@
             </div>
         </div>
 
-        <!-- NUOVA SEZIONE CORSO CW -->
-        <div class="box-panel" style="margin-bottom: 8px; border: 2px solid var(--link-color);">
+        <!-- SEZIONE CORSO CW (VECCHIA, DA PULIRE O NASCONDERE) -->
+        <div class="box-panel" style="margin-bottom: 8px; border: 2px solid var(--link-color); display: none;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <h3 style="color:var(--link-color); margin:0; font-size:1em;">📻 Corso CW (Metodo Koch)</h3>
-                <button id="btnOpenCourse" class="action-btn-small btn-champ" style="width:auto; padding:4px 12px;">Gestisci</button>
+                <button id="btnOpenCourse" class="action-btn-small btn-champ" style="width:auto; padding:4px 12px; display: none;">Gestisci</button>
             </div>
             <div id="coursePreviewInfo" style="font-size:0.85em; color:var(--hint-color);">
                 Attiva il tuo piano di allenamento personalizzato.
@@ -364,6 +377,62 @@
         <div class="box-panel" style="margin-top:8px; flex-shrink:0; flex-direction:row; gap:6px;">
             <button id="btnCreateErrorDict" class="btn-success" style="font-size:0.85em; padding:10px; flex:2;">🛠️ Allenamento Parole Critiche</button>
             <button id="btnResetErrorStats" class="btn-danger" style="font-size:0.85em; padding:10px; flex:1;">🗑️ Reset Dati</button>
+        </div>
+    </div>
+
+    <!-- SEZIONE 3: GESTIONE CORSO CW -->
+    <div id="profileCourseArea" class="screen-content" style="display: none;">
+        <div id="courseTabSetupView" style="display:none; flex-direction:column; gap:10px; width: 100%;">
+            <p style="font-size:0.9em; text-align:center;">Configura il tuo piano di allenamento settimanale ispirato ai runner.</p>
+
+            <div class="box-panel">
+                <label style="font-size:0.85em; font-weight:bold;">Giorni di allenamento a settimana:</label>
+                <select id="courseTabDaysInput" style="width:100%; padding:8px; margin-top:5px;">
+                    <option value="1">1 Giorno</option>
+                    <option value="2">2 Giorni</option>
+                    <option value="3" selected>3 Giorni</option>
+                    <option value="4">4 Giorni</option>
+                    <option value="5">5 Giorni</option>
+                    <option value="6">6 Giorni</option>
+                    <option value="7">7 Giorni</option>
+                </select>
+            </div>
+
+            <div class="settings-row">
+                <div><label>WPM Caratt.</label> <input type="number" id="courseTabWpmInput" value="20" min="15" max="50"></div>
+                <div><label>WPM Spazio</label> <input type="number" id="courseTabFarnsworthInput" value="12" min="5" max="50"></div>
+            </div>
+
+            <div class="box-panel">
+                <h4 style="margin:0 0 8px 0; font-size:0.9em;">Durata Sessioni (Minuti)</h4>
+                <div class="settings-row">
+                    <div><label>Base (Z2)</label> <input type="number" id="courseTabMinZ2" value="10" min="5" max="60"></div>
+                    <div><label>Lavoro</label> <input type="number" id="courseTabMinWork" value="15" min="5" max="60"></div>
+                    <div><label>Lungo</label> <input type="number" id="courseTabMinLong" value="30" min="10" max="120"></div>
+                </div>
+            </div>
+
+            <button id="btnTabCreatePlan" class="btn-success">CREA IL MIO PIANO 🚀</button>
+        </div>
+
+        <div id="courseTabDashboardView" style="display:none; flex-direction:column; gap:10px; width: 100%;">
+            <!-- Heatmap Caratteri -->
+            <div class="box-panel">
+                <h4 style="margin:0 0 5px 0; font-size:0.85em;">Padronanza Caratteri (Metodo Koch)</h4>
+                <div id="courseTabHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:5px;"></div>
+                <p id="courseTabLessonInfo" style="font-size:0.75em; text-align:center; color:var(--hint-color); margin-top:5px;"></p>
+            </div>
+
+            <!-- Piano Settimanale -->
+            <div class="box-panel">
+                <h4 style="margin:0 0 5px 0; font-size:0.85em;">Il tuo Piano per questa Settimana</h4>
+                <div id="courseTabWeeklyPlan" style="display:flex; flex-direction:column; gap:4px;"></div>
+            </div>
+
+            <div style="display:flex; gap:10px;">
+                <button id="btnTabStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
+                <button id="btnTabResetCourse" class="btn-danger" style="flex:1; font-size:0.75em;">RESET</button>
+            </div>
         </div>
     </div>
 
