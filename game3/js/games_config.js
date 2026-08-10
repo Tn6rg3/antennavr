@@ -183,7 +183,7 @@ window.calculateGamePoints = function(currentMode, currentWord, userWord, wpm, r
         }
         
         if (usedReplay) {
-            points = Math.round(points * 0.2);
+            points = 0;
         }
     }
     

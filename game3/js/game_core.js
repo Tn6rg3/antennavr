@@ -769,7 +769,7 @@ window.handleWordSubmission = function(userWord) {
             if (levDist === 0) scoreColor = usedReplay ? "#999999" : "#4caf50";
             else if (levDist === 1) scoreColor = "#ff9800";
             else scoreColor = "#d32f2f";
-            if (usedReplay) points = Math.round(points * 0.2);
+            if (usedReplay) points = 0;
         }
     }
 
@@ -794,21 +794,25 @@ window.handleWordSubmission = function(userWord) {
 
     if (!isFixedSpeed && currentMode !== 'chars') {
         if (levDist === 0 && !usedReplay) {
-        currentWpm += 2;
-        window.addXP?.(10, "Correct Word");
-        window.updateMissionProgress?.('count', 1);
-        window.updateMissionProgress?.('wpm_min', currentWpm);
-        currentStreak++;
-        window.updateMissionProgress?.('streak', currentStreak);
-    }
-    else if (levDist === 1) {
-        currentWpm -= 1;
-        currentStreak = 0;
-    }
-    else if (levDist > 1) {
-        currentWpm -= 2;
-        currentStreak = 0;
-    }
+            currentWpm += 2;
+            window.addXP?.(10, "Correct Word");
+            window.updateMissionProgress?.('count', 1);
+            window.updateMissionProgress?.('wpm_min', currentWpm);
+            currentStreak++;
+            window.updateMissionProgress?.('streak', currentStreak);
+        }
+        else if (usedReplay) {
+            currentWpm -= 2;
+            currentStreak = 0;
+        }
+        else if (levDist === 1) {
+            currentWpm -= 1;
+            currentStreak = 0;
+        }
+        else if (levDist > 1) {
+            currentWpm -= 2;
+            currentStreak = 0;
+        }
         currentWpm = Math.max(10, currentWpm);
     }
     totalScore += points;
