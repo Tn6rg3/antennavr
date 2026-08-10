@@ -5,7 +5,7 @@ window.updateCourseUI = function() {
 
     const preview = document.getElementById('coursePreviewInfo');
     if (preview) {
-        if (window.courseData.active_plan) {
+        if (window.courseData.active_plan === true) {
             preview.textContent = `Lezione ${window.courseData.progress.current_lesson} - ${window.courseData.settings.days_per_week}gg/sett`;
         } else {
             preview.textContent = "Attiva il tuo piano di allenamento personalizzato.";
@@ -158,8 +158,10 @@ window.generateWeeklySchedule = function() {
 
 // --- LOGICA WIZARD PASSO-PASSO ---
 window.startCourseWizard = function() {
-    document.getElementById('courseTabInitialPrompt').style.display = 'none';
-    document.getElementById('courseWizardContainer').style.display = 'block';
+    const prompt = document.getElementById('courseTabInitialPrompt');
+    const wizard = document.getElementById('courseWizardContainer');
+    if (prompt) prompt.style.display = 'none';
+    if (wizard) wizard.style.display = 'block';
     window.populateLessonDropdowns();
     window.nextWizardStep(1);
 };
@@ -179,20 +181,6 @@ window.populateLessonDropdowns = function() {
             select.appendChild(opt);
         }
     };
-
-    populate(wizardSelect);
-    populate(settingsSelect);
-
-    if (wizardSelect) {
-        wizardSelect.onchange = () => {
-            const num = parseInt(wizardSelect.value);
-            const chars = window.KOCH_SEQUENCE.slice(0, num).join(", ");
-            const info = document.getElementById('wizardLessonChars');
-            if (info) info.textContent = `Caratteri: ${chars}`;
-        };
-        wizardSelect.onchange();
-    }
-};
 
     populate(wizardSelect);
     populate(settingsSelect);
@@ -273,7 +261,8 @@ window.finishWizard = function() {
     window.saveCourseState();
 
     // Pulizia UI
-    document.getElementById('courseWizardContainer').style.display = 'none';
+    const wizard = document.getElementById('courseWizardContainer');
+    if (wizard) wizard.style.display = 'none';
     showToast("Corso attivato! Iniziamo l'allenamento. 🚀");
 };
 

@@ -14,8 +14,7 @@ window.showScreen = function(screenId) {
 
     const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen'].includes(screenId);
 
-    // Se siamo usciti dalle schermate di gioco ma abbiamo una stanza attiva,
-    // manteniamo il listener per avviare la partita se l'host preme START
+    // Se stiamo navigando fuori da una stanza e siamo in una stanza attiva
     if (!isPlayingScreen && roomCode && !gameRunning) {
         // Se non abbiamo ancora accettato la sfida, usciamo del tutto per pulire il contatore
         db.ref(`rooms/${roomCode}/players/${myId}/accepted`).once('value', s => {
@@ -619,15 +618,6 @@ window.playNextWord = function() {
     usedReplay = false;
     const currentWord = gameWords[wordIndex].toUpperCase();
 
-    if (roomCode) db.ref(`rooms/${roomCode}/liveAudio`).set({ word: currentWord, wpm: currentWpm, ts: Date.now() });
-
-    if (isEasyMode && els.easyModeHint) {
-        els.easyModeHint.textContent = currentWord.split('').sort(() => 0.5 - Math.random()).join(' ');
-        els.easyModeHint.style.display = 'block';
-    } else if (els.easyModeHint) {
-        els.easyModeHint.style.display = 'none';
-    }
-
     if (typeof playMorseAudio === 'function') playMorseAudio(currentWord, currentWpm);
     lastWordStartTime = Date.now();
 
@@ -658,8 +648,6 @@ window.finishGame = function() {
     isChallenging = false;
 
     db.ref(`presence/${myId}`).update({
-        name: myName,
-        username: myPrivacy ? "" : tgUsername,
         allowSpectators: false,
         activeRoomCode: null,
         status: 'online'
@@ -1237,7 +1225,7 @@ window.watchSpecificRoom = function(code, targetName) {
             const msgTs = audioData.ts || 0;
             if (msgTs > (window.lastSpectatorAudioTs || 0)) {
                 window.lastSpectatorAudioTs = msgTs;
-                const liveWpm = audioData.wpm || 20;
+                const liveWpm = audioData.wordWpm || audioData.wpm || 20;
                 if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm}`;
                 if (typeof playMorseAudio === 'function') playMorseAudio(audioData.word, liveWpm, true);
             }
@@ -1355,31 +1343,7 @@ document.addEventListener('visibilitychange', () => {
         }
         if (typeof startBluetoothKeepAlive === 'function') startBluetoothKeepAlive();
         if (gameRunning && window.lostFocusDuringWord) {
-            if (els.btnSendPingPong) {
-    els.btnSendPingPong.onclick = function() {
-        const input = document.getElementById('pingPongWordToSend');
-        const val = input ? input.value.trim().toUpperCase() : "";
-        if (!val) return;
-
-        db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
-            if (d && !d.word) {
-                d.word = val;
-                d.wordId = (d.wordId || 0) + 1;
-                d.senderId = myId;
-            }
-            return d;
-        });
-        if (input) input.value = "";
-    };
-}
-
-if (document.getElementById('pingPongWordToSend')) {
-    document.getElementById('pingPongWordToSend').onkeypress = function(e) {
-        if (e.key === 'Enter') els.btnSendPingPong.click();
-    };
-}
-
-window.lostFocusDuringWord = false;
+            window.lostFocusDuringWord = false;
             inputActive = false;
             showToast("⚠️ Schermo spento: parola considerata persa!");
 
