@@ -14,6 +14,12 @@ window.showScreen = function(screenId) {
 
     const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen'].includes(screenId);
 
+    // Se siamo usciti dalle schermate di gioco ma abbiamo una stanza attiva,
+    // manteniamo il listener per avviare la partita se l'host preme START
+    if (!isPlayingScreen && roomCode && !gameRunning) {
+        window.listenToRoomInBackground();
+    }
+
     if (db && myId) {
         try {
             db.ref(`presence/${myId}`).update({
@@ -126,7 +132,8 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
                     if (roomCode && !roomCode.startsWith("TRN_")) {
                         db.ref(`rooms/${roomCode}/players`).once('value', s => {
                             if (s.exists()) {
-                                db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(Object.keys(s.val()).length);
+                                const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
+                                db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
                             }
                         });
                     }
@@ -140,7 +147,8 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
                 if (roomCode && !roomCode.startsWith("TRN_")) {
                     db.ref(`rooms/${roomCode}/players`).once('value', s => {
                         if (s.exists()) {
-                            db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(Object.keys(s.val()).length);
+                            const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
+                            db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
                         } else if (!amIHost) {
                             db.ref(`public_lobby_rooms/${roomCode}`).remove();
                         }
@@ -170,6 +178,28 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     if (targetScreen === 'setupScreen') {
         if (typeof window.listenToRooms === 'function') window.listenToRooms();
     }
+};
+
+// Listener silenzioso quando l'utente naviga l'app ma è in una stanza
+window.listenToRoomInBackground = function() {
+    if (!roomCode || listeners.room) return;
+
+    // Usiamo lo stesso listener di joinRoomLogic ma senza cambiare schermata subito
+    // per intercettare lo stato 'countdown' o 'playing'
+    listeners.room = db.ref(`rooms/${roomCode}`);
+    listeners.room.on('value', snap => {
+        if (!snap.exists()) {
+            roomCode = "";
+            localStorage.removeItem(STORAGE_ROOM_KEY);
+            return window.exitRoomCleanly(true);
+        }
+        const rData = snap.val();
+
+        // Se la partita sta per iniziare o è iniziata, riportiamo l'utente dentro
+        if ((rData.status === 'playing' || rData.status === 'countdown') && !gameRunning) {
+            window.joinRoomLogic(true);
+        }
+    });
 };
 
 window.joinSpecificRoom = function(code) {
