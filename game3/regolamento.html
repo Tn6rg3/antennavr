@@ -1,128 +1,105 @@
 <div style="padding-bottom: 20px;">
-    <!-- SEZIONE 1: REGOLE DEL GIOCO -->
     <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
-    <p style="margin-top: 5px; font-size: 0.9em;">Il gioco consiste nell'ascoltare sequenze in codice Morse e decifrare la parola o il nominativo corretto.</p>
+    <p style="margin-top: 5px; font-size: 0.9em;">Benvenuto in Sfida Telegrafia! Decodifica il codice Morse e scala le classifiche.</p>
 
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">⚔️ Conquista (Modalità Collaborativa - Co-op):</h4>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li><b>Tiro alla Fune Esclusivo:</b> I giocatori cooperano nello stesso team per far salire la barra di conquista al <b>100%</b> entro <b>5 minuti</b>, contrastando il decadimento continuo dei punti.</li>
-        <li><b>Canali Esclusivi (Lock-in):</b> Devi prenotare una delle 3 frequenze disponibili cliccandoci sopra. Ogni frequenza è associata a una lunghezza diversa:
-            <ul style="margin-top: 2px; padding-left: 15px;">
-                <li>🟢 <b>FREQ 1 (3-4 caratteri):</b> Risposta Esatta: <b>+4%</b> | Errore: <b>-2%</b></li>
-                <li>🟡 <b>FREQ 2 (5-6 caratteri):</b> Risposta Esatta: <b>+7%</b> | Errore: <b>-3%</b></li>
-                <li>🔴 <b>FREQ 3 (7+ caratteri):</b> Risposta Esatta: <b>+12%</b> | Errore: <b>-5%</b></li>
-            </ul>
-        </li>
-        <li>Quando un giocatore occupa una frequenza, questa si <b>blocca per gli altri compagni</b> (tasto grigio). È possibile liberare il canale in qualsiasi momento premendo il tasto "<b>SGANCIA 🔓</b>".</li>
-        <li><b>WPM Adattivo Personale:</b> Ogni parola indovinata correttamente fa aumentare la tua velocità di ascolto di <b>+2 WPM</b>. Ogni errore la riduce di <b>-2 WPM</b> (minimo 10 WPM).</li>
-        <li><b>Pausa e Cooldown:</b> Dopo ogni tentativo (corretto o errato), l'input si blocca per <b>2 secondi</b> per dare il tempo di concentrarsi sulla parola successiva.</li>
-    </ul>
+    <!-- ACCORDION: MODALITÀ DI GIOCO -->
+    <div class="rules-accordion">
 
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">📅 Sfida Giornaliera:</h4>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li>Ogni giorno viene proposta una sequenza identica per tutti i giocatori (20 parole, partendo da 15 WPM).</li>
-        <li>La velocità aumenta a ogni risposta esatta. I primi 3 classificati di giornata ricevono medaglie esclusive (Oro, Argento, Bronzo) sul proprio profilo!</li>
-    </ul>
+        <details style="margin-bottom: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden;">
+            <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--link-color); list-style: none; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1);">
+                🔤 Parole Comuni (Standard) <span style="font-size: 0.8em;">▼</span>
+            </summary>
+            <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
+                <p>Decodifica parole di senso compiuto. La velocità si adatta alle tue risposte:</p>
+                <ul style="padding-left: 20px;">
+                    <li><b>Parola perfetta:</b> +2 WPM.</li>
+                    <li><b>1 Errore:</b> -1 WPM.</li>
+                    <li><b>Più errori:</b> -2 WPM.</li>
+                    <li><b>Riascolto:</b> 0 punti e -2 WPM.</li>
+                </ul>
+            </div>
+        </details>
 
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">⚔️ Battaglia Serale (Battle Royale):</h4>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li>Evento speciale quotidiano! Segnati cliccando sul banner per l'iscrizione. La sfida parte alle <b>21:30</b> esatte (minimo 5 partecipanti).</li>
-        <li>Tutti ricevono la stessa parola in contemporanea (si parte da <b>25 WPM</b>). Hai 30 secondi per rispondere e <b>3 vite</b> (❤️❤️❤️).</li>
-        <li>Se sbagli o il tempo scade, perdi una vita. A ogni round superato la velocità aumenta di <b>+1 WPM</b>. L'ultimo telegrafista in vita vince!</li>
-    </ul>
+        <details style="margin-bottom: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden;">
+            <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--link-color); list-style: none; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1);">
+                ⚔️ Conquista (Co-op Collaborativo) <span style="font-size: 0.8em;">▼</span>
+            </summary>
+            <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
+                <p>Collabora con i compagni per far salire la barra di conquista al <b>100%</b> contrastando il decadimento continuo.</p>
+                <ul style="padding-left: 20px;">
+                    <li><b>Canali Esclusivi:</b> Prenota una delle 3 frequenze per decodificare gruppi di diversa lunghezza.</li>
+                    <li><b>Punteggio:</b> Risposta esatta (+4%, +7% o +12%) | Errore (-2%, -3% o -5%).</li>
+                    <li><b>Lock-in:</b> Mentre occupi un canale, gli altri non possono usarlo.</li>
+                </ul>
+            </div>
+        </details>
 
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">🏆 Tornei e Squadre:</h4>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li>Fonda una squadra o unisciti a una esistente per competere nei tornei globali o privati.</li>
-        <li>L'organizzatore genera il tabellone degli incontri. I membri delle squadre si scontrano in match diretti per far guadagnare punti al proprio team nella classifica del torneo.</li>
-    </ul>
+        <details style="margin-bottom: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden;">
+            <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--link-color); list-style: none; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1);">
+                📻 Corso CW (Metodo Koch & Runner) <span style="font-size: 0.8em;">▼</span>
+            </summary>
+            <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
+                <p>Un percorso di addestramento professionale ispirato ai runner:</p>
+                <ul style="padding-left: 20px;">
+                    <li><b>Metodo Koch:</b> Inizia con 2 caratteri e ne sblocchi uno nuovo raggiungendo il 90% di precisione.</li>
+                    <li><b>Piano 30/20/50:</b> Sessioni <b>Base (Z2)</b> per consolidare, <b>Lavoro</b> per imparare nuovi caratteri (+ bonus velocità), e <b>Lungo</b> per la resistenza.</li>
+                    <li><b>Adaptive Coach:</b> I caratteri su cui sbagli appaiono più spesso.</li>
+                    <li><b>Pause Personalizzate:</b> Imposta pause automatiche ogni X secondi di lavoro.</li>
+                </ul>
+            </div>
+        </details>
 
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">🔤 Modalità Parole Comuni:</h4>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li><b>Parola perfetta:</b> Ricevi <b>+10 pt</b>. La velocità aumenterà di <b>+2 WPM</b>.</li>
-        <li><b>1 Carattere errato:</b> Ricevi <b>+2 pt</b>. La velocità scenderà di <b>-1 WPM</b>.</li>
-        <li><b>Più di 1 errore:</b> Ricevi <b>0 pt</b>. La velocità scenderà di <b>-2 WPM</b>.</li>
-        <li><i>Nota:</i> La velocità WPM <b>non scenderà mai</b> sotto la soglia minima impostata all'inizio.</li>
-    </ul>
+        <details style="margin-bottom: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden;">
+            <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--link-color); list-style: none; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1);">
+                🎙️ Nominativi (CW Freak) <span style="font-size: 0.8em;">▼</span>
+            </summary>
+            <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
+                <p>Allenati sui nominativi radioamatoriali mondiali. Velocità di partenza: 25 WPM. Più ne indovini di fila, più il Bonus Serie aumenta!</p>
+            </div>
+        </details>
 
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">🏓 Modalità Ping Pong:</h4>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li>Sfida a turni <b>Multiplayer</b> (necessita di almeno 2 giocatori).</li>
-        <li>A turno, l'utente <b>A</b> pensa a una parola e la digita, l'utente <b>B</b> la ascolta in codice Morse e deve decodificarla. I ruoli si invertono per le stringhe successive.</li>
-    </ul>
+        <details style="margin-bottom: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden;">
+            <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--link-color); list-style: none; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1);">
+                🏓 Ping Pong (Multiplayer) <span style="font-size: 0.8em;">▼</span>
+            </summary>
+            <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
+                <p>Sfida a turni: l'utente A scrive una parola, l'utente B deve decodificarla ascoltandola in Morse. Poi i ruoli si invertono.</p>
+            </div>
+        </details>
 
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">🎙️ Modalità Nominativi (CW Freak):</h4>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li>Base: <b>(WPM * 2) pt</b>. Più ne indovini di fila, più il <b>Bonus Serie</b> aumenta (+5 pt) e la velocità sale (+2 WPM).</li>
-        <li>Al primo errore la serie si azzera (0 pt) e la velocità scende di <b>-1 WPM</b>.</li>
-    </ul>
+        <details style="margin-bottom: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden;">
+            <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--link-color); list-style: none; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1);">
+                ❓ Modalità Quiz <span style="font-size: 0.8em;">▼</span>
+            </summary>
+            <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
+                <p>Ascolta la domanda e le 4 opzioni interamente in Morse. In multiplayer, usa il <b>Buzzer 🚨</b> per prenotare la risposta.</p>
+            </div>
+        </details>
 
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">❓ Modalità Quiz:</h4>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li>Ascolta la domanda e le 4 opzioni (A, B, C, D) interamente in codice Morse.</li>
-        <li><b>Buzzer:</b> In multiplayer, il primo che preme il pulsante 🚨 può rispondere.</li>
-        <li><b>Punteggio:</b> Ogni risposta corretta assegna <b>+100 pt</b>.</li>
-    </ul>
+        <details style="margin-bottom: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden;">
+            <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--link-color); list-style: none; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1);">
+                ⚔️ Battaglia Serale (Battle Royale) <span style="font-size: 0.8em;">▼</span>
+            </summary>
+            <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
+                <p>Ogni sera alle <b>21:30</b>. Tutti ricevono la stessa parola a 25 WPM. Hai 3 vite. L'ultimo operatore in vita vince la sfida quotidiana!</p>
+            </div>
+        </details>
 
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">📖 Modalità Personale (Single Player):</h4>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li>Puoi caricare un tuo file di testo <b>(.txt)</b> con una lista di parole personalizzate.</li>
-        <li>Il sistema estrarrà le parole (min. 3 caratteri) e le userà per la tua sessione di allenamento.</li>
-        <li>Il dizionario caricato rimane salvato in locale sul tuo dispositivo.</li>
-    </ul>
-
-    <!-- NUOVA SEZIONE: SPETTATORI E SPAZIATURA AVANZATA -->
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">👁️ Spettatori e Funzioni Speciali:</h4>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li><b>Osserva Partita (Spettatore):</b> In modalità Gioca da Solo, puoi spuntare la casella "<b>👁️ Spettatori</b>". Il tuo stato nella lista degli Utenti Online diventerà giallo e i tuoi amici potranno premere "Osserva" per seguire la tua sessione dal vivo, vedendo la tua tabella punteggi e ascoltando in streaming il segnale Morse che stai decodificando.</li>
-        <li><b>Spaziatura Avanzata (Farnsworth):</b> Nelle partite singole puoi disaccoppiare la velocità. Imposta una velocità elevata per il singolo carattere (es. 20 WPM per imparare il suono corretto) ma aumenta lo <b>Spazio Parole (es. 2.0x - 4.0x)</b> per avere più tempo di riflessione tra una parola e l'altra.</li>
-        <li><b>CW in Chat e Audio:</b> Attivando la modalità "<b>📻 CW: ON</b>" nel menu della chat, i messaggi verranno inviati come spoiler mascherati e l'app riprodurrà automaticamente il messaggio in codice Morse. Puoi silenziare i suoni delle notifiche globali in qualsiasi momento dal menu principale.</li>
-    </ul>
-
-    <p style="margin-top: 15px; font-size: 0.85em; background: rgba(var(--link-color-rgb), 0.1); padding: 10px; border-radius: 8px; border-left: 3px solid var(--link-color); line-height: 1.4;">
-        🚀 <b>Rientro Automatico:</b> Se la connessione cade o lo schermo si spegne, riaprendo l'app verrai riportato automaticamente nella partita in corso con tutti i tuoi progressi salvati.
-    </p>
-
-    <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 20px 0;">
-
-    <!-- SEZIONE 2: TERMINI E CONDIZIONI -->
-    <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">📄 Termini di Servizio (ToS)</h3>
-    <p style="margin-top: 5px; font-size: 0.85em; line-height: 1.4;">
-        L'accesso e l'utilizzo di "Sfida Telegrafia" implicano l'accettazione integrale dei seguenti termini.
-    </p>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li><b>Comportamento degli Utenti:</b> È severamente vietato l'uso di linguaggio offensivo, diffamatorio o discriminatorio all'interno delle chat (Globali, di Stanza o di Squadra). È altresì vietato l'uso di bot, script o cheat per manipolare i punteggi.</li>
-        <li><b>Sanzioni:</b> L'amministratore si riserva il diritto insindacabile di azzerare i punteggi, rimuovere account o bannare utenti che violino le regole o disturbino la community.</li>
-        <li><b>Disponibilità del Servizio:</b> L'app è fornita "così com'è" (As-Is). Non si garantisce l'assenza di bug o il mantenimento perpetuo dei server o dei salvataggi. L'amministratore non è responsabile per eventuali perdite di dati o interruzioni di servizio.</li>
-    </ul>
+    </div>
 
     <hr style="border: 0; border-top: 1px solid var(--hint-color); margin: 20px 0;">
 
-    <!-- SEZIONE 3: PRIVACY POLICY (GDPR) -->
-    <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">⚖️ Informativa Privacy (GDPR)</h3>
-    <p style="margin-top: 5px; font-size: 0.85em; line-height: 1.4;">
-        Ai sensi del Regolamento (UE) 2016/679 (GDPR), ti informiamo su come raccogliamo, gestiamo e proteggiamo i tuoi dati personali.<br>
-        <b>Titolare del Trattamento:</b> Contattabile all'indirizzo/username <b>[INSERISCI LA TUA EMAIL O CONTATTO]</b>.
-    </p>
+    <details style="margin-bottom: 10px; background: rgba(0,0,0,0.1); border-radius: 8px;">
+        <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--champ-color); list-style: none;">📄 Termini di Servizio (ToS)</summary>
+        <div style="padding: 10px; font-size: 0.8em; line-height: 1.4;">
+            <p>È vietato l'uso di linguaggio offensivo e l'uso di bot o script. L'amministratore si riserva il diritto di azzerare punteggi o bannare utenti in caso di violazioni.</p>
+        </div>
+    </details>
 
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">1. Dati Raccolti</h4>
-    <p style="margin-top: 2px; font-size: 0.85em; line-height: 1.4;">
-        Tramite le API di Telegram e l'uso dell'App raccogliamo:
-    </p>
-    <ul style="margin-top: 2px; padding-left: 20px; font-size: 0.85em; line-height: 1.4;">
-        <li><b>Dati Identificativi:</b> ID Telegram univoco, First Name (Nome) e Username pubblico (se impostato su Telegram).</li>
-        <li><b>Dati di Gioco:</b> Statistiche di precisione, storico delle partite, punteggi WPM, appartenenza a squadre e alias personalizzati.</li>
-        <li><b>Dati di Comunicazione:</b> I messaggi inviati nelle chat interne dell'app. Si prega di NON condividere informazioni personali sensibili nelle chat.</li>
-        <li><b>Dati di Navigazione (Local Storage):</b> L'app salva localmente sul tuo dispositivo (similmente ai cookie tecnici) le tue preferenze (es. lingua scelta, parametri WPM/Tono/Spaziatura predefiniti, preferenze audio della chat e visione dei popup) per migliorare l'esperienza e ridurre il traffico di rete.</li>
-    </ul>
-
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">2. Finalità e Base Giuridica</h4>
-    <p style="margin-top: 2px; font-size: 0.85em; line-height: 1.4;">
-        I dati sono trattati per permettere il funzionamento del gioco (esecuzione di un contratto), stilare classifiche e moderare le interazioni. Il tuo nome/alias sarà visibile pubblicamente in classifica. Puoi nascondere il link al tuo profilo attivando "Nascondi mio username Telegram" nel Profilo.
-    </p>
-
-    <h4 style="color: var(--link-color); margin-bottom: 2px; margin-top: 10px; font-size: 0.95em;">3. Terze Parti e Trasferimento Dati</h4>
-    <p style="margin-top: 2px; font-size: 0.85em; line-height: 1.4;">
-        L'app si appoggia a <b>Google Firebase</b> (Database e Auth) e all'ecosistema <b>Telegram</b>. I dati potrebbero essere elaborati su server extra-UE, ma sono protetti da clausole contrattuali standard (SCC) che ne garantiscono la sicurezza. Nessun dato viene ceduto per profilazione o marketing.
-    </p>
+    <details style="margin-bottom: 10px; background: rgba(0,0,0,0.1); border-radius: 8px;">
+        <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--champ-color); list-style: none;">⚖️ Privacy Policy (GDPR)</summary>
+        <div style="padding: 10px; font-size: 0.8em; line-height: 1.4;">
+            <p>Raccogliamo l'ID Telegram e lo username (se pubblico) per il funzionamento del gioco. I dati di gioco includono statistiche e storico partite salvati su Firebase. Puoi eliminare i tuoi dati in qualsiasi momento dal profilo.</p>
+        </div>
+    </details>
 </div>
