@@ -50,7 +50,21 @@ window.getDefaultCourseData = function() {
 
 window.saveCourseState = function() {
     if (!myId || !window.courseData) return;
-    db.ref(`users/${myId}/course`).set(window.courseData);
+
+    // Controlliamo se lo stato del piano attivo è cambiato per aggiornare il counter globale
+    db.ref(`users/${myId}/course/active_plan`).once('value', oldActiveSnap => {
+        const wasActive = !!oldActiveSnap.val();
+        const isActive = !!window.courseData.active_plan;
+
+        db.ref(`users/${myId}/course`).set(window.courseData).then(() => {
+            if (wasActive !== isActive) {
+                db.ref('appConfig/courseEnrollmentCount').transaction(current => {
+                    let next = (current || 0) + (isActive ? 1 : -1);
+                    return next < 0 ? 0 : next;
+                });
+            }
+        });
+    });
 };
 
 window.updateCourseUI = function() {
@@ -350,6 +364,18 @@ window.initCourseManager = function() {
     window.loadCourseState().then(() => {
         window.checkWeeklyReview();
         window.checkCourseStartupNotification();
+        window.listenToCourseEnrollment();
+    });
+};
+
+window.listenToCourseEnrollment = function() {
+    db.ref('appConfig/courseEnrollmentCount').on('value', snap => {
+        const count = snap.val() || 0;
+        const badge = document.getElementById('courseEnrollmentBadge');
+        if (badge) {
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'flex' : 'none';
+        }
     });
 };
 

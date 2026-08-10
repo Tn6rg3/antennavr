@@ -203,21 +203,38 @@ window.updateWizardDurationsPreview = function() {
 };
 
 window.finishWizard = function() {
-    const z2 = parseInt(document.getElementById('wizardMinZ2').value) || 10;
+    console.log("Course: Finishing Wizard...");
+    const z2Input = document.getElementById('wizardMinZ2');
+    const lessonInput = document.getElementById('wizardStartLesson');
+    const daysInput = document.getElementById('wizardDays');
+    const wpmInput = document.getElementById('wizardWpm');
+    const farnsworthInput = document.getElementById('wizardFarnsworth');
+    const spacingInput = document.getElementById('wizardGroupSpacing');
+    const pauseIntInput = document.getElementById('wizardPauseInterval');
+    const pauseDurInput = document.getElementById('wizardPauseDuration');
+
+    if (!z2Input || !lessonInput || !daysInput) {
+        console.error("Course Wizard: Missing critical inputs");
+        return alert("Errore nel recupero dei dati. Riprova.");
+    }
+
+    const z2 = parseInt(z2Input.value) || 10;
+
     window.courseData.active_plan = true;
-    window.courseData.progress.current_lesson = parseInt(document.getElementById('wizardStartLesson').value) || 2;
+    window.courseData.progress.current_lesson = parseInt(lessonInput.value) || 2;
     window.courseData.settings = {
-        days_per_week: document.getElementById('wizardDays').value,
-        start_wpm: document.getElementById('wizardWpm').value,
-        farnsworth_wpm: document.getElementById('wizardFarnsworth').value,
-        group_spacing: document.getElementById('wizardGroupSpacing').value,
-        pause_interval: parseInt(document.getElementById('wizardPauseInterval').value) || 60,
-        pause_duration: parseInt(document.getElementById('wizardPauseDuration').value) || 0,
+        days_per_week: daysInput.value,
+        start_wpm: wpmInput ? wpmInput.value : 15,
+        farnsworth_wpm: farnsworthInput ? farnsworthInput.value : 12,
+        group_spacing: spacingInput ? spacingInput.value : "3.0",
+        pause_interval: pauseIntInput ? parseInt(pauseIntInput.value) : 60,
+        pause_duration: pauseDurInput ? parseInt(pauseDurInput.value) : 10,
         minutes_z2: z2,
         minutes_work: Math.round(z2 * (20/30)),
         minutes_long: Math.round(z2 * (50/30))
     };
 
+    console.log("Course: Wizard Finished. Settings:", window.courseData.settings);
     window.generateWeeklySchedule();
     window.renderCourseTabView();
     window.saveCourseState();
