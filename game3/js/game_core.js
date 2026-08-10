@@ -16,7 +16,11 @@ window.showScreen = function(screenId) {
 
     if (db && myId) {
         try {
-            db.ref(`presence/${myId}`).update({ status: isPlayingScreen ? 'playing' : 'online' });
+            db.ref(`presence/${myId}`).update({
+                name: myName,
+                username: myPrivacy ? "" : tgUsername,
+                status: isPlayingScreen ? 'playing' : 'online'
+            });
         } catch(e) {}
     }
 
@@ -153,6 +157,8 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     }
 
     db.ref(`presence/${myId}`).update({
+        name: myName,
+        username: myPrivacy ? "" : tgUsername,
         allowSpectators: false,
         activeRoomCode: null,
         status: 'online'
@@ -527,6 +533,8 @@ window.finishGame = function() {
     isChallenging = false;
 
     db.ref(`presence/${myId}`).update({
+        name: myName,
+        username: myPrivacy ? "" : tgUsername,
         allowSpectators: false,
         activeRoomCode: null,
         status: 'online'
