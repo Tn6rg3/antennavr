@@ -133,18 +133,19 @@ window.generateAdaptiveGroup = function() {
             const selected = currentWeights[selectedIdx];
 
             // Limite: max 3 caratteri uguali per gruppo
-            const count = (group.match(new RegExp(selected.char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "g")) || []).length;
+            // Usiamo una versione sicura per la regex che gestisce caratteri speciali
+            const safeChar = selected.char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const count = (group.match(new RegExp(safeChar, "g")) || []).length;
+
             if (count < 3) {
                 group += selected.char;
                 found = true;
                 break;
             } else {
-                // Rimuoviamo questo carattere dalle opzioni per questa posizione e riproviamo
                 currentWeights.splice(selectedIdx, 1);
             }
         }
 
-        // Fallback se i filtri esauriscono le opzioni
         if (!found) group += activeChars[Math.floor(Math.random() * activeChars.length)];
     }
     return group;
@@ -154,14 +155,14 @@ window.preGenerateCourseGroups = function() {
     if (!window.courseData || !window.courseData.current_day_session) return;
 
     const session = window.courseData.current_day_session;
-    const wpm = window.calculateDynamicCourseWpm();
     const farnsworth = parseInt(window.courseData.settings.farnsworth_wpm) || 12;
     const spacing = parseFloat(window.courseData.settings.group_spacing) || 3.0;
 
     // Stima della durata di un gruppo di 5 caratteri (in secondi)
+    // Formula approssimativa: (5 caratteri * 50 unit/parola / 1.2 wpm) + spacing
     const estimatedSecPerGroup = (60 / farnsworth) + (spacing * 2);
 
-    // Calcoliamo quanti gruppi servono per coprire l'intera durata
+    // Calcoliamo quanti gruppi servono per coprire l'intera durata + 50% extra di buffer
     const numGroups = Math.ceil((session.total_seconds / estimatedSecPerGroup) * 1.5);
 
     console.log(`Course: Pre-generating ${numGroups} groups for session...`);
@@ -173,9 +174,12 @@ window.preGenerateCourseGroups = function() {
     requestedWordCount = gameWords.length;
 };
 
+let courseSessionTimer = null;
 window.startCourseSessionSequence = function() {
     window.showScreen('gameArea');
     if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
+
+    if (courseSessionTimer) clearInterval(courseSessionTimer);
 
     window.courseSessionTotalSec = window.courseData.current_day_session.total_seconds;
     window.courseSessionPauseDuration = parseInt(window.courseData.settings.pause_duration) || 0;
@@ -184,20 +188,19 @@ window.startCourseSessionSequence = function() {
     window.courseIsPaused = false;
     window.coursePausePending = false;
 
-    // PRE-GENERAZIONE LISTA GRUPPI
     window.preGenerateCourseGroups();
     wordIndex = 0;
 
-    // Inizializziamo il timer della sessione
     window.updateCourseTimerUI();
     courseSessionTimer = setInterval(() => {
         if (!gameRunning || !window.courseData.current_day_session) return;
-        if (window.courseIsPaused) return;
+
+        // Se siamo in pausa o l'app è in background, non scaliamo il tempo rimanente
+        if (window.courseIsPaused || document.hidden) return;
 
         window.courseData.current_day_session.remaining_seconds--;
         window.updateCourseTimerUI();
 
-        // Controllo Trigger Pausa Ricorrente (SPOSTATO: ora mette solo in "attesa")
         if (window.courseSessionPauseDuration > 0 && Date.now() >= window.courseSessionNextPauseTs) {
             window.coursePausePending = true;
         }
@@ -212,12 +215,14 @@ window.startCourseSessionSequence = function() {
     setTimeout(() => { if (gameRunning) window.playNextCourseGroup(); }, 800);
 };
 
+let coursePauseInterval = null;
 window.triggerCoursePause = function() {
+    if (coursePauseInterval) clearInterval(coursePauseInterval);
+
     window.courseIsPaused = true;
     inputActive = false;
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
 
-    // Puliamo l'input per evitare invii spuri durante o subito dopo la pausa
     if (els.permanentGameInput) els.permanentGameInput.value = "";
 
     let timeLeft = window.courseSessionPauseDuration;
@@ -226,21 +231,24 @@ window.triggerCoursePause = function() {
     };
 
     updatePauseUI();
-    const pauseInt = setInterval(() => {
+    coursePauseInterval = setInterval(() => {
         if (!gameRunning || !isCourseMode) {
-            clearInterval(pauseInt);
+            clearInterval(coursePauseInterval);
             return;
         }
 
         timeLeft--;
         if (timeLeft <= 0) {
-            clearInterval(pauseInt);
+            clearInterval(coursePauseInterval);
             window.courseIsPaused = false;
             window.courseSessionNextPauseTs = Date.now() + (window.courseSessionPauseInterval * 1000);
             if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
             inputActive = true;
             if (gameRunning) {
-                if (els.permanentGameInput) els.permanentGameInput.focus();
+                if (els.permanentGameInput) {
+                    els.permanentGameInput.focus();
+                    els.permanentGameInput.value = "";
+                }
                 window.playNextCourseGroup();
             }
         } else {

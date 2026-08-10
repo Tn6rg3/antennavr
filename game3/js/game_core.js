@@ -879,10 +879,11 @@ window.handleWordSubmission = function(userWord) {
 
         setTimeout(() => {
             if (gameRunning && isCourseMode) {
+                // Incrementiamo l'indice PRIMA di chiamare il prossimo gruppo
                 wordIndex++;
                 window.playNextCourseGroup?.();
             }
-        }, 600);
+        }, 300); // Ridotto il delay per maggiore reattività
         return;
     }
 
