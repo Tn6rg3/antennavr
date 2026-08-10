@@ -870,6 +870,8 @@ window.handleWordSubmission = function(userWord) {
         // --- CONTROLLO PAUSA PROGRAMMATA (CORSO) ---
         if (window.coursePausePending) {
             window.coursePausePending = false;
+            // Incrementiamo l'indice per non ripetere la parola dopo la pausa
+            wordIndex++;
             // Aggiungiamo un piccolo delay per permettere all'utente di vedere l'ultimo risultato
             setTimeout(() => {
                 if (gameRunning && isCourseMode) window.triggerCoursePause?.();
