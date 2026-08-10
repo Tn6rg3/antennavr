@@ -12,13 +12,22 @@ const STORAGE_COURSE_STATE = "cwgame_course_state";
 
 window.initCourseManager = function() {
     console.log("Course: Initializing...");
-    window.loadCourseState();
+    window.loadCourseState().then(() => {
+        window.renderCourseTabView();
+    });
 };
 
 window.loadCourseState = async function() {
     if (!myId) return;
     const snap = await db.ref(`users/${myId}/course`).once('value');
-    window.courseData = snap.val() || window.getDefaultCourseData();
+    const data = snap.val();
+
+    if (data) {
+        window.courseData = data;
+    } else {
+        window.courseData = window.getDefaultCourseData();
+    }
+
     window.updateCourseUI();
 
     // Aggiorniamo il registro iscritti all'accesso per sicurezza

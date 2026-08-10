@@ -85,7 +85,11 @@ window.renderCourseTabDashboard = function() {
             }
 
             box.onclick = () => {
-                if (s.attempts > 0) showToast(`${char}: Accurato al ${Math.round(accuracy * 100)}% su ${s.attempts} tentativi.`);
+                if (s.attempts > 0) {
+                    alert(`${char}: Accurato al ${Math.round(accuracy * 100)}% su ${s.attempts} tentativi.`);
+                } else {
+                    alert(`${char}: Nessun dato registrato.`);
+                }
             };
 
             heatmap.appendChild(box);
@@ -163,10 +167,11 @@ window.populateLessonDropdowns = function() {
     const populate = (select) => {
         if (!select) return;
         select.innerHTML = '';
+        // Sequenza Koch: K M R S U A P T L O W I . N J E F 0 Y V , , G 5 / Q 9 Z H 3 8 B ? 4 2 7 C 1 D 6 X
         for (let i = 2; i <= window.KOCH_SEQUENCE.length; i++) {
             const opt = document.createElement('option');
             opt.value = i;
-            opt.textContent = `Lezione ${i}`;
+            opt.textContent = `Lezione ${i} (${window.KOCH_SEQUENCE[i-1]})`;
             select.appendChild(opt);
         }
     };
