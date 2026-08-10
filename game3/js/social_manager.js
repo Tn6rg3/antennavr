@@ -442,10 +442,11 @@ window.listenToInvites = function() {
                 els.acceptInviteBtn.onclick = () => {
                     const roomCodeNew = Math.floor(1000 + Math.random() * 9000).toString();
                     const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard');
+                    const isCoop = (inv.mode === 'conquest');
 
                     db.ref(`rooms/${roomCodeNew}`).set({
                         status: 'countdown',
-                        type: 'multi',
+                        type: isCoop ? 'coop' : 'multi',
                         mode: inv.mode || 'standard',
                         wpm: inv.wpm || 20,
                         tone: 600,
