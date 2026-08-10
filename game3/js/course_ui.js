@@ -33,7 +33,10 @@ window.renderCourseTabView = function() {
         window.renderCourseTabDashboard();
 
         // Popoliamo i campi impostazioni
+        window.populateLessonDropdowns();
         const s = window.courseData.settings;
+        const currentLesson = window.courseData.progress.current_lesson;
+        if (document.getElementById('courseTabLessonInput')) document.getElementById('courseTabLessonInput').value = currentLesson;
         if (document.getElementById('courseTabDaysInput')) document.getElementById('courseTabDaysInput').value = s.days_per_week;
         if (document.getElementById('courseTabWpmInput')) document.getElementById('courseTabWpmInput').value = s.start_wpm;
         if (document.getElementById('courseTabFarnsworthInput')) document.getElementById('courseTabFarnsworthInput').value = s.farnsworth_wpm;
@@ -145,7 +148,37 @@ window.generateWeeklySchedule = function() {
 window.startCourseWizard = function() {
     document.getElementById('courseTabInitialPrompt').style.display = 'none';
     document.getElementById('courseWizardContainer').style.display = 'block';
+    window.populateLessonDropdowns();
     window.nextWizardStep(1);
+};
+
+window.populateLessonDropdowns = function() {
+    const wizardSelect = document.getElementById('wizardStartLesson');
+    const settingsSelect = document.getElementById('courseTabLessonInput');
+
+    const populate = (select) => {
+        if (!select) return;
+        select.innerHTML = '';
+        for (let i = 2; i <= window.KOCH_SEQUENCE.length; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = `Lezione ${i}`;
+            select.appendChild(opt);
+        }
+    };
+
+    populate(wizardSelect);
+    populate(settingsSelect);
+
+    if (wizardSelect) {
+        wizardSelect.onchange = () => {
+            const num = parseInt(wizardSelect.value);
+            const chars = window.KOCH_SEQUENCE.slice(0, num).join(", ");
+            const info = document.getElementById('wizardLessonChars');
+            if (info) info.textContent = `Caratteri: ${chars}`;
+        };
+        wizardSelect.onchange();
+    }
 };
 
 window.nextWizardStep = function(step) {
@@ -172,6 +205,7 @@ window.updateWizardDurationsPreview = function() {
 window.finishWizard = function() {
     const z2 = parseInt(document.getElementById('wizardMinZ2').value) || 10;
     window.courseData.active_plan = true;
+    window.courseData.progress.current_lesson = parseInt(document.getElementById('wizardStartLesson').value) || 2;
     window.courseData.settings = {
         days_per_week: document.getElementById('wizardDays').value,
         start_wpm: document.getElementById('wizardWpm').value,
@@ -206,6 +240,7 @@ window.attachCourseEventListeners = function() {
     if (btnSave) {
         btnSave.onclick = () => {
             const z2 = parseInt(document.getElementById('courseTabMinZ2').value) || 10;
+            window.courseData.progress.current_lesson = parseInt(document.getElementById('courseTabLessonInput').value) || 2;
             window.courseData.settings.days_per_week = document.getElementById('courseTabDaysInput').value;
             window.courseData.settings.start_wpm = document.getElementById('courseTabWpmInput').value;
             window.courseData.settings.farnsworth_wpm = document.getElementById('courseTabFarnsworthInput').value;
