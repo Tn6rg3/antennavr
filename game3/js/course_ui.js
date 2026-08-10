@@ -30,7 +30,8 @@ window.renderCourseTabView = function() {
     if (initialPrompt) initialPrompt.style.display = 'none';
     if (wizardContainer) wizardContainer.style.display = 'none';
 
-    if (window.courseData && window.courseData.active_plan === true) {
+    // CONTROLLO RIGOROSO: Se il piano è attivo, mostriamo la dashboard
+    if (window.courseData && (window.courseData.active_plan === true || window.courseData.active_plan === "true")) {
         if (activeView) activeView.style.display = 'flex';
         window.renderCourseTabDashboard();
 
@@ -50,6 +51,7 @@ window.renderCourseTabView = function() {
         // Inizializza Chat Corso
         window.initCourseChat();
     } else {
+        // Altrimenti mostriamo il prompt iniziale
         if (initialPrompt) initialPrompt.style.display = 'block';
     }
 };
@@ -177,6 +179,20 @@ window.populateLessonDropdowns = function() {
             select.appendChild(opt);
         }
     };
+
+    populate(wizardSelect);
+    populate(settingsSelect);
+
+    if (wizardSelect) {
+        wizardSelect.onchange = () => {
+            const num = parseInt(wizardSelect.value);
+            const chars = window.KOCH_SEQUENCE.slice(0, num).join(", ");
+            const info = document.getElementById('wizardLessonChars');
+            if (info) info.textContent = `Caratteri: ${chars}`;
+        };
+        wizardSelect.onchange();
+    }
+};
 
     populate(wizardSelect);
     populate(settingsSelect);

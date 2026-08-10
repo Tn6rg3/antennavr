@@ -12,12 +12,18 @@ const STORAGE_COURSE_STATE = "cwgame_course_state";
 
 window.initCourseManager = function() {
     console.log("Course: Initializing...");
+
+    // Forza la visibilità del bottone se l'elemento esiste
+    const btnOpen = document.getElementById('btnOpenCourse');
+    if (btnOpen) btnOpen.style.display = 'block';
+
     if (!myId || !db) {
         console.warn("Course Init: Missing Auth or DB, retrying in 500ms...");
         setTimeout(window.initCourseManager, 500);
         return;
     }
     window.loadCourseState().then(() => {
+        console.log("Course: State loaded, rendering view...");
         window.renderCourseTabView();
         window.checkWeeklyReview();
         window.checkCourseStartupNotification();
