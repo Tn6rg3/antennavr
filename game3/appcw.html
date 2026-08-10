@@ -133,9 +133,13 @@
                 <button class="action-btn-small" onclick="showScreen('participationScreen'); switchActTab('daily');" id="txt_act_btn">
                     <span id="txt_act_btn_label">🏅 Attività</span>
                 </button>
-                <button class="action-btn-small" onclick="showProfileScreen()" id="txt_profile_btn">
+                <button class="action-btn-small" onclick="showProfileScreen()" id="txt_profile_btn" style="position: relative;">
                     <span id="txt_profile_btn_label">👤 Profilo</span>
                     <span id="missionsBadge" class="badge-counter">0</span>
+                </button>
+                <button class="action-btn-small" onclick="showProfileScreen(); switchProfileTab('course');" id="txt_course_tab_btn" style="position: relative;">
+                    <span id="txt_course_btn_label">📻 Corso</span>
+                    <span id="courseEnrollmentBadgeGlobal" class="badge-counter" style="background:#2196f3;">0</span>
                 </button>
                 <button class="action-btn-small" onclick="showScreen('leaderboardScreen');" id="txt_lb_btn">
                     <span id="txt_lb_btn_label">🏆 Classifica</span>

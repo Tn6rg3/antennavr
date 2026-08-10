@@ -245,6 +245,20 @@ function initGame() {
     chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;
     chatCwTone = parseInt(localStorage.getItem(STORAGE_CHAT_CW_TONE)) || 600;
 
+    // RIPRISTINO VALORI INPUT CHAT CW
+    if (els.chatCwWpmInput) els.chatCwWpmInput.value = chatCwWpm;
+    if (els.chatCwToneInput) els.chatCwToneInput.value = chatCwTone;
+
+    // SALVATAGGIO AUTOMATICO IMPOSTAZIONI CHAT CW
+    els.chatCwWpmInput?.addEventListener('change', (e) => {
+        chatCwWpm = parseInt(e.target.value) || 20;
+        localStorage.setItem(STORAGE_CHAT_CW_WPM, chatCwWpm);
+    });
+    els.chatCwToneInput?.addEventListener('change', (e) => {
+        chatCwTone = parseInt(e.target.value) || 600;
+        localStorage.setItem(STORAGE_CHAT_CW_TONE, chatCwTone);
+    });
+
     if (els.toggleChatCwBtn) {
         const updateBtn = () => {
             els.toggleChatCwBtn.textContent = isChatCwEnabled ? "📻 CW: ON" : "📻 CW: OFF";

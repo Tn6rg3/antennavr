@@ -156,6 +156,9 @@ window.setLanguage = function(lang) {
     if (profileBtnLabel) profileBtnLabel.textContent = "👤 " + t.profile;
     if (actBtnLabel) actBtnLabel.textContent = "🏅 " + t.activity;
 
+    const courseBtnLabel = document.getElementById('txt_course_btn_label');
+    if (courseBtnLabel) courseBtnLabel.textContent = "📻 " + (lang === 'it' ? "Corso" : "Course");
+
     window.populateGameModesUI();
     window.checkGameTypeUI();
     if (typeof window.updateMuteBtnUI === 'function') window.updateMuteBtnUI();

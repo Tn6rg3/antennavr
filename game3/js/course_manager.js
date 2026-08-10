@@ -373,15 +373,17 @@ window.listenToCourseEnrollment = function() {
     db.ref('appConfig/courseEnrollmentCount').on('value', snap => {
         const count = snap.val() || 0;
         console.log("Course: Global enrollment count from DB:", count);
-        const badge = document.getElementById('courseEnrollmentBadge');
-        if (badge) {
-            badge.textContent = count;
-            badge.style.display = count > 0 ? 'flex' : 'none';
-            badge.classList.toggle('badge-active', count > 0);
-            console.log("Course: Badge UI updated. Display:", badge.style.display, "Text:", badge.textContent);
-        } else {
-            console.warn("Course: courseEnrollmentBadge element not found in DOM");
-        }
+
+        // Aggiorna tutti i badge possibili (Profilo tab e Menu principale)
+        const badgeIds = ['courseEnrollmentBadge', 'courseEnrollmentBadgeGlobal'];
+        badgeIds.forEach(id => {
+            const badge = document.getElementById(id);
+            if (badge) {
+                badge.textContent = count;
+                badge.style.display = count > 0 ? 'flex' : 'none';
+                badge.classList.toggle('badge-active', count > 0);
+            }
+        });
     });
 };
 
