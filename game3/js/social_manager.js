@@ -588,7 +588,15 @@ window.listenToRooms = function() {
     if (els.waitingRoomsList) els.waitingRoomsList.innerHTML = '';
     const lobbyQuery = db.ref('rooms').orderByChild('status').equalTo('waiting').limitToLast(20);
 
-    const onAdded = lobbyQuery.on('child_added', snap => window.addOrUpdateRoomCard(snap.key, snap.val()));
+    const onAdded = lobbyQuery.on('child_added', snap => {
+        const room = snap.val();
+        const now = Date.now();
+        // Se la stanza non è stata toccata da più di 20 minuti, la ignoriamo (auto-cleanup per bacheca)
+        if (room.createdAt && (now - room.createdAt > 20 * 60 * 1000) && (!room.players || Object.keys(room.players).length < 2)) {
+            return;
+        }
+        window.addOrUpdateRoomCard(snap.key, room);
+    });
     const onChanged = lobbyQuery.on('child_changed', snap => window.addOrUpdateRoomCard(snap.key, snap.val()));
     const onRemoved = lobbyQuery.on('child_removed', snap => window.removeRoomCard(snap.key));
 

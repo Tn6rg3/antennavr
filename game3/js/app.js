@@ -99,6 +99,10 @@ let quizQuestionIndex = 0, randomizedQuizQuestions = [], lastLoadedQuizIndex = -
 let sessionCharErrors = Object.create(null), sessionErrorsByWpm = Object.create(null);
 let userMatchHistory = [];
 
+// GESTIONE INATTIVITÀ
+let lastActivityTs = Date.now();
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minuti
+
 // GESTORE CENTRALE LISTENER
 const listeners = {
     room: null, chat: null, pingPong: null, players: null, quizState: null,
@@ -291,6 +295,18 @@ function initGame() {
 
         if (els.playerName) els.playerName.textContent = myName;
 
+        // --- PULIZIA SESSIONI PRECEDENTI ---
+        // Se l'app si è chiusa male, l'utente potrebbe avere ancora una stanza "waiting" a suo nome.
+        // La puliamo all'avvio per evitare "ghost rooms" in bacheca.
+        db.ref('rooms').orderByChild('hostId').equalTo(myId).once('value', s => {
+            s.forEach(roomSnap => {
+                if (roomSnap.val().status === 'waiting') {
+                    roomSnap.ref.remove();
+                    db.ref(`public_lobby_rooms/${roomSnap.key}`).remove();
+                }
+            });
+        });
+
         // --- SBLOCCO UI CRITICO ---
         if (els.loadingText) els.loadingText.style.display = 'none';
         if (els.createRoomBtn) {
@@ -302,8 +318,35 @@ function initGame() {
             if (!s.val()) return;
             const pRef = db.ref(`presence/${myId}`);
             pRef.onDisconnect().remove();
-            pRef.set({ name: myName, username: myPrivacy ? "" : tgUsername, status: 'online', ts: firebase.database.ServerValue.TIMESTAMP });
+            pRef.set({
+                name: myName,
+                username: myPrivacy ? "" : tgUsername,
+                status: 'online',
+                ts: firebase.database.ServerValue.TIMESTAMP,
+                lastActive: firebase.database.ServerValue.TIMESTAMP
+            });
         });
+
+        // --- MONITORAGGIO INATTIVITÀ ---
+        const updateActivity = () => { lastActivityTs = Date.now(); };
+        ['mousedown', 'keydown', 'touchstart', 'input'].forEach(evt => window.addEventListener(evt, updateActivity));
+
+        setInterval(() => {
+            const now = Date.now();
+            if (now - lastActivityTs > INACTIVITY_TIMEOUT_MS) {
+                console.log("Inattività rilevata (15 min). Chiusura sessione.");
+                if (roomCode) {
+                    window.showToast?.(currentLang === 'it' ? "Sessione chiusa per inattività." : "Session closed due to inactivity.");
+                    window.exitRoomCleanly?.(false, true);
+                }
+                // Rimuoviamo anche la presenza per sicurezza
+                db.ref(`presence/${myId}`).remove();
+                // Fermiamo l'aggiornamento automatico fino alla prossima interazione
+            } else if (db && myId) {
+                // Aggiorna il timestamp sul server ogni minuto per mostrare che siamo vivi
+                db.ref(`presence/${myId}/lastActive`).set(firebase.database.ServerValue.TIMESTAMP);
+            }
+        }, 60000); // Controllo ogni minuto
 
         if (startParam) {
             if (startParam.startsWith('team_')) window.processTeamInvite?.(startParam.replace('team_', ''));
