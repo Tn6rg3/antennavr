@@ -217,6 +217,9 @@ window.triggerCoursePause = function() {
     inputActive = false;
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
 
+    // Puliamo l'input per evitare invii spuri durante o subito dopo la pausa
+    if (els.permanentGameInput) els.permanentGameInput.value = "";
+
     let timeLeft = window.courseSessionPauseDuration;
     const updatePauseUI = () => {
         if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<span style="color:#ff9800">☕ PAUSA: ${timeLeft}s</span>`;
@@ -224,6 +227,11 @@ window.triggerCoursePause = function() {
 
     updatePauseUI();
     const pauseInt = setInterval(() => {
+        if (!gameRunning || !isCourseMode) {
+            clearInterval(pauseInt);
+            return;
+        }
+
         timeLeft--;
         if (timeLeft <= 0) {
             clearInterval(pauseInt);
@@ -231,7 +239,10 @@ window.triggerCoursePause = function() {
             window.courseSessionNextPauseTs = Date.now() + (window.courseSessionPauseInterval * 1000);
             if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
             inputActive = true;
-            if (gameRunning) window.playNextCourseGroup();
+            if (gameRunning) {
+                if (els.permanentGameInput) els.permanentGameInput.focus();
+                window.playNextCourseGroup();
+            }
         } else {
             updatePauseUI();
         }
@@ -290,9 +301,10 @@ window.calculateDynamicCourseWpm = function() {
 
 window.playNextCourseGroup = function() {
     if (!gameRunning || !isCourseMode) return;
+    if (wordIndex >= requestedWordCount) return window.finishCourseSession();
+
     inputActive = true;
-    const group = window.generateAdaptiveGroup();
-    gameWords[wordIndex] = group;
+    const group = gameWords[wordIndex];
 
     const charWpm = window.calculateDynamicCourseWpm();
     const farnsworthWpm = parseInt(window.courseData.settings.farnsworth_wpm);

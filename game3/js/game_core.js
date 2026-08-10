@@ -869,12 +869,18 @@ window.handleWordSubmission = function(userWord) {
         // --- CONTROLLO PAUSA PROGRAMMATA (CORSO) ---
         if (window.coursePausePending) {
             window.coursePausePending = false;
-            window.triggerCoursePause?.();
+            // Aggiungiamo un piccolo delay per permettere all'utente di vedere l'ultimo risultato
+            setTimeout(() => {
+                if (gameRunning && isCourseMode) window.triggerCoursePause?.();
+            }, 600);
             return;
         }
 
         setTimeout(() => {
-            if (gameRunning) window.playNextCourseGroup?.();
+            if (gameRunning && isCourseMode) {
+                wordIndex++;
+                window.playNextCourseGroup?.();
+            }
         }, 600);
         return;
     }
