@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.222";
+const APP_VERSION = "20260807.220";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -137,6 +137,9 @@ function escapeHTML(str) {
 }
 
 function showToast(message) {
+    // DISATTIVIAMO LE NOTIFICHE VISIVE DURANTE IL GIOCO
+    if (gameRunning || isCourseMode) return;
+
     const toast = document.createElement('div');
     toast.className = 'toast';
     toast.textContent = message;
@@ -219,6 +222,24 @@ function initGame() {
     if (els.startWpmInput) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM) || 20;
     if (els.wordCountInput) els.wordCountInput.value = localStorage.getItem(STORAGE_PREF_WORDS) || 10;
     if (els.toneInput) els.toneInput.value = localStorage.getItem(STORAGE_PREF_TONE) || 600;
+
+    // RIPRISTINO IMPOSTAZIONI AGGIUNTIVE
+    if (els.charSpaceInput) els.charSpaceInput.value = localStorage.getItem(STORAGE_PREF_CHAR_SPACE) || "";
+    if (els.wordSpaceSelect) els.wordSpaceSelect.value = localStorage.getItem(STORAGE_PREF_WORD_SPACE) || "1.0";
+    if (els.fixedSpeedCheckbox) els.fixedSpeedCheckbox.checked = localStorage.getItem("cwgame_pref_fixed") === 'true';
+    if (els.easyModeCheckbox) els.easyModeCheckbox.checked = localStorage.getItem("cwgame_pref_easy") === 'true';
+    if (els.allowSpectatorsCheckbox) els.allowSpectatorsCheckbox.checked = localStorage.getItem("cwgame_pref_spectate") === 'true';
+
+    // SALVATAGGIO AUTOMATICO DELLE PREFERENZE AL CAMBIO
+    const savePref = (key, val) => localStorage.setItem(key, val);
+    els.startWpmInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_WPM, e.target.value));
+    els.wordCountInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORDS, e.target.value));
+    els.toneInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_TONE, e.target.value));
+    els.charSpaceInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_CHAR_SPACE, e.target.value));
+    els.wordSpaceSelect?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORD_SPACE, e.target.value));
+    els.fixedSpeedCheckbox?.addEventListener('change', (e) => savePref("cwgame_pref_fixed", e.target.checked));
+    els.easyModeCheckbox?.addEventListener('change', (e) => savePref("cwgame_pref_easy", e.target.checked));
+    els.allowSpectatorsCheckbox?.addEventListener('change', (e) => savePref("cwgame_pref_spectate", e.target.checked));
 
     isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
     chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;

@@ -65,6 +65,9 @@ window.playBeep = function(freq, duration) {
 };
 
 window.playNotificationSound = function() {
+    // DISATTIVIAMO LE NOTIFICHE SONORE DURANTE IL GIOCO
+    if (gameRunning || isCourseMode) return;
+
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
     window.playBeep(880, 0.08);
