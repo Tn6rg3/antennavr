@@ -455,7 +455,8 @@ if (els.createRoomBtn) {
 
         const expires = isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
-        db.ref('rooms/' + roomCode).set({
+        const roomRef = db.ref('rooms/' + roomCode);
+        roomRef.set({
             status: isSinglePlayer ? 'countdown' : 'waiting',
             type: isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
             mode: currentMode,
@@ -471,7 +472,14 @@ if (els.createRoomBtn) {
             expiresAt: expires,
             hostId: myId
         }).then(() => {
-            if (!isSinglePlayer) db.ref(`public_lobby_rooms/${roomCode}`).set({ mode: currentMode, pCount: 1, wpm: currentWpm, status: 'waiting', expiresAt: expires });
+            if (!isSinglePlayer) {
+                // PULIZIA AUTOMATICA: Se l'Host si disconnette completamente da Firebase, rimuovi la stanza
+                roomRef.onDisconnect().remove();
+
+                const lobbyRef = db.ref(`public_lobby_rooms/${roomCode}`);
+                lobbyRef.set({ mode: currentMode, pCount: 1, wpm: currentWpm, status: 'waiting', expiresAt: expires });
+                lobbyRef.onDisconnect().remove();
+            }
 
             if (isSinglePlayer && allowSpectators) {
                 db.ref(`presence/${myId}`).update({

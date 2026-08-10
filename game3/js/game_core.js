@@ -413,6 +413,18 @@ window.renderPlayersList = function(playersData, hostId) {
         };
     }
 
+    if (els.withdrawChallengeBtn) {
+        els.withdrawChallengeBtn.style.display = (!amIHost && haveIAccepted) ? 'block' : 'none';
+        els.withdrawChallengeBtn.onclick = () => {
+            db.ref(`rooms/${roomCode}/players/${myId}`).update({ accepted: false, ready: false }).then(() => {
+                db.ref(`rooms/${roomCode}/players`).once('value', s => {
+                    const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
+                    db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
+                });
+            });
+        };
+    }
+
     if (els.startMultiplayerBtn) els.startMultiplayerBtn.style.display = (amIHost && !isTrnOrPP) ? 'block' : 'none';
     if (els.deleteRoomBtn) els.deleteRoomBtn.style.display = (myId === hostId && !roomCode.startsWith("TRN_")) ? 'block' : 'none';
     if (els.readyBtn) els.readyBtn.style.display = (haveIAccepted && isTrnOrPP && !amIReady) ? 'block' : 'none';
