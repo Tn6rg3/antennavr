@@ -380,8 +380,13 @@ window.listenToCourseEnrollment = function() {
             const badge = document.getElementById(id);
             if (badge) {
                 badge.textContent = count;
-                badge.style.display = count > 0 ? 'flex' : 'none';
-                badge.classList.toggle('badge-active', count > 0);
+                if (count > 0) {
+                    badge.style.display = 'flex';
+                    badge.classList.add('badge-active');
+                } else {
+                    badge.style.display = 'none';
+                    badge.classList.remove('badge-active');
+                }
             }
         });
     });

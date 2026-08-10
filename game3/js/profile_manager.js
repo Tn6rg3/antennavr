@@ -137,31 +137,29 @@ window.renderActivityRankings = function(period, key) {
 window.switchProfileTab = function(tabId) {
     const infoBtn = document.getElementById('btnTabProfile');
     const statsBtn = document.getElementById('btnTabStats');
-    const courseBtn = document.getElementById('btnTabCourse');
     const infoArea = document.getElementById('profileInfoArea');
     const statsArea = document.getElementById('profileStatsArea');
     const courseArea = document.getElementById('profileCourseArea');
 
-    infoBtn.classList.remove('active-tab');
-    statsBtn.classList.remove('active-tab');
-    if (courseBtn) courseBtn.classList.remove('active-tab');
+    if (infoBtn) infoBtn.classList.remove('active-tab');
+    if (statsBtn) statsBtn.classList.remove('active-tab');
 
-    infoArea.style.display = 'none';
-    statsArea.style.display = 'none';
+    if (infoArea) infoArea.style.display = 'none';
+    if (statsArea) statsArea.style.display = 'none';
     if (courseArea) courseArea.style.display = 'none';
 
     if (tabId === 'info') {
-        infoBtn.classList.add('active-tab');
-        infoArea.style.display = 'flex';
+        if (infoBtn) infoBtn.classList.add('active-tab');
+        if (infoArea) infoArea.style.display = 'flex';
         window.loadProfileInfo();
     } else if (tabId === 'stats') {
-        statsBtn.classList.add('active-tab');
-        statsArea.style.display = 'flex';
+        if (statsBtn) statsBtn.classList.add('active-tab');
+        if (statsArea) statsArea.style.display = 'flex';
         document.getElementById('bigramThresholdInput')?.addEventListener('change', window.loadAdvancedStats);
         document.getElementById('wordThresholdInput')?.addEventListener('change', window.loadAdvancedStats);
         window.loadAdvancedStats();
     } else if (tabId === 'course') {
-        if (courseBtn) courseBtn.classList.add('active-tab');
+        // La tab course ora gestisce solo la visualizzazione dell'area, il bottone è esterno
         if (courseArea) courseArea.style.display = 'flex';
         if (typeof window.renderCourseTabView === 'function') window.renderCourseTabView();
     }
