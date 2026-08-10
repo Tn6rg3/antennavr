@@ -227,12 +227,11 @@ window.attachCourseEventListeners = function() {
     const btnExit = document.getElementById('btnTabResetCourse');
     if (btnExit) {
         btnExit.onclick = () => {
-            if (confirm("Vuoi davvero uscire dal Corso CW? Il tuo piano verrà rimosso, ma le tue statistiche caratteri rimarranno salvate.")) {
-                window.courseData.active_plan = false;
-                window.courseData.current_day_session = null;
-                window.courseData.weekly_schedule = null;
+            if (confirm("ATTENZIONE: Stai per ABBANDONARE il Corso CW. Tutti i tuoi progressi e le statistiche dei caratteri (Heatmap) verranno CANCELLATI DEFINITIVAMENTE. Vuoi procedere?")) {
+                window.courseData = window.getDefaultCourseData();
                 window.saveCourseState();
                 window.renderCourseTabView();
+                showToast("Corso abbandonato e dati resettati.");
             }
         };
     }

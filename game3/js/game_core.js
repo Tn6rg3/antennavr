@@ -733,6 +733,13 @@ window.handleWordSubmission = function(userWord) {
             els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
         }
 
+        // --- CONTROLLO PAUSA PROGRAMMATA (CORSO) ---
+        if (window.coursePausePending) {
+            window.coursePausePending = false;
+            window.triggerCoursePause?.();
+            return;
+        }
+
         setTimeout(() => {
             if (gameRunning) window.playNextCourseGroup?.();
         }, 600);

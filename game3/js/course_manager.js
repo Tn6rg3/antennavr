@@ -125,6 +125,7 @@ window.startCourseSessionSequence = function() {
     window.courseSessionPauseInterval = parseInt(window.courseData.settings.pause_interval) || 60;
     window.courseSessionNextPauseTs = Date.now() + (window.courseSessionPauseInterval * 1000);
     window.courseIsPaused = false;
+    window.coursePausePending = false;
 
     // Inizializziamo il timer della sessione
     window.updateCourseTimerUI();
@@ -135,9 +136,9 @@ window.startCourseSessionSequence = function() {
         window.courseData.current_day_session.remaining_seconds--;
         window.updateCourseTimerUI();
 
-        // Controllo Trigger Pausa Ricorrente
+        // Controllo Trigger Pausa Ricorrente (SPOSTATO: ora mette solo in "attesa")
         if (window.courseSessionPauseDuration > 0 && Date.now() >= window.courseSessionNextPauseTs) {
-            window.triggerCoursePause();
+            window.coursePausePending = true;
         }
 
         if (window.courseData.current_day_session.remaining_seconds <= 0) {
