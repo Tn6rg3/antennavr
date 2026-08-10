@@ -376,7 +376,12 @@ if (els.createTeamBtn) {
     els.createTeamBtn.addEventListener('click', () => {
         const tName = els.newTeamName ? els.newTeamName.value.trim() : "";
         if (!tName) return;
-        db.ref('teams').push().set({ name: tName, captainId: myId, status: 'open', members: { [myId]: { name: myName, username: myPrivacy ? "" : tgUsername } } }).then(() => window.checkMyTeamStatus());
+        db.ref('teams').push().set({
+            name: tName,
+            captainId: myId,
+            status: 'open',
+            members: { [myId]: { name: myName, username: myPrivacy ? "" : tgUsername } }
+        }).then(() => window.checkMyTeamStatus());
     });
 }
 

@@ -104,10 +104,15 @@ window.setupChat = function(chatRef, containerId, alertBtnId) {
                 if (msg.ts > maxTs) maxTs = msg.ts;
             }
 
-            const nameB = document.createElement('b');
-            nameB.style.color = 'var(--link-color)';
-            nameB.textContent = msg.name + ": ";
-            div.appendChild(nameB);
+            const nameSpan = document.createElement('b');
+            nameSpan.style.color = 'var(--link-color)';
+            nameSpan.textContent = msg.name + ": ";
+            if (msg.username && String(msg.username).trim() !== "") {
+                nameSpan.style.cursor = 'pointer';
+                nameSpan.style.textDecoration = 'underline';
+                nameSpan.onclick = () => window.openTelegramProfile(msg.username);
+            }
+            div.appendChild(nameSpan);
 
             const textSpan = document.createElement('span');
             if (isChatCwEnabled) {
@@ -290,6 +295,7 @@ window.openInviteModal = function(targetId, targetName) {
             db.ref(`invites/${targetId}`).set({
                 fromId: myId,
                 fromName: myName,
+                fromUsername: myPrivacy ? "" : tgUsername,
                 type: 'game',
                 mode: mode,
                 wpm: wpm,
@@ -369,6 +375,7 @@ window.sendRecruitmentInvite = function(type) {
     db.ref(`invites/${currentInviterId}`).set({
         fromId: myId,
         fromName: myName,
+        fromUsername: myPrivacy ? "" : tgUsername,
         type: 'team',
         ts: firebase.database.ServerValue.TIMESTAMP,
         teamId: type === 'team' ? myTeamId : null,

@@ -405,7 +405,7 @@ if (els.sendChatBtn) {
 if (els.sendLobbyChatBtn) {
     els.sendLobbyChatBtn.onclick = () => {
         const txt = els.lobbyChatInput?.value.trim(); if (!txt || !roomCode) return;
-        db.ref(`rooms/${roomCode}/chat`).push().set({ name: myName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+        db.ref(`rooms/${roomCode}/chat`).push().set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         if (els.lobbyChatInput) els.lobbyChatInput.value = '';
     };
 }
