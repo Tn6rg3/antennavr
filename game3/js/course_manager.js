@@ -51,19 +51,18 @@ window.getDefaultCourseData = function() {
 window.saveCourseState = function() {
     if (!myId || !window.courseData) return;
 
-    // Controlliamo se lo stato del piano attivo è cambiato per aggiornare il counter globale
-    db.ref(`users/${myId}/course/active_plan`).once('value', oldActiveSnap => {
-        const wasActive = !!oldActiveSnap.val();
-        const isActive = !!window.courseData.active_plan;
-
-        db.ref(`users/${myId}/course`).set(window.courseData).then(() => {
-            if (wasActive !== isActive) {
-                db.ref('appConfig/courseEnrollmentCount').transaction(current => {
-                    let next = (current || 0) + (isActive ? 1 : -1);
-                    return next < 0 ? 0 : next;
-                });
-            }
-        });
+    // Salviamo lo stato locale dell'utente
+    db.ref(`users/${myId}/course`).set(window.courseData).then(() => {
+        // Gestione del registro iscritti (per contatore preciso)
+        const activeRef = db.ref('courseActiveEnrollments/' + myId);
+        if (window.courseData.active_plan) {
+            activeRef.set({
+                name: myName,
+                ts: firebase.database.ServerValue.TIMESTAMP
+            });
+        } else {
+            activeRef.remove();
+        }
     });
 };
 
@@ -369,11 +368,13 @@ window.initCourseManager = function() {
 };
 
 window.listenToCourseEnrollment = function() {
-    console.log("Course: Listening to global enrollment count...");
-    const enrollmentRef = db.ref('appConfig/courseEnrollmentCount');
+    console.log("Course: Listening to dynamic enrollment count...");
+    // Ascoltiamo il registro reale degli iscritti attivi
+    const enrollmentRef = db.ref('courseActiveEnrollments');
     enrollmentRef.on('value', snap => {
-        const count = snap.val() || 0;
-        console.log("Course: Global enrollment count from DB:", count);
+        const enrollments = snap.val() || {};
+        const count = Object.keys(enrollments).length;
+        console.log("Course: Dynamic enrollment count:", count);
 
         const badge = document.getElementById('courseEnrollmentBadgeGlobal');
         if (badge) {
@@ -386,6 +387,9 @@ window.listenToCourseEnrollment = function() {
                 badge.classList.remove('badge-active');
             }
         }
+
+        // Aggiorniamo anche il contatore testuale in appConfig per retrocompatibilità se serve
+        db.ref('appConfig/courseEnrollmentCount').set(count);
     });
 };
 
