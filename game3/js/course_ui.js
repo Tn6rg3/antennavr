@@ -44,6 +44,9 @@ window.renderCourseTabView = function() {
         if (document.getElementById('courseTabPauseIntervalInput')) document.getElementById('courseTabPauseIntervalInput').value = s.pause_interval || 60;
         if (document.getElementById('courseTabPauseDurationInput')) document.getElementById('courseTabPauseDurationInput').value = s.pause_duration || 10;
         if (document.getElementById('courseTabMinZ2')) document.getElementById('courseTabMinZ2').value = s.minutes_z2;
+
+        // Inizializza Chat Corso
+        window.initCourseChat();
     } else {
         if (initialPrompt) initialPrompt.style.display = 'block';
     }
@@ -122,6 +125,7 @@ window.renderCourseTabDashboard = function() {
 };
 
 window.generateWeeklySchedule = function() {
+    if (!window.courseData || !window.courseData.settings) return;
     const daysPerWeek = parseInt(window.courseData.settings.days_per_week);
     let schedule = Array(7).fill(null).map(() => ({ type: 'REST', completed: false }));
 
@@ -190,16 +194,19 @@ window.nextWizardStep = function(step) {
     // Aggiornamento anteprima durate al passo 4
     if (step === 4) {
         window.updateWizardDurationsPreview();
-        document.getElementById('wizardMinZ2').oninput = window.updateWizardDurationsPreview;
+        const input = document.getElementById('wizardMinZ2');
+        if (input) input.oninput = window.updateWizardDurationsPreview;
     }
 };
 
 window.updateWizardDurationsPreview = function() {
-    const z2 = parseInt(document.getElementById('wizardMinZ2').value) || 10;
+    const input = document.getElementById('wizardMinZ2');
+    if (!input) return;
+    const z2 = parseInt(input.value) || 10;
     const work = Math.round(z2 * (20/30));
     const long = Math.round(z2 * (50/30));
-    document.getElementById('wizardDurationsPreview').textContent =
-        `Base: ${z2} min | Lavoro: ${work} min | Lungo: ${long} min`;
+    const preview = document.getElementById('wizardDurationsPreview');
+    if (preview) preview.textContent = `Base: ${z2} min | Lavoro: ${work} min | Lungo: ${long} min`;
 };
 
 window.finishWizard = function() {
@@ -241,17 +248,58 @@ window.finishWizard = function() {
     showToast("Corso attivato! Iniziamo l'allenamento. 🚀");
 };
 
-window.attachCourseEventListeners = function() {
-    const btnToggle = document.getElementById('btnToggleCourseSettings');
-    if (btnToggle) {
-        btnToggle.onclick = () => {
-            const content = document.getElementById('courseTabSettingsContent');
-            if (content) {
-                content.style.display = (content.style.display === 'none') ? 'flex' : 'none';
-                btnToggle.textContent = (content.style.display === 'none') ? 'Mostra' : 'Nascondi';
+window.initCourseChat = function() {
+    if (!db) return;
+    const chatRef = db.ref('courseChat');
+    window.setupChat(chatRef, 'courseChatMessages', null);
+
+    const sendBtn = document.getElementById('sendCourseChatBtn');
+    const input = document.getElementById('courseChatInput');
+    if (sendBtn && input) {
+        sendBtn.onclick = () => {
+            const txt = input.value.trim();
+            if (!txt) return;
+            chatRef.push({
+                name: myName,
+                username: myPrivacy ? "" : tgUsername,
+                text: txt,
+                ts: firebase.database.ServerValue.TIMESTAMP
+            });
+            input.value = '';
+        };
+        input.onkeypress = (e) => { if (e.key === 'Enter') sendBtn.click(); };
+    }
+
+    const clearBtn = document.getElementById('clearCourseChatBtn');
+    if (clearBtn) {
+        clearBtn.onclick = () => {
+            if (confirm("Vuoi cancellare la cronologia della Radio-Aula?")) {
+                chatRef.remove();
             }
         };
     }
+};
+
+window.attachCourseEventListeners = function() {
+    // Toggle Pannelli
+    const togglePairs = [
+        { btn: 'btnToggleCourseChat', content: 'courseChatContent' },
+        { btn: 'btnToggleCourseSettings', content: 'courseTabSettingsContent' },
+        { btn: 'btnToggleCourseHeatmap', content: 'courseTabHeatmapContent' },
+        { btn: 'btnToggleCoursePlan', content: 'courseTabWeeklyPlanContent' }
+    ];
+
+    togglePairs.forEach(p => {
+        const btn = document.getElementById(p.btn);
+        const content = document.getElementById(p.content);
+        if (btn && content) {
+            btn.onclick = () => {
+                const isHidden = content.style.display === 'none';
+                content.style.display = isHidden ? (p.content.includes('Content') ? 'flex' : 'block') : 'none';
+                btn.textContent = isHidden ? 'Nascondi' : 'Mostra';
+            };
+        }
+    });
 
     const btnSave = document.getElementById('btnTabSavePlan');
     if (btnSave) {
@@ -308,13 +356,15 @@ window.attachCourseEventListeners = function() {
     const btnPlayNowModal = document.getElementById('btnPlayCourseNow');
     if (btnPlayNowModal) {
         btnPlayNowModal.onclick = () => {
-            document.getElementById('courseSessionModal').style.display = 'none';
+            const modal = document.getElementById('courseSessionModal');
+            if (modal) modal.style.display = 'none';
             window.startCourseSessionUI();
         };
     }
 };
 
 window.startCourseSessionUI = function() {
+    if (!window.courseData) return;
     const todayIdx = (new Date().getDay() + 6) % 7;
     const session = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
 
