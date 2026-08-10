@@ -304,7 +304,13 @@ window.playNextCourseGroup = function() {
     if (wordIndex >= requestedWordCount) return window.finishCourseSession();
 
     inputActive = true;
-    const group = gameWords[wordIndex];
+    let group = gameWords[wordIndex];
+
+    // Se per qualche motivo il buffer è vuoto in questa posizione, generiamo al volo
+    if (!group) {
+        group = window.generateAdaptiveGroup();
+        gameWords[wordIndex] = group;
+    }
 
     const charWpm = window.calculateDynamicCourseWpm();
     const farnsworthWpm = parseInt(window.courseData.settings.farnsworth_wpm);

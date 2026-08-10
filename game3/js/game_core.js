@@ -824,6 +824,7 @@ window.handleWordSubmission = function(userWord) {
     userWord = userWord.substring(0, 50).trim().toUpperCase();
 
     if (isCourseMode) {
+        inputActive = false; // Blocchiamo subito l'input per evitare spam
         const currentWord = gameWords[wordIndex] || "";
         const isCorrect = (userWord === currentWord);
 
