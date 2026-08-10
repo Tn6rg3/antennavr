@@ -473,29 +473,25 @@
         <!-- Dashboard e Settings (Se piano attivo) -->
         <div id="courseTabActiveView" style="display:none; flex-direction:column; gap:10px; width: 100%;">
 
-            <div id="courseTabDashboardView" style="display:flex; flex-direction:column; gap:10px;">
-                <!-- Heatmap Caratteri -->
-                <div class="box-panel">
-                    <h4 style="margin:0 0 5px 0; font-size:0.85em;">Padronanza Caratteri (Metodo Koch)</h4>
-                    <div id="courseTabHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:5px;"></div>
-                    <p id="courseTabLessonInfo" style="font-size:0.75em; text-align:center; color:var(--hint-color); margin-top:5px;"></p>
+            <!-- CHAT DEL CORSO (RADIO-AULA) -->
+            <div class="box-panel" style="border-color: var(--champ-color); padding:5px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; padding:0 5px;">
+                    <h4 style="margin:0; font-size:0.9em; color:var(--champ-color);">💬 Radio-Aula (Chat Corso)</h4>
+                    <div style="display:flex; gap:5px;">
+                        <button id="clearCourseChatBtn" class="action-btn-small btn-danger" style="width:auto; padding:2px 8px; font-size:0.75em;">🗑️</button>
+                        <button id="btnToggleCourseChat" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi</button>
+                    </div>
                 </div>
-
-                <!-- Piano Settimanale -->
-                <div class="box-panel">
-                    <h4 style="margin:0 0 5px 0; font-size:0.85em;">Il tuo Piano per questa Settimana</h4>
-                    <div id="courseTabWeeklyPlan" style="display:flex; flex-direction:column; gap:4px;"></div>
-                </div>
-
-                <div style="display:flex; gap:10px;">
-                    <button id="btnTabStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
-                    <button id="btnTabResetCourse" class="btn-danger" style="flex:1.2; font-size:0.75em;">ESCI DAL CORSO</button>
+                <div id="courseChatContent" style="display:flex; flex-direction:column; gap:5px;">
+                    <div id="courseChatMessages" style="height:120px; overflow-y:auto; font-size:0.85em; padding:8px; background:var(--bg-color); border-radius:8px; border:1px solid rgba(255,255,255,0.05);"></div>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <input type="text" id="courseChatInput" placeholder="Chiedi un consiglio..." style="flex:1; padding:8px; font-size:0.9em; margin:0;">
+                        <button id="sendCourseChatBtn" class="btn-success" style="width:auto; margin:0; padding:8px 12px;">Invia</button>
+                    </div>
                 </div>
             </div>
 
-            <hr class="divider">
-
-            <!-- Impostazioni (Collassate) -->
+            <!-- Impostazioni (Spostate in alto e Collassate di default) -->
             <div class="box-panel" style="border-color: var(--link-color);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h4 style="margin:0; font-size:0.9em; color:var(--hint-color);">⚙️ Modifica Impostazioni</h4>
@@ -528,6 +524,36 @@
                         <div style="flex:1;"><label>Min. Z2</label> <input type="number" id="courseTabMinZ2" value="10"></div>
                     </div>
                     <button id="btnTabSavePlan" class="btn-success">SALVA E AGGIORNA PIANO 💾</button>
+                </div>
+            </div>
+
+            <div id="courseTabDashboardView" style="display:flex; flex-direction:column; gap:10px;">
+                <!-- Heatmap Caratteri -->
+                <div class="box-panel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                        <h4 style="margin:0; font-size:0.85em;">Padronanza Caratteri (Metodo Koch)</h4>
+                        <button id="btnToggleCourseHeatmap" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi</button>
+                    </div>
+                    <div id="courseTabHeatmapContent">
+                        <div id="courseTabHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:5px;"></div>
+                        <p id="courseTabLessonInfo" style="font-size:0.75em; text-align:center; color:var(--hint-color); margin-top:5px;"></p>
+                    </div>
+                </div>
+
+                <!-- Piano Settimanale -->
+                <div class="box-panel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                        <h4 style="margin:0; font-size:0.85em;">Il tuo Piano per questa Settimana</h4>
+                        <button id="btnToggleCoursePlan" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi</button>
+                    </div>
+                    <div id="courseTabWeeklyPlanContent">
+                        <div id="courseTabWeeklyPlan" style="display:flex; flex-direction:column; gap:4px;"></div>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:10px;">
+                    <button id="btnTabStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
+                    <button id="btnTabResetCourse" class="btn-danger" style="flex:1.2; font-size:0.75em;">ESCI DAL CORSO</button>
                 </div>
             </div>
         </div>
@@ -699,7 +725,7 @@
         <div class="box-panel" style="flex-shrink:0; margin-top:5px; padding:8px;">
             <h3 style="font-size:0.9em; margin-bottom:5px;">🎖️ Le Mie Medaglie</h3>
             <div id="myMedalsContainer" style="display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:1.5em;">
-                <span style="font-size:0.6em; color:var(--hint-color);">Nessuna medaglia ancora.</span>
+                <span style="font-size:0.65em; color:var(--hint-color);">Nessuna medaglia ancora.</span>
             </div>
         </div>
     </div>
