@@ -533,9 +533,15 @@ window.addOrUpdateRoomCard = function(code, room) {
     const isMyRoom = (room.hostId === myId);
     const isOutsideRoom = (roomCode !== code || (els.lobbyScreen && !els.lobbyScreen.classList.contains('active-screen')));
 
-    if (isMyRoom && pCount > prevCount && pCount >= 2 && isOutsideRoom) {
+    if (isMyRoom && pCount > prevCount && pCount >= 2) {
+        // Se sono l'Host e qualcuno entra nella mia stanza (indipendentemente dalla schermata)
         showToast(`👤 Un giocatore è appena entrato nella tua stanza #${code}!`);
         if (typeof playNotificationSound === 'function') playNotificationSound();
+
+        // Se non sono nella lobby, potremmo mostrare un avviso più evidente o gestire il rientro
+        if (els.lobbyScreen && !els.lobbyScreen.classList.contains('active-screen')) {
+            console.log("Host in background: Player joined room", code);
+        }
     }
     window.lastKnownRoomPlayersCount[code] = pCount;
 

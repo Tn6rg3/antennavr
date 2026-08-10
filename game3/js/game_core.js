@@ -178,6 +178,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
                     });
                 } else {
                     db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
+                    // NOTA: Se l'Host esce ma resta nell'app, la stanza rimane aperta e lui riceverà notifiche.
                 }
             });
         }
@@ -300,6 +301,12 @@ window.joinRoomLogic = function(isReconnect = false) {
             isFixedSpeed = !!rData.fixedSpeed;
             isEasyMode = !!rData.easyMode;
             roomHostId = rData.hostId;
+
+            // Se sono l'Host, assicuriamoci che la stanza si chiuda se sparisco (crash o chiusura tab)
+            if (myId === roomHostId && rData.status === 'waiting') {
+                db.ref(`rooms/${roomCode}`).onDisconnect().remove();
+                db.ref(`public_lobby_rooms/${roomCode}`).onDisconnect().remove();
+            }
 
             // Se charSpaceWpm è 0 o mancante, l'audio engine userà automaticamente la velocità corrente (WPM)
             window.charSpaceWpm = rData.charSpaceWpm || 0;
