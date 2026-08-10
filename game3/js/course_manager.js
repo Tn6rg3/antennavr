@@ -113,26 +113,39 @@ window.generateAdaptiveGroup = function() {
 
     let group = "";
     for (let i = 0; i < 5; i++) {
-        let totalWeight = weights.reduce((acc, w) => acc + w.weight, 0);
-        let random = Math.random() * totalWeight;
-        for (let w of weights) {
-            random -= w.weight;
-            if (random <= 0) {
-                // Limite: max 3 caratteri uguali per gruppo
-                const count = (group.match(new RegExp(w.char, "g")) || []).length;
-                if (count < 3) {
-                    group += w.char;
+        let currentWeights = [...weights];
+        let found = false;
+
+        while (currentWeights.length > 0) {
+            let totalWeight = currentWeights.reduce((acc, w) => acc + w.weight, 0);
+            let random = Math.random() * totalWeight;
+            let selectedIdx = -1;
+
+            for (let j = 0; j < currentWeights.length; j++) {
+                random -= currentWeights[j].weight;
+                if (random <= 0) {
+                    selectedIdx = j;
                     break;
-                } else {
-                    // Se troppo ripetuto, riprova con un altro estraendo un nuovo random
-                    totalWeight -= w.weight;
-                    random = Math.random() * totalWeight;
-                    continue;
                 }
             }
+
+            if (selectedIdx === -1) selectedIdx = currentWeights.length - 1;
+            const selected = currentWeights[selectedIdx];
+
+            // Limite: max 3 caratteri uguali per gruppo
+            const count = (group.match(new RegExp(selected.char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "g")) || []).length;
+            if (count < 3) {
+                group += selected.char;
+                found = true;
+                break;
+            } else {
+                // Rimuoviamo questo carattere dalle opzioni per questa posizione e riproviamo
+                currentWeights.splice(selectedIdx, 1);
+            }
         }
-        // Fallback se il loop sopra fallisce per filtri
-        if (group.length <= i) group += activeChars[Math.floor(Math.random() * activeChars.length)];
+
+        // Fallback se i filtri esauriscono le opzioni
+        if (!found) group += activeChars[Math.floor(Math.random() * activeChars.length)];
     }
     return group;
 };
