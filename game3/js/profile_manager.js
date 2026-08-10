@@ -166,17 +166,21 @@ window.switchProfileTab = function(tabId) {
 };
 
 window.loadProfileInfo = function() {
-    if (els.matchHistoryList) els.matchHistoryList.innerHTML = '<li style="justify-content:center;">Caricamento...</li>';
+    const list = document.getElementById('matchHistoryList');
+    if (list) list.innerHTML = '<li style="justify-content:center;">Caricamento...</li>';
+
+    if (!myId) return;
 
     db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(20).once('value').then(snap => {
-        if (!els.matchHistoryList) return;
-        els.matchHistoryList.innerHTML = '';
+        const listContainer = document.getElementById('matchHistoryList');
+        if (!listContainer) return;
+        listContainer.innerHTML = '';
         userMatchHistory = [];
         snap.forEach(child => { userMatchHistory.push({ key: child.key, ...child.val() }); });
         userMatchHistory.reverse();
 
         if (userMatchHistory.length === 0) {
-            els.matchHistoryList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna partita.</li>';
+            listContainer.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna partita.</li>';
             return;
         }
 
@@ -189,7 +193,7 @@ window.loadProfileInfo = function() {
             li.style.cssText = "flex-direction:column; align-items:flex-start; padding:8px;";
             li.innerHTML = `
                 <div style="display:flex; justify-content:space-between; width:100%; font-size:0.85em;">
-                    <b>${modeIcon} ${match.mode.toUpperCase()}</b>
+                    <b>${modeIcon} ${(match.mode || "GIOCO").toUpperCase()}</b>
                     <span style="color:var(--hint-color)">${dateStr}</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; width:100%; margin-top:5px; align-items:center;">
@@ -197,8 +201,12 @@ window.loadProfileInfo = function() {
                     <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${match.key}')" style="width:auto; padding:2px 10px;">Vedi</button>
                 </div>
             `;
-            els.matchHistoryList.appendChild(li);
+            listContainer.appendChild(li);
         });
+    }).catch(err => {
+        console.error("Profile: Error loading history:", err);
+        const listContainer = document.getElementById('matchHistoryList');
+        if (listContainer) listContainer.innerHTML = '<li style="justify-content:center; color:red;">Errore caricamento.</li>';
     });
 };
 
@@ -398,8 +406,8 @@ if (els.saveAliasBtn) {
     });
 }
 
-if (els.resetStatsBtn) {
-    els.resetStatsBtn.addEventListener('click', async () => {
+if (document.getElementById('resetStatsBtn')) {
+    document.getElementById('resetStatsBtn').addEventListener('click', async () => {
         if (confirm("Vuoi azzerare tutte le tue statistiche?")) {
             try {
                 await Promise.all([ db.ref(`users/${myId}/stats`).remove(), db.ref(`users/${myId}/history`).remove() ]);
