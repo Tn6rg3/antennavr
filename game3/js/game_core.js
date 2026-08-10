@@ -659,6 +659,14 @@ if (els.replayWordBtn) {
 
 if (els.permanentGameInput) {
     els.permanentGameInput.addEventListener('input', function() {
+        if (isCourseMode && inputActive && gameRunning) {
+            const val = els.permanentGameInput.value.trim().toUpperCase();
+            if (val.length >= 5) {
+                window.handleWordSubmission(val.substring(0, 5));
+                els.permanentGameInput.value = "";
+            }
+            return;
+        }
         if (currentMode === 'chars' && inputActive && gameRunning) {
             const val = els.permanentGameInput.value.trim().toUpperCase();
             if (val.length >= 1) {

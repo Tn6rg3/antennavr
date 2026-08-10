@@ -29,19 +29,20 @@ window.getDefaultCourseData = function() {
             days_per_week: 3,
             start_wpm: 20,
             farnsworth_wpm: 12,
-            group_spacing: 1.5,
+            group_spacing: "2.0",
             minutes_z2: 10,
             minutes_work: 15,
             minutes_long: 30
         },
         progress: {
-            current_lesson: 2, // Quanti caratteri della sequenza Koch sono attivi
+            current_lesson: 2,
             weekly_completed_days: 0,
             last_session_date: "",
             total_xp: 0,
-            char_stats: {} // { "K": { attempts: 0, errors: 0 } }
+            char_stats: {},
+            last_z2_accuracy: 1.0 // Inizializzato a 100%
         },
-        current_day_session: null // { type: 'WORK', remaining_seconds: 900, total_seconds: 900, completed: false, date: 'YYYY-MM-DD' }
+        current_day_session: null
     };
 };
 
@@ -140,7 +141,44 @@ window.updateCourseTimerUI = function() {
     const s = window.courseData.current_day_session.remaining_seconds;
     const min = Math.floor(s / 60);
     const sec = s % 60;
-    els.wpmDisplay.textContent = `⏱️ ${min}:${sec.toString().padStart(2, '0')} | WPM: ${currentWpm}`;
+
+    // Calcoliamo la velocità dinamica per il display
+    let displayWpm = currentWpm;
+    if (isCourseMode) {
+        displayWpm = window.calculateDynamicCourseWpm();
+    }
+
+    els.wpmDisplay.textContent = `⏱️ ${min}:${sec.toString().padStart(2, '0')} | WPM: ${displayWpm}`;
+};
+
+window.calculateDynamicCourseWpm = function() {
+    if (!window.courseData || !window.courseData.current_day_session) return currentWpm;
+    const session = window.courseData.current_day_session;
+    const baseWpm = parseInt(window.courseData.settings.start_wpm);
+    const lastAccuracy = window.courseData.progress.last_z2_accuracy || 0;
+
+    if (session.type === 'Z2') return baseWpm;
+
+    if (session.type === 'WORK') {
+        const bonus = lastAccuracy >= 1.0 ? 3 : lastAccuracy >= 0.9 ? 2 : 0;
+        return baseWpm + bonus;
+    }
+
+    if (session.type === 'LONG') {
+        const total = session.total_seconds;
+        const remaining = session.remaining_seconds;
+        const elapsed = total - remaining;
+
+        // Split 1/3 Base, 1/3 Work Logic, 1/3 Base
+        if (elapsed < total / 3) return baseWpm;
+        if (elapsed < (2 * total) / 3) {
+            const bonus = lastAccuracy >= 1.0 ? 3 : lastAccuracy >= 0.9 ? 2 : 0;
+            return baseWpm + bonus;
+        }
+        return baseWpm;
+    }
+
+    return baseWpm;
 };
 
 window.playNextCourseGroup = function() {
@@ -149,19 +187,38 @@ window.playNextCourseGroup = function() {
     const group = window.generateAdaptiveGroup();
     gameWords[wordIndex] = group;
 
-    const charWpm = parseInt(window.courseData.settings.start_wpm);
+    const charWpm = window.calculateDynamicCourseWpm();
     const farnsworthWpm = parseInt(window.courseData.settings.farnsworth_wpm);
+    const groupSpacingMult = parseFloat(window.courseData.settings.group_spacing || 2.0);
 
-    // Configuriamo temporaneamente l'audio engine
+    // Configuriamo l'audio engine
     window.charSpaceWpm = farnsworthWpm;
-    window.wordSpaceMult = 1.0;
+    window.wordSpaceMult = groupSpacingMult;
     currentWpm = charWpm;
 
-    if (typeof playMorseAudio === 'function') playMorseAudio(group, charWpm);
+    if (typeof playMorseAudio === 'function') {
+        // Aggiungiamo un piccolo delay iniziale per non sovrapporsi all'invio automatico
+        setTimeout(() => {
+            if (gameRunning && isCourseMode) playMorseAudio(group, charWpm);
+        }, 300);
+    }
     lastWordStartTime = Date.now();
 };
 
 window.finishCourseSession = function() {
+    if (window.courseData.current_day_session.type === 'Z2') {
+        // Calcolo accuratezza sessione per influenzare i prossimi 'Work'
+        const stats = window.courseData.progress.char_stats || {};
+        const activeChars = window.KOCH_SEQUENCE.slice(0, window.courseData.progress.current_lesson);
+        let totalAttempts = 0, totalErrors = 0;
+        activeChars.forEach(char => {
+            const s = stats[char] || { attempts: 0, errors: 0 };
+            totalAttempts += s.attempts;
+            totalErrors += s.errors;
+        });
+        window.courseData.progress.last_z2_accuracy = totalAttempts > 0 ? (totalAttempts - totalErrors) / totalAttempts : 1.0;
+    }
+
     window.courseData.current_day_session.completed = true;
     window.courseData.current_day_session.remaining_seconds = 0;
 

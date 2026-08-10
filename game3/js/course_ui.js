@@ -19,21 +19,34 @@ window.updateCourseUI = function() {
 };
 
 window.renderCourseTabView = function() {
-    const setupView = document.getElementById('courseTabSetupView');
     const dashboardView = document.getElementById('courseTabDashboardView');
+    const settingsContent = document.getElementById('courseTabSettingsContent');
+    const btnToggle = document.getElementById('btnToggleCourseSettings');
 
-    if (!window.courseData || !window.courseData.active_plan) {
-        if (setupView) setupView.style.display = 'flex';
-        if (dashboardView) dashboardView.style.display = 'none';
-    } else {
-        if (setupView) setupView.style.display = 'none';
+    if (window.courseData && window.courseData.active_plan) {
         if (dashboardView) dashboardView.style.display = 'flex';
         window.renderCourseTabDashboard();
+        if (settingsContent) settingsContent.style.display = 'none';
+        if (btnToggle) btnToggle.style.display = 'block';
+    } else {
+        if (dashboardView) dashboardView.style.display = 'none';
+        if (settingsContent) settingsContent.style.display = 'flex';
+        if (btnToggle) btnToggle.style.display = 'none';
+    }
+
+    if (window.courseData) {
+        const s = window.courseData.settings;
+        if (document.getElementById('courseTabDaysInput')) document.getElementById('courseTabDaysInput').value = s.days_per_week;
+        if (document.getElementById('courseTabWpmInput')) document.getElementById('courseTabWpmInput').value = s.start_wpm;
+        if (document.getElementById('courseTabFarnsworthInput')) document.getElementById('courseTabFarnsworthInput').value = s.farnsworth_wpm;
+        if (document.getElementById('courseTabGroupSpacingInput')) document.getElementById('courseTabGroupSpacingInput').value = s.group_spacing || "2.0";
+        if (document.getElementById('courseTabMinZ2')) document.getElementById('courseTabMinZ2').value = s.minutes_z2;
+        if (document.getElementById('courseTabMinWork')) document.getElementById('courseTabMinWork').value = s.minutes_work;
+        if (document.getElementById('courseTabMinLong')) document.getElementById('courseTabMinLong').value = s.minutes_long;
     }
 };
 
 window.renderCourseTabDashboard = function() {
-    // 1. Heatmap
     const heatmap = document.getElementById('courseTabHeatmap');
     const lessonInfo = document.getElementById('courseTabLessonInfo');
     if (heatmap) {
@@ -67,7 +80,6 @@ window.renderCourseTabDashboard = function() {
             box.onclick = () => {
                 if (s.attempts > 0) showToast(`${char}: Accurato al ${Math.round(accuracy * 100)}% su ${s.attempts} tentativi.`);
             };
-
             heatmap.appendChild(box);
         });
 
@@ -75,7 +87,6 @@ window.renderCourseTabDashboard = function() {
         if (lessonInfo) lessonInfo.textContent = `Caratteri attivi (${currentLesson}): ${activeCharsStr}`;
     }
 
-    // 2. Weekly Plan
     const planList = document.getElementById('courseTabWeeklyPlan');
     if (planList) {
         planList.innerHTML = '';
@@ -128,6 +139,14 @@ window.generateWeeklySchedule = function() {
 };
 
 window.attachCourseEventListeners = function() {
+    const btnToggle = document.getElementById('btnToggleCourseSettings');
+    if (btnToggle) {
+        btnToggle.onclick = () => {
+            const content = document.getElementById('courseTabSettingsContent');
+            if (content) content.style.display = (content.style.display === 'none') ? 'flex' : 'none';
+        };
+    }
+
     const btnCreate = document.getElementById('btnTabCreatePlan');
     if (btnCreate) {
         btnCreate.onclick = () => {
@@ -135,14 +154,15 @@ window.attachCourseEventListeners = function() {
             window.courseData.settings.days_per_week = document.getElementById('courseTabDaysInput').value;
             window.courseData.settings.start_wpm = document.getElementById('courseTabWpmInput').value;
             window.courseData.settings.farnsworth_wpm = document.getElementById('courseTabFarnsworthInput').value;
+            window.courseData.settings.group_spacing = document.getElementById('courseTabGroupSpacingInput').value;
             window.courseData.settings.minutes_z2 = document.getElementById('courseTabMinZ2').value;
             window.courseData.settings.minutes_work = document.getElementById('courseTabMinWork').value;
             window.courseData.settings.minutes_long = document.getElementById('courseTabMinLong').value;
 
-            window.generateWeeklySchedule();
+            if (!window.courseData.weekly_schedule) window.generateWeeklySchedule();
             window.renderCourseTabView();
             window.saveCourseState();
-            showToast("Piano creato con successo! 🎯");
+            showToast("Configurazione salvata! 🎯");
         };
     }
 
@@ -173,7 +193,7 @@ window.attachCourseEventListeners = function() {
 
 window.startCourseSessionUI = function() {
     const todayIdx = (new Date().getDay() + 6) % 7;
-    const session = window.courseData.weekly_schedule[todayIdx];
+    const session = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
 
     if (!session || session.type === 'REST') {
         return alert("Oggi è previsto riposo! Ma puoi comunque fare pratica libera.");
