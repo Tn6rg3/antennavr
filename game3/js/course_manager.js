@@ -377,10 +377,9 @@ window.listenToCourseEnrollment = function() {
 
         const badge = document.getElementById('courseEnrollmentBadgeGlobal');
         if (badge) {
-            badge.textContent = count;
+            badge.innerText = count;
             if (count > 0) {
-                // Rimuoviamo display:none inline se presente e usiamo le classi CSS
-                badge.style.display = 'flex';
+                badge.style.setProperty('display', 'flex', 'important');
                 badge.classList.add('badge-active');
             } else {
                 badge.style.display = 'none';
