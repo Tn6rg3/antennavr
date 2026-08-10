@@ -20,6 +20,14 @@ window.loadCourseState = async function() {
     const snap = await db.ref(`users/${myId}/course`).once('value');
     window.courseData = snap.val() || window.getDefaultCourseData();
     window.updateCourseUI();
+
+    // Aggiorniamo il registro iscritti all'accesso per sicurezza
+    if (window.courseData.active_plan) {
+        db.ref('courseActiveEnrollments/' + myId).set({
+            name: myName,
+            ts: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
 };
 
 window.getDefaultCourseData = function() {
