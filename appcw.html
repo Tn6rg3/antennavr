@@ -397,6 +397,13 @@
                     <option value="6">6 Giorni</option>
                     <option value="7">7 Giorni</option>
                 </select>
+
+                <label style="font-size:0.8em; font-weight:bold;">Da quale lezione vuoi iniziare?</label>
+                <select id="wizardStartLesson" style="width:100%; padding:10px; margin: 10px 0;">
+                    <!-- Popolato da JS -->
+                </select>
+                <p id="wizardLessonChars" style="font-size:0.7em; color:var(--link-color); min-height: 1.2em;"></p>
+
                 <button class="btn-success" onclick="window.nextWizardStep(2)">Avanti ➡️</button>
             </div>
 
@@ -496,9 +503,14 @@
 
                 <div id="courseTabSettingsContent" style="display:none; flex-direction:column; gap:10px;">
                     <div class="settings-row">
-                        <div style="flex:2;"><label>GG/Sett.</label> <input type="number" id="courseTabDaysInput" value="3" min="1" max="7"></div>
-                        <div style="flex:2;"><label>WPM</label> <input type="number" id="courseTabWpmInput" value="20"></div>
-                        <div style="flex:2;"><label>Spazio</label> <input type="number" id="courseTabFarnsworthInput" value="12"></div>
+                        <div style="flex:1.5;"><label>Lezione</label>
+                            <select id="courseTabLessonInput" style="width:100%; padding:5px;">
+                                <!-- Popolato da JS -->
+                            </select>
+                        </div>
+                        <div style="flex:1.2;"><label>GG/Sett.</label> <input type="number" id="courseTabDaysInput" value="3" min="1" max="7"></div>
+                        <div style="flex:1.5;"><label>WPM</label> <input type="number" id="courseTabWpmInput" value="20"></div>
+                        <div style="flex:1.5;"><label>Spazio</label> <input type="number" id="courseTabFarnsworthInput" value="12"></div>
                     </div>
                     <div class="settings-row">
                         <div style="flex:1.5;"><label>Spazio Gruppi</label>
@@ -955,6 +967,7 @@
                     <option value="standard">Parole Comuni</option>
                     <option value="callsign">Nominativi (CW Freak)</option>
                     <option value="pingpong">Ping Pong</option>
+                    <option value="conquest">Collaborativo (Co-op) ⚔️</option>
                 </select>
             </div>
         </div>
