@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.220";
+const APP_VERSION = "20260807.222";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
