@@ -382,40 +382,58 @@
 
     <!-- SEZIONE 3: GESTIONE CORSO CW -->
     <div id="profileCourseArea" class="screen-content" style="display: none;">
-        <div id="courseTabSetupView" style="display:none; flex-direction:column; gap:10px; width: 100%;">
-            <p style="font-size:0.9em; text-align:center;">Configura il tuo piano di allenamento settimanale ispirato ai runner.</p>
-
-            <div class="box-panel">
-                <label style="font-size:0.85em; font-weight:bold;">Giorni di allenamento a settimana:</label>
-                <select id="courseTabDaysInput" style="width:100%; padding:8px; margin-top:5px;">
-                    <option value="1">1 Giorno</option>
-                    <option value="2">2 Giorni</option>
-                    <option value="3" selected>3 Giorni</option>
-                    <option value="4">4 Giorni</option>
-                    <option value="5">5 Giorni</option>
-                    <option value="6">6 Giorni</option>
-                    <option value="7">7 Giorni</option>
-                </select>
+        <!-- Configurazione (Sempre visibile o espandibile) -->
+        <div class="box-panel" style="border-color: var(--link-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h4 style="margin:0; font-size:0.95em;">⚙️ Impostazioni Corso</h4>
+                <button id="btnToggleCourseSettings" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Mostra/Nascondi</button>
             </div>
 
-            <div class="settings-row">
-                <div><label>WPM Caratt.</label> <input type="number" id="courseTabWpmInput" value="20" min="15" max="50"></div>
-                <div><label>WPM Spazio</label> <input type="number" id="courseTabFarnsworthInput" value="12" min="5" max="50"></div>
-            </div>
-
-            <div class="box-panel">
-                <h4 style="margin:0 0 8px 0; font-size:0.9em;">Durata Sessioni (Minuti)</h4>
-                <div class="settings-row">
-                    <div><label>Base (Z2)</label> <input type="number" id="courseTabMinZ2" value="10" min="5" max="60"></div>
-                    <div><label>Lavoro</label> <input type="number" id="courseTabMinWork" value="15" min="5" max="60"></div>
-                    <div><label>Lungo</label> <input type="number" id="courseTabMinLong" value="30" min="10" max="120"></div>
+            <div id="courseTabSettingsContent" style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <label style="font-size:0.85em; font-weight:bold;">Giorni di allenamento a settimana:</label>
+                    <select id="courseTabDaysInput" style="width:100%; padding:8px;">
+                        <option value="1">1 Giorno</option>
+                        <option value="2">2 Giorni</option>
+                        <option value="3" selected>3 Giorni</option>
+                        <option value="4">4 Giorni</option>
+                        <option value="5">5 Giorni</option>
+                        <option value="6">6 Giorni</option>
+                        <option value="7">7 Giorni</option>
+                    </select>
                 </div>
-            </div>
 
-            <button id="btnTabCreatePlan" class="btn-success">CREA IL MIO PIANO 🚀</button>
+                <div class="settings-row">
+                    <div><label>WPM Caratt.</label> <input type="number" id="courseTabWpmInput" value="20" min="15" max="50"></div>
+                    <div><label>WPM Spazio</label> <input type="number" id="courseTabFarnsworthInput" value="12" min="5" max="50"></div>
+                </div>
+
+                <div class="settings-row">
+                    <div style="flex:1;"><label>Spazio Gruppi</label>
+                        <select id="courseTabGroupSpacingInput" style="width:100%; padding:5px;">
+                            <option value="1.0">1.0x (Std)</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2.0" selected>2.0x</option>
+                            <option value="3.0">3.0x</option>
+                            <option value="4.0">4.0x</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="box-panel" style="background: rgba(0,0,0,0.1); margin: 5px 0;">
+                    <h4 style="margin:0 0 8px 0; font-size:0.85em;">Durata Sessioni (Minuti)</h4>
+                    <div class="settings-row">
+                        <div><label>Base (Z2)</label> <input type="number" id="courseTabMinZ2" value="10" min="5" max="60"></div>
+                        <div><label>Lavoro</label> <input type="number" id="courseTabMinWork" value="15" min="5" max="60"></div>
+                        <div><label>Lungo</label> <input type="number" id="courseTabMinLong" value="30" min="10" max="120"></div>
+                    </div>
+                </div>
+
+                <button id="btnTabCreatePlan" class="btn-success">SALVA CONFIGURAZIONE 💾</button>
+            </div>
         </div>
 
-        <div id="courseTabDashboardView" style="display:none; flex-direction:column; gap:10px; width: 100%;">
+        <div id="courseTabDashboardView" style="display:none; flex-direction:column; gap:10px; width: 100%; margin-top: 10px;">
             <!-- Heatmap Caratteri -->
             <div class="box-panel">
                 <h4 style="margin:0 0 5px 0; font-size:0.85em;">Padronanza Caratteri (Metodo Koch)</h4>
