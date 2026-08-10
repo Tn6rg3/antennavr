@@ -689,29 +689,36 @@ window.handleWordSubmission = function(userWord) {
         // Aggiorna statistiche corso
         if (window.courseData) {
             if (!window.courseData.progress.char_stats) window.courseData.progress.char_stats = {};
-            for (let char of currentWord) {
-                if (!window.courseData.progress.char_stats[char]) window.courseData.progress.char_stats[char] = { attempts: 0, errors: 0 };
-                window.courseData.progress.char_stats[char].attempts++;
-                if (currentWord.indexOf(char) !== userWord.indexOf(char) || userWord.length !== currentWord.length) {
-                    // Logica semplificata: se la parola è sbagliata, contiamo errore per tutti i caratteri della parola?
-                    // Meglio: confrontiamo carattere per carattere
-                }
-            }
-            // Logica corretta per carattere
             for (let i=0; i<currentWord.length; i++) {
                 let c = currentWord[i];
+                if (!window.courseData.progress.char_stats[c]) window.courseData.progress.char_stats[c] = { attempts: 0, errors: 0 };
+                window.courseData.progress.char_stats[c].attempts++;
                 if (userWord[i] !== c) window.courseData.progress.char_stats[c].errors++;
             }
             window.saveCourseState?.();
         }
 
-        // Feedback visuale
+        // Feedback visuale con evidenziazione errori
         const tr = document.createElement('tr');
-        const tdTyped = document.createElement('td'); tdTyped.textContent = userWord;
-        const tdReal = document.createElement('td'); tdReal.textContent = currentWord;
+        const tdTyped = document.createElement('td');
+        tdTyped.textContent = userWord;
+
+        const tdReal = document.createElement('td');
+        for (let i=0; i<currentWord.length; i++) {
+            const span = document.createElement('span');
+            span.textContent = currentWord[i];
+            if (userWord[i] !== currentWord[i]) {
+                span.style.color = "#d32f2f";
+                span.style.fontWeight = "bold";
+            }
+            tdReal.appendChild(span);
+        }
+
         const tdPoints = document.createElement('td');
         tdPoints.textContent = isCorrect ? "OK" : "ERR";
         tdPoints.style.color = isCorrect ? "#4caf50" : "#d32f2f";
+        tdPoints.style.fontWeight = "bold";
+
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
         if (els.tableBody) {
             els.tableBody.appendChild(tr);

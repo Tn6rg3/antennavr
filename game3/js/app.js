@@ -307,19 +307,6 @@ function initGame() {
         window.initProgression?.();
         window.initCourseManager?.();
 
-        // --- NOTIFICA CORSO CW ALL'AVVIO ---
-        setTimeout(() => {
-            if (window.courseData && window.courseData.active_plan) {
-                const todayIdx = (new Date().getDay() + 6) % 7;
-                const session = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
-                if (session && session.type !== 'REST' && !session.completed) {
-                    const typeCfg = window.COURSE_TYPES[session.type];
-                    const label = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
-                    showToast(`📅 Oggi: Sessione ${label}! Controlla il tuo profilo.`);
-                }
-            }
-        }, 3000);
-
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
             if (els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;

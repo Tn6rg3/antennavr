@@ -225,7 +225,26 @@ window.initCourseManager = function() {
     console.log("Course: Initializing...");
     window.loadCourseState().then(() => {
         window.checkWeeklyReview();
+        window.checkCourseStartupNotification();
     });
+};
+
+window.checkCourseStartupNotification = function() {
+    if (!window.courseData || !window.courseData.active_plan) return;
+
+    const todayIdx = (new Date().getDay() + 6) % 7;
+    const session = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
+
+    if (session && session.type !== 'REST' && !session.completed) {
+        const modal = document.getElementById('courseSessionModal');
+        const text = document.getElementById('courseModalText');
+        if (modal && text) {
+            const typeCfg = window.COURSE_TYPES[session.type];
+            const label = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
+            text.innerHTML = `Oggi il tuo piano prevede una sessione di <b>${label}</b>.<br>Sei pronto per allenarti?`;
+            modal.style.display = 'flex';
+        }
+    }
 };
 
 // --- LISTENER PULSANTI ---

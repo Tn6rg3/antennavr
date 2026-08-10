@@ -14,31 +14,28 @@ window.updateCourseUI = function() {
 
     const btnOpen = document.getElementById('btnOpenCourse');
     if (btnOpen) {
-        btnOpen.onclick = () => {
-            document.getElementById('courseModal').style.display = 'flex';
-            window.renderCourseView();
-        };
+        btnOpen.style.display = 'none'; // Nascondiamo il vecchio bottone Gestisci
     }
 };
 
-window.renderCourseView = function() {
-    const setupView = document.getElementById('courseSetupView');
-    const dashboardView = document.getElementById('courseDashboardView');
+window.renderCourseTabView = function() {
+    const setupView = document.getElementById('courseTabSetupView');
+    const dashboardView = document.getElementById('courseTabDashboardView');
 
-    if (!window.courseData.active_plan) {
-        setupView.style.display = 'flex';
-        dashboardView.style.display = 'none';
+    if (!window.courseData || !window.courseData.active_plan) {
+        if (setupView) setupView.style.display = 'flex';
+        if (dashboardView) dashboardView.style.display = 'none';
     } else {
-        setupView.style.display = 'none';
-        dashboardView.style.display = 'flex';
-        window.renderCourseDashboard();
+        if (setupView) setupView.style.display = 'none';
+        if (dashboardView) dashboardView.style.display = 'flex';
+        window.renderCourseTabDashboard();
     }
 };
 
-window.renderCourseDashboard = function() {
+window.renderCourseTabDashboard = function() {
     // 1. Heatmap
-    const heatmap = document.getElementById('courseHeatmap');
-    const lessonInfo = document.getElementById('courseLessonInfo');
+    const heatmap = document.getElementById('courseTabHeatmap');
+    const lessonInfo = document.getElementById('courseTabLessonInfo');
     if (heatmap) {
         heatmap.innerHTML = '';
         const stats = window.courseData.progress.char_stats || {};
@@ -75,15 +72,14 @@ window.renderCourseDashboard = function() {
         });
 
         const activeCharsStr = window.KOCH_SEQUENCE.slice(0, currentLesson).join(", ");
-        lessonInfo.textContent = `Caratteri attivi (${currentLesson}): ${activeCharsStr}`;
+        if (lessonInfo) lessonInfo.textContent = `Caratteri attivi (${currentLesson}): ${activeCharsStr}`;
     }
 
     // 2. Weekly Plan
-    const planList = document.getElementById('courseWeeklyPlan');
+    const planList = document.getElementById('courseTabWeeklyPlan');
     if (planList) {
         planList.innerHTML = '';
         const days = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-        // Se non abbiamo un piano per questa settimana, lo generiamo
         if (!window.courseData.weekly_schedule) window.generateWeeklySchedule();
 
         window.courseData.weekly_schedule.forEach((session, idx) => {
@@ -110,13 +106,11 @@ window.renderCourseDashboard = function() {
 
 window.generateWeeklySchedule = function() {
     const daysPerWeek = parseInt(window.courseData.settings.days_per_week);
-    let schedule = Array(7).fill({ type: 'REST', completed: false });
+    let schedule = Array(7).fill(null).map(() => ({ type: 'REST', completed: false }));
 
-    // Distribuzione logica: 1 Lungo a fine settimana, gli altri divisi tra Work e Z2
     let workDays = [];
-    if (daysPerWeek === 1) workDays = [6]; // Solo Domenica (Lungo)
+    if (daysPerWeek === 1) workDays = [6];
     else {
-        // Distribuiamo i giorni
         const step = 7 / daysPerWeek;
         for (let i=0; i<daysPerWeek; i++) workDays.push(Math.floor(i * step));
     }
@@ -133,29 +127,94 @@ window.generateWeeklySchedule = function() {
     window.saveCourseState();
 };
 
-if (document.getElementById('btnCreatePlan')) {
-    document.getElementById('btnCreatePlan').onclick = () => {
-        window.courseData.active_plan = true;
-        window.courseData.settings.days_per_week = document.getElementById('courseDaysInput').value;
-        window.courseData.settings.start_wpm = document.getElementById('courseWpmInput').value;
-        window.courseData.settings.farnsworth_wpm = document.getElementById('courseFarnsworthInput').value;
-        window.courseData.settings.minutes_z2 = document.getElementById('courseMinZ2').value;
-        window.courseData.settings.minutes_work = document.getElementById('courseMinWork').value;
-        window.courseData.settings.minutes_long = document.getElementById('courseMinLong').value;
+window.attachCourseEventListeners = function() {
+    const btnCreate = document.getElementById('btnTabCreatePlan');
+    if (btnCreate) {
+        btnCreate.onclick = () => {
+            window.courseData.active_plan = true;
+            window.courseData.settings.days_per_week = document.getElementById('courseTabDaysInput').value;
+            window.courseData.settings.start_wpm = document.getElementById('courseTabWpmInput').value;
+            window.courseData.settings.farnsworth_wpm = document.getElementById('courseTabFarnsworthInput').value;
+            window.courseData.settings.minutes_z2 = document.getElementById('courseTabMinZ2').value;
+            window.courseData.settings.minutes_work = document.getElementById('courseTabMinWork').value;
+            window.courseData.settings.minutes_long = document.getElementById('courseTabMinLong').value;
 
-        window.generateWeeklySchedule();
-        window.renderCourseView();
-        window.saveCourseState();
-        showToast("Piano creato con successo! 🎯");
-    };
-}
-
-if (document.getElementById('btnResetCourse')) {
-    document.getElementById('btnResetCourse').onclick = () => {
-        if (confirm("Sei sicuro di voler resettare tutto il corso? Perderai progressi e statistiche.")) {
-            window.courseData = window.getDefaultCourseData();
+            window.generateWeeklySchedule();
+            window.renderCourseTabView();
             window.saveCourseState();
-            window.renderCourseView();
-        }
-    };
-}
+            showToast("Piano creato con successo! 🎯");
+        };
+    }
+
+    const btnReset = document.getElementById('btnTabResetCourse');
+    if (btnReset) {
+        btnReset.onclick = () => {
+            if (confirm("Sei sicuro di voler resettare tutto il corso? Perderai progressi e statistiche.")) {
+                window.courseData = window.getDefaultCourseData();
+                window.saveCourseState();
+                window.renderCourseTabView();
+            }
+        };
+    }
+
+    const btnStart = document.getElementById('btnTabStartCourseSession');
+    if (btnStart) {
+        btnStart.onclick = () => window.startCourseSessionUI();
+    }
+
+    const btnPlayNowModal = document.getElementById('btnPlayCourseNow');
+    if (btnPlayNowModal) {
+        btnPlayNowModal.onclick = () => {
+            document.getElementById('courseSessionModal').style.display = 'none';
+            window.startCourseSessionUI();
+        };
+    }
+};
+
+window.startCourseSessionUI = function() {
+    const todayIdx = (new Date().getDay() + 6) % 7;
+    const session = window.courseData.weekly_schedule[todayIdx];
+
+    if (!session || session.type === 'REST') {
+        return alert("Oggi è previsto riposo! Ma puoi comunque fare pratica libera.");
+    }
+
+    if (session.completed) {
+        return alert("Hai già completato l'allenamento di oggi!");
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (!window.courseData.current_day_session || window.courseData.current_day_session.date !== todayStr) {
+        let duration = 15;
+        if (session.type === 'Z2') duration = window.courseData.settings.minutes_z2;
+        else if (session.type === 'WORK') duration = window.courseData.settings.minutes_work;
+        else if (session.type === 'LONG') duration = window.courseData.settings.minutes_long;
+
+        window.courseData.current_day_session = {
+            type: session.type,
+            total_seconds: duration * 60,
+            remaining_seconds: duration * 60,
+            completed: false,
+            date: todayStr
+        };
+        window.saveCourseState();
+    }
+
+    currentMode = 'course';
+    isSinglePlayer = true;
+    currentWpm = parseInt(window.courseData.settings.start_wpm);
+    requestedWordCount = 999;
+    roomCode = "COURSE_" + myId;
+
+    db.ref('rooms/' + roomCode).set({
+        status: 'countdown',
+        type: 'single',
+        mode: 'course',
+        wpm: currentWpm,
+        tone: 600,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        hostId: myId
+    }).then(() => window.joinRoomLogic?.(false));
+};
+
+setTimeout(window.attachCourseEventListeners, 2000);
