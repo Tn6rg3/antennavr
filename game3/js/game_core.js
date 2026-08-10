@@ -883,7 +883,7 @@ window.handleWordSubmission = function(userWord) {
                 wordIndex++;
                 window.playNextCourseGroup?.();
             }
-        }, 300); // Ridotto il delay per maggiore reattività
+        }, 300 * (parseFloat(window.courseData?.settings?.group_spacing) || 1.0)); // Delay dinamico basato sullo spazio gruppi
         return;
     }
 
