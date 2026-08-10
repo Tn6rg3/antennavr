@@ -17,7 +17,14 @@ window.showScreen = function(screenId) {
     // Se siamo usciti dalle schermate di gioco ma abbiamo una stanza attiva,
     // manteniamo il listener per avviare la partita se l'host preme START
     if (!isPlayingScreen && roomCode && !gameRunning) {
-        window.listenToRoomInBackground();
+        // Se non abbiamo ancora accettato la sfida, usciamo del tutto per pulire il contatore
+        db.ref(`rooms/${roomCode}/players/${myId}/accepted`).once('value', s => {
+            if (s.exists() && s.val() === false) {
+                window.exitRoomCleanly(false, true); // Uscita esplicita per rimuovere il player non confermato
+            } else {
+                window.listenToRoomInBackground();
+            }
+        });
     }
 
     if (db && myId) {
@@ -158,7 +165,21 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
             roomCode = "";
         }
         else {
-            db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
+            // Se l'utente non ha accettato la sfida, rimuoviamolo comunque per non "sporcare" il contatore
+            // Se l'ha accettata, lo segniamo come offline per permettere il rientro (rejoin)
+            db.ref(`rooms/${roomCode}/players/${myId}`).once('value', s => {
+                const p = s.val();
+                if (p && !p.accepted) {
+                    db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
+                        db.ref(`rooms/${roomCode}/players`).once('value', snap => {
+                            const accCount = Object.values(snap.val() || {}).filter(p => p.accepted).length;
+                            db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
+                        });
+                    });
+                } else {
+                    db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
+                }
+            });
         }
     } else {
         if (listeners.room) { listeners.room.off(); listeners.room = null; }
