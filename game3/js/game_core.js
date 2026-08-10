@@ -236,7 +236,8 @@ window.joinRoomLogic = function(isReconnect = false) {
             isEasyMode = !!rData.easyMode;
             roomHostId = rData.hostId;
 
-            window.charSpaceWpm = rData.charSpaceWpm !== undefined ? rData.charSpaceWpm : rData.wpm;
+            // Se charSpaceWpm è 0 o mancante, l'audio engine userà automaticamente la velocità corrente (WPM)
+            window.charSpaceWpm = rData.charSpaceWpm || 0;
             window.wordSpaceMult = rData.wordSpaceMult || 1.0;
 
             if (rData.status === 'playing' || rData.status === 'countdown') {

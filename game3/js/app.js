@@ -406,7 +406,8 @@ if (els.createRoomBtn) {
         const isEasy = isSinglePlayer && els.easyModeCheckbox?.checked;
         const allowSpectators = isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
 
-        let cSpace = isSinglePlayer && els.charSpaceInput?.value ? parseInt(els.charSpaceInput.value) : currentWpm;
+        // Se l'input è vuoto o non siamo in Solo, impostiamo 0 (spaziatura automatica proporzionale)
+        let cSpace = (isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
         let wSpace = isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
 
         roomCode = Math.floor(1000 + Math.random() * 9000).toString();
