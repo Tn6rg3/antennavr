@@ -273,15 +273,20 @@ window.renderRoomLeaderboard = function(players) {
     if (!els.leaderboardContainer) return;
     els.leaderboardContainer.innerHTML = '';
     let allFinished = true;
-    const playersArray = Object.entries(players).map(([id, data]) => ({
-        id,
-        name: data.name || "Sconosciuto",
-        username: data.username,
-        score: data.score || 0,
-        wpm: data.wpm || 0,
-        finished: data.finished,
-        matchDetails: data.matchDetails || []
-    }));
+
+    // Filtriamo solo chi ha accettato la sfida
+    const playersArray = Object.entries(players)
+        .filter(([id, data]) => data.accepted)
+        .map(([id, data]) => ({
+            id,
+            name: data.name || "Sconosciuto",
+            username: data.username,
+            score: data.score || 0,
+            wpm: data.wpm || 0,
+            finished: data.finished,
+            matchDetails: data.matchDetails || []
+        }));
+
     if (playersArray.length === 0) return;
     playersArray.forEach(p => { if (!p.finished) allFinished = false; });
     if (els.waitingOthersText) els.waitingOthersText.style.display = allFinished ? 'none' : 'block';

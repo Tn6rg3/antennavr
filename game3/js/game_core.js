@@ -202,6 +202,12 @@ window.joinRoomLogic = function(isReconnect = false) {
         playerRef.onDisconnect().update({ online: false });
 
         if (!pData) {
+            // Se la stanza non è single player, l'utente entra come "prospect" (non ancora confermato)
+            // tranne se è il proprietario o è un invito accettato
+            const isInviteAccepted = window.lastIncomingInvite && window.lastIncomingInvite.fromId === roomHostId;
+            const amIHost = (myId === roomHostId);
+            const shouldAutoAccept = isSinglePlayer || amIHost || isInviteAccepted || roomCode.startsWith("TRN_");
+
             playerRef.set({
                 name: myName,
                 username: myPrivacy ? "" : tgUsername,
@@ -210,9 +216,10 @@ window.joinRoomLogic = function(isReconnect = false) {
                 finished: false,
                 teamId: myTeamId,
                 ready: false,
-                online: true
+                online: true,
+                accepted: shouldAutoAccept // true se single player o host o invito diretto
             }).then(() => {
-                if (!isSinglePlayer && !roomCode.startsWith("TRN_")) {
+                if (!isSinglePlayer && !roomCode.startsWith("TRN_") && shouldAutoAccept) {
                     db.ref(`rooms/${roomCode}/players`).once('value', s => {
                         const count = s.exists() ? Object.keys(s.val()).length : 1;
                         db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(count);
@@ -290,7 +297,12 @@ window.joinRoomLogic = function(isReconnect = false) {
 window.renderPlayersList = function(playersData, hostId) {
     if (!els.playersList) return;
     els.playersList.innerHTML = '';
-    const count = Object.keys(playersData).length;
+
+    // Filtriamo i giocatori che hanno effettivamente accettato la sfida
+    const playersArray = Object.entries(playersData);
+    const acceptedPlayers = playersArray.filter(([id, data]) => data.accepted);
+    const count = acceptedPlayers.length;
+
     if (count > lastPlayerCount && lastPlayerCount > 0) {
         if (typeof window.playBeep === 'function') window.playBeep(500, 0.1);
         setTimeout(() => { if (typeof window.playBeep === 'function') window.playBeep(700, 0.15); }, 150);
@@ -298,10 +310,10 @@ window.renderPlayersList = function(playersData, hostId) {
     }
     lastPlayerCount = count;
     let allReady = true;
-    const pKeys = Object.keys(playersData);
-    if (pKeys.length < 2) allReady = false;
+    if (count < 2) allReady = false;
 
-    Object.entries(playersData).forEach(([id, data]) => {
+    // Mostriamo solo i giocatori accettati nella lista ufficiale
+    acceptedPlayers.forEach(([id, data]) => {
         if (!data.ready) allReady = false;
         const li = document.createElement('li');
         const nSpan = document.createElement('span');
@@ -323,27 +335,48 @@ window.renderPlayersList = function(playersData, hostId) {
 
     const isTrnOrPP = roomCode.startsWith("TRN_") || currentMode === 'pingpong';
     const amIHost = (myId === hostId) || roomCode.startsWith("TRN_");
-    const amIReady = playersData[myId]?.ready;
+    const myData = playersData[myId];
+    const amIReady = myData?.ready;
+    const haveIAccepted = myData?.accepted;
+
+    if (els.acceptChallengeBtn) {
+        els.acceptChallengeBtn.style.display = (!amIHost && !haveIAccepted) ? 'block' : 'none';
+        els.acceptChallengeBtn.onclick = () => {
+            db.ref(`rooms/${roomCode}/players/${myId}`).update({ accepted: true }).then(() => {
+                db.ref(`rooms/${roomCode}/players`).once('value', s => {
+                    const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
+                    db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
+                });
+            });
+        };
+    }
 
     if (els.startMultiplayerBtn) els.startMultiplayerBtn.style.display = (amIHost && !isTrnOrPP) ? 'block' : 'none';
     if (els.deleteRoomBtn) els.deleteRoomBtn.style.display = (myId === hostId && !roomCode.startsWith("TRN_")) ? 'block' : 'none';
-    if (els.readyBtn) els.readyBtn.style.display = (isTrnOrPP && !amIReady) ? 'block' : 'none';
+    if (els.readyBtn) els.readyBtn.style.display = (haveIAccepted && isTrnOrPP && !amIReady) ? 'block' : 'none';
 
     if (isTrnOrPP) {
         if (els.waitingHostText) {
             els.waitingHostText.style.display = amIReady ? 'block' : 'none';
             els.waitingHostText.textContent = "In attesa...";
         }
-        if (els.statusInfoText) els.statusInfoText.textContent = amIReady ? "SONO PRONTO ✅" : "Connessione sicura in corso...";
+        if (els.statusInfoText) {
+            if (!haveIAccepted && !amIHost) els.statusInfoText.textContent = "Vuoi partecipare?";
+            else els.statusInfoText.textContent = amIReady ? "SONO PRONTO ✅" : "Connessione sicura in corso...";
+        }
     } else {
         if (els.waitingHostText) {
             els.waitingHostText.style.display = amIHost ? 'none' : 'block';
-            els.waitingHostText.textContent = "In attesa dell'host...";
+            els.waitingHostText.textContent = haveIAccepted ? "In attesa dell'host..." : "Accetta la sfida per partecipare!";
         }
-        if (els.statusInfoText) els.statusInfoText.textContent = amIHost ? "Sei l'Host." : "Sei un partecipante.";
+        if (els.statusInfoText) {
+            if (amIHost) els.statusInfoText.textContent = "Sei l'Host.";
+            else if (haveIAccepted) els.statusInfoText.textContent = "Partecipante confermato.";
+            else els.statusInfoText.textContent = "In attesa di conferma...";
+        }
     }
 
-    if (allReady && isTrnOrPP && (pKeys[0] === myId || amIHost)) {
+    if (allReady && isTrnOrPP && (acceptedPlayers[0][0] === myId || amIHost)) {
         db.ref(`rooms/${roomCode}`).update({ status: 'countdown', expiresAt: null });
         db.ref(`public_lobby_rooms/${roomCode}`).remove();
     }
