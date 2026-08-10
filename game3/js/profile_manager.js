@@ -159,7 +159,7 @@ window.switchProfileTab = function(tabId) {
         document.getElementById('wordThresholdInput')?.addEventListener('change', window.loadAdvancedStats);
         window.loadAdvancedStats();
     } else if (tabId === 'course') {
-        // La tab course ora gestisce solo la visualizzazione dell'area, il bottone è esterno
+        if (courseBtn) courseBtn.classList.add('active-tab');
         if (courseArea) courseArea.style.display = 'flex';
         if (typeof window.renderCourseTabView === 'function') window.renderCourseTabView();
     }
