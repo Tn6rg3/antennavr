@@ -150,6 +150,29 @@ window.generateAdaptiveGroup = function() {
     return group;
 };
 
+window.preGenerateCourseGroups = function() {
+    if (!window.courseData || !window.courseData.current_day_session) return;
+
+    const session = window.courseData.current_day_session;
+    const wpm = window.calculateDynamicCourseWpm();
+    const farnsworth = parseInt(window.courseData.settings.farnsworth_wpm) || 12;
+    const spacing = parseFloat(window.courseData.settings.group_spacing) || 3.0;
+
+    // Stima della durata di un gruppo di 5 caratteri (in secondi)
+    const estimatedSecPerGroup = (60 / farnsworth) + (spacing * 2);
+
+    // Calcoliamo quanti gruppi servono per coprire l'intera durata
+    const numGroups = Math.ceil((session.total_seconds / estimatedSecPerGroup) * 1.5);
+
+    console.log(`Course: Pre-generating ${numGroups} groups for session...`);
+
+    gameWords = [];
+    for (let i = 0; i < numGroups; i++) {
+        gameWords.push(window.generateAdaptiveGroup());
+    }
+    requestedWordCount = gameWords.length;
+};
+
 window.startCourseSessionSequence = function() {
     window.showScreen('gameArea');
     if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
@@ -160,6 +183,10 @@ window.startCourseSessionSequence = function() {
     window.courseSessionNextPauseTs = Date.now() + (window.courseSessionPauseInterval * 1000);
     window.courseIsPaused = false;
     window.coursePausePending = false;
+
+    // PRE-GENERAZIONE LISTA GRUPPI
+    window.preGenerateCourseGroups();
+    wordIndex = 0;
 
     // Inizializziamo il timer della sessione
     window.updateCourseTimerUI();
