@@ -50,8 +50,59 @@ window.getGameWords = function(num, mode) {
     if (window.GAME_MODES && window.GAME_MODES[mode] && typeof window.GAME_MODES[mode].generateWords === 'function') {
         return window.GAME_MODES[mode].generateWords(num, { master: window.masterDictionary, custom: window.customDictionary });
     }
+    // Se siamo in modalità standard ma c'è un dizionario personalizzato carico, usalo
+    if (mode === 'standard' && window.customDictionary && window.customDictionary.length > 0) {
+        return fisherYatesShuffle(window.customDictionary).slice(0, num).map(w => w.toUpperCase());
+    }
     return fisherYatesShuffle(window.masterDictionary).slice(0, num).map(w => w.toUpperCase());
 };
+
+window.updateCustomDictStatus = function() {
+    const statusEl = document.getElementById('customDictStatus');
+    if (!statusEl) return;
+    if (window.customDictionary && window.customDictionary.length > 0) {
+        statusEl.textContent = `✅ Caricate ${window.customDictionary.length} parole personalizzate.`;
+        statusEl.style.color = 'var(--link-color)';
+    } else {
+        statusEl.textContent = "Nessun file caricato.";
+        statusEl.style.color = 'var(--hint-color)';
+    }
+};
+
+window.handleCustomDictUpload = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const text = e.target.result;
+        // Divide per spazi, virgole o nuove righe
+        const words = text.split(/[\s,]+/)
+            .map(w => w.trim().toLowerCase())
+            .filter(w => w.length >= 3);
+
+        if (words.length > 0) {
+            window.customDictionary = words;
+            localStorage.setItem("cwgame_custom_dict", JSON.stringify(words));
+            window.updateCustomDictStatus();
+            showToast(`Dizionario caricato: ${words.length} parole.`);
+        } else {
+            showToast("Il file non contiene parole valide (min. 3 caratteri).");
+        }
+    };
+    reader.onerror = function() {
+        showToast("Errore durante la lettura del file.");
+    };
+    reader.readAsText(file);
+};
+
+// Inizializzazione listener caricamento file
+setTimeout(() => {
+    const fileInput = document.getElementById('customDictFileInput');
+    if (fileInput) {
+        fileInput.addEventListener('change', window.handleCustomDictUpload);
+    }
+}, 2000);
 
 function mulberry32(a) {
     return function() {
