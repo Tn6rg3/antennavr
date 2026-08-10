@@ -57,14 +57,14 @@ html, body {
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    padding-bottom: 10px;
+    padding-bottom: 15px;
     -webkit-overflow-scrolling: touch;
 }
 
 /* Contenitore fisso per i bottoni in fondo */
 .fixed-bottom-btns {
     width: 100%;
-    padding: 5px 0;
+    padding: 10px 0 5px 0;
     background: var(--bg-color);
     flex-shrink: 0;
     border-top: 1px solid rgba(0,0,0,0.05);
@@ -173,6 +173,18 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10; }
 .action-btn-small { width: auto; padding: 6px 12px; font-size: 0.85em; margin: 0; flex-shrink: 0; position: relative; overflow: visible !important; }
 
 /* =========================================================
+   SCROLLING LISTE INTERNE
+   ========================================================= */
+#matchHistoryContainer {
+    max-height: 230px; /* Circa 3 righe */
+    overflow-y: auto;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.03);
+    padding: 2px;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* =========================================================
    BADGE NOTIFICHE E MISSIONI
    ========================================================= */
 .badge-counter {
@@ -245,21 +257,6 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10; }
     z-index: 50;
     width: 100%;
     clear: both;
-}
-
-/* =========================================================
-   SCROLLING STORICO PARTITE (Profilo)
-   ========================================================= */
-#matchHistoryContainer {
-    max-height: 220px; /* Altezza per circa 3 partite */
-    overflow-y: auto;
-    border-radius: 8px;
-    background: rgba(0,0,0,0.05);
-    padding: 2px;
-    -webkit-overflow-scrolling: touch;
-}
-.data-list#matchHistoryList li {
-    margin-bottom: 6px;
 }
 #lbModeSelect {
     margin: 5px 0;
