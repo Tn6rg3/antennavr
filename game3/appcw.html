@@ -297,6 +297,17 @@
             </div>
         </div>
 
+        <!-- NUOVA SEZIONE CORSO CW -->
+        <div class="box-panel" style="margin-bottom: 8px; border: 2px solid var(--link-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <h3 style="color:var(--link-color); margin:0; font-size:1em;">📻 Corso CW (Metodo Koch)</h3>
+                <button id="btnOpenCourse" class="action-btn-small btn-champ" style="width:auto; padding:4px 12px;">Gestisci</button>
+            </div>
+            <div id="coursePreviewInfo" style="font-size:0.85em; color:var(--hint-color);">
+                Attiva il tuo piano di allenamento personalizzato.
+            </div>
+        </div>
+
         <div class="box-panel" style="margin-bottom:8px; flex-shrink:0;">
             <h3 id="txt_alias_title" style="color:var(--link-color); margin-bottom:5px;">🏷️ Il tuo Alias</h3>
             <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
@@ -867,6 +878,70 @@
     </div>
 </div>
 
+<!-- MODAL: GESTIONE CORSO CW -->
+<div id="courseModal" style="display: none; position: fixed; top: 5%; left: 5%; width: 90%; height: 90%; background: var(--bg-color); z-index: 7000; border: 2px solid var(--link-color); border-radius: 12px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
+    <h3 style="margin-top:0; text-align: center; color: var(--link-color);">📖 Programma Allenamento CW</h3>
+
+    <div id="courseSetupView" style="display:none; flex-direction:column; gap:10px;">
+        <p style="font-size:0.9em; text-align:center;">Configura il tuo piano di allenamento settimanale ispirato ai runner.</p>
+
+        <div class="box-panel">
+            <label style="font-size:0.85em; font-weight:bold;">Giorni di allenamento a settimana:</label>
+            <select id="courseDaysInput" style="width:100%; padding:8px; margin-top:5px;">
+                <option value="1">1 Giorno</option>
+                <option value="2">2 Giorni</option>
+                <option value="3" selected>3 Giorni</option>
+                <option value="4">4 Giorni</option>
+                <option value="5">5 Giorni</option>
+                <option value="6">6 Giorni</option>
+                <option value="7">7 Giorni</option>
+            </select>
+        </div>
+
+        <div class="settings-row">
+            <div><label>WPM Caratt.</label> <input type="number" id="courseWpmInput" value="20" min="15" max="50"></div>
+            <div><label>WPM Spazio</label> <input type="number" id="courseFarnsworthInput" value="12" min="5" max="50"></div>
+        </div>
+
+        <div class="box-panel">
+            <h4 style="margin:0 0 8px 0; font-size:0.9em;">Durata Sessioni (Minuti)</h4>
+            <div class="settings-row">
+                <div><label>Base (Z2)</label> <input type="number" id="courseMinZ2" value="10" min="5" max="60"></div>
+                <div><label>Lavoro</label> <input type="number" id="courseMinWork" value="15" min="5" max="60"></div>
+                <div><label>Lungo</label> <input type="number" id="courseMinLong" value="30" min="10" max="120"></div>
+            </div>
+        </div>
+
+        <button id="btnCreatePlan" class="btn-success">CREA IL MIO PIANO 🚀</button>
+    </div>
+
+    <div id="courseDashboardView" style="display:none; flex-direction:column; gap:10px;">
+        <!-- Heatmap Caratteri -->
+        <div class="box-panel">
+            <h4 style="margin:0 0 5px 0; font-size:0.85em;">Padronanza Caratteri (Metodo Koch)</h4>
+            <div id="courseHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:5px;">
+                <!-- Popolato da JS -->
+            </div>
+            <p id="courseLessonInfo" style="font-size:0.75em; text-align:center; color:var(--hint-color); margin-top:5px;"></p>
+        </div>
+
+        <!-- Piano Settimanale -->
+        <div class="box-panel">
+            <h4 style="margin:0 0 5px 0; font-size:0.85em;">Il tuo Piano per questa Settimana</h4>
+            <div id="courseWeeklyPlan" style="display:flex; flex-direction:column; gap:4px;">
+                <!-- Popolato da JS -->
+            </div>
+        </div>
+
+        <div style="display:flex; gap:10px;">
+            <button id="btnStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
+            <button id="btnResetCourse" class="btn-danger" style="flex:1; font-size:0.75em;">RESET</button>
+        </div>
+    </div>
+
+    <button onclick="document.getElementById('courseModal').style.display='none'" class="btn-secondary" style="margin-top:15px;">Chiudi</button>
+</div>
+
 <!-- CARICAMENTO DINAMICO ANTI-CACHE PER TELEGRAM MOBILE -->
 <script>
     (function() {
@@ -888,6 +963,8 @@
             "js/quiz_manager.js",
             "js/br_manager.js",
             "js/coop_manager.js",
+            "js/course_manager.js",
+            "js/course_ui.js",
             "js/game_core.js"
         ];
 
