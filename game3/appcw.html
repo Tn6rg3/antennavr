@@ -123,25 +123,22 @@
 <!-- MENU PRINCIPALE -->
 <div id="setupScreen" class="screen">
     <div class="screen-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 8px; gap: 6px; flex-wrap: wrap;">
-            <h2 style="margin: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 1.1em; flex-grow: 1;">
-                <span id="txt_hello">Ciao</span> <span id="playerName">Giocatore</span>!
-            </h2>
-            <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
+        <div style="display: flex; justify-content: center; align-items: center; width: 100%; margin-bottom: 8px; gap: 4px; flex-wrap: nowrap;">
+            <div style="display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; width: 100%;">
                 <button onclick="toggleLanguage()" class="action-btn-small btn-secondary" style="width:36px; padding:6px 0;" id="langBtn">IT</button>
-                <button class="action-btn-small btn-secondary" onclick="showScreen('privacyScreen')" id="txt_info_btn">Info</button>
-                <button class="action-btn-small" onclick="showScreen('participationScreen'); switchActTab('daily');" id="txt_act_btn">
+                <button class="action-btn-small btn-secondary" onclick="showScreen('privacyScreen')" id="txt_info_btn" style="flex:1;">Info</button>
+                <button class="action-btn-small" onclick="showScreen('participationScreen'); switchActTab('daily');" id="txt_act_btn" style="flex:1;">
                     <span id="txt_act_btn_label">🏅 Attività</span>
                 </button>
-                <button class="action-btn-small" onclick="showProfileScreen()" id="txt_profile_btn" style="position: relative;">
+                <button class="action-btn-small" onclick="showProfileScreen()" id="txt_profile_btn" style="flex:1.2; position: relative;">
                     <span id="txt_profile_btn_label">👤 Profilo</span>
                     <span id="missionsBadge" class="badge-counter">0</span>
                 </button>
-                <button class="action-btn-small" onclick="showProfileScreen(); switchProfileTab('course');" id="txt_course_tab_btn" style="position: relative;">
+                <button class="action-btn-small" onclick="showProfileScreen(); switchProfileTab('course');" id="txt_course_tab_btn" style="flex:1.2; position: relative;">
                     <span id="txt_course_btn_label">📻 Corso</span>
-                    <span id="courseEnrollmentBadgeGlobal" class="badge-counter" style="background:#2196f3;">0</span>
+                    <span id="courseEnrollmentBadgeGlobal" class="badge-counter badge-active" style="background:#2196f3; color:white;">0</span>
                 </button>
-                <button class="action-btn-small" onclick="showScreen('leaderboardScreen');" id="txt_lb_btn">
+                <button class="action-btn-small" onclick="showScreen('leaderboardScreen');" id="txt_lb_btn" style="flex:1.2;">
                     <span id="txt_lb_btn_label">🏆 Classifica</span>
                 </button>
             </div>
@@ -286,13 +283,10 @@
 
 <!-- PROFILO E STATISTICHE -->
 <div id="profileScreen" class="screen">
-    <div style="display: flex; gap: 4px; width: 100%; margin-bottom: 15px; flex-shrink:0; flex-wrap: wrap;">
+    <div style="display: flex; gap: 4px; width: 100%; margin-bottom: 15px; flex-shrink:0; flex-wrap: nowrap;">
         <button id="btnTabProfile" class="tab-btn active-tab" onclick="switchProfileTab('info')" style="flex:1; font-size: 0.8em; padding: 10px 2px;">👤 Profilo</button>
         <button id="btnTabStats" class="tab-btn" onclick="switchProfileTab('stats')" style="flex:1; font-size: 0.8em; padding: 10px 2px;">📊 Analisi Errori</button>
-        <button id="btnTabCourse" class="tab-btn" onclick="switchProfileTab('course')" style="flex:1.2; font-size: 0.8em; padding: 10px 2px; position: relative;">
-            📻 Corso CW
-            <span id="courseEnrollmentBadge" class="badge-counter" style="display:none; background:#2196f3; right: -2px; top: -5px;">0</span>
-        </button>
+        <div id="btnTabCourse" style="display:none;"></div> <!-- Nascondiamo il vecchio bottone tab -->
     </div>
 
     <!-- SEZIONE 1: INFO PROFILO E MISSIONI -->
