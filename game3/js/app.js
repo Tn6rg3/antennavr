@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.221";
+const APP_VERSION = "20260807.220";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -68,6 +68,10 @@ let gameWords = [], wordIndex = 0, currentWpm = 20, baseWpm = 20, currentTone = 
 let totalScore = 0, currentStreak = 0, usedReplay = false, matchDetailsArray = [];
 let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
+
+// STATO CORSO CW
+let isCourseMode = false, courseSessionTimer = null;
+window.courseData = null;
 
 // STATO CO-OP
 let isCoopMode = false, coopActiveFreqIndex = 0;
@@ -301,6 +305,20 @@ function initGame() {
         window.initBattleRoyaleScheduler?.();
         window.loadRegolamento();
         window.initProgression?.();
+        window.initCourseManager?.();
+
+        // --- NOTIFICA CORSO CW ALL'AVVIO ---
+        setTimeout(() => {
+            if (window.courseData && window.courseData.active_plan) {
+                const todayIdx = (new Date().getDay() + 6) % 7;
+                const session = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
+                if (session && session.type !== 'REST' && !session.completed) {
+                    const typeCfg = window.COURSE_TYPES[session.type];
+                    const label = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
+                    showToast(`📅 Oggi: Sessione ${label}! Controlla il tuo profilo.`);
+                }
+            }
+        }, 3000);
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {

@@ -2,6 +2,7 @@
 
 window.showScreen = function(screenId) {
     clearAllTimers();
+    if (courseSessionTimer) { clearInterval(courseSessionTimer); courseSessionTimer = null; }
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
     }
@@ -345,6 +346,8 @@ window.renderPlayersList = function(playersData, hostId) {
 window.startCountdownSequence = function() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (listeners.room) listeners.room.off();
+
+    isCourseMode = (currentMode === 'course');
     if (!isSinglePlayer) {
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
             gameStartPlayerCount = snap.exists() ? Object.keys(snap.val()).length : 0;
@@ -429,6 +432,9 @@ window.startCountdownSequence = function() {
                 if (currentMode === 'conquest') {
                     if (typeof window.startCoopSequence === 'function') return window.startCoopSequence();
                 }
+                if (currentMode === 'course') {
+                    if (typeof window.startCourseSessionSequence === 'function') return window.startCourseSessionSequence();
+                }
                 if (currentMode === 'quiz') {
                     if (typeof window.startQuizSequence === 'function') return window.startQuizSequence();
                 }
@@ -486,6 +492,7 @@ window.resumeGameSequence = function() {
 
 window.playNextWord = function() {
     if (!gameRunning || currentMode === 'pingpong') return;
+    if (isCourseMode) return window.playNextCourseGroup?.();
     if (wordIndex >= requestedWordCount) return window.finishGame();
     if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
     inputActive = true;
@@ -674,6 +681,48 @@ if (els.permanentGameInput) {
 window.handleWordSubmission = function(userWord) {
     if (!userWord) return;
     userWord = userWord.substring(0, 50).trim().toUpperCase();
+
+    if (isCourseMode) {
+        const currentWord = gameWords[wordIndex] || "";
+        const isCorrect = (userWord === currentWord);
+
+        // Aggiorna statistiche corso
+        if (window.courseData) {
+            if (!window.courseData.progress.char_stats) window.courseData.progress.char_stats = {};
+            for (let char of currentWord) {
+                if (!window.courseData.progress.char_stats[char]) window.courseData.progress.char_stats[char] = { attempts: 0, errors: 0 };
+                window.courseData.progress.char_stats[char].attempts++;
+                if (currentWord.indexOf(char) !== userWord.indexOf(char) || userWord.length !== currentWord.length) {
+                    // Logica semplificata: se la parola è sbagliata, contiamo errore per tutti i caratteri della parola?
+                    // Meglio: confrontiamo carattere per carattere
+                }
+            }
+            // Logica corretta per carattere
+            for (let i=0; i<currentWord.length; i++) {
+                let c = currentWord[i];
+                if (userWord[i] !== c) window.courseData.progress.char_stats[c].errors++;
+            }
+            window.saveCourseState?.();
+        }
+
+        // Feedback visuale
+        const tr = document.createElement('tr');
+        const tdTyped = document.createElement('td'); tdTyped.textContent = userWord;
+        const tdReal = document.createElement('td'); tdReal.textContent = currentWord;
+        const tdPoints = document.createElement('td');
+        tdPoints.textContent = isCorrect ? "OK" : "ERR";
+        tdPoints.style.color = isCorrect ? "#4caf50" : "#d32f2f";
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
+        if (els.tableBody) {
+            els.tableBody.appendChild(tr);
+            els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
+        }
+
+        setTimeout(() => {
+            if (gameRunning) window.playNextCourseGroup?.();
+        }, 600);
+        return;
+    }
 
     if (currentMode === 'conquest') {
         if (coopActiveFreqIndex === 0) {
