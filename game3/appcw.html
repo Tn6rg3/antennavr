@@ -382,75 +382,130 @@
 
     <!-- SEZIONE 3: GESTIONE CORSO CW -->
     <div id="profileCourseArea" class="screen-content" style="display: none;">
-        <!-- Configurazione (Sempre visibile o espandibile) -->
-        <div class="box-panel" style="border-color: var(--link-color);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h4 style="margin:0; font-size:0.95em;">⚙️ Impostazioni Corso</h4>
-                <button id="btnToggleCourseSettings" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Mostra/Nascondi</button>
+
+        <!-- WIZARD CONFIGURAZIONE (PASSO-PASSO) -->
+        <div id="courseWizardContainer" class="box-panel" style="display:none; border-color: var(--link-color); padding: 20px; text-align: center;">
+            <div id="wizardStep1">
+                <h3>🗓️ Passo 1: Frequenza</h3>
+                <p style="font-size:0.85em;">Quanti giorni a settimana vuoi allenarti? La costanza è più importante della durata.</p>
+                <select id="wizardDays" style="width:100%; padding:10px; margin: 15px 0;">
+                    <option value="1">1 Giorno</option>
+                    <option value="2">2 Giorni</option>
+                    <option value="3" selected>3 Giorni</option>
+                    <option value="4">4 Giorni</option>
+                    <option value="5">5 Giorni</option>
+                    <option value="6">6 Giorni</option>
+                    <option value="7">7 Giorni</option>
+                </select>
+                <button class="btn-success" onclick="window.nextWizardStep(2)">Avanti ➡️</button>
             </div>
 
-            <div id="courseTabSettingsContent" style="display:flex; flex-direction:column; gap:10px;">
-                <div style="display:flex; flex-direction:column; gap:5px;">
-                    <label style="font-size:0.85em; font-weight:bold;">Giorni di allenamento a settimana:</label>
-                    <select id="courseTabDaysInput" style="width:100%; padding:8px;">
-                        <option value="1">1 Giorno</option>
-                        <option value="2">2 Giorni</option>
-                        <option value="3" selected>3 Giorni</option>
-                        <option value="4">4 Giorni</option>
-                        <option value="5">5 Giorni</option>
-                        <option value="6">6 Giorni</option>
-                        <option value="7">7 Giorni</option>
-                    </select>
-                </div>
-
+            <div id="wizardStep2" style="display:none;">
+                <h3>📻 Passo 2: Velocità</h3>
+                <p style="font-size:0.85em;">Imposta la velocità del suono dei caratteri (WPM) e lo spazio tra loro (Farnsworth).</p>
                 <div class="settings-row">
-                    <div><label>WPM Caratt.</label> <input type="number" id="courseTabWpmInput" value="20" min="15" max="50"></div>
-                    <div><label>WPM Spazio</label> <input type="number" id="courseTabFarnsworthInput" value="12" min="5" max="50"></div>
+                    <div><label>Velocità (WPM)</label> <input type="number" id="wizardWpm" value="20" min="15" max="50"></div>
+                    <div><label>Spazio (WPM)</label> <input type="number" id="wizardFarnsworth" value="12" min="5" max="50"></div>
                 </div>
-
-                <div class="settings-row">
-                    <div style="flex:1;"><label>Spazio Gruppi</label>
-                        <select id="courseTabGroupSpacingInput" style="width:100%; padding:5px;">
-                            <option value="1.0">1.0x (Std)</option>
-                            <option value="1.5">1.5x</option>
-                            <option value="2.0" selected>2.0x</option>
-                            <option value="3.0">3.0x</option>
-                            <option value="4.0">4.0x</option>
-                        </select>
-                    </div>
+                <p style="font-size:0.7em; color:var(--hint-color); margin-top:5px;">💡 Consiglio: Mantieni la velocità caratteri a 20+ WPM per imparare il "suono" e non contare i punti/linee.</p>
+                <div style="display:flex; gap:10px; margin-top:15px;">
+                    <button class="btn-secondary" onclick="window.nextWizardStep(1)" style="flex:1;">⬅️ Indietro</button>
+                    <button class="btn-success" onclick="window.nextWizardStep(3)" style="flex:1;">Avanti ➡️</button>
                 </div>
+            </div>
 
-                <div class="box-panel" style="background: rgba(0,0,0,0.1); margin: 5px 0;">
-                    <h4 style="margin:0 0 8px 0; font-size:0.85em;">Durata Sessioni (Minuti)</h4>
-                    <div class="settings-row">
-                        <div><label>Base (Z2)</label> <input type="number" id="courseTabMinZ2" value="10" min="5" max="60"></div>
-                        <div><label>Lavoro</label> <input type="number" id="courseTabMinWork" value="15" min="5" max="60"></div>
-                        <div><label>Lungo</label> <input type="number" id="courseTabMinLong" value="30" min="10" max="120"></div>
-                    </div>
+            <div id="wizardStep3" style="display:none;">
+                <h3>🏓 Passo 3: Spaziatura Gruppi</h3>
+                <p style="font-size:0.85em;">Quanto tempo vuoi tra un gruppo di 5 caratteri e l'altro?</p>
+                <select id="wizardGroupSpacing" style="width:100%; padding:10px; margin: 15px 0;">
+                    <option value="1.0">1.0x (Nessuna pausa extra)</option>
+                    <option value="1.5">1.5x (Breve pausa)</option>
+                    <option value="2.0" selected>2.0x (Pausa media)</option>
+                    <option value="3.0">3.0x (Pausa lunga)</option>
+                    <option value="4.0">4.0x (Molto rilassato)</option>
+                </select>
+                <div style="display:flex; gap:10px; margin-top:15px;">
+                    <button class="btn-secondary" onclick="window.nextWizardStep(2)" style="flex:1;">⬅️ Indietro</button>
+                    <button class="btn-success" onclick="window.nextWizardStep(4)" style="flex:1;">Avanti ➡️</button>
                 </div>
+            </div>
 
-                <button id="btnTabCreatePlan" class="btn-success">SALVA CONFIGURAZIONE 💾</button>
+            <div id="wizardStep4" style="display:none;">
+                <h3>⏱️ Passo 4: Durata (Volume)</h3>
+                <p style="font-size:0.85em;">Quanti minuti vuoi dedicare alla sessione <b>BASE (Z2)</b>?</p>
+                <input type="number" id="wizardMinZ2" value="10" min="5" max="60" style="width:80px; padding:10px; font-size:1.2em; text-align:center; margin: 15px 0;">
+                <p style="font-size:0.8em;">Le altre sessioni verranno calcolate automaticamente (30/20/50):</p>
+                <div id="wizardDurationsPreview" style="font-size:0.75em; background:rgba(0,0,0,0.1); padding:10px; border-radius:8px; margin-top:5px;">
+                    Base: 10 min | Lavoro: 7 min | Lungo: 17 min
+                </div>
+                <div style="display:flex; gap:10px; margin-top:15px;">
+                    <button class="btn-secondary" onclick="window.nextWizardStep(3)" style="flex:1;">⬅️ Indietro</button>
+                    <button class="btn-success" onclick="window.finishWizard()" style="flex:1;">🏁 Concludi</button>
+                </div>
             </div>
         </div>
 
-        <div id="courseTabDashboardView" style="display:none; flex-direction:column; gap:10px; width: 100%; margin-top: 10px;">
-            <!-- Heatmap Caratteri -->
-            <div class="box-panel">
-                <h4 style="margin:0 0 5px 0; font-size:0.85em;">Padronanza Caratteri (Metodo Koch)</h4>
-                <div id="courseTabHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:5px;"></div>
-                <p id="courseTabLessonInfo" style="font-size:0.75em; text-align:center; color:var(--hint-color); margin-top:5px;"></p>
+        <!-- Dashboard e Settings (Se piano attivo) -->
+        <div id="courseTabActiveView" style="display:none; flex-direction:column; gap:10px; width: 100%;">
+
+            <div id="courseTabDashboardView" style="display:flex; flex-direction:column; gap:10px;">
+                <!-- Heatmap Caratteri -->
+                <div class="box-panel">
+                    <h4 style="margin:0 0 5px 0; font-size:0.85em;">Padronanza Caratteri (Metodo Koch)</h4>
+                    <div id="courseTabHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:5px;"></div>
+                    <p id="courseTabLessonInfo" style="font-size:0.75em; text-align:center; color:var(--hint-color); margin-top:5px;"></p>
+                </div>
+
+                <!-- Piano Settimanale -->
+                <div class="box-panel">
+                    <h4 style="margin:0 0 5px 0; font-size:0.85em;">Il tuo Piano per questa Settimana</h4>
+                    <div id="courseTabWeeklyPlan" style="display:flex; flex-direction:column; gap:4px;"></div>
+                </div>
+
+                <div style="display:flex; gap:10px;">
+                    <button id="btnTabStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
+                    <button id="btnTabResetCourse" class="btn-danger" style="flex:1.2; font-size:0.75em;">ESCI DAL CORSO</button>
+                </div>
             </div>
 
-            <!-- Piano Settimanale -->
-            <div class="box-panel">
-                <h4 style="margin:0 0 5px 0; font-size:0.85em;">Il tuo Piano per questa Settimana</h4>
-                <div id="courseTabWeeklyPlan" style="display:flex; flex-direction:column; gap:4px;"></div>
-            </div>
+            <hr class="divider">
 
-            <div style="display:flex; gap:10px;">
-                <button id="btnTabStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
-                <button id="btnTabResetCourse" class="btn-danger" style="flex:1; font-size:0.75em;">RESET</button>
+            <!-- Impostazioni (Collassate) -->
+            <div class="box-panel" style="border-color: var(--link-color);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; font-size:0.9em; color:var(--hint-color);">⚙️ Modifica Impostazioni</h4>
+                    <button id="btnToggleCourseSettings" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Mostra</button>
+                </div>
+
+                <div id="courseTabSettingsContent" style="display:none; flex-direction:column; gap:10px;">
+                    <div class="settings-row">
+                        <div style="flex:2;"><label>GG/Sett.</label> <input type="number" id="courseTabDaysInput" value="3" min="1" max="7"></div>
+                        <div style="flex:2;"><label>WPM</label> <input type="number" id="courseTabWpmInput" value="20"></div>
+                        <div style="flex:2;"><label>Spazio</label> <input type="number" id="courseTabFarnsworthInput" value="12"></div>
+                    </div>
+                    <div class="settings-row">
+                        <div style="flex:1;"><label>Spazio Gruppi</label>
+                            <select id="courseTabGroupSpacingInput" style="width:100%; padding:5px;">
+                                <option value="1.0">1.0x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2.0">2.0x</option>
+                                <option value="3.0">3.0x</option>
+                                <option value="4.0">4.0x</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;"><label>Min. Z2</label> <input type="number" id="courseTabMinZ2" value="10"></div>
+                    </div>
+                    <button id="btnTabSavePlan" class="btn-success">SALVA E AGGIORNA PIANO 💾</button>
+                </div>
             </div>
+        </div>
+
+        <div id="courseTabInitialPrompt" class="box-panel" style="display:none; text-align:center; padding: 30px 10px;">
+             <span style="font-size: 4em;">📻</span>
+             <h2 style="color:var(--link-color);">Vuoi iniziare il Corso CW?</h2>
+             <p style="font-size:0.9em; margin-bottom:20px;">Un percorso di allenamento strutturato per dominare il Codice Morse seguendo il metodo Koch e un piano atletico settimanale.</p>
+             <button class="btn-success" onclick="window.startCourseWizard()" style="padding:15px 30px; font-size:1.1em;">SÌ, INIZIA ORA! 🚀</button>
+             <button class="btn-secondary" onclick="goBackToMenu()" style="margin-top:10px; font-size:0.9em;">Non ora</button>
         </div>
     </div>
 
