@@ -42,7 +42,7 @@ window.loadCourseState = async function() {
         window.updateCourseUI();
 
         // Aggiorniamo il registro iscritti all'accesso per sicurezza
-        if (window.courseData.active_plan === true) {
+        if (window.courseData && window.courseData.active_plan === true) {
             db.ref('courseActiveEnrollments/' + myId).set({
                 name: myName,
                 ts: firebase.database.ServerValue.TIMESTAMP
@@ -80,13 +80,19 @@ window.getDefaultCourseData = function() {
 };
 
 window.saveCourseState = function() {
-    if (!myId || !window.courseData) return;
+    if (!myId || !db || !window.courseData) {
+        console.error("Course Manager: Cannot save, missing context.");
+        return;
+    }
+
+    console.log("Course Manager: Saving state to Firebase...", window.courseData);
 
     // Salviamo lo stato locale dell'utente
     db.ref(`users/${myId}/course`).set(window.courseData).then(() => {
+        console.log("Course Manager: State saved successfully.");
         // Gestione del registro iscritti (per contatore preciso)
         const activeRef = db.ref('courseActiveEnrollments/' + myId);
-        if (window.courseData.active_plan) {
+        if (window.courseData.active_plan === true) {
             activeRef.set({
                 name: myName,
                 ts: firebase.database.ServerValue.TIMESTAMP
@@ -94,6 +100,8 @@ window.saveCourseState = function() {
         } else {
             activeRef.remove();
         }
+    }).catch(err => {
+        console.error("Course Manager: Save error:", err);
     });
 };
 

@@ -228,18 +228,20 @@ window.finishWizard = function() {
     const pauseDurInput = document.getElementById('wizardPauseDuration');
 
     if (!z2Input || !lessonInput || !daysInput) {
-        console.error("Course Wizard: Missing critical inputs");
-        return alert("Errore nel recupero dei dati. Riprova.");
+        console.error("Course Wizard: Missing critical inputs", { z2Input, lessonInput, daysInput });
+        alert("Errore nel recupero dei dati. Riprova.");
+        return;
     }
 
     const z2 = parseInt(z2Input.value) || 10;
+    const startLesson = parseInt(lessonInput.value) || 2;
 
     window.courseData.active_plan = true;
-    window.courseData.progress.current_lesson = parseInt(lessonInput.value) || 2;
+    window.courseData.progress.current_lesson = startLesson;
     window.courseData.settings = {
         days_per_week: daysInput.value,
-        start_wpm: wpmInput ? wpmInput.value : 15,
-        farnsworth_wpm: farnsworthInput ? farnsworthInput.value : 12,
+        start_wpm: wpmInput ? parseInt(wpmInput.value) : 15,
+        farnsworth_wpm: farnsworthInput ? parseInt(farnsworthInput.value) : 12,
         group_spacing: spacingInput ? spacingInput.value : "3.0",
         pause_interval: pauseIntInput ? parseInt(pauseIntInput.value) : 60,
         pause_duration: pauseDurInput ? parseInt(pauseDurInput.value) : 10,
@@ -248,10 +250,14 @@ window.finishWizard = function() {
         minutes_long: Math.round(z2 * (50/30))
     };
 
-    console.log("Course: Wizard Finished. Settings:", window.courseData.settings);
+    console.log("Course: Final settings for save:", window.courseData.settings);
+
     window.generateWeeklySchedule();
     window.renderCourseTabView();
     window.saveCourseState();
+
+    // Pulizia UI
+    document.getElementById('courseWizardContainer').style.display = 'none';
     showToast("Corso attivato! Iniziamo l'allenamento. 🚀");
 };
 
