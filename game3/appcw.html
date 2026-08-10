@@ -404,10 +404,10 @@
                 <h3>📻 Passo 2: Velocità</h3>
                 <p style="font-size:0.85em;">Imposta la velocità del suono dei caratteri (WPM) e lo spazio tra loro (Farnsworth).</p>
                 <div class="settings-row">
-                    <div><label>Velocità (WPM)</label> <input type="number" id="wizardWpm" value="20" min="15" max="50"></div>
+                    <div><label>Velocità (WPM)</label> <input type="number" id="wizardWpm" value="15" min="5" max="50"></div>
                     <div><label>Spazio (WPM)</label> <input type="number" id="wizardFarnsworth" value="12" min="5" max="50"></div>
                 </div>
-                <p style="font-size:0.7em; color:var(--hint-color); margin-top:5px;">💡 Consiglio: Mantieni la velocità caratteri a 20+ WPM per imparare il "suono" e non contare i punti/linee.</p>
+                <p style="font-size:0.7em; color:var(--hint-color); margin-top:5px;">💡 Consiglio: La velocità di base è 15 WPM. Più è alta, più impari il "suono" totale del carattere.</p>
                 <div style="display:flex; gap:10px; margin-top:15px;">
                     <button class="btn-secondary" onclick="window.nextWizardStep(1)" style="flex:1;">⬅️ Indietro</button>
                     <button class="btn-success" onclick="window.nextWizardStep(3)" style="flex:1;">Avanti ➡️</button>
@@ -415,15 +415,32 @@
             </div>
 
             <div id="wizardStep3" style="display:none;">
-                <h3>🏓 Passo 3: Spaziatura Gruppi</h3>
-                <p style="font-size:0.85em;">Quanto tempo vuoi tra un gruppo di 5 caratteri e l'altro?</p>
-                <select id="wizardGroupSpacing" style="width:100%; padding:10px; margin: 15px 0;">
-                    <option value="1.0">1.0x (Nessuna pausa extra)</option>
-                    <option value="1.5">1.5x (Breve pausa)</option>
-                    <option value="2.0" selected>2.0x (Pausa media)</option>
-                    <option value="3.0">3.0x (Pausa lunga)</option>
-                    <option value="4.0">4.0x (Molto rilassato)</option>
-                </select>
+                <h3>🏓 Passo 3: Spaziatura e Pause</h3>
+                <p style="font-size:0.85em;">Configura il ritmo della tua sessione.</p>
+
+                <div style="margin-bottom:15px;">
+                    <label style="font-size:0.8em; font-weight:bold;">Spazio tra gruppi (5 car.):</label>
+                    <select id="wizardGroupSpacing" style="width:100%; padding:10px; margin-top:5px;">
+                        <option value="1.0">1.0x (Nessuna pausa)</option>
+                        <option value="2.0">2.0x (Standard)</option>
+                        <option value="3.0" selected>3.0x (Rilassato)</option>
+                        <option value="5.0">5.0x (Molto spazio)</option>
+                        <option value="10.0">10.0x (Massimo respiro)</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom:15px; display: flex; gap: 10px; justify-content: center;">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8em; font-weight:bold;">Ogni quanto (sec):</label>
+                        <input type="number" id="wizardPauseInterval" value="60" min="20" max="300" style="width:100%; padding:10px; margin-top:5px;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:0.8em; font-weight:bold;">Durata Pausa (sec):</label>
+                        <input type="number" id="wizardPauseDuration" value="10" min="0" max="60" style="width:100%; padding:10px; margin-top:5px;">
+                    </div>
+                </div>
+                <small style="font-size:0.65em; color:var(--hint-color);">Esempio: Una pausa di 10s ogni 60s di allenamento.</small>
+
                 <div style="display:flex; gap:10px; margin-top:15px;">
                     <button class="btn-secondary" onclick="window.nextWizardStep(2)" style="flex:1;">⬅️ Indietro</button>
                     <button class="btn-success" onclick="window.nextWizardStep(4)" style="flex:1;">Avanti ➡️</button>
@@ -484,15 +501,17 @@
                         <div style="flex:2;"><label>Spazio</label> <input type="number" id="courseTabFarnsworthInput" value="12"></div>
                     </div>
                     <div class="settings-row">
-                        <div style="flex:1;"><label>Spazio Gruppi</label>
+                        <div style="flex:1.5;"><label>Spazio Gruppi</label>
                             <select id="courseTabGroupSpacingInput" style="width:100%; padding:5px;">
                                 <option value="1.0">1.0x</option>
-                                <option value="1.5">1.5x</option>
                                 <option value="2.0">2.0x</option>
                                 <option value="3.0">3.0x</option>
-                                <option value="4.0">4.0x</option>
+                                <option value="5.0">5.0x</option>
+                                <option value="10.0">10.0x</option>
                             </select>
                         </div>
+                        <div style="flex:1;"><label>Ogni (sec)</label> <input type="number" id="courseTabPauseIntervalInput" value="60" min="20"></div>
+                        <div style="flex:1;"><label>Pausa (sec)</label> <input type="number" id="courseTabPauseDurationInput" value="10" min="0"></div>
                         <div style="flex:1;"><label>Min. Z2</label> <input type="number" id="courseTabMinZ2" value="10"></div>
                     </div>
                     <button id="btnTabSavePlan" class="btn-success">SALVA E AGGIORNA PIANO 💾</button>
