@@ -630,6 +630,17 @@ window.playNextWord = function() {
 
     if (typeof playMorseAudio === 'function') playMorseAudio(currentWord, currentWpm);
     lastWordStartTime = Date.now();
+
+    // Aggiornamento liveAudio per gli spettatori ad ogni nuova parola
+    if (roomCode) {
+        db.ref(`rooms/${roomCode}/liveAudio`).set({
+            word: currentWord,
+            wpm: currentWpm,
+            ts: Date.now(),
+            wordId: wordIndex // Aggiungiamo un ID parola incrementale
+        });
+    }
+
     if (els.permanentGameInput) els.permanentGameInput.focus();
 };
 
@@ -1212,9 +1223,14 @@ window.watchSpecificRoom = function(code, targetName) {
     const onAudioChange = db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
         const audioData = snap.val();
         if (audioData && audioData.word) {
-            const liveWpm = audioData.wpm || 20;
-            if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm}`;
-            if (typeof playMorseAudio === 'function') playMorseAudio(audioData.word, liveWpm, true);
+            // Evitiamo di riprodurre la stessa parola più volte (controllo ts o wordId)
+            const msgTs = audioData.ts || 0;
+            if (msgTs > (window.lastSpectatorAudioTs || 0)) {
+                window.lastSpectatorAudioTs = msgTs;
+                const liveWpm = audioData.wpm || 20;
+                if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm}`;
+                if (typeof playMorseAudio === 'function') playMorseAudio(audioData.word, liveWpm, true);
+            }
         }
     });
 
