@@ -1,6 +1,6 @@
 <div style="padding-bottom: 20px;">
     <h3 style="color: var(--champ-color); font-size: 1.1em; margin-top: 0; border-bottom: 1px solid var(--hint-color); padding-bottom: 5px;">🎮 Regole del Gioco</h3>
-    <p style="margin-top: 5px; font-size: 0.9em;">Benvenuto in Sfida Telegrafia! Decodifica il codice Morse e scala le classifiche.</p>
+    <p style="margin-top: 5px; font-size: 0.9em;">Benvenuto in Sfida Telegrafia! Decodifica il codice Morse e scala le classifiche mondiali.</p>
 
     <!-- ACCORDION: MODALITÀ DI GIOCO -->
     <div class="rules-accordion">
@@ -10,12 +10,13 @@
                 🔤 Parole Comuni (Standard) <span style="font-size: 0.8em;">▼</span>
             </summary>
             <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
-                <p>Decodifica parole di senso compiuto. La velocità si adatta alle tue risposte:</p>
+                <p>È la modalità classica di allenamento e sfida. Riceverai parole di senso compiuto estratte dal dizionario (Italiano o Inglese).</p>
+                <p><b>Punteggio e Velocità:</b></p>
                 <ul style="padding-left: 20px;">
-                    <li><b>Parola perfetta:</b> +2 WPM.</li>
-                    <li><b>1 Errore:</b> -1 WPM.</li>
-                    <li><b>Più errori:</b> -2 WPM.</li>
-                    <li><b>Riascolto:</b> 0 punti e -2 WPM.</li>
+                    <li><b>Parola Corretta:</b> Guadagni punti in base alla velocità (WPM) e alla lunghezza della parola. La velocità aumenta di <b>+2 WPM</b>.</li>
+                    <li><b>1 Errore (Levenshtein):</b> Guadagni punti parziali e la velocità scende di <b>-1 WPM</b>.</li>
+                    <li><b>Più Errori:</b> 0 punti e la velocità scende di <b>-2 WPM</b>.</li>
+                    <li><b>Riascolto:</b> L'uso del tasto "Riascolta" comporta <b>0 punti</b> e una penalità di <b>-2 WPM</b>, resettando la tua serie.</li>
                 </ul>
             </div>
         </details>
@@ -25,26 +26,33 @@
                 ⚔️ Conquista (Co-op Collaborativo) <span style="font-size: 0.8em;">▼</span>
             </summary>
             <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
-                <p>Collabora con i compagni per far salire la barra di conquista al <b>100%</b> contrastando il decadimento continuo.</p>
+                <p>Collabora con i compagni per far salire la barra di conquista al <b>100%</b>. La barra decade continuamente nel tempo, quindi la velocità di risposta è fondamentale.</p>
                 <ul style="padding-left: 20px;">
-                    <li><b>Canali Esclusivi:</b> Prenota una delle 3 frequenze per decodificare gruppi di diversa lunghezza.</li>
-                    <li><b>Punteggio:</b> Risposta esatta (+4%, +7% o +12%) | Errore (-2%, -3% o -5%).</li>
-                    <li><b>Lock-in:</b> Mentre occupi un canale, gli altri non possono usarlo.</li>
+                    <li><b>Canali Esclusivi:</b> Prenota una delle 3 frequenze disponibili. Ogni frequenza ha una difficoltà diversa:
+                        <ul style="padding-left: 15px; margin-top: 5px;">
+                            <li><b>Freq 1 (Facile):</b> 3-4 car. | +4% conquista | -2% errore.</li>
+                            <li><b>Freq 2 (Media):</b> 5-6 car. | +7% conquista | -3% errore.</li>
+                            <li><b>Freq 3 (Difficile):</b> 7+ car. | +12% conquista | -5% errore.</li>
+                        </ul>
+                    </li>
+                    <li><b>Lock-in:</b> Mentre occupi una frequenza, nessun altro giocatore può usarla finché non completi il gruppo o la "sganci".</li>
                 </ul>
             </div>
         </details>
 
         <details style="margin-bottom: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden;">
             <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--link-color); list-style: none; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1);">
-                📻 Corso CW (Metodo Koch & Runner) <span style="font-size: 0.8em;">▼</span>
+                📻 Corso CW (Coach Adattivo) <span style="font-size: 0.8em;">▼</span>
             </summary>
             <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
-                <p>Un percorso di addestramento professionale ispirato ai runner:</p>
+                <p>Un percorso professionale basato sul <b>Metodo Koch</b> (40 lezioni) e sulla programmazione dei runner.</p>
+                <p><b>Allenamento Strutturato:</b></p>
                 <ul style="padding-left: 20px;">
-                    <li><b>Metodo Koch:</b> Inizia con 2 caratteri e ne sblocchi uno nuovo raggiungendo il 90% di precisione.</li>
-                    <li><b>Piano 30/20/50:</b> Sessioni <b>Base (Z2)</b> per consolidare, <b>Lavoro</b> per imparare nuovi caratteri (+ bonus velocità), e <b>Lungo</b> per la resistenza.</li>
-                    <li><b>Adaptive Coach:</b> I caratteri su cui sbagli appaiono più spesso.</li>
-                    <li><b>Pause Personalizzate:</b> Imposta pause automatiche ogni X secondi di lavoro.</li>
+                    <li><b>Piano 30/20/50:</b> Il volume settimanale è diviso tra <b>Base (Z2)</b> per consolidare (30%), <b>Lavoro</b> per imparare nuovi caratteri (20%) e <b>Lungo</b> per la resistenza (50%).</li>
+                    <li><b>Velocità Dinamica:</b> Nelle sessioni Lavoro, la velocità aumenta di <b>+1, +2 o +3 WPM</b> se la tua ultima sessione Z2 è stata eccellente.</li>
+                    <li><b>Invio Automatico:</b> Il sistema convalida il gruppo appena digiti il 5° carattere.</li>
+                    <li><b>Coach Adattivo:</b> I caratteri su cui commetti più errori appariranno più spesso grazie alla Heatmap dinamica.</li>
+                    <li><b>Pause Personalizzate:</b> Imposta pause automatiche (intervallo e durata) per evitare il sovraccarico mentale.</li>
                 </ul>
             </div>
         </details>
@@ -54,7 +62,7 @@
                 🎙️ Nominativi (CW Freak) <span style="font-size: 0.8em;">▼</span>
             </summary>
             <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
-                <p>Allenati sui nominativi radioamatoriali mondiali. Velocità di partenza: 25 WPM. Più ne indovini di fila, più il Bonus Serie aumenta!</p>
+                <p>Allena l'orecchio sui nominativi radioamatoriali mondiali. La velocità di partenza è fissa a <b>25 WPM</b>. Più ne indovini di fila, più il Bonus Serie e il moltiplicatore XP aumentano.</p>
             </div>
         </details>
 
@@ -63,7 +71,12 @@
                 🏓 Ping Pong (Multiplayer) <span style="font-size: 0.8em;">▼</span>
             </summary>
             <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
-                <p>Sfida a turni: l'utente A scrive una parola, l'utente B deve decodificarla ascoltandola in Morse. Poi i ruoli si invertono.</p>
+                <p>Una sfida tattica a turni per 2 giocatori:</p>
+                <ul style="padding-left: 20px;">
+                    <li>L'<b>Utente A</b> scrive una parola (massimo 15 car.).</li>
+                    <li>L'<b>Utente B</b> deve decodificarla ascoltandola in Morse.</li>
+                    <li>Poi i ruoli si invertono. Vince chi accumula più punti nei test di ricezione.</li>
+                </ul>
             </div>
         </details>
 
@@ -72,7 +85,7 @@
                 ❓ Modalità Quiz <span style="font-size: 0.8em;">▼</span>
             </summary>
             <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
-                <p>Ascolta la domanda e le 4 opzioni interamente in Morse. In multiplayer, usa il <b>Buzzer 🚨</b> per prenotare la risposta.</p>
+                <p>Ascolta la domanda e le 4 opzioni di risposta interamente in codice Morse. In multiplayer, la velocità di riflessi è tutto: usa il <b>Buzzer 🚨</b> per prenotare la risposta prima degli altri.</p>
             </div>
         </details>
 
@@ -81,7 +94,12 @@
                 ⚔️ Battaglia Serale (Battle Royale) <span style="font-size: 0.8em;">▼</span>
             </summary>
             <div style="padding: 10px; font-size: 0.85em; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1);">
-                <p>Ogni sera alle <b>21:30</b>. Tutti ricevono la stessa parola a 25 WPM. Hai 3 vite. L'ultimo operatore in vita vince la sfida quotidiana!</p>
+                <p>Ogni sera alle <b>21:30</b>. Tutti i partecipanti ricevono la stessa parola alla velocità di 25 WPM contemporaneamente.</p>
+                <ul style="padding-left: 20px;">
+                    <li>Hai <b>3 vite</b> a disposizione.</li>
+                    <li>Ogni errore ti fa perdere una vita.</li>
+                    <li>L'ultimo operatore a rimanere con almeno una vita vince la sfida del giorno.</li>
+                </ul>
             </div>
         </details>
 
@@ -92,14 +110,26 @@
     <details style="margin-bottom: 10px; background: rgba(0,0,0,0.1); border-radius: 8px;">
         <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--champ-color); list-style: none;">📄 Termini di Servizio (ToS)</summary>
         <div style="padding: 10px; font-size: 0.8em; line-height: 1.4;">
-            <p>È vietato l'uso di linguaggio offensivo e l'uso di bot o script. L'amministratore si riserva il diritto di azzerare punteggi o bannare utenti in caso di violazioni.</p>
+            <p>Benvenuto in Sfida Telegrafia. Utilizzando questa applicazione, accetti i seguenti termini:</p>
+            <ul style="padding-left: 20px;">
+                <li><b>Fair Play:</b> È severamente vietato l'uso di bot, script di auto-decodifica o software esterni per simulare l'input umano.</li>
+                <li><b>Comportamento:</b> Nelle chat (globale, di stanza e di squadra) è vietato l'uso di linguaggio offensivo, discriminatorio o spam.</li>
+                <li><b>Responsabilità:</b> L'amministratore si riserva il diritto di azzerare i punteggi in classifica o bannare permanentemente gli utenti in caso di violazioni accertate.</li>
+                <li><b>Contenuti:</b> I dizionari e i contenuti sono forniti a scopo didattico e ludico.</li>
+            </ul>
         </div>
     </details>
 
     <details style="margin-bottom: 10px; background: rgba(0,0,0,0.1); border-radius: 8px;">
         <summary style="padding: 10px; cursor: pointer; font-weight: bold; color: var(--champ-color); list-style: none;">⚖️ Privacy Policy (GDPR)</summary>
         <div style="padding: 10px; font-size: 0.8em; line-height: 1.4;">
-            <p>Raccogliamo l'ID Telegram e lo username (se pubblico) per il funzionamento del gioco. I dati di gioco includono statistiche e storico partite salvati su Firebase. Puoi eliminare i tuoi dati in qualsiasi momento dal profilo.</p>
+            <p>La tua privacy è importante. Ecco come gestiamo i tuoi dati:</p>
+            <ul style="padding-left: 20px;">
+                <li><b>Dati Raccolti:</b> Memorizziamo il tuo ID Telegram univoco e il tuo nome/username (se fornito) per gestire il tuo profilo e le classifiche.</li>
+                <li><b>Statistiche di Gioco:</b> I dati sulle tue partite, XP, medaglie e analisi errori sono salvati in modo sicuro su Firebase.</li>
+                <li><b>Visibilità:</b> Il tuo Alias e i tuoi punteggi sono visibili agli altri utenti nelle classifiche globali. Puoi nascondere il tuo username Telegram dalle impostazioni del profilo.</li>
+                <li><b>Controllo dei Dati:</b> In conformità al GDPR, puoi richiedere la cancellazione totale e definitiva di tutti i tuoi dati direttamente dal pulsante rosso in fondo alla pagina Info dell'app.</li>
+            </ul>
         </div>
     </details>
 </div>
