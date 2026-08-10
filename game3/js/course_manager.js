@@ -12,30 +12,44 @@ const STORAGE_COURSE_STATE = "cwgame_course_state";
 
 window.initCourseManager = function() {
     console.log("Course: Initializing...");
+    if (!myId || !db) {
+        console.warn("Course Init: Missing Auth or DB, retrying in 500ms...");
+        setTimeout(window.initCourseManager, 500);
+        return;
+    }
     window.loadCourseState().then(() => {
         window.renderCourseTabView();
+        window.checkWeeklyReview();
+        window.checkCourseStartupNotification();
+        window.listenToCourseEnrollment();
     });
 };
 
 window.loadCourseState = async function() {
-    if (!myId) return;
-    const snap = await db.ref(`users/${myId}/course`).once('value');
-    const data = snap.val();
+    if (!myId || !db) return;
+    try {
+        const snap = await db.ref(`users/${myId}/course`).once('value');
+        const data = snap.val();
 
-    if (data) {
-        window.courseData = data;
-    } else {
-        window.courseData = window.getDefaultCourseData();
-    }
+        console.log("Course Manager: Loaded data from Firebase:", data);
 
-    window.updateCourseUI();
+        if (data) {
+            window.courseData = data;
+        } else {
+            window.courseData = window.getDefaultCourseData();
+        }
 
-    // Aggiorniamo il registro iscritti all'accesso per sicurezza
-    if (window.courseData.active_plan) {
-        db.ref('courseActiveEnrollments/' + myId).set({
-            name: myName,
-            ts: firebase.database.ServerValue.TIMESTAMP
-        });
+        window.updateCourseUI();
+
+        // Aggiorniamo il registro iscritti all'accesso per sicurezza
+        if (window.courseData.active_plan === true) {
+            db.ref('courseActiveEnrollments/' + myId).set({
+                name: myName,
+                ts: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    } catch (e) {
+        console.error("Course Manager: Error loading course state:", e);
     }
 };
 

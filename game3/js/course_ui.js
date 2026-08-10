@@ -23,12 +23,14 @@ window.renderCourseTabView = function() {
     const initialPrompt = document.getElementById('courseTabInitialPrompt');
     const wizardContainer = document.getElementById('courseWizardContainer');
 
+    console.log("Course UI: Rendering Tab View. Data active_plan:", window.courseData?.active_plan);
+
     // Reset visualizzazione
     if (activeView) activeView.style.display = 'none';
     if (initialPrompt) initialPrompt.style.display = 'none';
     if (wizardContainer) wizardContainer.style.display = 'none';
 
-    if (window.courseData && window.courseData.active_plan) {
+    if (window.courseData && window.courseData.active_plan === true) {
         if (activeView) activeView.style.display = 'flex';
         window.renderCourseTabDashboard();
 
