@@ -159,9 +159,15 @@ window.calculateDynamicCourseWpm = function() {
 
     if (session.type === 'Z2') return baseWpm;
 
+    const calculateBonus = (acc) => {
+        if (acc >= 1.0) return 3;
+        if (acc >= 0.9) return 2;
+        if (acc >= 0.8) return 1;
+        return 0;
+    };
+
     if (session.type === 'WORK') {
-        const bonus = lastAccuracy >= 1.0 ? 3 : lastAccuracy >= 0.9 ? 2 : 0;
-        return baseWpm + bonus;
+        return baseWpm + calculateBonus(lastAccuracy);
     }
 
     if (session.type === 'LONG') {
@@ -172,8 +178,7 @@ window.calculateDynamicCourseWpm = function() {
         // Split 1/3 Base, 1/3 Work Logic, 1/3 Base
         if (elapsed < total / 3) return baseWpm;
         if (elapsed < (2 * total) / 3) {
-            const bonus = lastAccuracy >= 1.0 ? 3 : lastAccuracy >= 0.9 ? 2 : 0;
-            return baseWpm + bonus;
+            return baseWpm + calculateBonus(lastAccuracy);
         }
         return baseWpm;
     }

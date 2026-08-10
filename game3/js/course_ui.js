@@ -19,34 +19,33 @@ window.updateCourseUI = function() {
 };
 
 window.renderCourseTabView = function() {
-    const dashboardView = document.getElementById('courseTabDashboardView');
-    const settingsContent = document.getElementById('courseTabSettingsContent');
-    const btnToggle = document.getElementById('btnToggleCourseSettings');
+    const activeView = document.getElementById('courseTabActiveView');
+    const initialPrompt = document.getElementById('courseTabInitialPrompt');
+    const wizardContainer = document.getElementById('courseWizardContainer');
+
+    // Reset visualizzazione
+    if (activeView) activeView.style.display = 'none';
+    if (initialPrompt) initialPrompt.style.display = 'none';
+    if (wizardContainer) wizardContainer.style.display = 'none';
 
     if (window.courseData && window.courseData.active_plan) {
-        if (dashboardView) dashboardView.style.display = 'flex';
+        if (activeView) activeView.style.display = 'flex';
         window.renderCourseTabDashboard();
-        if (settingsContent) settingsContent.style.display = 'none';
-        if (btnToggle) btnToggle.style.display = 'block';
-    } else {
-        if (dashboardView) dashboardView.style.display = 'none';
-        if (settingsContent) settingsContent.style.display = 'flex';
-        if (btnToggle) btnToggle.style.display = 'none';
-    }
 
-    if (window.courseData) {
+        // Popoliamo i campi impostazioni
         const s = window.courseData.settings;
         if (document.getElementById('courseTabDaysInput')) document.getElementById('courseTabDaysInput').value = s.days_per_week;
         if (document.getElementById('courseTabWpmInput')) document.getElementById('courseTabWpmInput').value = s.start_wpm;
         if (document.getElementById('courseTabFarnsworthInput')) document.getElementById('courseTabFarnsworthInput').value = s.farnsworth_wpm;
         if (document.getElementById('courseTabGroupSpacingInput')) document.getElementById('courseTabGroupSpacingInput').value = s.group_spacing || "2.0";
         if (document.getElementById('courseTabMinZ2')) document.getElementById('courseTabMinZ2').value = s.minutes_z2;
-        if (document.getElementById('courseTabMinWork')) document.getElementById('courseTabMinWork').value = s.minutes_work;
-        if (document.getElementById('courseTabMinLong')) document.getElementById('courseTabMinLong').value = s.minutes_long;
+    } else {
+        if (initialPrompt) initialPrompt.style.display = 'block';
     }
 };
 
 window.renderCourseTabDashboard = function() {
+    // 1. Heatmap
     const heatmap = document.getElementById('courseTabHeatmap');
     const lessonInfo = document.getElementById('courseTabLessonInfo');
     if (heatmap) {
@@ -80,6 +79,7 @@ window.renderCourseTabDashboard = function() {
             box.onclick = () => {
                 if (s.attempts > 0) showToast(`${char}: Accurato al ${Math.round(accuracy * 100)}% su ${s.attempts} tentativi.`);
             };
+
             heatmap.appendChild(box);
         });
 
@@ -87,6 +87,7 @@ window.renderCourseTabDashboard = function() {
         if (lessonInfo) lessonInfo.textContent = `Caratteri attivi (${currentLesson}): ${activeCharsStr}`;
     }
 
+    // 2. Weekly Plan
     const planList = document.getElementById('courseTabWeeklyPlan');
     if (planList) {
         planList.innerHTML = '';
@@ -138,39 +139,92 @@ window.generateWeeklySchedule = function() {
     window.saveCourseState();
 };
 
+// --- LOGICA WIZARD PASSO-PASSO ---
+window.startCourseWizard = function() {
+    document.getElementById('courseTabInitialPrompt').style.display = 'none';
+    document.getElementById('courseWizardContainer').style.display = 'block';
+    window.nextWizardStep(1);
+};
+
+window.nextWizardStep = function(step) {
+    for(let i=1; i<=4; i++) {
+        const el = document.getElementById('wizardStep'+i);
+        if(el) el.style.display = (i === step) ? 'block' : 'none';
+    }
+
+    // Aggiornamento anteprima durate al passo 4
+    if (step === 4) {
+        window.updateWizardDurationsPreview();
+        document.getElementById('wizardMinZ2').oninput = window.updateWizardDurationsPreview;
+    }
+};
+
+window.updateWizardDurationsPreview = function() {
+    const z2 = parseInt(document.getElementById('wizardMinZ2').value) || 10;
+    const work = Math.round(z2 * (20/30));
+    const long = Math.round(z2 * (50/30));
+    document.getElementById('wizardDurationsPreview').textContent =
+        `Base: ${z2} min | Lavoro: ${work} min | Lungo: ${long} min`;
+};
+
+window.finishWizard = function() {
+    const z2 = parseInt(document.getElementById('wizardMinZ2').value) || 10;
+    window.courseData.active_plan = true;
+    window.courseData.settings = {
+        days_per_week: document.getElementById('wizardDays').value,
+        start_wpm: document.getElementById('wizardWpm').value,
+        farnsworth_wpm: document.getElementById('wizardFarnsworth').value,
+        group_spacing: document.getElementById('wizardGroupSpacing').value,
+        minutes_z2: z2,
+        minutes_work: Math.round(z2 * (20/30)),
+        minutes_long: Math.round(z2 * (50/30))
+    };
+
+    window.generateWeeklySchedule();
+    window.renderCourseTabView();
+    window.saveCourseState();
+    showToast("Corso attivato! Iniziamo l'allenamento. 🚀");
+};
+
 window.attachCourseEventListeners = function() {
     const btnToggle = document.getElementById('btnToggleCourseSettings');
     if (btnToggle) {
         btnToggle.onclick = () => {
             const content = document.getElementById('courseTabSettingsContent');
-            if (content) content.style.display = (content.style.display === 'none') ? 'flex' : 'none';
+            if (content) {
+                content.style.display = (content.style.display === 'none') ? 'flex' : 'none';
+                btnToggle.textContent = (content.style.display === 'none') ? 'Mostra' : 'Nascondi';
+            }
         };
     }
 
-    const btnCreate = document.getElementById('btnTabCreatePlan');
-    if (btnCreate) {
-        btnCreate.onclick = () => {
-            window.courseData.active_plan = true;
+    const btnSave = document.getElementById('btnTabSavePlan');
+    if (btnSave) {
+        btnSave.onclick = () => {
+            const z2 = parseInt(document.getElementById('courseTabMinZ2').value) || 10;
             window.courseData.settings.days_per_week = document.getElementById('courseTabDaysInput').value;
             window.courseData.settings.start_wpm = document.getElementById('courseTabWpmInput').value;
             window.courseData.settings.farnsworth_wpm = document.getElementById('courseTabFarnsworthInput').value;
             window.courseData.settings.group_spacing = document.getElementById('courseTabGroupSpacingInput').value;
-            window.courseData.settings.minutes_z2 = document.getElementById('courseTabMinZ2').value;
-            window.courseData.settings.minutes_work = document.getElementById('courseTabMinWork').value;
-            window.courseData.settings.minutes_long = document.getElementById('courseTabMinLong').value;
+            window.courseData.settings.minutes_z2 = z2;
+            window.courseData.settings.minutes_work = Math.round(z2 * (20/30));
+            window.courseData.settings.minutes_long = Math.round(z2 * (50/30));
 
-            if (!window.courseData.weekly_schedule) window.generateWeeklySchedule();
+            // Rigeneriamo il piano per riflettere i cambiamenti
+            window.generateWeeklySchedule();
             window.renderCourseTabView();
             window.saveCourseState();
-            showToast("Configurazione salvata! 🎯");
+            showToast("Impostazioni salvate e piano aggiornato! 💾");
         };
     }
 
-    const btnReset = document.getElementById('btnTabResetCourse');
-    if (btnReset) {
-        btnReset.onclick = () => {
-            if (confirm("Sei sicuro di voler resettare tutto il corso? Perderai progressi e statistiche.")) {
-                window.courseData = window.getDefaultCourseData();
+    const btnExit = document.getElementById('btnTabResetCourse');
+    if (btnExit) {
+        btnExit.onclick = () => {
+            if (confirm("Vuoi davvero uscire dal Corso CW? Il tuo piano verrà rimosso, ma le tue statistiche caratteri rimarranno salvate.")) {
+                window.courseData.active_plan = false;
+                window.courseData.current_day_session = null;
+                window.courseData.weekly_schedule = null;
                 window.saveCourseState();
                 window.renderCourseTabView();
             }
