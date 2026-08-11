@@ -607,6 +607,11 @@ window.resumeGameSequence = function() {
     gameRunning = true;
     isRejoining = false;
 
+    // --- ROUTING ARCADE ---
+    if (currentMode === 'arcade') {
+        if (typeof window.initArcadeMode === 'function') return window.initArcadeMode();
+    }
+
     isCoopMode = (currentMode === 'conquest');
     if (els.coopArea) els.coopArea.style.display = 'none';
     if (els.tableWrapper) els.tableWrapper.style.display = 'block';

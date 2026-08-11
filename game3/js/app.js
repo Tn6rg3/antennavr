@@ -628,18 +628,20 @@ if (els.createRoomBtn) {
         let wSpace = isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
 
         roomCode = Math.floor(1000 + Math.random() * 9000).toString();
-        gameWords = window.getGameWords(requestedWordCount, currentMode);
 
-        const expires = isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
+        // Se è arcade, non servono parole pre-generate (le genera arcade_manager)
+        gameWords = (gType === 'arcade') ? [] : window.getGameWords(requestedWordCount, currentMode);
+
+        const expires = (isSinglePlayer || gType === 'arcade') ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
         const roomRef = db.ref('rooms/' + roomCode);
         roomRef.set({
-            status: isSinglePlayer ? 'countdown' : 'waiting',
-            type: isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
+            status: 'countdown', // Forza l'avvio immediato senza passare dalla lobby
+            type: (gType === 'arcade') ? 'arcade' : (isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi')),
             mode: (gType === 'arcade') ? 'arcade' : currentMode,
             wpm: currentWpm,
             tone: currentTone,
-            wordCount: requestedWordCount,
+            wordCount: (gType === 'arcade') ? 999 : requestedWordCount,
             words: gameWords,
             fixedSpeed: !!isFixed,
             easyMode: !!isEasy,
