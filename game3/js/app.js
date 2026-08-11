@@ -321,15 +321,21 @@ function initGame() {
             if (!s.val()) return;
             const pRef = db.ref(`presence/${myId}`);
             pRef.onDisconnect().remove();
-            pRef.set({
+            const presenceData = {
                 name: myName,
                 username: myPrivacy ? "" : tgUsername,
                 status: 'online',
-                level: window.userProgression?.level || 1, // Aggiunto livello qui
-                uid: firebase.auth().currentUser.uid, // Mappa l'UID di sessione
+                uid: firebase.auth().currentUser.uid,
                 ts: firebase.database.ServerValue.TIMESTAMP,
                 lastActive: firebase.database.ServerValue.TIMESTAMP
-            });
+            };
+
+            // Aggiungiamo il livello solo se già disponibile in memoria
+            if (window.userProgression && window.userProgression.level) {
+                presenceData.level = window.userProgression.level;
+            }
+
+            pRef.set(presenceData);
 
             // Crea anche una mappa inversa specifica per le regole di sicurezza
             db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(myId);

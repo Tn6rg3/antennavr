@@ -49,6 +49,11 @@ window.initProgression = function() {
             return;
         }
 
+        // AGGIORNAMENTO SINCRONO DELLA PRESENZA ONLINE
+        if (db && myId) {
+            db.ref(`presence/${myId}`).update({ level: level });
+        }
+
         window.renderXPBar();
         window.checkDailyMissionsStatus();
         window.updateMissionsBadge();
