@@ -527,6 +527,11 @@ window.startCountdownSequence = function() {
     }
 
     window.showScreen('countdownScreen');
+
+    // RESET CONDIVISIONE
+    const share = document.getElementById('matchShareContainer');
+    if (share) share.style.display = 'none';
+
     gameRunning = true;
     let count = 3;
     if (els.countdownNumber) els.countdownNumber.textContent = count;
@@ -740,8 +745,54 @@ window.finishGame = function() {
         };
     }
 
+    // Pulizia eventuale container condivisione precedente
+    const oldShare = document.getElementById('matchShareContainer');
+    if (oldShare) oldShare.style.display = 'none';
+
     if (els.gameInputArea) els.gameInputArea.style.display = 'none';
     if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<b style="color:var(--champ-color)">FINITO!</b> PT: ${totalScore}`;
+
+    // --- NUOVO: BOTTONI CONDIVISIONE NELLA SCHERMATA DI REVISIONE ---
+    window.showMatchShareButtons();
+};    // --- NUOVO: BOTTONI CONDIVISIONE NELLA SCHERMATA DI REVISIONE ---
+    window.showMatchShareButtons();
+};
+
+window.showMatchShareButtons = function() {
+    // Cerchiamo un contenitore dove inserire i bottoni, o lo creiamo sotto la tabella
+    let shareContainer = document.getElementById('matchShareContainer');
+    if (!shareContainer) {
+        shareContainer = document.createElement('div');
+        shareContainer.id = 'matchShareContainer';
+        shareContainer.style.cssText = "display:flex; flex-direction:column; gap:8px; width:100%; margin-top:10px;";
+        const quitBtn = els.quitGameBtn;
+        if (quitBtn && quitBtn.parentNode) {
+            quitBtn.parentNode.insertBefore(shareContainer, quitBtn);
+        }
+    }
+    shareContainer.innerHTML = '';
+    shareContainer.style.display = 'flex';
+
+    const btn = document.createElement('button');
+    btn.className = 'btn-champ';
+    btn.style.margin = '0';
+    btn.textContent = currentLang === 'it' ? "📢 Condividi Risultato" : "📢 Share Result";
+
+    btn.onclick = () => {
+        const appUrl = encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`);
+        let modeName = (currentMode || "Match").toUpperCase();
+        if (currentMode === 'daily_challenge') modeName = "Sfida Giornaliera";
+
+        const textMsg = encodeURIComponent(`📻 ${modeName} CW!\nHo totalizzato ${totalScore} pt (Velocità: ${currentWpm} WPM).\nRiesci a fare di meglio?`);
+        const shareUrl = `https://t.me/share/url?url=${appUrl}&text=${textMsg}`;
+        try {
+            if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl); else window.open(shareUrl, '_blank');
+        } catch (e) {
+            window.open(shareUrl, '_blank');
+        }
+    };
+
+    shareContainer.appendChild(btn);
 };
 
 window.showPostMatchReplayButtons = function() {
