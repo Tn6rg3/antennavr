@@ -8,6 +8,30 @@ window.COURSE_TYPES = {
     LONG: { id: 'LONG', labelIt: 'Lungo (Full)', labelEn: 'Long (Full)', color: '#9c27b0', weight: 0.5 }
 };
 
+window.firebaseEscape = function(key) {
+    if (!key) return key;
+    return key.toString()
+        .replace(/\./g, '_dot_')
+        .replace(/\//g, '_slash_')
+        .replace(/#/g, '_hash_')
+        .replace(/\$/g, '_dollar_')
+        .replace(/\[/g, '_lbrac_')
+        .replace(/\]/g, '_rbrac_')
+        .replace(/\?/g, '_ques_');
+};
+
+window.firebaseUnescape = function(key) {
+    if (!key) return key;
+    return key.toString()
+        .replace(/_dot_/g, '.')
+        .replace(/_slash_/g, '/')
+        .replace(/_hash_/g, '#')
+        .replace(/_dollar_/g, '$')
+        .replace(/_lbrac_/g, '[')
+        .replace(/_rbrac_/g, ']')
+        .replace(/_ques_/g, '?');
+};
+
 window.initCourseManager = function() {
     console.log("Course: Initializing...");
 
@@ -142,7 +166,8 @@ window.generateAdaptiveGroup = function() {
 
     const stats = window.courseData.progress.char_stats || {};
     let weights = activeChars.map(char => {
-        const charStat = stats[char] || { attempts: 0, errors: 0 };
+        const dbChar = window.firebaseEscape(char);
+        const charStat = stats[dbChar] || { attempts: 0, errors: 0 };
         let weight = 1.0;
         if (charStat.attempts > 5) {
             const errorRate = charStat.errors / charStat.attempts;
@@ -178,9 +203,7 @@ window.generateAdaptiveGroup = function() {
             if (selectedIdx === -1) selectedIdx = currentWeights.length - 1;
             const selected = currentWeights[selectedIdx];
 
-            const safeChar = selected.char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const count = (group.match(new RegExp(safeChar, "g")) || []).length;
-
+            const count = group.split(selected.char).length - 1;
             if (count < 3) {
                 group += selected.char;
                 found = true;
@@ -226,7 +249,7 @@ window.startCourseSessionSequence = function() {
     if (els.tableBody) els.tableBody.innerHTML = "";
     if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
 
-    if (courseSessionTimer) clearInterval(courseSessionTimer);
+    if (courseSessionTimer) { clearInterval(courseSessionTimer); courseSessionTimer = null; }
 
     window.courseSessionTotalSec = window.courseData.current_day_session.total_seconds;
     window.courseSessionPauseDuration = parseInt(window.courseData.settings.pause_duration) || 0;
@@ -280,15 +303,18 @@ window.triggerCoursePause = function() {
     };
 
     updatePauseUI();
-    let pauseInterval = setInterval(() => {
+    if (coursePauseInterval) clearInterval(coursePauseInterval);
+    coursePauseInterval = setInterval(() => {
         if (!gameRunning || !isCourseMode) {
-            clearInterval(pauseInterval);
+            clearInterval(coursePauseInterval);
+            coursePauseInterval = null;
             return;
         }
 
         timeLeft--;
         if (timeLeft <= 0) {
-            clearInterval(pauseInterval);
+            clearInterval(coursePauseInterval);
+            coursePauseInterval = null;
             window.courseIsPaused = false;
             window.courseSessionNextPauseTs = Date.now() + (window.courseSessionPauseInterval * 1000);
 
@@ -353,14 +379,24 @@ window.calculateDynamicCourseWpm = function() {
 
 window.playNextCourseGroup = function() {
     if (!gameRunning || !isCourseMode) return;
-    if (wordIndex >= requestedWordCount) return window.finishCourseSession();
 
-    inputActive = true;
+    // --- GESTIONE PAUSA PROGRAMMATA ---
+    if (window.coursePausePending) {
+        window.coursePausePending = false;
+        window.triggerCoursePause();
+        return;
+    }
+
+    // In modalità corso, la sessione finisce solo quando scade il timer.
+    // Se finiamo i gruppi pre-generati, ne creiamo di nuovi.
     let group = gameWords[wordIndex];
     if (!group) {
         group = window.generateAdaptiveGroup();
         gameWords[wordIndex] = group;
+        requestedWordCount = gameWords.length;
     }
+
+    inputActive = true;
 
     const charWpm = window.calculateDynamicCourseWpm();
     const farnsworthWpm = parseInt(window.courseData.settings.farnsworth_wpm);
@@ -386,7 +422,8 @@ window.finishCourseSession = function() {
     let worstChars = [];
 
     activeChars.forEach(char => {
-        const s = stats[char] || { attempts: 0, errors: 0 };
+        const dbChar = window.firebaseEscape(char);
+        const s = stats[dbChar] || { attempts: 0, errors: 0 };
         totalAttempts += s.attempts;
         totalErrors += s.errors;
         if (s.attempts > 0 && (s.errors / s.attempts) > 0.2) {
@@ -401,6 +438,7 @@ window.finishCourseSession = function() {
     }
 
     window.courseData.current_day_session.completed = true;
+    requestedWordCount = wordIndex;
 
     const todayIdx = (new Date().getDay() + 6) % 7;
     if (window.courseData.weekly_schedule && window.courseData.weekly_schedule[todayIdx]) {
@@ -409,7 +447,8 @@ window.finishCourseSession = function() {
 
     let canAdvance = true;
     activeChars.forEach(char => {
-        const s = stats[char] || { attempts: 0, errors: 0 };
+        const dbChar = window.firebaseEscape(char);
+        const s = stats[dbChar] || { attempts: 0, errors: 0 };
         if (s.attempts < 50 || (s.attempts - s.errors) / s.attempts < 0.9) canAdvance = false;
     });
 

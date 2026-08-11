@@ -47,7 +47,8 @@ window.renderCourseTabDashboard = function() {
             box.style.cssText = "width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:0.75em; font-weight:bold; border-radius:4px; border:1px solid rgba(255,255,255,0.1); cursor:pointer;";
             box.textContent = char;
 
-            const s = stats[char] || { attempts: 0, errors: 0 };
+            const dbChar = (typeof firebaseEscape === 'function') ? firebaseEscape(char) : char.replace(/\./g, '_dot_');
+            const s = stats[dbChar] || { attempts: 0, errors: 0 };
             const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
 
             if (idx >= currentLesson) {

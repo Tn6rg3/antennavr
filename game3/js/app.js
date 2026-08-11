@@ -39,7 +39,7 @@ const els = window.els;
 // --- COSTANTI DI STORAGE ---
 const STORAGE_ROOM_KEY = "cwgame_last_room";
 const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
-const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted"; 
+const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted";
 const STORAGE_PREF_WPM = "cwgame_pref_wpm";
 const STORAGE_PREF_WORDS = "cwgame_pref_words";
 const STORAGE_PREF_TONE = "cwgame_pref_tone";
@@ -70,7 +70,7 @@ let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
 
 // STATO CORSO CW
-let isCourseMode = false, courseSessionTimer = null;
+let isCourseMode = false, courseSessionTimer = null, coursePauseInterval = null;
 window.courseData = null;
 
 // STATO CO-OP
@@ -122,8 +122,8 @@ function fisherYatesShuffle(array) {
 }
 
 function clearAllTimers() {
-    [lobbyTimerInterval, quizTimerInterval, ppTimerInterval, brTimerInterval, coopTimerInterval, coopDecayInterval].forEach(t => { if(t) clearInterval(t); });
-    lobbyTimerInterval = quizTimerInterval = ppTimerInterval = brTimerInterval = coopTimerInterval = coopDecayInterval = null;
+    [lobbyTimerInterval, quizTimerInterval, ppTimerInterval, brTimerInterval, coopTimerInterval, coopDecayInterval, courseSessionTimer, coursePauseInterval].forEach(t => { if(t) clearInterval(t); });
+    lobbyTimerInterval = quizTimerInterval = ppTimerInterval = brTimerInterval = coopTimerInterval = coopDecayInterval = courseSessionTimer = coursePauseInterval = null;
 }
 
 window.forceAppUpdate = function() {
@@ -167,8 +167,8 @@ window.toggleLanguage = function() {
 
 function updateMuteBtnUI() {
     if (els.muteGlobalChatBtn) {
-        els.muteGlobalChatBtn.textContent = isGlobalChatMuted 
-            ? (currentLang === 'it' ? "🔇 Notifiche Disattivate" : "🔇 Notifications Muted") 
+        els.muteGlobalChatBtn.textContent = isGlobalChatMuted
+            ? (currentLang === 'it' ? "🔇 Notifiche Disattivate" : "🔇 Notifications Muted")
             : (currentLang === 'it' ? "🔊 Notifiche Attive" : "🔊 Notifications Active");
     }
 }
@@ -209,14 +209,14 @@ function startApp() {
 window.startApp = startApp;
 
 function initGame() {
-    const firebaseConfig = { 
-        apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk", 
-        authDomain: "telegrafiabot.firebaseapp.com", 
-        databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app", 
-        projectId: "telegrafiabot", 
-        storageBucket: "telegrafiabot.firebasestorage.app", 
-        messagingSenderId: "575790683327", 
-        appId: "1:575790683327:web:db333b0316c8e8ec63a20a" 
+    const firebaseConfig = {
+        apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
+        authDomain: "telegrafiabot.firebaseapp.com",
+        databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "telegrafiabot",
+        storageBucket: "telegrafiabot.firebasestorage.app",
+        messagingSenderId: "575790683327",
+        appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
     };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     db = firebase.database();

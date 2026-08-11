@@ -824,9 +824,13 @@ window.handleWordSubmission = function(userWord) {
             for (let i=0; i<currentWord.length; i++) {
                 let c = currentWord[i];
                 if (!c || ['__proto__','constructor','prototype'].includes(c)) continue;
-                if (!window.courseData.progress.char_stats[c]) window.courseData.progress.char_stats[c] = { attempts: 0, errors: 0 };
-                window.courseData.progress.char_stats[c].attempts++;
-                if (userWord[i] !== currentWord[i]) window.courseData.progress.char_stats[c].errors++;
+
+                // Sanitizzazione chiave per Firebase
+                let dbChar = (typeof firebaseEscape === 'function') ? firebaseEscape(c) : c.replace(/\./g, '_dot_');
+
+                if (!window.courseData.progress.char_stats[dbChar]) window.courseData.progress.char_stats[dbChar] = { attempts: 0, errors: 0 };
+                window.courseData.progress.char_stats[dbChar].attempts++;
+                if (userWord[i] !== currentWord[i]) window.courseData.progress.char_stats[dbChar].errors++;
             }
             window.saveCourseState();
         }
@@ -851,15 +855,6 @@ window.handleWordSubmission = function(userWord) {
         if (els.tableBody) {
             els.tableBody.appendChild(tr);
             els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
-        }
-
-        if (window.coursePausePending) {
-            window.coursePausePending = false;
-            wordIndex++;
-            setTimeout(() => {
-                if (gameRunning && isCourseMode) window.triggerCoursePause();
-            }, 600);
-            return;
         }
 
         setTimeout(() => {
