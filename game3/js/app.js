@@ -612,7 +612,7 @@ if (els.createRoomBtn) {
         if (gMode === 'custom' && window.customDictionary.length === 0) return showToast("Carica un file!");
 
         isChallenging = false;
-        currentMode = gMode || 'standard';
+        currentMode = (gType === 'arcade') ? 'arcade' : (gMode || 'standard');
         isSinglePlayer = (gType === 'single' || gType === 'arcade');
         currentWpm = baseWpm = (currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
         requestedWordCount = (currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));

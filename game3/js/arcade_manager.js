@@ -216,6 +216,9 @@ window.arcadeGameOver = function(reason) {
     gameRunning = false;
     if (arcadeFallTimer) clearTimeout(arcadeFallTimer);
 
+    // Ripristiniamo la visualizzazione standard
+    if (els.tableWrapper) els.tableWrapper.style.display = 'block';
+
     alert(`GAME OVER: ${reason}\n\nPunteggio Finale: ${totalScore}\nVelocità Massima: ${currentWpm} WPM`);
 
     // Salvataggio record (se score > 0)
