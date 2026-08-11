@@ -75,104 +75,121 @@ window.processChatCwQueue = async function() {
     isChatCwPlaying = false;
 };
 
-window.setupChat = function(chatRef, containerId, alertBtnId) {
-    const container = els[containerId];
-    if (!container) return;
+window.setupChat = function(ref, containerId, limit = 50) {
+    if (!els[containerId]) return;
 
-    if (listeners.activeChat[containerId] && listeners.activeChat[containerId].ref) {
+    if (!listeners.activeChat) listeners.activeChat = {};
+
+    if (listeners.activeChat[containerId]) {
         listeners.activeChat[containerId].ref.off('value', listeners.activeChat[containerId].callback);
+        delete listeners.activeChat[containerId];
     }
 
     let initialLoad = true, lastTs = Date.now();
 
-    const callback = chatRef.limitToLast(10).on('value', snapshot => {
-        container.innerHTML = '';
-        let newMsgsCount = 0, latestMsg = null, latestMsgKey = null, maxTs = lastTs;
+    const callback = snap => {
+        const container = els[containerId];
+        if (!container) return;
+        const shouldScroll = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
 
-        snapshot.forEach(child => {
-            const msg = child.val();
+        container.innerHTML = '';
+        const messages = [];
+        let maxTs = lastTs;
+
+        snap.forEach(child => {
+            const m = child.val();
+            if (m && typeof m === 'object') {
+                messages.push({ id: child.key, ...m });
+                if (m.ts > maxTs) maxTs = m.ts;
+            }
+        });
+
+        if (messages.length === 0) {
+            container.innerHTML = '<p style="text-align:center; opacity:0.5; margin-top:20px;">Nessun messaggio.</p>';
+            return;
+        }
+
+        messages.forEach(m => {
             const div = document.createElement('div');
+            div.className = 'chat-msg';
+            if (m.name === myName) div.classList.add('chat-msg-own');
             div.style.marginBottom = '6px';
 
-            if (msg.ts) {
-                const d = new Date(msg.ts);
-                const dateSmall = document.createElement('small');
-                dateSmall.style.color = 'var(--hint-color)';
-                dateSmall.style.fontSize = '0.75em';
-                dateSmall.textContent = `[${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}] `;
-                div.appendChild(dateSmall);
-                if (msg.ts > maxTs) maxTs = msg.ts;
-            }
+            const header = document.createElement('div');
+            header.style.cssText = "display:flex; justify-content:space-between; font-size:0.75em; opacity:0.7; margin-bottom:2px;";
 
+            const time = new Date(m.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
             const nameSpan = document.createElement('b');
-            nameSpan.style.color = 'var(--link-color)';
-            nameSpan.textContent = msg.name + ": ";
-            if (msg.username && String(msg.username).trim() !== "") {
+            nameSpan.textContent = m.name;
+            if (m.username) {
+                nameSpan.style.color = 'var(--link-color)';
                 nameSpan.style.cursor = 'pointer';
-                nameSpan.style.textDecoration = 'underline';
-                nameSpan.onclick = () => window.openTelegramProfile(msg.username);
+                nameSpan.onclick = () => window.openTelegramProfile(m.username);
             }
-            div.appendChild(nameSpan);
 
-            const textSpan = document.createElement('span');
+            const timeSpan = document.createElement('span');
+            timeSpan.textContent = time;
+
+            header.appendChild(nameSpan);
+            header.appendChild(timeSpan);
+            div.appendChild(header);
+
+            const textSpan = document.createElement('div');
+            textSpan.style.wordBreak = 'break-word';
+
             if (isChatCwEnabled) {
                 textSpan.className = 'cw-spoiler';
-                textSpan.textContent = msg.text;
+                textSpan.textContent = m.text;
                 textSpan.title = "Clicca per svelare il testo";
                 textSpan.onclick = function() {
                     this.classList.toggle('revealed');
                 };
             } else {
-                textSpan.textContent = msg.text;
+                textSpan.textContent = m.text;
             }
             div.appendChild(textSpan);
-
             container.appendChild(div);
-            if (!initialLoad && msg.ts && msg.ts > lastTs && msg.name !== myName) {
-                newMsgsCount++;
-                latestMsg = msg;
-                latestMsgKey = child.key;
+
+            // Gestione notifiche e audio per nuovi messaggi
+            if (!initialLoad && m.ts > lastTs && m.name !== myName) {
+                window.handleNewChatMessage(ref.key, m, child.key);
             }
         });
 
         lastTs = maxTs;
-        container.scrollTop = container.scrollHeight;
+        if (shouldScroll) container.scrollTop = container.scrollHeight;
+        initialLoad = false;
+    };
 
-        if (!initialLoad && newMsgsCount > 0 && latestMsg) {
-            if (alertBtnId && !isChatDrawerOpen && els[alertBtnId]) {
-                els[alertBtnId].style.backgroundColor = '#4caf50';
-            }
+    const finalRef = limit ? ref.limitToLast(limit) : ref;
+    finalRef.on('value', callback);
+    listeners.activeChat[containerId] = { ref: finalRef, callback: callback };
+};
 
-            const isPlayingBR = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
-            const isGlobal = (chatRef.key === 'globalChat');
-            const shouldNotify = isGlobal
-                ? (!isGlobalChatMuted && !gameRunning && !isPlayingBR && (!isChatDrawerOpen || activeChatContext !== 'global'))
-                : (!isChatDrawerOpen || chatRef.key !== (activeChatContext === 'room' ? roomCode : myTeamId));
+window.handleNewChatMessage = function(refKey, msg, msgKey) {
+    const isGlobal = (refKey === 'globalChat');
+    const isPlayingBR = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
 
-            if (isChatCwEnabled) {
-                if (shouldNotify) {
-                    const prefix = isGlobal ? "🌎" : "💬";
-                    showToast(`${prefix} ${latestMsg.name}: [📻 Messaggio CW...]`);
-                }
-                if (!gameRunning && !isPlayingBR && (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room')))) {
-                    if (latestMsgKey && latestMsgKey !== window.lastPlayedCwMsgKey) {
-                        window.lastPlayedCwMsgKey = latestMsgKey;
-                        window.enqueueChatCwAudio(latestMsg.text);
-                    }
-                }
-            } else {
-                if (shouldNotify) {
-                    const prefix = isGlobal ? "🌎" : "💬";
-                    showToast(`${prefix} ${latestMsg.name}: ${latestMsg.text.substring(0,25)}...`);
-                    if (!isGlobalChatMuted && typeof playNotificationSound === 'function') {
-                        playNotificationSound();
-                    }
-                }
+    const shouldNotify = isGlobal
+        ? (!isGlobalChatMuted && !gameRunning && !isPlayingBR && (!isChatDrawerOpen || activeChatContext !== 'global'))
+        : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId));
+
+    if (isChatCwEnabled) {
+        if (shouldNotify) {
+            const prefix = isGlobal ? "🌎" : "💬";
+            showToast(`${prefix} ${msg.name}: [📻 Messaggio CW...]`);
+        }
+        if (!gameRunning && !isPlayingBR && (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room')))) {
+            if (msgKey !== window.lastPlayedCwMsgKey) {
+                window.lastPlayedCwMsgKey = msgKey;
+                window.enqueueChatCwAudio(msg.text);
             }
         }
-        initialLoad = false;
-    });
-    listeners.activeChat[containerId] = { ref: chatRef, callback: callback };
+    } else if (shouldNotify) {
+        const prefix = isGlobal ? "🌎" : "💬";
+        showToast(`${prefix} ${msg.name}: ${msg.text.substring(0,25)}...`);
+        if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound();
+    }
 };
 
 // --- PRESENZA ONLINE E LISTE UTENTI ---

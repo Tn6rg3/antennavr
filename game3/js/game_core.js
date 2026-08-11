@@ -772,16 +772,31 @@ function finishGameNavigation() {
     if (currentMode === 'daily_challenge') {
         let todayStr = new Date().toISOString().split('T')[0];
         localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
-        activeTab = "daily_challenge";
-        if (typeof window.showLeaderboardTab === 'function') window.showLeaderboardTab('opt_lb_daily');
+        if (typeof window.switchLBGroup === 'function') window.switchLBGroup('daily');
     }
-    else if (roomCode && roomCode.startsWith("TRN_")) { activeTab = "room"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn'); if (typeof window.listenToRoomLeaderboard === 'function') window.listenToRoomLeaderboard(); }
-    else if (isSinglePlayer && currentMode === 'callsign') { activeTab = "cwfreak"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabGlobalCWFreakBtn'); }
-    else if (isSinglePlayer && currentMode === 'pingpong') { activeTab = "pingpong"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabGlobalPingPongBtn'); }
-    else if (isSinglePlayer && currentMode === 'quiz') { activeTab = "quiz_single"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabGlobalQuizSingleBtn'); }
-    else if (isSinglePlayer && currentMode === 'chars') { activeTab = "chars_single"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabGlobalCharsSingleBtn'); }
-    else if (isSinglePlayer) { activeTab = "std_single"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabGlobalStandardSingleBtn'); }
-    else { activeTab = "room"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn'); if (typeof window.listenToRoomLeaderboard === 'function') window.listenToRoomLeaderboard(); }
+    else if (roomCode && roomCode.startsWith("TRN_")) {
+        if (typeof window.switchLBGroup === 'function') window.switchLBGroup('special');
+        setTimeout(() => {
+            const select = document.getElementById('lbModeSelect');
+            if (select) { select.value = 'tournaments'; select.dispatchEvent(new Event('change')); }
+        }, 100);
+    }
+    else if (isSinglePlayer) {
+        if (typeof window.switchLBGroup === 'function') window.switchLBGroup('single');
+        setTimeout(() => {
+            const select = document.getElementById('lbModeSelect');
+            const targetMode = currentMode === 'callsign' ? 'callsign' : (currentMode === 'quiz' ? 'quiz' : (currentMode === 'chars' ? 'chars' : 'standard'));
+            if (select) { select.value = targetMode; select.dispatchEvent(new Event('change')); }
+        }, 100);
+    }
+    else {
+        if (typeof window.switchLBGroup === 'function') window.switchLBGroup('multi');
+        setTimeout(() => {
+            const select = document.getElementById('lbModeSelect');
+            const targetMode = currentMode === 'pingpong' ? 'pingpong' : 'standard';
+            if (select) { select.value = targetMode; select.dispatchEvent(new Event('change')); }
+        }, 100);
+    }
 }
 
 window.getLevenshteinDistance = function(a, b) {
