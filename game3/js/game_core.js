@@ -265,14 +265,6 @@ window.joinRoomLogic = function(isReconnect = false) {
             matchDetailsArray = pData.matchDetails || [];
             if (isRejoining) window.showToast("🔄 Partita recuperata!");
         }
-
-        // --- SALTO LOBBY PER ARCADE ---
-        if (currentMode === 'arcade' || rData.mode === 'arcade' || rData.type === 'arcade') {
-            window.currentMode = 'arcade';
-            window.showScreen('countdownScreen'); // Vai dritto al countdown
-            return; // Esci dalla funzione per non eseguire showScreen('lobbyScreen')
-        }
-
         window.showScreen('lobbyScreen');
         if (els.lobbyTitleText) els.lobbyTitleText.textContent = roomCode.startsWith("TRN_") ? "Lobby Incontro Torneo 🥊" : "Lobby Stanza Libera";
         if (els.permanentGameInput) els.permanentGameInput.blur();
@@ -320,12 +312,9 @@ window.joinRoomLogic = function(isReconnect = false) {
         listeners.room.on('value', snap => {
             if (!snap.exists()) return window.exitRoomCleanly(true);
             const rData = snap.val();
-
-            // AGGIORNAMENTO FORZATO MODALITÀ E TIPO
-            window.currentMode = rData.mode;
             currentMode = rData.mode;
             requestedWordCount = rData.wordCount;
-            isSinglePlayer = (rData.type === 'single' || rData.type === 'arcade' || rData.mode === 'arcade');
+            isSinglePlayer = rData.type === 'single';
             isFixedSpeed = !!rData.fixedSpeed;
             isEasyMode = !!rData.easyMode;
             roomHostId = rData.hostId;
@@ -347,11 +336,6 @@ window.joinRoomLogic = function(isReconnect = false) {
             if (rData.status === 'playing' && !gameRunning) {
                 currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
                 if (rData.words) gameWords = rData.words;
-
-                // FORZA ROUTING ARCADE
-                if (rData.mode === 'arcade') {
-                    return window.initArcadeMode();
-                }
                 return window.resumeGameSequence();
             }
             if (rData.status === 'countdown' && !gameRunning) {
@@ -550,11 +534,7 @@ window.startCountdownSequence = function() {
     window.lastSeenGuessId = 0;
     if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
-
-    // Gestione visibilità input area per arcade
-    if (els.gameInputArea) {
-        els.gameInputArea.style.display = (currentMode === 'arcade') ? 'none' : 'flex';
-    }
+    if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
 
     if (currentMode === 'pingpong' && (myId === roomHostId || roomCode.startsWith("TRN_"))) {
         db.ref(`rooms/${roomCode}/pingpong`).once('value', s => {
@@ -592,10 +572,6 @@ window.startCountdownSequence = function() {
                 if (els.coopArea) els.coopArea.style.display = 'none';
                 if (els.tableWrapper) els.tableWrapper.style.display = 'block';
 
-                // --- GESTIONE ROUTING MODALITÀ ---
-                if (currentMode === 'arcade') {
-                    if (typeof window.initArcadeMode === 'function') return window.initArcadeMode();
-                }
                 if (currentMode === 'conquest') {
                     if (typeof window.startCoopSequence === 'function') return window.startCoopSequence();
                 }
@@ -622,11 +598,6 @@ window.resumeGameSequence = function() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     gameRunning = true;
     isRejoining = false;
-
-    // --- ROUTING ARCADE ---
-    if (currentMode === 'arcade') {
-        if (typeof window.initArcadeMode === 'function') return window.initArcadeMode();
-    }
 
     isCoopMode = (currentMode === 'conquest');
     if (els.coopArea) els.coopArea.style.display = 'none';

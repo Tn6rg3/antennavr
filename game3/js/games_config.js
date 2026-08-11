@@ -138,21 +138,6 @@ window.GAME_MODES = {
             }
             return ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
         }
-    },
-    "arcade": {
-        id: "arcade",
-        titleIt: "Intercettazione Arcade",
-        titleEn: "Arcade Interception",
-        icon: "🕹️",
-        defaultWpm: 20,
-        defaultWordCount: 999, // Partita infinita finché hai vite
-        wpmConfigurable: false,
-        wordCountConfigurable: false,
-        fixedSpeedAllowed: false,
-        spacingConfigurable: false,
-        generateWords: function(num, dicts) {
-            return []; // Generate dinamicamente per lunghezza crescente
-        }
     }
 };
 

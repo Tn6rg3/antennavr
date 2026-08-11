@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.220";
+const APP_VERSION = "20260807.222";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -612,8 +612,8 @@ if (els.createRoomBtn) {
         if (gMode === 'custom' && window.customDictionary.length === 0) return showToast("Carica un file!");
 
         isChallenging = false;
-        currentMode = (gType === 'arcade') ? 'arcade' : (gMode || 'standard');
-        isSinglePlayer = (gType === 'single' || gType === 'arcade');
+        currentMode = gMode || 'standard';
+        isSinglePlayer = (gType === 'single');
         currentWpm = baseWpm = (currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
         requestedWordCount = (currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         currentTone = parseInt(els.toneInput?.value) || 600;
@@ -628,20 +628,18 @@ if (els.createRoomBtn) {
         let wSpace = isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
 
         roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+        gameWords = window.getGameWords(requestedWordCount, currentMode);
 
-        // Se è arcade, non servono parole pre-generate (le genera arcade_manager)
-        gameWords = (gType === 'arcade') ? [] : window.getGameWords(requestedWordCount, currentMode);
-
-        const expires = (isSinglePlayer || gType === 'arcade') ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
+        const expires = isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
         const roomRef = db.ref('rooms/' + roomCode);
         roomRef.set({
-            status: 'countdown', // Forza l'avvio immediato senza passare dalla lobby
-            type: (gType === 'arcade') ? 'arcade' : (isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi')),
-            mode: (gType === 'arcade') ? 'arcade' : currentMode,
+            status: isSinglePlayer ? 'countdown' : 'waiting',
+            type: isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
+            mode: currentMode,
             wpm: currentWpm,
             tone: currentTone,
-            wordCount: (gType === 'arcade') ? 999 : requestedWordCount,
+            wordCount: requestedWordCount,
             words: gameWords,
             fixedSpeed: !!isFixed,
             easyMode: !!isEasy,
