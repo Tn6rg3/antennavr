@@ -636,7 +636,7 @@ if (els.createRoomBtn) {
         roomRef.set({
             status: isSinglePlayer ? 'countdown' : 'waiting',
             type: isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
-            mode: currentMode,
+            mode: (gType === 'arcade') ? 'arcade' : currentMode,
             wpm: currentWpm,
             tone: currentTone,
             wordCount: requestedWordCount,

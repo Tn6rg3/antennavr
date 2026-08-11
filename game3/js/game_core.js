@@ -314,7 +314,7 @@ window.joinRoomLogic = function(isReconnect = false) {
             const rData = snap.val();
             currentMode = rData.mode;
             requestedWordCount = rData.wordCount;
-            isSinglePlayer = rData.type === 'single';
+            isSinglePlayer = (rData.type === 'single' || currentMode === 'arcade');
             isFixedSpeed = !!rData.fixedSpeed;
             isEasyMode = !!rData.easyMode;
             roomHostId = rData.hostId;
@@ -534,7 +534,11 @@ window.startCountdownSequence = function() {
     window.lastSeenGuessId = 0;
     if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
-    if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
+
+    // Gestione visibilità input area per arcade
+    if (els.gameInputArea) {
+        els.gameInputArea.style.display = (currentMode === 'arcade') ? 'none' : 'flex';
+    }
 
     if (currentMode === 'pingpong' && (myId === roomHostId || roomCode.startsWith("TRN_"))) {
         db.ref(`rooms/${roomCode}/pingpong`).once('value', s => {
