@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.221";
+const APP_VERSION = "20260807.220";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -265,14 +265,17 @@ function initGame() {
 
     if (els.toggleChatCwBtn) {
         const updateBtn = () => {
+            // Sincronizzazione variabile globale con stato reale
+            isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
             els.toggleChatCwBtn.textContent = isChatCwEnabled ? "📻 CW: ON" : "📻 CW: OFF";
             els.toggleChatCwBtn.className = isChatCwEnabled ? "btn btn-success" : "btn btn-secondary";
             if (els.chatCwSettingsPanel) els.chatCwSettingsPanel.style.display = isChatCwEnabled ? 'block' : 'none';
         };
         updateBtn();
         els.toggleChatCwBtn.onclick = () => {
-            isChatCwEnabled = !isChatCwEnabled;
-            localStorage.setItem(STORAGE_CHAT_CW_ENABLED, isChatCwEnabled);
+            const newState = !(localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true');
+            localStorage.setItem(STORAGE_CHAT_CW_ENABLED, newState);
+            isChatCwEnabled = newState; // Forza aggiornamento variabile globale
             updateBtn();
             if (typeof listenToChat === 'function') listenToChat();
         };

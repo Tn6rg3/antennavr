@@ -138,7 +138,10 @@ window.setupChat = function(ref, containerId, limit = 50) {
             const textSpan = document.createElement('div');
             textSpan.style.wordBreak = 'break-word';
 
-            if (isChatCwEnabled) {
+            // OTTIMIZZAZIONE: Verifica diretta su localStorage per evitare problemi di scope
+            const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
+
+            if (isCwActive) {
                 textSpan.className = 'cw-spoiler';
                 textSpan.textContent = m.text;
                 textSpan.title = "Clicca per svelare il testo";
@@ -172,12 +175,15 @@ window.handleNewChatMessage = function(refKey, msg, msgKey) {
     const isGlobal = (refKey === 'globalChat');
     const isPlayingBR = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
 
+    // OTTIMIZZAZIONE: Verifica diretta su localStorage per evitare problemi di scope
+    const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
+
     // Notifica visiva (Toast): Solo per messaggi ALTRUI
     const shouldNotifyUI = !isOwn && (isGlobal
         ? (!isGlobalChatMuted && !gameRunning && !isPlayingBR && (!isChatDrawerOpen || activeChatContext !== 'global'))
         : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId)));
 
-    if (isChatCwEnabled) {
+    if (isCwActive) {
         if (shouldNotifyUI) {
             const prefix = isGlobal ? "🌎" : "💬";
             showToast(`${prefix} ${msg.name}: [📻 Messaggio CW...]`);
