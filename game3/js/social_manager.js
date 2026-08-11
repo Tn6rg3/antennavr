@@ -172,6 +172,7 @@ window.handleNewChatMessage = function(refKey, msg, msgKey) {
     const isGlobal = (refKey === 'globalChat');
     const isPlayingBR = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
 
+    // Notifica visiva (Toast): Solo per messaggi ALTRUI
     const shouldNotifyUI = !isOwn && (isGlobal
         ? (!isGlobalChatMuted && !gameRunning && !isPlayingBR && (!isChatDrawerOpen || activeChatContext !== 'global'))
         : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId)));
@@ -182,7 +183,9 @@ window.handleNewChatMessage = function(refKey, msg, msgKey) {
             showToast(`${prefix} ${msg.name}: [📻 Messaggio CW...]`);
         }
 
-        if (!gameRunning && !isPlayingBR) {
+        // AUDIO CW: Suona SEMPRE per i messaggi altrui se siamo fuori partita
+        // NOTA: I propri messaggi NON suonano per evitare loop fastidiosi
+        if (!isOwn && !gameRunning && !isPlayingBR) {
             if (msgKey !== window.lastPlayedCwMsgKey) {
                 window.lastPlayedCwMsgKey = msgKey;
                 window.enqueueChatCwAudio(msg.text);
