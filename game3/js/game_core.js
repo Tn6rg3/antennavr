@@ -312,9 +312,12 @@ window.joinRoomLogic = function(isReconnect = false) {
         listeners.room.on('value', snap => {
             if (!snap.exists()) return window.exitRoomCleanly(true);
             const rData = snap.val();
+
+            // AGGIORNAMENTO FORZATO MODALITÀ E TIPO
+            window.currentMode = rData.mode;
             currentMode = rData.mode;
             requestedWordCount = rData.wordCount;
-            isSinglePlayer = (rData.type === 'single' || currentMode === 'arcade');
+            isSinglePlayer = (rData.type === 'single' || rData.type === 'arcade' || rData.mode === 'arcade');
             isFixedSpeed = !!rData.fixedSpeed;
             isEasyMode = !!rData.easyMode;
             roomHostId = rData.hostId;
@@ -336,6 +339,11 @@ window.joinRoomLogic = function(isReconnect = false) {
             if (rData.status === 'playing' && !gameRunning) {
                 currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
                 if (rData.words) gameWords = rData.words;
+
+                // FORZA ROUTING ARCADE
+                if (rData.mode === 'arcade') {
+                    return window.initArcadeMode();
+                }
                 return window.resumeGameSequence();
             }
             if (rData.status === 'countdown' && !gameRunning) {
