@@ -29,7 +29,8 @@ window.i18n = {
         custom_title: "Dizionario Personale 📖", custom_desc: "Carica un file di testo (.txt) con le tue parole personalizzate.",
         select_file: "Scegli File .txt", custom_hint1: "Le parole possono essere separate da spazio, virgola o a capo.",
         custom_hint2: "Verranno ignorate le parole più corte di 3 caratteri.", custom_hint3: "Il dizionario rimarrà salvato in locale.",
-        no_file: "Nessun file caricato.", loaded_words: "Parole caricate: ", manage_custom: "⚙️ Gestisci Dizionario Personale"
+        no_file: "Nessun file caricato.", loaded_words: "Parole caricate: ", manage_custom: "⚙️ Gestisci Dizionario Personale",
+        arcade_title: "🕹️ Intercettazione Arcade", arcade_start: "Gioca Subito Arcade 🕹️", arcade_level: "Livello", arcade_lives: "Vite", arcade_game_over: "PARTITA CONCLUSA", arcade_new_level: "LIVELLO COMPLETATO!"
     },
     en: {
         hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", conn_secure: "Secure connection in progress...",
@@ -59,7 +60,8 @@ window.i18n = {
         custom_title: "Personal Dictionary 📖", custom_desc: "Upload a text file (.txt) with your custom words.",
         select_file: "Choose .txt File", custom_hint1: "Words can be separated by spaces, commas, or newlines.",
         custom_hint2: "Words shorter than 3 characters will be ignored.", custom_hint3: "The dictionary will be saved locally.",
-        no_file: "No file uploaded.", loaded_words: "Words loaded: ", manage_custom: "⚙️ Manage Personal Dictionary"
+        no_file: "No file uploaded.", loaded_words: "Words loaded: ", manage_custom: "⚙️ Manage Personal Dictionary",
+        arcade_title: "🕹️ Arcade Interception", arcade_start: "Play Arcade Now 🕹️", arcade_level: "Level", arcade_lives: "Lives", arcade_game_over: "GAME OVER", arcade_new_level: "LEVEL COMPLETED!"
     }
 };
 

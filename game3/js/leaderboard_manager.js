@@ -18,7 +18,8 @@ window.lbGroups = {
         { val: 'quiz_single', it: '👤 Allenamento Quiz', en: '👤 Quiz Practice' }
     ],
     special: [
-        { val: 'cwfreak', it: '🎙️ Nominativi (CW Freak)', en: '🎙️ Callsigns (CW Freak)' }
+        { val: 'cwfreak', it: '🎙️ Nominativi (CW Freak)', en: '🎙️ Callsigns (CW Freak)' },
+        { val: 'arcade', it: '🕹️ Intercettazione Arcade', en: '🕹️ Arcade Interception' }
     ]
 };
 
@@ -70,6 +71,8 @@ window.showLeaderboardTab = function(modeValue) {
         window.fetchAndRenderGlobalLeaderboard('tournaments', null);
     } else if (modeValue === 'cwfreak') {
         window.fetchAndRenderGlobalLeaderboard('callsign', null);
+    } else if (modeValue === 'arcade') {
+        window.fetchAndRenderGlobalLeaderboard('arcade', null);
     } else {
         // Gestione dinamica Multi/Single per Parole, Caratteri, Quiz, Ping Pong
         if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
@@ -188,6 +191,18 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
+    // 4b. ARCADE
+    if (tabType === 'arcade') {
+        db.ref('leaderboard/arcade/all').orderByChild('score').limitToLast(50).once('value', snapshot => {
+            let players = [];
+            snapshot.forEach(child => { if (child.val()) players.push(child.val()); });
+            // Ordinamento: Punteggio decrescente
+            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+            window.renderPlayersListHTML(players, els.leaderboardContainer, false, false, true);
+        });
+        return;
+    }
+
     // 5. SOLO PRACTICE (Record Individuali)
     let baseMode = tabType.replace('_single', '');
     if (baseMode === 'std') baseMode = 'standard';
@@ -225,7 +240,7 @@ window.renderMatchesHistoryHTML = function(matches, container) {
     });
 };
 
-window.renderPlayersListHTML = function(players, container, showWordCount, isTeam = false) {
+window.renderPlayersListHTML = function(players, container, showWordCount, isTeam = false, isArcade = false) {
     container.innerHTML = '';
     if (players.length === 0) {
         container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">${currentLang === 'it' ? 'Nessun record trovato.' : 'No records found.'}</p>`;
@@ -267,7 +282,8 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
 
         const dateDiv = document.createElement('div'); dateDiv.style.fontSize = '0.75em'; dateDiv.style.color = 'var(--hint-color)'; dateDiv.textContent = (player.date || "") + " ";
         if (!isTeam && player.wpm) {
-            const wpmSpan = document.createElement('span'); wpmSpan.style.color = 'var(--champ-color)'; wpmSpan.style.fontWeight = 'bold'; wpmSpan.textContent = player.wpm + " WPM"; dateDiv.appendChild(wpmSpan);
+            const wpmLabel = isArcade ? "Peak " : "";
+            const wpmSpan = document.createElement('span'); wpmSpan.style.color = 'var(--champ-color)'; wpmSpan.style.fontWeight = 'bold'; wpmSpan.textContent = wpmLabel + player.wpm + " WPM"; dateDiv.appendChild(wpmSpan);
         }
 
         infoDiv.appendChild(nameDiv); infoDiv.appendChild(dateDiv);

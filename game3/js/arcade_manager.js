@@ -1,267 +1,276 @@
 // js/arcade_manager.js
 
-let arcadeLives = 3;
-let arcadeCorrectInRow = 0;
-let arcadeCurrentLen = 3;
-let arcadeActiveWord = "";
-let arcadeFallTimer = null;
-let arcadeIsRunning = false;
+let arcadeLoopId = null;
+let lastFrameTime = 0;
+const ARCADE_BASE_FALL_SPEED = 0.5; // pixel per frame a 60fps (base)
 
-window.initArcadeMode = function() {
-    console.log("Arcade: Starting Initialization...");
-    arcadeLives = 3;
-    arcadeCorrectInRow = 0;
-    arcadeCurrentLen = 3;
-    totalScore = 0;
-    currentWpm = 20;
-    arcadeIsRunning = true;
+window.startArcadeSequence = function() {
+    console.log("Arcade: Starting Mission...");
+    isArcadeMode = true;
     gameRunning = true;
+    arcadeLives = 3;
+    arcadeScore = 0;
+    arcadeLevel = 1;
+    arcadeWordsSolved = 0;
+    arcadeWordLen = 3;
+    arcadeWpm = parseInt(els.startWpmInput?.value) || 15;
+    peakWpm = arcadeWpm;
 
-    window.showScreen('arcadeArea');
-    window.updateArcadeUI();
+    showScreen('arcadeArea');
+    window.updateArcadeStatsUI();
 
+    if (els.arcadeBrickContainer) els.arcadeBrickContainer.innerHTML = '';
     if (els.arcadeInput) {
-        els.arcadeInput.value = "";
+        els.arcadeInput.value = '';
+        els.arcadeInput.disabled = false;
         setTimeout(() => els.arcadeInput.focus(), 500);
-
-        // Listener Input istantaneo
-        els.arcadeInput.oninput = (e) => {
-            const val = e.target.value.trim().toUpperCase();
-            if (val === arcadeActiveWord && arcadeActiveWord !== "") {
-                window.handleArcadeSuccess();
-            }
-        };
     }
 
-    if (els.quitArcadeBtn) {
-        els.quitArcadeBtn.onclick = () => {
-            window.arcadeGameOver("Abbandono");
-        };
-    }
+    arcadeActiveBrick = null;
+    lastFrameTime = performance.now();
+    arcadeLoopId = requestAnimationFrame(window.arcadeGameLoop);
 
-    setTimeout(window.spawnArcadeWord, 1000);
+    window.spawnArcadeBrick();
 };
 
-window.spawnArcadeWord = function() {
-    if (!arcadeIsRunning) return;
+window.spawnArcadeBrick = function() {
+    if (!gameRunning || !isArcadeMode) return;
 
-    // Scegliamo una parola della lunghezza attuale
-    const pool = (window.itDictionary && window.itDictionary.length > 0) ? window.itDictionary : window.FALLBACK_WORDS_IT;
-    let sameLenWords = pool.filter(w => w.length === arcadeCurrentLen);
+    // Genera parola della lunghezza corrente
+    const dict = window.masterDictionary.filter(w => w.length === arcadeWordLen);
+    const word = (dict.length > 0 ? dict[Math.floor(Math.random() * dict.length)] : "SOS").toUpperCase();
 
-    // Se non troviamo parole di quella lunghezza, ne generiamo una o allarghiamo la ricerca
-    if (sameLenWords.length === 0) {
-        sameLenWords = pool.filter(w => w.length >= arcadeCurrentLen - 1 && w.length <= arcadeCurrentLen + 1);
-    }
-
-    const word = sameLenWords.length > 0
-        ? sameLenWords[Math.floor(Math.random() * sameLenWords.length)].toUpperCase()
-        : window.generateRandomString(arcadeCurrentLen);
-
-    arcadeActiveWord = word;
-
-    // Grafica: Mattoncino Arcade
-    const container = document.getElementById('arcadeFallContainer');
-    container.innerHTML = "";
-
-    const wordWrapper = document.createElement('div');
-    wordWrapper.className = 'falling-word-block';
-    wordWrapper.id = "falling_word_obj";
+    const container = els.arcadeBrickContainer;
+    if (!container) return;
 
     const brick = document.createElement('div');
     brick.className = 'arcade-brick';
-    brick.textContent = "•".repeat(word.length); // Puntini dentro il mattoncino
+    brick.id = 'active_brick';
+    // Mostriamo puntini invece della parola
+    brick.textContent = "•".repeat(word.length);
 
-    wordWrapper.appendChild(brick);
-    container.appendChild(wordWrapper);
+    // Posizione orizzontale casuale
+    const containerWidth = container.clientWidth;
+    const brickWidth = 100;
+    const startX = Math.floor(Math.random() * (containerWidth - brickWidth));
 
-    // Calcolo durata caduta (PIÙ LENTA E GRADUALE)
-    // Partiamo da 10 secondi per 3 caratteri e scendiamo gradualmente
-    const baseDuration = 10000;
-    const lenBonus = (word.length - 3) * 1000; // +1s per ogni carattere in più
-    const wpmPenalty = (currentWpm - 20) * 150; // -0.15s per ogni WPM sopra i 20
+    brick.style.left = startX + 'px';
+    brick.style.top = '-50px';
+    container.appendChild(brick);
 
-    const fallDuration = Math.max(4500, baseDuration + lenBonus - wpmPenalty);
+    arcadeActiveBrick = {
+        el: brick,
+        word: word,
+        y: -50,
+        startTime: Date.now()
+    };
 
-    console.log(`Arcade: Word "${word}" will fall in ${fallDuration}ms`);
+    // Riproduce audio Morse
+    stopAllMorseAudio();
+    playMorseAudio(word, arcadeWpm, true);
+};
 
-    // Avvio caduta tramite JS Animation (più affidabile del CSS in questo contesto)
-    let startTime = null;
-    const startY = -100;
-    const endY = window.innerHeight * 0.7; // Si ferma prima dell'input
+window.arcadeGameLoop = function(timestamp) {
+    if (!gameRunning || !isArcadeMode) return;
 
-    function animateFall(timestamp) {
-        if (!startTime) startTime = timestamp;
-        const progress = (timestamp - startTime) / fallDuration;
+    const deltaTime = timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
 
-        if (progress < 1 && arcadeIsRunning && arcadeActiveWord === word) {
-            const currentY = startY + (endY - startY) * progress;
-            wordWrapper.style.transform = `translateY(${currentY}px)`;
-            requestAnimationFrame(animateFall);
-        } else if (progress >= 1 && arcadeIsRunning && arcadeActiveWord === word) {
-            // HA TOCCATO IL FONDO
+    if (arcadeActiveBrick && !window.arcadePaused) {
+        // Velocità di caduta aumenta con WPM, ma rallenta se la parola è lunga
+        // Tempo extra per parole lunghe: moltiplicatore inverso alla lunghezza
+        const lengthFactor = Math.max(0.4, 1 - ((arcadeWordLen - 3) * 0.05));
+        const speed = (ARCADE_BASE_FALL_SPEED + (arcadeWpm - 15) * 0.02) * lengthFactor;
+
+        arcadeActiveBrick.y += speed * (deltaTime / 16.67); // Normalizzato a 60fps
+        arcadeActiveBrick.el.style.top = arcadeActiveBrick.y + 'px';
+
+        // Collisione con il fondo
+        const containerHeight = els.arcadeBrickContainer.clientHeight;
+        if (arcadeActiveBrick.y > containerHeight - 50) {
             window.handleArcadeMiss();
         }
     }
 
-    // Audio
-    if (typeof playMorseAudio === 'function') {
-        playMorseAudio(word, currentWpm);
-    }
-
-    requestAnimationFrame(animateFall);
-};
-
-window.handleArcadeSuccess = function() {
-    // Fermiamo la logica di caduta cambiando la parola attiva
-    const wordWas = arcadeActiveWord;
-    arcadeActiveWord = "";
-
-    if (arcadeFallTimer) clearTimeout(arcadeFallTimer);
-
-    const el = document.getElementById('falling_word_obj');
-    if (el) {
-        const brick = el.querySelector('.arcade-brick');
-        if (brick) {
-            brick.textContent = wordWas; // Riveliamo la parola
-            brick.style.background = "rgba(0, 255, 0, 0.4)";
-            brick.style.borderColor = "#00ff00";
-            brick.style.color = "#fff";
-        }
-        el.classList.add('brick-exploding');
-    }
-
-    // Calcolo Punti (Bonus per velocità e lunghezza)
-    totalScore += (arcadeCurrentLen * 20) + currentWpm;
-    arcadeCorrectInRow++;
-
-    // Progressione: +1 WPM ogni parola giusta
-    currentWpm += 1;
-
-    // Progressione Lunghezza: +1 carattere ogni 2 parole giuste
-    if (arcadeCorrectInRow % 2 === 0) {
-        const oldLen = arcadeCurrentLen;
-        arcadeCurrentLen = Math.min(15, arcadeCurrentLen + 1);
-
-        // Ogni 3 caratteri di aumento è un nuovo "Livello" (es: 6, 9, 12...)
-        if (arcadeCurrentLen > oldLen && (arcadeCurrentLen - 3) % 3 === 0) {
-            window.showArcadeLevelUp(arcadeCurrentLen);
-            return;
-        }
-    }
-
-    if (els.arcadeInput) els.arcadeInput.value = "";
-    window.updateArcadeUI();
-
-    // Prossima parola
-    setTimeout(window.spawnArcadeWord, 800);
-};
-
-window.showArcadeLevelUp = function(newLen) {
-    const overlay = document.getElementById('arcadeLevelUpOverlay');
-    const levelText = document.getElementById('arcadeNewLevelText');
-    const bonusText = document.getElementById('arcadeLevelBonus');
-    if (!overlay || !levelText) return;
-
-    const currentLevel = Math.floor((newLen - 3) / 3) + 1;
-    levelText.textContent = `LIVELLO ${currentLevel} (${newLen} Caratteri)`;
-
-    let bonus = "";
-    // Ogni 3 livelli guadagni una vita (es: Lv 4, 7...)
-    if (currentLevel > 1 && (currentLevel - 1) % 3 === 0) {
-        arcadeLives = Math.min(5, arcadeLives + 1);
-        bonus = "🎁 BONUS: +1 VITA! ❤️";
-        if (typeof window.playBeep === 'function') window.playBeep(1000, 0.5);
-    } else {
-        if (typeof window.playBeep === 'function') window.playBeep(880, 0.2);
-    }
-
-    if (bonusText) bonusText.textContent = bonus;
-
-    overlay.style.display = 'flex';
-    window.updateArcadeUI();
-
-    setTimeout(() => {
-        overlay.style.display = 'none';
-        if (els.arcadeInput) els.arcadeInput.value = "";
-        window.spawnArcadeWord();
-    }, 3000);
+    arcadeLoopId = requestAnimationFrame(window.arcadeGameLoop);
 };
 
 window.handleArcadeMiss = function() {
+    if (!arcadeActiveBrick) return;
+
     arcadeLives--;
-    arcadeCorrectInRow = 0; // Reset progressione lunghezza
+    window.updateArcadeStatsUI();
 
-    const area = document.getElementById('arcadeArea');
-    area.classList.add('screen-shake');
-    setTimeout(() => area.classList.remove('screen-shake'), 300);
+    // Effetto scuotimento
+    els.arcadeArea.classList.add('shake');
+    setTimeout(() => els.arcadeArea.classList.remove('shake'), 400);
 
-    if (els.arcadeInput) els.arcadeInput.value = "";
-    window.updateArcadeUI();
+    // Rimuovi mattoncino
+    if (arcadeActiveBrick.el) arcadeActiveBrick.el.remove();
+    arcadeActiveBrick = null;
 
     if (arcadeLives <= 0) {
-        window.arcadeGameOver("Vite Esaurite");
+        window.finishArcadeGame();
     } else {
-        setTimeout(window.spawnArcadeWord, 1000);
-    }
-};
-    } else {
-        setTimeout(window.spawnArcadeWord, 1000);
+        // Breve pausa prima del prossimo
+        setTimeout(window.spawnArcadeBrick, 1000);
     }
 };
 
-window.arcadeGameOver = function(reason) {
-    arcadeIsRunning = false;
-    gameRunning = false;
-    if (arcadeFallTimer) clearTimeout(arcadeFallTimer);
+window.handleArcadeInput = function() {
+    if (!arcadeActiveBrick || !gameRunning) return;
 
-    // Ripristiniamo la visualizzazione standard
-    if (els.tableWrapper) els.tableWrapper.style.display = 'block';
+    const typed = els.arcadeInput.value.trim().toUpperCase();
+    const target = arcadeActiveBrick.word;
 
-    alert(`GAME OVER: ${reason}\n\nPunteggio Finale: ${totalScore}\nVelocità Massima: ${currentWpm} WPM`);
+    if (typed === target) {
+        // CORRETTO!
+        const reactionTime = Date.now() - arcadeActiveBrick.startTime;
 
-    // Salvataggio record (se score > 0)
-    if (totalScore > 0) {
-        const dbPath = `leaderboard/arcade/global/${myId}`;
-        db.ref(dbPath).once('value', s => {
-            const old = s.val();
-            if (!old || totalScore > old.score) {
-                db.ref(dbPath).set({
-                    name: myName,
-                    username: myPrivacy ? "" : tgUsername,
-                    score: totalScore,
-                    wpm: currentWpm,
-                    date: new Date().toLocaleDateString('it-IT')
-                });
+        // Calcolo punteggio Arcade: (WPM * Lunghezza) * (Bonus tempo)
+        const timeBonus = Math.max(1, 20000 / reactionTime);
+        const points = Math.round((arcadeWpm * target.length) * timeBonus);
+
+        arcadeScore += points;
+        arcadeWordsSolved++;
+
+        // Effetto esplosione
+        const el = arcadeActiveBrick.el;
+        el.textContent = target; // Rivela la parola
+        el.classList.add('exploded');
+
+        const oldBrick = arcadeActiveBrick;
+        arcadeActiveBrick = null;
+        els.arcadeInput.value = '';
+
+        setTimeout(() => { if (el) el.remove(); }, 500);
+
+        window.updateArcadeProgression();
+        window.updateArcadeStatsUI();
+
+        // Prossimo mattoncino
+        setTimeout(window.spawnArcadeBrick, 600);
+    }
+};
+
+window.updateArcadeProgression = function() {
+    // Ogni parola indovinata: +1 WPM
+    arcadeWpm++;
+    if (arcadeWpm > peakWpm) peakWpm = arcadeWpm;
+
+    // Ogni 2 parole: +1 lunghezza (max 15)
+    if (arcadeWordsSolved % 2 === 0) {
+        const oldLen = arcadeWordLen;
+        arcadeWordLen = Math.min(15, arcadeWordLen + 1);
+
+        // Verifica Level Up (soglie: 6, 9, 12...)
+        if (arcadeWordLen > oldLen) {
+            const levelThresholds = [6, 9, 12, 15];
+            if (levelThresholds.includes(arcadeWordLen)) {
+                arcadeLevel++;
+                window.showArcadeLevelUp();
+
+                // Bonus Vita ogni 3 livelli (2, 5, 8... considerando la logica utente 4, 7, 10)
+                // Usiamo arcadeLevel per semplicità: se divisibile per 3 (es. Livello 3 -> 4)
+                if (arcadeLevel % 3 === 1 && arcadeLevel > 1) {
+                    arcadeLives = Math.min(5, arcadeLives + 1);
+                    showToast("❤️ VITA EXTRA GUADAGNATA!");
+                }
             }
+        }
+    }
+};
+
+window.showArcadeLevelUp = function() {
+    window.arcadePaused = true;
+    stopAllMorseAudio();
+
+    if (els.arcadeLevelOverlay) {
+        els.arcadeLevelOverlay.style.display = 'flex';
+        if (els.arcadeLevelNextText) {
+            els.arcadeLevelNextText.textContent = `Preparati per parole da ${arcadeWordLen} caratteri!`;
+        }
+    }
+
+    setTimeout(() => {
+        if (els.arcadeLevelOverlay) els.arcadeLevelOverlay.style.display = 'none';
+        window.arcadePaused = false;
+        window.updateArcadeStatsUI();
+    }, 3000);
+};
+
+window.updateArcadeStatsUI = function() {
+    if (els.arcadeWpmDisplay) els.arcadeWpmDisplay.textContent = `WPM: ${arcadeWpm}`;
+    if (els.arcadeScoreDisplay) els.arcadeScoreDisplay.textContent = `Punti: ${arcadeScore}`;
+    if (els.arcadeLevelDisplay) els.arcadeLevelDisplay.textContent = `LIVELLO ${arcadeLevel}`;
+
+    if (els.arcadeLivesDisplay) {
+        const hearts = "❤️".repeat(arcadeLives);
+        els.arcadeLivesDisplay.textContent = hearts;
+        if (arcadeLives === 1) els.arcadeLivesDisplay.classList.add('pulse-red');
+        else els.arcadeLivesDisplay.classList.remove('pulse-red');
+    }
+};
+
+window.finishArcadeGame = function() {
+    gameRunning = false;
+    cancelAnimationFrame(arcadeLoopId);
+    stopAllMorseAudio();
+
+    const finalScore = arcadeScore;
+    const finalWpm = peakWpm;
+
+    showToast("💀 MISSIONE FALLITA! " + finalScore + " punti.");
+
+    // Salvataggio record Arcade
+    if (db && myId) {
+        const recordData = {
+            name: myName,
+            username: myPrivacy ? "" : tgUsername,
+            score: finalScore,
+            wpm: finalWpm,
+            level: arcadeLevel,
+            date: new Date().toLocaleDateString('it-IT'),
+            ts: firebase.database.ServerValue.TIMESTAMP
+        };
+        db.ref(`leaderboard/arcade/all/${myId}`).transaction(current => {
+            if (!current || finalScore > (current.score || 0)) return recordData;
+            return current;
         });
     }
 
-    window.goBackToMenu();
-};
-
-window.updateArcadeUI = function() {
-    if (els.arcadeScoreDisplay) els.arcadeScoreDisplay.textContent = `Punti: ${totalScore}`;
-    if (els.arcadeWpmDisplay) els.arcadeWpmDisplay.textContent = `WPM: ${currentWpm}`;
-
-    const currentLevel = Math.floor((arcadeCurrentLen - 3) / 3) + 1;
-    const lvDisp = document.getElementById('arcadeLevelDisplay');
-    if (lvDisp) lvDisp.textContent = `LV: ${currentLevel}`;
-
-    if (els.arcadeLivesDisplay) {
-        let hearts = "";
-        for(let i=0; i<Math.max(3, arcadeLives); i++) {
-            hearts += (i < arcadeLives) ? "❤️" : "🖤";
+    setTimeout(() => {
+        showScreen('leaderboardScreen');
+        if (typeof window.switchLBGroup === 'function') {
+            // Routing manuale verso la nuova tab Arcade
+            window.lbManualRouting = true;
+            window.switchLBGroup('special');
+            setTimeout(() => {
+                if (els.lbModeSelect) {
+                    els.lbModeSelect.value = 'arcade';
+                    window.showLeaderboardTab('arcade');
+                }
+            }, 200);
         }
-        els.arcadeLivesDisplay.textContent = hearts;
-    }
-    const nextLenInfo = document.getElementById('arcadeWordLengthInfo');
-    if (nextLenInfo) nextLenInfo.textContent = `Lunghezza attuale: ${arcadeCurrentLen} car.`;
+    }, 1500);
 };
 
-window.generateRandomString = function(len) {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    let res = "";
-    for(let i=0; i<len; i++) res += chars[Math.floor(Math.random() * chars.length)];
-    return res;
-};
+// Listeners
+if (els.arcadeInput) {
+    els.arcadeInput.addEventListener('input', window.handleArcadeInput);
+}
+
+if (els.quitArcadeBtn) {
+    els.quitArcadeBtn.onclick = () => {
+        if (confirm("Vuoi davvero abbandonare la missione? I punti non verranno salvati.")) {
+            gameRunning = false;
+            cancelAnimationFrame(arcadeLoopId);
+            isArcadeMode = false;
+            goBackToMenu();
+        }
+    };
+}
+
+if (els.startArcadeBtn) {
+    els.startArcadeBtn.onclick = () => window.startArcadeSequence();
+}

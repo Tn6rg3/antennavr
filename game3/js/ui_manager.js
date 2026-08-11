@@ -76,6 +76,7 @@ window.checkGameTypeUI = function() {
         spacing: document.getElementById('advancedSpacingContainer'),
         custom: document.getElementById('customDictControl'),
         spectator: document.getElementById('spectatorContainer'),
+        arcadeBtn: document.getElementById('startArcadeBtn'),
         btn: document.getElementById('createRoomBtn'),
         startWpm: document.getElementById('startWpmInput'),
         wordCount: document.getElementById('wordCountInput')
@@ -105,10 +106,19 @@ window.checkGameTypeUI = function() {
     if (containers.custom) containers.custom.style.display = (isSingle && selectedMode === 'custom') ? 'flex' : 'none';
     if (containers.spectator) containers.spectator.style.display = isSingle ? 'flex' : 'none';
 
+    if (containers.arcadeBtn) {
+        containers.arcadeBtn.style.display = (isSingle && selectedMode === 'arcade') ? 'block' : 'none';
+    }
+
     if (containers.btn) {
-        if (isCoop) containers.btn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
-        else if (isTrn) containers.btn.textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
-        else containers.btn.textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
+        if (isSingle && selectedMode === 'arcade') {
+            containers.btn.style.display = 'none';
+        } else {
+            containers.btn.style.display = 'block';
+            if (isCoop) containers.btn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
+            else if (isTrn) containers.btn.textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
+            else containers.btn.textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
+        }
     }
 };
 
@@ -140,7 +150,8 @@ window.setLanguage = function(lang) {
         tabTournamentsBtn: t.tab_tournaments, txt_custom_dict_title: t.custom_title, txt_custom_dict_desc: t.custom_desc,
         txt_select_file_btn: t.select_file, txt_custom_hint1: t.custom_hint1, txt_custom_hint2: t.custom_hint2,
         txt_custom_hint3: t.custom_hint3, txt_close_custom_btn: t.chat_close, txt_manage_custom_btn: t.manage_custom,
-        opt_lb_room: t.tab_this_match, opt_lb_trn: t.tab_trn_lb, opt_lb_call: t.tab_callsigns, opt_lb_single: t.tab_std_single
+        opt_lb_room: t.tab_this_match, opt_lb_trn: t.tab_trn_lb, opt_lb_call: t.tab_callsigns, opt_lb_single: t.tab_std_single,
+        startArcadeBtn: t.arcade_start, txt_arcade_new_level: t.arcade_new_level
     };
 
     for (let key in textMap) {

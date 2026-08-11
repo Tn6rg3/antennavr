@@ -138,6 +138,21 @@ window.GAME_MODES = {
             }
             return ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
         }
+    },
+    "arcade": {
+        id: "arcade",
+        titleIt: "Arcade (Pioggia) 🕹️",
+        titleEn: "Arcade (Rain) 🕹️",
+        icon: "🕹️",
+        defaultWpm: 15,
+        defaultWordCount: 0, // Illimitato
+        wpmConfigurable: true,
+        wordCountConfigurable: false,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: false,
+        generateWords: function(num, dicts) {
+            return []; // Gestito internamente da arcade_manager
+        }
     }
 };
 
