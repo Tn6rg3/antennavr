@@ -250,6 +250,17 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
             const nameSpan = document.createElement('span'); nameSpan.style.fontWeight = 'bold'; nameSpan.textContent = player.name; nameDiv.appendChild(nameSpan);
         }
 
+        // AGGIUNTA LIVELLO ACCANTO AL NOME
+        if (player.level) {
+            const lvSpan = document.createElement('span');
+            lvSpan.style.fontSize = '0.7em';
+            lvSpan.style.color = 'var(--champ-color)';
+            lvSpan.style.marginLeft = '5px';
+            lvSpan.style.fontWeight = 'bold';
+            lvSpan.textContent = `(${player.level})`;
+            nameDiv.appendChild(lvSpan);
+        }
+
         if (showWordCount && player.wordCount) {
             const wcSpan = document.createElement('span'); wcSpan.style.background = 'var(--hint-color)'; wcSpan.style.color = 'var(--bg-color)'; wcSpan.style.padding = '1px 4px'; wcSpan.style.borderRadius = '3px'; wcSpan.style.fontSize = '0.8em'; wcSpan.style.marginLeft = '4px'; wcSpan.textContent = player.wordCount + " str."; nameDiv.appendChild(wcSpan);
         }

@@ -325,6 +325,7 @@ function initGame() {
                 name: myName,
                 username: myPrivacy ? "" : tgUsername,
                 status: 'online',
+                level: window.userProgression?.level || 1, // Aggiunto livello qui
                 uid: firebase.auth().currentUser.uid, // Mappa l'UID di sessione
                 ts: firebase.database.ServerValue.TIMESTAMP,
                 lastActive: firebase.database.ServerValue.TIMESTAMP

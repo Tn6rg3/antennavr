@@ -263,6 +263,14 @@ window.renderOrUpdateUserListItem = function(userId, u) {
 
     leftSpan.appendChild(nameB);
 
+    // AGGIUNTA LIVELLO NELLA LISTA ONLINE
+    if (u.level) {
+        const lvSpan = document.createElement('span');
+        lvSpan.style.cssText = "font-size: 0.75em; color: var(--champ-color); font-weight: bold; margin-left: 5px;";
+        lvSpan.textContent = `(${u.level})`;
+        leftSpan.appendChild(lvSpan);
+    }
+
     const btn = document.createElement('button');
     btn.style.cssText = "width:auto; padding:4px 10px; font-size:0.8em; margin:0; flex-shrink:0;";
 

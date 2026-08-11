@@ -694,12 +694,25 @@ window.finishGame = function() {
                 let oldData = s.val();
                 let oldScore = oldData ? (Number(oldData.score) || 0) : 0;
                 let oldWpm = oldData ? (Number(oldData.wpm) || 0) : 0;
+                const myLevel = window.userProgression?.level || 1;
 
                 // Aggiorniamo se il punteggio è migliore, OPPURE se il punteggio è uguale ma la velocità è superiore
                 if (!oldData || totalScore > oldScore || (totalScore === oldScore && peakWpm > oldWpm)) {
-                    db.ref(dbPath).set({ name: myName, username: myPrivacy ? "" : tgUsername, score: totalScore, wpm: peakWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') });
+                    db.ref(dbPath).set({
+                        name: myName,
+                        username: myPrivacy ? "" : tgUsername,
+                        score: totalScore,
+                        wpm: peakWpm,
+                        level: myLevel,
+                        wordCount: requestedWordCount,
+                        date: new Date().toLocaleDateString('it-IT')
+                    });
                     window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
                 } else {
+                    // Anche se non è record, aggiorniamo il livello se è cambiato
+                    if (oldData && oldData.level !== myLevel) {
+                        db.ref(dbPath).update({ level: myLevel });
+                    }
                     window.showToast(currentLang === 'it' ? "Ottima partita! (Non hai superato il tuo record personale)" : "Good game! (Personal best not beaten)");
                 }
             });
