@@ -285,6 +285,9 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
             const wpmLabel = isArcade ? "Peak " : "";
             const wpmSpan = document.createElement('span'); wpmSpan.style.color = 'var(--champ-color)'; wpmSpan.style.fontWeight = 'bold'; wpmSpan.textContent = wpmLabel + player.wpm + " WPM"; dateDiv.appendChild(wpmSpan);
         }
+        if (isArcade && player.wave) {
+            const waveSpan = document.createElement('span'); waveSpan.style.color = 'var(--link-color)'; waveSpan.style.marginLeft = '5px'; waveSpan.style.fontWeight = 'bold'; waveSpan.textContent = `(Lvl. ${player.wave})`; dateDiv.appendChild(waveSpan);
+        }
 
         infoDiv.appendChild(nameDiv); infoDiv.appendChild(dateDiv);
         mainDiv.appendChild(medalDiv); mainDiv.appendChild(infoDiv);

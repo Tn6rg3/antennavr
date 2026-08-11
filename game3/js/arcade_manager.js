@@ -224,17 +224,23 @@ window.finishArcadeGame = function() {
 
     // Salvataggio record Arcade
     if (db && myId) {
+        const rpgLevel = window.userProgression?.level || 1;
         const recordData = {
             name: myName,
             username: myPrivacy ? "" : tgUsername,
             score: finalScore,
             wpm: finalWpm,
-            level: arcadeLevel,
+            level: rpgLevel,
+            wave: arcadeLevel, // Salviamo separatamente il livello arcade raggiunto
             date: new Date().toLocaleDateString('it-IT'),
             ts: firebase.database.ServerValue.TIMESTAMP
         };
         db.ref(`leaderboard/arcade/all/${myId}`).transaction(current => {
             if (!current || finalScore > (current.score || 0)) return recordData;
+            // Se non è record, aggiorniamo comunque il livello RPG se è cresciuto
+            if (current && rpgLevel > (current.level || 0)) {
+                current.level = rpgLevel;
+            }
             return current;
         });
     }
