@@ -695,8 +695,26 @@
 
 <!-- SCHERMATA REGOLE E PRIVACY -->
 <div id="privacyScreen" class="screen">
-    <div class="screen-content" id="regolamentoContainer" style="text-align: left; font-size: 0.9em; padding: 10px; margin-bottom: 0; background: var(--sec-bg-color); border-radius: 10px; border: 1px solid var(--hint-color);">
-        <p style="text-align:center; color:var(--hint-color);">Caricamento regolamento...</p>
+    <div class="screen-content">
+        <div id="regolamentoContainer" style="text-align: left; font-size: 0.9em; padding: 10px; margin-bottom: 10px; background: var(--sec-bg-color); border-radius: 10px; border: 1px solid var(--hint-color);">
+            <p style="text-align:center; color:var(--hint-color);">Caricamento regolamento...</p>
+        </div>
+
+        <!-- SEZIONE SEGNALAZIONE BUG (VISIBILE A TUTTI) -->
+        <div class="box-panel" style="border-color: var(--champ-color); margin-bottom: 15px;">
+            <h3 style="color: var(--champ-color); margin: 0 0 5px 0; font-size: 1em;">🐞 Segnalazione Bug</h3>
+            <textarea id="bugReportText" placeholder="Descrivi il problema o suggerimento..." style="width: 100%; height: 60px; padding: 8px; border-radius: 8px; border: 1px solid var(--hint-color); background: var(--bg-color); color: var(--text-color); font-family: inherit; resize: none; font-size: 0.9em;"></textarea>
+            <button id="btnSendBugReport" class="btn-success" style="margin-top: 8px; width: 100%; padding: 8px;">Invia allo Sviluppatore 🚀</button>
+        </div>
+
+        <!-- PANNELLO ADMIN (VISIBILE SOLO ALLO SVILUPPATORE) -->
+        <div id="adminBugPanel" class="box-panel" style="display:none; border-color: #d32f2f; background: rgba(211, 47, 47, 0.05); margin-bottom: 15px;">
+            <h3 style="color: #d32f2f; margin: 0 0 10px 0; font-size: 1em;">🛡️ Pannello Amministratore</h3>
+            <button id="btnReadAllBugs" class="btn-danger" style="width: 100%; margin-bottom: 10px; padding: 8px;">Leggi Segnalazioni 📜</button>
+            <div id="adminBugList" style="max-height: 200px; overflow-y: auto; font-size: 0.85em; text-align: left; background: var(--bg-color); border-radius: 8px; padding: 5px;">
+                <p style="text-align:center; color:var(--hint-color);">Nessun bug caricato.</p>
+            </div>
+        </div>
     </div>
     <div class="fixed-bottom-btns">
         <button id="deleteDataBtn" class="btn-danger" style="margin-bottom: 8px;">🗑️ Elimina Definitivamente i miei Dati</button>
