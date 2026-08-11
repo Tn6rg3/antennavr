@@ -174,7 +174,6 @@
                         <option value="multi" id="txt_opt_multi">Multi-Giocatore</option>
                         <option value="coop" id="txt_opt_coop">Collaborativo (Co-op) ⚔️</option>
                         <option value="single" id="txt_opt_single">Solo</option>
-                        <option value="arcade">Arcade (Pioggia) 🕹️</option>
                         <option value="tournament" id="txt_opt_trn">Torneo</option>
                     </select>
                 </div>
@@ -933,38 +932,6 @@
     </div>
 </div>
 
-<!-- AREA ARCADE -->
-<div id="arcadeArea" class="screen" style="background: linear-gradient(180deg, #0a0a1a 0%, #000 100%); overflow: hidden; position: relative;">
-    <div class="header-stats" style="z-index: 100; background: rgba(0,0,0,0.7); border-bottom: 1px solid #00e5ff;">
-        <div id="arcadeWpmDisplay" style="color: #00e5ff; font-weight: bold;">WPM: 20</div>
-        <div id="arcadeLevelDisplay" style="color: #ffeb3b; font-weight: bold;">LV: 1</div>
-        <div id="arcadeScoreDisplay" style="color: #fff;">Punti: 0</div>
-        <div id="arcadeLivesDisplay" style="letter-spacing: 2px;">❤️❤️❤️</div>
-    </div>
-
-    <!-- Contenitore Pioggia -->
-    <div id="arcadeFallContainer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></div>
-
-    <!-- Area Feedback (Esplosioni, ecc) -->
-    <div id="arcadeFeedback" style="position: absolute; top: 40%; left: 0; width: 100%; text-align: center; font-size: 2em; font-weight: bold; pointer-events: none; z-index: 50; opacity: 0; transition: all 0.3s;"></div>
-
-    <!-- OVERLAY LIVELLO SUPERATO -->
-    <div id="arcadeLevelUpOverlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:500; flex-direction:column; justify-content:center; align-items:center; text-align:center; animation: fadeIn 0.5s;">
-        <h1 style="color:#00e5ff; font-size:3em; margin:0; text-shadow:0 0 20px #00e5ff;">LIVELLO COMPLETATO!</h1>
-        <h2 id="arcadeNewLevelText" style="color:#fff; font-size:1.5em; margin:10px 0;">Livello 2</h2>
-        <div id="arcadeLevelBonus" style="color:#ffeb3b; font-size:1.2em; font-weight:bold; margin-top:20px; min-height:1.5em;"></div>
-        <div style="margin-top:30px; color:#00e5ff; font-size:0.9em; animation: pulse 1s infinite;">PREPARAZIONE PROSSIMA ONDATA...</div>
-    </div>
-
-    <!-- Input Fisso in Basso -->
-    <div style="position: absolute; bottom: 0; width: 100%; padding: 15px; box-sizing: border-box; background: rgba(0,0,0,0.8); z-index: 200;">
-        <div id="arcadeWordLengthInfo" style="text-align: center; font-size: 0.7em; color: #00e5ff; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">Prossima parola: 3 caratteri</div>
-        <input type="text" id="arcadeInput" placeholder="ASCOLTA E INTERCETTA..." autocomplete="off" autocapitalize="none"
-               style="width: 100%; padding: 15px; font-size: 1.2em; border: 2px solid #00e5ff; background: #000; color: #00e5ff; border-radius: 12px; text-align: center; box-shadow: 0 0 20px rgba(0, 229, 255, 0.3); outline: none;">
-        <button id="quitArcadeBtn" class="btn-danger" style="margin-top: 10px; padding: 8px; font-size: 0.8em; opacity: 0.6;">Esci</button>
-    </div>
-</div>
-
 <!-- AREA QUIZ -->
 <div id="quizArea" class="screen">
     <div class="header-stats">
@@ -1219,7 +1186,6 @@
             "js/quiz_manager.js",
             "js/br_manager.js",
             "js/coop_manager.js",
-            "js/arcade_manager.js",
             "js/course_manager.js",
             "js/course_ui.js",
             "js/game_core.js"
