@@ -325,9 +325,14 @@ function initGame() {
                 name: myName,
                 username: myPrivacy ? "" : tgUsername,
                 status: 'online',
+                uid: firebase.auth().currentUser.uid, // Mappa l'UID di sessione
                 ts: firebase.database.ServerValue.TIMESTAMP,
                 lastActive: firebase.database.ServerValue.TIMESTAMP
             });
+
+            // Crea anche una mappa inversa specifica per le regole di sicurezza
+            db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(myId);
+            db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).onDisconnect().remove();
         });
 
         // --- MONITORAGGIO INATTIVITÀ ---
