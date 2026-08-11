@@ -521,6 +521,7 @@ window.startCountdownSequence = function() {
 
     if (!isRejoining) {
         totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0; usedReplay = false;
+        peakWpm = currentWpm;
         sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
     }
     if (els.tableBody) els.tableBody.innerHTML = "";
@@ -673,7 +674,7 @@ window.finishGame = function() {
 
     if (roomCode) {
         const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-        myPlayerRef.update({ finished: true, score: totalScore, wpm: currentWpm, matchDetails: matchDetailsArray });
+        myPlayerRef.update({ finished: true, score: totalScore, wpm: peakWpm, matchDetails: matchDetailsArray });
         myPlayerRef.onDisconnect().cancel();
     }
 
@@ -692,8 +693,11 @@ window.finishGame = function() {
             db.ref(dbPath).once('value', s => {
                 let oldData = s.val();
                 let oldScore = oldData ? (Number(oldData.score) || 0) : 0;
-                if (!oldData || totalScore > oldScore) {
-                    db.ref(dbPath).set({ name: myName, username: myPrivacy ? "" : tgUsername, score: totalScore, wpm: currentWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') });
+                let oldWpm = oldData ? (Number(oldData.wpm) || 0) : 0;
+
+                // Aggiorniamo se il punteggio è migliore, OPPURE se il punteggio è uguale ma la velocità è superiore
+                if (!oldData || totalScore > oldScore || (totalScore === oldScore && peakWpm > oldWpm)) {
+                    db.ref(dbPath).set({ name: myName, username: myPrivacy ? "" : tgUsername, score: totalScore, wpm: peakWpm, wordCount: requestedWordCount, date: new Date().toLocaleDateString('it-IT') });
                     window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
                 } else {
                     window.showToast(currentLang === 'it' ? "Ottima partita! (Non hai superato il tuo record personale)" : "Good game! (Personal best not beaten)");
@@ -703,7 +707,7 @@ window.finishGame = function() {
     }
 
     if (matchDetailsArray.length > 0) {
-        db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: currentMode, score: totalScore, wpm: currentWpm, type: isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
+        db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: currentMode, score: totalScore, wpm: peakWpm, type: isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
         if (typeof window.updateActivity === 'function') window.updateActivity(totalScore > 0);
 
         // --- ASSEGNAZIONE XP FINALE (RPG) ---
@@ -1139,6 +1143,7 @@ window.handleWordSubmission = function(userWord) {
     if (!isFixedSpeed && currentMode !== 'chars') {
         if (levDist === 0 && !usedReplay) {
             currentWpm += 2;
+            if (currentWpm > peakWpm) peakWpm = currentWpm;
             window.addXP?.(10, "Correct Word");
             window.updateMissionProgress?.('count', 1);
             window.updateMissionProgress?.('wpm_min', currentWpm);
@@ -1158,6 +1163,7 @@ window.handleWordSubmission = function(userWord) {
             currentStreak = 0;
         }
         currentWpm = Math.max(10, currentWpm);
+        if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
     }
     totalScore += points;
     matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm, ms: reactionMs });

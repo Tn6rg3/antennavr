@@ -128,7 +128,8 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         db.ref(`leaderboard/daily_challenge/${todayStr}`).orderByChild('score').limitToLast(50).once('value', snapshot => {
             let players = [];
             snapshot.forEach(child => { if (child.val()) players.push(child.val()); });
-            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+            // Ordinamento: Punteggio decrescente, poi WPM decrescente
+            players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
             window.renderPlayersListHTML(players, els.leaderboardContainer, false);
         });
         return;
@@ -204,7 +205,8 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
                 }
             }
         });
-        players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+        // Ordinamento: Punteggio decrescente, poi WPM decrescente
+        players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
         window.renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, true);
     });
 };

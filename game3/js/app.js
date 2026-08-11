@@ -64,7 +64,7 @@ let isChallenging = false, isRejoining = false, currentInviterId = null;
 let roomCode = "", roomHostId = null, activeTrnId = null;
 let lastPlayerCount = 0, gameStartPlayerCount = 0;
 let gameRunning = false, inputActive = false, audioCtx = null;
-let gameWords = [], wordIndex = 0, currentWpm = 20, baseWpm = 20, currentTone = 600;
+let gameWords = [], wordIndex = 0, currentWpm = 20, baseWpm = 20, currentTone = 600, peakWpm = 0;
 let totalScore = 0, currentStreak = 0, usedReplay = false, matchDetailsArray = [];
 let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
 let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
