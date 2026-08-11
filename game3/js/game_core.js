@@ -204,9 +204,12 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     // Se non è un'uscita forzata/esplicita e siamo in un contesto particolare (es. Torneo), restiamo lì
     if (currentCode && currentCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
 
-    window.showScreen(targetScreen);
+    // Se stiamo navigando verso la classifica (lbManualRouting attivo), non cambiamo schermata qui
+    if (!window.lbManualRouting) {
+        window.showScreen(targetScreen);
+    }
 
-    if (targetScreen === 'setupScreen') {
+    if (targetScreen === 'setupScreen' && !window.lbManualRouting) {
         if (typeof window.listenToRooms === 'function') window.listenToRooms();
     }
 };
@@ -744,6 +747,11 @@ window.finishGame = function() {
         const savedRoomCode = roomCode;
 
         els.quitGameBtn.onclick = function() {
+            const modeToRoute = savedMode;
+            const wcToRoute = savedWordCount;
+            const singleToRoute = savedSinglePlayer;
+            const codeToRoute = savedRoomCode;
+
             // Pulizia UI e ripristino bottone originale
             els.quitGameBtn.textContent = currentLang === 'it' ? "Abbandona" : "Quit";
             els.quitGameBtn.classList.add('btn-danger');
@@ -755,8 +763,11 @@ window.finishGame = function() {
                 }
             };
 
-            // Eseguiamo la navigazione usando i dati salvati
-            window.finishGameNavigation(savedMode, savedWordCount, savedSinglePlayer, savedRoomCode);
+            // Usciamo dalla stanza ma SENZA cambiare schermata (restiamo in transizione)
+            window.exitRoomCleanly(false, false);
+
+            // Eseguiamo la navigazione forzata alla classifica corretta
+            window.finishGameNavigation(modeToRoute, wcToRoute, singleToRoute, codeToRoute);
         };
     }
 
