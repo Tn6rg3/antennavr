@@ -541,6 +541,8 @@ window.setupChat = function(ref, containerId, limit = 50) {
         delete listeners.activeChat[containerId];
     }
 
+    let initialLoad = true, lastTs = Date.now();
+
     const callback = snap => {
         const container = els[containerId];
         if (!container) return;
@@ -548,9 +550,14 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
         container.innerHTML = '';
         const messages = [];
+        let maxTs = lastTs;
+
         snap.forEach(child => {
             const m = child.val();
-            if (m && typeof m === 'object') messages.push({ id: child.key, ...m });
+            if (m && typeof m === 'object') {
+                messages.push({ id: child.key, ...m });
+                if (m.ts > maxTs) maxTs = m.ts;
+            }
         });
 
         if (messages.length === 0) {
@@ -561,11 +568,14 @@ window.setupChat = function(ref, containerId, limit = 50) {
         messages.forEach(m => {
             const div = document.createElement('div');
             div.className = 'chat-msg';
-            if (m.name === myName) div.classList.add('chat-msg-own');
+            const isOwn = (m.name === myName);
+            if (isOwn) div.classList.add('chat-msg-own');
+            div.style.marginBottom = '6px';
 
-            const time = new Date(m.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
             const header = document.createElement('div');
             header.style.cssText = "display:flex; justify-content:space-between; font-size:0.75em; opacity:0.7; margin-bottom:2px;";
+
+            const time = new Date(m.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
             const nameSpan = document.createElement('b');
             nameSpan.textContent = m.name;
             if (m.username) {
@@ -573,23 +583,81 @@ window.setupChat = function(ref, containerId, limit = 50) {
                 nameSpan.style.cursor = 'pointer';
                 nameSpan.onclick = () => window.openTelegramProfile(m.username);
             }
+
             const timeSpan = document.createElement('span');
             timeSpan.textContent = time;
+
             header.appendChild(nameSpan);
             header.appendChild(timeSpan);
-            const textDiv = document.createElement('div');
-            textDiv.style.wordBreak = 'break-word';
-            textDiv.textContent = m.text;
             div.appendChild(header);
-            div.appendChild(textDiv);
+
+            const textSpan = document.createElement('div');
+            textSpan.style.wordBreak = 'break-word';
+
+            // OTTIMIZZAZIONE: Verifica diretta su localStorage per evitare problemi di scope
+            const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
+
+            if (isCwActive) {
+                textSpan.className = 'cw-spoiler';
+                textSpan.textContent = m.text;
+                textSpan.title = "Clicca per svelare il testo";
+                textSpan.onclick = function() {
+                    this.classList.toggle('revealed');
+                };
+            } else {
+                textSpan.textContent = m.text;
+            }
+            div.appendChild(textSpan);
             container.appendChild(div);
+
+            // Gestione notifiche e audio per nuovi messaggi
+            if (!initialLoad && m.ts > lastTs) {
+                window.handleNewChatMessage(ref.key, m, child.key);
+            }
         });
+
+        lastTs = maxTs;
         if (shouldScroll) container.scrollTop = container.scrollHeight;
+        initialLoad = false;
     };
 
     const finalRef = limit ? ref.limitToLast(limit) : ref;
     finalRef.on('value', callback);
     listeners.activeChat[containerId] = { ref: finalRef, callback: callback };
+};
+
+window.handleNewChatMessage = function(refKey, msg, msgKey) {
+    const isOwn = (msg.name === myName);
+    const isGlobal = (refKey === 'globalChat');
+    const isPlayingBR = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
+
+    // OTTIMIZZAZIONE: Verifica diretta su localStorage per evitare problemi di scope
+    const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
+
+    // Notifica visiva (Toast): Solo per messaggi ALTRUI
+    const shouldNotifyUI = !isOwn && (isGlobal
+        ? (!isGlobalChatMuted && !gameRunning && !isPlayingBR && (!isChatDrawerOpen || activeChatContext !== 'global'))
+        : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId)));
+
+    if (isCwActive) {
+        if (shouldNotifyUI) {
+            const prefix = isGlobal ? "🌎" : "💬";
+            showToast(`${prefix} ${msg.name}: [📻 Messaggio CW...]`);
+        }
+
+        // AUDIO CW: Suona SEMPRE per i messaggi altrui se siamo fuori partita
+        // NOTA: I propri messaggi NON suonano per evitare loop fastidiosi
+        if (!isOwn && !gameRunning && !isPlayingBR) {
+            if (msgKey !== window.lastPlayedCwMsgKey) {
+                window.lastPlayedCwMsgKey = msgKey;
+                window.enqueueChatCwAudio(msg.text);
+            }
+        }
+    } else if (shouldNotifyUI) {
+        const prefix = isGlobal ? "🌎" : "💬";
+        showToast(`${prefix} ${msg.name}: ${msg.text.substring(0,25)}...`);
+        if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound();
+    }
 };
 
 // --- LISTA STANZE E BACHECA SFIDE (SENZA DUPLICATI) ---
