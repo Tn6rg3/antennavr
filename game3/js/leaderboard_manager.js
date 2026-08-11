@@ -18,7 +18,8 @@ window.lbGroups = {
         { val: 'quiz_single', it: '👤 Allenamento Quiz', en: '👤 Quiz Practice' }
     ],
     special: [
-        { val: 'cwfreak', it: '🎙️ Nominativi (CW Freak)', en: '🎙️ Callsigns (CW Freak)' }
+        { val: 'cwfreak', it: '🎙️ Nominativi (CW Freak)', en: '🎙️ Callsigns (CW Freak)' },
+        { val: 'arcade', it: '🕹️ Intercettazione Arcade', en: '🕹️ Arcade Interception' }
     ]
 };
 
@@ -70,6 +71,8 @@ window.showLeaderboardTab = function(modeValue) {
         window.fetchAndRenderGlobalLeaderboard('tournaments', null);
     } else if (modeValue === 'cwfreak') {
         window.fetchAndRenderGlobalLeaderboard('callsign', null);
+    } else if (modeValue === 'arcade') {
+        window.fetchAndRenderGlobalLeaderboard('arcade', null);
     } else {
         // Gestione dinamica Multi/Single per Parole, Caratteri, Quiz, Ping Pong
         if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
@@ -184,6 +187,17 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
             snapshot.forEach(child => { if (child.val()) teams.push(child.val()); });
             teams.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
             window.renderPlayersListHTML(teams, els.leaderboardContainer, false, true);
+        });
+        return;
+    }
+
+    // 4.1 ARCADE
+    if (tabType === 'arcade') {
+        db.ref('leaderboard/arcade/global').orderByChild('score').limitToLast(50).once('value', snapshot => {
+            let players = [];
+            snapshot.forEach(child => { if (child.val()) players.push(child.val()); });
+            players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
+            window.renderPlayersListHTML(players, els.leaderboardContainer, false);
         });
         return;
     }

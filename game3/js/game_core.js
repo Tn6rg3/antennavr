@@ -572,6 +572,10 @@ window.startCountdownSequence = function() {
                 if (els.coopArea) els.coopArea.style.display = 'none';
                 if (els.tableWrapper) els.tableWrapper.style.display = 'block';
 
+                if (els.gameTypeInput && els.gameTypeInput.value === 'arcade') {
+                    if (typeof window.initArcadeMode === 'function') return window.initArcadeMode();
+                }
+
                 if (currentMode === 'conquest') {
                     if (typeof window.startCoopSequence === 'function') return window.startCoopSequence();
                 }
