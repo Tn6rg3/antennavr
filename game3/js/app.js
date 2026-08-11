@@ -384,6 +384,7 @@ function initGame() {
         window.listenToInvites?.();
         window.listenToInviteAccepted?.();
         window.initBattleRoyaleScheduler?.();
+        window.initGlobalNotificationListener?.(); // AVVIO LISTENER BACKGROUND
         window.loadRegolamento();
         window.initProgression?.();
         window.initCourseManager?.();

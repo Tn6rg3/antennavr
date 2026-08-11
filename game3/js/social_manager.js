@@ -76,18 +76,11 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
     if (!listeners.activeChat) listeners.activeChat = {};
 
-    // Evitiamo di ri-agganciare lo stesso listener se stiamo già ascoltando lo stesso ref
-    if (listeners.activeChat[containerId] && listeners.activeChat[containerId].refPath === ref.toString()) {
-        return;
-    }
-
-    // Se stiamo cambiando ref (es. da global a room), spegniamo il vecchio
+    // Spegniamo il listener precedente per questo specifico container UI
     if (listeners.activeChat[containerId]) {
         listeners.activeChat[containerId].ref.off('value', listeners.activeChat[containerId].callback);
         delete listeners.activeChat[containerId];
     }
-
-    let initialLoad = true, lastTs = Date.now();
 
     const callback = snap => {
         const container = els[containerId];
@@ -96,13 +89,11 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
         container.innerHTML = '';
         const messages = [];
-        let maxTs = lastTs;
 
         snap.forEach(child => {
             const m = child.val();
             if (m && typeof m === 'object') {
                 messages.push({ id: child.key, ...m });
-                if (m.ts > maxTs) maxTs = m.ts;
             }
         });
 
@@ -114,8 +105,7 @@ window.setupChat = function(ref, containerId, limit = 50) {
         messages.forEach(m => {
             const div = document.createElement('div');
             div.className = 'chat-msg';
-            const isOwn = (m.name === myName);
-            if (isOwn) div.classList.add('chat-msg-own');
+            if (m.name === myName) div.classList.add('chat-msg-own');
             div.style.marginBottom = '6px';
 
             const header = document.createElement('div');
@@ -141,67 +131,103 @@ window.setupChat = function(ref, containerId, limit = 50) {
             textSpan.style.wordBreak = 'break-word';
 
             const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
-
             if (isCwActive) {
                 textSpan.className = 'cw-spoiler';
                 textSpan.textContent = m.text;
                 textSpan.title = "Clicca per svelare il testo";
-                textSpan.onclick = function() {
-                    this.classList.toggle('revealed');
-                };
+                textSpan.onclick = function() { this.classList.toggle('revealed'); };
             } else {
                 textSpan.textContent = m.text;
             }
             div.appendChild(textSpan);
             container.appendChild(div);
-
-            // Gestione notifiche e audio per nuovi messaggi
-            if (!initialLoad && m.ts > lastTs) {
-                window.handleNewChatMessage(ref.key, m, m.id || child.key);
-            }
         });
 
-        lastTs = maxTs;
         if (shouldScroll) container.scrollTop = container.scrollHeight;
-        initialLoad = false;
     };
 
     const finalRef = limit ? ref.limitToLast(limit) : ref;
     finalRef.on('value', callback);
-    listeners.activeChat[containerId] = { ref: finalRef, callback: callback, refPath: ref.toString() };
+    listeners.activeChat[containerId] = { ref: finalRef, callback: callback };
+};
+
+// --- GESTORE NOTIFICHE GLOBALE (SCOLLEGATO DALLA UI) ---
+window.initGlobalNotificationListener = function() {
+    if (listeners.globalChatNotif) return;
+
+    console.log("Chat: Initializing Global Background Listener...");
+    const globalRef = db.ref('globalChat').limitToLast(1);
+    let initialLoad = true;
+    let lastProcessedTs = Date.now();
+
+    listeners.globalChatNotif = globalRef.on('child_added', snap => {
+        const m = snap.val();
+        if (!m || !m.ts) return;
+
+        // Se è un caricamento iniziale o è un mio messaggio, o è vecchio, ignoriamo
+        if (initialLoad || m.name === myName || m.ts <= lastProcessedTs) {
+            if (m.ts > lastProcessedTs) lastProcessedTs = m.ts;
+            initialLoad = false;
+            return;
+        }
+
+        lastProcessedTs = m.ts;
+        window.handleNewChatMessage('globalChat', m, snap.key);
+    });
+
+    // Listener per la stanza (se presente)
+    setInterval(() => {
+        if (roomCode && !listeners.roomChatNotif) {
+            console.log("Chat: Adding Background Listener for Room:", roomCode);
+            const roomRef = db.ref(`rooms/${roomCode}/chat`).limitToLast(1);
+            let roomInitialLoad = true;
+            let roomLastTs = Date.now();
+
+            listeners.roomChatNotif = roomRef.on('child_added', rSnap => {
+                const rm = rSnap.val();
+                if (!rm || !rm.ts) return;
+                if (roomInitialLoad || rm.name === myName || rm.ts <= roomLastTs) {
+                    if (rm.ts > roomLastTs) roomLastTs = rm.ts;
+                    roomInitialLoad = false;
+                    return;
+                }
+                roomLastTs = rm.ts;
+                window.handleNewChatMessage(roomCode, rm, rSnap.key);
+            });
+        } else if (!roomCode && listeners.roomChatNotif) {
+            // Pulizia se usciamo dalla stanza
+            db.ref().child('rooms').off(); // Spegnimento generico se necessario
+            listeners.roomChatNotif = null;
+        }
+    }, 5000);
 };
 
 window.handleNewChatMessage = function(refKey, msg, msgKey) {
-    const isOwn = (msg.name === myName);
     const isGlobal = (refKey === 'globalChat');
     const isPlayingBR = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
-
-    // OTTIMIZZAZIONE: Verifica diretta su localStorage per evitare problemi di scope
     const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
 
-    // Notifica visiva (Toast): Solo per messaggi ALTRUI
-    const shouldNotifyUI = !isOwn && (isGlobal
+    // 1. Notifica Visiva (Toast)
+    const shouldNotifyUI = (isGlobal
         ? (!isGlobalChatMuted && !gameRunning && !isPlayingBR && (!isChatDrawerOpen || activeChatContext !== 'global'))
         : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId)));
 
-    if (isCwActive) {
-        if (shouldNotifyUI) {
-            const prefix = isGlobal ? "🌎" : "💬";
-            showToast(`${prefix} ${msg.name}: [📻 Messaggio CW...]`);
-        }
-
-        // AUDIO CW: Suona SEMPRE per i messaggi altrui se siamo fuori partita
-        // NOTA: I propri messaggi NON suonano per evitare loop fastidiosi
-        if (!isOwn && !gameRunning && !isPlayingBR) {
-            if (msgKey !== window.lastPlayedCwMsgKey) {
-                window.lastPlayedCwMsgKey = msgKey;
-                window.enqueueChatCwAudio(msg.text);
-            }
-        }
-    } else if (shouldNotifyUI) {
+    if (shouldNotifyUI) {
         const prefix = isGlobal ? "🌎" : "💬";
-        showToast(`${prefix} ${msg.name}: ${msg.text.substring(0,25)}...`);
-        if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound();
+        if (isCwActive) {
+            showToast(`${prefix} ${msg.name}: [📻 Messaggio CW...]`);
+        } else {
+            showToast(`${prefix} ${msg.name}: ${msg.text.substring(0,25)}...`);
+            if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound();
+        }
+    }
+
+    // 2. Audio CW (Sempre se ON, tranne in partita)
+    if (isCwActive && !gameRunning && !isPlayingBR) {
+        if (msgKey !== window.lastPlayedCwMsgKey) {
+            window.lastPlayedCwMsgKey = msgKey;
+            window.enqueueChatCwAudio(msg.text);
+        }
     }
 };
 
@@ -537,18 +563,11 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
     if (!listeners.activeChat) listeners.activeChat = {};
 
-    // Evitiamo di ri-agganciare lo stesso listener se stiamo già ascoltando lo stesso ref
-    if (listeners.activeChat[containerId] && listeners.activeChat[containerId].refPath === ref.toString()) {
-        return;
-    }
-
-    // Se stiamo cambiando ref (es. da global a room), spegniamo il vecchio
+    // Spegniamo il listener precedente per questo specifico container UI
     if (listeners.activeChat[containerId]) {
         listeners.activeChat[containerId].ref.off('value', listeners.activeChat[containerId].callback);
         delete listeners.activeChat[containerId];
     }
-
-    let initialLoad = true, lastTs = Date.now();
 
     const callback = snap => {
         const container = els[containerId];
@@ -557,13 +576,11 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
         container.innerHTML = '';
         const messages = [];
-        let maxTs = lastTs;
 
         snap.forEach(child => {
             const m = child.val();
             if (m && typeof m === 'object') {
                 messages.push({ id: child.key, ...m });
-                if (m.ts > maxTs) maxTs = m.ts;
             }
         });
 
@@ -575,8 +592,7 @@ window.setupChat = function(ref, containerId, limit = 50) {
         messages.forEach(m => {
             const div = document.createElement('div');
             div.className = 'chat-msg';
-            const isOwn = (m.name === myName);
-            if (isOwn) div.classList.add('chat-msg-own');
+            if (m.name === myName) div.classList.add('chat-msg-own');
             div.style.marginBottom = '6px';
 
             const header = document.createElement('div');
@@ -602,67 +618,103 @@ window.setupChat = function(ref, containerId, limit = 50) {
             textSpan.style.wordBreak = 'break-word';
 
             const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
-
             if (isCwActive) {
                 textSpan.className = 'cw-spoiler';
                 textSpan.textContent = m.text;
                 textSpan.title = "Clicca per svelare il testo";
-                textSpan.onclick = function() {
-                    this.classList.toggle('revealed');
-                };
+                textSpan.onclick = function() { this.classList.toggle('revealed'); };
             } else {
                 textSpan.textContent = m.text;
             }
             div.appendChild(textSpan);
             container.appendChild(div);
-
-            // Gestione notifiche e audio per nuovi messaggi
-            if (!initialLoad && m.ts > lastTs) {
-                window.handleNewChatMessage(ref.key, m, m.id || child.key);
-            }
         });
 
-        lastTs = maxTs;
         if (shouldScroll) container.scrollTop = container.scrollHeight;
-        initialLoad = false;
     };
 
     const finalRef = limit ? ref.limitToLast(limit) : ref;
     finalRef.on('value', callback);
-    listeners.activeChat[containerId] = { ref: finalRef, callback: callback, refPath: ref.toString() };
+    listeners.activeChat[containerId] = { ref: finalRef, callback: callback };
+};
+
+// --- GESTORE NOTIFICHE GLOBALE (SCOLLEGATO DALLA UI) ---
+window.initGlobalNotificationListener = function() {
+    if (listeners.globalChatNotif) return;
+
+    console.log("Chat: Initializing Global Background Listener...");
+    const globalRef = db.ref('globalChat').limitToLast(1);
+    let initialLoad = true;
+    let lastProcessedTs = Date.now();
+
+    listeners.globalChatNotif = globalRef.on('child_added', snap => {
+        const m = snap.val();
+        if (!m || !m.ts) return;
+
+        // Se è un caricamento iniziale o è un mio messaggio, o è vecchio, ignoriamo
+        if (initialLoad || m.name === myName || m.ts <= lastProcessedTs) {
+            if (m.ts > lastProcessedTs) lastProcessedTs = m.ts;
+            initialLoad = false;
+            return;
+        }
+
+        lastProcessedTs = m.ts;
+        window.handleNewChatMessage('globalChat', m, snap.key);
+    });
+
+    // Listener per la stanza (se presente)
+    setInterval(() => {
+        if (roomCode && !listeners.roomChatNotif) {
+            console.log("Chat: Adding Background Listener for Room:", roomCode);
+            const roomRef = db.ref(`rooms/${roomCode}/chat`).limitToLast(1);
+            let roomInitialLoad = true;
+            let roomLastTs = Date.now();
+
+            listeners.roomChatNotif = roomRef.on('child_added', rSnap => {
+                const rm = rSnap.val();
+                if (!rm || !rm.ts) return;
+                if (roomInitialLoad || rm.name === myName || rm.ts <= roomLastTs) {
+                    if (rm.ts > roomLastTs) roomLastTs = rm.ts;
+                    roomInitialLoad = false;
+                    return;
+                }
+                roomLastTs = rm.ts;
+                window.handleNewChatMessage(roomCode, rm, rSnap.key);
+            });
+        } else if (!roomCode && listeners.roomChatNotif) {
+            // Pulizia se usciamo dalla stanza
+            db.ref().child('rooms').off(); // Spegnimento generico se necessario
+            listeners.roomChatNotif = null;
+        }
+    }, 5000);
 };
 
 window.handleNewChatMessage = function(refKey, msg, msgKey) {
-    const isOwn = (msg.name === myName);
     const isGlobal = (refKey === 'globalChat');
     const isPlayingBR = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
-
-    // OTTIMIZZAZIONE: Verifica diretta su localStorage per evitare problemi di scope
     const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
 
-    // Notifica visiva (Toast): Solo per messaggi ALTRUI
-    const shouldNotifyUI = !isOwn && (isGlobal
+    // 1. Notifica Visiva (Toast)
+    const shouldNotifyUI = (isGlobal
         ? (!isGlobalChatMuted && !gameRunning && !isPlayingBR && (!isChatDrawerOpen || activeChatContext !== 'global'))
         : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId)));
 
-    if (isCwActive) {
-        if (shouldNotifyUI) {
-            const prefix = isGlobal ? "🌎" : "💬";
-            showToast(`${prefix} ${msg.name}: [📻 Messaggio CW...]`);
-        }
-
-        // AUDIO CW: Suona SEMPRE per i messaggi altrui se siamo fuori partita
-        // NOTA: I propri messaggi NON suonano per evitare loop fastidiosi
-        if (!isOwn && !gameRunning && !isPlayingBR) {
-            if (msgKey !== window.lastPlayedCwMsgKey) {
-                window.lastPlayedCwMsgKey = msgKey;
-                window.enqueueChatCwAudio(msg.text);
-            }
-        }
-    } else if (shouldNotifyUI) {
+    if (shouldNotifyUI) {
         const prefix = isGlobal ? "🌎" : "💬";
-        showToast(`${prefix} ${msg.name}: ${msg.text.substring(0,25)}...`);
-        if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound();
+        if (isCwActive) {
+            showToast(`${prefix} ${msg.name}: [📻 Messaggio CW...]`);
+        } else {
+            showToast(`${prefix} ${msg.name}: ${msg.text.substring(0,25)}...`);
+            if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound();
+        }
+    }
+
+    // 2. Audio CW (Sempre se ON, tranne in partita)
+    if (isCwActive && !gameRunning && !isPlayingBR) {
+        if (msgKey !== window.lastPlayedCwMsgKey) {
+            window.lastPlayedCwMsgKey = msgKey;
+            window.enqueueChatCwAudio(msg.text);
+        }
     }
 };
 
