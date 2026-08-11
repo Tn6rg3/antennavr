@@ -309,11 +309,41 @@ window.openMatchDetails = function(matchKey) {
     if (h3) h3.textContent = `Dettagli Match - ${match.mode.toUpperCase()}`;
     (match.details || []).forEach(row => {
         const tr = document.createElement('tr');
-        let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
+        const isCorrect = (row.real === row.typed);
+        let color = row.points > 0 ? "#4caf50" : (!isCorrect ? "#d32f2f" : "#999999");
+
         const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || '-';
-        const tdReal = document.createElement('td'); const bReal = document.createElement('b'); if (typeof renderDiffSecure === 'function') renderDiffSecure(bReal, row.real, row.typed || ''); else bReal.textContent = row.real; tdReal.appendChild(bReal);
-        const tdPoints = document.createElement('td'); tdPoints.style.color = color; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = row.points;
-        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); els.matchDetailsBody.appendChild(tr);
+        const tdReal = document.createElement('td');
+        if (typeof window.renderDiffSecure === 'function') {
+            window.renderDiffSecure(tdReal, row.real, row.typed || '');
+        } else {
+            const bReal = document.createElement('b'); bReal.textContent = row.real; tdReal.appendChild(bReal);
+        }
+
+        const tdActions = document.createElement('td');
+        tdActions.style.textAlign = 'center';
+
+        const ptsSpan = document.createElement('span');
+        ptsSpan.style.color = color;
+        ptsSpan.style.fontWeight = 'bold';
+        ptsSpan.style.display = 'block';
+        ptsSpan.textContent = row.points;
+        tdActions.appendChild(ptsSpan);
+
+        if (!isCorrect) {
+            const replayBtn = document.createElement('button');
+            replayBtn.className = 'action-btn-small btn-secondary';
+            replayBtn.style.padding = '2px 6px';
+            replayBtn.style.marginTop = '2px';
+            replayBtn.style.width = 'auto';
+            replayBtn.innerHTML = '🔊';
+            const replayWpm = row.wpm || match.wpm || 20;
+            replayBtn.onclick = () => window.playMorseAudio(row.real, replayWpm, true);
+            tdActions.appendChild(replayBtn);
+        }
+
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdActions);
+        els.matchDetailsBody.appendChild(tr);
     });
     els.matchDetailsModal.style.display = 'flex';
 };

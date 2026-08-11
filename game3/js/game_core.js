@@ -731,6 +731,34 @@ window.finishGame = function() {
         }
     }
 
+    // --- MODIFICA: RESTA NELLA SCHERMATA GIOCO PER REVISIONE ---
+    if (els.quitGameBtn) {
+        els.quitGameBtn.textContent = currentLang === 'it' ? "Vai alla Classifica" : "Go to Leaderboard";
+        els.quitGameBtn.classList.remove('btn-danger');
+        els.quitGameBtn.classList.add('btn-success');
+        els.quitGameBtn.onclick = function() {
+            // Ripristiniamo il comportamento originale e andiamo alla classifica
+            els.quitGameBtn.textContent = currentLang === 'it' ? "Abbandona" : "Quit";
+            els.quitGameBtn.classList.add('btn-danger');
+            els.quitGameBtn.classList.remove('btn-success');
+            els.quitGameBtn.onclick = function() {
+                if (confirm("Vuoi abbandonare la partita?")) {
+                    gameRunning = false;
+                    window.exitRoomCleanly(false, true);
+                }
+            };
+
+            finishGameNavigation();
+        };
+    }
+
+    if (els.gameInputArea) els.gameInputArea.style.display = 'none';
+    if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<b style="color:var(--champ-color)">FINITO!</b> PT: ${totalScore}`;
+};
+
+function finishGameNavigation() {
+    window.showScreen('leaderboardScreen');
+
     if (currentMode === 'daily_challenge') {
         let todayStr = new Date().toISOString().split('T')[0];
         localStorage.setItem(STORAGE_DAILY_SHOWN, todayStr);
@@ -744,7 +772,7 @@ window.finishGame = function() {
     else if (isSinglePlayer && currentMode === 'chars') { activeTab = "chars_single"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabGlobalCharsSingleBtn'); }
     else if (isSinglePlayer) { activeTab = "std_single"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabGlobalStandardSingleBtn'); }
     else { activeTab = "room"; if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn'); if (typeof window.listenToRoomLeaderboard === 'function') window.listenToRoomLeaderboard(); }
-};
+}
 
 window.getLevenshteinDistance = function(a, b) {
     const matrix = [];
@@ -760,11 +788,18 @@ window.getLevenshteinDistance = function(a, b) {
 };
 
 window.renderDiffSecure = function(container, real, typed) {
-    for (let i = 0; i < Math.max(real.length, typed.length); i++) {
-        if (!real[i]) continue;
+    if (!real) return;
+    const r = real.toUpperCase();
+    const t = (typed || "").toUpperCase();
+    for (let i = 0; i < Math.max(r.length, t.length); i++) {
+        if (!r[i]) continue; // Se la parola reale è finita, ignoriamo extra dell'utente qui (mostriamo solo la correzione)
         const span = document.createElement('span');
-        if (!typed[i] || typed[i] !== real[i]) span.style.color = "#d32f2f";
-        span.textContent = real[i];
+        if (!t[i] || t[i] !== r[i]) {
+            span.style.color = "#d32f2f";
+            span.style.fontWeight = "bold";
+            span.style.textDecoration = "underline";
+        }
+        span.textContent = r[i];
         container.appendChild(span);
     }
 };
@@ -847,11 +882,28 @@ window.handleWordSubmission = function(userWord) {
             }
             tdReal.appendChild(span);
         }
-        const tdPoints = document.createElement('td');
-        tdPoints.textContent = isCorrect ? "OK" : "ERR";
-        tdPoints.style.color = isCorrect ? "#4caf50" : "#d32f2f";
-        tdPoints.style.fontWeight = "bold";
-        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
+        const tdActions = document.createElement('td');
+        tdActions.style.textAlign = 'center';
+
+        const ptsSpan = document.createElement('span');
+        ptsSpan.textContent = isCorrect ? "OK" : "ERR";
+        ptsSpan.style.color = isCorrect ? "#4caf50" : "#d32f2f";
+        ptsSpan.style.fontWeight = "bold";
+        ptsSpan.style.display = 'block';
+        tdActions.appendChild(ptsSpan);
+
+        if (!isCorrect) {
+            const replayBtn = document.createElement('button');
+            replayBtn.className = 'action-btn-small btn-secondary';
+            replayBtn.style.padding = '2px 6px';
+            replayBtn.style.marginTop = '2px';
+            replayBtn.style.width = 'auto';
+            replayBtn.innerHTML = '🔊';
+            replayBtn.onclick = () => window.playMorseAudio(currentWord, currentWpm, true);
+            tdActions.appendChild(replayBtn);
+        }
+
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdActions);
         if (els.tableBody) {
             els.tableBody.appendChild(tr);
             els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
@@ -1011,13 +1063,33 @@ window.handleWordSubmission = function(userWord) {
 
     if (currentMode !== 'pingpong') {
         const tr = document.createElement('tr');
-        const tdTyped = document.createElement('td'); tdTyped.textContent = userWord;
-        const tdReal = document.createElement('td'); const bReal = document.createElement('b'); bReal.textContent = currentWord; tdReal.appendChild(bReal);
-        const tdPoints = document.createElement('td');
-        tdPoints.style.color = scoreColor;
-        tdPoints.style.fontWeight = 'bold';
-        tdPoints.textContent = currentMode === 'chars' ? points + " (" + reactionMs + "ms)" : (usedReplay ? '0 (Replay)' : (points > 0 ? "+"+points : points));
-        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
+        const tdTyped = document.createElement('td'); tdTyped.textContent = userWord || "-";
+
+        const tdReal = document.createElement('td');
+        window.renderDiffSecure(tdReal, currentWord, userWord);
+
+        const tdActions = document.createElement('td');
+        tdActions.style.textAlign = 'center';
+
+        const ptsSpan = document.createElement('span');
+        ptsSpan.style.color = scoreColor;
+        ptsSpan.style.fontWeight = 'bold';
+        ptsSpan.style.display = 'block';
+        ptsSpan.textContent = currentMode === 'chars' ? points : (usedReplay ? '0' : (points > 0 ? "+"+points : points));
+        tdActions.appendChild(ptsSpan);
+
+        if (levDist > 0) {
+            const replayBtn = document.createElement('button');
+            replayBtn.className = 'action-btn-small btn-secondary';
+            replayBtn.style.padding = '2px 6px';
+            replayBtn.style.marginTop = '2px';
+            replayBtn.style.width = 'auto';
+            replayBtn.innerHTML = '🔊';
+            replayBtn.onclick = () => window.playMorseAudio(currentWord, currentWpm, true);
+            tdActions.appendChild(replayBtn);
+        }
+
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdActions);
         if (els.tableBody) {
             els.tableBody.appendChild(tr);
             els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
@@ -1058,8 +1130,28 @@ window.setupPingPongListener = function() {
             const tr = document.createElement('tr');
             const tdTyped = document.createElement('td'); tdTyped.textContent = ppData.lastGuess.typed || '';
             const tdReal = document.createElement('td'); window.renderDiffSecure(tdReal, ppData.lastGuess.real, ppData.lastGuess.typed || '');
-            const tdPoints = document.createElement('td'); tdPoints.style.fontWeight = 'bold'; tdPoints.style.color = ppData.lastGuess.points > 0 ? "#4caf50" : (ppData.lastGuess.points === 0 && ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999"); tdPoints.textContent = ppData.lastGuess.points;
-            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
+
+            const tdActions = document.createElement('td');
+            tdActions.style.textAlign = 'center';
+            const ptsSpan = document.createElement('span');
+            ptsSpan.style.fontWeight = 'bold';
+            ptsSpan.style.display = 'block';
+            ptsSpan.style.color = ppData.lastGuess.points > 0 ? "#4caf50" : (ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
+            ptsSpan.textContent = ppData.lastGuess.points;
+            tdActions.appendChild(ptsSpan);
+
+            if (ppData.lastGuess.typed !== ppData.lastGuess.real) {
+                const replayBtn = document.createElement('button');
+                replayBtn.className = 'action-btn-small btn-secondary';
+                replayBtn.style.padding = '2px 6px';
+                replayBtn.style.marginTop = '2px';
+                replayBtn.style.width = 'auto';
+                replayBtn.innerHTML = '🔊';
+                replayBtn.onclick = () => window.playMorseAudio(ppData.lastGuess.real, currentWpm, true);
+                tdActions.appendChild(replayBtn);
+            }
+
+            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdActions);
             if (els.tableBody) els.tableBody.appendChild(tr);
             if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
         }
