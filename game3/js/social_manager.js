@@ -252,24 +252,30 @@ window.renderOrUpdateUserListItem = function(userId, u) {
     const canSpectate = (isPlaying && u.allowSpectators && u.activeRoomCode);
 
     const leftSpan = document.createElement('span');
-    leftSpan.style.cssText = "white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60%; font-size:0.9em;";
+    leftSpan.style.cssText = "display: flex; flex-direction: column; justify-content: center; overflow: hidden; max-width: 65%; font-size: 0.9em; line-height: 1.2;";
+
+    const nameAndLevelDiv = document.createElement('div');
+    nameAndLevelDiv.style.cssText = "display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px;";
 
     const nameB = document.createElement('b');
     nameB.textContent = u.name || "Anonimo";
     nameB.style.cursor = 'pointer';
     nameB.style.color = 'var(--link-color)';
     nameB.style.textDecoration = 'underline';
+    nameB.style.wordBreak = 'break-word'; // Permette al nome di spezzarsi se troppo lungo
     nameB.onclick = () => window.openTeamInviteModal(userId, u.name);
 
-    leftSpan.appendChild(nameB);
+    nameAndLevelDiv.appendChild(nameB);
 
     // AGGIUNTA LIVELLO NELLA LISTA ONLINE
     if (u.level) {
         const lvSpan = document.createElement('span');
-        lvSpan.style.cssText = "font-size: 0.75em; color: var(--champ-color); font-weight: bold; margin-left: 5px;";
+        lvSpan.style.cssText = "font-size: 0.75em; color: var(--champ-color); font-weight: bold; flex-shrink: 0;";
         lvSpan.textContent = `(${u.level})`;
-        leftSpan.appendChild(lvSpan);
+        nameAndLevelDiv.appendChild(lvSpan);
     }
+
+    leftSpan.appendChild(nameAndLevelDiv);
 
     const btn = document.createElement('button');
     btn.style.cssText = "width:auto; padding:4px 10px; font-size:0.8em; margin:0; flex-shrink:0;";
