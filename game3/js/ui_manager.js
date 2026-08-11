@@ -16,8 +16,8 @@ window.populateGameModesUI = function() {
         // FILTRO 1: In Solo non mostriamo Ping Pong
         if (isSingle && mode.id === 'pingpong') return;
 
-        // FILTRO 2: Conquest è solo per CO-OP (gestito in checkGameTypeUI)
-        if (mode.id === 'conquest') return;
+        // FILTRO 2: Conquest è solo per CO-OP, Arcade è gestito a parte
+        if (mode.id === 'conquest' || mode.id === 'arcade') return;
 
         const opt = document.createElement('option');
         opt.value = mode.id;
@@ -45,11 +45,15 @@ window.checkGameTypeUI = function() {
     const isSingle = typeInput.value === 'single';
     const isTrn = typeInput.value === 'tournament';
     const isCoop = typeInput.value === 'coop';
+    const isArcade = typeInput.value === 'arcade';
 
     const currentVal = modeInput.value;
 
     // Gestione dinamica delle opzioni nel menu "Modo"
-    if (isCoop) {
+    if (isArcade) {
+        modeInput.innerHTML = `<option value="arcade">${currentLang === 'it' ? "Intercettazione Arcade 🕹️" : "Arcade Interception 🕹️"}</option>`;
+        modeInput.value = "arcade";
+    } else if (isCoop) {
         modeInput.innerHTML = `<option value="conquest">${currentLang === 'it' ? "Conquista (Co-op) ⚔️" : "Conquest (Co-op) ⚔️"}</option>`;
         modeInput.value = "conquest";
     } else if (isTrn) {
@@ -81,7 +85,7 @@ window.checkGameTypeUI = function() {
         wordCount: document.getElementById('wordCountInput')
     };
 
-    if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop) ? 'none' : 'block';
+    if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcade) ? 'none' : 'block';
 
     if (modeCfg) {
         if (containers.fixed) containers.fixed.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
@@ -89,12 +93,14 @@ window.checkGameTypeUI = function() {
         if (containers.spacing) containers.spacing.style.display = (isSingle && modeCfg.spacingConfigurable) ? 'flex' : 'none';
 
         if (containers.startWpm) {
-            containers.startWpm.disabled = (modeCfg.wpmConfigurable === false);
-            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) containers.startWpm.value = modeCfg.defaultWpm;
+            containers.startWpm.disabled = (modeCfg.wpmConfigurable === false || isArcade);
+            if (isArcade) containers.startWpm.value = modeCfg.defaultWpm;
+            else if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) containers.startWpm.value = modeCfg.defaultWpm;
         }
         if (containers.wordCount) {
-            containers.wordCount.disabled = (modeCfg.wordCountConfigurable === false);
-            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) containers.wordCount.value = modeCfg.defaultWordCount;
+            containers.wordCount.disabled = (modeCfg.wordCountConfigurable === false || isArcade);
+            if (isArcade) containers.wordCount.value = modeCfg.defaultWordCount;
+            else if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) containers.wordCount.value = modeCfg.defaultWordCount;
         }
     } else {
         if (containers.fixed) containers.fixed.style.display = 'none';

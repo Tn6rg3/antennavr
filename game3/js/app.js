@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.222";
+const APP_VERSION = "20260807.220";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -613,7 +613,7 @@ if (els.createRoomBtn) {
 
         isChallenging = false;
         currentMode = gMode || 'standard';
-        isSinglePlayer = (gType === 'single');
+        isSinglePlayer = (gType === 'single' || gType === 'arcade');
         currentWpm = baseWpm = (currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
         requestedWordCount = (currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         currentTone = parseInt(els.toneInput?.value) || 600;

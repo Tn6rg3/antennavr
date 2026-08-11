@@ -45,66 +45,94 @@ window.initArcadeMode = function() {
 window.spawnArcadeWord = function() {
     if (!arcadeIsRunning) return;
 
-    // Scegliamo una parola della lunghezza attuale dal dizionario itDictionary o FALLBACK
+    // Scegliamo una parola della lunghezza attuale
     const pool = (window.itDictionary && window.itDictionary.length > 0) ? window.itDictionary : window.FALLBACK_WORDS_IT;
-    const sameLenWords = pool.filter(w => w.length === arcadeCurrentLen);
+    let sameLenWords = pool.filter(w => w.length === arcadeCurrentLen);
+
+    // Se non troviamo parole di quella lunghezza, ne generiamo una o allarghiamo la ricerca
+    if (sameLenWords.length === 0) {
+        sameLenWords = pool.filter(w => w.length >= arcadeCurrentLen - 1 && w.length <= arcadeCurrentLen + 1);
+    }
+
     const word = sameLenWords.length > 0
         ? sameLenWords[Math.floor(Math.random() * sameLenWords.length)].toUpperCase()
         : window.generateRandomString(arcadeCurrentLen);
 
     arcadeActiveWord = word;
 
-    // Grafica: Elemento che cade
+    // Grafica: Mattoncino Arcade
     const container = document.getElementById('arcadeFallContainer');
     container.innerHTML = "";
 
-    const wordEl = document.createElement('div');
-    wordEl.className = 'falling-word';
-    wordEl.id = "falling_word_obj";
-    wordEl.innerHTML = "•".repeat(word.length); // Nascondiamo la parola inizialmente
+    const wordWrapper = document.createElement('div');
+    wordWrapper.className = 'falling-word-block';
+    wordWrapper.id = "falling_word_obj";
 
-    // Calcolo durata caduta (Graduale)
-    // Formula: tempo base + (bonus per lunghezza) - (malus per WPM)
-    // Garantiamo che l'utente abbia sempre almeno 1.5 secondi extra dopo la fine dell'audio
-    const audioDurationMs = (word.length * 50 / currentWpm) * 1000;
-    const fallDuration = Math.max(4000, 6000 + (word.length * 500) - (currentWpm * 50));
+    const brick = document.createElement('div');
+    brick.className = 'arcade-brick';
+    brick.textContent = "•".repeat(word.length); // Puntini dentro il mattoncino
 
-    wordEl.style.transition = `transform ${fallDuration}ms linear, opacity 0.5s`;
-    container.appendChild(wordEl);
+    wordWrapper.appendChild(brick);
+    container.appendChild(wordWrapper);
 
-    // Avvio caduta (millisecondo dopo per far registrare il transition)
-    setTimeout(() => {
-        wordEl.style.transform = "translateY(75vh)";
-    }, 50);
+    // Calcolo durata caduta (PIÙ LENTA E GRADUALE)
+    // Partiamo da 10 secondi per 3 caratteri e scendiamo gradualmente
+    const baseDuration = 10000;
+    const lenBonus = (word.length - 3) * 1000; // +1s per ogni carattere in più
+    const wpmPenalty = (currentWpm - 20) * 150; // -0.15s per ogni WPM sopra i 20
+
+    const fallDuration = Math.max(4500, baseDuration + lenBonus - wpmPenalty);
+
+    console.log(`Arcade: Word "${word}" will fall in ${fallDuration}ms`);
+
+    // Avvio caduta tramite JS Animation (più affidabile del CSS in questo contesto)
+    let startTime = null;
+    const startY = -100;
+    const endY = window.innerHeight * 0.7; // Si ferma prima dell'input
+
+    function animateFall(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const progress = (timestamp - startTime) / fallDuration;
+
+        if (progress < 1 && arcadeIsRunning && arcadeActiveWord === word) {
+            const currentY = startY + (endY - startY) * progress;
+            wordWrapper.style.transform = `translateY(${currentY}px)`;
+            requestAnimationFrame(animateFall);
+        } else if (progress >= 1 && arcadeIsRunning && arcadeActiveWord === word) {
+            // HA TOCCATO IL FONDO
+            window.handleArcadeMiss();
+        }
+    }
 
     // Audio
     if (typeof playMorseAudio === 'function') {
         playMorseAudio(word, currentWpm);
     }
 
-    // Timer per il fallimento (se tocca il fondo)
-    if (arcadeFallTimer) clearTimeout(arcadeFallTimer);
-    arcadeFallTimer = setTimeout(() => {
-        if (arcadeIsRunning && arcadeActiveWord === word) {
-            window.handleArcadeMiss();
-        }
-    }, fallDuration);
+    requestAnimationFrame(animateFall);
 };
 
 window.handleArcadeSuccess = function() {
+    // Fermiamo la logica di caduta cambiando la parola attiva
+    const wordWas = arcadeActiveWord;
+    arcadeActiveWord = "";
+
     if (arcadeFallTimer) clearTimeout(arcadeFallTimer);
 
     const el = document.getElementById('falling_word_obj');
     if (el) {
-        el.textContent = arcadeActiveWord;
-        el.style.color = "#00ff00";
-        el.style.textShadow = "0 0 20px #00ff00";
-        el.style.transform = "translateY(40vh) scale(2)";
-        el.style.opacity = "0";
+        const brick = el.querySelector('.arcade-brick');
+        if (brick) {
+            brick.textContent = wordWas; // Riveliamo la parola
+            brick.style.background = "rgba(0, 255, 0, 0.4)";
+            brick.style.borderColor = "#00ff00";
+            brick.style.color = "#fff";
+        }
+        el.classList.add('brick-exploding');
     }
 
-    // Calcolo Punti
-    totalScore += (arcadeCurrentLen * 10) + currentWpm;
+    // Calcolo Punti (Bonus per velocità e lunghezza)
+    totalScore += (arcadeCurrentLen * 20) + currentWpm;
     arcadeCorrectInRow++;
 
     // Progressione: +1 WPM ogni parola giusta
@@ -112,7 +140,15 @@ window.handleArcadeSuccess = function() {
 
     // Progressione: +1 carattere ogni 2 parole giuste
     if (arcadeCorrectInRow % 2 === 0) {
-        arcadeCurrentLen = Math.min(12, arcadeCurrentLen + 1);
+        const oldLen = arcadeCurrentLen;
+        arcadeCurrentLen = Math.min(15, arcadeCurrentLen + 1);
+
+        // Ogni 3 caratteri di aumento è un nuovo "Livello"
+        // Esempio: 6 car. (Lv 2), 9 car. (Lv 3), 12 car. (Lv 4)
+        if (arcadeCurrentLen > oldLen && (arcadeCurrentLen - 3) % 3 === 0) {
+            window.showArcadeLevelUp(arcadeCurrentLen);
+            return;
+        }
     }
 
     if (els.arcadeInput) els.arcadeInput.value = "";
@@ -120,6 +156,37 @@ window.handleArcadeSuccess = function() {
 
     // Prossima parola
     setTimeout(window.spawnArcadeWord, 800);
+};
+
+window.showArcadeLevelUp = function(newLen) {
+    const overlay = document.getElementById('arcadeLevelUpOverlay');
+    const levelText = document.getElementById('arcadeNewLevelText');
+    const bonusText = document.getElementById('arcadeLevelBonus');
+    if (!overlay || !levelText) return;
+
+    const currentLevel = Math.floor((newLen - 3) / 3) + 1;
+    levelText.textContent = `LIVELLO ${currentLevel} (${newLen} Caratteri)`;
+
+    let bonus = "";
+    // Ogni 3 livelli guadagni una vita (es: Lv 4, 7...)
+    if (currentLevel > 1 && (currentLevel - 1) % 3 === 0) {
+        arcadeLives = Math.min(5, arcadeLives + 1);
+        bonus = "🎁 BONUS: +1 VITA! ❤️";
+        if (typeof window.playBeep === 'function') window.playBeep(1000, 0.5);
+    } else {
+        if (typeof window.playBeep === 'function') window.playBeep(880, 0.2);
+    }
+
+    if (bonusText) bonusText.textContent = bonus;
+
+    overlay.style.display = 'flex';
+    window.updateArcadeUI();
+
+    setTimeout(() => {
+        overlay.style.display = 'none';
+        if (els.arcadeInput) els.arcadeInput.value = "";
+        window.spawnArcadeWord();
+    }, 3000);
 };
 
 window.handleArcadeMiss = function() {
@@ -135,6 +202,10 @@ window.handleArcadeMiss = function() {
 
     if (arcadeLives <= 0) {
         window.arcadeGameOver("Vite Esaurite");
+    } else {
+        setTimeout(window.spawnArcadeWord, 1000);
+    }
+};
     } else {
         setTimeout(window.spawnArcadeWord, 1000);
     }
@@ -170,9 +241,16 @@ window.arcadeGameOver = function(reason) {
 window.updateArcadeUI = function() {
     if (els.arcadeScoreDisplay) els.arcadeScoreDisplay.textContent = `Punti: ${totalScore}`;
     if (els.arcadeWpmDisplay) els.arcadeWpmDisplay.textContent = `WPM: ${currentWpm}`;
+
+    const currentLevel = Math.floor((arcadeCurrentLen - 3) / 3) + 1;
+    const lvDisp = document.getElementById('arcadeLevelDisplay');
+    if (lvDisp) lvDisp.textContent = `LV: ${currentLevel}`;
+
     if (els.arcadeLivesDisplay) {
         let hearts = "";
-        for(let i=0; i<3; i++) hearts += (i < arcadeLives) ? "❤️" : "🖤";
+        for(let i=0; i<Math.max(3, arcadeLives); i++) {
+            hearts += (i < arcadeLives) ? "❤️" : "🖤";
+        }
         els.arcadeLivesDisplay.textContent = hearts;
     }
     const nextLenInfo = document.getElementById('arcadeWordLengthInfo');
