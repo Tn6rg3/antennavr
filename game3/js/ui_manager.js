@@ -19,6 +19,9 @@ window.populateGameModesUI = function() {
         // FILTRO 2: Conquest è solo per CO-OP (gestito in checkGameTypeUI)
         if (mode.id === 'conquest') return;
 
+        // FILTRO 3: Arcade è solo per tipo ARCADE
+        if (mode.id === 'arcade') return;
+
         const opt = document.createElement('option');
         opt.value = mode.id;
         opt.id = 'txt_opt_' + mode.id;
@@ -45,6 +48,7 @@ window.checkGameTypeUI = function() {
     const isSingle = typeInput.value === 'single';
     const isTrn = typeInput.value === 'tournament';
     const isCoop = typeInput.value === 'coop';
+    const isArcadeType = typeInput.value === 'arcade';
 
     const currentVal = modeInput.value;
 
@@ -52,6 +56,9 @@ window.checkGameTypeUI = function() {
     if (isCoop) {
         modeInput.innerHTML = `<option value="conquest">${currentLang === 'it' ? "Conquista (Co-op) ⚔️" : "Conquest (Co-op) ⚔️"}</option>`;
         modeInput.value = "conquest";
+    } else if (isArcadeType) {
+        modeInput.innerHTML = `<option value="arcade">${currentLang === 'it' ? "Pioggia (Arcade) 🕹️" : "Rain (Arcade) 🕹️"}</option>`;
+        modeInput.value = "arcade";
     } else if (isTrn) {
         const trnOptions = [
             { val: "trn_create_team", it: "Fonda Squadra", en: "Create Team" },
@@ -107,11 +114,11 @@ window.checkGameTypeUI = function() {
     if (containers.spectator) containers.spectator.style.display = isSingle ? 'flex' : 'none';
 
     if (containers.arcadeBtn) {
-        containers.arcadeBtn.style.display = (isSingle && selectedMode === 'arcade') ? 'block' : 'none';
+        containers.arcadeBtn.style.display = isArcadeType ? 'block' : 'none';
     }
 
     if (containers.btn) {
-        if (isSingle && selectedMode === 'arcade') {
+        if (isArcadeType) {
             containers.btn.style.display = 'none';
         } else {
             containers.btn.style.display = 'block';
@@ -132,7 +139,9 @@ window.setLanguage = function(lang) {
 
     const textMap = {
         txt_hello: t.hello, txt_free_challenge_title: t.free_challenge, txt_play_solo_title: t.play_solo,
-        txt_game_type_label: t.game_type, txt_mode_label: t.mode, txt_opt_multi: t.opt_multi, txt_opt_single: t.opt_single,
+        txt_game_type_label: t.game_type, txt_mode_label: t.mode,
+        txt_opt_multi: t.opt_multi, txt_opt_single: t.opt_single,
+        txt_opt_coop: t.opt_coop, txt_opt_trn: t.opt_trn, txt_opt_arcade: t.opt_arcade,
         txt_opt_std: t.opt_std, txt_opt_call: t.opt_call, txt_opt_pp: t.opt_pp, txt_wpm_label: t.wpm,
         txt_words_label: t.words, txt_tone_label: t.tone, txt_fixed_speed: t.fixed, txt_easy_mode: t.easy,
         txt_room_timeout: t.timeout, txt_challenge_board_title: t.challenge_board, txt_no_challenges: t.no_challenges,

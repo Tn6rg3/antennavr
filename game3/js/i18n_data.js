@@ -6,6 +6,7 @@ window.i18n = {
         free_challenge: "⚡ Sfida Libera", play_solo: "Gioca da Solo o Sfida un Amico",
         game_type: "Tipo di Gioco:", mode: "Modalità:", wpm: "WPM:", words: "Parole:", tone: "Tono:", timeout: "Scadenza Stanza (min):",
         opt_multi: "Multiplayer (con Lobby)", opt_single: "Singleplayer (Immediata)",
+        opt_coop: "Collaborativo (Co-op) ⚔️", opt_trn: "Torneo 🏆",
         opt_std: "Parole Comuni", opt_call: "Nominativi (CW Freak)", opt_pp: "Ping Pong",
         opt_custom: "Personale", fixed: "Fissa", easy: "Semplice", create_room: "Inizia Partita Libera", play_now: "Gioca Subito",
         challenge_board: "Bacheca Sfide ⏳", no_challenges: "Nessuna sfida.",
@@ -30,13 +31,15 @@ window.i18n = {
         select_file: "Scegli File .txt", custom_hint1: "Le parole possono essere separate da spazio, virgola o a capo.",
         custom_hint2: "Verranno ignorate le parole più corte di 3 caratteri.", custom_hint3: "Il dizionario rimarrà salvato in locale.",
         no_file: "Nessun file caricato.", loaded_words: "Parole caricate: ", manage_custom: "⚙️ Gestisci Dizionario Personale",
-        arcade_title: "🕹️ Intercettazione Arcade", arcade_start: "Gioca Subito Arcade 🕹️", arcade_level: "Livello", arcade_lives: "Vite", arcade_game_over: "PARTITA CONCLUSA", arcade_new_level: "LIVELLO COMPLETATO!"
+        arcade_title: "🕹️ Intercettazione Arcade", arcade_start: "Gioca Subito Arcade 🕹️", arcade_level: "Livello", arcade_lives: "Vite", arcade_game_over: "PARTITA CONCLUSA", arcade_new_level: "LIVELLO COMPLETATO!",
+        opt_arcade: "Arcade 🕹️", opt_rain: "Pioggia (Arcade) 🕹️"
     },
     en: {
         hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", conn_secure: "Secure connection in progress...",
         free_challenge: "⚡ Free Challenge", play_solo: "Play Solo or Challenge a Friend",
         game_type: "Game Type:", mode: "Mode:", wpm: "WPM:", words: "Words:", tone: "Tone:", timeout: "Room Timeout (min):",
         opt_multi: "Multiplayer (Lobby)", opt_single: "Singleplayer (Immediate)",
+        opt_coop: "Collaborative (Co-op) ⚔️", opt_trn: "Tournament 🏆",
         opt_std: "Common Words", opt_call: "Callsigns (CW Freak)", opt_pp: "Ping Pong",
         opt_custom: "Personal", fixed: "Fixed", easy: "Easy", create_room: "Start Free Match", play_now: "Play Now",
         challenge_board: "Challenge Board ⏳", no_challenges: "No challenges.",
@@ -61,7 +64,8 @@ window.i18n = {
         select_file: "Choose .txt File", custom_hint1: "Words can be separated by spaces, commas, or newlines.",
         custom_hint2: "Words shorter than 3 characters will be ignored.", custom_hint3: "The dictionary will be saved locally.",
         no_file: "No file uploaded.", loaded_words: "Words loaded: ", manage_custom: "⚙️ Manage Personal Dictionary",
-        arcade_title: "🕹️ Arcade Interception", arcade_start: "Play Arcade Now 🕹️", arcade_level: "Level", arcade_lives: "Lives", arcade_game_over: "GAME OVER", arcade_new_level: "LEVEL COMPLETED!"
+        arcade_title: "🕹️ Arcade Interception", arcade_start: "Play Arcade Now 🕹️", arcade_level: "Level", arcade_lives: "Lives", arcade_game_over: "GAME OVER", arcade_new_level: "LEVEL COMPLETED!",
+        opt_arcade: "Arcade 🕹️", opt_rain: "Rain (Arcade) 🕹️"
     }
 };
 
