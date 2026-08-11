@@ -502,6 +502,67 @@ window.listenToInviteAccepted = function() {
     });
 };
 
+window.setupChat = function(ref, containerId, limit = 50) {
+    if (!els[containerId]) return;
+
+    if (!listeners.activeChat) listeners.activeChat = {};
+
+    if (listeners.activeChat[containerId]) {
+        listeners.activeChat[containerId].ref.off('value', listeners.activeChat[containerId].callback);
+        delete listeners.activeChat[containerId];
+    }
+
+    const callback = snap => {
+        const container = els[containerId];
+        if (!container) return;
+        const shouldScroll = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
+
+        container.innerHTML = '';
+        const messages = [];
+        snap.forEach(child => {
+            const m = child.val();
+            if (m && typeof m === 'object') messages.push({ id: child.key, ...m });
+        });
+
+        if (messages.length === 0) {
+            container.innerHTML = '<p style="text-align:center; opacity:0.5; margin-top:20px;">Nessun messaggio.</p>';
+            return;
+        }
+
+        messages.forEach(m => {
+            const div = document.createElement('div');
+            div.className = 'chat-msg';
+            if (m.name === myName) div.classList.add('chat-msg-own');
+
+            const time = new Date(m.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            const header = document.createElement('div');
+            header.style.cssText = "display:flex; justify-content:space-between; font-size:0.75em; opacity:0.7; margin-bottom:2px;";
+            const nameSpan = document.createElement('b');
+            nameSpan.textContent = m.name;
+            if (m.username) {
+                nameSpan.style.color = 'var(--link-color)';
+                nameSpan.style.cursor = 'pointer';
+                nameSpan.onclick = () => window.openTelegramProfile(m.username);
+            }
+            const timeSpan = document.createElement('span');
+            timeSpan.textContent = time;
+            header.appendChild(nameSpan);
+            header.appendChild(timeSpan);
+            const textDiv = document.createElement('div');
+            textDiv.style.wordBreak = 'break-word';
+            textDiv.textContent = m.text;
+            div.appendChild(header);
+            div.appendChild(textDiv);
+            container.appendChild(div);
+        });
+        if (shouldScroll) container.scrollTop = container.scrollHeight;
+    };
+
+    const finalRef = limit ? ref.limitToLast(limit) : ref;
+    finalRef.on('value', callback);
+    listeners.activeChat[containerId] = { ref: finalRef, callback: callback };
+};
+
 // --- LISTA STANZE E BACHECA SFIDE (SENZA DUPLICATI) ---
 window.lastKnownRoomPlayersCount = window.lastKnownRoomPlayersCount || {};
 

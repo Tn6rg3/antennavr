@@ -8,14 +8,8 @@ window.COURSE_TYPES = {
     LONG: { id: 'LONG', labelIt: 'Lungo (Full)', labelEn: 'Long (Full)', color: '#9c27b0', weight: 0.5 }
 };
 
-const STORAGE_COURSE_STATE = "cwgame_course_state";
-
 window.initCourseManager = function() {
     console.log("Course: Initializing...");
-
-    // Forza la visibilità del bottone se l'elemento esiste
-    const btnOpen = document.getElementById('btnOpenCourse');
-    if (btnOpen) btnOpen.style.display = 'block';
 
     if (!myId || !db) {
         console.warn("Course Init: Missing Auth or DB, retrying in 500ms...");
@@ -48,9 +42,7 @@ window.loadCourseState = async function() {
             window.courseData = window.getDefaultCourseData();
         }
 
-        window.updateCourseUI();
-
-        // Aggiorniamo il registro iscritti all'accesso per sicurezza
+        // Sincronizzazione registro iscritti
         if (window.courseData.active_plan === true) {
             db.ref('courseActiveEnrollments/' + myId).set({
                 name: myName,
@@ -96,10 +88,8 @@ window.saveCourseState = function() {
 
     console.log("Course Manager: Saving state to Firebase...", window.courseData);
 
-    // Salviamo lo stato locale dell'utente
     db.ref(`users/${myId}/course`).set(window.courseData).then(() => {
         console.log("Course Manager: State saved successfully.");
-        // Gestione del registro iscritti (per contatore preciso)
         const activeRef = db.ref('courseActiveEnrollments/' + myId);
         if (window.courseData.active_plan === true) {
             activeRef.set({
@@ -114,10 +104,28 @@ window.saveCourseState = function() {
     });
 };
 
-window.updateCourseUI = function() {
-    // Verrà implementata in course_ui.js o qui per semplicità iniziale
-    const btn = document.getElementById('btnOpenCourse');
-    if (btn) btn.style.display = 'block';
+window.generateWeeklySchedule = function() {
+    if (!window.courseData || !window.courseData.settings) return;
+    const daysPerWeek = parseInt(window.courseData.settings.days_per_week);
+    let schedule = Array(7).fill(null).map(() => ({ type: 'REST', completed: false }));
+
+    let workDays = [];
+    if (daysPerWeek === 1) workDays = [6];
+    else {
+        const step = 7 / daysPerWeek;
+        for (let i=0; i<daysPerWeek; i++) workDays.push(Math.floor(i * step));
+    }
+
+    workDays.forEach((dayIdx, i) => {
+        let type = 'WORK';
+        if (i === workDays.length - 1) type = 'LONG';
+        else if (i % 2 === 0) type = 'Z2';
+
+        schedule[dayIdx] = { type: type, completed: false };
+    });
+
+    window.courseData.weekly_schedule = schedule;
+    window.saveCourseState();
 };
 
 window.generateAdaptiveGroup = function() {
@@ -126,29 +134,27 @@ window.generateAdaptiveGroup = function() {
     const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
     const sessionType = window.courseData.current_day_session?.type || 'LONG';
 
-    // In Z2 usiamo distribuzione uniforme per relax
     if (sessionType === 'Z2') {
         let group = "";
         for(let i=0; i<5; i++) group += activeChars[Math.floor(Math.random() * activeChars.length)];
         return group;
     }
 
-    // Calcolo pesi basato su errori (Weighted Random)
     const stats = window.courseData.progress.char_stats || {};
     let weights = activeChars.map(char => {
         const charStat = stats[char] || { attempts: 0, errors: 0 };
         let weight = 1.0;
         if (charStat.attempts > 5) {
             const errorRate = charStat.errors / charStat.attempts;
-            weight += errorRate * 5; // Aumenta il peso fino a 6x se l'errore è 100%
+            weight += errorRate * 5;
         }
         return { char, weight };
     });
 
-    // Se siamo in WORK, diamo un peso enorme all'ULTIMO carattere aggiunto (la novità)
     if (sessionType === 'WORK') {
         const lastChar = activeChars[activeChars.length - 1];
-        weights.find(w => w.char === lastChar).weight *= 3;
+        const lastWeight = weights.find(w => w.char === lastChar);
+        if (lastWeight) lastWeight.weight *= 3;
     }
 
     let group = "";
@@ -172,8 +178,6 @@ window.generateAdaptiveGroup = function() {
             if (selectedIdx === -1) selectedIdx = currentWeights.length - 1;
             const selected = currentWeights[selectedIdx];
 
-            // Limite: max 3 caratteri uguali per gruppo
-            // Usiamo una versione sicura per la regex che gestisce caratteri speciali
             const safeChar = selected.char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const count = (group.match(new RegExp(safeChar, "g")) || []).length;
 
@@ -198,11 +202,7 @@ window.preGenerateCourseGroups = function() {
     const farnsworth = parseInt(window.courseData.settings.farnsworth_wpm) || 12;
     const spacing = parseFloat(window.courseData.settings.group_spacing) || 3.0;
 
-    // Stima della durata di un gruppo di 5 caratteri (in secondi)
-    // Formula approssimativa: (5 caratteri * 50 unit/parola / 1.2 wpm) + spacing
     const estimatedSecPerGroup = (60 / farnsworth) + (spacing * 2);
-
-    // Calcoliamo quanti gruppi servono per coprire l'intera durata + 50% extra di buffer
     const numGroups = Math.ceil((session.total_seconds / estimatedSecPerGroup) * 1.5);
 
     console.log(`Course: Pre-generating ${numGroups} groups for session...`);
@@ -214,7 +214,6 @@ window.preGenerateCourseGroups = function() {
     requestedWordCount = gameWords.length;
 };
 
-let courseSessionTimer = null;
 window.startCourseSessionSequence = function() {
     window.showScreen('gameArea');
     if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
@@ -235,7 +234,6 @@ window.startCourseSessionSequence = function() {
     courseSessionTimer = setInterval(() => {
         if (!gameRunning || !window.courseData.current_day_session) return;
 
-        // Se siamo in pausa o l'app è in background, non scaliamo il tempo rimanente
         if (window.courseIsPaused || document.hidden) return;
 
         window.courseData.current_day_session.remaining_seconds--;
@@ -255,14 +253,10 @@ window.startCourseSessionSequence = function() {
     setTimeout(() => { if (gameRunning) window.playNextCourseGroup(); }, 800);
 };
 
-let coursePauseInterval = null;
 window.triggerCoursePause = function() {
-    if (coursePauseInterval) clearInterval(coursePauseInterval);
-
+    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
     window.courseIsPaused = true;
     inputActive = false;
-    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
-
     if (els.permanentGameInput) els.permanentGameInput.value = "";
 
     let timeLeft = window.courseSessionPauseDuration;
@@ -271,15 +265,15 @@ window.triggerCoursePause = function() {
     };
 
     updatePauseUI();
-    coursePauseInterval = setInterval(() => {
+    let pauseInterval = setInterval(() => {
         if (!gameRunning || !isCourseMode) {
-            clearInterval(coursePauseInterval);
+            clearInterval(pauseInterval);
             return;
         }
 
         timeLeft--;
         if (timeLeft <= 0) {
-            clearInterval(coursePauseInterval);
+            clearInterval(pauseInterval);
             window.courseIsPaused = false;
             window.courseSessionNextPauseTs = Date.now() + (window.courseSessionPauseInterval * 1000);
             if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
@@ -303,12 +297,7 @@ window.updateCourseTimerUI = function() {
     const min = Math.floor(s / 60);
     const sec = s % 60;
 
-    // Calcoliamo la velocità dinamica per il display
-    let displayWpm = currentWpm;
-    if (isCourseMode) {
-        displayWpm = window.calculateDynamicCourseWpm();
-    }
-
+    let displayWpm = window.calculateDynamicCourseWpm();
     els.wpmDisplay.textContent = `⏱️ ${min}:${sec.toString().padStart(2, '0')} | WPM: ${displayWpm}`;
 };
 
@@ -336,7 +325,6 @@ window.calculateDynamicCourseWpm = function() {
         const remaining = session.remaining_seconds;
         const elapsed = total - remaining;
 
-        // Split 1/3 Base, 1/3 Work Logic, 1/3 Base
         if (elapsed < total / 3) return baseWpm;
         if (elapsed < (2 * total) / 3) {
             return baseWpm + calculateBonus(lastAccuracy);
@@ -353,8 +341,6 @@ window.playNextCourseGroup = function() {
 
     inputActive = true;
     let group = gameWords[wordIndex];
-
-    // Se per qualche motivo il buffer è vuoto in questa posizione, generiamo al volo
     if (!group) {
         group = window.generateAdaptiveGroup();
         gameWords[wordIndex] = group;
@@ -364,13 +350,11 @@ window.playNextCourseGroup = function() {
     const farnsworthWpm = parseInt(window.courseData.settings.farnsworth_wpm);
     const groupSpacingMult = parseFloat(window.courseData.settings.group_spacing || 2.0);
 
-    // Configuriamo l'audio engine
     window.charSpaceWpm = farnsworthWpm;
     window.wordSpaceMult = groupSpacingMult;
     currentWpm = charWpm;
 
     if (typeof playMorseAudio === 'function') {
-        // Aggiungiamo un piccolo delay iniziale per non sovrapporsi all'invio automatico
         setTimeout(() => {
             if (gameRunning && isCourseMode) playMorseAudio(group, charWpm);
         }, 300);
@@ -379,7 +363,6 @@ window.playNextCourseGroup = function() {
 };
 
 window.finishCourseSession = function() {
-    // Calcolo statistiche sessione corrente per il riepilogo
     const stats = window.courseData.progress.char_stats || {};
     const currentLesson = window.courseData.progress.current_lesson;
     const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
@@ -402,15 +385,12 @@ window.finishCourseSession = function() {
     }
 
     window.courseData.current_day_session.completed = true;
-    window.courseData.current_day_session.remaining_seconds = 0;
 
-    // Segniamo come completato nel piano settimanale
     const todayIdx = (new Date().getDay() + 6) % 7;
-    if (window.courseData.weekly_schedule[todayIdx]) {
+    if (window.courseData.weekly_schedule && window.courseData.weekly_schedule[todayIdx]) {
         window.courseData.weekly_schedule[todayIdx].completed = true;
     }
 
-    // --- LOGICA DI AVANZAMENTO (KOCH) ---
     let canAdvance = true;
     activeChars.forEach(char => {
         const s = stats[char] || { attempts: 0, errors: 0 };
@@ -425,7 +405,6 @@ window.finishCourseSession = function() {
 
     window.saveCourseState();
 
-    // --- MESSAGGIO MOTIVAZIONALE DI FINE SESSIONE ---
     const quotes = [
         "Ottimo lavoro! La costanza è la chiave del successo.",
         "Stai costruendo i tuoi riflessi Morse, continua così!",
@@ -455,7 +434,6 @@ window.checkWeeklyReview = function() {
     const currentWeek = window.getWeekNumber(now);
 
     if (lastReview !== currentWeek && window.courseData.weekly_schedule) {
-        // Controlliamo se ha fatto tutti i giorni
         const completedCount = window.courseData.weekly_schedule.filter(s => s.completed || s.type === 'REST').length;
         if (completedCount === 7) {
             if (confirm("Settimana completata con successo! 🏆\nVuoi aumentare il volume di allenamento (minuti) del 10% per la prossima settimana?")) {
@@ -464,56 +442,27 @@ window.checkWeeklyReview = function() {
                 window.courseData.settings.minutes_long = Math.round(window.courseData.settings.minutes_long * 1.1);
             }
         }
-
-        // Reset per la nuova settimana
         window.courseData.progress.last_weekly_review = currentWeek;
         window.generateWeeklySchedule();
     }
 };
 
-// Integriamo il controllo settimanale nell'init
-window.initCourseManager = function() {
-    console.log("Course: Initializing...");
-    window.loadCourseState().then(() => {
-        window.checkWeeklyReview();
-        window.checkCourseStartupNotification();
-        window.listenToCourseEnrollment();
-    });
-};
-
 window.listenToCourseEnrollment = function() {
-    console.log("Course: Listening to dynamic enrollment count...");
-    // Ascoltiamo il registro reale degli iscritti attivi
     const enrollmentRef = db.ref('courseActiveEnrollments');
     enrollmentRef.on('value', snap => {
         const enrollments = snap.val() || {};
         const count = Object.keys(enrollments).length;
-        console.log("Course: Dynamic enrollment count:", count);
-
         const badge = document.getElementById('courseEnrollmentBadgeGlobal');
         if (badge) {
             badge.innerText = count;
-            if (count > 0) {
-                badge.style.setProperty('display', 'flex', 'important');
-                badge.classList.add('badge-active');
-            } else {
-                badge.style.display = 'none';
-                badge.classList.remove('badge-active');
-            }
+            badge.style.display = count > 0 ? 'flex' : 'none';
         }
-
-        // Aggiorniamo anche il contatore testuale in appConfig per retrocompatibilità se serve
         db.ref('appConfig/courseEnrollmentCount').set(count);
     });
 };
 
 window.checkCourseStartupNotification = function() {
-    // Se il piano non è attivo, usciamo subito per evitare popup fantasma
-    if (!window.courseData || window.courseData.active_plan !== true) {
-        console.log("Course: No active plan found, skipping startup notification.");
-        return;
-    }
-
+    if (!window.courseData || window.courseData.active_plan !== true) return;
     const todayIdx = (new Date().getDay() + 6) % 7;
     const session = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
 
@@ -528,60 +477,3 @@ window.checkCourseStartupNotification = function() {
         }
     }
 };
-
-// --- LISTENER PULSANTI ---
-window.attachCourseEventListeners = function() {
-    const btnStart = document.getElementById('btnStartCourseSession');
-    if (btnStart) {
-        btnStart.onclick = () => {
-            if (!window.courseData.weekly_schedule) window.generateWeeklySchedule();
-            const todayIdx = (new Date().getDay() + 6) % 7;
-            const session = window.courseData.weekly_schedule[todayIdx];
-
-            if (!session || session.type === 'REST') {
-                return alert("Oggi è previsto riposo! Ma puoi comunque fare pratica libera.");
-            }
-
-            if (session.completed) {
-                return alert("Hai già completato l'allenamento di oggi!");
-            }
-
-            const todayStr = new Date().toISOString().split('T')[0];
-            if (!window.courseData.current_day_session || window.courseData.current_day_session.date !== todayStr) {
-                let duration = 15;
-                if (session.type === 'Z2') duration = window.courseData.settings.minutes_z2;
-                else if (session.type === 'WORK') duration = window.courseData.settings.minutes_work;
-                else if (session.type === 'LONG') duration = window.courseData.settings.minutes_long;
-
-                window.courseData.current_day_session = {
-                    type: session.type,
-                    total_seconds: duration * 60,
-                    remaining_seconds: duration * 60,
-                    completed: false,
-                    date: todayStr
-                };
-                window.saveCourseState();
-            }
-
-            currentMode = 'course';
-            isSinglePlayer = true;
-            currentWpm = parseInt(window.courseData.settings.start_wpm);
-            requestedWordCount = 999;
-            roomCode = "COURSE_" + myId;
-
-            document.getElementById('courseModal').style.display = 'none';
-
-            db.ref('rooms/' + roomCode).set({
-                status: 'countdown',
-                type: 'single',
-                mode: 'course',
-                wpm: currentWpm,
-                tone: 600,
-                createdAt: firebase.database.ServerValue.TIMESTAMP,
-                hostId: myId
-            }).then(() => window.joinRoomLogic?.(false));
-        };
-    }
-};
-
-setTimeout(window.attachCourseEventListeners, 2000);

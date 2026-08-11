@@ -812,27 +812,23 @@ window.handleWordSubmission = function(userWord) {
     userWord = userWord.substring(0, 50).trim().toUpperCase();
 
     if (isCourseMode) {
-        inputActive = false; // Blocchiamo subito l'input per evitare spam
+        inputActive = false;
         const currentWord = gameWords[wordIndex] || "";
         const isCorrect = (userWord === currentWord);
 
-        // Aggiorna statistiche corso
         if (window.courseData) {
             if (!window.courseData.progress.char_stats) window.courseData.progress.char_stats = {};
             for (let i=0; i<currentWord.length; i++) {
                 let c = currentWord[i];
                 if (!window.courseData.progress.char_stats[c]) window.courseData.progress.char_stats[c] = { attempts: 0, errors: 0 };
                 window.courseData.progress.char_stats[c].attempts++;
-                if (userWord[i] !== c) window.courseData.progress.char_stats[c].errors++;
+                if (userWord[i] !== currentWord[i]) window.courseData.progress.char_stats[c].errors++;
             }
-            window.saveCourseState?.();
+            window.saveCourseState();
         }
 
-        // Feedback visuale con evidenziazione errori
         const tr = document.createElement('tr');
-        const tdTyped = document.createElement('td');
-        tdTyped.textContent = userWord;
-
+        const tdTyped = document.createElement('td'); tdTyped.textContent = userWord;
         const tdReal = document.createElement('td');
         for (let i=0; i<currentWord.length; i++) {
             const span = document.createElement('span');
@@ -843,37 +839,31 @@ window.handleWordSubmission = function(userWord) {
             }
             tdReal.appendChild(span);
         }
-
         const tdPoints = document.createElement('td');
         tdPoints.textContent = isCorrect ? "OK" : "ERR";
         tdPoints.style.color = isCorrect ? "#4caf50" : "#d32f2f";
         tdPoints.style.fontWeight = "bold";
-
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
         if (els.tableBody) {
             els.tableBody.appendChild(tr);
             els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
         }
 
-        // --- CONTROLLO PAUSA PROGRAMMATA (CORSO) ---
         if (window.coursePausePending) {
             window.coursePausePending = false;
-            // Incrementiamo l'indice per non ripetere la parola dopo la pausa
             wordIndex++;
-            // Aggiungiamo un piccolo delay per permettere all'utente di vedere l'ultimo risultato
             setTimeout(() => {
-                if (gameRunning && isCourseMode) window.triggerCoursePause?.();
+                if (gameRunning && isCourseMode) window.triggerCoursePause();
             }, 600);
             return;
         }
 
         setTimeout(() => {
             if (gameRunning && isCourseMode) {
-                // Incrementiamo l'indice PRIMA di chiamare il prossimo gruppo
                 wordIndex++;
-                window.playNextCourseGroup?.();
+                window.playNextCourseGroup();
             }
-        }, 300 * (parseFloat(window.courseData?.settings?.group_spacing) || 1.0)); // Delay dinamico basato sullo spazio gruppi
+        }, 300 * (parseFloat(window.courseData?.settings?.group_spacing) || 1.0));
         return;
     }
 
