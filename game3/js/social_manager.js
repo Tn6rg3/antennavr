@@ -156,7 +156,7 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
             // Gestione notifiche e audio per nuovi messaggi
             if (!initialLoad && m.ts > lastTs) {
-                window.handleNewChatMessage(ref.key, m, child.key);
+                window.handleNewChatMessage(ref.key, m, m.id || child.key);
             }
         });
 
@@ -612,7 +612,7 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
             // Gestione notifiche e audio per nuovi messaggi
             if (!initialLoad && m.ts > lastTs) {
-                window.handleNewChatMessage(ref.key, m, child.key);
+                window.handleNewChatMessage(ref.key, m, m.id || child.key);
             }
         });
 
