@@ -175,6 +175,7 @@ window.finishWizard = function() {
     };
 
     window.generateWeeklySchedule();
+    window.updateGlobalEnrollmentRecord(true); // Aggiorna contatore globale iscritti
     window.renderCourseTabView();
     showToast("Corso attivato con successo! 🚀");
 };
@@ -182,7 +183,9 @@ window.finishWizard = function() {
 window.initCourseChat = function() {
     if (!db) return;
     const chatRef = db.ref('courseChat');
-    if (typeof window.setupChat === 'function') window.setupChat(chatRef, 'courseChatMessages', null);
+
+    // OTTIMIZZAZIONE: Carichiamo solo gli ultimi 50 messaggi (non tutto lo storico infinito)
+    if (typeof window.setupChat === 'function') window.setupChat(chatRef, 'courseChatMessages', 50);
 
     if (els.sendCourseChatBtn && els.courseChatInput) {
         els.sendCourseChatBtn.onclick = () => {
@@ -243,6 +246,7 @@ window.attachCourseUIListeners = function() {
     if (els.btnTabResetCourse) {
         els.btnTabResetCourse.onclick = () => {
             if (confirm("ATTENZIONE: Stai per ABBANDONARE il Corso. I progressi verranno resettati. Vuoi procedere?")) {
+                window.updateGlobalEnrollmentRecord(false); // Sottrae dal contatore globale
                 window.courseData = window.getDefaultCourseData();
                 window.saveCourseState();
                 window.renderCourseTabView();

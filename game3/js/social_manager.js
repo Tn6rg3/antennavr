@@ -15,15 +15,15 @@ window.hideChat = function() {
 
 window.listenToChat = function() {
     if (activeChatContext === 'room' && roomCode) {
-        window.setupChat(db.ref(`rooms/${roomCode}/chat`), 'lobbyChatMessages', null);
-        window.setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', null);
+        window.setupChat(db.ref(`rooms/${roomCode}/chat`), 'lobbyChatMessages', 50);
+        window.setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', 50);
         if (els.chatTitle) els.chatTitle.textContent = "💬 Chat Stanza";
         if (els.gameArea && els.gameArea.classList.contains('active-screen')) {
             els.chatDrawer.style.display = 'none';
             isChatDrawerOpen = false;
         }
     } else {
-        window.setupChat(db.ref('globalChat'), 'chatMessages', null);
+        window.setupChat(db.ref('globalChat'), 'chatMessages', 50);
         if (els.chatTitle) els.chatTitle.textContent = "🌎 Chat Globale";
     }
 };

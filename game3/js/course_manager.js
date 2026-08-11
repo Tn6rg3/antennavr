@@ -66,12 +66,9 @@ window.loadCourseState = async function() {
             window.courseData = window.getDefaultCourseData();
         }
 
-        // Sincronizzazione registro iscritti
+        // Verifica consistenza registro iscritti (senza duplicare i download)
         if (window.courseData.active_plan === true) {
-            db.ref('courseActiveEnrollments/' + myId).set({
-                name: myName,
-                ts: firebase.database.ServerValue.TIMESTAMP
-            });
+            window.updateGlobalEnrollmentRecord(true);
         }
     } catch (e) {
         console.error("Course Manager: Error loading course state:", e);
@@ -114,18 +111,37 @@ window.saveCourseState = function() {
 
     db.ref(`users/${myId}/course`).set(window.courseData).then(() => {
         console.log("Course Manager: State saved successfully.");
-        const activeRef = db.ref('courseActiveEnrollments/' + myId);
-        if (window.courseData.active_plan === true) {
-            activeRef.set({
-                name: myName,
-                ts: firebase.database.ServerValue.TIMESTAMP
-            });
-        } else {
-            activeRef.remove();
-        }
+        // Rimosso l'aggiornamento dinamico del contatore da qui per risparmiare banda.
+        // Il contatore viene aggiornato solo tramite window.updateGlobalEnrollmentRecord()
+        // quando l'utente attiva/disattiva il piano.
     }).catch(err => {
         console.error("Course Manager: Save error:", err);
     });
+};
+
+window.updateGlobalEnrollmentRecord = function(isActive) {
+    if (!myId || !db) return;
+
+    const activeRef = db.ref('courseActiveEnrollments/' + myId);
+    const countRef = db.ref('appConfig/courseEnrollmentCount');
+
+    if (isActive) {
+        activeRef.once('value', snap => {
+            if (!snap.exists()) {
+                // Incrementiamo solo se l'utente non era già censito come attivo
+                activeRef.set({ name: myName, ts: firebase.database.ServerValue.TIMESTAMP });
+                countRef.transaction(curr => (curr || 0) + 1);
+            }
+        });
+    } else {
+        activeRef.once('value', snap => {
+            if (snap.exists()) {
+                // Decrementiamo solo se l'utente era censito
+                activeRef.remove();
+                countRef.transaction(curr => Math.max(0, (curr || 0) - 1));
+            }
+        });
+    }
 };
 
 window.generateWeeklySchedule = function() {
@@ -503,16 +519,16 @@ window.checkWeeklyReview = function() {
 };
 
 window.listenToCourseEnrollment = function() {
-    const enrollmentRef = db.ref('courseActiveEnrollments');
-    enrollmentRef.on('value', snap => {
-        const enrollments = snap.val() || {};
-        const count = Object.keys(enrollments).length;
+    // OTTIMIZZAZIONE: Ascoltiamo solo il campo contatore singolo, non l'intera lista utenti.
+    // Questo riduce drasticamente il consumo di download per tutti gli utenti online.
+    const countRef = db.ref('appConfig/courseEnrollmentCount');
+    countRef.on('value', snap => {
+        const count = snap.val() || 0;
         const badge = document.getElementById('courseEnrollmentBadgeGlobal');
         if (badge) {
             badge.innerText = count;
             badge.style.display = count > 0 ? 'flex' : 'none';
         }
-        db.ref('appConfig/courseEnrollmentCount').set(count);
     });
 };
 
