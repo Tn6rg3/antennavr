@@ -754,8 +754,6 @@ window.finishGame = function() {
 
     // --- NUOVO: BOTTONI CONDIVISIONE NELLA SCHERMATA DI REVISIONE ---
     window.showMatchShareButtons();
-};    // --- NUOVO: BOTTONI CONDIVISIONE NELLA SCHERMATA DI REVISIONE ---
-    window.showMatchShareButtons();
 };
 
 window.showMatchShareButtons = function() {
