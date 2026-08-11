@@ -240,6 +240,7 @@ window.finishWizard = function() {
     const z2 = parseInt(z2Input.value) || 10;
     const startLesson = parseInt(lessonInput.value) || 2;
 
+    // Aggiornamento oggetto globale
     window.courseData.active_plan = true;
     window.courseData.progress.current_lesson = startLesson;
     window.courseData.settings = {
@@ -254,16 +255,21 @@ window.finishWizard = function() {
         minutes_long: Math.round(z2 * (50/30))
     };
 
-    console.log("Course: Final settings for save:", window.courseData.settings);
+    console.log("Course: Final settings to commit:", window.courseData.settings);
 
-    window.generateWeeklySchedule();
-    window.renderCourseTabView();
+    // Persistenza FORZATA prima di renderizzare
     window.saveCourseState();
+
+    // Rigeneriamo il piano
+    window.generateWeeklySchedule();
+
+    // Passiamo alla dashboard
+    window.renderCourseTabView();
 
     // Pulizia UI
     const wizard = document.getElementById('courseWizardContainer');
     if (wizard) wizard.style.display = 'none';
-    showToast("Corso attivato! Iniziamo l'allenamento. 🚀");
+    showToast("Corso attivato con successo! 🚀");
 };
 
 window.initCourseChat = function() {

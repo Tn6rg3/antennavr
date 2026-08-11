@@ -35,11 +35,14 @@ window.loadCourseState = async function() {
     if (!myId || !db) return;
     try {
         const snap = await db.ref(`users/${myId}/course`).once('value');
-        const data = snap.val();
+        let data = snap.val();
 
-        console.log("Course Manager: Loaded data from Firebase:", data);
+        console.log("Course Manager: Raw data from Firebase:", data);
 
         if (data) {
+            // Normalizzazione flag active_plan (può essere stringa o boolean)
+            if (data.active_plan === "true") data.active_plan = true;
+            if (data.active_plan === "false") data.active_plan = false;
             window.courseData = data;
         } else {
             window.courseData = window.getDefaultCourseData();
@@ -48,7 +51,7 @@ window.loadCourseState = async function() {
         window.updateCourseUI();
 
         // Aggiorniamo il registro iscritti all'accesso per sicurezza
-        if (window.courseData && window.courseData.active_plan === true) {
+        if (window.courseData.active_plan === true) {
             db.ref('courseActiveEnrollments/' + myId).set({
                 name: myName,
                 ts: firebase.database.ServerValue.TIMESTAMP
