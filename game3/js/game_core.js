@@ -28,11 +28,16 @@ window.showScreen = function(screenId) {
 
     if (db && myId) {
         try {
-            db.ref(`presence/${myId}`).update({
+            const presenceData = {
                 name: myName,
                 username: myPrivacy ? "" : tgUsername,
                 status: isPlayingScreen ? 'playing' : 'online'
-            });
+            };
+            // Includiamo sempre il livello se disponibile
+            if (window.userProgression?.level) {
+                presenceData.level = window.userProgression.level;
+            }
+            db.ref(`presence/${myId}`).update(presenceData);
         } catch(e) {}
     }
 
