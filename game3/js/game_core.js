@@ -779,23 +779,52 @@ function finishGameNavigation() {
         setTimeout(() => {
             const select = document.getElementById('lbModeSelect');
             if (select) { select.value = 'tournaments'; select.dispatchEvent(new Event('change')); }
-        }, 100);
+        }, 150);
     }
     else if (isSinglePlayer) {
         if (typeof window.switchLBGroup === 'function') window.switchLBGroup('single');
         setTimeout(() => {
             const select = document.getElementById('lbModeSelect');
             const targetMode = currentMode === 'callsign' ? 'callsign' : (currentMode === 'quiz' ? 'quiz' : (currentMode === 'chars' ? 'chars' : 'standard'));
-            if (select) { select.value = targetMode; select.dispatchEvent(new Event('change')); }
-        }, 100);
+            if (select) {
+                select.value = targetMode;
+                select.dispatchEvent(new Event('change'));
+
+                // --- NUOVO: SELEZIONE FILTRO PAROLE PER SINGOLO ---
+                setTimeout(() => {
+                    const filter = document.getElementById('lbWordFilter');
+                    if (filter) {
+                        const val = requestedWordCount.toString();
+                        // Verifichiamo se il valore esiste nelle opzioni, altrimenti 'all'
+                        const exists = Array.from(filter.options).some(o => o.value === val);
+                        filter.value = exists ? val : 'all';
+                        filter.dispatchEvent(new Event('change'));
+                    }
+                }, 100);
+            }
+        }, 150);
     }
     else {
         if (typeof window.switchLBGroup === 'function') window.switchLBGroup('multi');
         setTimeout(() => {
             const select = document.getElementById('lbModeSelect');
             const targetMode = currentMode === 'pingpong' ? 'pingpong' : 'standard';
-            if (select) { select.value = targetMode; select.dispatchEvent(new Event('change')); }
-        }, 100);
+            if (select) {
+                select.value = targetMode;
+                select.dispatchEvent(new Event('change'));
+
+                // --- NUOVO: SELEZIONE FILTRO PAROLE PER MULTI ---
+                setTimeout(() => {
+                    const filter = document.getElementById('lbWordFilter');
+                    if (filter) {
+                        const val = requestedWordCount.toString();
+                        const exists = Array.from(filter.options).some(o => o.value === val);
+                        filter.value = exists ? val : 'all';
+                        filter.dispatchEvent(new Event('change'));
+                    }
+                }, 100);
+            }
+        }, 150);
     }
 }
 

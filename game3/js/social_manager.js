@@ -112,7 +112,8 @@ window.setupChat = function(ref, containerId, limit = 50) {
         messages.forEach(m => {
             const div = document.createElement('div');
             div.className = 'chat-msg';
-            if (m.name === myName) div.classList.add('chat-msg-own');
+            const isOwn = (m.name === myName);
+            if (isOwn) div.classList.add('chat-msg-own');
             div.style.marginBottom = '6px';
 
             const header = document.createElement('div');
@@ -151,7 +152,7 @@ window.setupChat = function(ref, containerId, limit = 50) {
             container.appendChild(div);
 
             // Gestione notifiche e audio per nuovi messaggi
-            if (!initialLoad && m.ts > lastTs && m.name !== myName) {
+            if (!initialLoad && m.ts > lastTs) {
                 window.handleNewChatMessage(ref.key, m, child.key);
             }
         });
@@ -167,25 +168,27 @@ window.setupChat = function(ref, containerId, limit = 50) {
 };
 
 window.handleNewChatMessage = function(refKey, msg, msgKey) {
+    const isOwn = (msg.name === myName);
     const isGlobal = (refKey === 'globalChat');
     const isPlayingBR = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
 
-    const shouldNotify = isGlobal
+    const shouldNotifyUI = !isOwn && (isGlobal
         ? (!isGlobalChatMuted && !gameRunning && !isPlayingBR && (!isChatDrawerOpen || activeChatContext !== 'global'))
-        : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId));
+        : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId)));
 
     if (isChatCwEnabled) {
-        if (shouldNotify) {
+        if (shouldNotifyUI) {
             const prefix = isGlobal ? "🌎" : "💬";
             showToast(`${prefix} ${msg.name}: [📻 Messaggio CW...]`);
         }
-        if (!gameRunning && !isPlayingBR && (shouldNotify || (isChatDrawerOpen && activeChatContext === (isGlobal ? 'global' : 'room')))) {
+
+        if (!gameRunning && !isPlayingBR) {
             if (msgKey !== window.lastPlayedCwMsgKey) {
                 window.lastPlayedCwMsgKey = msgKey;
                 window.enqueueChatCwAudio(msg.text);
             }
         }
-    } else if (shouldNotify) {
+    } else if (shouldNotifyUI) {
         const prefix = isGlobal ? "🌎" : "💬";
         showToast(`${prefix} ${msg.name}: ${msg.text.substring(0,25)}...`);
         if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound();
