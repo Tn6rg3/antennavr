@@ -406,6 +406,7 @@ function initGame() {
         window.loadRegolamento();
         window.initProgression?.();
         window.initCourseManager?.();
+        window.setupBugSystem?.();
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
@@ -431,6 +432,72 @@ function initGame() {
     window.checkGameTypeUI?.();
     setTimeout(() => { window.checkGameTypeUI?.(); }, 1200);
 }
+
+// --- SFIDA GIORNALIERA ---
+window.setupBugSystem = function() {
+    // 1. TENTATIVO DI LETTURA "SILENZIOSO" (PROVA DI ACCESSO)
+    // Proviamo a leggere solo 1 elemento per vedere se abbiamo il permesso
+    db.ref('bugReports').limitToFirst(1).once('value', () => {
+        // Se arriviamo qui, Firebase ci ha dato il permesso -> Siamo Admin!
+        if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
+        console.log("Bug System: Admin access granted.");
+    }, (error) => {
+        // Se c'è un errore di permesso, non siamo admin. Non facciamo nulla.
+        console.log("Bug System: Standard user access.");
+    });
+
+    // 2. Invio Bug (Per tutti)
+    if (document.getElementById('btnSendBugReport')) {
+        document.getElementById('btnSendBugReport').onclick = () => {
+            const textarea = document.getElementById('bugReportText');
+            if (!textarea) return;
+            const text = textarea.value.trim();
+            if (text.length < 5) return showToast("Messaggio troppo breve!");
+
+            db.ref('bugReports').push({
+                from: myName,
+                fromId: myId,
+                username: tgUsername || "N/A",
+                msg: text,
+                ts: firebase.database.ServerValue.TIMESTAMP,
+                date: new Date().toLocaleString('it-IT')
+            }).then(() => {
+                showToast("Segnalazione inviata! Grazie.");
+                textarea.value = "";
+            }).catch(() => showToast("Errore nell'invio."));
+        };
+    }
+
+    // 3. Lettura Bug (Solo Admin)
+    if (document.getElementById('btnReadAllBugs')) {
+        document.getElementById('btnReadAllBugs').onclick = () => {
+            const list = document.getElementById('adminBugList');
+            if (!list) return;
+            list.innerHTML = "Caricamento...";
+
+            db.ref('bugReports').once('value', snap => {
+                list.innerHTML = "";
+                if (!snap.exists()) {
+                    list.innerHTML = "Nessuna segnalazione.";
+                    return;
+                }
+                snap.forEach(child => {
+                    const bug = child.val();
+                    const item = document.createElement('div');
+                    item.style.padding = "8px";
+                    item.style.borderBottom = "1px solid var(--hint-color)";
+                    item.innerHTML = `
+                        <div style="color:var(--link-color); font-weight:bold;">👤 ${bug.from} (@${bug.username})</div>
+                        <div style="font-size:0.7em; color:var(--hint-color);">${bug.date}</div>
+                        <div style="margin-top:4px; white-space: pre-wrap;">${bug.msg}</div>
+                        <button style="font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:2px 6px; margin-top:5px; cursor:pointer;" onclick="if(confirm('Eliminare?')){ db.ref('bugReports/${child.key}').remove(); this.parentElement.remove(); }">Elimina</button>
+                    `;
+                    list.prepend(item);
+                });
+            });
+        };
+    }
+};
 
 // --- SFIDA GIORNALIERA ---
 if (els.btnPlayDailyNow) {
