@@ -371,9 +371,22 @@ function initGame() {
         
         window.loadDictionaries().then(() => {
             let today = new Date().toISOString().split('T')[0];
-            if (localStorage.getItem(STORAGE_DAILY_SHOWN) !== today && !startParam && els.dailyChallengeModal) {
-                els.dailyChallengeModal.style.display = 'flex';
-            }
+            const lastShown = localStorage.getItem(STORAGE_DAILY_SHOWN);
+
+            // Verifichiamo se l'utente ha già giocato OGGI consultando la history su Firebase
+            // Se esiste già una partita daily per oggi, non mostriamo il popup
+            db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(5).once('value', histSnap => {
+                let alreadyPlayedToday = false;
+                histSnap.forEach(matchSnap => {
+                    const m = matchSnap.val();
+                    const mDate = new Date(m.date).toISOString().split('T')[0];
+                    if (m.mode === 'daily_challenge' && mDate === today) alreadyPlayedToday = true;
+                });
+
+                if (!alreadyPlayedToday && lastShown !== today && !startParam && els.dailyChallengeModal) {
+                    els.dailyChallengeModal.style.display = 'flex';
+                }
+            });
         });
 
         const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);

@@ -115,6 +115,9 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     let targetScreen = 'setupScreen';
     const amIHost = (myId === roomHostId);
 
+    // Salviamo il roomCode prima di pulirlo per decidere la schermata di ritorno
+    const currentCode = roomCode;
+
     if (listeners.players && roomCode) { db.ref(`rooms/${roomCode}/players`).off('value', listeners.players); listeners.players = null; }
     if (listeners.roomLb && roomCode) { db.ref(`rooms/${roomCode}`).off('value', listeners.roomLb); listeners.roomLb = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
@@ -197,6 +200,10 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     });
 
     if (typeof window.hideChat === 'function') window.hideChat();
+
+    // Se non è un'uscita forzata/esplicita e siamo in un contesto particolare (es. Torneo), restiamo lì
+    if (currentCode && currentCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
+
     window.showScreen(targetScreen);
 
     if (targetScreen === 'setupScreen') {
@@ -805,6 +812,10 @@ window.showPostMatchReplayButtons = function() {
             // Troviamo la cella Pt / 🔊 (indice 2)
             const tdActions = row.cells[2];
             if (tdActions) {
+                // Puliamo prima per sicurezza se richiamata più volte
+                const oldBtn = tdActions.querySelector('.action-btn-small');
+                if (oldBtn) oldBtn.remove();
+
                 const replayBtn = document.createElement('button');
                 replayBtn.className = 'action-btn-small btn-secondary';
                 replayBtn.style.padding = '2px 6px';
