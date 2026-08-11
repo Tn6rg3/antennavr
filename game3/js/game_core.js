@@ -265,6 +265,14 @@ window.joinRoomLogic = function(isReconnect = false) {
             matchDetailsArray = pData.matchDetails || [];
             if (isRejoining) window.showToast("🔄 Partita recuperata!");
         }
+
+        // --- SALTO LOBBY PER ARCADE ---
+        if (currentMode === 'arcade' || rData.mode === 'arcade' || rData.type === 'arcade') {
+            window.currentMode = 'arcade';
+            window.showScreen('countdownScreen'); // Vai dritto al countdown
+            return; // Esci dalla funzione per non eseguire showScreen('lobbyScreen')
+        }
+
         window.showScreen('lobbyScreen');
         if (els.lobbyTitleText) els.lobbyTitleText.textContent = roomCode.startsWith("TRN_") ? "Lobby Incontro Torneo 🥊" : "Lobby Stanza Libera";
         if (els.permanentGameInput) els.permanentGameInput.blur();

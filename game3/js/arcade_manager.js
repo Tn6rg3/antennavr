@@ -138,13 +138,12 @@ window.handleArcadeSuccess = function() {
     // Progressione: +1 WPM ogni parola giusta
     currentWpm += 1;
 
-    // Progressione: +1 carattere ogni 2 parole giuste
+    // Progressione Lunghezza: +1 carattere ogni 2 parole giuste
     if (arcadeCorrectInRow % 2 === 0) {
         const oldLen = arcadeCurrentLen;
         arcadeCurrentLen = Math.min(15, arcadeCurrentLen + 1);
 
-        // Ogni 3 caratteri di aumento è un nuovo "Livello"
-        // Esempio: 6 car. (Lv 2), 9 car. (Lv 3), 12 car. (Lv 4)
+        // Ogni 3 caratteri di aumento è un nuovo "Livello" (es: 6, 9, 12...)
         if (arcadeCurrentLen > oldLen && (arcadeCurrentLen - 3) % 3 === 0) {
             window.showArcadeLevelUp(arcadeCurrentLen);
             return;

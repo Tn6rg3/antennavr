@@ -37,49 +37,39 @@ window.populateGameModesUI = function() {
 };
 
 window.checkGameTypeUI = function() {
-    console.log("UI: Checking Game Type UI...");
     const typeInput = document.getElementById('gameTypeInput');
     const modeInput = document.getElementById('gameModeInput');
     if (!typeInput || !modeInput) return;
 
-    const isSingle = typeInput.value === 'single';
-    const isTrn = typeInput.value === 'tournament';
-    const isCoop = typeInput.value === 'coop';
-    const isArcade = typeInput.value === 'arcade';
+    const gType = typeInput.value;
 
-    const currentVal = modeInput.value;
-
-    // Gestione dinamica delle opzioni nel menu "Modo"
-    if (isArcade) {
-        modeInput.innerHTML = `<option value="arcade">${currentLang === 'it' ? "Intercettazione Arcade 🕹️" : "Arcade Interception 🕹️"}</option>`;
+    // FORZATURA ARCADE: Se il tipo è arcade, svuota e imposta solo arcade
+    if (gType === 'arcade') {
+        modeInput.innerHTML = `<option value="arcade">Intercettazione Arcade 🕹️</option>`;
         modeInput.value = "arcade";
-    } else if (isCoop) {
-        modeInput.innerHTML = `<option value="conquest">${currentLang === 'it' ? "Conquista (Co-op) ⚔️" : "Conquest (Co-op) ⚔️"}</option>`;
+        window.currentMode = "arcade"; // Forza variabile globale
+    } else if (gType === 'coop') {
+        modeInput.innerHTML = `<option value="conquest">Conquista (Co-op) ⚔️</option>`;
         modeInput.value = "conquest";
-    } else if (isTrn) {
-        const trnOptions = [
-            { val: "trn_create_team", it: "Fonda Squadra", en: "Create Team" },
-            { val: "trn_join_team", it: "Unisciti a Squadra", en: "Join Team" },
-            { val: "trn_create_trn", it: "Crea Nuovo Torneo", en: "Create Tournament" }
-        ];
-        modeInput.innerHTML = trnOptions.map(o => `<option value="${o.val}">${currentLang === 'it' ? o.it : o.en}</option>`).join('');
-        if (!modeInput.value.startsWith('trn_')) modeInput.value = "trn_join_team";
+    } else if (gType === 'tournament') {
+        modeInput.innerHTML = `
+            <option value="trn_join_team">Unisciti a Squadra</option>
+            <option value="trn_create_team">Fonda Squadra</option>
+            <option value="trn_create_trn">Crea Nuovo Torneo</option>`;
     } else {
-        // Multiplayer o Solo: popoliamo con le modalità standard applicando i filtri
         window.populateGameModesUI();
     }
 
-    const selectedMode = modeInput.value;
-    const modeCfg = window.GAME_MODES ? window.GAME_MODES[selectedMode] : null;
+    const isArcade = (gType === 'arcade');
+    const isSingle = (gType === 'single');
+    const isTrn = (gType === 'tournament');
+    const isCoop = (gType === 'coop');
 
-    // --- LOGICA VISIBILITÀ OPZIONI ---
     const containers = {
         timeout: document.getElementById('timeoutDiv'),
         fixed: document.getElementById('fixedSpeedContainer'),
         easy: document.getElementById('easyModeContainer'),
         spacing: document.getElementById('advancedSpacingContainer'),
-        custom: document.getElementById('customDictControl'),
-        spectator: document.getElementById('spectatorContainer'),
         btn: document.getElementById('createRoomBtn'),
         startWpm: document.getElementById('startWpmInput'),
         wordCount: document.getElementById('wordCountInput')
@@ -87,35 +77,19 @@ window.checkGameTypeUI = function() {
 
     if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcade) ? 'none' : 'block';
 
-    if (modeCfg) {
-        if (containers.fixed) containers.fixed.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
-        if (containers.easy) containers.easy.style.display = isSingle ? 'flex' : 'none';
-        if (containers.spacing) containers.spacing.style.display = (isSingle && modeCfg.spacingConfigurable) ? 'flex' : 'none';
-
-        if (containers.startWpm) {
-            containers.startWpm.disabled = (modeCfg.wpmConfigurable === false || isArcade);
-            if (isArcade) containers.startWpm.value = modeCfg.defaultWpm;
-            else if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) containers.startWpm.value = modeCfg.defaultWpm;
-        }
-        if (containers.wordCount) {
-            containers.wordCount.disabled = (modeCfg.wordCountConfigurable === false || isArcade);
-            if (isArcade) containers.wordCount.value = modeCfg.defaultWordCount;
-            else if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) containers.wordCount.value = modeCfg.defaultWordCount;
-        }
-    } else {
+    // Nascondi tutto se arcade
+    if (isArcade) {
         if (containers.fixed) containers.fixed.style.display = 'none';
-        if (containers.easy) containers.easy.style.display = isSingle ? 'flex' : 'none';
+        if (containers.easy) containers.easy.style.display = 'none';
         if (containers.spacing) containers.spacing.style.display = 'none';
+        if (containers.startWpm) containers.startWpm.disabled = true;
+        if (containers.wordCount) containers.wordCount.disabled = true;
+        if (containers.btn) containers.btn.textContent = "Gioca Subito Arcade 🕹️";
+    } else {
+        // ... logica normale per le altre modalità ...
+        if (containers.btn) containers.btn.textContent = isSingle ? "Gioca Subito" : "Inizia Partita Libera";
     }
-
-    if (containers.custom) containers.custom.style.display = (isSingle && selectedMode === 'custom') ? 'flex' : 'none';
-    if (containers.spectator) containers.spectator.style.display = isSingle ? 'flex' : 'none';
-
-    if (containers.btn) {
-        if (isCoop) containers.btn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
-        else if (isTrn) containers.btn.textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
-        else containers.btn.textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
-    }
+};
 };
 
 window.setLanguage = function(lang) {
