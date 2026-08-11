@@ -412,3 +412,66 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
     .action-btn-small { padding: 5px 8px !important; font-size: 0.78em !important; }
     #setupScreen h2 { font-size: 0.95em !important; max-width: 100%; margin-bottom: 4px !important; }
 }
+
+/* ==========================================================================
+   ARCADE MODE (RAIN)
+   ========================================================================== */
+
+.arcade-brick {
+    position: absolute;
+    min-width: 80px;
+    height: 40px;
+    background: rgba(0, 255, 0, 0.2);
+    border: 2px solid #0f0;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #0f0;
+    font-weight: bold;
+    font-size: 1.2em;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+    transition: transform 0.1s linear;
+    z-index: 10;
+}
+
+.arcade-brick.exploded {
+    animation: brick-explode 0.5s forwards;
+    pointer-events: none;
+}
+
+@keyframes brick-explode {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.5; filter: brightness(2); }
+    100% { transform: scale(2); opacity: 0; }
+}
+
+.shake {
+    animation: screen-shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes screen-shake {
+    10%, 90% { transform: translate3d(-1px, 0, 0); }
+    20%, 80% { transform: translate3d(2px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+    40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+
+#arcadeArea {
+    display: none;
+    flex-direction: column;
+}
+
+#arcadeArea.active-screen {
+    display: flex;
+}
+
+.pulse-red {
+    animation: pulse-red-anim 1s infinite;
+}
+
+@keyframes pulse-red-anim {
+    0% { color: #f44336; text-shadow: 0 0 0px #f44336; }
+    50% { color: #ff5252; text-shadow: 0 0 10px #f44336; }
+    100% { color: #f44336; text-shadow: 0 0 0px #f44336; }
+}
