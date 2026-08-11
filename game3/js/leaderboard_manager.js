@@ -285,19 +285,26 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
             const wpmLabel = isArcade ? "Peak " : "";
             const wpmSpan = document.createElement('span'); wpmSpan.style.color = 'var(--champ-color)'; wpmSpan.style.fontWeight = 'bold'; wpmSpan.textContent = wpmLabel + player.wpm + " WPM"; dateDiv.appendChild(wpmSpan);
         }
-        if (isArcade && player.wave) {
-            const waveSpan = document.createElement('span'); waveSpan.style.color = 'var(--link-color)'; waveSpan.style.marginLeft = '5px'; waveSpan.style.fontWeight = 'bold'; waveSpan.textContent = `(Lvl. ${player.wave})`; dateDiv.appendChild(waveSpan);
-        }
 
         infoDiv.appendChild(nameDiv); infoDiv.appendChild(dateDiv);
         mainDiv.appendChild(medalDiv); mainDiv.appendChild(infoDiv);
+
+        row.appendChild(mainDiv);
+
+        // NUOVA COLONNA: LIVELLO RAGGIUNTO (SOLO ARCADE)
+        if (isArcade) {
+            const midDiv = document.createElement('div');
+            midDiv.style.cssText = "flex: 0 0 70px; text-align: center; font-weight: bold; color: var(--link-color); border-left: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); margin: 0 5px;";
+            midDiv.innerHTML = `<div style="font-size:0.65em; color:var(--hint-color); font-weight:normal; text-transform:uppercase;">Livello</div>${player.wave || 1}`;
+            row.appendChild(midDiv);
+        }
 
         const scoreDiv = document.createElement('div'); scoreDiv.style.textAlign = 'right';
         const scoreB = document.createElement('b'); scoreB.style.fontSize = '1.1em'; scoreB.style.color = 'var(--link-color)'; scoreB.textContent = player.score;
         const ptSpan = document.createElement('span'); ptSpan.style.fontSize = '0.7em'; ptSpan.style.color = 'var(--hint-color)'; ptSpan.style.marginLeft = '2px'; ptSpan.textContent = 'pt';
         scoreDiv.appendChild(scoreB); scoreDiv.appendChild(ptSpan);
 
-        row.appendChild(mainDiv); row.appendChild(scoreDiv); container.appendChild(row);
+        row.appendChild(scoreDiv); container.appendChild(row);
     });
 };
 
