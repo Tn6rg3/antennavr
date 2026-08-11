@@ -373,18 +373,23 @@ function initGame() {
             let today = new Date().toISOString().split('T')[0];
             const lastShown = localStorage.getItem(STORAGE_DAILY_SHOWN);
 
+            if (lastShown === today || startParam) return;
+
             // Verifichiamo se l'utente ha già giocato OGGI consultando la history su Firebase
-            // Se esiste già una partita daily per oggi, non mostriamo il popup
-            db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(5).once('value', histSnap => {
+            db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value', histSnap => {
                 let alreadyPlayedToday = false;
                 histSnap.forEach(matchSnap => {
                     const m = matchSnap.val();
+                    if (!m.date) return;
                     const mDate = new Date(m.date).toISOString().split('T')[0];
                     if (m.mode === 'daily_challenge' && mDate === today) alreadyPlayedToday = true;
                 });
 
-                if (!alreadyPlayedToday && lastShown !== today && !startParam && els.dailyChallengeModal) {
+                if (!alreadyPlayedToday && els.dailyChallengeModal) {
                     els.dailyChallengeModal.style.display = 'flex';
+                } else if (alreadyPlayedToday) {
+                    // Aggiorniamo il cache locale se Firebase dice che abbiamo giocato
+                    localStorage.setItem(STORAGE_DAILY_SHOWN, today);
                 }
             });
         });

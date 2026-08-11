@@ -736,8 +736,15 @@ window.finishGame = function() {
         els.quitGameBtn.textContent = currentLang === 'it' ? "Vai alla Classifica" : "Go to Leaderboard";
         els.quitGameBtn.classList.remove('btn-danger');
         els.quitGameBtn.classList.add('btn-success');
+
+        // Salviamo lo stato del gioco corrente per la navigazione classifiche
+        const savedMode = currentMode;
+        const savedWordCount = requestedWordCount;
+        const savedSinglePlayer = isSinglePlayer;
+        const savedRoomCode = roomCode;
+
         els.quitGameBtn.onclick = function() {
-            // Ripristiniamo il comportamento originale e andiamo alla classifica
+            // Pulizia UI e ripristino bottone originale
             els.quitGameBtn.textContent = currentLang === 'it' ? "Abbandona" : "Quit";
             els.quitGameBtn.classList.add('btn-danger');
             els.quitGameBtn.classList.remove('btn-success');
@@ -748,7 +755,8 @@ window.finishGame = function() {
                 }
             };
 
-            finishGameNavigation();
+            // Eseguiamo la navigazione usando i dati salvati
+            window.finishGameNavigation(savedMode, savedWordCount, savedSinglePlayer, savedRoomCode);
         };
     }
 
@@ -829,30 +837,28 @@ window.showPostMatchReplayButtons = function() {
     });
 };
 
-function finishGameNavigation() {
-    window.lbManualRouting = true; // Segnale per ui_manager/game_core di non resettare la tab
+function finishGameNavigation(mode, wordCount, isSingle, code) {
+    window.lbManualRouting = true;
     window.showScreen('leaderboardScreen');
 
     // Determiniamo la categoria principale (tab)
     let mainGroup = 'multi';
-    if (currentMode === 'daily_challenge') mainGroup = 'daily';
-    else if (roomCode && roomCode.startsWith("TRN_")) mainGroup = 'special';
-    else if (isSinglePlayer) mainGroup = 'single';
+    if (mode === 'daily_challenge') mainGroup = 'daily';
+    else if (code && code.startsWith("TRN_")) mainGroup = 'special';
+    else if (isSingle) mainGroup = 'single';
 
     // Determiniamo il sotto-modo (select)
     let subMode = 'standard';
-    if (currentMode === 'callsign') subMode = 'callsign';
-    else if (currentMode === 'quiz') subMode = 'quiz';
-    else if (currentMode === 'chars') subMode = 'chars';
-    else if (currentMode === 'pingpong') subMode = 'pingpong';
-    else if (roomCode && roomCode.startsWith("TRN_")) subMode = 'tournaments';
+    if (mode === 'callsign') subMode = 'callsign';
+    else if (mode === 'quiz') subMode = 'quiz';
+    else if (mode === 'chars') subMode = 'chars';
+    else if (mode === 'pingpong') subMode = 'pingpong';
+    else if (code && code.startsWith("TRN_")) subMode = 'tournaments';
 
-    // 1. Attiviamo il Tab principale
     if (typeof window.switchLBGroup === 'function') {
         window.switchLBGroup(mainGroup);
     }
 
-    // 2. Impostiamo il Sotto-Modo e il Filtro Parole con un piccolo delay per caricamento UI
     setTimeout(() => {
         const modeSelect = document.getElementById('lbModeSelect');
         if (modeSelect) {
@@ -860,11 +866,10 @@ function finishGameNavigation() {
             modeSelect.dispatchEvent(new Event('change'));
         }
 
-        // 3. Impostiamo il filtro quantità parole (10, 20, 30, 50)
         setTimeout(() => {
             const wordFilter = document.getElementById('lbWordFilter');
             if (wordFilter) {
-                const val = requestedWordCount.toString();
+                const val = wordCount.toString();
                 const exists = Array.from(wordFilter.options).some(o => o.value === val);
                 wordFilter.value = exists ? val : 'all';
                 wordFilter.dispatchEvent(new Event('change'));
