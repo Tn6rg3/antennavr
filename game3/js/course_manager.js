@@ -216,6 +216,14 @@ window.preGenerateCourseGroups = function() {
 
 window.startCourseSessionSequence = function() {
     window.showScreen('gameArea');
+
+    // RESET UI E INPUT PER EVITARE RESIDUI
+    if (els.permanentGameInput) {
+        els.permanentGameInput.value = "";
+        els.permanentGameInput.disabled = false;
+        setTimeout(() => els.permanentGameInput.focus(), 500);
+    }
+    if (els.tableBody) els.tableBody.innerHTML = "";
     if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
 
     if (courseSessionTimer) clearInterval(courseSessionTimer);
@@ -239,6 +247,7 @@ window.startCourseSessionSequence = function() {
         window.courseData.current_day_session.remaining_seconds--;
         window.updateCourseTimerUI();
 
+        // Se scade l'intervallo, segnaliamo che la prossima pausa è pronta
         if (window.courseSessionPauseDuration > 0 && Date.now() >= window.courseSessionNextPauseTs) {
             window.coursePausePending = true;
         }
@@ -249,19 +258,25 @@ window.startCourseSessionSequence = function() {
         }
     }, 1000);
 
-    setTimeout(() => { if (els.permanentGameInput) els.permanentGameInput.focus(); }, 200);
     setTimeout(() => { if (gameRunning) window.playNextCourseGroup(); }, 800);
 };
 
 window.triggerCoursePause = function() {
+    console.log("Course: Triggering Pause...");
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+
     window.courseIsPaused = true;
     inputActive = false;
-    if (els.permanentGameInput) els.permanentGameInput.value = "";
+
+    if (els.permanentGameInput) {
+        els.permanentGameInput.value = "";
+        els.permanentGameInput.placeholder = "PAUSA CAFFÈ...";
+        els.permanentGameInput.disabled = true;
+    }
 
     let timeLeft = window.courseSessionPauseDuration;
     const updatePauseUI = () => {
-        if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<span style="color:#ff9800">☕ PAUSA: ${timeLeft}s</span>`;
+        if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<span style="color:#ff9800; font-weight:bold; animation: pulse 1s infinite;">☕ PAUSA: ${timeLeft}s</span>`;
     };
 
     updatePauseUI();
@@ -276,15 +291,16 @@ window.triggerCoursePause = function() {
             clearInterval(pauseInterval);
             window.courseIsPaused = false;
             window.courseSessionNextPauseTs = Date.now() + (window.courseSessionPauseInterval * 1000);
+
             if (els.scoreDisplay) els.scoreDisplay.textContent = "Sessione Corso";
-            inputActive = true;
-            if (gameRunning) {
-                if (els.permanentGameInput) {
-                    els.permanentGameInput.focus();
-                    els.permanentGameInput.value = "";
-                }
-                window.playNextCourseGroup();
+            if (els.permanentGameInput) {
+                els.permanentGameInput.disabled = false;
+                els.permanentGameInput.placeholder = "Digita qui...";
+                els.permanentGameInput.focus();
             }
+
+            inputActive = true;
+            if (gameRunning) window.playNextCourseGroup();
         } else {
             updatePauseUI();
         }

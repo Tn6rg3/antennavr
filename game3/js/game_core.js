@@ -816,10 +816,14 @@ window.handleWordSubmission = function(userWord) {
         const currentWord = gameWords[wordIndex] || "";
         const isCorrect = (userWord === currentWord);
 
+        // Puliamo l'input immediatamente dopo l'invio nel corso per evitare residui
+        if (els.permanentGameInput) els.permanentGameInput.value = "";
+
         if (window.courseData) {
             if (!window.courseData.progress.char_stats) window.courseData.progress.char_stats = {};
             for (let i=0; i<currentWord.length; i++) {
                 let c = currentWord[i];
+                if (!c || ['__proto__','constructor','prototype'].includes(c)) continue;
                 if (!window.courseData.progress.char_stats[c]) window.courseData.progress.char_stats[c] = { attempts: 0, errors: 0 };
                 window.courseData.progress.char_stats[c].attempts++;
                 if (userWord[i] !== currentWord[i]) window.courseData.progress.char_stats[c].errors++;
