@@ -13,7 +13,7 @@ window.startArcadeSequence = function() {
     arcadeLevel = 1;
     arcadeWordsSolved = 0;
     arcadeWordLen = 3;
-    arcadeWpm = parseInt(els.startWpmInput?.value) || 15;
+    arcadeWpm = 20; // Velocità fissa iniziale per tutti
     peakWpm = arcadeWpm;
 
     showScreen('arcadeArea');

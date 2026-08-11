@@ -89,9 +89,15 @@ window.checkGameTypeUI = function() {
         wordCount: document.getElementById('wordCountInput')
     };
 
-    if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop) ? 'none' : 'block';
+    if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcadeType) ? 'none' : 'block';
 
-    if (modeCfg) {
+    if (isArcadeType) {
+        if (containers.startWpm) {
+            containers.startWpm.disabled = true;
+            containers.startWpm.value = 20;
+        }
+        if (containers.wordCount) containers.wordCount.disabled = true;
+    } else if (modeCfg) {
         if (containers.fixed) containers.fixed.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
         if (containers.easy) containers.easy.style.display = isSingle ? 'flex' : 'none';
         if (containers.spacing) containers.spacing.style.display = (isSingle && modeCfg.spacingConfigurable) ? 'flex' : 'none';

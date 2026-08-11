@@ -144,9 +144,9 @@ window.GAME_MODES = {
         titleIt: "Arcade (Pioggia) 🕹️",
         titleEn: "Arcade (Rain) 🕹️",
         icon: "🕹️",
-        defaultWpm: 15,
+        defaultWpm: 20,
         defaultWordCount: 0, // Illimitato
-        wpmConfigurable: true,
+        wpmConfigurable: false,
         wordCountConfigurable: false,
         fixedSpeedAllowed: false,
         spacingConfigurable: false,
