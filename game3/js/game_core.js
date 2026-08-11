@@ -653,24 +653,6 @@ window.finishGame = function() {
         status: 'online'
     });
 
-    window.showScreen('leaderboardScreen');
-
-    if (currentMode === 'daily_challenge' && els.btnShareDaily) {
-        els.btnShareDaily.style.display = 'inline-block';
-        els.btnShareDaily.onclick = () => {
-            const appUrl = encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`);
-            const textMsg = encodeURIComponent(`📻 Sfida Giornaliera CW!\nHo totalizzato ${totalScore} pt (Max Velocità: ${currentWpm} WPM).\nRiesci a fare di meglio?`);
-            const shareUrl = `https://t.me/share/url?url=${appUrl}&text=${textMsg}`;
-            try {
-                if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl); else window.open(shareUrl, '_blank');
-            } catch (e) {
-                window.open(shareUrl, '_blank');
-            }
-        };
-    } else if (els.btnShareDaily) {
-        els.btnShareDaily.style.display = 'none';
-    }
-
     if (roomCode) {
         const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
         myPlayerRef.update({ finished: true, score: totalScore, wpm: currentWpm, matchDetails: matchDetailsArray });
@@ -731,6 +713,9 @@ window.finishGame = function() {
         }
     }
 
+    // --- MOSTRA TASTI RIASCOLTO NELLA TABELLA SOLO A FINE PARTITA ---
+    window.showPostMatchReplayButtons();
+
     // --- MODIFICA: RESTA NELLA SCHERMATA GIOCO PER REVISIONE ---
     if (els.quitGameBtn) {
         els.quitGameBtn.textContent = currentLang === 'it' ? "Vai alla Classifica" : "Go to Leaderboard";
@@ -754,6 +739,31 @@ window.finishGame = function() {
 
     if (els.gameInputArea) els.gameInputArea.style.display = 'none';
     if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<b style="color:var(--champ-color)">FINITO!</b> PT: ${totalScore}`;
+};
+
+window.showPostMatchReplayButtons = function() {
+    if (!els.tableBody) return;
+    const rows = els.tableBody.querySelectorAll('tr');
+    rows.forEach((row, index) => {
+        const detail = matchDetailsArray[index];
+        if (!detail) return;
+
+        const isCorrect = (detail.real === detail.typed);
+        if (!isCorrect) {
+            // Troviamo la cella Pt / 🔊 (indice 2)
+            const tdActions = row.cells[2];
+            if (tdActions) {
+                const replayBtn = document.createElement('button');
+                replayBtn.className = 'action-btn-small btn-secondary';
+                replayBtn.style.padding = '2px 6px';
+                replayBtn.style.marginTop = '2px';
+                replayBtn.style.width = 'auto';
+                replayBtn.innerHTML = '🔊';
+                replayBtn.onclick = () => window.playMorseAudio(detail.real, detail.wpm || currentWpm, true);
+                tdActions.appendChild(replayBtn);
+            }
+        }
+    });
 };
 
 function finishGameNavigation() {
@@ -882,28 +892,14 @@ window.handleWordSubmission = function(userWord) {
             }
             tdReal.appendChild(span);
         }
-        const tdActions = document.createElement('td');
-        tdActions.style.textAlign = 'center';
 
-        const ptsSpan = document.createElement('span');
-        ptsSpan.textContent = isCorrect ? "OK" : "ERR";
-        ptsSpan.style.color = isCorrect ? "#4caf50" : "#d32f2f";
-        ptsSpan.style.fontWeight = "bold";
-        ptsSpan.style.display = 'block';
-        tdActions.appendChild(ptsSpan);
+        const tdPoints = document.createElement('td');
+        tdPoints.style.textAlign = 'center';
+        tdPoints.textContent = isCorrect ? "OK" : "ERR";
+        tdPoints.style.color = isCorrect ? "#4caf50" : "#d32f2f";
+        tdPoints.style.fontWeight = "bold";
 
-        if (!isCorrect) {
-            const replayBtn = document.createElement('button');
-            replayBtn.className = 'action-btn-small btn-secondary';
-            replayBtn.style.padding = '2px 6px';
-            replayBtn.style.marginTop = '2px';
-            replayBtn.style.width = 'auto';
-            replayBtn.innerHTML = '🔊';
-            replayBtn.onclick = () => window.playMorseAudio(currentWord, currentWpm, true);
-            tdActions.appendChild(replayBtn);
-        }
-
-        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdActions);
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
         if (els.tableBody) {
             els.tableBody.appendChild(tr);
             els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
@@ -1068,28 +1064,13 @@ window.handleWordSubmission = function(userWord) {
         const tdReal = document.createElement('td');
         window.renderDiffSecure(tdReal, currentWord, userWord);
 
-        const tdActions = document.createElement('td');
-        tdActions.style.textAlign = 'center';
+        const tdPoints = document.createElement('td');
+        tdPoints.style.textAlign = 'center';
+        tdPoints.style.color = scoreColor;
+        tdPoints.style.fontWeight = 'bold';
+        tdPoints.textContent = currentMode === 'chars' ? points : (usedReplay ? '0' : (points > 0 ? "+"+points : points));
 
-        const ptsSpan = document.createElement('span');
-        ptsSpan.style.color = scoreColor;
-        ptsSpan.style.fontWeight = 'bold';
-        ptsSpan.style.display = 'block';
-        ptsSpan.textContent = currentMode === 'chars' ? points : (usedReplay ? '0' : (points > 0 ? "+"+points : points));
-        tdActions.appendChild(ptsSpan);
-
-        if (levDist > 0) {
-            const replayBtn = document.createElement('button');
-            replayBtn.className = 'action-btn-small btn-secondary';
-            replayBtn.style.padding = '2px 6px';
-            replayBtn.style.marginTop = '2px';
-            replayBtn.style.width = 'auto';
-            replayBtn.innerHTML = '🔊';
-            replayBtn.onclick = () => window.playMorseAudio(currentWord, currentWpm, true);
-            tdActions.appendChild(replayBtn);
-        }
-
-        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdActions);
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
         if (els.tableBody) {
             els.tableBody.appendChild(tr);
             els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
@@ -1131,27 +1112,13 @@ window.setupPingPongListener = function() {
             const tdTyped = document.createElement('td'); tdTyped.textContent = ppData.lastGuess.typed || '';
             const tdReal = document.createElement('td'); window.renderDiffSecure(tdReal, ppData.lastGuess.real, ppData.lastGuess.typed || '');
 
-            const tdActions = document.createElement('td');
-            tdActions.style.textAlign = 'center';
-            const ptsSpan = document.createElement('span');
-            ptsSpan.style.fontWeight = 'bold';
-            ptsSpan.style.display = 'block';
-            ptsSpan.style.color = ppData.lastGuess.points > 0 ? "#4caf50" : (ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
-            ptsSpan.textContent = ppData.lastGuess.points;
-            tdActions.appendChild(ptsSpan);
+            const tdPoints = document.createElement('td');
+            tdPoints.style.textAlign = 'center';
+            tdPoints.style.fontWeight = 'bold';
+            tdPoints.style.color = ppData.lastGuess.points > 0 ? "#4caf50" : (ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
+            tdPoints.textContent = ppData.lastGuess.points;
 
-            if (ppData.lastGuess.typed !== ppData.lastGuess.real) {
-                const replayBtn = document.createElement('button');
-                replayBtn.className = 'action-btn-small btn-secondary';
-                replayBtn.style.padding = '2px 6px';
-                replayBtn.style.marginTop = '2px';
-                replayBtn.style.width = 'auto';
-                replayBtn.innerHTML = '🔊';
-                replayBtn.onclick = () => window.playMorseAudio(ppData.lastGuess.real, currentWpm, true);
-                tdActions.appendChild(replayBtn);
-            }
-
-            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdActions);
+            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
             if (els.tableBody) els.tableBody.appendChild(tr);
             if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
         }
