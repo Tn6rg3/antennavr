@@ -18,10 +18,6 @@ window.listenToChat = function() {
         window.setupChat(db.ref(`rooms/${roomCode}/chat`), 'lobbyChatMessages', 50);
         window.setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', 50);
         if (els.chatTitle) els.chatTitle.textContent = "💬 Chat Stanza";
-        if (els.gameArea && els.gameArea.classList.contains('active-screen')) {
-            els.chatDrawer.style.display = 'none';
-            isChatDrawerOpen = false;
-        }
     } else {
         window.setupChat(db.ref('globalChat'), 'chatMessages', 50);
         if (els.chatTitle) els.chatTitle.textContent = "🌎 Chat Globale";
@@ -80,6 +76,12 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
     if (!listeners.activeChat) listeners.activeChat = {};
 
+    // Evitiamo di ri-agganciare lo stesso listener se stiamo già ascoltando lo stesso ref
+    if (listeners.activeChat[containerId] && listeners.activeChat[containerId].refPath === ref.toString()) {
+        return;
+    }
+
+    // Se stiamo cambiando ref (es. da global a room), spegniamo il vecchio
     if (listeners.activeChat[containerId]) {
         listeners.activeChat[containerId].ref.off('value', listeners.activeChat[containerId].callback);
         delete listeners.activeChat[containerId];
@@ -138,7 +140,6 @@ window.setupChat = function(ref, containerId, limit = 50) {
             const textSpan = document.createElement('div');
             textSpan.style.wordBreak = 'break-word';
 
-            // OTTIMIZZAZIONE: Verifica diretta su localStorage per evitare problemi di scope
             const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
 
             if (isCwActive) {
@@ -167,7 +168,7 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
     const finalRef = limit ? ref.limitToLast(limit) : ref;
     finalRef.on('value', callback);
-    listeners.activeChat[containerId] = { ref: finalRef, callback: callback };
+    listeners.activeChat[containerId] = { ref: finalRef, callback: callback, refPath: ref.toString() };
 };
 
 window.handleNewChatMessage = function(refKey, msg, msgKey) {
@@ -536,6 +537,12 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
     if (!listeners.activeChat) listeners.activeChat = {};
 
+    // Evitiamo di ri-agganciare lo stesso listener se stiamo già ascoltando lo stesso ref
+    if (listeners.activeChat[containerId] && listeners.activeChat[containerId].refPath === ref.toString()) {
+        return;
+    }
+
+    // Se stiamo cambiando ref (es. da global a room), spegniamo il vecchio
     if (listeners.activeChat[containerId]) {
         listeners.activeChat[containerId].ref.off('value', listeners.activeChat[containerId].callback);
         delete listeners.activeChat[containerId];
@@ -594,7 +601,6 @@ window.setupChat = function(ref, containerId, limit = 50) {
             const textSpan = document.createElement('div');
             textSpan.style.wordBreak = 'break-word';
 
-            // OTTIMIZZAZIONE: Verifica diretta su localStorage per evitare problemi di scope
             const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
 
             if (isCwActive) {
@@ -623,7 +629,7 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
     const finalRef = limit ? ref.limitToLast(limit) : ref;
     finalRef.on('value', callback);
-    listeners.activeChat[containerId] = { ref: finalRef, callback: callback };
+    listeners.activeChat[containerId] = { ref: finalRef, callback: callback, refPath: ref.toString() };
 };
 
 window.handleNewChatMessage = function(refKey, msg, msgKey) {

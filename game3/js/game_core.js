@@ -80,7 +80,10 @@ window.showScreen = function(screenId) {
             activeChatContext = null;
         }
     } else if (screenId === 'leaderboardScreen') {
-        if (typeof window.switchLBGroup === 'function') window.switchLBGroup('daily');
+        if (!window.lbManualRouting) {
+            if (typeof window.switchLBGroup === 'function') window.switchLBGroup('daily');
+        }
+        window.lbManualRouting = false;
     } else if (screenId === 'teamsScreen') {
         activeChatContext = 'team';
         if (typeof window.checkMyTeamStatus === 'function') window.checkMyTeamStatus();
@@ -767,6 +770,7 @@ window.showPostMatchReplayButtons = function() {
 };
 
 function finishGameNavigation() {
+    window.lbManualRouting = true; // Segnale per ui_manager/game_core di non resettare la tab
     window.showScreen('leaderboardScreen');
 
     // Determiniamo la categoria principale (tab)
