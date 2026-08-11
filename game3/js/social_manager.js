@@ -252,30 +252,22 @@ window.renderOrUpdateUserListItem = function(userId, u) {
     const canSpectate = (isPlaying && u.allowSpectators && u.activeRoomCode);
 
     const leftSpan = document.createElement('span');
-    leftSpan.style.cssText = "display: flex; flex-direction: column; justify-content: center; overflow: hidden; max-width: 65%; font-size: 0.9em; line-height: 1.2;";
-
-    const nameAndLevelDiv = document.createElement('div');
-    nameAndLevelDiv.style.cssText = "display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px;";
+    leftSpan.style.cssText = "display: flex; flex-direction: column; flex-grow: 1; min-width: 0; padding-right: 10px;";
 
     const nameB = document.createElement('b');
     nameB.textContent = u.name || "Anonimo";
-    nameB.style.cursor = 'pointer';
-    nameB.style.color = 'var(--link-color)';
-    nameB.style.textDecoration = 'underline';
-    nameB.style.wordBreak = 'break-word'; // Permette al nome di spezzarsi se troppo lungo
+    nameB.style.cssText = "font-size: 0.95em; color: var(--link-color); text-decoration: underline; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;";
     nameB.onclick = () => window.openTeamInviteModal(userId, u.name);
 
-    nameAndLevelDiv.appendChild(nameB);
+    leftSpan.appendChild(nameB);
 
-    // AGGIUNTA LIVELLO NELLA LISTA ONLINE
+    // AGGIUNTA LIVELLO SOTTO IL NOME
     if (u.level) {
-        const lvSpan = document.createElement('span');
-        lvSpan.style.cssText = "font-size: 0.75em; color: var(--champ-color); font-weight: bold; flex-shrink: 0;";
-        lvSpan.textContent = `(${u.level})`;
-        nameAndLevelDiv.appendChild(lvSpan);
+        const lvDiv = document.createElement('div');
+        lvDiv.style.cssText = "font-size: 0.72em; color: var(--champ-color); font-weight: bold; margin-top: -1px; opacity: 0.9;";
+        lvDiv.textContent = `Livello ${u.level}`;
+        leftSpan.appendChild(lvDiv);
     }
-
-    leftSpan.appendChild(nameAndLevelDiv);
 
     const btn = document.createElement('button');
     btn.style.cssText = "width:auto; padding:4px 10px; font-size:0.8em; margin:0; flex-shrink:0;";
