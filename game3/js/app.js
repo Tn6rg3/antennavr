@@ -440,14 +440,37 @@ function initGame() {
 
 // --- SFIDA GIORNALIERA ---
 window.setupBugSystem = function() {
-    // 1. TENTATIVO DI LETTURA "SILENZIOSO" (PROVA DI ACCESSO)
-    // Proviamo a leggere solo 1 elemento per vedere se abbiamo il permesso
-    db.ref('bugReports').limitToFirst(1).once('value', () => {
+    const badge = document.getElementById('bugsBadge');
+
+    // 1. TENTATIVO DI LETTURA "SILENZIOSO" (PROVA DI ACCESSO E BADGE)
+    db.ref('bugReports').on('value', snap => {
         // Se arriviamo qui, Firebase ci ha dato il permesso -> Siamo Admin!
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
-        console.log("Bug System: Admin access granted.");
+
+        if (!snap.exists()) {
+            if (badge) badge.style.display = 'none';
+            return;
+        }
+
+        // Calcolo badge: messaggi dopo l'ultima visualizzazione
+        const lastSeen = parseInt(localStorage.getItem('cw_last_bug_ts') || 0);
+        let newCount = 0;
+        let latestTs = lastSeen;
+
+        snap.forEach(c => {
+            const b = c.val();
+            if (b.ts > lastSeen) newCount++;
+            if (b.ts > latestTs) latestTs = b.ts;
+        });
+
+        if (newCount > 0 && badge) {
+            badge.textContent = newCount;
+            badge.style.display = 'flex';
+        } else if (badge) {
+            badge.style.display = 'none';
+        }
+        window.temp_max_bug_ts = latestTs;
     }, (error) => {
-        // Se c'è un errore di permesso, non siamo admin. Non facciamo nulla.
         console.log("Bug System: Standard user access.");
     });
 
@@ -478,6 +501,11 @@ window.setupBugSystem = function() {
         document.getElementById('btnReadAllBugs').onclick = () => {
             const list = document.getElementById('adminBugList');
             if (!list) return;
+
+            // Azzeriamo il badge quando leggiamo
+            localStorage.setItem('cw_last_bug_ts', window.temp_max_bug_ts || Date.now());
+            if (badge) badge.style.display = 'none';
+
             list.innerHTML = "Caricamento...";
 
             db.ref('bugReports').once('value', snap => {
@@ -495,7 +523,12 @@ window.setupBugSystem = function() {
                         <div style="color:var(--link-color); font-weight:bold;">👤 ${bug.from} (@${bug.username})</div>
                         <div style="font-size:0.7em; color:var(--hint-color);">${bug.date}</div>
                         <div style="margin-top:4px; white-space: pre-wrap;">${bug.msg}</div>
-                        <button style="font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:2px 6px; margin-top:5px; cursor:pointer;" onclick="if(confirm('Eliminare?')){ db.ref('bugReports/${child.key}').remove(); this.parentElement.remove(); }">Elimina</button>
+                        <button style="font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:2px 6px; margin-top:5px; cursor:pointer;"
+                                onclick="if(confirm('Eliminare definitivamente?')){
+                                    db.ref('bugReports/${child.key}').remove()
+                                        .then(() => { this.parentElement.remove(); showToast('Eliminato'); })
+                                        .catch(e => { alert('Errore permessi: controlla le regole Firebase'); console.error(e); });
+                                }">Elimina</button>
                     `;
                     list.prepend(item);
                 });
