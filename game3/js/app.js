@@ -454,8 +454,8 @@ function initGame() {
 window.setupBugSystem = function() {
     const badge = document.getElementById('bugsBadge');
 
-    // 1. TENTATIVO DI LETTURA "SILENZIOSO" (PROVA DI ACCESSO E BADGE)
-    db.ref('bugReports').on('value', snap => {
+    // 1. TENTATIVO DI LETTURA "SILENZIOSO" (LIMITATO AI PIÙ RECENTI)
+    db.ref('bugReports').limitToLast(20).on('value', snap => {
         // Se arriviamo qui, Firebase ci ha dato il permesso -> Siamo Admin!
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
 

@@ -1,6 +1,41 @@
 // js/teams_manager.js
 
-window.checkMyTeamStatus = function() {
+window.checkMyTeamStatus = async function() {
+    // OTTIMIZZAZIONE: Cerchiamo prima il teamId nel profilo utente per evitare di scaricare TUTTI i team
+    let tId = null;
+    try {
+        const uSnap = await db.ref(`users/${myId}/teamId`).once('value');
+        tId = uSnap.val();
+    } catch(e) {}
+
+    if (tId) {
+        db.ref(`teams/${tId}`).once('value', snap => {
+            const team = snap.val();
+            if (team && team.members && team.members[myId] && team.status !== 'retired') {
+                myTeamId = tId;
+                myTeamName = team.name;
+                isTeamCaptain = (team.captainId === myId);
+
+                if (els.noTeamView) els.noTeamView.style.display = 'none';
+                if (els.myTeamView) els.myTeamView.style.display = 'flex';
+                window.listenToMyTeam();
+                window.listenToTournaments();
+                window.listenToAllTeams(true);
+                window.switchTeamTab('gest');
+                return;
+            } else {
+                // Se il team non esiste o non siamo più membri, puliamo il riferimento
+                db.ref(`users/${myId}/teamId`).remove();
+                window.checkMyTeamStatusFallback();
+            }
+        });
+    } else {
+        window.checkMyTeamStatusFallback();
+    }
+};
+
+window.checkMyTeamStatusFallback = function() {
+    // Vecchio metodo (scansione) come fallback o per utenti vecchi
     db.ref('teams').once('value', snap => {
         myTeamId = null; isTeamCaptain = false; myTeamName = "";
         snap.forEach(team => {
@@ -8,6 +43,8 @@ window.checkMyTeamStatus = function() {
                 myTeamId = team.key;
                 myTeamName = team.val().name;
                 isTeamCaptain = (team.val().captainId === myId);
+                // Salviamo per la prossima volta
+                db.ref(`users/${myId}/teamId`).set(myTeamId);
             }
         });
         if (myTeamId) {
@@ -33,6 +70,16 @@ window.switchTeamTab = function(tab) {
     if (els.allTeamsArea) els.allTeamsArea.style.display = 'none';
     if (els.tournamentsArea) els.tournamentsArea.style.display = 'none';
 
+    // OTTIMIZZAZIONE: Spegniamo i listener delle tab non attive
+    if (tab !== 'allteams' && listeners.allTeams) {
+        db.ref('teams').off('value', listeners.allTeams);
+        listeners.allTeams = null;
+    }
+    if (tab !== 'tournaments' && listeners.trn) {
+        db.ref('tournaments').off('value', listeners.trn);
+        listeners.trn = null;
+    }
+
     if (tab === 'gest') {
         if (els.tabTeamGestBtn) els.tabTeamGestBtn.classList.add('active-tab');
         if (myTeamId) { if (els.myTeamView) els.myTeamView.style.display = 'flex'; }
@@ -49,8 +96,11 @@ window.switchTeamTab = function(tab) {
 };
 
 window.listenToAllTeams = function(isAlreadyInTeam) {
-    if (listeners.allTeams) db.ref('teams').off('value', listeners.allTeams);
-    listeners.allTeams = db.ref('teams').on('value', snap => {
+    if (listeners.allTeams) return; // Già attivo
+
+    // OTTIMIZZAZIONE: Limitiamo a 30 squadre invece di scaricare tutto il database
+    const teamsRef = db.ref('teams').limitToLast(30);
+    listeners.allTeams = teamsRef.on('value', snap => {
         if (els.openTeamsList) els.openTeamsList.innerHTML = '';
         if (els.globalAllTeamsList) els.globalAllTeamsList.innerHTML = '';
 
@@ -98,7 +148,10 @@ window.listenToAllTeams = function(isAlreadyInTeam) {
 };
 
 window.joinTeam = function(tId) {
-    db.ref(`teams/${tId}/members/${myId}`).set({ name: myName, username: myPrivacy ? "" : tgUsername }).then(() => window.checkMyTeamStatus());
+    db.ref(`teams/${tId}/members/${myId}`).set({ name: myName, username: myPrivacy ? "" : tgUsername }).then(() => {
+        db.ref(`users/${myId}/teamId`).set(tId);
+        window.checkMyTeamStatus();
+    });
 };
 
 window.listenToMyTeam = function() {
@@ -141,8 +194,11 @@ window.listenToMyTeam = function() {
 };
 
 window.listenToTournaments = function() {
-    if (listeners.trn) db.ref('tournaments').off('value', listeners.trn);
-    listeners.trn = db.ref('tournaments').on('value', snap => {
+    if (listeners.trn) return; // Già attivo
+
+    // OTTIMIZZAZIONE: Limitiamo ai 20 tornei più recenti
+    const trnRef = db.ref('tournaments').limitToLast(20);
+    listeners.trn = trnRef.on('value', snap => {
         activeTrnId = null;
         if (els.openTournamentsList) els.openTournamentsList.innerHTML = '';
         if (els.pastTournamentsList) els.pastTournamentsList.innerHTML = '';
@@ -376,12 +432,16 @@ if (els.createTeamBtn) {
     els.createTeamBtn.addEventListener('click', () => {
         const tName = els.newTeamName ? els.newTeamName.value.trim() : "";
         if (!tName) return;
-        db.ref('teams').push().set({
+        const newTeamRef = db.ref('teams').push();
+        newTeamRef.set({
             name: tName,
             captainId: myId,
             status: 'open',
             members: { [myId]: { name: myName, username: myPrivacy ? "" : tgUsername } }
-        }).then(() => window.checkMyTeamStatus());
+        }).then(() => {
+            db.ref(`users/${myId}/teamId`).set(newTeamRef.key);
+            window.checkMyTeamStatus();
+        });
     });
 }
 
@@ -408,6 +468,7 @@ if (els.leaveTeamBtn) {
         if (confirm("Vuoi abbandonare la squadra?")) {
             db.ref(`teams/${myTeamId}`).once('value', snap => {
                 const team = snap.val();
+                db.ref(`users/${myId}/teamId`).remove(); // OTTIMIZZAZIONE
                 if (isTeamCaptain) {
                     let others = Object.keys(team.members).filter(id => id !== myId);
                     if (others.length > 0) db.ref(`teams/${myTeamId}/captainId`).set(others[0]).then(() => db.ref(`teams/${myTeamId}/members/${myId}`).remove().then(() => window.checkMyTeamStatus()));

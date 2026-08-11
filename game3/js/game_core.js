@@ -56,9 +56,11 @@ window.showScreen = function(screenId) {
             }
         }
 
+        // OTTIMIZZAZIONE: Attiviamo i listener solo nel menu principale
         if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();
         if (typeof window.listenToRooms === 'function') window.listenToRooms();
     } else {
+        // OTTIMIZZAZIONE: Spegniamo i listener pesanti quando usciamo dal menu
         if (listeners.presence && listeners.presence.ref) {
             listeners.presence.ref.off('child_added', listeners.presence.onAdded);
             listeners.presence.ref.off('child_changed', listeners.presence.onChanged);
