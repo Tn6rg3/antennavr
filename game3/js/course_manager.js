@@ -8,6 +8,170 @@ window.COURSE_TYPES = {
     LONG: { id: 'LONG', labelIt: 'Lungo (Full)', labelEn: 'Long (Full)', color: '#9c27b0', weight: 0.5 }
 };
 
+window.COURSE_BRIEFING_PHRASES = {
+    Z2: [
+        "Sessione Base (Z2): focalizzati sulla fluidità di {chars}.",
+        "Oggi l'obiettivo è il consolidamento dei caratteri {chars}.",
+        "Allenamento di routine. Sintonizza l'orecchio su {chars}.",
+        "Z2 in corso. I caratteri {chars} devono diventare istintivi.",
+        "Costruiamo le fondamenta. Radar puntato su {chars}.",
+        "Ritmo costante e orecchio rilassato per decodificare {chars}.",
+        "Pratica quotidiana Z2. Caratteri: {chars}.",
+        "Manteniamo caldi i riflessi su {chars}.",
+        "Base Z2: nessun errore ammesso su {chars}.",
+        "Riscaldamento Morse su {chars}. Let's go!",
+        "Senza fretta ma senza sosta su {chars}.",
+        "Solidità è la parola d'ordine per {chars}.",
+        "Sessione di ossigenazione per il tuo orecchio: {chars}.",
+        "Ripassiamo i fondamentali: {chars}.",
+        "Z2: il ritmo del cuore batte per {chars}.",
+        "Pensa al suono, non ai punti. Focus su {chars}.",
+        "Base operativa attivata. Obiettivo: {chars}.",
+        "Fluire con il Codice. Oggi: {chars}.",
+        "Costruiamo la memoria muscolare per {chars}.",
+        "Pura tecnica su {chars}. Concentrati.",
+        "Z2: sintonizzati sulla frequenza di {chars}."
+    ],
+    WORK: [
+        "Nuova sfida! Diamo il benvenuto ai caratteri {chars}.",
+        "Oggi si lavora duro sui nuovi suoni: {chars}.",
+        "Sessione WORK: massima allerta per intercettare {chars}.",
+        "Dati in arrivo. I protagonisti del tuo studio oggi sono {chars}.",
+        "Alziamo l'asticella. Vediamo come te la cavi con {chars}.",
+        "Nuovo addestramento: i caratteri {chars} ti metteranno alla prova.",
+        "Espandiamo la tua conoscenza di {chars}.",
+        "Attacco frontale ai nuovi caratteri: {chars}.",
+        "Sessione WORK: non mollare su {chars}.",
+        "Nuovi suoni all'orizzonte! Ecco {chars}.",
+        "Sblocchiamo il potenziale dei caratteri {chars}.",
+        "Dacci dentro con {chars}. L'errore è parte del processo.",
+        "Oggi si scrive la storia del tuo addestramento su {chars}.",
+        "WORK: intensità massima per {chars}.",
+        "Il metodo Koch ti sfida su {chars}.",
+        "Ascolta con attenzione: {chars} stanno arrivando.",
+        "Nuovi mattoni per la tua casa Morse: {chars}.",
+        "Nessuna paura di {chars}. Dominazione totale.",
+        "Allenamento intensivo: focus speciale su {chars}.",
+        "Studia le pause e i suoni di {chars}.",
+        "Il segreto è la ripetizione. Oggi: {chars}."
+    ],
+    LONG: [
+        "Sessione LUNGA: resistenza e precisione su tutto il set {chars}.",
+        "Oggi mettiamo alla prova tutto quello che sai su {chars}.",
+        "Maratona Morse! Gestisci il flusso costante di {chars}.",
+        "Nessun carattere escluso: {chars} in arrivo a velocità sostenuta.",
+        "Dimostra la tua maestria su tutto l'alfabeto sbloccato: {chars}.",
+        "Intercettazione totale in corso. Obiettivo: {chars}.",
+        "Sfida di resistenza su {chars}.",
+        "Il set completo {chars} metterà a dura prova il tuo orecchio.",
+        "Maratona Morse: tieni il passo di {chars}.",
+        "Sessione LUNGA: dove i veri operatori si vedono su {chars}.",
+        "Non perdere un colpo su {chars}.",
+        "Lungo raggio attivato. Radar sintonizzato su {chars}.",
+        "Gestire la stanchezza con {chars} è l'obiettivo di oggi.",
+        "Nessuno spazio per i dubbi su {chars}.",
+        "Tutto quello che hai imparato finora: {chars}.",
+        "Sessione Full-Set: {chars} in arrivo veloci.",
+        "Mantieni la calma sotto il fuoco di {chars}.",
+        "L'etere è affollato oggi: riconosci {chars}.",
+        "Test di durata operativa su {chars}.",
+        "Decodifica continua: non farti sfuggire {chars}.",
+        "Sei pronto per il lungo viaggio tra i caratteri {chars}?"
+    ],
+    GENERIC: [
+        "Briefing operativo: l'aria vibra per i caratteri {chars}.",
+        "Pronto per l'invio? I target di oggi sono {chars}."
+    ]
+};
+
+window.COURSE_DEBRIEFING_PHRASES = {
+    EXCELLENT: [
+        "Accuratezza chirurgica! Hai dominato {chars} senza esitazioni.",
+        "Ottimo lavoro, operatore. Il tuo orecchio per {chars} è perfetto.",
+        "Performance da manuale. Sei pronto per alzare la velocità!",
+        "Zero sbavature. La tua padronanza di {chars} è impressionante.",
+        "Missione compiuta con lode. Continua così!",
+        "Riflessi pronti e zero errori. Sei una leggenda dell'etere.",
+        "Eccezionale! Hai danzato tra {chars}.",
+        "Maestria assoluta. {chars} non hanno segreti.",
+        "Record di precisione! {chars} decodificati alla perfezione.",
+        "Incredibile operatore. Sei il re di {chars}.",
+        "Riflessi da Jedi su {chars}. Impressionante.",
+        "Livello Elite raggiunto su {chars}. Continua così.",
+        "Orecchio d'oro per {chars}. Velocità consigliata: +1!",
+        "Performance perfetta. {chars} sono ormai istinto.",
+        "Hai reso il Morse un'arte oggi con {chars}.",
+        "Vittoria totale contro il silenzio. Brava gestione di {chars}.",
+        "Nessun errore rilevato su {chars}. Sei una macchina!",
+        "Top Player! {chars} sono stati intercettati con stile.",
+        "Hai dominato ogni singolo bit di {chars}.",
+        "Accuratezza 100%. {chars} sono tuoi schiavi.",
+        "Sei sulla strada per la gloria Morse. Ottimo su {chars}."
+    ],
+    GOOD: [
+        "Ben fatto, ma il carattere {chars} ha mostrato qualche incertezza.",
+        "Dati ricevuti. Hai avuto piccoli intoppi su {chars}. Ripassali.",
+        "Solidità operativa discreta. Focus per domani: {chars}.",
+        "Buona media, ma occhio a non confondere i suoni di {chars}.",
+        "XP guadagnati! Domani martelleremo di più su {chars}.",
+        "Sessione positiva. Solo {chars} ti hanno fatto rallentare.",
+        "Buona sessione, ma {chars} hanno avuto qualche incertezza.",
+        "Stai crescendo! {chars} però richiedono un piccolo ripasso.",
+        "Operativo e affidabile, tranne che su {chars}.",
+        "Molto bene! Domani battiamo di più su {chars}.",
+        "Hai perso qualche colpo su {chars}, ma la base è solida.",
+        "Il radar è quasi pulito. Solo {chars} hanno creato disturbo.",
+        "Punti bonus per la costanza! Occhio a {chars}.",
+        "Ti stai avvicinando alla perfezione. Focus su {chars}.",
+        "Bella prova! {chars} sono stati i tuoi ostacoli oggi.",
+        "Dati ricevuti. Hai il controllo di {chars}, quasi.",
+        "Buona media. Non farti fregare da {chars}.",
+        "Stai costruendo i tuoi riflessi. {chars} sono quasi pronti.",
+        "XP guadagnati! Hai superato la prova su {chars}.",
+        "Solidità discreta. Le orecchie iniziano a capire {chars}.",
+        "Non fermarti ora. {chars} sono il prossimo target."
+    ],
+    STRUGGLING: [
+        "Sessione ostica. {chars} sono stati i tuoi punti deboli oggi.",
+        "Analisi post-operazione: i caratteri {chars} richiedono più studio.",
+        "Non abbatterti, operatore. {chars} saranno prioritari domani.",
+        "Rilevate criticità su {chars}. Li riproporremo con più insistenza.",
+        "L'addestramento serve a questo. Concentriamoci meglio su {chars}.",
+        "Oggi {chars} ti hanno battuto. Domani sarà un'altra storia.",
+        "Sessione difficile, ma {chars} saranno i tuoi maestri domani.",
+        "Non mollare! {chars} sono ostici per tutti all'inizio.",
+        "Cadere fa parte del volo. Domani ripartiamo da {chars}.",
+        "Troppi errori su {chars}. Riduciamo i WPM e riproviamo?",
+        "L'addestramento è una salita. {chars} sono la tua pendenza oggi.",
+        "Focus totale necessario per domani: {chars}.",
+        "Nessuno è nato imparato. Martelleremo su {chars} finché non cederanno.",
+        "Rilevata stanchezza operativa su {chars}. Riposa e riprova.",
+        "Analisi post-match: {chars} hanno vinto oggi. Ma non domani.",
+        "Usa la heatmap per studiare {chars}. Torna più forte.",
+        "Lezione imparata: {chars} hanno bisogno di più amore.",
+        "Ritenta, sarai più fortunato (e preparato) su {chars}.",
+        "Il Morse è pazienza. {chars} ti stanno insegnando questo.",
+        "Nessuna resa su {chars}. La persistenza paga.",
+        "Oggi è andata così. Domani {chars} saranno un ricordo."
+    ]
+};
+
+window.getCourseBriefing = function(typeId, chars) {
+    const pool = window.COURSE_BRIEFING_PHRASES[typeId] || window.COURSE_BRIEFING_PHRASES.GENERIC;
+    const p = pool[Math.floor(Math.random() * pool.length)];
+    return p.replace('{chars}', chars).replace('{type}', typeId);
+};
+
+window.getCourseDebriefing = function(accuracy, worstChars) {
+    let pool = window.COURSE_DEBRIEFING_PHRASES.GOOD;
+    if (accuracy >= 0.95) pool = window.COURSE_DEBRIEFING_PHRASES.EXCELLENT;
+    else if (accuracy < 0.8) pool = window.COURSE_DEBRIEFING_PHRASES.STRUGGLING;
+
+    const p = pool[Math.floor(Math.random() * pool.length)];
+    const charStr = worstChars.length > 0 ? worstChars.join(", ") : "tutti i caratteri";
+    return p.replace('{chars}', charStr);
+};
+
 window.firebaseEscape = function(key) {
     if (!key) return key;
     return key.toString()
@@ -78,6 +242,7 @@ window.loadCourseState = async function() {
 window.getDefaultCourseData = function() {
     return {
         active_plan: false,
+        elite_mode: false,
         settings: {
             days_per_week: 3,
             start_wpm: 15,
@@ -95,6 +260,7 @@ window.getDefaultCourseData = function() {
             last_session_date: "",
             total_xp: 0,
             char_stats: {},
+            char_stats_by_type: { Z2: {}, WORK: {}, LONG: {} },
             last_z2_accuracy: 1.0
         },
         current_day_session: null
@@ -147,7 +313,8 @@ window.updateGlobalEnrollmentRecord = function(isActive) {
 window.generateWeeklySchedule = function() {
     if (!window.courseData || !window.courseData.settings) return;
     const daysPerWeek = parseInt(window.courseData.settings.days_per_week);
-    let schedule = Array(7).fill(null).map(() => ({ type: 'REST', completed: false }));
+    const isElite = window.courseData.elite_mode === true;
+    let schedule = Array(7).fill(null).map(() => ({ sessions: [{ type: 'REST', completed: false }] }));
 
     let workDays = [];
     if (daysPerWeek === 1) workDays = [6];
@@ -161,7 +328,14 @@ window.generateWeeklySchedule = function() {
         if (i === workDays.length - 1) type = 'LONG';
         else if (i % 2 === 0) type = 'Z2';
 
-        schedule[dayIdx] = { type: type, completed: false };
+        let sessions = [{ type: type, completed: false }];
+        if (isElite) {
+            // Se Elite, aggiunge una seconda sessione Z2 se la primaria non è già Z2
+            // oppure raddoppia lo Z2 se è giorno Z2
+            sessions.push({ type: 'Z2', completed: false, elite: true });
+        }
+
+        schedule[dayIdx] = { sessions: sessions };
     });
 
     window.courseData.weekly_schedule = schedule;
@@ -432,8 +606,10 @@ window.playNextCourseGroup = function() {
 
 window.finishCourseSession = function() {
     const stats = window.courseData.progress.char_stats || {};
+    const statsByType = window.courseData.progress.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
     const currentLesson = window.courseData.progress.current_lesson;
     const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
+    const sessionType = window.courseData.current_day_session.type;
     let totalAttempts = 0, totalErrors = 0;
     let worstChars = [];
 
@@ -442,10 +618,20 @@ window.finishCourseSession = function() {
         const s = stats[dbChar] || { attempts: 0, errors: 0 };
         totalAttempts += s.attempts;
         totalErrors += s.errors;
+
+        // Aggiornamento statistiche per TIPO
+        if (!statsByType[sessionType]) statsByType[sessionType] = {};
+        if (!statsByType[sessionType][dbChar]) statsByType[sessionType][dbChar] = { attempts: 0, errors: 0 };
+
+        // I dati incrementali reali (attempts/errors) vengono salvati in trackCharError di game_core
+        // ma qui consolidiamo il completamento della sessione.
+
         if (s.attempts > 0 && (s.errors / s.attempts) > 0.2) {
             worstChars.push({ char, rate: Math.round((s.errors / s.attempts) * 100) });
         }
     });
+
+    window.courseData.progress.char_stats_by_type = statsByType;
 
     const accuracy = totalAttempts > 0 ? ((totalAttempts - totalErrors) / totalAttempts) : 1.0;
 
@@ -505,7 +691,9 @@ window.checkWeeklyReview = function() {
     const currentWeek = window.getWeekNumber(now);
 
     if (lastReview !== currentWeek && window.courseData.weekly_schedule) {
-        const completedCount = window.courseData.weekly_schedule.filter(s => s.completed || s.type === 'REST').length;
+        const completedCount = window.courseData.weekly_schedule.filter(day => {
+            return day.sessions.every(s => s.completed || s.type === 'REST');
+        }).length;
         if (completedCount === 7) {
             if (confirm("Settimana completata con successo! 🏆\nVuoi aumentare il volume di allenamento (minuti) del 10% per la prossima settimana?")) {
                 window.courseData.settings.minutes_z2 = Math.round(window.courseData.settings.minutes_z2 * 1.1);
@@ -535,15 +723,21 @@ window.listenToCourseEnrollment = function() {
 window.checkCourseStartupNotification = function() {
     if (!window.courseData || window.courseData.active_plan !== true) return;
     const todayIdx = (new Date().getDay() + 6) % 7;
-    const session = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
+    const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
+    const session = dayData ? dayData.sessions.find(s => !s.completed && s.type !== 'REST') : null;
 
-    if (session && session.type !== 'REST' && !session.completed) {
+    if (session) {
         const modal = document.getElementById('courseSessionModal');
         const text = document.getElementById('courseModalText');
         if (modal && text) {
             const typeCfg = window.COURSE_TYPES[session.type];
-            const label = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
-            text.innerHTML = `Oggi il tuo piano prevede una sessione di <b>${label}</b>.<br>Sei pronto per allenarti?`;
+            const typeLabel = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
+
+            const currentLesson = window.courseData.progress.current_lesson;
+            const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson).join(", ");
+            const briefing = window.getCourseBriefing(session.type, activeChars);
+
+            text.innerHTML = `Oggi il tuo piano prevede una sessione di <b>${typeLabel}</b>.<br><br><div style="background:var(--sec-bg-color); padding:10px; border-radius:8px; border-left:4px solid var(--link-color); font-style:italic; font-size:0.9em; text-align:left;">"${briefing}"</div>`;
             modal.style.display = 'flex';
         }
     }

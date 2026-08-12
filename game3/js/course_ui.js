@@ -31,6 +31,7 @@ window.populateCourseSettingsInputs = function() {
     if (els.courseTabPauseIntervalInput) els.courseTabPauseIntervalInput.value = s.pause_interval || 60;
     if (els.courseTabPauseDurationInput) els.courseTabPauseDurationInput.value = s.pause_duration || 10;
     if (els.courseTabMinZ2) els.courseTabMinZ2.value = s.minutes_z2;
+    if (els.courseTabEliteInput) els.courseTabEliteInput.checked = window.courseData.elite_mode === true;
 };
 
 window.renderCourseTabDashboard = function() {
@@ -66,14 +67,16 @@ window.renderCourseTabDashboard = function() {
             }
 
             box.onclick = () => {
-                if (s.attempts > 0) alert(`${char}: Accurato al ${Math.round(accuracy * 100)}% su ${s.attempts} tentativi.`);
-                else alert(`${char}: Nessun dato registrato.`);
+                window.renderAdvancedCourseStats(char);
             };
             heatmap.appendChild(box);
         });
 
         const activeCharsStr = window.KOCH_SEQUENCE.slice(0, currentLesson).join(", ");
         if (lessonInfo) lessonInfo.textContent = `Caratteri attivi (${currentLesson}): ${activeCharsStr}`;
+
+        // Render iniziale statistiche (primo carattere sbloccato)
+        window.renderAdvancedCourseStats(window.KOCH_SEQUENCE[0]);
     }
 
     // 2. Weekly Plan
@@ -83,23 +86,100 @@ window.renderCourseTabDashboard = function() {
         const days = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
         if (!window.courseData.weekly_schedule) window.generateWeeklySchedule();
 
-        window.courseData.weekly_schedule.forEach((session, idx) => {
-            const div = document.createElement('div');
-            div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:6px; background:var(--sec-bg-color); border-radius:6px; font-size:0.85em;";
-            const label = document.createElement('span');
-            label.textContent = `${days[idx]}: `;
-            const typeCfg = window.COURSE_TYPES[session.type] || { labelIt: 'Riposo', color: '#999' };
-            const typeSpan = document.createElement('b');
-            typeSpan.textContent = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
-            typeSpan.style.color = typeCfg.color;
-            label.appendChild(typeSpan);
-            const status = document.createElement('span');
-            status.textContent = session.completed ? "✅ Fatto" : (session.type === 'REST' ? "😴" : "⏳");
-            div.appendChild(label);
-            div.appendChild(status);
-            planList.appendChild(div);
+        window.courseData.weekly_schedule.forEach((dayData, idx) => {
+            const sessions = dayData.sessions || [];
+            const dayDiv = document.createElement('div');
+            dayDiv.style.cssText = "display:flex; flex-direction:column; gap:4px; padding:8px; background:var(--sec-bg-color); border-radius:8px;";
+
+            const title = document.createElement('b');
+            title.style.fontSize = "0.85em";
+            title.textContent = days[idx];
+            dayDiv.appendChild(title);
+
+            sessions.forEach(session => {
+                const div = document.createElement('div');
+                div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:4px 8px; background:rgba(255,255,255,0.03); border-radius:6px; font-size:0.8em;";
+
+                const typeCfg = window.COURSE_TYPES[session.type] || { labelIt: 'Riposo', color: '#999' };
+                const label = document.createElement('span');
+                const typeSpan = document.createElement('b');
+                typeSpan.textContent = (currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn) + (session.elite ? " ⚡" : "");
+                typeSpan.style.color = typeCfg.color;
+                label.appendChild(typeSpan);
+
+                const status = document.createElement('span');
+                status.textContent = session.completed ? "✅ Fatto" : (session.type === 'REST' ? "😴" : "⏳");
+
+                div.appendChild(label);
+                div.appendChild(status);
+                dayDiv.appendChild(div);
+            });
+
+            planList.appendChild(dayDiv);
         });
     }
+};
+
+window.renderAdvancedCourseStats = function(selectedChar) {
+    const container = document.getElementById('courseAdvancedStats');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const statsByType = window.courseData.progress.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
+    const dbChar = window.firebaseEscape(selectedChar);
+
+    const header = document.createElement('div');
+    header.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;";
+
+    const title = document.createElement('b');
+    title.style.cssText = "font-size: 0.9em; color: var(--champ-color);";
+    title.textContent = `Dettaglio: ${selectedChar}`;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = "action-btn-small btn-danger";
+    closeBtn.style.cssText = "width: auto; padding: 2px 8px; margin: 0; font-size: 0.7em;";
+    closeBtn.textContent = "Chiudi ✕";
+    closeBtn.onclick = () => container.innerHTML = '<div style="font-size:0.65em; color:var(--hint-color); text-align:center; font-style:italic; margin-top:5px;">Tocca un carattere sulla heatmap per analizzarlo.</div>';
+
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    container.appendChild(header);
+
+    const types = ['Z2', 'WORK', 'LONG'];
+    types.forEach(type => {
+        const s = (statsByType[type] && statsByType[type][dbChar]) ? statsByType[type][dbChar] : { attempts: 0, errors: 0 };
+        const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
+        const perc = Math.round(accuracy * 100);
+
+        const row = document.createElement('div');
+        row.style.cssText = "display: flex; align-items: center; gap: 10px; font-size: 0.75em; margin-bottom: 4px;";
+
+        const label = document.createElement('span');
+        label.style.width = "40px";
+        label.textContent = type;
+        label.style.color = window.COURSE_TYPES[type].color;
+        label.style.fontWeight = "bold";
+
+        const barContainer = document.createElement('div');
+        barContainer.style.cssText = "flex-grow: 1; height: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);";
+
+        const bar = document.createElement('div');
+        bar.style.width = `${perc}%`;
+        bar.style.height = "100%";
+        bar.style.background = accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f';
+        bar.style.transition = "width 0.5s ease-out";
+
+        const val = document.createElement('span');
+        val.style.width = "40px";
+        val.style.textAlign = "right";
+        val.textContent = s.attempts > 0 ? `${perc}%` : "--";
+
+        barContainer.appendChild(bar);
+        row.appendChild(label);
+        row.appendChild(barContainer);
+        row.appendChild(val);
+        container.appendChild(row);
+    });
 };
 
 window.startCourseWizard = function() {
@@ -159,8 +239,10 @@ window.updateWizardDurationsPreview = function() {
 window.finishWizard = function() {
     const z2 = parseInt(els.wizardMinZ2?.value) || 10;
     const startLesson = parseInt(els.wizardStartLesson?.value) || 2;
+    const isElite = document.getElementById('wizardEliteMode')?.checked === true;
 
     window.courseData.active_plan = true;
+    window.courseData.elite_mode = isElite;
     window.courseData.progress.current_lesson = startLesson;
     window.courseData.settings = {
         days_per_week: els.wizardDays.value,
@@ -177,7 +259,93 @@ window.finishWizard = function() {
     window.generateWeeklySchedule();
     window.updateGlobalEnrollmentRecord(true); // Aggiorna contatore globale iscritti
     window.renderCourseTabView();
-    showToast("Corso attivato con successo! 🚀");
+    showToast(isElite ? "Piano ELITE attivato! ⚡" : "Corso attivato con successo! 🚀");
+};
+
+window.finishCourseSession = function() {
+    const stats = window.courseData.progress.char_stats || {};
+    const statsByType = window.courseData.progress.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
+    const currentLesson = window.courseData.progress.current_lesson;
+    const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
+    const sessionType = window.courseData.current_day_session.type;
+    let totalAttempts = 0, totalErrors = 0;
+    let worstChars = [];
+
+    activeChars.forEach(char => {
+        const dbChar = window.firebaseEscape(char);
+        const s = stats[dbChar] || { attempts: 0, errors: 0 };
+        totalAttempts += s.attempts;
+        totalErrors += s.errors;
+
+        if (!statsByType[sessionType]) statsByType[sessionType] = {};
+        if (!statsByType[sessionType][dbChar]) statsByType[sessionType][dbChar] = { attempts: 0, errors: 0 };
+
+        if (s.attempts > 0 && (s.errors / s.attempts) > 0.15) {
+            worstChars.push(char);
+        }
+    });
+
+    const accuracy = totalAttempts > 0 ? ((totalAttempts - totalErrors) / totalAttempts) : 1.0;
+
+    if (window.courseData.current_day_session.type === 'Z2') {
+        window.courseData.progress.last_z2_accuracy = accuracy;
+    }
+
+    window.courseData.current_day_session.completed = true;
+    requestedWordCount = wordIndex;
+
+    const todayIdx = (new Date().getDay() + 6) % 7;
+    const dayData = window.courseData.weekly_schedule[todayIdx];
+    if (dayData && dayData.sessions) {
+        const sessionObj = dayData.sessions.find(s => s.type === sessionType && !s.completed);
+        if (sessionObj) sessionObj.completed = true;
+    }
+
+    let canAdvance = true;
+    activeChars.forEach(char => {
+        const dbChar = window.firebaseEscape(char);
+        const s = stats[dbChar] || { attempts: 0, errors: 0 };
+        if (s.attempts < 50 || (s.attempts - s.errors) / s.attempts < 0.9) canAdvance = false;
+    });
+
+    let advanceMsg = "";
+    if (canAdvance && currentLesson < window.KOCH_SEQUENCE.length) {
+        window.courseData.progress.current_lesson++;
+        advanceMsg = `\n\n🚀 NUOVO CARATTERE SBLOCCATO: ${window.KOCH_SEQUENCE[window.courseData.progress.current_lesson - 1]}!`;
+    }
+
+    window.courseData.progress.char_stats_by_type = statsByType;
+    window.saveCourseState();
+
+    // --- VISUALIZZAZIONE DEBRIEFING GRAFICO ---
+    const modal = document.getElementById('courseResultsModal');
+    const accTxt = document.getElementById('courseResultsAccuracy');
+    const msgDiv = document.getElementById('courseResultsMessage');
+    const focusP = document.getElementById('courseResultsFocus');
+
+    if (modal && accTxt && msgDiv && focusP) {
+        accTxt.textContent = `Accuratezza Finale: ${Math.round(accuracy * 100)}%`;
+        accTxt.style.color = accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f';
+
+        const debriefing = window.getCourseDebriefing(accuracy, worstChars.slice(0, 3));
+        msgDiv.innerHTML = `"${debriefing}"${advanceMsg}`;
+
+        if (worstChars.length > 0) {
+            focusP.innerHTML = `⚠️ <b>Focus per domani:</b> ${worstChars.slice(0, 5).join(", ")}`;
+        } else {
+            focusP.textContent = "Ottima sessione, nessun carattere critico rilevato.";
+        }
+
+        modal.style.display = 'flex';
+
+        document.getElementById('btnCloseCourseResults').onclick = () => {
+            modal.style.display = 'none';
+            window.finishGame();
+        };
+    } else {
+        alert(`Sessione completata! Accuratezza: ${Math.round(accuracy * 100)}%`);
+        window.finishGame();
+    }
 };
 
 window.initCourseChat = function() {
@@ -227,6 +395,7 @@ window.attachCourseUIListeners = function() {
         els.btnTabSavePlan.onclick = () => {
             const z2 = parseInt(els.courseTabMinZ2.value) || 10;
             window.courseData.progress.current_lesson = parseInt(els.courseTabLessonInput.value) || 2;
+            window.courseData.elite_mode = els.courseTabEliteInput?.checked === true;
             window.courseData.settings.days_per_week = els.courseTabDaysInput.value;
             window.courseData.settings.start_wpm = els.courseTabWpmInput.value;
             window.courseData.settings.farnsworth_wpm = els.courseTabFarnsworthInput.value;
@@ -258,9 +427,17 @@ window.attachCourseUIListeners = function() {
     if (els.btnTabStartCourseSession) {
         els.btnTabStartCourseSession.onclick = () => {
              const todayIdx = (new Date().getDay() + 6) % 7;
-             const session = window.courseData.weekly_schedule[todayIdx];
-             if (!session || session.type === 'REST') return alert("Oggi è previsto riposo!");
-             if (session.completed) return alert("Allenamento completato!");
+             const dayData = window.courseData.weekly_schedule[todayIdx];
+             if (!dayData || dayData.sessions[0].type === 'REST') return alert("Oggi è previsto riposo!");
+
+             // Cerchiamo la prima sessione non completata
+             const session = dayData.sessions.find(s => !s.completed);
+             if (!session) return alert("Allenamento completato per oggi!");
+
+             if (dayData.sessions.length > 1) {
+                 const label = session.elite ? "ELITE (Base Z2)" : "STANDARD";
+                 if (!confirm(`Oggi hai doppia sessione! Vuoi iniziare la sessione ${label}?`)) return;
+             }
 
              const todayStr = new Date().toISOString().split('T')[0];
              if (!window.courseData.current_day_session || window.courseData.current_day_session.date !== todayStr) {

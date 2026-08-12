@@ -995,6 +995,10 @@ window.handleWordSubmission = function(userWord) {
 
         if (window.courseData) {
             if (!window.courseData.progress.char_stats) window.courseData.progress.char_stats = {};
+            if (!window.courseData.progress.char_stats_by_type) window.courseData.progress.char_stats_by_type = { Z2: {}, WORK: {}, LONG: {} };
+
+            const sessionType = window.courseData.current_day_session?.type || 'LONG';
+
             for (let i=0; i<currentWord.length; i++) {
                 let c = currentWord[i];
                 if (!c || ['__proto__','constructor','prototype'].includes(c)) continue;
@@ -1002,9 +1006,16 @@ window.handleWordSubmission = function(userWord) {
                 // Sanitizzazione chiave per Firebase
                 let dbChar = (typeof firebaseEscape === 'function') ? firebaseEscape(c) : c.replace(/\./g, '_dot_');
 
+                // 1. Statistiche Globali
                 if (!window.courseData.progress.char_stats[dbChar]) window.courseData.progress.char_stats[dbChar] = { attempts: 0, errors: 0 };
                 window.courseData.progress.char_stats[dbChar].attempts++;
                 if (userWord[i] !== currentWord[i]) window.courseData.progress.char_stats[dbChar].errors++;
+
+                // 2. Statistiche per TIPO di sessione
+                if (!window.courseData.progress.char_stats_by_type[sessionType]) window.courseData.progress.char_stats_by_type[sessionType] = {};
+                if (!window.courseData.progress.char_stats_by_type[sessionType][dbChar]) window.courseData.progress.char_stats_by_type[sessionType][dbChar] = { attempts: 0, errors: 0 };
+                window.courseData.progress.char_stats_by_type[sessionType][dbChar].attempts++;
+                if (userWord[i] !== currentWord[i]) window.courseData.progress.char_stats_by_type[sessionType][dbChar].errors++;
             }
             window.saveCourseState();
         }
