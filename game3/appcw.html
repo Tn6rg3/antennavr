@@ -558,14 +558,17 @@
                     <div id="courseTabHeatmapContent">
                         <div id="courseTabHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:5px;"></div>
                         <p id="courseTabLessonInfo" style="font-size:0.75em; text-align:center; color:var(--hint-color); margin-top:5px;"></p>
+                    </div>
+                </div>
 
-                        <!-- ANALISI APPROFONDITA -->
-                        <div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
-                            <h5 style="margin: 0 0 8px 0; font-size: 0.8em; color: var(--link-color); text-align: center;">📊 Analisi Approfondita Errori</h5>
-                            <div id="courseAdvancedStats" style="display: flex; flex-direction: column; gap: 8px;">
-                                <!-- Popolato da JS -->
-                            </div>
-                        </div>
+                <!-- ANALISI APPROFONDITA (Spostata Sotto) -->
+                <div id="courseAdvancedStatsPanel" class="box-panel" style="display:none; border-color: var(--link-color); border-style: dashed; background: rgba(0,0,0,0.2);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h4 style="margin:0; font-size:0.85em; color:var(--link-color);">📊 Analisi Dettagliata</h4>
+                        <button id="btnCloseAdvancedStats" class="action-btn-small btn-danger" style="width:auto; padding:2px 8px;">Chiudi ✕</button>
+                    </div>
+                    <div id="courseAdvancedStats" style="display: flex; flex-direction: column; gap: 12px;">
+                        <!-- Popolato da JS -->
                     </div>
                 </div>
 
