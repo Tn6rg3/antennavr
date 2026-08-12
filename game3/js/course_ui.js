@@ -653,13 +653,20 @@ window.attachCourseUIListeners = function() {
 window.actualStartCourseGame = function() {
     if (!window.courseData.current_day_session) return;
 
+    // Chiudiamo il modale esplicitamente
+    const modal = document.getElementById('courseSessionModal');
+    if (modal) modal.style.display = 'none';
+
     currentMode = 'course';
     isSinglePlayer = true;
     currentWpm = parseInt(window.courseData.settings.start_wpm);
     roomCode = "COURSE_" + myId;
 
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
-    if (typeof initAudioContext === 'function') initAudioContext();
+
+    // Inizializzazione audio contesto
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
 
     db.ref('rooms/' + roomCode).set({
         status: 'countdown', type: 'single', mode: 'course', wpm: currentWpm, tone: 600,

@@ -680,6 +680,21 @@ window.checkCourseStartupNotification = function() {
     // L'allenamento extra viene proposto solo se l'utente clicca esplicitamente nel tab Corso.
 
     if (session) {
+        // Inizializziamo la sessione corrente nei dati globali così il tasto "Inizia" sa cosa avviare
+        if (!window.courseData.current_day_session || window.courseData.current_day_session.type !== session.type) {
+            let duration = 15;
+            if (session.type === 'Z2') duration = window.courseData.settings.minutes_z2;
+            else if (session.type === 'WORK') duration = window.courseData.settings.minutes_work;
+            else if (session.type === 'LONG') duration = window.courseData.settings.minutes_long;
+
+            window.courseData.current_day_session = {
+                type: session.type, total_seconds: duration * 60,
+                remaining_seconds: duration * 60, completed: false,
+                date: new Date().toISOString().split('T')[0]
+            };
+            window.saveCourseState();
+        }
+
         window.showCourseSessionModal(session, false);
     }
 };
@@ -729,13 +744,16 @@ window.populateCourseWarmup = function(chars) {
         btn.textContent = char;
         btn.onclick = (e) => {
             e.stopPropagation();
-            // Assicuriamoci che l'audio sia inizializzato
-            if (typeof initAudioContext === 'function') initAudioContext();
+            // Forza inizializzazione audio al click (necessario per alcuni browser/Telegram)
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
             if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
 
             const wpm = parseInt(window.courseData?.settings?.start_wpm) || 20;
+            // IMPORTANTE: forcePlay = true per suonare fuori dal gameRunning
             if (typeof playMorseAudio === 'function') {
-                playMorseAudio(char, wpm);
+                playMorseAudio(char, wpm, true);
             }
         };
         container.appendChild(btn);
