@@ -305,9 +305,15 @@ window.finishCourseSession = function() {
     });
 
     let advanceMsg = "";
-    if (canAdvance && currentLesson < window.KOCH_SEQUENCE.length) {
+    const isExtra = window.courseData.current_day_session.isExtra === true;
+
+    if (!isExtra && canAdvance && currentLesson < window.KOCH_SEQUENCE.length) {
         window.courseData.progress.current_lesson++;
         advanceMsg = `\n\n🚀 NUOVO CARATTERE SBLOCCATO: ${window.KOCH_SEQUENCE[window.courseData.progress.current_lesson - 1]}!`;
+    }
+
+    if (isExtra) {
+        advanceMsg = "\n\n✨ Allenamento Extra completato. Ottimo per la tua memoria muscolare!";
     }
 
     window.courseData.progress.char_stats_by_type = statsByType;
@@ -461,25 +467,35 @@ window.attachCourseUIListeners = function() {
              if (!dayData || dayData.sessions[0].type === 'REST') return alert("Oggi è previsto riposo!");
 
              // Cerchiamo la prima sessione non completata
-             const session = dayData.sessions.find(s => !s.completed);
-             if (!session) return alert("Allenamento completato per oggi!");
+             let session = dayData.sessions.find(s => !s.completed);
+             let isExtra = false;
 
-             if (dayData.sessions.length > 1) {
+             if (!session) {
+                 // Se tutte completate, offriamo sessione extra di 10 minuti
+                 if (!confirm("Hai completato tutto per oggi! Vuoi fare una sessione EXTRA di 10 minuti per fare pratica? (Non sbloccherà nuovi caratteri)")) return;
+                 session = { type: 'LONG', completed: false };
+                 isExtra = true;
+             }
+
+             if (!isExtra && dayData.sessions.filter(s => !s.completed).length > 1) {
                  const label = session.elite ? "ELITE (Base Z2)" : "STANDARD";
                  if (!confirm(`Oggi hai doppia sessione! Vuoi iniziare la sessione ${label}?`)) return;
              }
 
              const todayStr = new Date().toISOString().split('T')[0];
 
-             // FORZIAMO SEMPRE IL RESET DELLA SESSIONE PER GESTIRE IL PIANO ELITE (DOPPIA SESSIONE)
-             let duration = 15;
-             if (session.type === 'Z2') duration = window.courseData.settings.minutes_z2;
-             else if (session.type === 'WORK') duration = window.courseData.settings.minutes_work;
-             else if (session.type === 'LONG') duration = window.courseData.settings.minutes_long;
+             // Durata sessione
+             let duration = 10; // Default extra
+             if (!isExtra) {
+                if (session.type === 'Z2') duration = window.courseData.settings.minutes_z2;
+                else if (session.type === 'WORK') duration = window.courseData.settings.minutes_work;
+                else if (session.type === 'LONG') duration = window.courseData.settings.minutes_long;
+             }
 
              window.courseData.current_day_session = {
                  type: session.type, total_seconds: duration * 60,
-                 remaining_seconds: duration * 60, completed: false, date: todayStr
+                 remaining_seconds: duration * 60, completed: false, date: todayStr,
+                 isExtra: isExtra
              };
              window.saveCourseState();
 

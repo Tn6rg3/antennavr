@@ -667,19 +667,60 @@ window.checkCourseStartupNotification = function() {
     if (!window.courseData || window.courseData.active_plan !== true) return;
     const todayIdx = (new Date().getDay() + 6) % 7;
     const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
-    const session = dayData ? dayData.sessions.find(s => !s.completed && s.type !== 'REST') : null;
+
+    // Cerchiamo la prima sessione non completata
+    let session = dayData ? dayData.sessions.find(s => !s.completed && s.type !== 'REST') : null;
+    let isExtra = false;
+
+    // Se non ci sono sessioni pendenti oggi, ma l'utente ha un piano attivo, offriamo l'allenamento extra
+    if (!session && dayData && dayData.sessions.some(s => s.type !== 'REST')) {
+        session = { type: 'LONG', completed: false, isExtra: true };
+        isExtra = true;
+    }
 
     if (session) {
         const modal = document.getElementById('courseSessionModal');
         const text = document.getElementById('courseModalText');
+        const warmupCont = document.getElementById('courseModalWarmupContainer');
+
         if (modal && text) {
-            const typeCfg = window.COURSE_TYPES[session.type];
-            const typeLabel = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
             const currentLesson = window.courseData.progress.current_lesson;
-            const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson).join(", ");
-            const briefing = window.getCourseBriefing(session.type, activeChars);
-            text.innerHTML = `Oggi il tuo piano prevede una sessione di <b>${typeLabel}</b>.<br><br><div style="background:var(--sec-bg-color); padding:10px; border-radius:8px; border-left:4px solid var(--link-color); font-style:italic; font-size:0.9em; text-align:left;">"${briefing}"</div>`;
+            const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
+            const charStr = activeChars.join(", ");
+
+            if (isExtra) {
+                text.innerHTML = `Hai completato gli allenamenti programmati per oggi! 🏆<br><br>Vuoi fare una sessione di <b>Allenamento Extra</b> sui caratteri sbloccati per consolidare la tua padronanza?`;
+            } else {
+                const typeCfg = window.COURSE_TYPES[session.type];
+                const typeLabel = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
+                const briefing = window.getCourseBriefing(session.type, charStr);
+                text.innerHTML = `Oggi il tuo piano prevede una sessione di <b>${typeLabel}</b>.<br><br><div style="background:var(--sec-bg-color); padding:10px; border-radius:8px; border-left:4px solid var(--link-color); font-style:italic; font-size:0.9em; text-align:left;">"${briefing}"</div>`;
+            }
+
+            // Popola area Warm-up
+            if (warmupCont) {
+                warmupCont.style.display = 'block';
+                window.populateCourseWarmup(activeChars);
+            }
+
             modal.style.display = 'flex';
         }
     }
+};
+
+window.populateCourseWarmup = function(chars) {
+    const container = document.getElementById('courseModalWarmup');
+    if (!container) return;
+    container.innerHTML = '';
+
+    chars.forEach(char => {
+        const btn = document.createElement('button');
+        btn.style.cssText = "width:40px; height:40px; padding:0; display:flex; align-items:center; justify-content:center; font-size:1.1em; background:rgba(255,255,255,0.1); border:1px solid var(--link-color); color:#fff; border-radius:8px; cursor:pointer;";
+        btn.textContent = char;
+        btn.onclick = () => {
+            if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+            if (typeof playMorseAudio === 'function') playMorseAudio(char, 20);
+        };
+        container.appendChild(btn);
+    });
 };
