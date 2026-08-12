@@ -760,7 +760,12 @@ window.finishGame = function() {
 
     // --- MODIFICA: RESTA NELLA SCHERMATA GIOCO PER REVISIONE ---
     if (els.quitGameBtn) {
-        els.quitGameBtn.textContent = currentLang === 'it' ? "Vai alla Classifica" : "Go to Leaderboard";
+        if (currentMode === 'course') {
+            els.quitGameBtn.textContent = currentLang === 'it' ? "Torna al Corso" : "Back to Course";
+        } else {
+            els.quitGameBtn.textContent = currentLang === 'it' ? "Vai alla Classifica" : "Go to Leaderboard";
+        }
+
         els.quitGameBtn.classList.remove('btn-danger');
         els.quitGameBtn.classList.add('btn-success');
 
@@ -787,6 +792,13 @@ window.finishGame = function() {
                 }
             };
 
+            if (modeToRoute === 'course') {
+                window.exitRoomCleanly(false, false);
+                window.showProfileScreen();
+                window.switchProfileTab('course');
+                return;
+            }
+
             // Usciamo dalla stanza ma SENZA cambiare schermata (restiamo in transizione)
             window.exitRoomCleanly(false, false);
 
@@ -807,6 +819,8 @@ window.finishGame = function() {
 };
 
 window.showMatchShareButtons = function() {
+    if (currentMode === 'course') return; // OTTIMIZZAZIONE: Nessun social nel corso
+
     // Cerchiamo un contenitore dove inserire i bottoni, o lo creiamo sotto la tabella
     let shareContainer = document.getElementById('matchShareContainer');
     if (!shareContainer) {
@@ -1047,6 +1061,11 @@ window.handleWordSubmission = function(userWord) {
 
         setTimeout(() => {
             if (gameRunning && isCourseMode) {
+                if (window.courseTimeIsUp) {
+                    window.courseTimeIsUp = false;
+                    if (typeof window.finishCourseSession === 'function') window.finishCourseSession();
+                    return;
+                }
                 wordIndex++;
                 window.playNextCourseGroup();
             }

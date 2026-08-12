@@ -336,7 +336,8 @@ window.finishCourseSession = function() {
 
         document.getElementById('btnCloseCourseResults').onclick = () => {
             modal.style.display = 'none';
-            window.finishGame();
+            window.showProfileScreen();
+            window.switchProfileTab('course');
         };
     } else {
         alert(`Sessione completata! Accuratezza: ${Math.round(accuracy * 100)}%`);

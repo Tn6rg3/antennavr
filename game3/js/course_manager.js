@@ -414,6 +414,7 @@ window.startCourseSessionSequence = function() {
 
     window.preGenerateCourseGroups();
     wordIndex = 0;
+    window.courseTimeIsUp = false; // Reset flag fine tempo
     window.updateCourseTimerUI();
     courseSessionTimer = setInterval(() => {
         if (!gameRunning || !window.courseData.current_day_session) return;
@@ -425,7 +426,9 @@ window.startCourseSessionSequence = function() {
         }
         if (window.courseData.current_day_session.remaining_seconds <= 0) {
             clearInterval(courseSessionTimer);
-            window.finishCourseSession();
+            window.courseTimeIsUp = true;
+            // Non chiamiamo subito finishCourseSession, aspettiamo l'invio dell'ultima parola
+            showToast(currentLang === 'it' ? "Tempo scaduto! Finisci l'ultima parola." : "Time's up! Finish the last word.");
         }
     }, 1000);
 
