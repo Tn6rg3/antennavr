@@ -327,6 +327,7 @@ window.getDefaultCourseData = function() {
     return {
         active_plan: false,
         elite_mode: false,
+        role: 'corsista', // Default role
         settings: {
             days_per_week: 3,
             start_wpm: 15,
@@ -665,46 +666,50 @@ window.listenToCourseEnrollment = function() {
 
 window.checkCourseStartupNotification = function() {
     if (!window.courseData || window.courseData.active_plan !== true) return;
+
+    // Se l'utente è un Tutor, non ha sessioni programmate da mostrare allo startup
+    if (window.courseData.role === 'tutor') return;
+
     const todayIdx = (new Date().getDay() + 6) % 7;
     const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
 
-    // Cerchiamo la prima sessione non completata
+    // Cerchiamo la prima sessione non completata (NON extra)
     let session = dayData ? dayData.sessions.find(s => !s.completed && s.type !== 'REST') : null;
-    let isExtra = false;
 
-    // Se non ci sono sessioni pendenti oggi, ma l'utente ha un piano attivo, offriamo l'allenamento extra
-    if (!session && dayData && dayData.sessions.some(s => s.type !== 'REST')) {
-        session = { type: 'LONG', completed: false, isExtra: true };
-        isExtra = true;
-    }
+    // NOTA: Se session è null (allenamento finito), non mostriamo nulla allo startup.
+    // L'allenamento extra viene proposto solo se l'utente clicca esplicitamente nel tab Corso.
 
     if (session) {
-        const modal = document.getElementById('courseSessionModal');
-        const text = document.getElementById('courseModalText');
-        const warmupCont = document.getElementById('courseModalWarmupContainer');
+        window.showCourseSessionModal(session, false);
+    }
+};
 
-        if (modal && text) {
-            const currentLesson = window.courseData.progress.current_lesson;
-            const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
-            const charStr = activeChars.join(", ");
+window.showCourseSessionModal = function(session, isExtra = false) {
+    const modal = document.getElementById('courseSessionModal');
+    const text = document.getElementById('courseModalText');
+    const warmupCont = document.getElementById('courseModalWarmupContainer');
 
-            if (isExtra) {
-                text.innerHTML = `Hai completato gli allenamenti programmati per oggi! 🏆<br><br>Vuoi fare una sessione di <b>Allenamento Extra</b> sui caratteri sbloccati per consolidare la tua padronanza?`;
-            } else {
-                const typeCfg = window.COURSE_TYPES[session.type];
-                const typeLabel = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
-                const briefing = window.getCourseBriefing(session.type, charStr);
-                text.innerHTML = `Oggi il tuo piano prevede una sessione di <b>${typeLabel}</b>.<br><br><div style="background:var(--sec-bg-color); padding:10px; border-radius:8px; border-left:4px solid var(--link-color); font-style:italic; font-size:0.9em; text-align:left;">"${briefing}"</div>`;
-            }
+    if (modal && text) {
+        const currentLesson = window.courseData.progress.current_lesson;
+        const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
+        const charStr = activeChars.join(", ");
 
-            // Popola area Warm-up
-            if (warmupCont) {
-                warmupCont.style.display = 'block';
-                window.populateCourseWarmup(activeChars);
-            }
-
-            modal.style.display = 'flex';
+        if (isExtra) {
+            text.innerHTML = `Hai completato gli allenamenti programmati per oggi! 🏆<br><br>Vuoi fare una sessione di <b>Allenamento Extra</b> sui caratteri sbloccati?`;
+        } else {
+            const typeCfg = window.COURSE_TYPES[session.type];
+            const typeLabel = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
+            const briefing = window.getCourseBriefing(session.type, charStr);
+            text.innerHTML = `Oggi il tuo piano prevede una sessione di <b>${typeLabel}</b>.<br><br><div style="background:var(--sec-bg-color); padding:10px; border-radius:8px; border-left:4px solid var(--link-color); font-style:italic; font-size:0.9em; text-align:left;">"${briefing}"</div>`;
         }
+
+        // Popola area Warm-up (Sempre visibile se ci sono caratteri)
+        if (warmupCont) {
+            warmupCont.style.display = 'block';
+            window.populateCourseWarmup(activeChars);
+        }
+
+        modal.style.display = 'flex';
     }
 };
 
