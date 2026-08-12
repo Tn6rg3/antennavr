@@ -443,18 +443,18 @@ window.attachCourseUIListeners = function() {
              }
 
              const todayStr = new Date().toISOString().split('T')[0];
-             if (!window.courseData.current_day_session || window.courseData.current_day_session.date !== todayStr) {
-                 let duration = 15;
-                 if (session.type === 'Z2') duration = window.courseData.settings.minutes_z2;
-                 else if (session.type === 'WORK') duration = window.courseData.settings.minutes_work;
-                 else if (session.type === 'LONG') duration = window.courseData.settings.minutes_long;
 
-                 window.courseData.current_day_session = {
-                     type: session.type, total_seconds: duration * 60,
-                     remaining_seconds: duration * 60, completed: false, date: todayStr
-                 };
-                 window.saveCourseState();
-             }
+             // FORZIAMO SEMPRE IL RESET DELLA SESSIONE PER GESTIRE IL PIANO ELITE (DOPPIA SESSIONE)
+             let duration = 15;
+             if (session.type === 'Z2') duration = window.courseData.settings.minutes_z2;
+             else if (session.type === 'WORK') duration = window.courseData.settings.minutes_work;
+             else if (session.type === 'LONG') duration = window.courseData.settings.minutes_long;
+
+             window.courseData.current_day_session = {
+                 type: session.type, total_seconds: duration * 60,
+                 remaining_seconds: duration * 60, completed: false, date: todayStr
+             };
+             window.saveCourseState();
 
              currentMode = 'course';
              isSinglePlayer = true;
