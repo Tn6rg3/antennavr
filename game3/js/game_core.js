@@ -140,6 +140,11 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
         if (roomCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
         localStorage.removeItem(STORAGE_ROOM_KEY);
 
+        // Se eravamo in un corso, rimuoviamo il segnalatore LIVE per i tutor
+        if (roomCode.startsWith("COURSE_")) {
+            db.ref(`courseActiveEnrollments/${myId}`).update({ roomCode: null });
+        }
+
         if (roomWasDeletedByHost) {
             if (amIHost && !roomCode.startsWith("TRN_")) {
                 db.ref(`rooms/${roomCode}`).remove();
