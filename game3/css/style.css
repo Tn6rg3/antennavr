@@ -419,8 +419,8 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
 
 .arcade-brick {
     position: absolute;
-    min-width: 80px;
-    height: 40px;
+    min-width: 60px; /* Ridotto da 80 */
+    height: 30px;    /* Ridotto da 40 */
     background: rgba(0, 255, 0, 0.2);
     border: 2px solid #0f0;
     border-radius: 4px;
@@ -429,7 +429,7 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
     justify-content: center;
     color: #0f0;
     font-weight: bold;
-    font-size: 1.2em;
+    font-size: 1em; /* Ridotto da 1.2em */
     box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
     transition: transform 0.1s linear;
     z-index: 10;
