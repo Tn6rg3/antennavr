@@ -407,7 +407,27 @@
 
         <!-- WIZARD CONFIGURAZIONE (PASSO-PASSO) -->
         <div id="courseWizardContainer" class="box-panel" style="display:none; border-color: var(--link-color); padding: 20px; text-align: center;">
-            <div id="wizardStep1">
+
+            <!-- STEP 0: SCELTA RUOLO -->
+            <div id="wizardStepRole" style="display:block;">
+                <h3>🛡️ Scegli il tuo Ruolo</h3>
+                <p style="font-size:0.85em; margin-bottom: 15px;">Come vuoi partecipare al corso?</p>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+                    <button onclick="window.selectWizardRole('corsista')" id="btnRoleCorsista" class="btn-success" style="height:100px; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+                        <span style="font-size:1.5em;">📖</span>
+                        <span style="font-size:0.9em;">CORSISTA</span>
+                        <small style="font-size:0.55em; font-weight:normal; opacity:0.8; margin-top:5px;">Segue il piano Koch</small>
+                    </button>
+                    <button onclick="window.selectWizardRole('tutor')" id="btnRoleTutor" class="btn-secondary" style="height:100px; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#673ab7;">
+                        <span style="font-size:1.5em;">🎓</span>
+                        <span style="font-size:0.9em;">TUTOR</span>
+                        <small style="font-size:0.55em; font-weight:normal; opacity:0.8; margin-top:5px;">Supporto e Analisi Dati</small>
+                    </button>
+                </div>
+                <p id="roleSelectionHint" style="font-size:0.7em; color:var(--hint-color); font-style:italic;">I tutor non hanno un piano di studio ma possono aiutare i corsisti in chat.</p>
+            </div>
+
+            <div id="wizardStep1" style="display:none;">
                 <h3>🗓️ Passo 1: Frequenza</h3>
                 <p style="font-size:0.85em;">Quanti giorni a settimana vuoi allenarti? La costanza è più importante della durata.</p>
                 <select id="wizardDays" style="width:100%; padding:10px; margin: 15px 0;">
@@ -504,6 +524,32 @@
 
         <!-- Dashboard e Settings (Se piano attivo) -->
         <div id="courseTabActiveView" style="display:none; flex-direction:column; gap:10px; width: 100%;">
+
+            <!-- PRESENTAZIONE CORSO (ACCORDION) -->
+            <div class="box-panel" style="padding: 10px; border-color: var(--link-color);">
+                <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.toggleVisibility('coursePresentationContent', 'btnTogglePresentation')">
+                    <b style="color:var(--link-color); font-size:0.9em;">📘 Presentazione Corso</b>
+                    <button id="btnTogglePresentation" class="btn-link" style="width:auto; margin-top:0; padding:5px;">Mostra</button>
+                </div>
+                <div id="coursePresentationContent" style="display:none; margin-top:10px; font-size:0.8em; line-height:1.4; text-align:left; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+                    <p>Benvenuto nel Corso Professionale CW. Ecco come funziona:</p>
+                    <ul style="padding-left:15px; margin-bottom:10px;">
+                        <li><b>Metodo Koch:</b> Imparerai un carattere alla volta solo dopo aver raggiunto il 90% di precisione.</li>
+                        <li><b>Piano 30/20/50:</b> Le sessioni variano tra Consolidamento, Studio e Resistenza.</li>
+                        <li><b>Allenamento Extra:</b> Disponibile dopo aver finito il piano giornaliero (non sblocca nuovi caratteri).</li>
+                        <li><b>Richiami:</b> La costanza è fondamentale. 3 giorni saltati portano all'espulsione automatica.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- AREA TUTOR (SOLO PER RUOLO TUTOR) -->
+            <div id="courseTutorPanel" class="box-panel" style="display:none; background:rgba(103, 58, 183, 0.1); border-color:#673ab7; padding:15px;">
+                <h3 style="color:#9575cd; margin-top:0; font-size:1em;">🎓 Pannello Tutor</h3>
+                <p style="font-size:0.8em; margin-bottom:10px;">Analizza i progressi dei corsisti:</p>
+                <div id="tutorStudentList" style="display:flex; flex-direction:column; gap:8px; max-height:250px; overflow-y:auto;">
+                    <p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Caricamento corsisti...</p>
+                </div>
+            </div>
 
             <!-- CHAT DEL CORSO (RADIO-AULA) -->
             <div class="box-panel" style="border-color: var(--champ-color); padding:5px;">
