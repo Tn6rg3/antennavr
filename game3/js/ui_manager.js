@@ -166,7 +166,7 @@ window.setLanguage = function(lang) {
         txt_select_file_btn: t.select_file, txt_custom_hint1: t.custom_hint1, txt_custom_hint2: t.custom_hint2,
         txt_custom_hint3: t.custom_hint3, txt_close_custom_btn: t.chat_close, txt_manage_custom_btn: t.manage_custom,
         opt_lb_room: t.tab_this_match, opt_lb_trn: t.tab_trn_lb, opt_lb_call: t.tab_callsigns, opt_lb_single: t.tab_std_single,
-        startArcadeBtn: t.arcade_start, txt_arcade_new_level: t.arcade_new_level
+        startArcadeBtn: t.arcade_start, arcadeLevelTitle: t.arcade_new_level
     };
 
     for (let key in textMap) {
