@@ -527,7 +527,10 @@
 
             <!-- AREA TUTOR (SOLO PER RUOLO TUTOR) -->
             <div id="courseTutorPanel" class="box-panel" style="display:none; background:rgba(103, 58, 183, 0.1); border-color:#673ab7; padding:15px;">
-                <h3 style="color:#9575cd; margin-top:0; font-size:1em;">🎓 Pannello Tutor</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h3 style="color:#9575cd; margin:0; font-size:1em;">🎓 Pannello Tutor</h3>
+                    <button id="btnTabExitTutor" class="btn-danger" style="width:auto; margin:0; padding:4px 8px; font-size:0.7em;">ABANDONA RUOLO</button>
+                </div>
                 <p style="font-size:0.8em; margin-bottom:10px;">Analizza i progressi dei corsisti:</p>
                 <div id="tutorStudentList" style="display:flex; flex-direction:column; gap:8px; max-height:250px; overflow-y:auto;">
                     <p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Caricamento corsisti...</p>
