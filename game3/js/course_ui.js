@@ -311,6 +311,33 @@ window.finishCourseSession = function() {
     }
 
     window.courseData.progress.char_stats_by_type = statsByType;
+
+    // --- GESTIONE RICHIAMI E GIORNI CONSECUTIVI ---
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const lastSession = window.courseData.progress.last_session_date;
+
+    if (lastSession) {
+        const lastDate = new Date(lastSession);
+        const diffDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
+        if (diffDays === 1) {
+            window.courseData.progress.consecutive_days = (window.courseData.progress.consecutive_days || 0) + 1;
+        } else if (diffDays > 1) {
+            window.courseData.progress.consecutive_days = 1;
+        }
+    } else {
+        window.courseData.progress.consecutive_days = 1;
+    }
+
+    // Se fatti 2 giorni consecutivi, scali un richiamo (se presente)
+    if (window.courseData.progress.consecutive_days > 0 && window.courseData.progress.consecutive_days % 2 === 0) {
+        if ((window.courseData.progress.reminders_count || 0) > 0) {
+            window.courseData.progress.reminders_count--;
+            showToast(currentLang === 'it' ? "Bravo! Per la tua costanza ti è stato rimosso un richiamo." : "Well done! A reminder has been removed due to your consistency.");
+        }
+    }
+
+    window.courseData.progress.last_session_date = todayStr;
     window.saveCourseState();
 
     // --- VISUALIZZAZIONE DEBRIEFING GRAFICO ---

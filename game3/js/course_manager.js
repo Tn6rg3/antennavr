@@ -156,6 +156,29 @@ window.COURSE_DEBRIEFING_PHRASES = {
     ]
 };
 
+window.COURSE_REMINDERS = [
+    "Operatore, l'etere non aspetta! Hai saltato l'allenamento ieri. Non perdere il ritmo.",
+    "Il tasto Morse sta prendendo polvere. Torna subito in postazione!",
+    "La costanza è l'anima della telegrafia. Ieri ti sei assentato, non farlo più.",
+    "Riceviamo segnali deboli... la tua memoria muscolare sta svanendo. Allenati ora!",
+    "Attenzione: un giorno senza pratica è un passo indietro. Ti aspettiamo in aula.",
+    "Soldato, il Codice Koch richiede disciplina! Ieri non ti sei presentato.",
+    "Sintonizzati! Ieri la tua frequenza era muta. Riprendi l'esercizio.",
+    "Non farti battere dalla pigrizia. Il Morse si impara giorno dopo giorno.",
+    "Abbiamo notato la tua assenza. Il corso procede, non restare indietro!",
+    "Ricorda: il genio è 1% talento e 99% esercizio. Torna a battere!",
+    "S.O.S. - Il tuo addestramento è in pericolo! Riprendi subito gli allenamenti.",
+    "Ieri il tuo manipolatore è rimasto muto. Recupera il tempo perduto.",
+    "Le orecchie si arrugginiscono in fretta. Non saltare le sessioni!",
+    "Un vero telegrafista non abbandona mai il campo. Ti abbiamo cercato ieri.",
+    "Riprendi il filo... o meglio, il punto e la linea! Allenamento mancato ieri.",
+    "Messaggio prioritario: la tua progressione è ferma. Torna operativo.",
+    "La velocità si conquista con la fatica quotidiana. Ieri hai riposato troppo.",
+    "Non lasciare che i nuovi caratteri vincano. Torna a studiare!",
+    "La Radio-Aula è aperta. Ieri il tuo banco era vuoto. Non mancare oggi.",
+    "Ultimo avviso prima del declino: riprendi l'allenamento e salva il tuo piano."
+];
+
 window.getCourseBriefing = function(typeId, chars) {
     const pool = window.COURSE_BRIEFING_PHRASES[typeId] || window.COURSE_BRIEFING_PHRASES.GENERIC;
     const p = pool[Math.floor(Math.random() * pool.length)];
@@ -212,8 +235,70 @@ window.initCourseManager = function() {
         console.log("Course: State loaded, rendering view...");
         window.renderCourseTabView();
         window.checkWeeklyReview();
+        window.checkCourseInactivity(); // NUOVO: Controllo richiami per inattività
         window.checkCourseStartupNotification();
     });
+};
+
+window.checkCourseInactivity = function() {
+    if (!window.courseData || window.courseData.active_plan !== true) return;
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    // Evitiamo controlli multipli nello stesso giorno
+    if (window.courseData.progress.last_inactivity_check === todayStr) return;
+
+    const lastSession = window.courseData.progress.last_session_date;
+    if (!lastSession) {
+        window.courseData.progress.last_inactivity_check = todayStr;
+        window.saveCourseState();
+        return;
+    }
+
+    const lastDate = new Date(lastSession);
+    const diffDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
+
+    if (diffDays >= 2) {
+        // L'utente ha saltato almeno ieri (diffDays 1 = ieri allenato, diffDays 2 = ieri saltato)
+        // Verifichiamo se ieri era un giorno di allenamento nel piano
+        const yesterdayIdx = (today.getDay() + 5) % 7; // GetDay 0=Dom, 1=Lun... yesterdayIdx 0=Lun, 6=Dom
+        const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[yesterdayIdx] : null;
+
+        if (dayData && dayData.sessions.some(s => s.type !== 'REST')) {
+            window.courseData.progress.reminders_count = (window.courseData.progress.reminders_count || 0) + 1;
+            window.courseData.progress.consecutive_days = 0; // Reset dei giorni consecutivi
+
+            if (window.courseData.progress.reminders_count >= 3) {
+                // ESPULSIONE DAL CORSO
+                alert("OPERATORE LICENZIATO PER INATTIVITÀ.\nHai accumulato 3 richiami formali senza riprendere l'addestramento. Il tuo piano è stato revocato.");
+                window.updateGlobalEnrollmentRecord(false);
+                window.courseData = window.getDefaultCourseData();
+                window.saveCourseState();
+                window.renderCourseTabView();
+                return;
+            } else {
+                // MOSTRA RICHIAMO
+                const msg = window.COURSE_REMINDERS[Math.floor(Math.random() * window.COURSE_REMINDERS.length)];
+                window.showCourseReminderModal(window.courseData.progress.reminders_count, msg);
+            }
+        }
+    }
+
+    window.courseData.progress.last_inactivity_check = todayStr;
+    window.saveCourseState();
+};
+
+window.showCourseReminderModal = function(count, message) {
+    const modal = document.getElementById('courseReminderModal');
+    const countTxt = document.getElementById('courseReminderCount');
+    const msgP = document.getElementById('courseReminderText');
+
+    if (modal && countTxt && msgP) {
+        countTxt.textContent = `Richiamo ${count} di 3`;
+        msgP.textContent = message;
+        modal.style.display = 'flex';
+    }
 };
 
 window.loadCourseState = async function() {
@@ -257,6 +342,9 @@ window.getDefaultCourseData = function() {
             current_lesson: 2,
             weekly_completed_days: 0,
             last_session_date: "",
+            last_inactivity_check: "",
+            reminders_count: 0,
+            consecutive_days: 0,
             total_xp: 0,
             char_stats: {},
             char_stats_by_type: { Z2: {}, WORK: {}, LONG: {} },
