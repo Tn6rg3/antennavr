@@ -55,6 +55,15 @@
         <button id="btnPlayCourseLater" class="btn-secondary" onclick="document.getElementById('courseSessionModal').style.display='none'">Più Tardi</button>
     </div>
 </div>
+
+<!-- MODAL: RICHIAMO CORSO -->
+<div id="courseReminderModal" style="display: none; position: fixed; top: 20%; left: 10%; width: 80%; background: #000; z-index: 6000; border: 2px solid #d32f2f; border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 0 30px rgba(211, 47, 47, 0.5); text-align: center;">
+    <span style="font-size: 4em; margin-bottom: 10px;">⚠️</span>
+    <h2 style="color: #d32f2f; margin: 0 0 10px 0;">RICHIAMO FORMALE</h2>
+    <div id="courseReminderCount" style="font-weight: bold; color: #fff; margin-bottom: 10px;">Richiamo 1 di 3</div>
+    <p id="courseReminderText" style="font-size: 0.95em; color: #eee; margin-bottom: 20px; font-style: italic;"></p>
+    <button onclick="document.getElementById('courseReminderModal').style.display='none'" class="btn-danger">Ho capito, torno al lavoro</button>
+</div>
 <!-- POPUP BENVENUTO NUOVO UTENTE (SOLO PRIMO ACCESSO) -->
 <div id="welcomeNewUserModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 6000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
     <span style="font-size: 3.5em; margin-bottom: 10px;">📻</span>
