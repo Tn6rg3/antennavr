@@ -79,7 +79,7 @@ let coopTimerInterval = null, coopDecayInterval = null;
 
 // STATO ARCADE
 let isArcadeMode = false, arcadeLives = 3, arcadeScore = 0, arcadeLevel = 1;
-let arcadeWpm = 15, arcadeWordLen = 3, arcadeWordsSolved = 0;
+let arcadeWpm = 15, arcadeWordLen = 3, arcadeWordsSolved = 0, arcadeWordsAtCurrentLen = 0;
 let arcadeActiveBrick = null, arcadeNextBrickTimeout = null;
 
 // TIMERS E SCHEDULER

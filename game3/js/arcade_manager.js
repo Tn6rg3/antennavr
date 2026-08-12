@@ -12,6 +12,7 @@ window.startArcadeSequence = function() {
     arcadeScore = 0;
     arcadeLevel = 1;
     arcadeWordsSolved = 0;
+    arcadeWordsAtCurrentLen = 0;
     arcadeWordLen = 3;
     arcadeWpm = 20; // Velocità fissa iniziale per tutti
     peakWpm = arcadeWpm;
@@ -37,7 +38,8 @@ window.startArcadeSequence = function() {
     lastFrameTime = performance.now();
     arcadeLoopId = requestAnimationFrame(window.arcadeGameLoop);
 
-    window.spawnArcadeBrick();
+    // Inizio ritardato di 1 secondo come richiesto
+    setTimeout(window.spawnArcadeBrick, 1000);
 };
 
 window.spawnArcadeBrick = function() {
@@ -166,6 +168,7 @@ window.handleArcadeInput = function() {
 
         arcadeScore += points;
         arcadeWordsSolved++;
+        arcadeWordsAtCurrentLen++;
 
         // Effetto esplosione
         const el = arcadeActiveBrick.el;
@@ -192,13 +195,17 @@ window.updateArcadeProgression = function() {
     arcadeWpm++;
     if (arcadeWpm > peakWpm) peakWpm = arcadeWpm;
 
-    // Ogni 2 parole: +1 lunghezza (max 15)
-    if (arcadeWordsSolved % 2 === 0) {
+    // Progression richiesto: 3ch->2w, 4ch->3w, 5ch->5w
+    const wordsPerLen = { 3: 2, 4: 3, 5: 5 };
+    const needed = wordsPerLen[arcadeWordLen] || 5;
+
+    if (arcadeWordsAtCurrentLen >= needed) {
         const oldLen = arcadeWordLen;
         arcadeWordLen = Math.min(15, arcadeWordLen + 1);
 
         // Se la lunghezza è aumentata, mostriamo SEMPRE una transizione visiva
         if (arcadeWordLen > oldLen) {
+            arcadeWordsAtCurrentLen = 0; // Reset per la nuova lunghezza
             // Semplice Wave Up o vero Level Up?
             const levelThresholds = [6, 9, 12, 15];
             const isMajorLevel = levelThresholds.includes(arcadeWordLen);
@@ -239,12 +246,8 @@ window.showArcadeLevelUp = function(isMajor) {
             els.arcadeLevelTitle.textContent = isMajor ? `LIVELLO ${arcadeLevel}` : "CARATTERI AUMENTATI";
         }
         if (els.arcadeLevelNextText) {
-            els.arcadeLevelNextText.textContent = `Preparati: parole da ${arcadeWordLen} caratteri`;
+            els.arcadeLevelNextText.style.display = 'none'; // Nascondiamo la scritta sotto
         }
-
-        // Suono celebrativo (tonalità ascendente)
-        setTimeout(() => playBeep(600, 0.1), 100);
-        setTimeout(() => playBeep(900, 0.2), 250);
     }
 
     setTimeout(() => {
