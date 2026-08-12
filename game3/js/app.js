@@ -287,131 +287,143 @@ function initGame() {
     }
 
     auth.signInAnonymously().then(async () => {
-        try {
-            // Ripristiniamo l'ID Telegram come ID primario per coerenza profilo
-            myId = tgUser.id.toString();
-            console.log("CW Game: Auth success, Telegram ID:", myId);
-            const userRef = db.ref(`users/${myId}`);
-            const snap = await userRef.once('value');
-            const data = snap.val() || {};
-            if (data.alias) myName = data.alias;
-            myPrivacy = data.privacyUsername || false;
+        // Ripristiniamo l'ID Telegram come ID primario per coerenza profilo
+        myId = tgUser.id.toString();
+        console.log("CW Game: Auth success, Telegram ID:", myId);
+        const userRef = db.ref(`users/${myId}`);
+        const snap = await userRef.once('value');
+        const data = snap.val() || {};
+        if (data.alias) myName = data.alias;
+        myPrivacy = data.privacyUsername || false;
 
-            if (!snap.exists() || !data.welcomed) {
-                await userRef.update({ name: myName, welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP });
-                if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'flex';
-            }
-
-            if (els.playerName) els.playerName.textContent = myName;
-
-            // --- PULIZIA SESSIONI PRECEDENTI ---
-            db.ref('rooms').orderByChild('hostId').equalTo(myId).once('value', s => {
-                s.forEach(roomSnap => {
-                    if (roomSnap.val().status === 'waiting') {
-                        roomSnap.ref.remove();
-                        db.ref(`public_lobby_rooms/${roomSnap.key}`).remove();
-                    }
-                });
-            });
-
-            // --- SBLOCCO UI CRITICO ---
-            if (els.loadingText) els.loadingText.style.display = 'none';
-            if (els.createRoomBtn) {
-                els.createRoomBtn.disabled = false;
-                console.log("CW Game: UI Unlocked.");
-            }
-
-            db.ref('.info/connected').on('value', s => {
-                if (!s.val()) return;
-                const pRef = db.ref(`presence/${myId}`);
-                pRef.onDisconnect().remove();
-                const presenceData = {
-                    name: myName,
-                    username: myPrivacy ? "" : tgUsername,
-                    status: 'online',
-                    uid: firebase.auth().currentUser.uid,
-                    ts: firebase.database.ServerValue.TIMESTAMP,
-                    lastActive: firebase.database.ServerValue.TIMESTAMP
-                };
-
-                if (window.userProgression && window.userProgression.level) {
-                    presenceData.level = window.userProgression.level;
-                }
-
-                pRef.set(presenceData);
-                db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(myId);
-                db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).onDisconnect().remove();
-            });
-
-            // --- MONITORAGGIO INATTIVITÀ ---
-            const updateActivity = () => { lastActivityTs = Date.now(); };
-            ['mousedown', 'keydown', 'touchstart', 'input'].forEach(evt => window.addEventListener(evt, updateActivity));
-
-            setInterval(() => {
-                const now = Date.now();
-                if (now - lastActivityTs > INACTIVITY_TIMEOUT_MS) {
-                    if (roomCode) window.exitRoomCleanly?.(false, true);
-                    db.ref(`presence/${myId}`).remove();
-                } else if (db && myId) {
-                    db.ref(`presence/${myId}/lastActive`).set(firebase.database.ServerValue.TIMESTAMP);
-                }
-            }, 60000);
-
-            if (startParam) {
-                if (startParam.startsWith('team_')) window.processTeamInvite?.(startParam.replace('team_', ''));
-                else if (startParam.startsWith('room_')) window.joinSpecificRoom?.(startParam.replace('room_', ''));
-            } else {
-                const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
-                if (lastRoom) {
-                    db.ref(`rooms/${lastRoom}`).once('value', s => {
-                        if (s.exists() && s.val().status !== 'finished') {
-                            roomCode = lastRoom; if (els.rejoinContainer) els.rejoinContainer.style.display = 'block';
-                            showScreen('setupScreen');
-                        } else { localStorage.removeItem(STORAGE_ROOM_KEY); showScreen('setupScreen'); }
-                    });
-                } else showScreen('setupScreen');
-            }
-
-            const savedLang = localStorage.getItem('gameLang');
-            if (savedLang) window.setLanguage(savedLang); else updateMuteBtnUI();
-
-            window.loadDictionaries().then(() => {
-                let today = new Date().toISOString().split('T')[0];
-                const lastShown = localStorage.getItem(STORAGE_DAILY_SHOWN);
-                if (lastShown === today || startParam) return;
-
-                db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value', histSnap => {
-                    let alreadyPlayedToday = false;
-                    histSnap.forEach(matchSnap => {
-                        const m = matchSnap.val();
-                        if (m.mode === 'daily_challenge' && new Date(m.date).toISOString().split('T')[0] === today) alreadyPlayedToday = true;
-                    });
-                    if (!alreadyPlayedToday && els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'flex';
-                });
-            });
-
-            const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);
-            if (savedCustom) { try { window.customDictionary = JSON.parse(savedCustom); window.updateCustomDictStatus?.(); } catch(e){} }
-
-            window.listenToRooms?.();
-            window.listenToOnlineUsers?.();
-            window.listenToInvites?.();
-            window.listenToInviteAccepted?.();
-            window.initBattleRoyaleScheduler?.();
-            window.initGlobalNotificationListener?.();
-            window.loadRegolamento();
-            window.initProgression?.();
-            window.initCourseManager?.();
-            window.setupBugSystem?.();
-
-        } catch (error) {
-            console.error("CW Game Initialization Error:", error);
-            showScreen('setupScreen'); // Sblocchiamo comunque l'utente
+        if (!snap.exists() || !data.welcomed) {
+            await userRef.update({ name: myName, welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP });
+            if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'flex';
         }
-    }).catch(err => {
-        console.error("Firebase Auth Error:", err);
-        showScreen('setupScreen');
-    });
+
+        if (els.playerName) els.playerName.textContent = myName;
+
+        // --- PULIZIA SESSIONI PRECEDENTI ---
+        // Se l'app si è chiusa male, l'utente potrebbe avere ancora una stanza "waiting" a suo nome.
+        // La puliamo all'avvio per evitare "ghost rooms" in bacheca.
+        db.ref('rooms').orderByChild('hostId').equalTo(myId).once('value', s => {
+            s.forEach(roomSnap => {
+                if (roomSnap.val().status === 'waiting') {
+                    roomSnap.ref.remove();
+                    db.ref(`public_lobby_rooms/${roomSnap.key}`).remove();
+                }
+            });
+        });
+
+        // --- SBLOCCO UI CRITICO ---
+        if (els.loadingText) els.loadingText.style.display = 'none';
+        if (els.createRoomBtn) {
+            els.createRoomBtn.disabled = false;
+            console.log("CW Game: UI Unlocked.");
+        }
+
+        db.ref('.info/connected').on('value', s => {
+            if (!s.val()) return;
+            const pRef = db.ref(`presence/${myId}`);
+            pRef.onDisconnect().remove();
+            const presenceData = {
+                name: myName,
+                username: myPrivacy ? "" : tgUsername,
+                status: 'online',
+                uid: firebase.auth().currentUser.uid,
+                ts: firebase.database.ServerValue.TIMESTAMP,
+                lastActive: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            // Aggiungiamo il livello solo se già disponibile in memoria
+            if (window.userProgression && window.userProgression.level) {
+                presenceData.level = window.userProgression.level;
+            }
+
+            pRef.set(presenceData);
+
+            // Crea anche una mappa inversa specifica per le regole di sicurezza
+            db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(myId);
+            db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).onDisconnect().remove();
+        });
+
+        // --- MONITORAGGIO INATTIVITÀ ---
+        const updateActivity = () => { lastActivityTs = Date.now(); };
+        ['mousedown', 'keydown', 'touchstart', 'input'].forEach(evt => window.addEventListener(evt, updateActivity));
+
+        setInterval(() => {
+            const now = Date.now();
+            if (now - lastActivityTs > INACTIVITY_TIMEOUT_MS) {
+                console.log("Inattività rilevata (15 min). Chiusura sessione.");
+                if (roomCode) {
+                    window.showToast?.(currentLang === 'it' ? "Sessione chiusa per inattività." : "Session closed due to inactivity.");
+                    window.exitRoomCleanly?.(false, true);
+                }
+                // Rimuoviamo anche la presenza per sicurezza
+                db.ref(`presence/${myId}`).remove();
+                // Fermiamo l'aggiornamento automatico fino alla prossima interazione
+            } else if (db && myId) {
+                // Aggiorna il timestamp sul server ogni minuto per mostrare che siamo vivi
+                db.ref(`presence/${myId}/lastActive`).set(firebase.database.ServerValue.TIMESTAMP);
+            }
+        }, 60000); // Controllo ogni minuto
+
+        if (startParam) {
+            if (startParam.startsWith('team_')) window.processTeamInvite?.(startParam.replace('team_', ''));
+            else if (startParam.startsWith('room_')) window.joinSpecificRoom?.(startParam.replace('room_', ''));
+        } else {
+            const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
+            if (lastRoom) {
+                db.ref(`rooms/${lastRoom}`).once('value', s => {
+                    if (s.exists() && s.val().status !== 'finished') {
+                        roomCode = lastRoom; if (els.rejoinContainer) els.rejoinContainer.style.display = 'block';
+                        showScreen('setupScreen');
+                    } else { localStorage.removeItem(STORAGE_ROOM_KEY); showScreen('setupScreen'); }
+                });
+            } else showScreen('setupScreen');
+        }
+
+        const savedLang = localStorage.getItem('gameLang');
+        if (savedLang) window.setLanguage(savedLang); else updateMuteBtnUI();
+        
+        window.loadDictionaries().then(() => {
+            let today = new Date().toISOString().split('T')[0];
+            const lastShown = localStorage.getItem(STORAGE_DAILY_SHOWN);
+
+            if (lastShown === today || startParam) return;
+
+            // Verifichiamo se l'utente ha già giocato OGGI consultando la history su Firebase
+            db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value', histSnap => {
+                let alreadyPlayedToday = false;
+                histSnap.forEach(matchSnap => {
+                    const m = matchSnap.val();
+                    if (!m.date) return;
+                    const mDate = new Date(m.date).toISOString().split('T')[0];
+                    if (m.mode === 'daily_challenge' && mDate === today) alreadyPlayedToday = true;
+                });
+
+                if (!alreadyPlayedToday && els.dailyChallengeModal) {
+                    els.dailyChallengeModal.style.display = 'flex';
+                } else if (alreadyPlayedToday) {
+                    // Aggiorniamo il cache locale se Firebase dice che abbiamo giocato
+                    localStorage.setItem(STORAGE_DAILY_SHOWN, today);
+                }
+            });
+        });
+
+        const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);
+        if (savedCustom) { try { window.customDictionary = JSON.parse(savedCustom); window.updateCustomDictStatus?.(); } catch(e){} }
+
+        window.listenToRooms?.();
+        window.listenToOnlineUsers?.();
+        window.listenToInvites?.();
+        window.listenToInviteAccepted?.();
+        window.initBattleRoyaleScheduler?.();
+        window.initGlobalNotificationListener?.(); // AVVIO LISTENER BACKGROUND
+        window.loadRegolamento();
+        window.initProgression?.();
+        window.initCourseManager?.();
+        window.setupBugSystem?.();
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
