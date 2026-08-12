@@ -201,66 +201,57 @@ window.updateArcadeProgression = function() {
         const oldLen = arcadeWordLen;
         arcadeWordLen = Math.min(15, arcadeWordLen + 1);
 
-        // Verifica Level Up (soglie: 6, 9, 12...)
+        // Se la lunghezza è aumentata, mostriamo SEMPRE una transizione visiva
         if (arcadeWordLen > oldLen) {
+            // Semplice Wave Up o vero Level Up?
             const levelThresholds = [6, 9, 12, 15];
-            if (levelThresholds.includes(arcadeWordLen)) {
-                arcadeLevel++;
-                window.showArcadeLevelUp();
+            const isMajorLevel = levelThresholds.includes(arcadeWordLen);
 
-                // Bonus Vita ogni 3 livelli (2, 5, 8... considerando la logica utente 4, 7, 10)
-                // Usiamo arcadeLevel per semplicità: se divisibile per 3 (es. Livello 3 -> 4)
-                if (arcadeLevel % 3 === 1 && arcadeLevel > 1) {
-                    arcadeLives = Math.min(5, arcadeLives + 1);
-                    showToast("❤️ VITA EXTRA GUADAGNATA!");
-                }
+            if (isMajorLevel) arcadeLevel++;
+
+            window.showArcadeLevelUp(isMajorLevel);
+
+            // Bonus Vita ogni volta che superiamo una soglia Major
+            if (isMajorLevel) {
+                arcadeLives = Math.min(5, arcadeLives + 1);
+                showToast("❤️ VITA EXTRA GUADAGNATA!");
             }
         }
     }
 };
 
-window.showArcadeLevelUp = function() {
+window.showArcadeLevelUp = function(isMajor) {
     window.arcadePaused = true;
     stopAllMorseAudio();
 
     if (els.arcadeLevelOverlay) {
         els.arcadeLevelOverlay.style.display = 'flex';
 
-        // Pulizia e creazione elemento numero gigante
-        els.arcadeLevelOverlay.innerHTML = '';
+        // Aggiorniamo i dati del nuovo overlay
+        if (els.arcadeLevelNumber) {
+            els.arcadeLevelNumber.textContent = isMajor ? arcadeLevel : arcadeWordLen;
+        }
+        if (els.arcadeLevelTitle) {
+            els.arcadeLevelTitle.textContent = isMajor ? "LIVELLO COMPLETATO" : "CARATTERI AUMENTATI";
+        }
+        if (els.arcadeLevelNextText) {
+            els.arcadeLevelNextText.textContent = `Prossimo obiettivo: ${arcadeWordLen} caratteri`;
+        }
 
-        const numEl = document.createElement('div');
-        numEl.className = 'level-number-anim';
-        numEl.style.cssText = "font-size: 150px; font-weight: 900; color: #0f0; text-shadow: 0 0 30px #0f0;";
-        numEl.textContent = arcadeLevel;
-
-        const txtEl = document.createElement('div');
-        txtEl.style.cssText = "font-size: 24px; color: #0f0; margin-top: -20px; letter-spacing: 5px; font-weight: bold;";
-        txtEl.textContent = "LIVELLO COMPLETATO";
-
-        const nextEl = document.createElement('div');
-        nextEl.style.cssText = "font-size: 18px; color: #0f0; margin-top: 20px; opacity: 0.8;";
-        nextEl.textContent = `Target: parole da ${arcadeWordLen} caratteri`;
-
-        els.arcadeLevelOverlay.appendChild(numEl);
-        els.arcadeLevelOverlay.appendChild(txtEl);
-        els.arcadeLevelOverlay.appendChild(nextEl);
+        // Suono celebrativo (tonalità ascendente)
+        setTimeout(() => playBeep(600, 0.1), 100);
+        setTimeout(() => playBeep(800, 0.1), 200);
+        setTimeout(() => playBeep(1000, 0.2), 300);
     }
 
     setTimeout(() => {
         if (els.arcadeLevelOverlay) {
             els.arcadeLevelOverlay.style.display = 'none';
-            // Ripristiniamo la struttura originale per utilizzi futuri se necessario
-            els.arcadeLevelOverlay.innerHTML = `
-                <h2 id="txt_arcade_new_level" style="color:#0f0; font-size:2em; margin-bottom:10px; text-shadow: 0 0 10px #0f0;">LIVELLO COMPLETATO!</h2>
-                <p id="arcadeLevelNextText" style="color:#0f0; font-size:1.2em;">Preparati per parole più lunghe...</p>
-            `;
         }
         window.arcadePaused = false;
         window.updateArcadeStatsUI();
-        // Ripristina l'input focus dopo l'overlay
         if (els.arcadeInput) els.arcadeInput.focus();
-    }, 3000);
+    }, 2500);
 };
 
 window.updateArcadeStatsUI = function() {
