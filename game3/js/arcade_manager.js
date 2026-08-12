@@ -138,8 +138,8 @@ window.handleArcadeMiss = function() {
     if (arcadeLives <= 0) {
         window.finishArcadeGame();
     } else {
-        // Breve pausa prima del prossimo
-        setTimeout(window.spawnArcadeBrick, 1000);
+        // Breve pausa prima del prossimo (RIDOTTA per fluidità)
+        setTimeout(window.spawnArcadeBrick, 500);
     }
 };
 
@@ -152,11 +152,8 @@ window.handleArcadeInput = function() {
     // Rivelazione parziale dei caratteri corretti
     let displayStr = "";
     for (let i = 0; i < target.length; i++) {
-        if (typed[i] === target[i]) {
-            displayStr += target[i];
-        } else {
-            displayStr += "•";
-        }
+        if (typed[i] === target[i]) displayStr += target[i];
+        else displayStr += "•";
     }
     arcadeActiveBrick.el.textContent = displayStr;
 
@@ -171,7 +168,7 @@ window.handleArcadeInput = function() {
 
         // Effetto esplosione
         const el = arcadeActiveBrick.el;
-        el.textContent = target; // Rivela la parola
+        el.textContent = target;
         el.classList.add('exploded');
 
         arcadeActiveBrick = null;
@@ -182,9 +179,9 @@ window.handleArcadeInput = function() {
         const hasTransition = window.updateArcadeProgression();
         window.updateArcadeStatsUI();
 
-        // Prossimo mattoncino solo se non siamo in pausa per transizione
+        // Prossimo mattoncino (RIDOTTO a 300ms per azione frenetica)
         if (!hasTransition) {
-            setTimeout(window.spawnArcadeBrick, 600);
+            setTimeout(window.spawnArcadeBrick, 300);
         }
     }
 };
@@ -225,27 +222,28 @@ window.showArcadeLevelUp = function(isMajor) {
     stopAllMorseAudio();
 
     if (els.arcadeLevelOverlay) {
-        // Reset forza animazione togliendo e mettendo la classe sul numero
+        // Forza riavvio animazione nascondendo e rimostrando
+        els.arcadeLevelOverlay.style.display = 'none';
+        void els.arcadeLevelOverlay.offsetWidth; // Reflow
+        els.arcadeLevelOverlay.style.display = 'flex';
+
         if (els.arcadeLevelNumber) {
             els.arcadeLevelNumber.classList.remove('level-number-anim');
-            void els.arcadeLevelNumber.offsetWidth; // Trigger reflow
+            void els.arcadeLevelNumber.offsetWidth; // Reflow
             els.arcadeLevelNumber.classList.add('level-number-anim');
             els.arcadeLevelNumber.textContent = isMajor ? arcadeLevel : arcadeWordLen;
         }
 
-        els.arcadeLevelOverlay.style.display = 'flex';
-
         if (els.arcadeLevelTitle) {
-            els.arcadeLevelTitle.textContent = isMajor ? "LIVELLO COMPLETATO" : "CARATTERI AUMENTATI";
+            els.arcadeLevelTitle.textContent = isMajor ? `LIVELLO ${arcadeLevel}` : "CARATTERI AUMENTATI";
         }
         if (els.arcadeLevelNextText) {
-            els.arcadeLevelNextText.textContent = `Prossimo obiettivo: ${arcadeWordLen} caratteri`;
+            els.arcadeLevelNextText.textContent = `Preparati: parole da ${arcadeWordLen} caratteri`;
         }
 
         // Suono celebrativo (tonalità ascendente)
         setTimeout(() => playBeep(600, 0.1), 100);
-        setTimeout(() => playBeep(800, 0.1), 200);
-        setTimeout(() => playBeep(1000, 0.2), 300);
+        setTimeout(() => playBeep(900, 0.2), 250);
     }
 
     setTimeout(() => {
@@ -260,7 +258,7 @@ window.showArcadeLevelUp = function(isMajor) {
         }
         // Spawna il prossimo mattone alla fine della transizione
         window.spawnArcadeBrick();
-    }, 3000);
+    }, 2800);
 };
 
 window.updateArcadeStatsUI = function() {
