@@ -621,6 +621,18 @@ window.attachCourseUIListeners = function() {
         };
     }
 
+    if (els.btnTabExitTutor) {
+        els.btnTabExitTutor.onclick = () => {
+            if (confirm("Vuoi davvero rinunciare al ruolo di TUTOR?\nNon avrai più accesso ai dati dei corsisti.")) {
+                window.updateGlobalEnrollmentRecord(false);
+                window.courseData = window.getDefaultCourseData();
+                window.saveCourseState();
+                window.renderCourseTabView();
+                showToast("Ruolo Tutor rimosso.");
+            }
+        };
+    }
+
     if (els.btnTabStartCourseSession) {
         els.btnTabStartCourseSession.onclick = () => {
              const todayIdx = (new Date().getDay() + 6) % 7;

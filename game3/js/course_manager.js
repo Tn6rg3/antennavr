@@ -303,8 +303,12 @@ window.showCourseReminderModal = function(count, message) {
 
 window.loadCourseState = async function() {
     if (!myId || !db) return;
-    try {
-        const snap = await db.ref(`users/${myId}/course`).once('value');
+
+    // Rimuoviamo eventuali listener precedenti se questa funzione viene chiamata più volte
+    db.ref(`users/${myId}/course`).off('value');
+
+    // Cambiamo in un listener (.on) per aggiornamenti in tempo reale (es. approvazione tutor)
+    db.ref(`users/${myId}/course`).on('value', snap => {
         let data = snap.val();
 
         if (data) {
@@ -317,10 +321,14 @@ window.loadCourseState = async function() {
 
         if (window.courseData.active_plan === true) {
             window.updateGlobalEnrollmentRecord(true);
+            // Se l'utente è nel tab corso, rinfreschiamo la vista
+            if (els.courseTabActiveView && els.courseTabActiveView.offsetParent !== null) {
+                window.renderCourseTabView();
+            }
         }
-    } catch (e) {
-        console.error("Course Manager: Error loading course state:", e);
-    }
+    }, (error) => {
+        console.error("Course Manager: Error syncing course state:", error);
+    });
 };
 
 window.getDefaultCourseData = function() {

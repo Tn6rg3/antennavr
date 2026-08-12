@@ -454,39 +454,20 @@ function initGame() {
 window.setupBugSystem = function() {
     const badge = document.getElementById('bugsBadge');
 
-    // 1. TENTATIVO DI LETTURA "SILENZIOSO" (LIMITATO AI PIÙ RECENTI)
+    // 1. Bug Reports Listener (Real-time per Admin Badge)
     db.ref('bugReports').limitToLast(20).on('value', snap => {
-        // Se arriviamo qui, Firebase ci ha dato il permesso -> Siamo Admin!
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
-
-        if (!snap.exists()) {
-            if (badge) badge.style.display = 'none';
-            return;
-        }
-
-        // Calcolo badge: messaggi dopo l'ultima visualizzazione
-        const lastSeen = parseInt(localStorage.getItem('cw_last_bug_ts') || 0);
-        let newCount = 0;
-        let latestTs = lastSeen;
-
-        snap.forEach(c => {
-            const b = c.val();
-            if (b.ts > lastSeen) newCount++;
-            if (b.ts > latestTs) latestTs = b.ts;
-        });
-
-        if (newCount > 0 && badge) {
-            badge.textContent = newCount;
-            badge.style.display = 'flex';
-        } else if (badge) {
-            badge.style.display = 'none';
-        }
-        window.temp_max_bug_ts = latestTs;
+        window.updateAdminBadge();
     }, (error) => {
         console.log("Bug System: Standard user access.");
     });
 
-    // 2. Invio Bug (Per tutti)
+    // 2. Tutor Requests Listener (Real-time per Admin Badge)
+    db.ref('tutorRequests').on('value', snap => {
+        window.updateAdminBadge();
+    }, (error) => { /* Silent for non-admin */ });
+
+    // 3. Invio Bug (Per tutti)
     if (document.getElementById('btnSendBugReport')) {
         document.getElementById('btnSendBugReport').onclick = () => {
             const textarea = document.getElementById('bugReportText');
@@ -508,80 +489,108 @@ window.setupBugSystem = function() {
         };
     }
 
-    // 3. Lettura Bug (Solo Admin)
-    if (document.getElementById('btnReadAllBugs')) {
-        document.getElementById('btnReadAllBugs').onclick = () => {
-            const list = document.getElementById('adminBugList');
-            if (!list) return;
-
-            // Azzeriamo il badge quando leggiamo
-            localStorage.setItem('cw_last_bug_ts', window.temp_max_bug_ts || Date.now());
-            if (badge) badge.style.display = 'none';
-
-            list.innerHTML = "Caricamento...";
-
-            db.ref('bugReports').once('value', snap => {
-                list.innerHTML = "";
-                if (!snap.exists()) {
-                    list.innerHTML = "Nessuna segnalazione.";
-                    return;
-                }
-                snap.forEach(child => {
-                    const bug = child.val();
-                    const item = document.createElement('div');
-                    item.style.padding = "8px";
-                    item.style.borderBottom = "1px solid var(--hint-color)";
-                    item.innerHTML = `
-                        <div style="color:var(--link-color); font-weight:bold;">👤 ${bug.from} (@${bug.username})</div>
-                        <div style="font-size:0.7em; color:var(--hint-color);">${bug.date}</div>
-                        <div style="margin-top:4px; white-space: pre-wrap;">${bug.msg}</div>
-                        <button style="font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:2px 6px; margin-top:5px; cursor:pointer;"
-                                onclick="if(confirm('Eliminare definitivamente?')){
-                                    db.ref('bugReports/${child.key}').remove()
-                                        .then(() => { this.parentElement.remove(); showToast('Eliminato'); })
-                                        .catch(e => { alert('Errore permessi: controlla le regole Firebase'); console.error(e); });
-                                }">Elimina</button>
-                    `;
-                    list.prepend(item);
-                });
-            });
-        };
+    // 4. Lettori (Solo Admin)
+    if (els.btnReadAllBugs) {
+        els.btnReadAllBugs.onclick = () => window.loadAdminBugs();
     }
-
-    // 4. Lettura Richieste Tutor (Solo Admin)
-    if (document.getElementById('btnReadTutorRequests')) {
-        document.getElementById('btnReadTutorRequests').onclick = () => {
-            const list = document.getElementById('adminBugList');
-            if (!list) return;
-            list.innerHTML = "Caricamento richieste...";
-
-            db.ref('tutorRequests').once('value', snap => {
-                list.innerHTML = "";
-                if (!snap.exists()) {
-                    list.innerHTML = "Nessuna richiesta pendente.";
-                    return;
-                }
-                snap.forEach(child => {
-                    const req = child.val();
-                    const item = document.createElement('div');
-                    item.style.padding = "10px";
-                    item.style.borderBottom = "1px solid #673ab7";
-                    item.style.background = "rgba(103, 58, 183, 0.05)";
-                    item.innerHTML = `
-                        <div style="font-weight:bold; color:#9575cd;">🎓 Richiesta da: ${req.name}</div>
-                        <div style="font-size:0.75em; color:var(--hint-color);">ID: ${req.uid} | @${req.username}</div>
-                        <div style="display:flex; gap:10px; margin-top:8px;">
-                            <button style="flex:1; background:#4caf50; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;"
-                                    onclick="window.approveTutor('${child.key}', '${req.uid}', '${req.name}')">APPROVA ✅</button>
-                            <button style="flex:1; background:#d32f2f; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;"
-                                    onclick="if(confirm('Rifiutare?')){ db.ref('tutorRequests/${child.key}').remove(); this.parentElement.parentElement.remove(); }">RIFIUTA ❌</button>
-                        </div>
-                    `;
-                    list.prepend(item);
-                });
-            });
-        };
+    if (els.btnReadTutorRequests) {
+        els.btnReadTutorRequests.onclick = () => window.loadAdminTutorRequests();
     }
+};
+
+window.updateAdminBadge = async function() {
+    const badge = document.getElementById('bugsBadge');
+    if (!badge || !db) return;
+
+    try {
+        const lastSeenBugTs = parseInt(localStorage.getItem('cw_last_bug_ts') || 0);
+
+        // Contiamo bug nuovi e tutor requests pendenti
+        const [bugsSnap, tutorSnap] = await Promise.all([
+            db.ref('bugReports').once('value'),
+            db.ref('tutorRequests').once('value')
+        ]);
+
+        let count = 0;
+        if (bugsSnap.exists()) {
+            bugsSnap.forEach(c => { if (c.val().ts > lastSeenBugTs) count++; });
+        }
+        if (tutorSnap.exists()) {
+            count += Object.keys(tutorSnap.val()).length;
+        }
+
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch(e) {}
+};
+
+window.loadAdminBugs = function() {
+    const list = document.getElementById('adminBugList');
+    const badge = document.getElementById('bugsBadge');
+    if (!list) return;
+
+    localStorage.setItem('cw_last_bug_ts', Date.now());
+    window.updateAdminBadge();
+
+    list.innerHTML = "Caricamento...";
+    db.ref('bugReports').once('value', snap => {
+        list.innerHTML = "";
+        if (!snap.exists()) { list.innerHTML = "Nessuna segnalazione."; return; }
+        snap.forEach(child => {
+            const bug = child.val();
+            const item = document.createElement('div');
+            item.style.padding = "8px";
+            item.style.borderBottom = "1px solid var(--hint-color)";
+            item.innerHTML = `
+                <div style="color:var(--link-color); font-weight:bold;">👤 ${bug.from} (@${bug.username})</div>
+                <div style="font-size:0.7em; color:var(--hint-color);">${bug.date}</div>
+                <div style="margin-top:4px; white-space: pre-wrap;">${bug.msg}</div>
+                <button style="font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:2px 6px; margin-top:5px; cursor:pointer;"
+                        onclick="if(confirm('Eliminare definitivamente?')){
+                            db.ref('bugReports/${child.key}').remove()
+                                .then(() => { this.parentElement.remove(); showToast('Eliminato'); window.updateAdminBadge(); })
+                                .catch(e => { alert('Errore permessi'); });
+                        }">Elimina</button>
+            `;
+            list.prepend(item);
+        });
+    });
+};
+
+window.loadAdminTutorRequests = function() {
+    const list = document.getElementById('adminBugList');
+    if (!list) return;
+    list.innerHTML = "Caricamento richieste...";
+
+    db.ref('tutorRequests').once('value', snap => {
+        list.innerHTML = "";
+        if (!snap.exists()) {
+            list.innerHTML = "Nessuna richiesta pendente.";
+            return;
+        }
+        snap.forEach(child => {
+            const req = child.val();
+            const item = document.createElement('div');
+            item.style.padding = "10px";
+            item.style.borderBottom = "1px solid #673ab7";
+            item.style.background = "rgba(103, 58, 183, 0.05)";
+            item.innerHTML = `
+                <div style="font-weight:bold; color:#9575cd;">🎓 Richiesta da: ${req.name}</div>
+                <div style="font-size:0.75em; color:var(--hint-color);">ID: ${req.uid} | @${req.username}</div>
+                <div style="display:flex; gap:10px; margin-top:8px;">
+                    <button style="flex:1; background:#4caf50; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;"
+                            onclick="window.approveTutor('${child.key}', '${req.uid}', '${req.name}')">APPROVA ✅</button>
+                    <button style="flex:1; background:#d32f2f; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;"
+                            onclick="if(confirm('Rifiutare?')){ db.ref('tutorRequests/${child.key}').remove().then(()=>window.updateAdminBadge()); this.parentElement.parentElement.remove(); }">RIFIUTA ❌</button>
+                </div>
+            `;
+            list.prepend(item);
+        });
+    });
 };
 
 window.approveTutor = function(reqId, uid, name) {
