@@ -692,6 +692,11 @@ window.showCourseSessionModal = function(session, isExtra = false) {
     if (modal && text) {
         const currentLesson = window.courseData.progress.current_lesson;
         const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
+
+        // MOSTRA SOLO GLI ULTIMI 2 CARATTERI (I NUOVI) PER IL WARM-UP
+        // Se siamo alla prima lezione (2 caratteri), li mostriamo entrambi.
+        const newChars = (currentLesson <= 2) ? activeChars : activeChars.slice(-2);
+
         const charStr = activeChars.join(", ");
 
         if (isExtra) {
@@ -706,7 +711,7 @@ window.showCourseSessionModal = function(session, isExtra = false) {
         // Popola area Warm-up (Sempre visibile se ci sono caratteri)
         if (warmupCont) {
             warmupCont.style.display = 'block';
-            window.populateCourseWarmup(activeChars);
+            window.populateCourseWarmup(newChars);
         }
 
         modal.style.display = 'flex';
@@ -720,11 +725,18 @@ window.populateCourseWarmup = function(chars) {
 
     chars.forEach(char => {
         const btn = document.createElement('button');
-        btn.style.cssText = "width:40px; height:40px; padding:0; display:flex; align-items:center; justify-content:center; font-size:1.1em; background:rgba(255,255,255,0.1); border:1px solid var(--link-color); color:#fff; border-radius:8px; cursor:pointer;";
+        btn.style.cssText = "width:50px; height:50px; padding:0; display:flex; align-items:center; justify-content:center; font-size:1.4em; font-weight:bold; background:rgba(255,255,255,0.1); border:2px solid var(--link-color); color:var(--link-color); border-radius:12px; cursor:pointer; box-shadow: 0 0 10px rgba(0,0,0,0.2);";
         btn.textContent = char;
-        btn.onclick = () => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            // Assicuriamoci che l'audio sia inizializzato
+            if (typeof initAudioContext === 'function') initAudioContext();
             if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
-            if (typeof playMorseAudio === 'function') playMorseAudio(char, 20);
+
+            const wpm = parseInt(window.courseData?.settings?.start_wpm) || 20;
+            if (typeof playMorseAudio === 'function') {
+                playMorseAudio(char, wpm);
+            }
         };
         container.appendChild(btn);
     });

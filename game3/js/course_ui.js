@@ -618,19 +618,11 @@ window.attachCourseUIListeners = function() {
              };
              window.saveCourseState();
 
-             // INVECE DI AVVIARE SUBITO, MOSTRIAMO IL MODALE CON IL WARM-UP
+             // MOSTRA IL MODALE CON IL WARM-UP
              if (typeof window.showCourseSessionModal === 'function') {
                  window.showCourseSessionModal(window.courseData.current_day_session, isExtra);
              } else {
-                 // Fallback se il modale non è pronto
-                 currentMode = 'course';
-                 isSinglePlayer = true;
-                 currentWpm = parseInt(window.courseData.settings.start_wpm);
-                 roomCode = "COURSE_" + myId;
-                 db.ref('rooms/' + roomCode).set({
-                     status: 'countdown', type: 'single', mode: 'course', wpm: currentWpm, tone: 600,
-                     createdAt: firebase.database.ServerValue.TIMESTAMP, hostId: myId
-                 }).then(() => window.joinRoomLogic?.(false));
+                 window.actualStartCourseGame();
              }
         };
     }
@@ -638,9 +630,30 @@ window.attachCourseUIListeners = function() {
     if (els.btnPlayCourseNow) {
         els.btnPlayCourseNow.onclick = () => {
             if (els.courseSessionModal) els.courseSessionModal.style.display = 'none';
-            if (els.btnTabStartCourseSession) els.btnTabStartCourseSession.click();
+            window.actualStartCourseGame();
         };
     }
+};
+
+window.actualStartCourseGame = function() {
+    if (!window.courseData.current_day_session) return;
+
+    currentMode = 'course';
+    isSinglePlayer = true;
+    currentWpm = parseInt(window.courseData.settings.start_wpm);
+    roomCode = "COURSE_" + myId;
+
+    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+    if (typeof initAudioContext === 'function') initAudioContext();
+
+    db.ref('rooms/' + roomCode).set({
+        status: 'countdown', type: 'single', mode: 'course', wpm: currentWpm, tone: 600,
+        createdAt: firebase.database.ServerValue.TIMESTAMP, hostId: myId
+    }).then(() => {
+        if (typeof window.joinRoomLogic === 'function') {
+            window.joinRoomLogic(false);
+        }
+    });
 };
 
 setTimeout(window.attachCourseUIListeners, 2000);
