@@ -19,7 +19,13 @@ window.startArcadeSequence = function() {
     showScreen('arcadeArea');
     window.updateArcadeStatsUI();
 
-    if (els.arcadeBrickContainer) els.arcadeBrickContainer.innerHTML = '';
+    if (els.arcadeBrickContainer) {
+        els.arcadeBrickContainer.innerHTML = '';
+        // Memorizziamo l'altezza "full" come riferimento per scalare la velocità
+        window.arcadeReferenceHeight = els.arcadeBrickContainer.clientHeight || 500;
+        els.arcadeBrickContainer.style.minHeight = '0'; // Rimuoviamo eventuali lock precedenti
+    }
+
     if (els.arcadeInput) {
         els.arcadeInput.value = '';
         els.arcadeInput.disabled = false;
@@ -90,16 +96,21 @@ window.arcadeGameLoop = function(timestamp) {
 
     if (arcadeActiveBrick && !window.arcadePaused) {
         // Velocità di caduta aumenta con WPM, ma rallenta se la parola è lunga
-        // Tempo extra per parole lunghe: moltiplicatore inverso alla lunghezza
         const lengthFactor = Math.max(0.4, 1 - ((arcadeWordLen - 3) * 0.05));
-        const speed = (ARCADE_BASE_FALL_SPEED + (arcadeWpm - 15) * 0.02) * lengthFactor;
+
+        // COMPENSAZIONE TASTIERA:
+        // Se l'altezza attuale è ridotta (tastiera aperta), rallentiamo i pixel/frame
+        // così il tempo totale di caduta rimane proporzionale allo spazio visibile.
+        const currentHeight = els.arcadeBrickContainer.clientHeight;
+        const heightScale = currentHeight / (window.arcadeReferenceHeight || currentHeight);
+
+        const speed = (ARCADE_BASE_FALL_SPEED + (arcadeWpm - 15) * 0.02) * lengthFactor * heightScale;
 
         arcadeActiveBrick.y += speed * (deltaTime / 16.67); // Normalizzato a 60fps
         arcadeActiveBrick.el.style.top = arcadeActiveBrick.y + 'px';
 
-        // Collisione con il fondo
-        const containerHeight = els.arcadeBrickContainer.clientHeight;
-        if (arcadeActiveBrick.y > containerHeight - 50) {
+        // Collisione con il fondo attuale (sopra la tastiera)
+        if (arcadeActiveBrick.y > currentHeight - 40) {
             window.handleArcadeMiss();
         }
     }
@@ -279,6 +290,13 @@ window.finishArcadeGame = function() {
 // Listeners
 if (els.arcadeInput) {
     els.arcadeInput.addEventListener('input', window.handleArcadeInput);
+    // Mantiene la tastiera aperta forzando il focus se si clicca fuori nell'area arcade
+    els.arcadeBrickContainer?.addEventListener('click', () => {
+        if (isArcadeMode && gameRunning) els.arcadeInput.focus();
+    });
+    els.arcadeInput.addEventListener('blur', () => {
+        if (isArcadeMode && gameRunning) setTimeout(() => els.arcadeInput.focus(), 100);
+    });
 }
 
 if (els.quitArcadeBtn) {
