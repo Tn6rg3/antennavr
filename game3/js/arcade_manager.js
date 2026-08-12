@@ -37,7 +37,19 @@ window.spawnArcadeBrick = function() {
     if (!gameRunning || !isArcadeMode) return;
 
     // Genera parola della lunghezza corrente
-    const dict = window.masterDictionary.filter(w => w.length === arcadeWordLen);
+    let dict = window.masterDictionary.filter(w => w.length === arcadeWordLen);
+
+    // Integrazione numeri scritti per parole corte
+    const numberWords = {
+        3: ["UNO", "DUE", "TRE", "SEI"],
+        4: ["OTTO", "NOVE"],
+        5: ["DIECI", "ZERO"],
+        6: ["QUATTRO", "CINQUE", "SETTE"]
+    };
+    if (numberWords[arcadeWordLen]) {
+        dict = dict.concat(numberWords[arcadeWordLen]);
+    }
+
     const word = (dict.length > 0 ? dict[Math.floor(Math.random() * dict.length)] : "SOS").toUpperCase();
 
     const container = els.arcadeBrickContainer;
@@ -51,17 +63,17 @@ window.spawnArcadeBrick = function() {
 
     // Posizione orizzontale casuale
     const containerWidth = container.clientWidth;
-    const brickWidth = 100;
+    const brickWidth = 80;
     const startX = Math.floor(Math.random() * (containerWidth - brickWidth));
 
     brick.style.left = startX + 'px';
-    brick.style.top = '-50px';
+    brick.style.top = '0px'; // Parte esattamente sotto la barra stats
     container.appendChild(brick);
 
     arcadeActiveBrick = {
         el: brick,
         word: word,
-        y: -50,
+        y: 0,
         startTime: Date.now()
     };
 
@@ -101,6 +113,9 @@ window.handleArcadeMiss = function() {
     arcadeLives--;
     window.updateArcadeStatsUI();
 
+    // Pulisce l'input se è rimasto del testo sbagliato
+    if (els.arcadeInput) els.arcadeInput.value = '';
+
     // Effetto scuotimento
     els.arcadeArea.classList.add('shake');
     setTimeout(() => els.arcadeArea.classList.remove('shake'), 400);
@@ -127,9 +142,10 @@ window.handleArcadeInput = function() {
         // CORRETTO!
         const reactionTime = Date.now() - arcadeActiveBrick.startTime;
 
-        // Calcolo punteggio Arcade: (WPM * Lunghezza) * (Bonus tempo)
-        const timeBonus = Math.max(1, 20000 / reactionTime);
-        const points = Math.round((arcadeWpm * target.length) * timeBonus);
+        // Calcolo punteggio Arcade: (WPM * Lunghezza * Livello) * (Bonus tempo)
+        // L'aggiunta di arcadeLevel assicura che i livelli superiori siano molto più premianti
+        const timeBonus = Math.max(1, 15000 / reactionTime);
+        const points = Math.round((arcadeWpm * target.length * arcadeLevel) * timeBonus);
 
         arcadeScore += points;
         arcadeWordsSolved++;
@@ -139,7 +155,6 @@ window.handleArcadeInput = function() {
         el.textContent = target; // Rivela la parola
         el.classList.add('exploded');
 
-        const oldBrick = arcadeActiveBrick;
         arcadeActiveBrick = null;
         els.arcadeInput.value = '';
 
