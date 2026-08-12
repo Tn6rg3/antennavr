@@ -446,6 +446,17 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
     100% { transform: scale(2); opacity: 0; }
 }
 
+.level-number-anim {
+    animation: level-zoom 2.5s ease-in-out forwards;
+}
+
+@keyframes level-zoom {
+    0% { transform: scale(0.5); opacity: 0; }
+    20% { transform: scale(1.2); opacity: 1; }
+    80% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(3); opacity: 0; }
+}
+
 .shake {
     animation: screen-shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
 }
