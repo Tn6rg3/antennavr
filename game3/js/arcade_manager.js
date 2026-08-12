@@ -149,6 +149,18 @@ window.handleArcadeInput = function() {
     const typed = els.arcadeInput.value.trim().toUpperCase();
     const target = arcadeActiveBrick.word;
 
+    // Rivelazione parziale dei caratteri corretti
+    let displayStr = "";
+    for (let i = 0; i < target.length; i++) {
+        // Se il carattere in posizione i è corretto, mostralo, altrimenti puntino
+        if (typed[i] === target[i]) {
+            displayStr += target[i];
+        } else {
+            displayStr += "•";
+        }
+    }
+    arcadeActiveBrick.el.textContent = displayStr;
+
     if (typed === target) {
         // CORRETTO!
         const reactionTime = Date.now() - arcadeActiveBrick.startTime;
@@ -213,15 +225,41 @@ window.showArcadeLevelUp = function() {
 
     if (els.arcadeLevelOverlay) {
         els.arcadeLevelOverlay.style.display = 'flex';
-        if (els.arcadeLevelNextText) {
-            els.arcadeLevelNextText.textContent = `Preparati per parole da ${arcadeWordLen} caratteri!`;
-        }
+
+        // Pulizia e creazione elemento numero gigante
+        els.arcadeLevelOverlay.innerHTML = '';
+
+        const numEl = document.createElement('div');
+        numEl.className = 'level-number-anim';
+        numEl.style.cssText = "font-size: 150px; font-weight: 900; color: #0f0; text-shadow: 0 0 30px #0f0;";
+        numEl.textContent = arcadeLevel;
+
+        const txtEl = document.createElement('div');
+        txtEl.style.cssText = "font-size: 24px; color: #0f0; margin-top: -20px; letter-spacing: 5px; font-weight: bold;";
+        txtEl.textContent = "LIVELLO COMPLETATO";
+
+        const nextEl = document.createElement('div');
+        nextEl.style.cssText = "font-size: 18px; color: #0f0; margin-top: 20px; opacity: 0.8;";
+        nextEl.textContent = `Target: parole da ${arcadeWordLen} caratteri`;
+
+        els.arcadeLevelOverlay.appendChild(numEl);
+        els.arcadeLevelOverlay.appendChild(txtEl);
+        els.arcadeLevelOverlay.appendChild(nextEl);
     }
 
     setTimeout(() => {
-        if (els.arcadeLevelOverlay) els.arcadeLevelOverlay.style.display = 'none';
+        if (els.arcadeLevelOverlay) {
+            els.arcadeLevelOverlay.style.display = 'none';
+            // Ripristiniamo la struttura originale per utilizzi futuri se necessario
+            els.arcadeLevelOverlay.innerHTML = `
+                <h2 id="txt_arcade_new_level" style="color:#0f0; font-size:2em; margin-bottom:10px; text-shadow: 0 0 10px #0f0;">LIVELLO COMPLETATO!</h2>
+                <p id="arcadeLevelNextText" style="color:#0f0; font-size:1.2em;">Preparati per parole più lunghe...</p>
+            `;
+        }
         window.arcadePaused = false;
         window.updateArcadeStatsUI();
+        // Ripristina l'input focus dopo l'overlay
+        if (els.arcadeInput) els.arcadeInput.focus();
     }, 3000);
 };
 
