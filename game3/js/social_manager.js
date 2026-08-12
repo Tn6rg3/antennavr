@@ -650,3 +650,16 @@ window.listenToRooms = function() {
 
     listeners.roomsList = { ref: lobbyQuery, onAdded, onChanged, onRemoved };
 };
+
+window.listenToInviteAccepted = function() {
+    if (listeners.inviteAccepted) db.ref(`invite_accepted/${myId}`).off('value', listeners.inviteAccepted);
+    listeners.inviteAccepted = db.ref(`invite_accepted/${myId}`).on('value', snap => {
+        const data = snap.val();
+        if (!data || Date.now() - data.ts > 30000) return;
+
+        db.ref(`invite_accepted/${myId}`).remove();
+        roomCode = data.roomCode;
+        showToast("Sfida accettata! Entro nella stanza...");
+        window.joinRoomLogic(false);
+    });
+};
