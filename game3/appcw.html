@@ -525,23 +525,6 @@
         <!-- Dashboard e Settings (Se piano attivo) -->
         <div id="courseTabActiveView" style="display:none; flex-direction:column; gap:10px; width: 100%;">
 
-            <!-- PRESENTAZIONE CORSO (ACCORDION) -->
-            <div class="box-panel" style="padding: 10px; border-color: var(--link-color);">
-                <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.toggleVisibility('coursePresentationContent', 'btnTogglePresentation')">
-                    <b style="color:var(--link-color); font-size:0.9em;">📘 Presentazione Corso</b>
-                    <button id="btnTogglePresentation" class="btn-link" style="width:auto; margin-top:0; padding:5px;">Mostra</button>
-                </div>
-                <div id="coursePresentationContent" style="display:none; margin-top:10px; font-size:0.8em; line-height:1.4; text-align:left; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
-                    <p>Benvenuto nel Corso Professionale CW. Ecco come funziona:</p>
-                    <ul style="padding-left:15px; margin-bottom:10px;">
-                        <li><b>Metodo Koch:</b> Imparerai un carattere alla volta solo dopo aver raggiunto il 90% di precisione.</li>
-                        <li><b>Piano 30/20/50:</b> Le sessioni variano tra Consolidamento, Studio e Resistenza.</li>
-                        <li><b>Allenamento Extra:</b> Disponibile dopo aver finito il piano giornaliero (non sblocca nuovi caratteri).</li>
-                        <li><b>Richiami:</b> La costanza è fondamentale. 3 giorni saltati portano all'espulsione automatica.</li>
-                    </ul>
-                </div>
-            </div>
-
             <!-- AREA TUTOR (SOLO PER RUOLO TUTOR) -->
             <div id="courseTutorPanel" class="box-panel" style="display:none; background:rgba(103, 58, 183, 0.1); border-color:#673ab7; padding:15px;">
                 <h3 style="color:#9575cd; margin-top:0; font-size:1em;">🎓 Pannello Tutor</h3>
@@ -569,8 +552,28 @@
                 </div>
             </div>
 
-            <!-- Impostazioni (Spostate in alto e Collassate di default) -->
-            <div class="box-panel" style="border-color: var(--link-color);">
+            <!-- GESTIONE PIANO E IMPOSTAZIONI (NASCOSTO PER TUTOR) -->
+            <div id="courseTrainingControls" style="display:flex; flex-direction:column; gap:10px;">
+
+                <!-- PRESENTAZIONE CORSO (ACCORDION) -->
+                <div id="coursePresentationPanel" class="box-panel" style="padding: 10px; border-color: var(--link-color);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.toggleVisibility('coursePresentationContent', 'btnTogglePresentation')">
+                        <b style="color:var(--link-color); font-size:0.9em;">📘 Presentazione Corso</b>
+                        <button id="btnTogglePresentation" class="btn-link" style="width:auto; margin-top:0; padding:5px;">Mostra</button>
+                    </div>
+                    <div id="coursePresentationContent" style="display:none; margin-top:10px; font-size:0.8em; line-height:1.4; text-align:left; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+                        <p>Benvenuto nel Corso Professionale CW. Ecco come funziona:</p>
+                        <ul style="padding-left:15px; margin-bottom:10px;">
+                            <li><b>Metodo Koch:</b> Imparerai un carattere alla volta solo dopo aver raggiunto il 90% di precisione.</li>
+                            <li><b>Piano 30/20/50:</b> Le sessioni variano tra Consolidamento, Studio e Resistenza.</li>
+                            <li><b>Allenamento Extra:</b> Disponibile dopo aver finito il piano giornaliero (non sblocca nuovi caratteri).</li>
+                            <li><b>Richiami:</b> La costanza è fondamentale. 3 giorni saltati portano all'espulsione automatica.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Impostazioni (Spostate in alto e Collassate di default) -->
+                <div class="box-panel" style="border-color: var(--link-color);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h4 style="margin:0; font-size:0.9em; color:var(--hint-color);">⚙️ Modifica Impostazioni</h4>
                     <button id="btnToggleCourseSettings" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Mostra</button>
@@ -609,7 +612,7 @@
 
                     <button id="btnTabSavePlan" class="btn-success">SALVA E AGGIORNA PIANO 💾</button>
                 </div>
-            </div>
+            </div> <!-- Close Settings box-panel -->
 
             <div id="courseTabDashboardView" style="display:flex; flex-direction:column; gap:10px;">
                 <!-- Heatmap Caratteri -->
@@ -650,8 +653,9 @@
                     <button id="btnTabStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
                     <button id="btnTabResetCourse" class="btn-danger" style="flex:1.2; font-size:0.75em;">ESCI DAL CORSO</button>
                 </div>
-            </div>
-        </div>
+            </div> <!-- courseTabDashboardView end -->
+        </div> <!-- courseTrainingControls end -->
+    </div> <!-- courseTabActiveView end -->
 
         <div id="courseTabInitialPrompt" class="box-panel" style="display:none; text-align:center; padding: 30px 10px;">
              <span style="font-size: 4em;">📻</span>
