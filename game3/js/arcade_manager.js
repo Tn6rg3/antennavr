@@ -20,7 +20,8 @@ window.startArcadeSequence = function() {
     window.updateArcadeStatsUI();
 
     if (els.arcadeBrickContainer) {
-        els.arcadeBrickContainer.innerHTML = '';
+        // Rimuoviamo solo i mattoncini (classe .arcade-brick), preservando l'overlay
+        els.arcadeBrickContainer.querySelectorAll('.arcade-brick').forEach(b => b.remove());
         // Memorizziamo l'altezza "full" come riferimento per scalare la velocità
         window.arcadeReferenceHeight = els.arcadeBrickContainer.clientHeight || 500;
         els.arcadeBrickContainer.style.minHeight = '0'; // Rimuoviamo eventuali lock precedenti
@@ -179,9 +180,9 @@ window.handleArcadeInput = function() {
         const hasTransition = window.updateArcadeProgression();
         window.updateArcadeStatsUI();
 
-        // Prossimo mattoncino (RIDOTTO a 300ms per azione frenetica)
+        // Prossimo mattoncino (AUMENTATO a 700ms per dare respiro tra parole)
         if (!hasTransition) {
-            setTimeout(window.spawnArcadeBrick, 300);
+            setTimeout(window.spawnArcadeBrick, 700);
         }
     }
 };
@@ -258,7 +259,7 @@ window.showArcadeLevelUp = function(isMajor) {
         }
         // Spawna il prossimo mattone alla fine della transizione
         window.spawnArcadeBrick();
-    }, 2800);
+    }, 2200);
 };
 
 window.updateArcadeStatsUI = function() {
