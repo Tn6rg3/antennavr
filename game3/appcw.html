@@ -806,9 +806,14 @@
         <!-- PANNELLO ADMIN (VISIBILE SOLO ALLO SVILUPPATORE) -->
         <div id="adminBugPanel" class="box-panel" style="display:none; border-color: #d32f2f; background: rgba(211, 47, 47, 0.05); margin-bottom: 15px;">
             <h3 style="color: #d32f2f; margin: 0 0 10px 0; font-size: 1em;">🛡️ Pannello Amministratore</h3>
-            <button id="btnReadAllBugs" class="btn-danger" style="width: 100%; margin-bottom: 10px; padding: 8px;">Leggi Segnalazioni 📜</button>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+                <button id="btnReadAllBugs" class="btn-danger" style="padding: 8px; font-size:0.8em; margin-top:0;">Bug 📜</button>
+                <button id="btnReadTutorRequests" class="btn-secondary" style="padding: 8px; font-size:0.8em; margin-top:0; background:#673ab7;">Tutor 🎓</button>
+            </div>
+
             <div id="adminBugList" style="max-height: 200px; overflow-y: auto; font-size: 0.85em; text-align: left; background: var(--bg-color); border-radius: 8px; padding: 5px;">
-                <p style="text-align:center; color:var(--hint-color);">Nessun bug caricato.</p>
+                <p style="text-align:center; color:var(--hint-color);">Seleziona una categoria sopra.</p>
             </div>
         </div>
     </div>
