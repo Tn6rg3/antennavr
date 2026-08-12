@@ -50,6 +50,14 @@
     <h2 style="color: var(--link-color); margin: 0 0 10px 0;">Allenamento Corso CW</h2>
     <p id="courseModalText" style="font-size: 0.9em; margin-bottom: 15px;">Oggi il tuo piano prevede una sessione...</p>
 
+    <!-- AREA RISCALDAMENTO (WARM-UP) -->
+    <div id="courseModalWarmupContainer" style="display:none; margin-bottom: 15px;">
+        <div style="font-size: 0.8em; color: var(--hint-color); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Preparazione Caratteri:</div>
+        <div id="courseModalWarmup" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;">
+            <!-- Pulsanti caratteri generati dinamicamente -->
+        </div>
+    </div>
+
     <div style="display: flex; flex-direction: column; gap: 10px;">
         <button id="btnPlayCourseNow" class="btn-success">INIZIA ALLENAMENTO 🚀</button>
         <button id="btnPlayCourseLater" class="btn-secondary" onclick="document.getElementById('courseSessionModal').style.display='none'">Più Tardi</button>
