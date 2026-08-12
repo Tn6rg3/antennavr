@@ -547,6 +547,65 @@ window.setupBugSystem = function() {
             });
         };
     }
+
+    // 4. Lettura Richieste Tutor (Solo Admin)
+    if (document.getElementById('btnReadTutorRequests')) {
+        document.getElementById('btnReadTutorRequests').onclick = () => {
+            const list = document.getElementById('adminBugList');
+            if (!list) return;
+            list.innerHTML = "Caricamento richieste...";
+
+            db.ref('tutorRequests').once('value', snap => {
+                list.innerHTML = "";
+                if (!snap.exists()) {
+                    list.innerHTML = "Nessuna richiesta pendente.";
+                    return;
+                }
+                snap.forEach(child => {
+                    const req = child.val();
+                    const item = document.createElement('div');
+                    item.style.padding = "10px";
+                    item.style.borderBottom = "1px solid #673ab7";
+                    item.style.background = "rgba(103, 58, 183, 0.05)";
+                    item.innerHTML = `
+                        <div style="font-weight:bold; color:#9575cd;">🎓 Richiesta da: ${req.name}</div>
+                        <div style="font-size:0.75em; color:var(--hint-color);">ID: ${req.uid} | @${req.username}</div>
+                        <div style="display:flex; gap:10px; margin-top:8px;">
+                            <button style="flex:1; background:#4caf50; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;"
+                                    onclick="window.approveTutor('${child.key}', '${req.uid}', '${req.name}')">APPROVA ✅</button>
+                            <button style="flex:1; background:#d32f2f; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;"
+                                    onclick="if(confirm('Rifiutare?')){ db.ref('tutorRequests/${child.key}').remove(); this.parentElement.parentElement.remove(); }">RIFIUTA ❌</button>
+                        </div>
+                    `;
+                    list.prepend(item);
+                });
+            });
+        };
+    }
+};
+
+window.approveTutor = function(reqId, uid, name) {
+    if (!confirm(`Approvare ${name} come TUTOR?`)) return;
+
+    // 1. Imposta ruolo nell'utente
+    db.ref(`users/${uid}/course`).update({
+        role: 'tutor',
+        active_plan: true,
+        enrolledAt: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        // 2. Registra nell'elenco globale iscritti (per visibilità tutor)
+        db.ref(`courseActiveEnrollments/${uid}`).set({
+            name: name,
+            role: 'tutor',
+            ts: firebase.database.ServerValue.TIMESTAMP
+        });
+        // 3. Rimuovi la richiesta
+        db.ref(`tutorRequests/${reqId}`).remove();
+        showToast(`Operatore ${name} approvato come Tutor!`);
+        document.getElementById('btnReadTutorRequests').click(); // Refresh
+    }).catch(e => {
+        showToast("Errore durante l'approvazione.");
+    });
 };
 
 // --- SFIDA GIORNALIERA ---

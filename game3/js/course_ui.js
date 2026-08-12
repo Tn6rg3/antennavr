@@ -86,13 +86,28 @@ window.selectWizardRole = function(role) {
     const s1 = document.getElementById('wizardStep1');
 
     if (role === 'tutor') {
-        if (confirm("Confermi di voler partecipare come TUTOR?\nNon avrai un piano di studio personale ma potrai analizzare i dati dei corsisti e aiutarli in chat.")) {
-            window.finishWizard();
-        }
+        window.requestTutorRole();
     } else {
         if (sRole) sRole.style.display = 'none';
         if (s1) s1.style.display = 'block';
     }
+};
+
+window.requestTutorRole = function() {
+    if (!confirm("Vuoi inviare una richiesta all'amministratore per diventare TUTOR?\nPotrai accedere al corso solo dopo l'approvazione.")) return;
+
+    db.ref('tutorRequests').push({
+        uid: myId,
+        name: myName,
+        username: tgUsername || "N/A",
+        ts: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        alert("Richiesta inviata! Riceverai l'abilitazione non appena l'amministratore avrà approvato il tuo profilo.");
+        // Non attiviamo il piano ora, l'utente resta "non iscritto"
+        goBackToMenu();
+    }).catch(e => {
+        showToast("Errore nell'invio della richiesta.");
+    });
 };
 
 window.toggleVisibility = function(contentId, btnId) {
