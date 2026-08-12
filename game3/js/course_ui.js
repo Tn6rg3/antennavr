@@ -121,65 +121,61 @@ window.renderCourseTabDashboard = function() {
 };
 
 window.renderAdvancedCourseStats = function(selectedChar) {
+    const panel = document.getElementById('courseAdvancedStatsPanel');
     const container = document.getElementById('courseAdvancedStats');
-    if (!container) return;
+    if (!container || !panel) return;
 
+    panel.style.display = 'block';
     container.innerHTML = '';
+
     const statsByType = window.courseData.progress.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
     const dbChar = window.firebaseEscape(selectedChar);
 
-    const header = document.createElement('div');
-    header.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;";
+    const title = document.createElement('div');
+    title.style.cssText = "font-size: 1.1em; font-weight: bold; text-align: center; margin-bottom: 10px; color: var(--champ-color); text-shadow: 0 0 5px rgba(255,152,0,0.3);";
+    title.textContent = `Analisi Carattere: ${selectedChar}`;
+    container.appendChild(title);
 
-    const title = document.createElement('b');
-    title.style.cssText = "font-size: 0.9em; color: var(--champ-color);";
-    title.textContent = `Dettaglio: ${selectedChar}`;
+    const types = [
+        { id: 'Z2', label: 'Base', icon: '🟢' },
+        { id: 'WORK', label: 'Lavoro', icon: '🟡' },
+        { id: 'LONG', label: 'Lungo', icon: '🟣' }
+    ];
 
-    const closeBtn = document.createElement('button');
-    closeBtn.className = "action-btn-small btn-danger";
-    closeBtn.style.cssText = "width: auto; padding: 2px 8px; margin: 0; font-size: 0.7em;";
-    closeBtn.textContent = "Chiudi ✕";
-    closeBtn.onclick = () => container.innerHTML = '<div style="font-size:0.65em; color:var(--hint-color); text-align:center; font-style:italic; margin-top:5px;">Tocca un carattere sulla heatmap per analizzarlo.</div>';
-
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-    container.appendChild(header);
-
-    const types = ['Z2', 'WORK', 'LONG'];
     types.forEach(type => {
-        const s = (statsByType[type] && statsByType[type][dbChar]) ? statsByType[type][dbChar] : { attempts: 0, errors: 0 };
+        const s = (statsByType[type.id] && statsByType[type.id][dbChar]) ? statsByType[type.id][dbChar] : { attempts: 0, errors: 0 };
         const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
         const perc = Math.round(accuracy * 100);
 
         const row = document.createElement('div');
-        row.style.cssText = "display: flex; align-items: center; gap: 10px; font-size: 0.75em; margin-bottom: 4px;";
+        row.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
 
-        const label = document.createElement('span');
-        label.style.width = "40px";
-        label.textContent = type;
-        label.style.color = window.COURSE_TYPES[type].color;
-        label.style.fontWeight = "bold";
+        const labelRow = document.createElement('div');
+        labelRow.style.cssText = "display: flex; justify-content: space-between; font-size: 0.8em; font-weight: bold;";
+        labelRow.innerHTML = `<span>${type.icon} ${type.label}</span> <span style="color:var(--hint-color)">${s.attempts} tentativi</span>`;
 
         const barContainer = document.createElement('div');
-        barContainer.style.cssText = "flex-grow: 1; height: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);";
+        barContainer.style.cssText = "height: 18px; background: rgba(255,255,255,0.05); border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; position: relative;";
 
         const bar = document.createElement('div');
-        bar.style.width = `${perc}%`;
+        bar.style.width = s.attempts > 0 ? `${perc}%` : "0%";
         bar.style.height = "100%";
-        bar.style.background = accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f';
-        bar.style.transition = "width 0.5s ease-out";
+        bar.style.background = s.attempts === 0 ? '#444' : (accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f');
+        bar.style.boxShadow = "inset 0 0 10px rgba(0,0,0,0.3)";
+        bar.style.transition = "width 0.8s cubic-bezier(0.17, 0.67, 0.83, 0.67)";
 
-        const val = document.createElement('span');
-        val.style.width = "40px";
-        val.style.textAlign = "right";
-        val.textContent = s.attempts > 0 ? `${perc}%` : "--";
+        const percLabel = document.createElement('span');
+        percLabel.style.cssText = "position: absolute; width: 100%; text-align: center; font-size: 0.7em; font-weight: bold; color: #fff; text-shadow: 1px 1px 2px #000;";
+        percLabel.textContent = s.attempts > 0 ? `${perc}%` : "NESSUN DATO";
 
         barContainer.appendChild(bar);
-        row.appendChild(label);
+        barContainer.appendChild(percLabel);
+        row.appendChild(labelRow);
         row.appendChild(barContainer);
-        row.appendChild(val);
         container.appendChild(row);
     });
+
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 };
 
 window.startCourseWizard = function() {
@@ -390,6 +386,12 @@ window.attachCourseUIListeners = function() {
             };
         }
     });
+
+    if (els.btnCloseAdvancedStats) {
+        els.btnCloseAdvancedStats.onclick = () => {
+            if (els.courseAdvancedStatsPanel) els.courseAdvancedStatsPanel.style.display = 'none';
+        };
+    }
 
     if (els.btnTabSavePlan) {
         els.btnTabSavePlan.onclick = () => {
