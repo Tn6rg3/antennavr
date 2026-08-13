@@ -441,7 +441,12 @@ function initGame() {
         window.listenToRooms?.();
         window.listenToOnlineUsers?.();
         window.listenToInvites?.();
-        window.listenToInviteAccepted?.();
+
+        // --- ATTIVAZIONE SISTEMA SFIDE (Fix Avvio Simultaneo) ---
+        if (typeof window.listenToInviteAccepted === 'function') {
+            window.listenToInviteAccepted();
+        }
+
         window.initBattleRoyaleScheduler?.();
         window.initGlobalNotificationListener?.(); // AVVIO LISTENER BACKGROUND
         window.loadRegolamento();
