@@ -1061,6 +1061,15 @@ window.handleWordSubmission = function(userWord) {
         tdPoints.style.color = isCorrect ? "#4caf50" : "#d32f2f";
         tdPoints.style.fontWeight = "bold";
 
+        // --- SINCRONIZZAZIONE PER TUTOR (SPETTATORI) ---
+        matchDetailsArray.push({ real: currentWord, typed: userWord, points: isCorrect ? 1 : 0, wpm: currentWpm });
+        if (roomCode) {
+            db.ref(`rooms/${roomCode}/players/${myId}`).update({
+                wordIndex: wordIndex + 1,
+                matchDetails: matchDetailsArray
+            });
+        }
+
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
         if (els.tableBody) {
             els.tableBody.appendChild(tr);

@@ -54,9 +54,13 @@ window.canUserChat = async function() {
         showToast(currentLang === 'it' ? "⚠️ Imposta uno username su Telegram per scrivere!" : "⚠️ Set a Telegram username to chat!");
         return false;
     }
+
+    // 3. XP Gate o Corso Attivo
     const level = window.userProgression?.level || 1;
-    if (level < 2) {
-        showToast(currentLang === 'it' ? "🚀 Raggiungi il Livello 2 per scrivere in chat!" : "🚀 Reach Level 2 to chat!");
+    const isStudent = window.courseData && window.courseData.active_plan === true;
+
+    if (level < 2 && !isStudent) {
+        showToast(currentLang === 'it' ? "🚀 Raggiungi il Livello 2 (o iscriviti al Corso) per scrivere!" : "🚀 Reach Level 2 (or enroll in the Course) to chat!");
         return false;
     }
     return true;

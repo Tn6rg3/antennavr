@@ -630,6 +630,17 @@ window.playNextCourseGroup = function() {
     if (typeof playMorseAudio === 'function') {
         setTimeout(() => { if (gameRunning && isCourseMode) playMorseAudio(group, charWpm); }, 300);
     }
+
+    // --- AGGIORNAMENTO LIVE AUDIO PER TUTOR (SPETTATORI) ---
+    if (roomCode) {
+        db.ref(`rooms/${roomCode}/liveAudio`).set({
+            word: group,
+            wpm: charWpm,
+            ts: Date.now(),
+            wordId: wordIndex
+        });
+    }
+
     lastWordStartTime = Date.now();
 };
 
