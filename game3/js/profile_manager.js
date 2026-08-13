@@ -175,7 +175,7 @@ window.loadProfileInfo = function() {
 
     if (!myId) return;
 
-    db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(20).once('value').then(snap => {
+    db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value').then(snap => {
         const listContainer = document.getElementById('matchHistoryList');
         if (!listContainer) return;
         listContainer.innerHTML = '';
@@ -202,7 +202,10 @@ window.loadProfileInfo = function() {
                 </div>
                 <div style="display:flex; justify-content:space-between; width:100%; margin-top:5px; align-items:center;">
                     <span><b>${match.score} pt</b> <small>(${match.wpm} WPM)</small></span>
-                    <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${match.key}')" style="width:auto; padding:2px 10px;">Vedi</button>
+                    <div style="display:flex; gap:5px;">
+                        <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${match.key}')" style="width:auto; padding:2px 10px;">Vedi</button>
+                        <button class="action-btn-small btn-danger" onclick="window.deleteHistoryItem('${match.key}')" style="width:auto; padding:2px 6px;">🗑️</button>
+                    </div>
                 </div>
             `;
             listContainer.appendChild(li);
