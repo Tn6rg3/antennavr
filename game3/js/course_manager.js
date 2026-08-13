@@ -714,6 +714,124 @@ window.checkCourseStartupNotification = function() {
     }
 };
 
+window.startTxExerciseSequence = function() {
+    if (!window.courseData || !window.courseData.active_plan) return;
+
+    // Prendiamo i caratteri della lezione attuale
+    const lesson = window.courseData.progress.current_lesson;
+    window.txActiveChars = window.KOCH_SEQUENCE.slice(0, lesson);
+    window.txCurrentTargetIdx = Math.floor(Math.random() * window.txActiveChars.length);
+
+    window.showScreen('txArea');
+    window.initTxExercise();
+};
+
+window.initTxExercise = function() {
+    const char = window.txActiveChars[window.txCurrentTargetIdx];
+    const code = window.morseDict[char];
+
+    if (els.txTargetChar) els.txTargetChar.textContent = char;
+    if (els.txTargetCode) els.txTargetCode.textContent = code.split('').join(' ');
+
+    // Reset Area Analisi
+    if (els.txReferenceBars) els.txReferenceBars.innerHTML = '';
+    if (els.txUserBars) els.txUserBars.innerHTML = '';
+    if (els.txAccuracyDisplay) els.txAccuracyDisplay.textContent = "In attesa...";
+    window.txUserSequence = [];
+    window.txTargetReady = false;
+
+    // Eseguiamo il suono del carattere target per farlo ascoltare all'utente
+    setTimeout(() => {
+        const wpm = parseInt(window.courseData.settings.start_wpm) || 20;
+        window.playMorseAudio(char, wpm, true).then(() => {
+            window.txTargetReady = true;
+            window.drawTxReferenceBars(char, wpm);
+        });
+    }, 800);
+};
+
+window.drawTxReferenceBars = function(char, wpm) {
+    const container = els.txReferenceBars;
+    if (!container) return;
+    container.innerHTML = '';
+
+    const code = window.morseDict[char];
+    const unit = 1200 / wpm; // ms per 1 unità (punto)
+
+    code.split('').forEach((sym, i) => {
+        const bar = document.createElement('div');
+        const dur = (sym === '-') ? unit * 3 : unit;
+        bar.style.cssText = `height:20px; width:${dur/5}px; background:#4caf50; border-radius:3px;`;
+        container.appendChild(bar);
+
+        // Spazio tra elementi (intra-char)
+        if (i < code.length - 1) {
+            const space = document.createElement('div');
+            space.style.width = `${unit/5}px`;
+            container.appendChild(space);
+        }
+    });
+};
+
+window.evaluateTxTransmission = function() {
+    const char = window.txActiveChars[window.txCurrentTargetIdx];
+    const targetCode = window.morseDict[char];
+    const wpm = parseInt(window.courseData.settings.start_wpm) || 20;
+    const unit = 1200 / wpm;
+
+    const userMarks = window.txUserSequence.filter(e => e.type === 'mark');
+    const userSpaces = window.txUserSequence.filter(e => e.type === 'space');
+
+    if (userMarks.length !== targetCode.length) {
+        showToast("Numero di elementi errato!");
+        setTimeout(window.initTxExercise, 1500);
+        return;
+    }
+
+    let totalScore = 0;
+    const elements = targetCode.split('');
+
+    // Analisi Elementi (Mark)
+    elements.forEach((sym, i) => {
+        const targetDur = (sym === '-') ? unit * 3 : unit;
+        const userDur = userMarks[i].duration;
+        const diff = Math.abs(userDur - targetDur);
+        const ratio = diff / targetDur;
+
+        let color = "#4caf50"; // Verde
+        if (ratio > 0.4) color = "#f44336"; // Rosso
+        else if (ratio > 0.2) color = "#ff9800"; // Giallo
+
+        if (ratio <= 0.2) totalScore += (1 / elements.length) * 100;
+
+        // Disegna barra utente
+        const bar = document.createElement('div');
+        bar.style.cssText = `height:20px; width:${userDur/5}px; background:${color}; border-radius:3px;`;
+        els.txUserBars.appendChild(bar);
+
+        if (i < userSpaces.length) {
+            const sDur = userSpaces[i].duration;
+            const sRatio = Math.abs(sDur - unit) / unit;
+            const sColor = sRatio > 0.4 ? "#f44336" : (sRatio > 0.2 ? "#ff9800" : "transparent");
+            const space = document.createElement('div');
+            space.style.cssText = `width:${sDur/5}px; height:2px; background:${sColor}; align-self:center;`;
+            els.txUserBars.appendChild(space);
+        }
+    });
+
+    const finalAcc = Math.round(totalScore);
+    els.txAccuracyDisplay.textContent = `Accuratezza: ${finalAcc}%`;
+
+    if (finalAcc >= 80) {
+        showToast("OTTIMA TRASMISSIONE! ✅");
+        window.txCurrentTargetIdx = (window.txCurrentTargetIdx + 1) % window.txActiveChars.length;
+        setTimeout(window.initTxExercise, 2000);
+    } else {
+        showToast("Riprova, cura i tempi... 🔁");
+        setTimeout(window.initTxExercise, 2000);
+    }
+};
+
 window.showCourseSessionModal = function(session, isExtra = false) {
     const modal = document.getElementById('courseSessionModal');
     const text = document.getElementById('courseModalText');

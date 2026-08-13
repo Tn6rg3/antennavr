@@ -65,6 +65,51 @@ window.playBeep = function(freq, duration) {
     } catch(e) {}
 };
 
+window.txOscillator = null;
+window.txGainNode = null;
+
+window.startContinuousTone = function(freq) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    window.startBluetoothKeepAlive();
+
+    if (window.txOscillator) return; // Già attivo
+
+    try {
+        window.txOscillator = audioCtx.createOscillator();
+        window.txGainNode = audioCtx.createGain();
+        window.txOscillator.frequency.value = freq || currentTone || 600;
+
+        window.txOscillator.connect(window.txGainNode);
+        window.txGainNode.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+        window.txGainNode.gain.setValueAtTime(0, now);
+        window.txGainNode.gain.linearRampToValueAtTime(0.5, now + 0.005);
+
+        window.txOscillator.start();
+    } catch(e) {}
+};
+
+window.stopContinuousTone = function() {
+    if (!window.txOscillator) return;
+
+    try {
+        const now = audioCtx.currentTime;
+        window.txGainNode.gain.cancelScheduledValues(now);
+        window.txGainNode.gain.setValueAtTime(window.txGainNode.gain.value, now);
+        window.txGainNode.gain.linearRampToValueAtTime(0, now + 0.005);
+
+        const oldOsc = window.txOscillator;
+        setTimeout(() => {
+            try { oldOsc.stop(); oldOsc.disconnect(); } catch(e) {}
+        }, 10);
+
+        window.txOscillator = null;
+        window.txGainNode = null;
+    } catch(e) {}
+};
+
 window.playNotificationSound = function() {
     // DISATTIVIAMO LE NOTIFICHE SONORE DURANTE IL GIOCO
     if (gameRunning || isCourseMode) return;
