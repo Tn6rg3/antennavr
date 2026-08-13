@@ -300,6 +300,16 @@ function initGame() {
         myId = tgUser.id.toString();
         console.log("CW Game: Auth success, Telegram ID:", myId);
 
+        // --- SICUREZZA: Registriamo il mapping UID subito per le regole Firebase ---
+        // Questo deve avvenire PRIMA di qualsiasi altra operazione di scrittura o lettura protetta
+        try {
+            const mappingRef = db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`);
+            await mappingRef.set(myId);
+            mappingRef.onDisconnect().remove();
+        } catch (e) {
+            console.error("CW Game: Security Mapping failed", e);
+        }
+
         const userRef = db.ref(`users/${myId}`);
         const snap = await userRef.once('value');
         const data = snap.val() || {};
@@ -354,16 +364,11 @@ function initGame() {
                 lastActive: firebase.database.ServerValue.TIMESTAMP
             };
 
-            // Aggiungiamo il livello solo se già disponibile in memoria
             if (window.userProgression && window.userProgression.level) {
                 presenceData.level = window.userProgression.level;
             }
 
             pRef.set(presenceData);
-
-            // Crea anche una mappa inversa specifica per le regole di sicurezza
-            db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(myId);
-            db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).onDisconnect().remove();
         });
 
         // --- MONITORAGGIO INATTIVITÀ ---
