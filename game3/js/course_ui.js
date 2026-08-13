@@ -61,14 +61,15 @@ window.switchCourseSubTab = function(tabId) {
     }
 };
 
-window.renderTutorPanel = async function() {
+window.renderTutorPanel = function() {
     const list = document.getElementById('tutorStudentList');
     if (!list || !db) return;
 
-    list.innerHTML = '<p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Analisi corsisti in corso...</p>';
+    if (listeners.tutorPanel) db.ref('courseActiveEnrollments').off('value', listeners.tutorPanel);
 
-    try {
-        const snap = await db.ref('courseActiveEnrollments').once('value');
+    list.innerHTML = '<p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Sincronizzazione corsisti...</p>';
+
+    listeners.tutorPanel = db.ref('courseActiveEnrollments').on('value', async (snap) => {
         const enrollments = snap.val() || {};
         list.innerHTML = '';
 
@@ -80,6 +81,7 @@ window.renderTutorPanel = async function() {
 
         for (const uid of uids) {
             if (uid === myId) continue;
+            // Carichiamo i progressi (Koch) per ogni iscritto
             const userDataSnap = await db.ref(`users/${uid}/course/progress`).once('value');
             const p = userDataSnap.val() || {};
             const enroll = enrollments[uid];
@@ -95,7 +97,7 @@ window.renderTutorPanel = async function() {
             // Verifica se è LIVE
             const isLive = !!enroll.roomCode;
             const liveBadge = isLive ? '<span style="background:#f44336; color:white; padding:1px 4px; border-radius:4px; font-size:0.7em; animation:pulse 1s infinite;">LIVE 🔴</span>' : '';
-            const watchBtn = isLive ? `<button onclick="window.watchStudentSession('${enroll.roomCode}')" style="width:auto; margin:0; padding:2px 8px; font-size:0.8em; background:#673ab7;">OSSERVA</button>` : '';
+            const watchBtn = isLive ? `<button onclick="window.watchStudentSession('${enroll.roomCode}', '${enroll.name || 'Anonimo'}')" style="width:auto; margin:0; padding:2px 8px; font-size:0.8em; background:#673ab7;">OSSERVA</button>` : '';
 
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -114,21 +116,24 @@ window.renderTutorPanel = async function() {
             `;
             list.appendChild(div);
         }
-    } catch (e) {
+    }, (error) => {
         list.innerHTML = '<p style="color:#f44336; font-size:0.75em;">Errore nel caricamento dati.</p>';
-    }
+    });
 };
 
-window.watchStudentSession = function(targetRoomCode) {
+window.watchStudentSession = function(targetRoomCode, studentName) {
     if (!targetRoomCode) return;
-    if (!confirm("Vuoi entrare come spettatore in questa sessione di allenamento?")) return;
+    if (!confirm(`Vuoi entrare come spettatore nell'allenamento di ${studentName}?`)) return;
 
     // Usciamo da eventuali stanze attuali
     if (typeof window.exitRoomCleanly === 'function') window.exitRoomCleanly(false);
 
-    roomCode = targetRoomCode;
-    isSinglePlayer = false; // Entriamo in una stanza altrui
-    window.joinRoomLogic?.(false);
+    // Utilizziamo la funzione nativa degli spettatori per abilitare audio e monitoraggio
+    if (typeof window.watchSpecificRoom === 'function') {
+        window.watchSpecificRoom(targetRoomCode, studentName);
+    } else {
+        showToast("Errore: Funzione spettatore non disponibile.");
+    }
 };
 
 window.selectWizardRole = function(role) {
