@@ -261,7 +261,7 @@ window.renderOrUpdateUserListItem = function(userId, u) {
 
     leftSpan.appendChild(nameB);
 
-    // AGGIUNTA LIVELLO SOTTO IL NOME
+    // LIVELLO
     if (u.level) {
         const lvDiv = document.createElement('div');
         lvDiv.style.cssText = "font-size: 0.72em; color: var(--champ-color); font-weight: bold; margin-top: -1px; opacity: 0.9;";

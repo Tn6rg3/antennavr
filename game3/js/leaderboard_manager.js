@@ -259,10 +259,19 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         const nameDiv = document.createElement('div'); nameDiv.style.display = 'flex'; nameDiv.style.alignItems = 'center';
 
         if (player.username && String(player.username).trim() !== "" && !isTeam) {
-            const nameLink = document.createElement('span'); nameLink.style.color = 'var(--link-color)'; nameLink.style.cursor = 'pointer'; nameLink.style.textDecoration = 'underline'; nameLink.style.fontWeight = 'bold'; nameLink.textContent = player.name; nameLink.onclick = () => openTelegramProfile(player.username);
+            const nameLink = document.createElement('span');
+            nameLink.style.color = 'var(--link-color)';
+            nameLink.style.cursor = 'pointer';
+            nameLink.style.textDecoration = 'underline';
+            nameLink.style.fontWeight = 'bold';
+            nameLink.textContent = player.name || "Anonimo";
+            nameLink.onclick = () => openTelegramProfile(player.username);
             nameDiv.appendChild(nameLink);
         } else {
-            const nameSpan = document.createElement('span'); nameSpan.style.fontWeight = 'bold'; nameSpan.textContent = player.name; nameDiv.appendChild(nameSpan);
+            const nameSpan = document.createElement('span');
+            nameSpan.style.fontWeight = 'bold';
+            nameSpan.textContent = player.name || "Anonimo";
+            nameDiv.appendChild(nameSpan);
         }
 
         // AGGIUNTA LIVELLO ACCANTO AL NOME
@@ -277,13 +286,29 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         }
 
         if (showWordCount && player.wordCount) {
-            const wcSpan = document.createElement('span'); wcSpan.style.background = 'var(--hint-color)'; wcSpan.style.color = 'var(--bg-color)'; wcSpan.style.padding = '1px 4px'; wcSpan.style.borderRadius = '3px'; wcSpan.style.fontSize = '0.8em'; wcSpan.style.marginLeft = '4px'; wcSpan.textContent = player.wordCount + " str."; nameDiv.appendChild(wcSpan);
+            const wcSpan = document.createElement('span');
+            wcSpan.style.background = 'var(--hint-color)';
+            wcSpan.style.color = 'var(--bg-color)';
+            wcSpan.style.padding = '1px 4px';
+            wcSpan.style.borderRadius = '3px';
+            wcSpan.style.fontSize = '0.8em';
+            wcSpan.style.marginLeft = '4px';
+            wcSpan.textContent = player.wordCount + " str.";
+            nameDiv.appendChild(wcSpan);
         }
 
-        const dateDiv = document.createElement('div'); dateDiv.style.fontSize = '0.75em'; dateDiv.style.color = 'var(--hint-color)'; dateDiv.textContent = (player.date || "") + " ";
+        const dateDiv = document.createElement('div');
+        dateDiv.style.fontSize = '0.75em';
+        dateDiv.style.color = 'var(--hint-color)';
+        dateDiv.textContent = (player.date || "") + " ";
+
         if (!isTeam && player.wpm) {
             const wpmLabel = isArcade ? "Peak " : "";
-            const wpmSpan = document.createElement('span'); wpmSpan.style.color = 'var(--champ-color)'; wpmSpan.style.fontWeight = 'bold'; wpmSpan.textContent = wpmLabel + player.wpm + " WPM"; dateDiv.appendChild(wpmSpan);
+            const wpmSpan = document.createElement('span');
+            wpmSpan.style.color = 'var(--champ-color)';
+            wpmSpan.style.fontWeight = 'bold';
+            wpmSpan.textContent = wpmLabel + player.wpm + " WPM";
+            dateDiv.appendChild(wpmSpan);
         }
 
         infoDiv.appendChild(nameDiv); infoDiv.appendChild(dateDiv);
@@ -291,11 +316,17 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
 
         row.appendChild(mainDiv);
 
-        // NUOVA COLONNA: LIVELLO RAGGIUNTO (SOLO ARCADE)
+        // LIVELLO ARCADE
         if (isArcade) {
             const midDiv = document.createElement('div');
             midDiv.style.cssText = "flex: 0 0 70px; text-align: center; font-weight: bold; color: var(--link-color); border-left: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); margin: 0 5px;";
-            midDiv.innerHTML = `<div style="font-size:0.65em; color:var(--hint-color); font-weight:normal; text-transform:uppercase;">Livello</div>${player.wave || 1}`;
+
+            const levelLabel = document.createElement('div');
+            levelLabel.style.cssText = "font-size:0.65em; color:var(--hint-color); font-weight:normal; text-transform:uppercase;";
+            levelLabel.textContent = "Livello";
+
+            midDiv.appendChild(levelLabel);
+            midDiv.appendChild(document.createTextNode(player.wave || 1));
             row.appendChild(midDiv);
         }
 
@@ -336,26 +367,37 @@ window.renderRoomLeaderboard = function(players) {
         playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm)).forEach((player, index) => {
             const row = document.createElement('div'); row.className = 'leaderboard-row';
             let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-            const leftSpan = document.createElement('span'); leftSpan.appendChild(document.createTextNode(medal + " "));
+
+            const leftSpan = document.createElement('span');
+            leftSpan.appendChild(document.createTextNode(medal + " "));
+
             if (player.username && String(player.username).trim() !== "") {
                 const nameLink = document.createElement('span');
                 nameLink.style.color = 'var(--link-color)';
                 nameLink.style.cursor = 'pointer';
                 nameLink.style.textDecoration = 'underline';
-                nameLink.textContent = player.name;
+                nameLink.textContent = player.name || "Sconosciuto";
                 nameLink.onclick = () => openTelegramProfile(player.username);
                 leftSpan.appendChild(nameLink);
             } else {
-                leftSpan.appendChild(document.createTextNode(player.name));
+                leftSpan.appendChild(document.createTextNode(player.name || "Sconosciuto"));
             }
+
             leftSpan.appendChild(document.createElement('br'));
+
             const wpmSmall = document.createElement('small');
             wpmSmall.style.color = 'var(--hint-color)';
             wpmSmall.textContent = `(${player.wpm || 0} WPM)`;
             leftSpan.appendChild(wpmSmall);
+
             const rightSpan = document.createElement('span');
-            const scoreB = document.createElement('b'); scoreB.textContent = `${player.score} pt`; rightSpan.appendChild(scoreB);
-            row.appendChild(leftSpan); row.appendChild(rightSpan); els.leaderboardContainer.appendChild(row);
+            const scoreB = document.createElement('b');
+            scoreB.textContent = `${player.score} pt`;
+            rightSpan.appendChild(scoreB);
+
+            row.appendChild(leftSpan);
+            row.appendChild(rightSpan);
+            els.leaderboardContainer.appendChild(row);
         });
     }
     if (allFinished && playersArray.length > 0 && els.roomWinnerBanner) {
@@ -371,9 +413,14 @@ window.renderHeadToHeadView = function(players, container) {
         const card = document.createElement('div');
         card.className = 'h2h-card' + (p.score === maxScore && maxScore > 0 ? ' winner' : '');
 
-        const nameDiv = document.createElement('div'); nameDiv.className = 'h2h-name'; nameDiv.textContent = p.name;
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'h2h-name';
+        nameDiv.textContent = p.name || "Sconosciuto";
+
         if (p.id === myId) {
-            const meSmall = document.createElement('small'); meSmall.textContent = ` (${currentLang === 'it' ? 'Tu' : 'You'})`; nameDiv.appendChild(meSmall);
+            const meSmall = document.createElement('small');
+            meSmall.textContent = ` (${currentLang === 'it' ? 'Tu' : 'You'})`;
+            nameDiv.appendChild(meSmall);
         }
         card.appendChild(nameDiv);
 

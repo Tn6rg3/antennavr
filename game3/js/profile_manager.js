@@ -432,6 +432,13 @@ if (els.saveAliasBtn) {
     els.saveAliasBtn.addEventListener('click', async () => {
         const alias = els.userAliasInput ? els.userAliasInput.value.trim() : "";
         const privacy = els.privacyUsernameCheckbox ? els.privacyUsernameCheckbox.checked : false;
+
+        if (alias) {
+            // Nuovi Vincoli: 1 parola, max 10 caratteri
+            if (alias.includes(" ")) return alert("L'Alias deve essere una singola parola (senza spazi).");
+            if (alias.length > 10) return alert("L'Alias non può superare i 10 caratteri.");
+        }
+
         if (privacy && !alias) return alert("L'Alias è obbligatorio se nascondi lo username Telegram!");
         const newName = alias || tgUser.first_name;
         const currentUsername = privacy ? "" : tgUsername;
