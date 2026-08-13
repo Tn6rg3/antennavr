@@ -104,11 +104,22 @@ window.checkGameTypeUI = function() {
 
         if (containers.startWpm) {
             containers.startWpm.disabled = (modeCfg.wpmConfigurable === false);
-            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) containers.startWpm.value = modeCfg.defaultWpm;
+            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) {
+                containers.startWpm.value = modeCfg.defaultWpm;
+            } else {
+                // RIPRISTINO PREFERENZA UTENTE se la modalità lo permette
+                const savedWpm = localStorage.getItem('cwgame_pref_wpm') || 20;
+                containers.startWpm.value = savedWpm;
+            }
         }
         if (containers.wordCount) {
             containers.wordCount.disabled = (modeCfg.wordCountConfigurable === false);
-            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) containers.wordCount.value = modeCfg.defaultWordCount;
+            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) {
+                containers.wordCount.value = modeCfg.defaultWordCount;
+            } else {
+                const savedWords = localStorage.getItem('cwgame_pref_words') || 10;
+                containers.wordCount.value = savedWords;
+            }
         }
     } else {
         if (containers.fixed) containers.fixed.style.display = 'none';

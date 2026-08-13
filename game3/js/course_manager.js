@@ -375,9 +375,14 @@ window.updateGlobalEnrollmentRecord = function(isActive) {
 
     if (isActive) {
         activeRef.once('value', snap => {
+            // Aggiorniamo sempre il nome per uniformità (Alias)
+            const updateData = { name: myName, role: window.courseData?.role || 'corsista', ts: firebase.database.ServerValue.TIMESTAMP };
+
             if (!snap.exists()) {
-                activeRef.set({ name: myName, ts: firebase.database.ServerValue.TIMESTAMP });
+                activeRef.set(updateData);
                 countRef.transaction(curr => (curr || 0) + 1);
+            } else {
+                activeRef.update({ name: myName, role: window.courseData?.role || 'corsista' });
             }
         });
     } else {

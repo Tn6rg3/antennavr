@@ -369,6 +369,13 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
         } catch(e) { console.warn("Update activity name failed:", e); }
     }
     if (myTeamId) await db.ref(`teams/${myTeamId}/members/${userId}`).update({ name: newName, username: newUsername });
+
+    // Sincronizzazione per il Corso CW (Tutor Panel)
+    try {
+        const courseRef = db.ref(`courseActiveEnrollments/${userId}`);
+        const snap = await courseRef.once('value');
+        if (snap.exists()) await courseRef.update({ name: newName });
+    } catch(e) {}
 };
 
 // --- LOGICA SALVATAGGIO ERRORI AVANZATI ---
