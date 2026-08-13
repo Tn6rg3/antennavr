@@ -982,9 +982,12 @@ if (els.permanentGameInput) {
             return;
         }
         if (currentMode === 'chars' && inputActive && gameRunning) {
-            const val = els.permanentGameInput.value.trim().toUpperCase();
-            if (val.length >= 1) {
-                window.handleWordSubmission(val[0]);
+            const rawVal = els.permanentGameInput.value;
+            // Estraiamo solo il carattere digitato ignorando spazi/controlli aggiunti dal tablet
+            const cleanVal = rawVal.replace(/\s/g, '').toUpperCase();
+            if (cleanVal.length >= 1) {
+                // Prendiamo l'ultimo carattere inserito in caso di buffer tastiera
+                window.handleWordSubmission(cleanVal[cleanVal.length - 1]);
                 els.permanentGameInput.value = "";
             }
         }
