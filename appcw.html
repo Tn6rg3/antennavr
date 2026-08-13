@@ -137,6 +137,25 @@
     <p>Questa applicazione è progettata per funzionare <b>esclusivamente</b> all'interno di Telegram.</p>
 </div>
 
+<!-- SCHERMATA MANCANZA USERNAME (ANTI-SPAM) -->
+<div id="noUsernameScreen" class="screen">
+    <div class="screen-content" style="justify-content: center; text-align: center; padding: 30px;">
+        <span style="font-size: 5em; margin-bottom: 20px;">🛡️</span>
+        <h2 style="color: var(--champ-color);">Sicurezza Account</h2>
+        <p style="font-size: 1.1em; line-height: 1.5; margin-bottom: 20px;">
+            Per proteggere la community di <b>Sfida Telegrafia</b> da bot e spam, l'accesso ai nuovi utenti è consentito solo se hanno impostato uno <b>Username pubblico</b> su Telegram.
+        </p>
+        <div style="background: var(--sec-bg-color); padding: 15px; border-radius: 12px; text-align: left; font-size: 0.9em; margin-bottom: 25px; border: 1px solid var(--hint-color);">
+            <b>Come fare:</b><br>
+            1. Vai nelle <b>Impostazioni</b> di Telegram.<br>
+            2. Clicca su <b>Modifica Profilo</b>.<br>
+            3. Inserisci un nome nel campo <b>Username</b>.<br>
+            4. Torna qui e ricarica l'app!
+        </div>
+        <button onclick="window.location.reload()" class="btn-success" style="padding: 15px 30px; font-size: 1.1em;">HO FATTO, RICARICA 🔄</button>
+    </div>
+</div>
+
 <!-- MENU PRINCIPALE -->
 <div id="setupScreen" class="screen">
     <div class="screen-content">
@@ -305,7 +324,7 @@
 
 <!-- PROFILO E STATISTICHE -->
 <div id="profileScreen" class="screen">
-    <div style="display: flex; gap: 4px; width: 100%; margin-bottom: 15px; flex-shrink:0; flex-wrap: nowrap;">
+    <div id="profileTabsHeader" style="display: flex; gap: 4px; width: 100%; margin-bottom: 15px; flex-shrink:0; flex-wrap: nowrap;">
         <button id="btnTabProfile" class="tab-btn active-tab" onclick="switchProfileTab('info')" style="flex:1; font-size: 0.8em; padding: 10px 2px;">👤 Profilo</button>
         <button id="btnTabStats" class="tab-btn" onclick="switchProfileTab('stats')" style="flex:1; font-size: 0.8em; padding: 10px 2px;">📊 Analisi Errori</button>
         <div id="btnTabCourse" style="display:none;"></div> <!-- Nascondiamo il vecchio bottone tab -->
@@ -346,7 +365,7 @@
         <div class="box-panel" style="margin-bottom:8px; flex-shrink:0;">
             <h3 id="txt_alias_title" style="color:var(--link-color); margin-bottom:5px;">🏷️ Il tuo Alias</h3>
             <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
-                <input type="text" id="userAliasInput" placeholder="Scegli un alias..." maxlength="15" style="flex: 1 1 auto; min-width: 0; margin:0; padding:8px;">
+                <input type="text" id="userAliasInput" placeholder="Scegli un alias..." maxlength="10" style="flex: 1 1 auto; min-width: 0; margin:0; padding:8px;">
                 <button id="saveAliasBtn" class="action-btn-small btn-success" style="width:auto; margin:0; flex-shrink:0;">Salva</button>
             </div>
             <div style="display:flex; align-items:center; gap:10px; margin-top:10px; background:rgba(0,0,0,0.05); padding:8px; border-radius:8px;">
@@ -684,10 +703,10 @@
                         </button>
                     </div>
 
-                    <div style="display:flex; gap:10px;">
-                        <button id="btnStartTxSession" class="btn-success" style="flex:2;">AVVIA ESERCIZIO</button>
-                        <button id="btnStopTxSession" class="btn-danger" style="flex:1; display:none;">STOP</button>
-                        <button id="btnReplayTargetChar" class="btn-secondary" style="flex:1;">🔊 RIASCOLTA</button>
+                    <div style="display:flex; gap:10px; min-height:45px; align-items:stretch;">
+                        <button id="btnStartTxSession" class="btn-success" style="flex:2; margin:0;">AVVIA ESERCIZIO</button>
+                        <button id="btnStopTxSession" class="btn-danger" style="flex:2; margin:0; display:none;">STOP</button>
+                        <button id="btnReplayTargetChar" class="btn-secondary" style="flex:1; margin:0;">🔊 RIASCOLTA</button>
                     </div>
 
                     <!-- PRECISIONE DETTAGLIATA (NEW) -->
