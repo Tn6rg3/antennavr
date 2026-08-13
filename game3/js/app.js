@@ -36,6 +36,16 @@ window.addEventListener('focus', updateViewportHeight);
 window.els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
 const els = window.els;
 
+window.escapeHtml = function(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+};
+
 // --- COSTANTI DI STORAGE ---
 const STORAGE_ROOM_KEY = "cwgame_last_room";
 const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
@@ -542,13 +552,18 @@ window.loadAdminBugs = function() {
         if (!snap.exists()) { list.innerHTML = "Nessuna segnalazione."; return; }
         snap.forEach(child => {
             const bug = child.val();
+            const safeFrom = window.escapeHtml(bug.from || "Anonimo");
+            const safeUser = window.escapeHtml(bug.username || "N/A");
+            const safeDate = window.escapeHtml(bug.date || "");
+            const safeMsg = window.escapeHtml(bug.msg || "");
+
             const item = document.createElement('div');
             item.style.padding = "8px";
             item.style.borderBottom = "1px solid var(--hint-color)";
             item.innerHTML = `
-                <div style="color:var(--link-color); font-weight:bold;">👤 ${bug.from} (@${bug.username})</div>
-                <div style="font-size:0.7em; color:var(--hint-color);">${bug.date}</div>
-                <div style="margin-top:4px; white-space: pre-wrap;">${bug.msg}</div>
+                <div style="color:var(--link-color); font-weight:bold;">👤 ${safeFrom} (@${safeUser})</div>
+                <div style="font-size:0.7em; color:var(--hint-color);">${safeDate}</div>
+                <div style="margin-top:4px; white-space: pre-wrap;">${safeMsg}</div>
                 <button style="font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:2px 6px; margin-top:5px; cursor:pointer;"
                         onclick="if(confirm('Eliminare definitivamente?')){
                             db.ref('bugReports/${child.key}').remove()
@@ -574,16 +589,20 @@ window.loadAdminTutorRequests = function() {
         }
         snap.forEach(child => {
             const req = child.val();
+            const safeName = window.escapeHtml(req.name || "Anonimo");
+            const safeUid = window.escapeHtml(req.uid || "");
+            const safeUser = window.escapeHtml(req.username || "N/A");
+
             const item = document.createElement('div');
             item.style.padding = "10px";
             item.style.borderBottom = "1px solid #673ab7";
             item.style.background = "rgba(103, 58, 183, 0.05)";
             item.innerHTML = `
-                <div style="font-weight:bold; color:#9575cd;">🎓 Richiesta da: ${req.name}</div>
-                <div style="font-size:0.75em; color:var(--hint-color);">ID: ${req.uid} | @${req.username}</div>
+                <div style="font-weight:bold; color:#9575cd;">🎓 Richiesta da: ${safeName}</div>
+                <div style="font-size:0.75em; color:var(--hint-color);">ID: ${safeUid} | @${safeUser}</div>
                 <div style="display:flex; gap:10px; margin-top:8px;">
                     <button style="flex:1; background:#4caf50; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;"
-                            onclick="window.approveTutor('${child.key}', '${req.uid}', '${req.name}')">APPROVA ✅</button>
+                            onclick="window.approveTutor('${child.key}', '${req.uid}', '${safeName.replace(/'/g, "\\'")}')">APPROVA ✅</button>
                     <button style="flex:1; background:#d32f2f; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;"
                             onclick="if(confirm('Rifiutare?')){ db.ref('tutorRequests/${child.key}').remove().then(()=>window.updateAdminBadge()); this.parentElement.parentElement.remove(); }">RIFIUTA ❌</button>
                 </div>

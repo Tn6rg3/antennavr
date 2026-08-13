@@ -291,7 +291,10 @@ window.showTxDetailedResult = function(isCorrect, msg, dotAcc=0, dashAcc=0, spac
     console.log(`TX_DEBUG: Result -> Correct: ${isCorrect}, Dot: ${dotAcc}%, Dash: ${dashAcc}%, Space: ${spaceAcc}%`);
 
     if (feedback) {
-        feedback.innerHTML = msg.replace("\n", "<br>");
+        // Fix Alert #124: Encoding completo e sostituzione globale dei newline
+        const safeMsg = window.escapeHtml(msg);
+        feedback.innerHTML = safeMsg.replace(/\n/g, "<br>");
+
         feedback.style.color = isCorrect ? "#4caf50" : "#d32f2f";
         feedback.style.whiteSpace = "normal";
         feedback.style.lineHeight = "1.2";
