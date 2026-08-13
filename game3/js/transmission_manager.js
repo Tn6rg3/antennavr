@@ -5,7 +5,7 @@ window.transmissionState = {
     active: false,
     currentTarget: '',
     startTime: 0,
-    sequence: [], // { type: 'on'|'off', duration: ms }
+    sequence: [],
     lastEventTime: 0,
     isDown: false,
     timeoutHandle: null,
@@ -13,12 +13,15 @@ window.transmissionState = {
 };
 
 window.initTransmissionManager = function() {
-    console.log("Transmission Manager: Initializing...");
+    console.log("TX_DEBUG: Initializing...");
 
     const keyBtn = document.getElementById('morseKeyBtn');
-    if (!keyBtn) return;
+    if (!keyBtn) {
+        console.error("TX_DEBUG: morseKeyBtn NOT FOUND");
+        return;
+    }
 
-    // Sostituiamo il tasto per pulire i listener
+    // Clonazione per pulizia listener
     const newBtn = keyBtn.cloneNode(true);
     keyBtn.parentNode.replaceChild(newBtn, keyBtn);
 
@@ -40,7 +43,7 @@ window.initTransmissionManager = function() {
             window.transmissionState.timeoutHandle = null;
         }
 
-        window.startTone();
+        if (typeof window.startTone === 'function') window.startTone();
         newBtn.style.transform = "scale(0.92)";
         newBtn.style.boxShadow = "0 2px 5px rgba(0,0,0,0.8), inset 0 2px 5px rgba(255,255,255,0.1)";
         const inner = newBtn.querySelector('span');
@@ -59,7 +62,7 @@ window.initTransmissionManager = function() {
         }
         window.transmissionState.lastEventTime = now;
 
-        window.stopTone();
+        if (typeof window.stopTone === 'function') window.stopTone();
         newBtn.style.transform = "scale(1)";
         newBtn.style.boxShadow = "0 10px 20px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.1)";
         const inner = newBtn.querySelector('span');
@@ -71,54 +74,50 @@ window.initTransmissionManager = function() {
     window.addEventListener('mouseup', handleUp);
     window.addEventListener('touchend', handleUp, {passive: false});
 
-    // Inizializzazione Pulsanti
-    const btnStart = document.getElementById('btnStartTxSession');
-    const btnStop = document.getElementById('btnStopTxSession');
-    const btnReplay = document.getElementById('btnReplayTargetChar');
+    // Inizializzazione Pulsanti con listener puliti
+    const setupButton = (id, handler) => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                console.log(`TX_DEBUG: Clicked ${id}`);
+                handler();
+            };
+        } else {
+            console.warn(`TX_DEBUG: Button ${id} NOT FOUND`);
+        }
+    };
 
-    if (btnStart) {
-        btnStart.onclick = () => {
-            console.log("Transmission UI: Start Clicked");
-            window.startTxSession();
-        };
-    }
-    if (btnStop) {
-        btnStop.onclick = () => {
-            console.log("Transmission UI: Stop Clicked");
-            window.stopTxSession();
-        };
-    }
-    if (btnReplay) {
-        btnReplay.onclick = () => {
-            window.replayTxTarget();
-        };
-    }
+    setupButton('btnStartTxSession', window.startTxSession);
+    setupButton('btnStopTxSession', window.stopTxSession);
+    setupButton('btnReplayTargetChar', window.replayTxTarget);
 
-    // WPM Display
     const wpmRef = document.getElementById('txWpmRef');
     if (wpmRef) {
         wpmRef.textContent = window.courseData?.settings?.start_wpm || 20;
     }
+    console.log("TX_DEBUG: Init completed");
 };
 
 window.startTxSession = function() {
-    console.log("Transmission: Session started");
+    console.log("TX_DEBUG: Executing startTxSession");
     window.transmissionState.sessionRunning = true;
     window.transmissionState.sessionStats = [];
 
-    // Aggiornamento Visibility UI
+    // Visibility
     const bStart = document.getElementById('btnStartTxSession');
     const bStop = document.getElementById('btnStopTxSession');
+    const bSummary = document.getElementById('txFinalSummary');
+
     if (bStart) bStart.style.display = 'none';
     if (bStop) bStop.style.display = 'inline-block';
-
-    document.getElementById('txFinalSummary').style.display = 'none';
+    if (bSummary) bSummary.style.display = 'none';
 
     window.pickNextTxTarget();
 };
 
 window.stopTxSession = function() {
-    console.log("Transmission: Session stopped");
+    console.log("TX_DEBUG: Executing stopTxSession");
     window.transmissionState.sessionRunning = false;
     window.transmissionState.active = false;
 
@@ -129,25 +128,37 @@ window.stopTxSession = function() {
     if (bStart) bStart.style.display = 'inline-block';
     if (bStop) bStop.style.display = 'none';
 
-    document.getElementById('txDetailedAccuracy').style.display = 'none';
+    const detailedAcc = document.getElementById('txDetailedAccuracy');
+    if (detailedAcc) detailedAcc.style.display = 'none';
+
     window.showFinalTxReport();
 };
 
 window.pickNextTxTarget = function() {
-    if (!window.transmissionState.sessionRunning) return;
+    console.log("TX_DEBUG: pickNextTxTarget");
+    if (!window.transmissionState.sessionRunning) {
+        console.warn("TX_DEBUG: Session NOT running, aborting pick");
+        return;
+    }
 
     window.transmissionState.active = true;
     window.transmissionState.sequence = [];
     window.transmissionState.lastEventTime = 0;
 
+    // Fallback dati Koch
     let lesson = 2;
-    if (window.courseData?.progress?.current_lesson) lesson = parseInt(window.courseData.progress.current_lesson);
+    try {
+        if (window.courseData && window.courseData.progress && window.courseData.progress.current_lesson) {
+            lesson = parseInt(window.courseData.progress.current_lesson);
+        }
+    } catch(e) {}
+
     const koch = window.KOCH_SEQUENCE || ["K","M","R","S"];
     const activeChars = koch.slice(0, Math.max(2, lesson));
     const randomChar = activeChars[Math.floor(Math.random() * activeChars.length)];
 
     window.transmissionState.currentTarget = randomChar;
-    console.log("Transmission: Target char ->", randomChar);
+    console.log("TX_DEBUG: Target is", randomChar);
 
     const targetEl = document.getElementById('txTargetChar');
     const feedbackEl = document.getElementById('txFeedbackText');
@@ -157,29 +168,30 @@ window.pickNextTxTarget = function() {
         feedbackEl.style.color = "var(--link-color)";
     }
 
-    // Reset Barre
-    document.getElementById('txDetailedAccuracy').style.display = 'none';
+    const detailedAcc = document.getElementById('txDetailedAccuracy');
+    if (detailedAcc) detailedAcc.style.display = 'none';
 
     setTimeout(() => {
         if (window.transmissionState.sessionRunning) window.replayTxTarget();
-    }, 200);
+    }, 300);
 };
 
 window.replayTxTarget = function() {
     if (!window.transmissionState.currentTarget) return;
     const wpm = parseInt(window.courseData?.settings?.start_wpm) || 20;
-    console.log("Transmission: Replaying", window.transmissionState.currentTarget, "@", wpm, "WPM");
+    console.log("TX_DEBUG: Playing audio for", window.transmissionState.currentTarget);
     if (typeof window.playMorseAudio === 'function') {
         window.playMorseAudio(window.transmissionState.currentTarget, wpm, true);
+    } else {
+        console.error("TX_DEBUG: playMorseAudio function missing!");
     }
 };
 
 window.checkTransmissionCompletion = function() {
-    const targetCode = window.morseDict[window.transmissionState.currentTarget];
+    const targetCode = window.morseDict ? window.morseDict[window.transmissionState.currentTarget] : null;
     if (!targetCode) return;
 
     const elementsSent = window.transmissionState.sequence.filter(s => s.type === 'on').length;
-
     if (elementsSent >= targetCode.length) {
         if (window.transmissionState.timeoutHandle) clearTimeout(window.transmissionState.timeoutHandle);
         window.transmissionState.timeoutHandle = setTimeout(() => {
@@ -194,9 +206,11 @@ window.analyzeTransmission = function() {
     if (!window.transmissionState.active) return;
 
     const target = window.transmissionState.currentTarget;
-    const targetCode = window.morseDict[target];
+    const targetCode = window.morseDict ? window.morseDict[target] : "";
+    if (!targetCode) return;
+
     const wpm = parseInt(window.courseData?.settings?.start_wpm) || 20;
-    const unit = 1200 / wpm; // Unità in ms
+    const unit = 1200 / wpm;
 
     const seq = window.transmissionState.sequence;
     const onElements = seq.filter(s => s.type === 'on');
@@ -207,7 +221,7 @@ window.analyzeTransmission = function() {
         detectedCode += (el.duration < unit * 2) ? "." : "-";
     });
 
-    console.log("Transmission: Detected", detectedCode, "vs Target", targetCode);
+    console.log("TX_DEBUG: Detected", detectedCode, "Target", targetCode);
 
     if (detectedCode !== targetCode) {
         window.showTxDetailedResult(false, "Sequenza errata! Riprova.");
@@ -216,7 +230,7 @@ window.analyzeTransmission = function() {
         return;
     }
 
-    // Calcolo accuratezze
+    // Analisi tecnica
     let dotAccs = [], dashAccs = [];
     onElements.forEach((el, i) => {
         const ideal = (targetCode[i] === '-') ? (unit * 3) : unit;
@@ -236,10 +250,8 @@ window.analyzeTransmission = function() {
     const totalAcc = Math.round((avgDot*0.35) + (avgDash*0.35) + (avgSpace*0.3));
 
     window.transmissionState.sessionStats.push({ char: target, totalAcc: totalAcc });
-
     window.showTxDetailedResult(true, "ECCELLENTE!", avgDot, avgDash, avgSpace);
 
-    // Avanzamento automatico solo se corretto
     window.transmissionState.active = false;
     setTimeout(() => {
         if (window.transmissionState.sessionRunning) {
