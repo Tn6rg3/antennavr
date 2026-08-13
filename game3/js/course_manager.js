@@ -655,16 +655,14 @@ window.checkWeeklyReview = function() {
 };
 
 window.listenToCourseEnrollment = function() {
-    // Sostituiamo il contatore manuale con il conteggio reale degli iscritti
     const activeRef = db.ref('courseActiveEnrollments');
     activeRef.on('value', snap => {
         const data = snap.val() || {};
         const entries = Object.values(data);
 
-        // Contiamo solo i "corsisti" (escludendo i tutor se vogliamo precisione,
-        // o contiamo tutti gli iscritti attivi nell'area corso)
-        // Scelgo di contare solo chi ha ruolo 'corsista' per rispondere alla tua domanda
-        const studentCount = entries.filter(e => e.role === 'corsista').length;
+        // Contiamo come "corsisti" tutti coloro che NON sono esplicitamente tutor
+        // (Includendo i vecchi record che non hanno ancora il campo 'role')
+        const studentCount = entries.filter(e => e.role !== 'tutor').length;
 
         const badge = document.getElementById('courseEnrollmentBadgeGlobal');
         if (badge) {
@@ -676,7 +674,7 @@ window.listenToCourseEnrollment = function() {
                 badge.style.display = 'none';
                 badge.classList.remove('badge-active');
             }
-            console.log("Course Real-time Count (Students):", studentCount);
+            console.log("Course Real-time Count (Students + Legacy):", studentCount);
         }
     });
 };
