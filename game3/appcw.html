@@ -137,6 +137,25 @@
     <p>Questa applicazione è progettata per funzionare <b>esclusivamente</b> all'interno di Telegram.</p>
 </div>
 
+<!-- SCHERMATA MANCANZA USERNAME (ANTI-SPAM) -->
+<div id="noUsernameScreen" class="screen">
+    <div class="screen-content" style="justify-content: center; text-align: center; padding: 30px;">
+        <span style="font-size: 5em; margin-bottom: 20px;">🛡️</span>
+        <h2 style="color: var(--champ-color);">Sicurezza Account</h2>
+        <p style="font-size: 1.1em; line-height: 1.5; margin-bottom: 20px;">
+            Per proteggere la community di <b>Sfida Telegrafia</b> da bot e spam, l'accesso ai nuovi utenti è consentito solo se hanno impostato uno <b>Username pubblico</b> su Telegram.
+        </p>
+        <div style="background: var(--sec-bg-color); padding: 15px; border-radius: 12px; text-align: left; font-size: 0.9em; margin-bottom: 25px; border: 1px solid var(--hint-color);">
+            <b>Come fare:</b><br>
+            1. Vai nelle <b>Impostazioni</b> di Telegram.<br>
+            2. Clicca su <b>Modifica Profilo</b>.<br>
+            3. Inserisci un nome nel campo <b>Username</b>.<br>
+            4. Torna qui e ricarica l'app!
+        </div>
+        <button onclick="window.location.reload()" class="btn-success" style="padding: 15px 30px; font-size: 1.1em;">HO FATTO, RICARICA 🔄</button>
+    </div>
+</div>
+
 <!-- MENU PRINCIPALE -->
 <div id="setupScreen" class="screen">
     <div class="screen-content">
@@ -1247,7 +1266,11 @@
             <button id="recruitJoinBtn" class="btn-success action-btn-small" style="display:none;">INVITA NELLA MIA SQUADRA 🏆</button>
             <button id="recruitCreateBtn" class="btn-champ action-btn-small">SUGGERISCI CREAZIONE SQUADRA 💡</button>
             <button id="recruitMsgBtn" class="btn-secondary action-btn-small">INVIA MESSAGGIO TELEGRAM 💬</button>
+
+            <!-- Bottone Admin Override (Visibile solo all'admin) -->
+            <button id="btnAdminEnableChat" class="btn-danger action-btn-small" style="display:none; font-weight:bold; border: 2px solid #fff;">ABILITA CHAT (Override) 🔓</button>
         </div>
+
         <button onclick="closeInviteModal()" class="btn-link" style="margin-top:10px;">ANNULLA</button>
     </div>
 
