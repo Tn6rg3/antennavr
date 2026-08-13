@@ -140,6 +140,7 @@ window.switchProfileTab = function(tabId) {
     const infoArea = document.getElementById('profileInfoArea');
     const statsArea = document.getElementById('profileStatsArea');
     const courseArea = document.getElementById('profileCourseArea');
+    const tabsHeader = document.getElementById('profileTabsHeader');
 
     if (infoBtn) infoBtn.classList.remove('active-tab');
     if (statsBtn) statsBtn.classList.remove('active-tab');
@@ -149,17 +150,20 @@ window.switchProfileTab = function(tabId) {
     if (courseArea) courseArea.style.display = 'none';
 
     if (tabId === 'info') {
+        if (tabsHeader) tabsHeader.style.display = 'flex';
         if (infoBtn) infoBtn.classList.add('active-tab');
         if (infoArea) infoArea.style.display = 'flex';
         window.loadProfileInfo();
     } else if (tabId === 'stats') {
+        if (tabsHeader) tabsHeader.style.display = 'flex';
         if (statsBtn) statsBtn.classList.add('active-tab');
         if (statsArea) statsArea.style.display = 'flex';
         document.getElementById('bigramThresholdInput')?.addEventListener('change', window.loadAdvancedStats);
         document.getElementById('wordThresholdInput')?.addEventListener('change', window.loadAdvancedStats);
         window.loadAdvancedStats();
     } else if (tabId === 'course') {
-        // La tab course ora gestisce solo la visualizzazione dell'area, il bottone è esterno
+        // Nascondiamo l'header dei tab principali per vedere solo Dashboard e Trasmissione
+        if (tabsHeader) tabsHeader.style.display = 'none';
         if (courseArea) courseArea.style.display = 'flex';
         if (typeof window.renderCourseTabView === 'function') window.renderCourseTabView();
     }
