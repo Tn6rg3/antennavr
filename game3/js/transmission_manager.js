@@ -15,13 +15,16 @@ window.transmissionState = {
 window.initTransmissionManager = function() {
     console.log("Transmission Manager: Initializing...");
     const keyBtn = document.getElementById('morseKeyBtn');
-    if (!keyBtn) return;
+    if (!keyBtn) {
+        console.error("Transmission Manager: morseKeyBtn not found!");
+        return;
+    }
 
-    // Rimuoviamo eventuali listener vecchi se ricaricato
+    // Rimuoviamo eventuali listener vecchi clonando il bottone
     const newBtn = keyBtn.cloneNode(true);
     keyBtn.parentNode.replaceChild(newBtn, keyBtn);
 
-    // Gestione Eventi Mouse/Touch
+    // Gestione Eventi Mouse/Touch sul Tasto
     const handleDown = (e) => {
         if (e && e.cancelable) e.preventDefault();
         if (window.transmissionState.isDown) return;
@@ -42,7 +45,8 @@ window.initTransmissionManager = function() {
         window.startTone();
         newBtn.style.transform = "scale(0.92)";
         newBtn.style.boxShadow = "0 2px 5px rgba(0,0,0,0.8), inset 0 2px 5px rgba(255,255,255,0.1)";
-        newBtn.querySelector('span').style.opacity = "0.6";
+        const innerCircle = newBtn.querySelector('span');
+        if (innerCircle) innerCircle.style.opacity = "0.6";
     };
 
     const handleUp = (e) => {
@@ -59,7 +63,8 @@ window.initTransmissionManager = function() {
         window.stopTone();
         newBtn.style.transform = "scale(1)";
         newBtn.style.boxShadow = "0 10px 20px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.1)";
-        newBtn.querySelector('span').style.opacity = "0.2";
+        const innerCircle = newBtn.querySelector('span');
+        if (innerCircle) innerCircle.style.opacity = "0.2";
 
         if (window.transmissionState.active) {
             window.checkTransmissionCompletion();
@@ -71,24 +76,48 @@ window.initTransmissionManager = function() {
     window.addEventListener('mouseup', handleUp);
     window.addEventListener('touchend', handleUp, {passive: false});
 
-    // Listener Bottoni
-    document.getElementById('btnStartTxSession')?.addEventListener('click', window.startTxSession);
-    document.getElementById('btnStopTxSession')?.addEventListener('click', window.stopTxSession);
-    document.getElementById('btnReplayTargetChar')?.addEventListener('click', window.replayTxTarget);
+    // Listener Bottoni (Usiamo els o document)
+    const btnStart = document.getElementById('btnStartTxSession');
+    const btnStop = document.getElementById('btnStopTxSession');
+    const btnReplay = document.getElementById('btnReplayTargetChar');
+
+    if (btnStart) {
+        btnStart.onclick = () => {
+            console.log("Transmission: Start clicked");
+            window.startTxSession();
+        };
+    }
+    if (btnStop) {
+        btnStop.onclick = () => {
+            console.log("Transmission: Stop clicked");
+            window.stopTxSession();
+        };
+    }
+    if (btnReplay) {
+        btnReplay.onclick = () => {
+            window.replayTxTarget();
+        };
+    }
 
     const wpmRef = document.getElementById('txWpmRef');
-    if (wpmRef && window.courseData?.settings) {
-        wpmRef.textContent = window.courseData.settings.start_wpm || 20;
+    if (wpmRef) {
+        const currentWpm = window.courseData?.settings?.start_wpm || 20;
+        wpmRef.textContent = currentWpm;
     }
 };
 
 window.startTxSession = function() {
+    console.log("Transmission: Starting session...");
     window.transmissionState.sessionRunning = true;
     window.transmissionState.sessionStats = [];
 
-    document.getElementById('btnStartTxSession').style.display = 'none';
-    document.getElementById('btnStopTxSession').style.display = 'block';
-    document.getElementById('txFinalSummary').style.display = 'none';
+    const btnStart = document.getElementById('btnStartTxSession');
+    const btnStop = document.getElementById('btnStopTxSession');
+    const finalSummary = document.getElementById('txFinalSummary');
+
+    if (btnStart) btnStart.style.display = 'none';
+    if (btnStop) btnStop.style.display = 'block';
+    if (finalSummary) finalSummary.style.display = 'none';
 
     window.pickNextTxTarget();
 };
@@ -111,25 +140,63 @@ window.pickNextTxTarget = function() {
     window.transmissionState.sequence = [];
     window.transmissionState.lastEventTime = 0;
 
-    const lesson = window.courseData?.progress?.current_lesson || 2;
-    const activeChars = window.KOCH_SEQUENCE.slice(0, lesson);
-    window.transmissionState.currentTarget = activeChars[Math.floor(Math.random() * activeChars.length)];
+    // Recupero caratteri sbloccati con fallback
+    let lesson = 2;
+    if (window.courseData && window.courseData.progress && window.courseData.progress.current_lesson) {
+        lesson = parseInt(window.courseData.progress.current_lesson);
+    }
+
+    const koch = window.KOCH_SEQUENCE || ["K", "M", "R", "S"];
+    const maxIdx = Math.min(koch.length, Math.max(2, lesson));
+    const activeChars = koch.slice(0, maxIdx);
+
+    const randomChar = activeChars[Math.floor(Math.random() * activeChars.length)] || "K";
+    window.transmissionState.currentTarget = randomChar;
+
+    console.log("Transmission: Next target is", randomChar, "from set", activeChars);
 
     const targetEl = document.getElementById('txTargetChar');
     const feedbackEl = document.getElementById('txFeedbackText');
-    if (targetEl) targetEl.textContent = window.transmissionState.currentTarget;
+
+    if (targetEl) {
+        targetEl.textContent = randomChar;
+    }
+
     if (feedbackEl) {
         feedbackEl.textContent = "Ascolta e ripeti...";
         feedbackEl.style.color = "var(--link-color)";
     }
 
-    window.replayTxTarget();
+    // Nascondiamo i dettagli del round precedente
+    const detailArea = document.getElementById('txDetailedAccuracy');
+    if (detailArea) detailArea.style.display = 'none';
+
+    // Delay minimo per permettere all'audioCtx di riprendersi se necessario
+    setTimeout(() => {
+        window.replayTxTarget();
+    }, 100);
 };
 
 window.replayTxTarget = function() {
     if (!window.transmissionState.currentTarget) return;
-    const wpm = parseInt(window.courseData?.settings?.start_wpm) || 20;
-    window.playMorseAudio(window.transmissionState.currentTarget, wpm, true);
+
+    // Proviamo a recuperare il WPM in modo più sicuro
+    let wpm = 20;
+    try {
+        if (window.courseData && window.courseData.settings && window.courseData.settings.start_wpm) {
+            wpm = parseInt(window.courseData.settings.start_wpm);
+        }
+    } catch(e) {}
+
+    if (isNaN(wpm)) wpm = 20;
+
+    console.log("Transmission: Playing audio for", window.transmissionState.currentTarget, "at", wpm, "WPM");
+
+    if (typeof window.playMorseAudio === 'function') {
+        window.playMorseAudio(window.transmissionState.currentTarget, wpm, true);
+    } else {
+        console.error("Transmission: playMorseAudio not found!");
+    }
 };
 
 window.checkTransmissionCompletion = function() {
