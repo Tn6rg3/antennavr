@@ -526,6 +526,10 @@ window.finishCourseSession = function() {
     window.courseData.progress.last_session_date = todayStr;
     window.saveCourseState();
 
+    // Rimuoviamo il segnale LIVE per i tutor a fine sessione
+    db.ref(`courseActiveEnrollments/${myId}`).update({ roomCode: null });
+    db.ref(`courseActiveEnrollments/${myId}`).child('roomCode').onDisconnect().cancel();
+
     // --- VISUALIZZAZIONE DEBRIEFING GRAFICO ---
     const modal = document.getElementById('courseResultsModal');
     const accTxt = document.getElementById('courseResultsAccuracy');
@@ -753,8 +757,10 @@ window.actualStartCourseGame = function() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
-    // Segnaliamo il roomCode ai tutor
-    db.ref(`courseActiveEnrollments/${myId}`).update({ roomCode: roomCode });
+    // Segnaliamo il roomCode ai tutor e impostiamo pulizia automatica al distacco
+    const enrollmentRef = db.ref(`courseActiveEnrollments/${myId}`);
+    enrollmentRef.update({ roomCode: roomCode });
+    enrollmentRef.child('roomCode').onDisconnect().set(null);
 
     db.ref('rooms/' + roomCode).set({
         status: 'countdown', type: 'single', mode: 'course', wpm: currentWpm, tone: 600,
