@@ -104,13 +104,13 @@ window.startTxSession = function() {
     window.transmissionState.sessionRunning = true;
     window.transmissionState.sessionStats = [];
 
-    // Visibility
+    // Visibility Swap con !important per evitare sovrascritture CSS
     const bStart = document.getElementById('btnStartTxSession');
     const bStop = document.getElementById('btnStopTxSession');
     const bSummary = document.getElementById('txFinalSummary');
 
-    if (bStart) bStart.style.display = 'none';
-    if (bStop) bStop.style.display = 'inline-block';
+    if (bStart) bStart.style.setProperty('display', 'none', 'important');
+    if (bStop) bStop.style.setProperty('display', 'block', 'important');
     if (bSummary) bSummary.style.display = 'none';
 
     window.pickNextTxTarget();
@@ -125,8 +125,9 @@ window.stopTxSession = function() {
 
     const bStart = document.getElementById('btnStartTxSession');
     const bStop = document.getElementById('btnStopTxSession');
-    if (bStart) bStart.style.display = 'inline-block';
-    if (bStop) bStop.style.display = 'none';
+
+    if (bStart) bStart.style.setProperty('display', 'block', 'important');
+    if (bStop) bStop.style.setProperty('display', 'none', 'important');
 
     const detailedAcc = document.getElementById('txDetailedAccuracy');
     if (detailedAcc) detailedAcc.style.display = 'none';
@@ -264,13 +265,15 @@ window.showTxDetailedResult = function(isCorrect, msg, dotAcc=0, dashAcc=0, spac
     const feedback = document.getElementById('txFeedbackText');
     const detailArea = document.getElementById('txDetailedAccuracy');
 
+    console.log(`TX_DEBUG: Result -> Correct: ${isCorrect}, Dot: ${dotAcc}%, Dash: ${dashAcc}%, Space: ${spaceAcc}%`);
+
     if (feedback) {
         feedback.textContent = msg;
         feedback.style.color = isCorrect ? "#4caf50" : "#d32f2f";
     }
 
     if (isCorrect && detailArea) {
-        detailArea.style.display = 'flex';
+        detailArea.style.setProperty('display', 'flex', 'important');
         window.updateTxBar('Dot', dotAcc);
         window.updateTxBar('Dash', dashAcc);
         window.updateTxBar('Space', spaceAcc);
