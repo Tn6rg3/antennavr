@@ -42,7 +42,14 @@ window.toggleChat = function() {
     }
 };
 
-window.canUserChat = function() {
+window.canUserChat = async function() {
+    // 1. Controllo Override Admin (Sempre prioritario)
+    try {
+        const overrideSnap = await db.ref(`users/${myId}/chatEnabledOverride`).once('value');
+        if (overrideSnap.val() === true) return true;
+    } catch(e) {}
+
+    // 2. Controlli Standard
     if (!tgUsername) {
         showToast(currentLang === 'it' ? "⚠️ Imposta uno username su Telegram per scrivere!" : "⚠️ Set a Telegram username to chat!");
         return false;
@@ -389,7 +396,7 @@ window.openInviteModal = function(targetId, targetName) {
 
 window.openTeamInviteModal = async function(targetId, targetName) {
     currentInviterId = targetId;
-    if (els.inviteModalTitle) els.inviteModalTitle.textContent = "Recluta " + targetName;
+    if (els.inviteModalTitle) els.inviteModalTitle.textContent = "Opzioni Utente: " + targetName;
     if (els.recruitmentStatusText) els.recruitmentStatusText.textContent = "Caricamento stato...";
     if (els.inviteSettings) els.inviteSettings.style.display = 'none';
     if (els.teamInviteSettings) els.teamInviteSettings.style.display = 'block';
@@ -397,6 +404,28 @@ window.openTeamInviteModal = async function(targetId, targetName) {
     if (els.incomingTeamInviteArea) els.incomingTeamInviteArea.style.display = 'none';
     if (els.outgoingInviteArea) els.outgoingInviteArea.style.display = 'none';
     if (els.recruitJoinBtn) els.recruitJoinBtn.style.display = 'none';
+
+    // CONTROLLI ADMIN (BOTTONE DIRETTO)
+    const enableBtn = document.getElementById('btnAdminEnableChat');
+
+    if (window.isAdmin && enableBtn) {
+        enableBtn.style.display = 'block';
+        enableBtn.textContent = "Verifica...";
+
+        db.ref(`users/${targetId}/chatEnabledOverride`).once('value', s => {
+            const hasOverride = s.val() === true;
+            enableBtn.textContent = hasOverride ? "BLOCCA CHAT (Admin) 🔒" : "ABILITA CHAT (Admin) 🔓";
+            enableBtn.onclick = () => {
+                const nextState = !hasOverride;
+                db.ref(`users/${targetId}/chatEnabledOverride`).set(nextState ? true : null).then(() => {
+                    showToast(nextState ? "Chat sbloccata per " + targetName : "Blocco ripristinato");
+                    window.openTeamInviteModal(targetId, targetName); // Refresh
+                });
+            };
+        });
+    } else if (enableBtn) {
+        enableBtn.style.display = 'none';
+    }
 
     try {
         const teamsSnap = await db.ref('teams').once('value');

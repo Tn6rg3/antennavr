@@ -475,9 +475,11 @@ window.setupBugSystem = function() {
 
     // 1. Bug Reports Listener (Real-time per Admin Badge)
     db.ref('bugReports').limitToLast(20).on('value', snap => {
+        window.isAdmin = true;
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
         window.updateAdminBadge();
     }, (error) => {
+        window.isAdmin = false;
         console.log("Bug System: Standard user access.");
     });
 
@@ -717,8 +719,8 @@ window.shareAppToFriends = function() {
 
 // --- LISTENER PULSANTI CHAT ---
 if (els.sendChatBtn) {
-    els.sendChatBtn.onclick = () => {
-        if (typeof window.canUserChat === 'function' && !window.canUserChat()) return;
+    els.sendChatBtn.onclick = async () => {
+        if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
         const txt = els.chatInput?.value.trim(); if (!txt) return;
         let ref = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
         ref.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
@@ -726,8 +728,8 @@ if (els.sendChatBtn) {
     };
 }
 if (els.sendLobbyChatBtn) {
-    els.sendLobbyChatBtn.onclick = () => {
-        if (typeof window.canUserChat === 'function' && !window.canUserChat()) return;
+    els.sendLobbyChatBtn.onclick = async () => {
+        if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
         const txt = els.lobbyChatInput?.value.trim(); if (!txt || !roomCode) return;
         db.ref(`rooms/${roomCode}/chat`).push().set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         if (els.lobbyChatInput) els.lobbyChatInput.value = '';

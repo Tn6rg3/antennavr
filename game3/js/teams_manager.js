@@ -451,8 +451,8 @@ if (els.clearTeamChatBtn) {
     });
 }
 if (els.sendTeamChatBtn) {
-    els.sendTeamChatBtn.addEventListener('click', () => {
-        if (typeof window.canUserChat === 'function' && !window.canUserChat()) return;
+    els.sendTeamChatBtn.addEventListener('click', async () => {
+        if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
         const txt = els.teamChatInput.value.trim();
         if (!txt || !myTeamId) return;
         db.ref(`teams/${myTeamId}/chat`).push({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });

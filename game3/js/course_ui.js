@@ -584,8 +584,8 @@ window.initCourseChat = function() {
     });
 
     if (els.sendCourseChatBtn && els.courseChatInput) {
-        els.sendCourseChatBtn.onclick = () => {
-            if (typeof window.canUserChat === 'function' && !window.canUserChat()) return;
+        els.sendCourseChatBtn.onclick = async () => {
+            if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
             const txt = els.courseChatInput.value.trim();
             if (!txt) return;
             chatRef.push({
