@@ -535,7 +535,19 @@ window.closeInviteModal = function() {
         db.ref(`invites/${currentInviterId}`).off();
         listeners.outgoingInvite = null;
     }
+    // NOTA: Non puliamo currentInviterId qui per permettere ai badge di persistere
+    // finché l'invito è attivo sul server. Lo facciamo in resetLocalChallengeState.
+};
+
+window.resetLocalChallengeState = function() {
+    console.log("Challenge: Resetting local state");
+    isChallenging = false;
     currentInviterId = null;
+    window.lastIncomingInvite = null;
+    if (listeners.outgoingInvite) {
+        db.ref(`invites/${listeners.outgoingInvite.target}`).off();
+        listeners.outgoingInvite = null;
+    }
 };
 
 window.listenToInviteAccepted = function() {
@@ -546,8 +558,7 @@ window.listenToInviteAccepted = function() {
             console.log("Challenge: Accepted! Joining room:", data.roomCode);
             db.ref(`invite_accepted/${myId}`).remove();
             roomCode = data.roomCode;
-            isChallenging = false;
-            currentInviterId = null;
+            window.resetLocalChallengeState();
             if (typeof window.joinRoomLogic === 'function') {
                 window.joinRoomLogic(false);
             }
@@ -654,6 +665,7 @@ window.listenToInvites = function() {
                             ts: firebase.database.ServerValue.TIMESTAMP
                         });
                         db.ref(`invites/${myId}`).remove();
+                        window.resetLocalChallengeState();
                         window.closeInviteModal();
                         roomCode = roomCodeNew;
                         window.joinRoomLogic(false);
@@ -664,6 +676,7 @@ window.listenToInvites = function() {
             if (els.declineInviteBtn) {
                 els.declineInviteBtn.onclick = () => {
                     db.ref(`invites/${myId}`).remove();
+                    window.resetLocalChallengeState();
                     window.closeInviteModal();
                 };
             }

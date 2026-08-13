@@ -119,6 +119,11 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
         window.currentSpectatorCleanup = null;
     }
 
+    // RESET STATI SFIDA (Badge Online)
+    if (typeof window.resetLocalChallengeState === 'function') {
+        window.resetLocalChallengeState();
+    }
+
     let targetScreen = 'setupScreen';
     const amIHost = (myId === roomHostId);
 
@@ -498,19 +503,26 @@ window.startCountdownSequence = function() {
             if (listeners.players) db.ref(`rooms/${roomCode}/players`).off('value', listeners.players);
             listeners.players = db.ref(`rooms/${roomCode}/players`).on('value', pSnap => {
                 if (!gameRunning) return;
-                const currentPCount = Object.keys(pSnap.val() || {}).length;
-                if (gameStartPlayerCount > 0 && currentPCount < gameStartPlayerCount) {
+                const players = pSnap.val() || {};
+                const currentPCount = Object.keys(players).length;
+
+                // Se siamo in un match 1vs1 e l'altro se ne va
+                if (gameStartPlayerCount === 2 && currentPCount === 1 && players[myId]) {
+                    gameRunning = false;
+                    alert(currentLang === 'it' ? "L'avversario ha abbandonato. Hai vinto a tavolino! 🏆" : "Opponent abandoned. You win by default! 🏆");
+                    window.finishGame();
+                }
+                else if (gameStartPlayerCount > 0 && currentPCount < gameStartPlayerCount) {
+                    // Logica generica per match con più di 2 giocatori
                     setTimeout(() => {
                         db.ref(`rooms/${roomCode}/players`).once('value', s => {
                             if (gameRunning && Object.keys(s.val() || {}).length < gameStartPlayerCount) {
-                                alert("Un giocatore ha abbandonato. Ritorno al menu.");
+                                alert(currentLang === 'it' ? "Troppi giocatori hanno abbandonato. Match terminato." : "Too many players abandoned. Match terminated.");
                                 gameRunning = false;
                                 window.exitRoomCleanly(false);
-                            } else if (gameRunning) {
-                                window.showToast("👥 Giocatore rientrato!");
                             }
                         });
-                    }, 10000);
+                    }, 5000);
                 }
             });
         });
