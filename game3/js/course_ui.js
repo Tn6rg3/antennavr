@@ -26,8 +26,38 @@ window.renderCourseTabView = function() {
         window.renderCourseTabDashboard();
         window.populateCourseSettingsInputs();
         window.initCourseChat();
+
+        // Di default mostriamo la dashboard
+        window.switchCourseSubTab('dash');
     } else {
         if (initialPrompt) initialPrompt.style.display = 'block';
+    }
+};
+
+window.switchCourseSubTab = function(tabId) {
+    const dashBtn = document.getElementById('btnCourseSubTabDash');
+    const txBtn = document.getElementById('btnCourseSubTabTx');
+    const dashView = document.getElementById('courseDashboardView');
+    const txView = document.getElementById('courseTransmissionView');
+
+    // NOTA: dashView nel file HTML è diventato courseTabDashboardView per evitare duplicati
+    const realDashView = document.getElementById('courseTabDashboardView') || dashView;
+
+    if (tabId === 'dash') {
+        dashBtn?.classList.add('active-tab');
+        txBtn?.classList.remove('active-tab');
+        if (realDashView) realDashView.style.display = 'flex';
+        if (txView) txView.style.display = 'none';
+    } else if (tabId === 'tx') {
+        dashBtn?.classList.remove('active-tab');
+        txBtn?.classList.add('active-tab');
+        if (realDashView) realDashView.style.display = 'none';
+        if (txView) txView.style.display = 'flex';
+
+        // Inizializziamo il manager della trasmissione
+        if (typeof window.initTransmissionManager === 'function') {
+            window.initTransmissionManager();
+        }
     }
 };
 

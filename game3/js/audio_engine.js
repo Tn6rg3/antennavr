@@ -8,8 +8,57 @@ window.morseDict = {
 };
 
 window.activeOscillators = [];
+window.manualOscillator = null;
+window.manualGain = null;
 window.morsePlayToken = 0;
 window.btKeepAliveOsc = null;
+
+window.startTone = function(freq) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    if (window.manualOscillator) return;
+
+    const f = freq || window.currentTone || 600;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.value = f;
+
+    gain.gain.setValueAtTime(0, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.005);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    window.manualOscillator = osc;
+    window.manualGain = gain;
+};
+
+window.stopTone = function() {
+    if (!window.manualOscillator) return;
+
+    const osc = window.manualOscillator;
+    const gain = window.manualGain;
+
+    const now = audioCtx.currentTime;
+    if (gain) {
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.005);
+    }
+
+    setTimeout(() => {
+        try {
+            osc.stop();
+            osc.disconnect();
+        } catch(e) {}
+    }, 20);
+
+    window.manualOscillator = null;
+    window.manualGain = null;
+};
 
 window.stopAllMorseAudio = function() {
     window.morsePlayToken++;
@@ -22,6 +71,8 @@ window.stopAllMorseAudio = function() {
         });
         window.activeOscillators = [];
     }
+    // Fermiamo anche il tono manuale se attivo durante stopAll
+    window.stopTone();
 };
 
 window.startBluetoothKeepAlive = function() {
