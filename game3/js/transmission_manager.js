@@ -251,7 +251,30 @@ window.analyzeTransmission = function() {
     const totalAcc = Math.round((avgDot*0.35) + (avgDash*0.35) + (avgSpace*0.3));
 
     window.transmissionState.sessionStats.push({ char: target, totalAcc: totalAcc });
-    window.showTxDetailedResult(true, "ECCELLENTE!", avgDot, avgDash, avgSpace);
+
+    // Determinazione messaggio di feedback intelligente
+    let finalMsg = "ECCELLENTE!";
+    let advice = "";
+
+    if (totalAcc < 90) {
+        if (totalAcc >= 75) finalMsg = "BUONO!";
+        else if (totalAcc >= 50) finalMsg = "DISCRETO";
+        else finalMsg = "INSURREZIONE!";
+
+        // Analisi dei punti deboli per il consiglio
+        const errors = [];
+        if (avgDot < 85) errors.push(avgDot < 60 ? "punti troppo irregolari" : "cura la durata dei punti");
+        if (avgDash < 85) errors.push(avgDash < 60 ? "linee sproporzionate" : "linee poco precise");
+        if (avgSpace < 85) errors.push(avgSpace < 60 ? "spazi casuali" : "ritmo irregolare");
+
+        if (errors.length > 0) {
+            advice = "💡 " + errors.join(" e ") + ".";
+        }
+    } else {
+        advice = "🚀 Ritmo perfetto, continua così!";
+    }
+
+    window.showTxDetailedResult(true, finalMsg + "\n" + advice, avgDot, avgDash, avgSpace);
 
     window.transmissionState.active = false;
     setTimeout(() => {
@@ -268,8 +291,10 @@ window.showTxDetailedResult = function(isCorrect, msg, dotAcc=0, dashAcc=0, spac
     console.log(`TX_DEBUG: Result -> Correct: ${isCorrect}, Dot: ${dotAcc}%, Dash: ${dashAcc}%, Space: ${spaceAcc}%`);
 
     if (feedback) {
-        feedback.textContent = msg;
+        feedback.innerHTML = msg.replace("\n", "<br>");
         feedback.style.color = isCorrect ? "#4caf50" : "#d32f2f";
+        feedback.style.whiteSpace = "normal";
+        feedback.style.lineHeight = "1.2";
     }
 
     if (isCorrect && detailArea) {
