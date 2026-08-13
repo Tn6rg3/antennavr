@@ -684,19 +684,43 @@
                         </button>
                     </div>
 
-                    <div style="display:flex; gap:10px;">
-                        <button id="btnStartTxSession" class="btn-success" style="flex:2;">AVVIA ESERCIZIO</button>
-                        <button id="btnReplayTargetChar" class="btn-secondary" style="flex:1;">🔊 RIASCOLTA</button>
+                    <div style="display:flex; gap:10px; min-height:45px; align-items:stretch;">
+                        <button id="btnStartTxSession" class="btn-success" style="flex:2; margin:0;">AVVIA ESERCIZIO</button>
+                        <button id="btnStopTxSession" class="btn-danger" style="flex:2; margin:0; display:none;">STOP</button>
+                        <button id="btnReplayTargetChar" class="btn-secondary" style="flex:1; margin:0;">🔊 RIASCOLTA</button>
                     </div>
 
-                    <!-- PRECISIONE -->
-                    <div id="txAccuracyContainer" style="margin-top:15px; display:none;">
-                        <div style="font-size:0.8em; color:var(--hint-color); margin-bottom:5px;">PRECISIONE ULTIMO INVIO:</div>
-                        <div style="width:100%; height:12px; background:var(--bg-color); border-radius:6px; overflow:hidden; border:1px solid var(--hint-color);">
-                            <div id="txAccuracyBar" style="width:0%; height:100%; background: #4caf50; transition: width 0.3s ease;"></div>
+                    <!-- PRECISIONE DETTAGLIATA (NEW) -->
+                    <div id="txDetailedAccuracy" style="margin-top:15px; display:none; flex-direction:column; gap:8px; background:rgba(0,0,0,0.1); padding:10px; border-radius:8px;">
+                        <div style="font-size:0.75em; color:var(--hint-color); font-weight:bold; text-align:left;">PRECISIONE TECNICA:</div>
+
+                        <!-- PUNTI -->
+                        <div>
+                            <div style="display:flex; justify-content:space-between; font-size:0.7em; margin-bottom:2px;"><span>PUNTI (DOT)</span><span id="txAccDotVal">0%</span></div>
+                            <div style="width:100%; height:6px; background:var(--bg-color); border-radius:3px; overflow:hidden;"><div id="txAccDotBar" style="width:0%; height:100%; background:#4caf50;"></div></div>
                         </div>
-                        <div id="txAccuracyValue" style="font-size:1.1em; font-weight:bold; margin-top:5px; color:#4caf50;">0%</div>
+
+                        <!-- LINEE -->
+                        <div>
+                            <div style="display:flex; justify-content:space-between; font-size:0.7em; margin-bottom:2px;"><span>LINEE (DASH)</span><span id="txAccDashVal">0%</span></div>
+                            <div style="width:100%; height:6px; background:var(--bg-color); border-radius:3px; overflow:hidden;"><div id="txAccDashBar" style="width:0%; height:100%; background:#2196f3;"></div></div>
+                        </div>
+
+                        <!-- SPAZI -->
+                        <div>
+                            <div style="display:flex; justify-content:space-between; font-size:0.7em; margin-bottom:2px;"><span>SPAZIATURA</span><span id="txAccSpaceVal">0%</span></div>
+                            <div style="width:100%; height:6px; background:var(--bg-color); border-radius:3px; overflow:hidden;"><div id="txAccSpaceBar" style="width:0%; height:100%; background:#ff9800;"></div></div>
+                        </div>
                     </div>
+                </div>
+
+                <!-- RESOCONTO FINALE (NEW) -->
+                <div id="txFinalSummary" class="box-panel" style="display:none; border-color:var(--link-color); background:rgba(33,150,243,0.05);">
+                    <h3 style="color:var(--link-color); margin:0 0 10px 0; font-size:1.1em;">📊 Resoconto Sessione</h3>
+                    <div id="txSummaryList" style="display:flex; flex-direction:column; gap:5px; max-height:200px; overflow-y:auto; font-size:0.85em;">
+                        <!-- Popolato via JS -->
+                    </div>
+                    <button onclick="document.getElementById('txFinalSummary').style.display='none'" class="action-btn-small btn-secondary" style="margin-top:10px; width:100%;">CHIUDI RESOCONTO</button>
                 </div>
 
                 <div class="box-panel">
