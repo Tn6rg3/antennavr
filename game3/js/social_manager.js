@@ -42,6 +42,19 @@ window.toggleChat = function() {
     }
 };
 
+window.canUserChat = function() {
+    if (!tgUsername) {
+        showToast(currentLang === 'it' ? "⚠️ Imposta uno username su Telegram per scrivere!" : "⚠️ Set a Telegram username to chat!");
+        return false;
+    }
+    const level = window.userProgression?.level || 1;
+    if (level < 2) {
+        showToast(currentLang === 'it' ? "🚀 Raggiungi il Livello 2 per scrivere in chat!" : "🚀 Reach Level 2 to chat!");
+        return false;
+    }
+    return true;
+};
+
 window.enqueueChatCwAudio = function(text) {
     if (!text || !isChatCwEnabled) return;
     if (chatCwAudioQueue.length < 10) {

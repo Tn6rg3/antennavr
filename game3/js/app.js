@@ -297,12 +297,21 @@ function initGame() {
     }
 
     auth.signInAnonymously().then(async () => {
-        // Ripristiniamo l'ID Telegram come ID primario per coerenza profilo
         myId = tgUser.id.toString();
         console.log("CW Game: Auth success, Telegram ID:", myId);
+
         const userRef = db.ref(`users/${myId}`);
         const snap = await userRef.once('value');
         const data = snap.val() || {};
+
+        // --- PROTEZIONE ANTI-SPAM (USERNAME GATE) ---
+        // Se l'utente non ha username E non esiste ancora nel database, lo blocchiamo
+        if (!tgUsername && !snap.exists()) {
+            if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
+            if (els.noUsernameScreen) els.noUsernameScreen.classList.add('active-screen');
+            return; // Interrompiamo l'avvio
+        }
+
         if (data.alias) myName = data.alias;
         myPrivacy = data.privacyUsername || false;
 
@@ -709,6 +718,7 @@ window.shareAppToFriends = function() {
 // --- LISTENER PULSANTI CHAT ---
 if (els.sendChatBtn) {
     els.sendChatBtn.onclick = () => {
+        if (typeof window.canUserChat === 'function' && !window.canUserChat()) return;
         const txt = els.chatInput?.value.trim(); if (!txt) return;
         let ref = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
         ref.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
@@ -717,6 +727,7 @@ if (els.sendChatBtn) {
 }
 if (els.sendLobbyChatBtn) {
     els.sendLobbyChatBtn.onclick = () => {
+        if (typeof window.canUserChat === 'function' && !window.canUserChat()) return;
         const txt = els.lobbyChatInput?.value.trim(); if (!txt || !roomCode) return;
         db.ref(`rooms/${roomCode}/chat`).push().set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         if (els.lobbyChatInput) els.lobbyChatInput.value = '';
