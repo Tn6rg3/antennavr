@@ -362,8 +362,11 @@ window.deleteHistoryItem = function(key) {
 };
 
 window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
+    // 1. Presenza e Stanza Attiva
     await db.ref(`presence/${userId}`).update({ name: newName, username: newUsername });
     if (roomCode) await db.ref(`rooms/${roomCode}/players/${userId}`).update({ name: newName, username: newUsername });
+
+    // 2. Attività (Storico classifiche partecipazione)
     const now = new Date();
     const dKey = now.toISOString().split('T')[0];
     const wKey = window.getWeekNumber(now);
@@ -373,15 +376,61 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
         try {
             const actSnap = await actRef.once('value');
             if (actSnap.exists()) await actRef.update({ name: newName });
-        } catch(e) { console.warn("Update activity name failed:", e); }
+        } catch(e) {}
     }
+
+    // 3. Squadra
     if (myTeamId) await db.ref(`teams/${myTeamId}/members/${userId}`).update({ name: newName, username: newUsername });
 
-    // Sincronizzazione per il Corso CW (Tutor Panel)
+    // 4. Corso CW
     try {
         const courseRef = db.ref(`courseActiveEnrollments/${userId}`);
         const snap = await courseRef.once('value');
         if (snap.exists()) await courseRef.update({ name: newName });
+    } catch(e) {}
+
+    // 5. Leaderboard (Fix Privacy & Alias su tutti i record esistenti)
+    await window.updateUserInAllLeaderboards(newName, newUsername);
+};
+
+window.updateUserInAllLeaderboards = async function(newName, newUsername) {
+    console.log("Privacy: Updating all leaderboard entries for user...");
+
+    // Percorsi con struttura fissa CATEGORIA/UID
+    const fixedPaths = [
+        `leaderboard/callsign/global/${myId}`,
+        `leaderboard/arcade/all/${myId}`,
+        `leaderboard/arcade/global/${myId}`
+    ];
+
+    for (const path of fixedPaths) {
+        try {
+            const snap = await db.ref(path).once('value');
+            if (snap.exists()) await db.ref(path).update({ name: newName, username: newUsername });
+        } catch(e) {}
+    }
+
+    // Percorsi con struttura dinamica CATEGORIA/SOTTO_MODO/UID (standard, chars, quiz, pingpong)
+    const categories = ['standard', 'chars', 'quiz', 'pingpong'];
+    for (const cat of categories) {
+        try {
+            const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
+            if (catSnap.exists()) {
+                catSnap.forEach(subNode => {
+                    if (subNode.hasChild(myId)) {
+                        subNode.child(myId).ref.update({ name: newName, username: newUsername });
+                    }
+                });
+            }
+        } catch(e) {}
+    }
+
+    // Sfida Giornaliera (Oggi)
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const dailyRef = db.ref(`leaderboard/daily_challenge/${today}/${myId}`);
+        const dSnap = await dailyRef.once('value');
+        if (dSnap.exists()) await dailyRef.update({ name: newName, username: newUsername });
     } catch(e) {}
 };
 
@@ -450,7 +499,7 @@ if (els.saveAliasBtn) {
             myName = newName; myPrivacy = privacy;
             if (els.playerName) els.playerName.textContent = myName;
             showToast("Profilo aggiornato!");
-            window.syncUserNameEverywhere(myId, newName, currentUsername);
+            await window.syncUserNameEverywhere(myId, newName, currentUsername);
         } catch(e) {
             alert("Errore durante il salvataggio: " + e.message);
         }
