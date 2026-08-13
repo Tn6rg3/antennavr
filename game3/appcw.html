@@ -654,57 +654,11 @@
 
                 <div style="display:flex; gap:10px;">
                     <button id="btnTabStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
-                    <button id="btnStartTxExercise" class="btn-secondary" style="flex:1.5; background:#ff9800; color:white; font-size:0.85em;">ESERCIZIO TX 🔑</button>
                     <button id="btnTabResetCourse" class="btn-danger" style="flex:1.2; font-size:0.75em;">ESCI DAL CORSO</button>
                 </div>
             </div> <!-- courseTabDashboardView end -->
         </div> <!-- courseTrainingControls end -->
     </div> <!-- courseTabActiveView end -->
-</div> <!-- profileCourseArea end -->
-
-<!-- AREA ESERCITAZIONE TX (TRASMISSIONE) -->
-<div id="txArea" class="screen">
-    <div class="header-stats">
-        <div id="txStatusTitle" style="color:var(--link-color); font-weight:bold;">MODALITÀ TRASMISSIONE</div>
-        <div id="txAccuracyDisplay">Accuratezza: 0%</div>
-    </div>
-
-    <div class="screen-content" style="padding: 10px; align-items: center; justify-content: center; gap: 20px;">
-        <!-- Area Target -->
-        <div class="box-panel" style="width: 100%; text-align: center; border-color: var(--link-color); padding: 15px;">
-            <div style="font-size: 0.8em; color: var(--hint-color); margin-bottom: 5px;">CARATTERE DA TRASMETTERE:</div>
-            <div id="txTargetChar" style="font-size: 5em; font-weight: bold; color: #fff; text-shadow: 0 0 15px var(--link-color);">K</div>
-            <div id="txTargetCode" style="font-size: 1.2em; letter-spacing: 5px; color: var(--hint-color);">- . -</div>
-        </div>
-
-        <!-- Analizzatore Tempi (Oscilloscopio) -->
-        <div id="txAnalyzer" class="box-panel" style="width: 100%; height: 180px; background: #000; border-color: #333; position: relative; overflow: hidden; padding: 5px; display: flex; flex-direction: column; gap: 10px;">
-             <!-- Riferimento Punto/Linea -->
-             <div id="txReferenceBars" style="flex:1; display:flex; align-items:flex-end; gap:5px; border-bottom:1px solid #222;">
-                 <!-- Popolato da JS: Barre verdi (ideali) -->
-             </div>
-             <!-- Input Utente -->
-             <div id="txUserBars" style="flex:1; display:flex; align-items:flex-start; gap:5px;">
-                 <!-- Popolato da JS: Barre colorate (utente) -->
-             </div>
-             <div id="txTimingLabels" style="position: absolute; width:100%; top:50%; transform:translateY(-50%); display:flex; justify-content:space-between; padding:0 10px; font-size:0.6em; color:#666; pointer-events:none;">
-                 <span>IDEALE (RX)</span>
-                 <span>UTENTE (TX)</span>
-             </div>
-        </div>
-
-        <!-- Tasto Verticale -->
-        <div id="txKeyBtn" style="width: 150px; height: 150px; background: radial-gradient(circle, #444 0%, #111 100%); border: 5px solid #666; border-radius: 50%; box-shadow: 0 10px 0 #333, 0 15px 20px rgba(0,0,0,0.5); cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; -webkit-tap-highlight-color: transparent;">
-            <div style="width: 80%; height: 80%; border: 2px solid rgba(255,255,255,0.1); border-radius: 50%;"></div>
-        </div>
-        <p style="font-size: 0.7em; color: var(--hint-color); text-transform: uppercase;">Premi o tocca il tasto per trasmettere</p>
-    </div>
-
-    <div class="fixed-bottom-btns">
-        <button id="btnQuitTx" class="btn-danger">Esci dall'Esercitazione</button>
-    </div>
-</div>
-
 
         <div id="courseTabInitialPrompt" class="box-panel" style="display:none; text-align:center; padding: 30px 10px;">
              <span style="font-size: 4em;">📻</span>

@@ -567,8 +567,7 @@ window.attachCourseUIListeners = function() {
         { btn: 'btnToggleCourseChat', content: 'courseChatContent' },
         { btn: 'btnToggleCourseSettings', content: 'courseTabSettingsContent' },
         { btn: 'btnToggleCourseHeatmap', content: 'courseTabHeatmapContent' },
-        { btn: 'btnToggleCoursePlan', content: 'courseTabWeeklyPlanContent' },
-        { btn: 'btnTogglePresentation', content: 'coursePresentationContent' }
+        { btn: 'btnToggleCoursePlan', content: 'courseTabWeeklyPlanContent' }
     ];
 
     togglePairs.forEach(p => {
@@ -577,74 +576,11 @@ window.attachCourseUIListeners = function() {
         if (btn && content) {
             btn.onclick = () => {
                 const isHidden = content.style.display === 'none';
-                content.style.display = isHidden ? 'block' : 'none';
+                content.style.display = isHidden ? (p.content.includes('Content') ? 'flex' : 'block') : 'none';
                 btn.textContent = isHidden ? 'Nascondi' : 'Mostra';
             };
         }
     });
-
-    if (els.btnStartTxExercise) {
-        els.btnStartTxExercise.onclick = () => window.startTxExerciseSequence();
-    }
-
-    if (els.btnQuitTx) {
-        els.btnQuitTx.onclick = () => {
-            if (typeof window.stopContinuousTone === 'function') window.stopContinuousTone();
-            window.showScreen('profileScreen');
-            window.switchProfileTab('course');
-        };
-    }
-
-    // GESTIONE TASTO TX (MARK / SPACE)
-    if (els.txKeyBtn) {
-        let pressStart = 0;
-        let releaseStart = 0;
-
-        const handleDown = (e) => {
-            e.preventDefault();
-            if (!window.txTargetReady) return;
-
-            const now = Date.now();
-            if (releaseStart > 0) {
-                const spaceDur = now - releaseStart;
-                window.txUserSequence.push({ type: 'space', duration: spaceDur });
-            }
-
-            pressStart = now;
-            if (typeof window.startContinuousTone === 'function') window.startContinuousTone();
-            els.txKeyBtn.style.transform = "scale(0.95) translateY(5px)";
-            els.txKeyBtn.style.boxShadow = "none";
-        };
-
-        const handleUp = (e) => {
-            e.preventDefault();
-            if (pressStart === 0) return;
-
-            const now = Date.now();
-            const markDur = now - pressStart;
-            window.txUserSequence.push({ type: 'mark', duration: markDur });
-
-            pressStart = 0;
-            releaseStart = now;
-            if (typeof window.stopContinuousTone === 'function') window.stopContinuousTone();
-            els.txKeyBtn.style.transform = "scale(1) translateY(0)";
-            els.txKeyBtn.style.boxShadow = "0 10px 0 #333, 0 15px 20px rgba(0,0,0,0.5)";
-
-            // Controllo fine trasmissione: se il numero di mark corrisponde al target
-            const char = window.txActiveChars[window.txCurrentTargetIdx];
-            const targetCode = window.morseDict[char];
-            if (window.txUserSequence.filter(x => x.type === 'mark').length >= targetCode.length) {
-                window.txTargetReady = false; // Blocca input durante valutazione
-                setTimeout(window.evaluateTxTransmission, 500);
-                releaseStart = 0;
-            }
-        };
-
-        els.txKeyBtn.addEventListener('mousedown', handleDown);
-        els.txKeyBtn.addEventListener('touchstart', handleDown, {passive: false});
-        window.addEventListener('mouseup', handleUp);
-        window.addEventListener('touchend', handleUp, {passive: false});
-    }
 
     if (els.btnCloseAdvancedStats) {
         els.btnCloseAdvancedStats.onclick = () => {
