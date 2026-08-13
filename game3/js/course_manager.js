@@ -371,7 +371,6 @@ window.saveCourseState = function() {
 window.updateGlobalEnrollmentRecord = function(isActive) {
     if (!myId || !db) return;
     const activeRef = db.ref('courseActiveEnrollments/' + myId);
-    const countRef = db.ref('appConfig/courseEnrollmentCount');
 
     if (isActive) {
         activeRef.once('value', snap => {
@@ -380,7 +379,6 @@ window.updateGlobalEnrollmentRecord = function(isActive) {
 
             if (!snap.exists()) {
                 activeRef.set(updateData);
-                countRef.transaction(curr => (curr || 0) + 1);
             } else {
                 activeRef.update({ name: myName, role: window.courseData?.role || 'corsista' });
             }
@@ -389,7 +387,6 @@ window.updateGlobalEnrollmentRecord = function(isActive) {
         activeRef.once('value', snap => {
             if (snap.exists()) {
                 activeRef.remove();
-                countRef.transaction(curr => Math.max(0, (curr || 0) - 1));
             }
         });
     }
@@ -658,21 +655,28 @@ window.checkWeeklyReview = function() {
 };
 
 window.listenToCourseEnrollment = function() {
-    const countRef = db.ref('appConfig/courseEnrollmentCount');
-    countRef.on('value', snap => {
-        const count = snap.val() || 0;
+    // Sostituiamo il contatore manuale con il conteggio reale degli iscritti
+    const activeRef = db.ref('courseActiveEnrollments');
+    activeRef.on('value', snap => {
+        const data = snap.val() || {};
+        const entries = Object.values(data);
+
+        // Contiamo solo i "corsisti" (escludendo i tutor se vogliamo precisione,
+        // o contiamo tutti gli iscritti attivi nell'area corso)
+        // Scelgo di contare solo chi ha ruolo 'corsista' per rispondere alla tua domanda
+        const studentCount = entries.filter(e => e.role === 'corsista').length;
+
         const badge = document.getElementById('courseEnrollmentBadgeGlobal');
         if (badge) {
-            badge.textContent = count;
-            // Usiamo sia la classe che lo stile inline per massima compatibilità
-            if (count > 0) {
+            badge.textContent = studentCount;
+            if (studentCount > 0) {
                 badge.style.display = 'flex';
                 badge.classList.add('badge-active');
             } else {
                 badge.style.display = 'none';
                 badge.classList.remove('badge-active');
             }
-            console.log("Course Badge Update:", count);
+            console.log("Course Real-time Count (Students):", studentCount);
         }
     });
 };
