@@ -447,6 +447,22 @@ window.finishCourseSession = function() {
 
     const accuracy = totalAttempts > 0 ? ((totalAttempts - totalErrors) / totalAttempts) : 1.0;
 
+    // --- ASSEGNAZIONE XP SPECIFICI CORSO ---
+    let sessionBaseXP = 50; // Default Z2
+    if (sessionType === 'WORK') sessionBaseXP = 100;
+    else if (sessionType === 'LONG') sessionBaseXP = 200;
+
+    // Gli XP guadagnati sono proporzionali all'accuratezza
+    const sessionEarnedXP = Math.round(sessionBaseXP * accuracy);
+
+    if (!window.courseData.progress.total_xp) window.courseData.progress.total_xp = 0;
+    window.courseData.progress.total_xp += sessionEarnedXP;
+
+    // Sincronizziamo anche con il livello globale dell'RPG
+    if (typeof window.addXP === 'function') {
+        window.addXP(sessionEarnedXP, `Course Session ${sessionType}`);
+    }
+
     if (window.courseData.current_day_session.type === 'Z2') {
         window.courseData.progress.last_z2_accuracy = accuracy;
     }
