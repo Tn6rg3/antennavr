@@ -525,6 +525,12 @@
         <!-- Dashboard e Settings (Se piano attivo) -->
         <div id="courseTabActiveView" style="display:none; flex-direction:column; gap:10px; width: 100%;">
 
+            <!-- NAVBAR INTERNA CORSO -->
+            <div style="display: flex; gap: 4px; width: 100%; margin-bottom: 5px; flex-shrink:0;">
+                <button id="btnCourseSubTabDash" class="tab-btn active-tab" onclick="window.switchCourseSubTab('dash')" style="flex:1; font-size: 0.75em; padding: 8px 2px;">📊 Dashboard</button>
+                <button id="btnCourseSubTabTx" class="tab-btn" onclick="window.switchCourseSubTab('tx')" style="flex:1; font-size: 0.75em; padding: 8px 2px;">📻 Trasmissione</button>
+            </div>
+
             <!-- AREA TUTOR (SOLO PER RUOLO TUTOR) -->
             <div id="courseTutorPanel" class="box-panel" style="display:none; background:rgba(103, 58, 183, 0.1); border-color:#673ab7; padding:15px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -538,7 +544,7 @@
             </div>
 
             <!-- CHAT DEL CORSO (RADIO-AULA) -->
-            <div class="box-panel" style="border-color: var(--champ-color); padding:5px;">
+            <div id="courseChatArea" class="box-panel" style="border-color: var(--champ-color); padding:5px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; padding:0 5px;">
                     <h4 style="margin:0; font-size:0.9em; color:var(--champ-color);">💬 Radio-Aula (Chat Corso)</h4>
                     <div style="display:flex; gap:5px;">
@@ -555,110 +561,161 @@
                 </div>
             </div>
 
-            <!-- GESTIONE PIANO E IMPOSTAZIONI (NASCOSTO PER TUTOR) -->
-            <div id="courseTrainingControls" style="display:flex; flex-direction:column; gap:10px;">
-
-                <!-- PRESENTAZIONE CORSO (ACCORDION) -->
-                <div id="coursePresentationPanel" class="box-panel" style="padding: 10px; border-color: var(--link-color);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.toggleVisibility('coursePresentationContent', 'btnTogglePresentation')">
-                        <b style="color:var(--link-color); font-size:0.9em;">📘 Presentazione Corso</b>
-                        <button id="btnTogglePresentation" class="btn-link" style="width:auto; margin-top:0; padding:5px;">Mostra</button>
-                    </div>
-                    <div id="coursePresentationContent" style="display:none; margin-top:10px; font-size:0.8em; line-height:1.4; text-align:left; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
-                        <p>Benvenuto nel Corso Professionale CW. Ecco come funziona:</p>
-                        <ul style="padding-left:15px; margin-bottom:10px;">
-                            <li><b>Metodo Koch:</b> Imparerai un carattere alla volta solo dopo aver raggiunto il 90% di precisione.</li>
-                            <li><b>Piano 30/20/50:</b> Le sessioni variano tra Consolidamento, Studio e Resistenza.</li>
-                            <li><b>Allenamento Extra:</b> Disponibile dopo aver finito il piano giornaliero (non sblocca nuovi caratteri).</li>
-                            <li><b>Richiami:</b> La costanza è fondamentale. 3 giorni saltati portano all'espulsione automatica.</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Impostazioni (Spostate in alto e Collassate di default) -->
-                <div class="box-panel" style="border-color: var(--link-color);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h4 style="margin:0; font-size:0.9em; color:var(--hint-color);">⚙️ Modifica Impostazioni</h4>
-                    <button id="btnToggleCourseSettings" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Mostra</button>
-                </div>
-
-                <div id="courseTabSettingsContent" style="display:none; flex-direction:column; gap:10px;">
-                    <div class="settings-row">
-                        <div style="flex:1.5;"><label>Lezione</label>
-                            <select id="courseTabLessonInput" style="width:100%; padding:5px;">
-                                <!-- Popolato da JS -->
-                            </select>
-                        </div>
-                        <div style="flex:1.2;"><label>GG/Sett.</label> <input type="number" id="courseTabDaysInput" value="3" min="1" max="7"></div>
-                        <div style="flex:1.5;"><label>WPM</label> <input type="number" id="courseTabWpmInput" value="20"></div>
-                        <div style="flex:1.5;"><label>Spazio</label> <input type="number" id="courseTabFarnsworthInput" value="12"></div>
-                    </div>
-                    <div class="settings-row">
-                        <div style="flex:1.5;"><label>Spazio Gruppi</label>
-                            <select id="courseTabGroupSpacingInput" style="width:100%; padding:5px;">
-                                <option value="1.0">1.0x</option>
-                                <option value="2.0">2.0x</option>
-                                <option value="3.0">3.0x</option>
-                                <option value="5.0">5.0x</option>
-                                <option value="10.0">10.0x</option>
-                            </select>
-                        </div>
-                        <div style="flex:1;"><label>Ogni (sec)</label> <input type="number" id="courseTabPauseIntervalInput" value="60" min="20"></div>
-                        <div style="flex:1;"><label>Pausa (sec)</label> <input type="number" id="courseTabPauseDurationInput" value="10" min="0"></div>
-                        <div style="flex:1;"><label>Min. Z2</label> <input type="number" id="courseTabMinZ2" value="10"></div>
-                    </div>
-
-                    <div style="display: flex; align-items: center; gap: 10px; background: rgba(156, 39, 176, 0.05); padding: 8px; border-radius: 6px;">
-                        <input type="checkbox" id="courseTabEliteInput" style="width: 18px; height: 18px;">
-                        <label for="courseTabEliteInput" style="font-size: 0.85em; font-weight: bold; color: #9c27b0;">Piano Elite (Doppia Sessione) ⚡</label>
-                    </div>
-
-                    <button id="btnTabSavePlan" class="btn-success">SALVA E AGGIORNA PIANO 💾</button>
-                </div>
-            </div> <!-- Close Settings box-panel -->
-
+            <!-- VISTA DASHBOARD (ESISTENTE) -->
             <div id="courseTabDashboardView" style="display:flex; flex-direction:column; gap:10px;">
-                <!-- Heatmap Caratteri -->
+
+                <!-- GESTIONE PIANO E IMPOSTAZIONI (NASCOSTO PER TUTOR) -->
+                <div id="courseTrainingControls" style="display:flex; flex-direction:column; gap:10px;">
+
+                    <!-- PRESENTAZIONE CORSO (ACCORDION) -->
+                    <div id="coursePresentationPanel" class="box-panel" style="padding: 10px; border-color: var(--link-color);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.toggleVisibility('coursePresentationContent', 'btnTogglePresentation')">
+                            <b style="color:var(--link-color); font-size:0.9em;">📘 Presentazione Corso</b>
+                            <button id="btnTogglePresentation" class="btn-link" style="width:auto; margin-top:0; padding:5px;">Mostra</button>
+                        </div>
+                        <div id="coursePresentationContent" style="display:none; margin-top:10px; font-size:0.8em; line-height:1.4; text-align:left; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+                            <p>Benvenuto nel Corso Professionale CW. Ecco come funziona:</p>
+                            <ul style="padding-left:15px; margin-bottom:10px;">
+                                <li><b>Metodo Koch:</b> Imparerai un carattere alla volta solo dopo aver raggiunto il 90% di precisione.</li>
+                                <li><b>Piano 30/20/50:</b> Le sessioni variano tra Consolidamento, Studio e Resistenza.</li>
+                                <li><b>Allenamento Extra:</b> Disponibile dopo aver finito il piano giornaliero (non sblocca nuovi caratteri).</li>
+                                <li><b>Richiami:</b> La costanza è fondamentale. 3 giorni saltati portano all'espulsione automatica.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Impostazioni -->
+                    <div class="box-panel" style="border-color: var(--link-color);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <h4 style="margin:0; font-size:0.9em; color:var(--hint-color);">⚙️ Modifica Impostazioni</h4>
+                            <button id="btnToggleCourseSettings" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Mostra</button>
+                        </div>
+
+                        <div id="courseTabSettingsContent" style="display:none; flex-direction:column; gap:10px;">
+                            <div class="settings-row">
+                                <div style="flex:1.5;"><label>Lezione</label>
+                                    <select id="courseTabLessonInput" style="width:100%; padding:5px;">
+                                        <!-- Popolato da JS -->
+                                    </select>
+                                </div>
+                                <div style="flex:1.2;"><label>GG/Sett.</label> <input type="number" id="courseTabDaysInput" value="3" min="1" max="7"></div>
+                                <div style="flex:1.5;"><label>WPM</label> <input type="number" id="courseTabWpmInput" value="20"></div>
+                                <div style="flex:1.5;"><label>Spazio</label> <input type="number" id="courseTabFarnsworthInput" value="12"></div>
+                            </div>
+                            <div class="settings-row">
+                                <div style="flex:1.5;"><label>Spazio Gruppi</label>
+                                    <select id="courseTabGroupSpacingInput" style="width:100%; padding:5px;">
+                                        <option value="1.0">1.0x</option>
+                                        <option value="2.0">2.0x</option>
+                                        <option value="3.0">3.0x</option>
+                                        <option value="5.0">5.0x</option>
+                                        <option value="10.0">10.0x</option>
+                                    </select>
+                                </div>
+                                <div style="flex:1;"><label>Ogni (sec)</label> <input type="number" id="courseTabPauseIntervalInput" value="60" min="20"></div>
+                                <div style="flex:1;"><label>Pausa (sec)</label> <input type="number" id="courseTabPauseDurationInput" value="10" min="0"></div>
+                                <div style="flex:1;"><label>Min. Z2</label> <input type="number" id="courseTabMinZ2" value="10"></div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px; background: rgba(156, 39, 176, 0.05); padding: 8px; border-radius: 6px;">
+                                <input type="checkbox" id="courseTabEliteInput" style="width: 18px; height: 18px;">
+                                <label for="courseTabEliteInput" style="font-size: 0.85em; font-weight: bold; color: #9c27b0;">Piano Elite (Doppia Sessione) ⚡</label>
+                            </div>
+                            <button id="btnTabSavePlan" class="btn-success">SALVA E AGGIORNA PIANO 💾</button>
+                        </div>
+                    </div>
+
+                    <!-- Heatmap Caratteri -->
+                    <div class="box-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                            <h4 style="margin:0; font-size:0.85em;">Padronanza Caratteri (Metodo Koch)</h4>
+                            <button id="btnToggleCourseHeatmap" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi</button>
+                        </div>
+                        <div id="courseTabHeatmapContent">
+                            <div id="courseTabHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:5px;"></div>
+                            <p id="courseTabLessonInfo" style="font-size:0.75em; text-align:center; color:var(--hint-color); margin-top:5px;"></p>
+                        </div>
+                    </div>
+
+                    <!-- ANALISI APPROFONDITA -->
+                    <div id="courseAdvancedStatsPanel" class="box-panel" style="display:none; border-color: var(--link-color); border-style: dashed; background: rgba(0,0,0,0.2);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <h4 style="margin:0; font-size:0.85em; color:var(--link-color);">📊 Analisi Dettagliata</h4>
+                            <button id="btnCloseAdvancedStats" class="action-btn-small btn-danger" style="width:auto; padding:2px 8px;">Chiudi ✕</button>
+                        </div>
+                        <div id="courseAdvancedStats" style="display: flex; flex-direction: column; gap: 12px;">
+                            <!-- Popolato da JS -->
+                        </div>
+                    </div>
+
+                    <!-- Piano Settimanale -->
+                    <div class="box-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                            <h4 style="margin:0; font-size:0.85em;">Il tuo Piano per questa Settimana</h4>
+                            <button id="btnToggleCoursePlan" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi</button>
+                        </div>
+                        <div id="courseTabWeeklyPlanContent">
+                            <div id="courseTabWeeklyPlan" style="display:flex; flex-direction:column; gap:4px;"></div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:10px;">
+                        <button id="btnTabStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
+                        <button id="btnTabResetCourse" class="btn-danger" style="flex:1.2; font-size:0.75em;">ESCI DAL CORSO</button>
+                    </div>
+
+                </div> <!-- courseTrainingControls end -->
+            </div> <!-- courseDashboardView end -->
+
+            <!-- VISTA TRASMISSIONE (NEW) -->
+            <div id="courseTransmissionView" style="display:none; flex-direction:column; gap:10px; width:100%;">
+                <div class="box-panel" style="text-align:center; padding:15px; border-color:var(--champ-color);">
+                    <h3 style="color:var(--champ-color); margin:0 0 10px 0;">🎙️ Esercizio di Trasmissione</h3>
+                    <p style="font-size:0.85em; color:var(--hint-color); margin-bottom:15px;">Ascolta il carattere e riproducilo usando il tasto qui sotto.</p>
+
+                    <div id="txStatusArea" style="background:var(--sec-bg-color); padding:15px; border-radius:12px; margin-bottom:15px; min-height:80px; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+                        <div id="txTargetChar" style="font-size:3em; font-weight:bold; color:var(--link-color);">?</div>
+                        <div id="txFeedbackText" style="font-size:0.9em; font-weight:bold; margin-top:5px;">Inizia per allenarti</div>
+                    </div>
+
+                    <!-- TASTO TELEGRAFICO -->
+                    <div style="display:flex; justify-content:center; align-items:center; margin: 20px 0;">
+                        <button id="morseKeyBtn" style="width:120px; height:120px; border-radius:50%; background:linear-gradient(145deg, #333, #111); border:4px solid var(--link-color); box-shadow: 0 10px 20px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.1); cursor:pointer; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color: transparent; user-select: none;">
+                            <span style="width:60px; height:60px; border-radius:50%; background:var(--link-color); opacity:0.2; display:block;"></span>
+                        </button>
+                    </div>
+
+                    <div style="display:flex; gap:10px;">
+                        <button id="btnStartTxSession" class="btn-success" style="flex:2;">AVVIA ESERCIZIO</button>
+                        <button id="btnReplayTargetChar" class="btn-secondary" style="flex:1;">🔊 RIASCOLTA</button>
+                    </div>
+
+                    <!-- PRECISIONE -->
+                    <div id="txAccuracyContainer" style="margin-top:15px; display:none;">
+                        <div style="font-size:0.8em; color:var(--hint-color); margin-bottom:5px;">PRECISIONE ULTIMO INVIO:</div>
+                        <div style="width:100%; height:12px; background:var(--bg-color); border-radius:6px; overflow:hidden; border:1px solid var(--hint-color);">
+                            <div id="txAccuracyBar" style="width:0%; height:100%; background: #4caf50; transition: width 0.3s ease;"></div>
+                        </div>
+                        <div id="txAccuracyValue" style="font-size:1.1em; font-weight:bold; margin-top:5px; color:#4caf50;">0%</div>
+                    </div>
+                </div>
+
                 <div class="box-panel">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                        <h4 style="margin:0; font-size:0.85em;">Padronanza Caratteri (Metodo Koch)</h4>
-                        <button id="btnToggleCourseHeatmap" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi</button>
-                    </div>
-                    <div id="courseTabHeatmapContent">
-                        <div id="courseTabHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:5px;"></div>
-                        <p id="courseTabLessonInfo" style="font-size:0.75em; text-align:center; color:var(--hint-color); margin-top:5px;"></p>
-                    </div>
+                    <h4 style="margin:0 0 10px 0; font-size:0.9em; color:var(--hint-color);">ℹ️ Come Funziona</h4>
+                    <p style="font-size:0.75em; line-height:1.4; text-align:left;">
+                        Il sistema analizza la durata dei tuoi punti (dot) e delle tue linee (dash).<br>
+                        • <b>Punto:</b> 1 unità di tempo.<br>
+                        • <b>Linea:</b> 3 unità di tempo.<br>
+                        • <b>Spazio tra elementi:</b> 1 unità di tempo.<br>
+                        Il tempo di riferimento è basato sui tuoi <b><span id="txWpmRef">20</span> WPM</b>.
+                    </p>
                 </div>
+            </div>
 
-                <!-- ANALISI APPROFONDITA (Spostata Sotto) -->
-                <div id="courseAdvancedStatsPanel" class="box-panel" style="display:none; border-color: var(--link-color); border-style: dashed; background: rgba(0,0,0,0.2);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <h4 style="margin:0; font-size:0.85em; color:var(--link-color);">📊 Analisi Dettagliata</h4>
-                        <button id="btnCloseAdvancedStats" class="action-btn-small btn-danger" style="width:auto; padding:2px 8px;">Chiudi ✕</button>
-                    </div>
-                    <div id="courseAdvancedStats" style="display: flex; flex-direction: column; gap: 12px;">
-                        <!-- Popolato da JS -->
-                    </div>
-                </div>
+            <div style="margin-top: 10px; padding-bottom: 2px; text-align: center; font-size: 0.7em; color: var(--hint-color); opacity: 0.6;">
+                Corso CW - Metodo Koch Professionale
+            </div>
 
-                <!-- Piano Settimanale -->
-                <div class="box-panel">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                        <h4 style="margin:0; font-size:0.85em;">Il tuo Piano per questa Settimana</h4>
-                        <button id="btnToggleCoursePlan" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi</button>
-                    </div>
-                    <div id="courseTabWeeklyPlanContent">
-                        <div id="courseTabWeeklyPlan" style="display:flex; flex-direction:column; gap:4px;"></div>
-                    </div>
-                </div>
-
-                <div style="display:flex; gap:10px;">
-                    <button id="btnTabStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
-                    <button id="btnTabResetCourse" class="btn-danger" style="flex:1.2; font-size:0.75em;">ESCI DAL CORSO</button>
-                </div>
-            </div> <!-- courseTabDashboardView end -->
-        </div> <!-- courseTrainingControls end -->
-    </div> <!-- courseTabActiveView end -->
+        </div> <!-- courseTabActiveView end -->
 
         <div id="courseTabInitialPrompt" class="box-panel" style="display:none; text-align:center; padding: 30px 10px;">
              <span style="font-size: 4em;">📻</span>
@@ -1336,6 +1393,7 @@
             "js/arcade_manager.js",
             "js/course_manager.js",
             "js/course_ui.js",
+            "js/transmission_manager.js",
             "js/game_core.js"
         ];
 
