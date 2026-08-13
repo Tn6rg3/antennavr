@@ -271,7 +271,8 @@ window.renderOrUpdateUserListItem = function(userId, u) {
     li.innerHTML = '';
     li.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:4px 8px; margin-bottom:3px;";
 
-    const isWaiting = (isChallenging && currentInviterId === userId);
+    const isIChallengingHim = (isChallenging && currentInviterId === userId);
+    const isHeChallengingMe = (window.lastIncomingInvite && window.lastIncomingInvite.fromId === userId);
     const isPlaying = (u.status === 'playing');
     const canSpectate = (isPlaying && u.allowSpectators && u.activeRoomCode);
 
@@ -285,13 +286,31 @@ window.renderOrUpdateUserListItem = function(userId, u) {
 
     leftSpan.appendChild(nameB);
 
-    // LIVELLO
+    // LIVELLO E STATO
+    const statusRow = document.createElement('div');
+    statusRow.style.cssText = "display: flex; gap: 5px; align-items: center;";
+
     if (u.level) {
         const lvDiv = document.createElement('div');
-        lvDiv.style.cssText = "font-size: 0.72em; color: var(--champ-color); font-weight: bold; margin-top: -1px; opacity: 0.9;";
-        lvDiv.textContent = `Livello ${u.level}`;
-        leftSpan.appendChild(lvDiv);
+        lvDiv.style.cssText = "font-size: 0.72em; color: var(--champ-color); font-weight: bold; opacity: 0.9;";
+        lvDiv.textContent = `Lv. ${u.level}`;
+        statusRow.appendChild(lvDiv);
     }
+
+    // Badge Stato Speciale
+    if (isIChallengingHim) {
+        const badge = document.createElement('small');
+        badge.style.cssText = "font-size: 0.65em; background: #ff9800; color: #fff; padding: 1px 4px; border-radius: 4px; font-weight: bold;";
+        badge.textContent = "SFIDATO";
+        statusRow.appendChild(badge);
+    } else if (isHeChallengingMe) {
+        const badge = document.createElement('small');
+        badge.style.cssText = "font-size: 0.65em; background: #4caf50; color: #fff; padding: 1px 4px; border-radius: 4px; font-weight: bold; animation: pulse 1s infinite;";
+        badge.textContent = "TI SFIDA";
+        statusRow.appendChild(badge);
+    }
+
+    leftSpan.appendChild(statusRow);
 
     const btn = document.createElement('button');
     btn.style.cssText = "width:auto; padding:4px 10px; font-size:0.8em; margin:0; flex-shrink:0;";
@@ -307,10 +326,22 @@ window.renderOrUpdateUserListItem = function(userId, u) {
         btn.className = "action-btn-small btn-secondary";
         btn.disabled = true;
         btn.textContent = "In partita";
+    } else if (isIChallengingHim) {
+        btn.className = "action-btn-small btn-danger";
+        btn.textContent = "Attesa...";
+        btn.disabled = true;
+    } else if (isHeChallengingMe) {
+        btn.className = "action-btn-small btn-success";
+        btn.style.animation = "pulse 1.5s infinite";
+        btn.textContent = "Accetta!";
+        btn.onclick = () => {
+            // Se clicca Accetta dalla lista, mostriamo il modale inviti che ha già il tasto Accetta programmato
+            if (els.inviteModal) window.listenToInvites();
+        };
     } else {
-        btn.className = `action-btn-small ${isWaiting ? 'btn-danger' : 'btn-success'}`;
-        if (isChallenging && !isWaiting) btn.disabled = true;
-        btn.textContent = isWaiting ? 'In Attesa...' : 'Sfida';
+        btn.className = "action-btn-small btn-success";
+        if (isChallenging) btn.disabled = true; // Non puoi sfidare due persone contemporaneamente
+        btn.textContent = 'Sfida';
         btn.onclick = () => window.openInviteModal(userId, u.name);
     }
 
@@ -390,6 +421,7 @@ window.openInviteModal = function(targetId, targetName) {
             }).then(() => {
                 showToast("Sfida inviata a " + targetName + " 🚀");
                 isChallenging = true;
+                window.listenToOutgoingInvite(targetId);
                 window.closeInviteModal();
             }).catch(err => {
                 showToast("Errore invio: " + err.message);
@@ -496,7 +528,54 @@ window.sendRecruitmentInvite = function(type) {
 
 window.closeInviteModal = function() {
     if (els.inviteModal) els.inviteModal.style.display = 'none';
+
+    // Se stavamo sfidando qualcuno e chiudiamo manualmente o viene rimosso,
+    // assicuriamoci di pulire i listener dell'invito in uscita
+    if (currentInviterId && listeners.outgoingInvite) {
+        db.ref(`invites/${currentInviterId}`).off();
+        listeners.outgoingInvite = null;
+    }
     currentInviterId = null;
+};
+
+window.listenToInviteAccepted = function() {
+    if (!myId) return;
+    db.ref(`invite_accepted/${myId}`).on('value', snap => {
+        const data = snap.val();
+        if (data && data.roomCode) {
+            console.log("Challenge: Accepted! Joining room:", data.roomCode);
+            db.ref(`invite_accepted/${myId}`).remove();
+            roomCode = data.roomCode;
+            isChallenging = false;
+            currentInviterId = null;
+            if (typeof window.joinRoomLogic === 'function') {
+                window.joinRoomLogic(false);
+            }
+        }
+    });
+};
+
+window.listenToOutgoingInvite = function(targetId) {
+    if (listeners.outgoingInvite) {
+        db.ref(`invites/${listeners.outgoingInvite.target}`).off();
+    }
+
+    const inviteRef = db.ref(`invites/${targetId}`);
+    const callback = inviteRef.on('value', snap => {
+        if (!snap.exists() && isChallenging && currentInviterId === targetId) {
+            // L'invito è sparito. Se non siamo ancora entrati in partita, è stato rifiutato
+            setTimeout(() => {
+                if (isChallenging && currentInviterId === targetId) {
+                    showToast("Sfida rifiutata o scaduta.");
+                    isChallenging = false;
+                    currentInviterId = null;
+                    inviteRef.off('value', callback);
+                    listeners.outgoingInvite = null;
+                }
+            }, 1500);
+        }
+    });
+    listeners.outgoingInvite = { target: targetId, ref: inviteRef, callback: callback };
 };
 
 window.listenToInvites = function() {
