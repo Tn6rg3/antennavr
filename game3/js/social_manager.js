@@ -589,17 +589,15 @@ window.listenToOutgoingInvite = function(targetId) {
 
     const inviteRef = db.ref(`invites/${targetId}`);
     const callback = inviteRef.on('value', snap => {
+        // Se l'invito sparisce dal DB e noi siamo ancora in stato "Sfidando"
         if (!snap.exists() && isChallenging && currentInviterId === targetId) {
-            // L'invito è sparito. Se non siamo ancora entrati in partita, è stato rifiutato
+            // Piccolo ritardo per evitare race condition con l'accettazione
             setTimeout(() => {
                 if (isChallenging && currentInviterId === targetId) {
-                    showToast("Sfida rifiutata o scaduta.");
-                    isChallenging = false;
-                    currentInviterId = null;
-                    inviteRef.off('value', callback);
-                    listeners.outgoingInvite = null;
+                    showToast(currentLang === 'it' ? "Sfida rifiutata o scaduta." : "Challenge declined or expired.");
+                    window.resetLocalChallengeState();
                 }
-            }, 1500);
+            }, 1000);
         }
     });
     listeners.outgoingInvite = { target: targetId, ref: inviteRef, callback: callback };
