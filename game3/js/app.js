@@ -291,10 +291,13 @@ async function validateIdentity() {
     }
 
     try {
-        // Inviamo i dati come JSON grezzo per la massima precisione della stringa initData
-        const response = await fetch(VALIDATION_SERVER_URL, {
-            method: 'POST',
-            body: JSON.stringify({ initData: tg.initData })
+        // Usiamo GET con initData in query string per la massima compatibilità CORS con Google Apps Script
+        const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(tg.initData);
+
+        const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            redirect: 'follow'
         });
 
         if (!response.ok) {
