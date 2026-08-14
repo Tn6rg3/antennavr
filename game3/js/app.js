@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260814.223";
+const APP_VERSION = "20260807.222";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -450,7 +450,7 @@ function initGame() {
         });
 
         const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);
-        if (savedCustom) { try { window.customDictionary = JSON.parse(savedCustom); window.updateCustomDictStatus?.(); } catch(e){} }
+        if (savedCustom) { try { window.customDictionary = JSON.parse(savedCustom); window.updateCustomDictStatus?.(); } catch(e) { console.error("Local Storage Error:", e); } }
 
         window.listenToRooms?.();
         window.listenToOnlineUsers?.();
@@ -577,7 +577,7 @@ window.updateAdminBadge = async function() {
         } else {
             badge.style.display = 'none';
         }
-    } catch(e) {}
+    } catch(e) { console.error("Firebase Security Logic Error:", e); }
 };
 
 window.loadAdminBugs = function() {

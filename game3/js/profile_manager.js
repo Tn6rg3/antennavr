@@ -56,7 +56,7 @@ window.checkActivityAndAwardMedals = async function() {
         check(wData.games, 20, 'w_active', "Stakanovista Settimanale", "20 partite questa settimana!", "🎖️", wKey);
         check(wData.games, 50, 'w_pro', "Campione Settimanale", "50 partite! Una leggenda questa settimana!", "🏆", wKey);
         check(mData.games, 150, 'm_legend', "Titano del Mese", "150 partite! Il gioco non ha segreti per te.", "💎", mKey);
-    } catch(e) {}
+    } catch(e) { console.error("Medals Logic Error:", e); }
     window.updateMedalGallery();
 };
 
@@ -376,7 +376,7 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
         try {
             const actSnap = await actRef.once('value');
             if (actSnap.exists()) await actRef.update({ name: newName });
-        } catch(e) {}
+        } catch(e) { console.error("Medals Logic Error:", e); }
     }
 
     // 3. Squadra
@@ -387,7 +387,7 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
         const courseRef = db.ref(`courseActiveEnrollments/${userId}`);
         const snap = await courseRef.once('value');
         if (snap.exists()) await courseRef.update({ name: newName });
-    } catch(e) {}
+    } catch(e) { console.error("Medals Logic Error:", e); }
 
     // 5. Leaderboard (Fix Privacy & Alias su tutti i record esistenti)
     await window.updateUserInAllLeaderboards(newName, newUsername);
@@ -407,7 +407,7 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername) {
         try {
             const snap = await db.ref(path).once('value');
             if (snap.exists()) await db.ref(path).update({ name: newName, username: newUsername });
-        } catch(e) {}
+        } catch(e) { console.error("Medals Logic Error:", e); }
     }
 
     // Percorsi con struttura dinamica CATEGORIA/SOTTO_MODO/UID (standard, chars, quiz, pingpong)
@@ -422,7 +422,7 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername) {
                     }
                 });
             }
-        } catch(e) {}
+        } catch(e) { console.error("Medals Logic Error:", e); }
     }
 
     // Sfida Giornaliera (Oggi)
@@ -431,7 +431,7 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername) {
         const dailyRef = db.ref(`leaderboard/daily_challenge/${today}/${myId}`);
         const dSnap = await dailyRef.once('value');
         if (dSnap.exists()) await dailyRef.update({ name: newName, username: newUsername });
-    } catch(e) {}
+    } catch(e) { console.error("Medals Logic Error:", e); }
 };
 
 // --- LOGICA SALVATAGGIO ERRORI AVANZATI ---

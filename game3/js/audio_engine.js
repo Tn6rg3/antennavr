@@ -53,7 +53,7 @@ window.stopTone = function() {
         try {
             osc.stop();
             osc.disconnect();
-        } catch(e) {}
+        } catch(e) { console.error("Audio Engine Disconnect Error:", e); }
     }, 20);
 
     window.manualOscillator = null;
@@ -67,7 +67,7 @@ window.stopAllMorseAudio = function() {
             try {
                 osc.stop();
                 osc.disconnect();
-            } catch(e) {}
+            } catch(e) { console.error("Audio Engine Disconnect Error:", e); }
         });
         window.activeOscillators = [];
     }
@@ -92,7 +92,7 @@ window.startBluetoothKeepAlive = function() {
         osc.start();
 
         window.btKeepAliveOsc = osc;
-    } catch(e) {}
+    } catch(e) { console.error("Audio Engine Disconnect Error:", e); }
 };
 
 window.playBeep = function(freq, duration) {
@@ -113,7 +113,7 @@ window.playBeep = function(freq, duration) {
         gain.gain.linearRampToValueAtTime(0, time + duration);
         osc.start(time);
         osc.stop(time + duration);
-    } catch(e) {}
+    } catch(e) { console.error("Audio Engine Disconnect Error:", e); }
 };
 
 window.playNotificationSound = function() {

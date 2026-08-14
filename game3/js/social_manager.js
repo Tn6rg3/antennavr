@@ -47,7 +47,7 @@ window.canUserChat = async function() {
     try {
         const overrideSnap = await db.ref(`users/${myId}/chatEnabledOverride`).once('value');
         if (overrideSnap.val() === true) return true;
-    } catch(e) {}
+    } catch(e) { console.error("Chat Auth Logic Error:", e); }
 
     // 2. Controlli Standard
     if (!tgUsername) {
@@ -506,7 +506,7 @@ window.openTeamInviteModal = async function(targetId, targetName) {
                 });
             };
         }
-    } catch(e) {}
+    } catch(e) { console.error("Chat Auth Logic Error:", e); }
 
     if (els.inviteModal) els.inviteModal.style.display = 'flex';
 };

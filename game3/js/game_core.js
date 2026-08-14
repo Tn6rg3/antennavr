@@ -1,5 +1,18 @@
 // js/game_core.js
 
+window.domCache = {};
+window.initDOMCache = function() {
+    const ids = [
+        'wpmDisplay', 'scoreDisplay', 'tableBody', 'tableWrapper',
+        'permanentGameInput', 'replayWordBtn', 'quitGameBtn',
+        'pingPongSendArea', 'gameInputArea', 'pingPongWordToSend',
+        'spectatorsCountDisplay', 'coopArea', 'coopTimeDisplay', 'coopProgressText', 'coopProgressBar'
+    ];
+    ids.forEach(id => {
+        window.domCache[id] = document.getElementById(id);
+    });
+};
+
 window.showScreen = function(screenId) {
     clearAllTimers();
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
@@ -12,6 +25,11 @@ window.showScreen = function(screenId) {
     if (els.matchDetailsModal) els.matchDetailsModal.style.display = 'none';
 
     const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen'].includes(screenId);
+
+    // Inizializziamo il cache DOM se entriamo in gioco
+    if (isPlayingScreen && typeof window.initDOMCache === 'function') {
+        window.initDOMCache();
+    }
 
     // Se stiamo navigando fuori da una stanza e siamo in una stanza attiva
     if (!isPlayingScreen && roomCode && !gameRunning) {
@@ -526,8 +544,8 @@ window.startCountdownSequence = function() {
             });
         });
     }
-    if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
-    if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: 0`;
+    if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
+    if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: 0`;
 
     if (isSinglePlayer && els.allowSpectatorsCheckbox && els.allowSpectatorsCheckbox.checked) {
         if (els.spectatorsCountDisplay) {
@@ -621,18 +639,18 @@ window.resumeGameSequence = function() {
     if (els.coopArea) els.coopArea.style.display = 'none';
     if (els.tableWrapper) els.tableWrapper.style.display = 'block';
 
-    if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
-    if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
+    if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
+    if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: ${totalScore}`;
 
-    if (els.tableBody) {
-        els.tableBody.innerHTML = "";
+    if (domCache.tableBody) {
+        domCache.tableBody.innerHTML = "";
         matchDetailsArray.forEach(row => {
             const tr = document.createElement('tr');
             let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
             const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed;
             const tdReal = document.createElement('td'); const bReal = document.createElement('b'); bReal.textContent = row.real; tdReal.appendChild(bReal);
             const tdPoints = document.createElement('td'); tdPoints.style.color = color; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = row.points;
-            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); els.tableBody.appendChild(tr);
+            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); domCache.tableBody.appendChild(tr);
         });
     }
 
@@ -673,7 +691,7 @@ window.playNextWord = function() {
         });
     }
 
-    if (els.permanentGameInput) els.permanentGameInput.focus();
+    if (domCache.permanentGameInput) domCache.permanentGameInput.focus();
 };
 
 window.finishGame = function() {
@@ -978,7 +996,7 @@ if (els.replayWordBtn) {
         if (!gameRunning || !inputActive) return;
         usedReplay = true;
         if (typeof playMorseAudio === 'function') playMorseAudio(gameWords[wordIndex].toUpperCase(), currentWpm);
-        if (els.permanentGameInput) els.permanentGameInput.focus();
+        if (domCache.permanentGameInput) domCache.permanentGameInput.focus();
     });
 }
 
@@ -1115,7 +1133,7 @@ window.handleWordSubmission = function(userWord) {
 
         if (isCorrect) {
             currentWpm += 2;
-            if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
+            if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
             showToast(`✅ CORRETTO! +${gain}% (Velocità -> ${currentWpm} WPM)`);
             if (typeof playBeep === 'function') playBeep(880, 0.1);
 
@@ -1139,7 +1157,7 @@ window.handleWordSubmission = function(userWord) {
             });
         } else {
             currentWpm = Math.max(10, currentWpm - 2);
-            if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
+            if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
             showToast(`❌ ERRORE! -${penalty}% (Velocità -> ${currentWpm} WPM)`);
             if (typeof playBeep === 'function') playBeep(300, 0.25);
 
@@ -1241,7 +1259,7 @@ window.handleWordSubmission = function(userWord) {
             currentStreak = 0;
         }
         currentWpm = Math.max(10, currentWpm);
-        if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
+        if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
     }
     totalScore += points;
     matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm, ms: reactionMs });
@@ -1288,204 +1306,7 @@ window.handleWordSubmission = function(userWord) {
     }
 };
 
-window.setupPingPongListener = function() {
-    if (listeners.pingPong) db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong);
-    listeners.pingPong = db.ref(`rooms/${roomCode}/pingpong`).on('value', snap => {
-        if (!gameRunning) return;
-        const ppData = snap.val();
-        if (!ppData) return;
 
-        if (ppData.lastGuess && ppData.lastGuess.id !== window.lastSeenGuessId) {
-            window.lastSeenGuessId = ppData.lastGuess.id;
-            const tr = document.createElement('tr');
-            const tdTyped = document.createElement('td'); tdTyped.textContent = ppData.lastGuess.typed || '';
-            const tdReal = document.createElement('td'); window.renderDiffSecure(tdReal, ppData.lastGuess.real, ppData.lastGuess.typed || '');
-
-            const tdPoints = document.createElement('td');
-            tdPoints.style.textAlign = 'center';
-            tdPoints.style.fontWeight = 'bold';
-            tdPoints.style.color = ppData.lastGuess.points > 0 ? "#4caf50" : (ppData.lastGuess.typed !== ppData.lastGuess.real ? "#d32f2f" : "#999999");
-            tdPoints.textContent = ppData.lastGuess.points;
-
-            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
-            if (els.tableBody) els.tableBody.appendChild(tr);
-            if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
-        }
-        if (ppData.wordsPlayed >= requestedWordCount) {
-            if (ppTimerInterval) clearInterval(ppTimerInterval);
-            return window.finishGame();
-        }
-        if (ppData.senderId === myId) {
-            if (!ppData.word) {
-                if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'flex';
-                if (els.gameInputArea) els.gameInputArea.style.display = 'none';
-                if (els.pingPongWordToSend) {
-                    els.pingPongWordToSend.value = '';
-                    setTimeout(() => els.pingPongWordToSend.focus(), 100);
-                }
-                window.startPingPongTimer();
-            } else {
-                if (ppTimerInterval) clearInterval(ppTimerInterval);
-                if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
-                if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
-                if (els.permanentGameInput) {
-                    els.permanentGameInput.disabled = true;
-                    els.permanentGameInput.placeholder = "Avversario in decodifica...";
-                    els.permanentGameInput.value = "";
-                }
-            }
-        } else {
-            if (ppTimerInterval) clearInterval(ppTimerInterval);
-            if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
-            if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
-            if (ppData.word && ppData.wordId > window.lastPlayedWordId) {
-                window.lastPlayedWordId = ppData.wordId;
-                gameWords[wordIndex] = ppData.word;
-                if (els.permanentGameInput) {
-                    els.permanentGameInput.disabled = false;
-                    els.permanentGameInput.placeholder = "Decodifica e scrivi...";
-                    els.permanentGameInput.value = "";
-                    setTimeout(() => els.permanentGameInput.focus(), 100);
-                }
-                inputActive = true;
-                setTimeout(() => { if (typeof playMorseAudio === 'function') playMorseAudio(ppData.word.toUpperCase(), currentWpm); }, 500);
-            } else if (!ppData.word && els.permanentGameInput) {
-                els.permanentGameInput.disabled = true;
-                els.permanentGameInput.placeholder = "In attesa dell'avversario...";
-                els.permanentGameInput.value = "";
-                inputActive = false;
-            }
-        }
-    });
-};
-
-window.startPingPongTimer = function() {
-    if (ppTimerInterval) clearInterval(ppTimerInterval);
-    let timeLeft = 100;
-    if (els.pingPongTimerProgress) els.pingPongTimerProgress.style.width = '100%';
-    ppTimerInterval = setInterval(() => {
-        timeLeft -= (100 / 300);
-        if (els.pingPongTimerProgress) els.pingPongTimerProgress.style.width = Math.max(0, timeLeft) + '%';
-        if (timeLeft <= 0) {
-            clearInterval(ppTimerInterval);
-            window.sendAutoPingPongWord();
-        }
-    }, 100);
-};
-
-window.sendAutoPingPongWord = function() {
-    if (!gameRunning || currentMode !== 'pingpong') return;
-    const randomWord = window.masterDictionary[Math.floor(Math.random() * window.masterDictionary.length)].toUpperCase();
-    db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
-        if (d && !d.word) {
-            d.word = randomWord;
-            d.wordId = (d.wordId || 0) + 1;
-        }
-        return d;
-    });
-    showToast(currentLang === 'it' ? "Tempo scaduto! Parola inviata automaticamente." : "Time's up! Word sent automatically.");
-};
-
-window.watchSpecificRoom = function(code, targetName) {
-    roomCode = code;
-    window.showScreen('gameArea');
-
-    if (els.permanentGameInput) {
-        els.permanentGameInput.disabled = true;
-        els.permanentGameInput.placeholder = `👁️ Stai osservando la partita di ${targetName}...`;
-        els.permanentGameInput.value = "";
-    }
-
-    if (els.wpmDisplay) els.wpmDisplay.textContent = "👁️ SPETTATORE | WPM: --";
-    if (els.spectatorsCountDisplay) els.spectatorsCountDisplay.style.display = 'none';
-
-    const mySpectatorRef = db.ref(`rooms/${roomCode}/spectators/${myId}`);
-    mySpectatorRef.set({ name: myName, ts: firebase.database.ServerValue.TIMESTAMP });
-    mySpectatorRef.onDisconnect().remove();
-
-    const roomRef = db.ref(`rooms/${roomCode}`);
-    const onRoomChange = roomRef.on('value', snap => {
-        if (!snap.exists()) {
-            showToast("⚠️ Il giocatore ha terminato o abbandonato la partita.");
-            window.stopWatchingCleanly();
-            return;
-        }
-
-        const roomData = snap.val();
-        const players = roomData.players || {};
-        const hostData = Object.values(players)[0];
-
-        if (!hostData || hostData.finished) {
-            showToast("🏁 La partita che stavi osservando è terminata!");
-            window.stopWatchingCleanly();
-            return;
-        }
-
-        const currentSpeed = hostData.wpm || roomData.wpm || 20;
-        if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${currentSpeed}`;
-        if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${hostData.score || 0}`;
-
-        if (els.tableBody && hostData.matchDetails) {
-            els.tableBody.innerHTML = "";
-            hostData.matchDetails.forEach(row => {
-                const tr = document.createElement('tr');
-                const tdTyped = document.createElement('td');
-                tdTyped.textContent = row.typed || "-";
-
-                const tdReal = document.createElement('td');
-                const bReal = document.createElement('b');
-                if (typeof window.renderDiffSecure === 'function') window.renderDiffSecure(bReal, row.real, row.typed || "");
-                else bReal.textContent = row.real;
-                tdReal.appendChild(bReal);
-
-                const tdPoints = document.createElement('td');
-                tdPoints.style.color = row.points > 0 ? "#4caf50" : "#d32f2f";
-                tdPoints.style.fontWeight = "bold";
-                tdPoints.textContent = row.points;
-
-                tr.appendChild(tdTyped);
-                tr.appendChild(tdReal);
-                tr.appendChild(tdPoints);
-                els.tableBody.appendChild(tr);
-            });
-
-            setTimeout(() => {
-                if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
-            }, 50);
-        }
-    });
-
-    const onAudioChange = db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
-        const audioData = snap.val();
-        if (audioData && audioData.word) {
-            // Evitiamo di riprodurre la stessa parola più volte (controllo ts o wordId)
-            const msgTs = audioData.ts || 0;
-            if (msgTs > (window.lastSpectatorAudioTs || 0)) {
-                window.lastSpectatorAudioTs = msgTs;
-                const liveWpm = audioData.wordWpm || audioData.wpm || 20;
-                if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm}`;
-                if (typeof playMorseAudio === 'function') playMorseAudio(audioData.word, liveWpm, true);
-            }
-        }
-    });
-
-    window.currentSpectatorCleanup = function() {
-        roomRef.off('value', onRoomChange);
-        db.ref(`rooms/${roomCode}/liveAudio`).off('value', onAudioChange);
-        mySpectatorRef.remove();
-    };
-};
-
-window.stopWatchingCleanly = function() {
-    if (typeof window.currentSpectatorCleanup === 'function') {
-        window.currentSpectatorCleanup();
-        window.currentSpectatorCleanup = null;
-    }
-    setTimeout(() => {
-        roomCode = "";
-        window.goBackToMenu();
-    }, 2500);
-};
 
 if (els.quitGameBtn) {
     els.quitGameBtn.onclick = function() {
@@ -1665,6 +1486,7 @@ function mulberry32(a) {
 // --- AVVIO APP (SICUREZZA DOM E MODULI) ---
 function bootApp() {
     console.log("CW Game: Booting app...");
+    if (typeof window.initDOMCache === 'function') window.initDOMCache();
     if (typeof window.startApp === 'function') {
         window.startApp();
     } else {

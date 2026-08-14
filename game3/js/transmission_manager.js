@@ -15,7 +15,8 @@ window.transmissionState = {
 window.initTransmissionManager = function() {
     window.logDebug("TX: Initializing...");
 
-    const keyBtn = document.getElementById('morseKeyBtn');
+    const dom = window.domCache || els;
+    const keyBtn = document.getElementById('morseKeyBtn'); // Non nel cache globale perché clonato spesso
     if (!keyBtn) {
         console.error("TX: morseKeyBtn NOT FOUND");
         return;
