@@ -566,10 +566,9 @@ window.resetLocalChallengeState = function() {
         listeners.outgoingInvite = null;
     }
 
-    // Rinfresca la UI per rimuovere i badge e ripristinare i tasti
-    setTimeout(() => {
-        window.refreshOnlineUsersList();
-    }, 100);
+    // Rinfresca la UI immediatamente e con un piccolo ritardo per sicurezza
+    window.refreshOnlineUsersList();
+    setTimeout(window.refreshOnlineUsersList, 500);
 };
 
 window.listenToInviteAccepted = function() {
@@ -590,7 +589,7 @@ window.listenToInviteAccepted = function() {
 
 window.listenToOutgoingInvite = function(targetId) {
     const sTargetId = String(targetId);
-    console.log("TX: Monitoring outgoing invite to:", sTargetId);
+    console.log("Challenge: Monitoring outgoing invite to:", sTargetId);
 
     if (listeners.outgoingInvite) {
         if (listeners.outgoingInvite.ref) listeners.outgoingInvite.ref.off('value', listeners.outgoingInvite.callback);
@@ -599,7 +598,6 @@ window.listenToOutgoingInvite = function(targetId) {
     const inviteRef = db.ref(`invites/${sTargetId}`);
     const callback = inviteRef.on('value', snap => {
         const exists = snap.exists();
-        console.log(`TX: Invite update for ${sTargetId}, exists: ${exists}, isChallenging: ${window.isChallenging}`);
 
         // Se l'invito sparisce dal DB e noi lo stiamo ancora aspettando (non siamo entrati in partita)
         if (!exists && window.isChallenging && String(window.currentInviterId) === sTargetId) {
@@ -609,10 +607,16 @@ window.listenToOutgoingInvite = function(targetId) {
                 const amIInRoom = (typeof roomCode !== 'undefined' && roomCode && roomCode !== "");
 
                 if (window.isChallenging && String(window.currentInviterId) === sTargetId && !amIInRoom) {
-                    console.log("TX: Challenge definitely refused by target.");
+                    console.log("Challenge: Definitely refused by target.");
                     const msg = currentLang === 'it' ? "La sfida è stata rifiutata o è scaduta." : "Challenge declined or expired.";
-                    if (typeof tg.showAlert === 'function') tg.showAlert(msg);
-                    else alert(msg);
+
+                    // Notifica Multi-canale (per sicurezza)
+                    if (window.tg && typeof window.tg.showAlert === 'function') {
+                        window.tg.showAlert(msg);
+                    } else if (typeof alert === 'function') {
+                        alert(msg);
+                    }
+                    showToast(msg);
 
                     window.resetLocalChallengeState();
                 }

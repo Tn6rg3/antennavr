@@ -9,9 +9,12 @@ const APP_VERSION = "20260807.222";
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
 
-const tg = window.Telegram.WebApp;
-const tgUser = tg.initDataUnsafe?.user;
-const tgUsername = tgUser?.username || "";
+window.tg = window.Telegram.WebApp;
+const tg = window.tg;
+window.tgUser = tg.initDataUnsafe?.user;
+const tgUser = window.tgUser;
+window.tgUsername = tgUser?.username || "";
+const tgUsername = window.tgUsername;
 const startParam = tg.initDataUnsafe?.start_param;
 
 // --- GESTIONE SCHERMO RESIZE E TASTIERA MOBILE ---
