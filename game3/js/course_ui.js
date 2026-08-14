@@ -94,26 +94,57 @@ window.renderTutorPanel = function() {
             const accuracy = p.last_z2_accuracy ? Math.round(p.last_z2_accuracy * 100) : 0;
             const reminders = p.reminders_count || 0;
 
-            // Verifica se è LIVE
-            const isLive = !!enroll.roomCode;
-            const liveBadge = isLive ? '<span style="background:#f44336; color:white; padding:1px 4px; border-radius:4px; font-size:0.7em; animation:pulse 1s infinite;">LIVE 🔴</span>' : '';
-            const watchBtn = isLive ? `<button onclick="window.watchStudentSession('${enroll.roomCode}', '${enroll.name || 'Anonimo'}')" style="width:auto; margin:0; padding:2px 8px; font-size:0.8em; background:#673ab7;">OSSERVA</button>` : '';
+            // --- COSTRUZIONE SICURA DOM (XSS Fix) ---
+            const div = document.createElement('div');
+            div.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px;";
 
-            div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <b style="color:#b39ddb;">👤 ${enroll.name || 'Anonimo'} ${liveBadge}</b>
-                    <div style="display:flex; gap:5px; align-items:center;">
-                        <span style="color:${reminders > 0 ? '#f44336' : '#4caf50'}">⚠️ ${reminders}</span>
-                        ${watchBtn}
-                    </div>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; font-size:0.9em; color:var(--hint-color);">
-                    <span>Lez: ${lesson}</span>
-                    <span>Acc: ${accuracy}%</span>
-                    <span>XP: ${p.total_xp || 0}</span>
-                    <span>Data: ${lastDate}</span>
-                </div>
-            `;
+            const headerRow = document.createElement('div');
+            headerRow.style.cssText = "display:flex; justify-content:space-between; align-items:center;";
+
+            const nameB = document.createElement('b');
+            nameB.style.color = "#b39ddb";
+            nameB.textContent = `👤 ${enroll.name || 'Anonimo'} `;
+
+            if (enroll.roomCode) {
+                const liveBadge = document.createElement('span');
+                liveBadge.style.cssText = "background:#f44336; color:white; padding:1px 4px; border-radius:4px; font-size:0.7em; animation:pulse 1s infinite;";
+                liveBadge.textContent = "LIVE 🔴";
+                nameB.appendChild(liveBadge);
+            }
+            headerRow.appendChild(nameB);
+
+            const actionDiv = document.createElement('div');
+            actionDiv.style.cssText = "display:flex; gap:5px; align-items:center;";
+
+            const remSpan = document.createElement('span');
+            remSpan.style.color = reminders > 0 ? '#f44336' : '#4caf50';
+            remSpan.textContent = `⚠️ ${reminders}`;
+            actionDiv.appendChild(remSpan);
+
+            if (enroll.roomCode) {
+                const watchBtn = document.createElement('button');
+                watchBtn.style.cssText = "width:auto; margin:0; padding:2px 8px; font-size:0.8em; background:#673ab7;";
+                watchBtn.textContent = "OSSERVA";
+                watchBtn.onclick = () => window.watchStudentSession(enroll.roomCode, enroll.name || 'Anonimo');
+                actionDiv.appendChild(watchBtn);
+            }
+            headerRow.appendChild(actionDiv);
+
+            const gridDiv = document.createElement('div');
+            gridDiv.style.cssText = "display:grid; grid-template-columns: 1fr 1fr; gap:5px; font-size:0.9em; color:var(--hint-color);";
+
+            const infoItems = [
+                `Lez: ${lesson}`, `Acc: ${accuracy}%`,
+                `XP: ${p.total_xp || 0}`, `Data: ${lastDate}`
+            ];
+            infoItems.forEach(txt => {
+                const s = document.createElement('span');
+                s.textContent = txt;
+                gridDiv.appendChild(s);
+            });
+
+            div.appendChild(headerRow);
+            div.appendChild(gridDiv);
             list.appendChild(div);
         }
     }, (error) => {
