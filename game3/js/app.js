@@ -291,15 +291,13 @@ async function validateIdentity() {
     }
 
     try {
-        // Usiamo POST con application/x-www-form-urlencoded per evitare pre-flight CORS
-        const params = new URLSearchParams();
-        params.append('initData', tg.initData);
+        // Usiamo GET con initData in query string per la massima compatibilità CORS con Google Apps Script
+        const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(tg.initData);
 
-        const response = await fetch(VALIDATION_SERVER_URL, {
-            method: 'POST',
+        const response = await fetch(url, {
+            method: 'GET',
             mode: 'cors',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params.toString()
+            redirect: 'follow'
         });
 
         if (!response.ok) {

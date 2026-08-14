@@ -92,8 +92,8 @@ window.renderTutorPanel = function() {
             const reminders = p.reminders_count || 0;
 
             // --- COSTRUZIONE SICURA DOM (XSS Fix) ---
-            const div = document.createElement('div');
-            div.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px;";
+            const tutorRow = document.createElement('div');
+            tutorRow.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px;";
 
             const headerRow = document.createElement('div');
             headerRow.style.cssText = "display:flex; justify-content:space-between; align-items:center;";
@@ -140,9 +140,9 @@ window.renderTutorPanel = function() {
                 gridDiv.appendChild(s);
             });
 
-            div.appendChild(headerRow);
-            div.appendChild(gridDiv);
-            list.appendChild(div);
+            tutorRow.appendChild(headerRow);
+            tutorRow.appendChild(gridDiv);
+            list.appendChild(tutorRow);
         }
     }, (error) => {
         list.innerHTML = '<p style="color:#f44336; font-size:0.75em;">Errore nel caricamento dati.</p>';
