@@ -432,11 +432,11 @@ function initGame() {
         
         window.loadDictionaries().then(() => {
             let today = new Date().toISOString().split('T')[0];
-            const lastShown = localStorage.getItem(STORAGE_DAILY_SHOWN);
 
-            if (lastShown === today || startParam) return;
+            if (startParam) return;
 
             // Verifichiamo se l'utente ha già giocato OGGI consultando la history su Firebase
+            // Ignoriamo il localStorage così se l'utente ha rifiutato per errore può ritentare riaprendo l'app
             db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value', histSnap => {
                 let alreadyPlayedToday = false;
                 histSnap.forEach(matchSnap => {
