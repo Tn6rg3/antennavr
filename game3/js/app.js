@@ -7,7 +7,7 @@ const WEBAPP_NAME = "cwgame";
 const APP_VERSION = "20260807.222";
 
 // URL della Web App di Google Apps Script per la validazione identità
-const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbxDHrVtL9z4xr3slBJhyBw5CHxmvt49Sba0oGNIS2FZYx81OlCUyBnyX9KP4jY518bStw/exec";
+const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbxaR50yUTZg5gU7V09NHPVUc2ZI4-xVCnXHGbhklIzKamh0gMFpHNapNKusYFN9849CFQ/exec";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
