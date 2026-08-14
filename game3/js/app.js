@@ -407,11 +407,25 @@ function initGame() {
             return; // Interrompiamo l'avvio
         }
 
-        if (data.alias) myName = data.alias;
-        myPrivacy = data.privacyUsername || false;
+        if (data.alias) {
+            myName = data.alias;
+        } else {
+            // Default: usa il nome di Telegram se non c'è alias
+            myName = tgUser.first_name;
+            await userRef.update({ alias: myName });
+        }
+
+        // Privacy: On di default per tutti i nuovi utenti o se mai impostata
+        if (data.privacyUsername === undefined) {
+            myPrivacy = true;
+            await userRef.update({ privacyUsername: true });
+        } else {
+            myPrivacy = data.privacyUsername;
+        }
 
         if (!snap.exists() || !data.welcomed) {
-            await userRef.update({ name: myName, welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP });
+            // Aggiorniamo welcomed e i dati base
+            await userRef.update({ welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP });
             if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'flex';
         }
 

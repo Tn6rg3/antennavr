@@ -529,10 +529,11 @@ window.openTeamInviteModal = async function(targetId, targetName) {
             els.recruitMsgBtn.onclick = () => {
                 db.ref(`presence/${targetId}`).once('value', s => {
                     const u = s.val();
+                    // Permettiamo il link solo se lo username esiste (non nascosto dalla privacy)
                     if (u && u.username && String(u.username).trim() !== "") {
                         tg.openTelegramLink('https://t.me/' + u.username);
                     } else {
-                        tg.showAlert("Nessun username pubblico.");
+                        tg.showAlert(currentLang === 'it' ? "Questo utente ha scelto di mantenere il profilo privato." : "This user has chosen to keep their profile private.");
                     }
                 });
             };

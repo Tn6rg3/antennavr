@@ -307,6 +307,10 @@ window.loadAdvancedStats = function() {
 window.showProfileScreen = function() {
     window.showScreen('profileScreen');
     window.switchProfileTab('info');
+
+    // Popoliamo gli input con i valori attuali dell'utente
+    if (els.userAliasInput) els.userAliasInput.value = myName || "";
+    if (els.privacyUsernameCheckbox) els.privacyUsernameCheckbox.checked = myPrivacy || false;
 };
 
 window.openMatchDetails = function(matchKey) {
