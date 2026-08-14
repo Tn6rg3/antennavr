@@ -667,6 +667,7 @@ window.initCourseChat = function() {
             if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
             const txt = els.courseChatInput.value.trim();
             if (!txt) return;
+            if (txt.length > 200) return alert(currentLang === 'it' ? "⚠️ Messaggio troppo lungo (max 200 car.)" : "⚠️ Message too long (max 200 chars)");
 
             window.lastChatSentTs = now;
             chatRef.push({

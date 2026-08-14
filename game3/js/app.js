@@ -827,7 +827,9 @@ if (els.sendChatBtn) {
         if (now - window.lastChatSentTs < 2000) return showToast("🐌 Vai più piano! Attendi 2 secondi.");
 
         if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
-        const txt = els.chatInput?.value.trim(); if (!txt) return;
+        const txt = els.chatInput?.value.trim();
+        if (!txt) return;
+        if (txt.length > 200) return showToast(currentLang === 'it' ? "⚠️ Messaggio troppo lungo (max 200 car.)" : "⚠️ Message too long (max 200 chars)");
 
         window.lastChatSentTs = now;
         let ref = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
@@ -841,7 +843,9 @@ if (els.sendLobbyChatBtn) {
         if (now - window.lastChatSentTs < 2000) return showToast("🐌 Vai più piano! Attendi 2 secondi.");
 
         if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
-        const txt = els.lobbyChatInput?.value.trim(); if (!txt || !roomCode) return;
+        const txt = els.lobbyChatInput?.value.trim();
+        if (!txt || !roomCode) return;
+        if (txt.length > 200) return showToast(currentLang === 'it' ? "⚠️ Messaggio troppo lungo (max 200 car.)" : "⚠️ Message too long (max 200 chars)");
 
         window.lastChatSentTs = now;
         db.ref(`rooms/${roomCode}/chat`).push().set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
