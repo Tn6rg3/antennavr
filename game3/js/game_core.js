@@ -130,6 +130,14 @@ window.goBackToMenu = function() {
 
 window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit = false) {
     clearAllTimers();
+    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+
+    // Reset variabili di gioco per evitare leakage tra sessioni
+    gameRunning = false;
+    inputActive = false;
+    gameWords = [];
+    wordIndex = 0;
+    isCourseMode = false;
 
     if (typeof window.currentSpectatorCleanup === 'function') {
         window.currentSpectatorCleanup();

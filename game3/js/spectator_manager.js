@@ -1,6 +1,15 @@
 // js/spectator_manager.js
 
 window.watchSpecificRoom = function(code, targetName) {
+    // RESET STATO LOCALE PER EVITARE INTERFERENZE (Fix parole invece di gruppi)
+    gameRunning = false;
+    inputActive = false;
+    currentMode = 'spectator';
+    isCourseMode = false;
+    wordIndex = 0;
+    gameWords = [];
+    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+
     roomCode = code;
     window.showScreen('gameArea');
 
