@@ -176,6 +176,11 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
         }
 
         if (roomWasDeletedByHost) {
+            if (!amIHost) {
+                const msg = currentLang === 'it' ? "⚠️ La stanza è stata chiusa dall'Host." : "⚠️ The room was closed by the Host.";
+                if (window.tg && window.tg.showAlert) window.tg.showAlert(msg);
+                else showToast(msg);
+            }
             if (amIHost && !roomCode.startsWith("TRN_")) {
                 db.ref(`rooms/${roomCode}`).remove();
                 db.ref(`public_lobby_rooms/${roomCode}`).remove();
@@ -523,31 +528,62 @@ window.startCountdownSequence = function() {
 
     isCourseMode = (currentMode === 'course');
     if (!isSinglePlayer) {
+        // Recuperiamo il conteggio iniziale dei giocatori che iniziano la sfida
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
-            gameStartPlayerCount = snap.exists() ? Object.keys(snap.val()).length : 0;
+            const initialPlayers = snap.val() || {};
+            gameStartPlayerCount = Object.keys(initialPlayers).length;
+
+            console.log("Match Start: Player count =", gameStartPlayerCount);
+
             if (listeners.players) db.ref(`rooms/${roomCode}/players`).off('value', listeners.players);
             listeners.players = db.ref(`rooms/${roomCode}/players`).on('value', pSnap => {
+                // Monitoriamo solo se la partita è effettivamente in corso o nel countdown
                 if (!gameRunning) return;
+
                 const players = pSnap.val() || {};
                 const currentPCount = Object.keys(players).length;
 
-                // Se siamo in un match 1vs1 e l'altro se ne va
-                if (gameStartPlayerCount === 2 && currentPCount === 1 && players[myId]) {
-                    gameRunning = false;
-                    alert(currentLang === 'it' ? "L'avversario ha abbandonato. Hai vinto a tavolino! 🏆" : "Opponent abandoned. You win by default! 🏆");
-                    window.finishGame();
+                // --- NUOVA LOGICA DI RILEVAMENTO ABBANDONO (Più robusta) ---
+
+                // Caso 1: Qualcuno è stato rimosso dal nodo players (Abbandono esplicito)
+                if (gameStartPlayerCount >= 2 && currentPCount < gameStartPlayerCount) {
+                    if (gameStartPlayerCount === 2 && players[myId]) {
+                        // In 1vs1 la vittoria è a tavolino
+                        gameRunning = false;
+                        const msg = currentLang === 'it' ? "L'avversario si è ritirato. Hai vinto a tavolino! 🏆" : "Opponent withdrew. You win by default! 🏆";
+
+                        if (window.tg && window.tg.showAlert) {
+                            window.tg.showAlert(msg);
+                        } else {
+                            alert(msg);
+                        }
+
+                        window.finishGame();
+                    } else {
+                        // In più di 2 giocatori, mostriamo solo un avviso
+                        showToast(currentLang === 'it' ? "Un giocatore ha abbandonato." : "A player left the game.");
+                    }
                 }
-                else if (gameStartPlayerCount > 0 && currentPCount < gameStartPlayerCount) {
-                    // Logica generica per match con più di 2 giocatori
-                    setTimeout(() => {
-                        db.ref(`rooms/${roomCode}/players`).once('value', s => {
-                            if (gameRunning && Object.keys(s.val() || {}).length < gameStartPlayerCount) {
-                                alert(currentLang === 'it' ? "Troppi giocatori hanno abbandonato. Match terminato." : "Too many players abandoned. Match terminated.");
-                                gameRunning = false;
-                                window.exitRoomCleanly(false);
-                            }
-                        });
-                    }, 5000);
+
+                // Caso 2: Qualcuno è ancora nel nodo ma è andato Offline (Crash o chiusura app)
+                // Lo gestiamo solo per il match 1vs1 per ora
+                if (gameStartPlayerCount === 2 && currentPCount === 2) {
+                    const myNameLower = (myName || "").toLowerCase();
+                    const opponent = Object.values(players).find(p => (p.name || "").toLowerCase() !== myNameLower);
+
+                    if (opponent && opponent.online === false) {
+                        // Aspettiamo un momento per vedere se rientra
+                        setTimeout(() => {
+                            if (!gameRunning) return;
+                            db.ref(`rooms/${roomCode}/players`).once('value', s => {
+                                const latestPlayers = s.val() || {};
+                                const latestOpp = Object.values(latestPlayers).find(p => (p.name || "").toLowerCase() !== myNameLower);
+                                if (gameRunning && latestOpp && latestOpp.online === false) {
+                                    showToast(currentLang === 'it' ? "L'avversario sembra offline..." : "Opponent seems offline...");
+                                }
+                            });
+                        }, 5000);
+                    }
                 }
             });
         });
