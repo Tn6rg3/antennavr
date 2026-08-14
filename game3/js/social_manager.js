@@ -705,6 +705,11 @@ window.listenToInvites = function() {
             if (els.outgoingInviteArea) els.outgoingInviteArea.style.display = 'none';
             if (els.acceptInviteBtn) {
                 els.acceptInviteBtn.onclick = () => {
+                    // Evitiamo click multipli
+                    if (els.acceptInviteBtn.disabled) return;
+                    els.acceptInviteBtn.disabled = true;
+                    els.acceptInviteBtn.textContent = "⌛ Avvio...";
+
                     const roomCodeNew = Math.floor(1000 + Math.random() * 9000).toString();
                     const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard');
                     const isCoop = (inv.mode === 'conquest');
@@ -727,8 +732,18 @@ window.listenToInvites = function() {
                         db.ref(`invites/${myId}`).remove();
                         window.resetLocalChallengeState();
                         window.closeInviteModal();
+
+                        // Reset bottone per futuro uso
+                        els.acceptInviteBtn.disabled = false;
+                        els.acceptInviteBtn.textContent = "ACCETTA ✅";
+
                         roomCode = roomCodeNew;
                         window.joinRoomLogic(false);
+                    }).catch(err => {
+                        console.error("Accept Invite Error:", err);
+                        els.acceptInviteBtn.disabled = false;
+                        els.acceptInviteBtn.textContent = "ACCETTA ✅";
+                        showToast("Errore durante l'accettazione.");
                     });
                 };
             }

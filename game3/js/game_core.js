@@ -470,11 +470,22 @@ window.renderPlayersList = function(playersData, hostId) {
     if (els.acceptChallengeBtn) {
         els.acceptChallengeBtn.style.display = (!amIHost && !haveIAccepted) ? 'block' : 'none';
         els.acceptChallengeBtn.onclick = () => {
+            if (els.acceptChallengeBtn.disabled) return;
+            els.acceptChallengeBtn.disabled = true;
+            els.acceptChallengeBtn.textContent = "⌛ Elaborazione...";
+
             db.ref(`rooms/${roomCode}/players/${myId}`).update({ accepted: true }).then(() => {
                 db.ref(`rooms/${roomCode}/players`).once('value', s => {
                     const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
                     db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
+
+                    els.acceptChallengeBtn.disabled = false;
+                    els.acceptChallengeBtn.textContent = "ACCETTA LA SFIDA ✅";
                 });
+            }).catch(err => {
+                console.error("Accept Challenge Error:", err);
+                els.acceptChallengeBtn.disabled = false;
+                els.acceptChallengeBtn.textContent = "ACCETTA LA SFIDA ✅";
             });
         };
     }
@@ -739,6 +750,11 @@ window.playNextWord = function() {
 };
 
 window.finishGame = function() {
+    // Se vinciamo a tavolino con 0 punti, diamo un punto simbolico per attivare il salvataggio
+    if (totalScore === 0 && !isSinglePlayer && !isCourseMode) {
+        totalScore = 1;
+    }
+
     gameRunning = false;
     inputActive = false;
     if (els.permanentGameInput) els.permanentGameInput.blur();
@@ -766,14 +782,17 @@ window.finishGame = function() {
     }
 
     if (totalScore > 0 && !roomCode.startsWith("TRN_")) {
+        // --- FIX CLASSIFICA SFIDE ---
+        // Determiniamo se era un multiplayer basandoci su gameStartPlayerCount salvato all'inizio
+        const isActuallyMulti = (gameStartPlayerCount >= 2);
+
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
-            const isReallySolo = isSinglePlayer || (Object.keys(snap.val() || {}).length < 2);
             let dbPath;
             if (currentMode === 'daily_challenge') {
                 let todayStr = new Date().toISOString().split('T')[0];
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${myId}`;
             } else {
-                const modeFolder = currentMode === 'callsign' ? 'callsign/global' : `${currentMode === 'quiz' ? 'quiz' : currentMode === 'chars' ? 'chars' : currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${isReallySolo ? 'single' : 'multi'}_${requestedWordCount}`;
+                const modeFolder = currentMode === 'callsign' ? 'callsign/global' : `${currentMode === 'quiz' ? 'quiz' : currentMode === 'chars' ? 'chars' : currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${!isActuallyMulti ? 'single' : 'multi'}_${requestedWordCount}`;
                 dbPath = `leaderboard/${modeFolder}/${myId}`;
             }
 
