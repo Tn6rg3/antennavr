@@ -139,9 +139,13 @@ window.setupChat = function(ref, containerId, limit = 50) {
             const nameSpan = document.createElement('b');
             nameSpan.textContent = m.name;
 
-            // Link Telegram rimosso per privacy come richiesto (solo testo)
-            // Se in futuro vorrai riabilitarlo solo per chi non ha la privacy,
-            // bisognerà aggiungere qui un controllo su m.username.
+            // --- PRIVACY DINAMICA: Link attivo solo se lo username è presente ---
+            if (m.username && String(m.username).trim() !== "") {
+                nameSpan.style.color = 'var(--link-color)';
+                nameSpan.style.cursor = 'pointer';
+                nameSpan.style.textDecoration = 'underline';
+                nameSpan.onclick = () => window.openTelegramProfile(m.username);
+            }
 
             const timeSpan = document.createElement('span');
             timeSpan.textContent = timeStr;

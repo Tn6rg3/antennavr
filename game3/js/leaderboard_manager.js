@@ -258,11 +258,22 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         const infoDiv = document.createElement('div'); infoDiv.style.display = 'flex'; infoDiv.style.flexDirection = 'column';
         const nameDiv = document.createElement('div'); nameDiv.style.display = 'flex'; nameDiv.style.alignItems = 'center';
 
-        // PRIVACY FIX: Nomi non più cliccabili come richiesto
-        const nameSpan = document.createElement('span');
-        nameSpan.style.fontWeight = 'bold';
-        nameSpan.textContent = player.name || "Anonimo";
-        nameDiv.appendChild(nameSpan);
+        // --- PRIVACY DINAMICA: Link attivo solo se lo username è presente ---
+        if (player.username && String(player.username).trim() !== "" && !isTeam) {
+            const nameLink = document.createElement('span');
+            nameLink.style.color = 'var(--link-color)';
+            nameLink.style.cursor = 'pointer';
+            nameLink.style.textDecoration = 'underline';
+            nameLink.style.fontWeight = 'bold';
+            nameLink.textContent = player.name || "Anonimo";
+            nameLink.onclick = () => openTelegramProfile(player.username);
+            nameDiv.appendChild(nameLink);
+        } else {
+            const nameSpan = document.createElement('span');
+            nameSpan.style.fontWeight = 'bold';
+            nameSpan.textContent = player.name || "Anonimo";
+            nameDiv.appendChild(nameSpan);
+        }
 
         // AGGIUNTA LIVELLO ACCANTO AL NOME
         if (player.level) {

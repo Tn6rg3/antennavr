@@ -166,10 +166,18 @@ window.listenToMyTeam = function() {
 
         Object.entries(team.members || {}).forEach(([id, mem]) => {
             const span = document.createElement('span');
-            span.style.fontWeight = 'bold';
             span.textContent = mem.name;
 
-            // Link Telegram rimosso per privacy (solo testo)
+            // --- PRIVACY DINAMICA ---
+            if (mem.username && String(mem.username).trim() !== "") {
+                span.style.color = 'var(--link-color)';
+                span.style.cursor = 'pointer';
+                span.style.textDecoration = 'underline';
+                span.style.fontWeight = 'bold';
+                span.onclick = () => openTelegramProfile(mem.username);
+            } else {
+                span.style.fontWeight = 'bold';
+            }
 
             if (id === team.captainId) {
                 if (els.captainName) els.captainName.appendChild(span);
