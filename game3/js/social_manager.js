@@ -285,8 +285,8 @@ window.renderOrUpdateUserListItem = function(userId, u) {
     li.innerHTML = '';
     li.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:4px 8px; margin-bottom:3px;";
 
-    const isIChallengingHim = (window.isChallenging && window.currentInviterId === userId);
-    const isHeChallengingMe = (window.lastIncomingInvite && window.lastIncomingInvite.fromId === userId);
+    const isIChallengingHim = (window.isChallenging && String(window.currentInviterId) === String(userId));
+    const isHeChallengingMe = (window.lastIncomingInvite && String(window.lastIncomingInvite.fromId) === String(userId));
     const isPlaying = (u.status === 'playing');
     const canSpectate = (isPlaying && u.allowSpectators && u.activeRoomCode);
 
@@ -590,18 +590,30 @@ window.listenToInviteAccepted = function() {
 
 window.listenToOutgoingInvite = function(targetId) {
     const sTargetId = String(targetId);
+    console.log("TX: Monitoring outgoing invite to:", sTargetId);
+
     if (listeners.outgoingInvite) {
         if (listeners.outgoingInvite.ref) listeners.outgoingInvite.ref.off('value', listeners.outgoingInvite.callback);
     }
 
     const inviteRef = db.ref(`invites/${sTargetId}`);
     const callback = inviteRef.on('value', snap => {
-        // Se l'invito sparisce dal DB e noi siamo ancora in stato "Sfidando"
-        if (!snap.exists() && window.isChallenging && String(window.currentInviterId) === sTargetId) {
-            // Piccolo ritardo per evitare race condition con l'accettazione
+        const exists = snap.exists();
+        console.log(`TX: Invite update for ${sTargetId}, exists: ${exists}, isChallenging: ${window.isChallenging}`);
+
+        // Se l'invito sparisce dal DB e noi lo stiamo ancora aspettando (non siamo entrati in partita)
+        if (!exists && window.isChallenging && String(window.currentInviterId) === sTargetId) {
+
+            // Verifichiamo se non siamo in una stanza (per distinguere Rifiuto da Accettazione)
             setTimeout(() => {
-                if (window.isChallenging && String(window.currentInviterId) === sTargetId) {
-                    showToast(currentLang === 'it' ? "Sfida rifiutata o scaduta." : "Challenge declined or expired.");
+                const amIInRoom = (typeof roomCode !== 'undefined' && roomCode && roomCode !== "");
+
+                if (window.isChallenging && String(window.currentInviterId) === sTargetId && !amIInRoom) {
+                    console.log("TX: Challenge definitely refused by target.");
+                    const msg = currentLang === 'it' ? "La sfida è stata rifiutata o è scaduta." : "Challenge declined or expired.";
+                    if (typeof tg.showAlert === 'function') tg.showAlert(msg);
+                    else alert(msg);
+
                     window.resetLocalChallengeState();
                 }
             }, 1000);
