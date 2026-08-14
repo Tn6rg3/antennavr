@@ -7,7 +7,7 @@ const WEBAPP_NAME = "cwgame";
 const APP_VERSION = "20260807.222";
 
 // URL della Web App di Google Apps Script per la validazione identità
-const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbzWfITeqpYIGuFWm4xtgZ_ary_Ml_CQb3UaVZLsJBJYJUTJYcvY-nbsLAyR1TSRcl9Pgw/exec";
+const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbwkxU6EuvPt-YBF5hGZGM5Pr8tWNPLJHTnvLGR8dQE0DVq12WmUFeX_S_jKt3E0qr__zA/exec";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -81,6 +81,7 @@ let isGlobalChatMuted = false;
 let isChatCwEnabled = false, chatCwWpm = 20, chatCwTone = 600;
 let chatCwAudioQueue = [], isChatCwPlaying = false;
 window.lastPlayedCwMsgTs = 0;
+window.lastChatSentTs = 0; // Cooldown anti-spam per la chat
 
 window.isChallenging = false;
 window.isRejoining = false;
@@ -262,31 +263,31 @@ async function startApp() {
     if (statusText) statusText.textContent = "Verifica identità Morse...";
 
     try {
-        const isVerified = await validateIdentity();
-        if (!isVerified) {
+        const isVerifiedData = await validateIdentity();
+        if (!isVerifiedData || !isVerifiedData.verified) {
             if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
             if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
             return;
         }
+
+        // Identità Certificata: Usiamo l'ID restituito dal server sicuro
+        myId = isVerifiedData.userId;
+        myName = tgUser.first_name;
     } catch (e) {
         console.error("Validation failed:", e);
-        // In caso di errore server GAS, potresti scegliere se bloccare o procedere.
-        // Qui decidiamo di bloccare per massima sicurezza.
         if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
         if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
         return;
     }
 
     // 2. Proseguiamo con l'avvio normale
-    myName = tgUser.first_name;
-    myId = tgUser.id.toString();
     initGame();
 }
 
 async function validateIdentity() {
-    if (VALIDATION_SERVER_URL.includes("INSERISCI_QUI") || !VALIDATION_SERVER_URL.startsWith("http")) {
-        console.warn("Security: Validation URL not set, skipping.");
-        return true;
+    if (!VALIDATION_SERVER_URL || !VALIDATION_SERVER_URL.startsWith("http")) {
+        console.error("Security: Validation URL is missing or invalid!");
+        return { verified: false };
     }
 
     try {
@@ -298,19 +299,21 @@ async function validateIdentity() {
 
         if (!response.ok) {
             console.error("Validation: HTTP Error", response.status);
-            return false;
+            return { verified: false };
         }
 
         const result = await response.json();
         console.log("Validation Result from Google:", result);
 
-        if (result.status === 'ok') return true;
+        if (result.status === 'ok') {
+            return { verified: true, userId: result.userId };
+        }
 
         console.error("Validation Denied:", result.message);
-        return false;
+        return { verified: false };
     } catch (err) {
         console.error("Validation: Request failed", err);
-        return false;
+        return { verified: false };
     }
 }
 window.startApp = startApp;
@@ -830,8 +833,13 @@ window.shareAppToFriends = function() {
 // --- LISTENER PULSANTI CHAT ---
 if (els.sendChatBtn) {
     els.sendChatBtn.onclick = async () => {
+        const now = Date.now();
+        if (now - window.lastChatSentTs < 2000) return showToast("🐌 Vai più piano! Attendi 2 secondi.");
+
         if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
         const txt = els.chatInput?.value.trim(); if (!txt) return;
+
+        window.lastChatSentTs = now;
         let ref = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
         ref.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         if (els.chatInput) els.chatInput.value = '';
@@ -839,8 +847,13 @@ if (els.sendChatBtn) {
 }
 if (els.sendLobbyChatBtn) {
     els.sendLobbyChatBtn.onclick = async () => {
+        const now = Date.now();
+        if (now - window.lastChatSentTs < 2000) return showToast("🐌 Vai più piano! Attendi 2 secondi.");
+
         if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
         const txt = els.lobbyChatInput?.value.trim(); if (!txt || !roomCode) return;
+
+        window.lastChatSentTs = now;
         db.ref(`rooms/${roomCode}/chat`).push().set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
         if (els.lobbyChatInput) els.lobbyChatInput.value = '';
     };

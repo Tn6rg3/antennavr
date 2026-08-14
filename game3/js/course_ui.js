@@ -631,9 +631,16 @@ window.initCourseChat = function() {
 
     if (els.sendCourseChatBtn && els.courseChatInput) {
         els.sendCourseChatBtn.onclick = async () => {
+            const now = Date.now();
+            if (window.lastChatSentTs && now - window.lastChatSentTs < 2000) {
+                return alert("🐌 Vai più piano! Attendi 2 secondi.");
+            }
+
             if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
             const txt = els.courseChatInput.value.trim();
             if (!txt) return;
+
+            window.lastChatSentTs = now;
             chatRef.push({
                 name: myName,
                 username: myPrivacy ? "" : tgUsername,
