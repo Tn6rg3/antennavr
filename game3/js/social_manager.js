@@ -260,7 +260,9 @@ window.onlineUsersCache = {};
 
 window.refreshOnlineUsersList = function() {
     if (!els.onlineUsersList) return;
-    Object.entries(window.onlineUsersCache).forEach(([uid, data]) => {
+    const entries = Object.entries(window.onlineUsersCache);
+    console.log(`UI: Refreshing ${entries.length} online users`);
+    entries.forEach(([uid, data]) => {
         window.renderOrUpdateUserListItem(uid, data);
     });
 };
@@ -283,7 +285,7 @@ window.renderOrUpdateUserListItem = function(userId, u) {
     li.innerHTML = '';
     li.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:4px 8px; margin-bottom:3px;";
 
-    const isIChallengingHim = (isChallenging && currentInviterId === userId);
+    const isIChallengingHim = (window.isChallenging && window.currentInviterId === userId);
     const isHeChallengingMe = (window.lastIncomingInvite && window.lastIncomingInvite.fromId === userId);
     const isPlaying = (u.status === 'playing');
     const canSpectate = (isPlaying && u.allowSpectators && u.activeRoomCode);
@@ -352,7 +354,7 @@ window.renderOrUpdateUserListItem = function(userId, u) {
         };
     } else {
         btn.className = "action-btn-small btn-success";
-        if (isChallenging) btn.disabled = true; // Non puoi sfidare due persone contemporaneamente
+        if (window.isChallenging) btn.disabled = true; // Non puoi sfidare due persone contemporaneamente
         btn.textContent = 'Sfida';
         btn.onclick = () => window.openInviteModal(userId, u.name);
     }
@@ -399,7 +401,7 @@ window.listenToOnlineUsers = function() {
 
 // --- MODALI INVITO E SFIDE ---
 window.openInviteModal = function(targetId, targetName) {
-    currentInviterId = targetId;
+    window.currentInviterId = targetId;
     if (els.inviteModalTitle) els.inviteModalTitle.textContent = "Sfida " + targetName;
     if (els.inviteModalText) els.inviteModalText.textContent = "Scegli le impostazioni per la sfida:";
     if (els.inviteSettings) els.inviteSettings.style.display = 'block';
@@ -433,7 +435,7 @@ window.openInviteModal = function(targetId, targetName) {
                 ts: firebase.database.ServerValue.TIMESTAMP
             }).then(() => {
                 showToast("Sfida inviata a " + targetName + " 🚀");
-                isChallenging = true;
+                window.isChallenging = true;
                 window.listenToOutgoingInvite(targetId);
                 window.closeInviteModal();
                 window.refreshOnlineUsersList();
@@ -445,7 +447,7 @@ window.openInviteModal = function(targetId, targetName) {
 };
 
 window.openTeamInviteModal = async function(targetId, targetName) {
-    currentInviterId = targetId;
+    window.currentInviterId = targetId;
     if (els.inviteModalTitle) els.inviteModalTitle.textContent = "Opzioni Utente: " + targetName;
     if (els.recruitmentStatusText) els.recruitmentStatusText.textContent = "Caricamento stato...";
     if (els.inviteSettings) els.inviteSettings.style.display = 'none';
@@ -526,7 +528,7 @@ window.openTeamInviteModal = async function(targetId, targetName) {
 };
 
 window.sendRecruitmentInvite = function(type) {
-    db.ref(`invites/${currentInviterId}`).set({
+    db.ref(`invites/${window.currentInviterId}`).set({
         fromId: myId,
         fromName: myName,
         fromUsername: myPrivacy ? "" : tgUsername,
@@ -545,8 +547,8 @@ window.closeInviteModal = function() {
 
     // Se stavamo sfidando qualcuno e chiudiamo manualmente o viene rimosso,
     // assicuriamoci di pulire i listener dell'invito in uscita
-    if (currentInviterId && listeners.outgoingInvite) {
-        db.ref(`invites/${currentInviterId}`).off();
+    if (window.currentInviterId && listeners.outgoingInvite) {
+        db.ref(`invites/${window.currentInviterId}`).off();
         listeners.outgoingInvite = null;
     }
     // NOTA: Non puliamo currentInviterId qui per permettere ai badge di persistere
@@ -554,16 +556,20 @@ window.closeInviteModal = function() {
 };
 
 window.resetLocalChallengeState = function() {
-    console.log("Challenge: Resetting local state");
-    isChallenging = false;
-    currentInviterId = null;
+    console.log("Challenge: Resetting local state...");
+    window.isChallenging = false;
+    window.currentInviterId = null;
     window.lastIncomingInvite = null;
+
     if (listeners.outgoingInvite) {
-        db.ref(`invites/${listeners.outgoingInvite.target}`).off();
+        if (listeners.outgoingInvite.ref) listeners.outgoingInvite.ref.off('value', listeners.outgoingInvite.callback);
         listeners.outgoingInvite = null;
     }
-    // Rinfresca la UI per rimuovere i badge
-    window.refreshOnlineUsersList();
+
+    // Rinfresca la UI per rimuovere i badge e ripristinare i tasti
+    setTimeout(() => {
+        window.refreshOnlineUsersList();
+    }, 100);
 };
 
 window.listenToInviteAccepted = function() {
@@ -583,24 +589,25 @@ window.listenToInviteAccepted = function() {
 };
 
 window.listenToOutgoingInvite = function(targetId) {
+    const sTargetId = String(targetId);
     if (listeners.outgoingInvite) {
-        db.ref(`invites/${listeners.outgoingInvite.target}`).off();
+        if (listeners.outgoingInvite.ref) listeners.outgoingInvite.ref.off('value', listeners.outgoingInvite.callback);
     }
 
-    const inviteRef = db.ref(`invites/${targetId}`);
+    const inviteRef = db.ref(`invites/${sTargetId}`);
     const callback = inviteRef.on('value', snap => {
         // Se l'invito sparisce dal DB e noi siamo ancora in stato "Sfidando"
-        if (!snap.exists() && isChallenging && currentInviterId === targetId) {
+        if (!snap.exists() && window.isChallenging && String(window.currentInviterId) === sTargetId) {
             // Piccolo ritardo per evitare race condition con l'accettazione
             setTimeout(() => {
-                if (isChallenging && currentInviterId === targetId) {
+                if (window.isChallenging && String(window.currentInviterId) === sTargetId) {
                     showToast(currentLang === 'it' ? "Sfida rifiutata o scaduta." : "Challenge declined or expired.");
                     window.resetLocalChallengeState();
                 }
             }, 1000);
         }
     });
-    listeners.outgoingInvite = { target: targetId, ref: inviteRef, callback: callback };
+    listeners.outgoingInvite = { target: sTargetId, ref: inviteRef, callback: callback };
 };
 
 window.listenToInvites = function() {
@@ -702,7 +709,7 @@ window.listenToInvites = function() {
         }
 
         if (els.inviteModal) els.inviteModal.style.display = 'flex';
-        currentInviterId = inv.fromId;
+        window.currentInviterId = inv.fromId;
         window.lastIncomingInvite = inv;
     });
 };

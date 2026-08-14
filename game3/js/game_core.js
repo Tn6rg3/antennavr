@@ -704,8 +704,9 @@ window.finishGame = function() {
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
 
     localStorage.removeItem(STORAGE_ROOM_KEY);
-    isRejoining = false;
-    isChallenging = false;
+    window.isRejoining = false;
+    window.isChallenging = false;
+    window.currentInviterId = null;
 
     db.ref(`presence/${myId}`).update({
         allowSpectators: false,

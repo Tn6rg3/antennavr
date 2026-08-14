@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260814.224";
+const APP_VERSION = "20260807.222";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -76,7 +76,9 @@ let isChatCwEnabled = false, chatCwWpm = 20, chatCwTone = 600;
 let chatCwAudioQueue = [], isChatCwPlaying = false;
 window.lastPlayedCwMsgTs = 0;
 
-let isChallenging = false, isRejoining = false, currentInviterId = null;
+window.isChallenging = false;
+window.isRejoining = false;
+window.currentInviterId = null;
 let roomCode = "", roomHostId = null, activeTrnId = null;
 let lastPlayerCount = 0, gameStartPlayerCount = 0;
 let gameRunning = false, inputActive = false, audioCtx = null;
@@ -791,7 +793,7 @@ if (els.createRoomBtn) {
         if (gType === 'tournament') { window.showScreen('teamsScreen'); return; }
         if (gMode === 'custom' && window.customDictionary.length === 0) return showToast("Carica un file!");
 
-        isChallenging = false;
+        window.isChallenging = false;
         currentMode = gMode || 'standard';
         isSinglePlayer = (gType === 'single');
         currentWpm = baseWpm = (currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
