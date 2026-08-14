@@ -6,6 +6,9 @@ const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
 const APP_VERSION = "20260807.222";
 
+// URL della Web App di Google Apps Script per la validazione identità
+const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbxDHrVtL9z4xr3slBJhyBw5CHxmvt49Sba0oGNIS2FZYx81OlCUyBnyX9KP4jY518bStw/exec";
+
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
 
@@ -247,15 +250,54 @@ if(document.getElementById('gameModeInput')) document.getElementById('gameModeIn
 if(document.getElementById('gameTypeInput')) document.getElementById('gameTypeInput').addEventListener('change', () => window.checkGameTypeUI?.());
 
 // --- STARTUP ---
-function startApp() {
+async function startApp() {
     if (!tgUser) {
         if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
         if (els.errorScreen) els.errorScreen.classList.add('active-screen');
-    } else {
-        myName = tgUser.first_name;
-        myId = tgUser.id.toString();
-        initGame();
+        return;
     }
+
+    // 1. Fase di Verifica Identità (Backend Google Apps Script)
+    const statusText = document.getElementById('initStatusText');
+    if (statusText) statusText.textContent = "Verifica identità Morse...";
+
+    try {
+        const isVerified = await validateIdentity();
+        if (!isVerified) {
+            if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
+            if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
+            return;
+        }
+    } catch (e) {
+        console.error("Validation failed:", e);
+        // In caso di errore server GAS, potresti scegliere se bloccare o procedere.
+        // Qui decidiamo di bloccare per massima sicurezza.
+        if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
+        if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
+        return;
+    }
+
+    // 2. Proseguiamo con l'avvio normale
+    myName = tgUser.first_name;
+    myId = tgUser.id.toString();
+    initGame();
+}
+
+async function validateIdentity() {
+    if (VALIDATION_SERVER_URL.includes("INSERISCI_QUI")) {
+        console.warn("Security: Validation URL not set, skipping for now.");
+        return true; // Bypass temporaneo per non bloccare lo sviluppo
+    }
+
+    const response = await fetch(VALIDATION_SERVER_URL, {
+        method: 'POST',
+        mode: 'cors',
+        body: JSON.stringify({ initData: tg.initData })
+    });
+
+    if (!response.ok) return false;
+    const result = await response.json();
+    return result.status === 'ok';
 }
 window.startApp = startApp;
 
