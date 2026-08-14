@@ -7,7 +7,7 @@ const WEBAPP_NAME = "cwgame";
 const APP_VERSION = "20260807.222";
 
 // URL della Web App di Google Apps Script per la validazione identità
-const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbwi2VvEGT2lxDJkKq8yY-N9YPIPRA6TFxkycZ3JMq4SimxLKn8UlB8Q7sqt0bSmwTCW7g/exec";
+const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbxkJ6KwZFKiUps1SotTxS_pd7qcH5IIKZbf0jsXqdW60s8xlpaG7zIkIc1y644VbyYdbQ/exec";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -291,19 +291,16 @@ async function validateIdentity() {
 
     const statusText = document.getElementById('initStatusText');
 
-    // Usiamo URLSearchParams per evitare problemi di CORS pre-flight con POST
-    const params = new URLSearchParams();
-    params.append('initData', tg.initData);
-
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 secondi di timeout
+        // Usiamo GET con initData in query string, che è il modo più affidabile con Google Apps Script
+        const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(tg.initData);
 
-        const response = await fetch(VALIDATION_SERVER_URL, {
-            method: 'POST',
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+        const response = await fetch(url, {
+            method: 'GET',
             mode: 'cors',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params.toString(),
             signal: controller.signal
         });
 
@@ -315,6 +312,7 @@ async function validateIdentity() {
         }
 
         const result = await response.json();
+        console.log("Validation Result:", result);
         return result.status === 'ok';
     } catch (err) {
         console.error("Validation Network Error:", err);
