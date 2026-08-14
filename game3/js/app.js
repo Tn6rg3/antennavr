@@ -8,6 +8,8 @@ const APP_VERSION = "20260807.222";
 
 // URL della Web App di Google Apps Script per la validazione identità
 const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbzv8xVnuNOLXhyKBexqJfmTE9VKxbl93rV25qxXQFlISrM8lf5PJR_8hPtCcOds_zb3VA/exec";
+
+
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
 
@@ -283,27 +285,17 @@ async function startApp() {
 }
 
 async function validateIdentity() {
-    if (VALIDATION_SERVER_URL.includes("INSERISCI_QUI")) {
-        console.warn("Security: Validation URL not set, skipping for now.");
+    if (VALIDATION_SERVER_URL.includes("INSERISCI_QUI") || !VALIDATION_SERVER_URL.startsWith("http")) {
+        console.warn("Security: Validation URL not set, skipping.");
         return true;
     }
 
-    const statusText = document.getElementById('initStatusText');
-
     try {
-        // Usiamo GET con initData in query string, che è il modo più affidabile con Google Apps Script
-        const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(tg.initData);
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-        const response = await fetch(url, {
-            method: 'GET',
-            mode: 'cors',
-            signal: controller.signal
+        // Inviamo i dati come JSON grezzo per la massima precisione della stringa initData
+        const response = await fetch(VALIDATION_SERVER_URL, {
+            method: 'POST',
+            body: JSON.stringify({ initData: tg.initData })
         });
-
-        clearTimeout(timeoutId);
 
         if (!response.ok) {
             console.error("Validation: HTTP Error", response.status);
@@ -315,12 +307,10 @@ async function validateIdentity() {
 
         if (result.status === 'ok') return true;
 
-        // Se c'è un errore, lo logghiamo in modo che tu possa leggerlo nella console browser
-        console.error("Validation Denied:", result.message, result.debug || "");
+        console.error("Validation Denied:", result.message);
         return false;
     } catch (err) {
-        console.error("Validation Network Error:", err);
-        if (statusText) statusText.textContent = "Errore di rete durante la verifica...";
+        console.error("Validation: Request failed", err);
         return false;
     }
 }
@@ -942,3 +932,4 @@ if (els.createRoomBtn) {
 }
 
 // --- LISTA STANZE (SPOSTATO IN SOCIAL_MANAGER.JS) ---
+
