@@ -746,7 +746,13 @@ window.showCourseSessionModal = function(session, isExtra = false) {
             const typeCfg = window.COURSE_TYPES[session.type];
             const typeLabel = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;
             const briefing = window.getCourseBriefing(session.type, charStr);
-            text.innerHTML = `Oggi il tuo piano prevede una sessione di <b>${typeLabel}</b>.<br><br><div style="background:var(--sec-bg-color); padding:10px; border-radius:8px; border-left:4px solid var(--link-color); font-style:italic; font-size:0.9em; text-align:left;">"${briefing}"</div>`;
+
+            // Messa in sicurezza briefing (XSS Fix)
+            text.innerHTML = `Oggi il tuo piano prevede una sessione di <b>${typeLabel}</b>.<br><br>`;
+            const bDiv = document.createElement('div');
+            bDiv.style.cssText = "background:var(--sec-bg-color); padding:10px; border-radius:8px; border-left:4px solid var(--link-color); font-style:italic; font-size:0.9em; text-align:left;";
+            bDiv.textContent = `"${briefing}"`;
+            text.appendChild(bDiv);
         }
 
         // Popola area Warm-up (Sempre visibile se ci sono caratteri)

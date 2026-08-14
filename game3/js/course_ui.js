@@ -546,10 +546,25 @@ window.finishCourseSession = function() {
         accTxt.style.color = accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f';
 
         const debriefing = window.getCourseDebriefing(accuracy, worstChars.slice(0, 3));
-        msgDiv.innerHTML = `"${debriefing}"${advanceMsg}`;
+
+        // Messa in sicurezza debriefing (XSS Fix)
+        msgDiv.innerHTML = "";
+        msgDiv.appendChild(document.createTextNode(`"${debriefing}"`));
+        if (advanceMsg) {
+            const advDiv = document.createElement('div');
+            advDiv.style.marginTop = "10px";
+            advDiv.style.color = "var(--link-color)";
+            advDiv.style.fontWeight = "bold";
+            advDiv.textContent = advanceMsg.trim();
+            msgDiv.appendChild(advDiv);
+        }
 
         if (worstChars.length > 0) {
-            focusP.innerHTML = `⚠️ <b>Focus per domani:</b> ${worstChars.slice(0, 5).join(", ")}`;
+            focusP.innerHTML = "";
+            const b = document.createElement('b');
+            b.textContent = "⚠️ Focus per domani: ";
+            focusP.appendChild(b);
+            focusP.appendChild(document.createTextNode(worstChars.slice(0, 5).join(", ")));
         } else {
             focusP.textContent = "Ottima sessione, nessun carattere critico rilevato.";
         }
@@ -583,10 +598,32 @@ window.initCourseChat = function() {
             const div = document.createElement('div');
             div.style.marginBottom = '5px';
 
-            const isTutor = msg.role === 'tutor';
-            const roleTag = isTutor ? '<b style="color:#673ab7; font-size:0.7em; background:#eee; padding:1px 4px; border-radius:4px; margin-right:4px;">TUTOR</b>' : '';
+            // Timestamp
+            const timeSpan = document.createElement('span');
+            timeSpan.style.cssText = "font-size:0.8em; color:var(--hint-color);";
+            timeSpan.textContent = new Date(msg.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + " ";
+            div.appendChild(timeSpan);
 
-            div.innerHTML = `<span style="font-size:0.8em; color:var(--hint-color);">${new Date(msg.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span> ${roleTag}<b style="color:var(--link-color); font-size:0.9em;">${msg.name}</b>: <span style="font-size:0.95em;">${msg.text}</span>`;
+            // Tag Tutor
+            if (msg.role === 'tutor') {
+                const roleTag = document.createElement('b');
+                roleTag.style.cssText = "color:#673ab7; font-size:0.7em; background:#eee; padding:1px 4px; border-radius:4px; margin-right:4px;";
+                roleTag.textContent = "TUTOR";
+                div.appendChild(roleTag);
+            }
+
+            // Nome Mittente
+            const nameB = document.createElement('b');
+            nameB.style.cssText = "color:var(--link-color); font-size:0.9em;";
+            nameB.textContent = msg.name + ": ";
+            div.appendChild(nameB);
+
+            // Testo Messaggio (XSS Safe via textContent)
+            const textSpan = document.createElement('span');
+            textSpan.style.fontSize = "0.95em";
+            textSpan.textContent = msg.text;
+            div.appendChild(textSpan);
+
             messagesCont.appendChild(div);
         }
         messagesCont.scrollTop = messagesCont.scrollHeight;
