@@ -384,8 +384,13 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
         } catch(e) { console.error("Medals Logic Error:", e); }
     }
 
-    // 3. Squadra
-    if (myTeamId) await db.ref(`teams/${myTeamId}/members/${userId}`).update({ name: newName, username: newUsername });
+    // 3. Squadra (Aggiornamento nome membro)
+    if (myTeamId) {
+        try {
+            await db.ref(`teams/${myTeamId}/members/${userId}`).update({ name: newName, username: newUsername });
+            console.log("Privacy: Updated team member info.");
+        } catch(e) { console.error("Team sync error:", e); }
+    }
 
     // 4. Corso CW
     try {
@@ -396,6 +401,25 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
 
     // 5. Leaderboard (Fix Privacy & Alias su tutti i record esistenti)
     await window.updateUserInAllLeaderboards(newName, newUsername);
+
+    // 6. Tornei (Aggiornamento slot nel torneo attivo)
+    if (window.activeTrnId) {
+        try {
+            const trnSnap = await db.ref(`tournaments/${window.activeTrnId}`).once('value');
+            if (trnSnap.exists() && trnSnap.val().matches) {
+                const matches = trnSnap.val().matches;
+                for (const mId in matches) {
+                    const match = matches[mId];
+                    if (match.playerA && match.playerA.id === userId) {
+                        await db.ref(`tournaments/${window.activeTrnId}/matches/${mId}/playerA`).update({ name: newName });
+                    }
+                    if (match.playerB && match.playerB.id === userId) {
+                        await db.ref(`tournaments/${window.activeTrnId}/matches/${mId}/playerB`).update({ name: newName });
+                    }
+                }
+            }
+        } catch(e) { console.error("Trn Sync Error:", e); }
+    }
 };
 
 window.updateUserInAllLeaderboards = async function(newName, newUsername) {

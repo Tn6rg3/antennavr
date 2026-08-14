@@ -165,13 +165,12 @@ window.listenToMyTeam = function() {
         if (els.teamOthersList) els.teamOthersList.innerHTML = '';
 
         Object.entries(team.members || {}).forEach(([id, mem]) => {
-            const span = document.createElement('span'); span.textContent = mem.name;
-            if (mem.username && String(mem.username).trim() !== "") {
-                span.style.color = 'var(--link-color)';
-                span.style.cursor = 'pointer';
-                span.style.textDecoration = 'underline';
-                span.onclick = () => openTelegramProfile(mem.username);
-            }
+            const span = document.createElement('span');
+            span.style.fontWeight = 'bold';
+            span.textContent = mem.name;
+
+            // Link Telegram rimosso per privacy (solo testo)
+
             if (id === team.captainId) {
                 if (els.captainName) els.captainName.appendChild(span);
             } else {
@@ -270,8 +269,24 @@ window.renderActiveTournament = function(trnSnap) {
         els.activeTrnTitle.textContent = trn.name + (isFinished ? (currentLang === 'it' ? " (Concluso)" : " (Finished)") : "");
     }
 
-    const amIHost = (trn.hostId === myId);
-    if (els.editTrnNameBtn) els.editTrnNameBtn.style.display = (amIHost && !isFinished) ? 'block' : 'none';
+    if (els.editTrnNameBtn) {
+        els.editTrnNameBtn.style.display = (amIHost && !isFinished) ? 'block' : 'none';
+        els.editTrnNameBtn.onclick = () => {
+            const currentTrnId = window.activeTrnId;
+            if (!currentTrnId) {
+                console.error("Tournament: activeTrnId is null");
+                return showToast("Errore: ID Torneo non trovato.");
+            }
+            console.log("Tournament: Requesting rename for:", currentTrnId);
+            const currentName = trn.name || "";
+            const newName = prompt(currentLang === 'it' ? "Nuovo nome del torneo:" : "New tournament name:", currentName);
+            if (newName && newName.trim() !== "" && newName !== currentName) {
+                db.ref(`tournaments/${currentTrnId}/name`).set(newName.trim()).then(() => {
+                    showToast("Nome torneo aggiornato!");
+                }).catch(e => console.error("Trn Rename Error:", e));
+            }
+        };
+    }
 
     if (els.leaveTrnBtn) {
         els.leaveTrnBtn.style.display = (isTeamCaptain && !isFinished) ? 'block' : 'none';

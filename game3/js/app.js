@@ -73,8 +73,12 @@ const DEBUG_MODE = false;
 window.logDebug = (...args) => { if (DEBUG_MODE) console.log(...args); };
 
 // --- STATO GLOBALE ---
-let myName = "", myId = "", myPrivacy = false;
-let myTeamId = null, myTeamName = "", isTeamCaptain = false;
+window.myName = "";
+window.myId = "";
+window.myPrivacy = false;
+window.myTeamId = null;
+window.myTeamName = "";
+window.isTeamCaptain = false;
 let db = null, auth = null, currentLang = 'it';
 let activeChatContext = null, activeTab = "room", isChatDrawerOpen = false;
 let isGlobalChatMuted = false;
@@ -87,7 +91,8 @@ window.isChallenging = false;
 window.isRejoining = false;
 window.outgoingChallengeId = null; // ID dell'utente che HO sfidato
 window.incomingChallengeId = null; // ID dell'utente che MI sfida
-let roomCode = "", roomHostId = null, activeTrnId = null;
+window.activeTrnId = null;
+let roomCode = "", roomHostId = null;
 let lastPlayerCount = 0, gameStartPlayerCount = 0;
 let gameRunning = false, inputActive = false, audioCtx = null;
 let gameWords = [], wordIndex = 0, currentWpm = 20, baseWpm = 20, currentTone = 600, peakWpm = 0;
@@ -382,20 +387,20 @@ function initGame() {
     }
 
     auth.signInAnonymously().then(async () => {
-        myId = tgUser.id.toString();
-        console.log("CW Game: Auth success, Telegram ID:", myId);
+        window.myId = tgUser.id.toString();
+        console.log("CW Game: Auth success, Telegram ID:", window.myId);
 
         // --- SICUREZZA: Registriamo il mapping UID subito per le regole Firebase ---
         // Questo deve avvenire PRIMA di qualsiasi altra operazione di scrittura o lettura protetta
         try {
             const mappingRef = db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`);
-            await mappingRef.set(myId);
+            await mappingRef.set(window.myId);
             mappingRef.onDisconnect().remove();
         } catch (e) {
             console.error("CW Game: Security Mapping failed", e);
         }
 
-        const userRef = db.ref(`users/${myId}`);
+        const userRef = db.ref(`users/${window.myId}`);
         const snap = await userRef.once('value');
         const data = snap.val() || {};
 
@@ -407,20 +412,29 @@ function initGame() {
             return; // Interrompiamo l'avvio
         }
 
+        // --- GESTIONE ALIAS E PRIVACY DI DEFAULT ---
+        let needsUpdate = false;
+        const updates = {};
+
         if (data.alias) {
-            myName = data.alias;
+            window.myName = data.alias;
         } else {
-            // Default: usa il nome di Telegram se non c'è alias
-            myName = tgUser.first_name;
-            await userRef.update({ alias: myName });
+            window.myName = tgUser.first_name;
+            updates.alias = window.myName;
+            needsUpdate = true;
         }
 
-        // Privacy: On di default per tutti i nuovi utenti o se mai impostata
         if (data.privacyUsername === undefined) {
-            myPrivacy = true;
-            await userRef.update({ privacyUsername: true });
+            window.myPrivacy = true;
+            updates.privacyUsername = true;
+            needsUpdate = true;
         } else {
-            myPrivacy = data.privacyUsername;
+            window.myPrivacy = data.privacyUsername;
+        }
+
+        if (needsUpdate) {
+            await userRef.update(updates);
+            console.log("Privacy: Applied default settings (Privacy ON, Alias set).");
         }
 
         if (!snap.exists() || !data.welcomed) {
@@ -429,7 +443,7 @@ function initGame() {
             if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'flex';
         }
 
-        if (els.playerName) els.playerName.textContent = myName;
+        if (els.playerName) els.playerName.textContent = window.myName;
 
         // --- SISTEMA LAZY CLEANUP GIORNALIERO ---
         try {
@@ -604,17 +618,19 @@ function initGame() {
     setTimeout(() => { window.checkGameTypeUI?.(); }, 1200);
 }
 
-// --- SFIDA GIORNALIERA ---
+// --- SISTEMA BUG E ADMIN ---
 window.setupBugSystem = function() {
     const badge = document.getElementById('bugsBadge');
 
-    // 1. Bug Reports Listener (Real-time per Admin Badge)
+    // 1. Bug Reports Listener (Rilevamento Admin basato su Permessi Firebase)
+    // Se le Regole Firebase permettono la lettura, l'utente è considerato Admin
     db.ref('bugReports').limitToLast(20).on('value', snap => {
         window.isAdmin = true;
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
         window.updateAdminBadge();
     }, (error) => {
         window.isAdmin = false;
+        if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
         console.log("Bug System: Standard user access.");
     });
 
