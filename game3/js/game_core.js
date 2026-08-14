@@ -822,6 +822,11 @@ window.finishGame = function() {
                     window.showToast(currentLang === 'it' ? "Ottima partita! (Non hai superato il tuo record personale)" : "Good game! (Personal best not beaten)");
                 }
             });
+
+            // --- SALVATAGGIO RIEPILOGO MATCH (CRONOLOGIA SFIDE) ---
+            if (isActuallyMulti) {
+                window.saveMatchSummary(snap.val());
+            }
         });
     }
 
@@ -954,6 +959,36 @@ window.showMatchShareButtons = function() {
     };
 
     shareContainer.appendChild(btn);
+};
+
+window.saveMatchSummary = function(playersData) {
+    if (!playersData || isSinglePlayer || isCourseMode) return;
+
+    // Identificativo unico per il match (Room + Timestamp)
+    const matchId = roomCode + "_" + Date.now().toString().substring(7);
+    const players = Object.values(playersData);
+
+    // Determiniamo il percorso in base al tipo di gioco
+    let baseMode = currentMode === 'std' ? 'standard' : (currentMode === 'chars' ? 'chars' : (currentMode === 'quiz' ? 'quiz' : 'pingpong'));
+    let category = baseMode;
+    if (baseMode !== 'pingpong') category += "_multi";
+
+    const matchSummary = {
+        players: players.map(p => ({
+            name: p.name,
+            username: p.username || "",
+            score: p.score || 0,
+            wpm: p.wpm || 0,
+            finished: !!p.finished
+        })),
+        mode: currentMode,
+        wordCount: requestedWordCount,
+        date: new Date().toLocaleDateString('it-IT'),
+        ts: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    const summaryPath = `leaderboard/recent_matches/${category}/${requestedWordCount}/${matchId}`;
+    db.ref(summaryPath).set(matchSummary).catch(e => console.error("Summary Save Error:", e));
 };
 
 window.showPostMatchReplayButtons = function() {
