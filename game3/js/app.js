@@ -7,7 +7,7 @@ const WEBAPP_NAME = "cwgame";
 const APP_VERSION = "20260807.222";
 
 // URL della Web App di Google Apps Script per la validazione identità
-const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycby_uDMRT3SaIBttTggcNpJas9lezFoJ_DWPAL6fE2ecZESLqxUUE7r20oM7SihmnFnOpQ/exec";
+const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbxkJ6KwZFKiUps1SotTxS_pd7qcH5IIKZbf0jsXqdW60s8xlpaG7zIkIc1y644VbyYdbQ/exec";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -307,13 +307,18 @@ async function validateIdentity() {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-            console.error("Server response not OK:", response.status);
+            console.error("Validation: HTTP Error", response.status);
             return false;
         }
 
         const result = await response.json();
-        console.log("Validation Result:", result);
-        return result.status === 'ok';
+        console.log("Validation Result from Google:", result);
+
+        if (result.status === 'ok') return true;
+
+        // Se c'è un errore, lo logghiamo in modo che tu possa leggerlo nella console browser
+        console.error("Validation Denied:", result.message, result.debug || "");
+        return false;
     } catch (err) {
         console.error("Validation Network Error:", err);
         if (statusText) statusText.textContent = "Errore di rete durante la verifica...";
