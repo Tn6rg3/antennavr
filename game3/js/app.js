@@ -289,21 +289,38 @@ async function validateIdentity() {
         return true;
     }
 
+    const statusText = document.getElementById('initStatusText');
+
     // Usiamo URLSearchParams per evitare problemi di CORS pre-flight con POST
     const params = new URLSearchParams();
     params.append('initData', tg.initData);
 
-    const response = await fetch(VALIDATION_SERVER_URL, {
-        method: 'POST',
-        mode: 'cors',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString()
-    });
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 secondi di timeout
 
-    if (!response.ok) return false;
-    const result = await response.json();
-    return result.status === 'ok';
-}
+        const response = await fetch(VALIDATION_SERVER_URL, {
+            method: 'POST',
+            mode: 'cors',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString(),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            console.error("Server response not OK:", response.status);
+            return false;
+        }
+
+        const result = await response.json();
+        return result.status === 'ok';
+    } catch (err) {
+        console.error("Validation Network Error:", err);
+        if (statusText) statusText.textContent = "Errore di rete durante la verifica...";
+        return false;
+    }
 }
 window.startApp = startApp;
 
