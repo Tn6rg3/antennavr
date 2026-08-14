@@ -81,7 +81,8 @@ window.lastPlayedCwMsgTs = 0;
 
 window.isChallenging = false;
 window.isRejoining = false;
-window.currentInviterId = null;
+window.outgoingChallengeId = null; // ID dell'utente che HO sfidato
+window.incomingChallengeId = null; // ID dell'utente che MI sfida
 let roomCode = "", roomHostId = null, activeTrnId = null;
 let lastPlayerCount = 0, gameStartPlayerCount = 0;
 let gameRunning = false, inputActive = false, audioCtx = null;
@@ -797,8 +798,9 @@ if (els.createRoomBtn) {
         if (gMode === 'custom' && window.customDictionary.length === 0) return showToast("Carica un file!");
 
         window.isChallenging = false;
+        window.outgoingChallengeId = null;
+        window.incomingChallengeId = null;
         currentMode = gMode || 'standard';
-        isSinglePlayer = (gType === 'single');
         currentWpm = baseWpm = (currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
         requestedWordCount = (currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         currentTone = parseInt(els.toneInput?.value) || 600;

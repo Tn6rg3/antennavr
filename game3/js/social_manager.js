@@ -285,8 +285,8 @@ window.renderOrUpdateUserListItem = function(userId, u) {
     li.innerHTML = '';
     li.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:4px 8px; margin-bottom:3px;";
 
-    const isIChallengingHim = (window.isChallenging && String(window.currentInviterId) === String(userId));
-    const isHeChallengingMe = (window.lastIncomingInvite && String(window.lastIncomingInvite.fromId) === String(userId));
+    const isIChallengingHim = (window.isChallenging && String(window.outgoingChallengeId) === String(userId));
+    const isHeChallengingMe = (window.incomingChallengeId && String(window.incomingChallengeId) === String(userId));
     const isPlaying = (u.status === 'playing');
     const canSpectate = (isPlaying && u.allowSpectators && u.activeRoomCode);
 
@@ -401,7 +401,7 @@ window.listenToOnlineUsers = function() {
 
 // --- MODALI INVITO E SFIDE ---
 window.openInviteModal = function(targetId, targetName) {
-    window.currentInviterId = targetId;
+    window.outgoingChallengeId = targetId;
     if (els.inviteModalTitle) els.inviteModalTitle.textContent = "Sfida " + targetName;
     if (els.inviteModalText) els.inviteModalText.textContent = "Scegli le impostazioni per la sfida:";
     if (els.inviteSettings) els.inviteSettings.style.display = 'block';
@@ -447,7 +447,7 @@ window.openInviteModal = function(targetId, targetName) {
 };
 
 window.openTeamInviteModal = async function(targetId, targetName) {
-    window.currentInviterId = targetId;
+    window.outgoingChallengeId = targetId;
     if (els.inviteModalTitle) els.inviteModalTitle.textContent = "Opzioni Utente: " + targetName;
     if (els.recruitmentStatusText) els.recruitmentStatusText.textContent = "Caricamento stato...";
     if (els.inviteSettings) els.inviteSettings.style.display = 'none';
@@ -528,7 +528,7 @@ window.openTeamInviteModal = async function(targetId, targetName) {
 };
 
 window.sendRecruitmentInvite = function(type) {
-    db.ref(`invites/${window.currentInviterId}`).set({
+    db.ref(`invites/${window.outgoingChallengeId}`).set({
         fromId: myId,
         fromName: myName,
         fromUsername: myPrivacy ? "" : tgUsername,
@@ -544,21 +544,15 @@ window.sendRecruitmentInvite = function(type) {
 
 window.closeInviteModal = function() {
     if (els.inviteModal) els.inviteModal.style.display = 'none';
-
-    // Se stavamo sfidando qualcuno e chiudiamo manualmente o viene rimosso,
-    // assicuriamoci di pulire i listener dell'invito in uscita
-    if (window.currentInviterId && listeners.outgoingInvite) {
-        db.ref(`invites/${window.currentInviterId}`).off();
-        listeners.outgoingInvite = null;
-    }
-    // NOTA: Non puliamo currentInviterId qui per permettere ai badge di persistere
-    // finché l'invito è attivo sul server. Lo facciamo in resetLocalChallengeState.
+    // RIMOSSO: Il cleanup del listener qui interrompeva il monitoraggio della sfida per il mittente.
+    // Il reset completo avviene solo in resetLocalChallengeState().
 };
 
 window.resetLocalChallengeState = function() {
     console.log("Challenge: Resetting local state...");
     window.isChallenging = false;
-    window.currentInviterId = null;
+    window.outgoingChallengeId = null;
+    window.incomingChallengeId = null;
     window.lastIncomingInvite = null;
 
     if (listeners.outgoingInvite) {
@@ -578,8 +572,11 @@ window.listenToInviteAccepted = function() {
         if (data && data.roomCode) {
             console.log("Challenge: Accepted! Joining room:", data.roomCode);
             db.ref(`invite_accepted/${myId}`).remove();
-            roomCode = data.roomCode;
+
+            // Prima di entrare resettiamo lo stato di sfida locale
             window.resetLocalChallengeState();
+
+            roomCode = data.roomCode;
             if (typeof window.joinRoomLogic === 'function') {
                 window.joinRoomLogic(false);
             }
@@ -598,29 +595,34 @@ window.listenToOutgoingInvite = function(targetId) {
     const inviteRef = db.ref(`invites/${sTargetId}`);
     const callback = inviteRef.on('value', snap => {
         const exists = snap.exists();
+        const currentTarget = String(window.outgoingChallengeId);
+
+        console.log(`TX: Invite update. Target: ${sTargetId}, GlobalTarget: ${currentTarget}, Exists: ${exists}, isChallenging: ${window.isChallenging}`);
 
         // Se l'invito sparisce dal DB e noi lo stiamo ancora aspettando (non siamo entrati in partita)
-        if (!exists && window.isChallenging && String(window.currentInviterId) === sTargetId) {
+        if (!exists && window.isChallenging && currentTarget === sTargetId) {
 
             // Verifichiamo se non siamo in una stanza (per distinguere Rifiuto da Accettazione)
             setTimeout(() => {
-                const amIInRoom = (typeof roomCode !== 'undefined' && roomCode && roomCode !== "");
+                const amIInRoom = (typeof window.roomCode !== 'undefined' && window.roomCode && window.roomCode !== "");
+                console.log(`TX: Re-checking state. InRoom: ${amIInRoom}, isChallenging: ${window.isChallenging}`);
 
-                if (window.isChallenging && String(window.currentInviterId) === sTargetId && !amIInRoom) {
+                if (window.isChallenging && String(window.outgoingChallengeId) === sTargetId && !amIInRoom) {
                     console.log("Challenge: Definitely refused by target.");
                     const msg = currentLang === 'it' ? "La sfida è stata rifiutata o è scaduta." : "Challenge declined or expired.";
 
-                    // Notifica Multi-canale (per sicurezza)
-                    if (window.tg && typeof window.tg.showAlert === 'function') {
-                        window.tg.showAlert(msg);
-                    } else if (typeof alert === 'function') {
-                        alert(msg);
-                    }
-                    showToast(msg);
+                    try {
+                        if (window.tg && typeof window.tg.showAlert === 'function') {
+                            window.tg.showAlert(msg);
+                        } else {
+                            alert(msg);
+                        }
+                    } catch(e) { console.error("Alert error:", e); }
 
+                    showToast(msg);
                     window.resetLocalChallengeState();
                 }
-            }, 1000);
+            }, 500);
         }
     });
     listeners.outgoingInvite = { target: sTargetId, ref: inviteRef, callback: callback };
@@ -632,6 +634,7 @@ window.listenToInvites = function() {
 
         // Aggiorniamo l'invito globale per la lista utenti (Badge "TI SFIDA")
         window.lastIncomingInvite = inv;
+        window.incomingChallengeId = inv ? inv.fromId : null;
         window.refreshOnlineUsersList();
 
         if (!inv || roomCode || gameRunning) return;
@@ -725,7 +728,7 @@ window.listenToInvites = function() {
         }
 
         if (els.inviteModal) els.inviteModal.style.display = 'flex';
-        window.currentInviterId = inv.fromId;
+        window.incomingChallengeId = inv.fromId;
         window.lastIncomingInvite = inv;
     });
 };

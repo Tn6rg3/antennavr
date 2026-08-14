@@ -706,7 +706,8 @@ window.finishGame = function() {
     localStorage.removeItem(STORAGE_ROOM_KEY);
     window.isRejoining = false;
     window.isChallenging = false;
-    window.currentInviterId = null;
+    window.outgoingChallengeId = null;
+    window.incomingChallengeId = null;
 
     db.ref(`presence/${myId}`).update({
         allowSpectators: false,
