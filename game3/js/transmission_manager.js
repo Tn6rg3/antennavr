@@ -13,11 +13,11 @@ window.transmissionState = {
 };
 
 window.initTransmissionManager = function() {
-    console.log("TX_DEBUG: Initializing...");
+    window.logDebug("TX: Initializing...");
 
     const keyBtn = document.getElementById('morseKeyBtn');
     if (!keyBtn) {
-        console.error("TX_DEBUG: morseKeyBtn NOT FOUND");
+        console.error("TX: morseKeyBtn NOT FOUND");
         return;
     }
 
@@ -80,11 +80,11 @@ window.initTransmissionManager = function() {
         if (btn) {
             btn.onclick = (e) => {
                 e.preventDefault();
-                console.log(`TX_DEBUG: Clicked ${id}`);
+                window.logDebug(`TX: Clicked ${id}`);
                 handler();
             };
         } else {
-            console.warn(`TX_DEBUG: Button ${id} NOT FOUND`);
+            console.warn(`TX: Button ${id} NOT FOUND`);
         }
     };
 
@@ -100,7 +100,7 @@ window.initTransmissionManager = function() {
 };
 
 window.startTxSession = function() {
-    console.log("TX_DEBUG: Executing startTxSession");
+    window.logDebug("TX: Executing startTxSession");
     window.transmissionState.sessionRunning = true;
     window.transmissionState.sessionStats = [];
 
@@ -117,7 +117,7 @@ window.startTxSession = function() {
 };
 
 window.stopTxSession = function() {
-    console.log("TX_DEBUG: Executing stopTxSession");
+    window.logDebug("TX: Executing stopTxSession");
     window.transmissionState.sessionRunning = false;
     window.transmissionState.active = false;
 
@@ -136,9 +136,9 @@ window.stopTxSession = function() {
 };
 
 window.pickNextTxTarget = function() {
-    console.log("TX_DEBUG: pickNextTxTarget");
+    window.logDebug("TX: pickNextTxTarget");
     if (!window.transmissionState.sessionRunning) {
-        console.warn("TX_DEBUG: Session NOT running, aborting pick");
+        console.warn("TX: Session NOT running, aborting pick");
         return;
     }
 
@@ -159,7 +159,7 @@ window.pickNextTxTarget = function() {
     const randomChar = activeChars[Math.floor(Math.random() * activeChars.length)];
 
     window.transmissionState.currentTarget = randomChar;
-    console.log("TX_DEBUG: Target is", randomChar);
+    window.logDebug("TX: Target is", randomChar);
 
     const targetEl = document.getElementById('txTargetChar');
     const feedbackEl = document.getElementById('txFeedbackText');
@@ -180,7 +180,7 @@ window.pickNextTxTarget = function() {
 window.replayTxTarget = function() {
     if (!window.transmissionState.currentTarget) return;
     const wpm = parseInt(window.courseData?.settings?.start_wpm) || 20;
-    console.log("TX_DEBUG: Playing audio for", window.transmissionState.currentTarget);
+    window.logDebug("TX: Playing audio for", window.transmissionState.currentTarget);
     if (typeof window.playMorseAudio === 'function') {
         window.playMorseAudio(window.transmissionState.currentTarget, wpm, true);
     } else {
@@ -222,7 +222,7 @@ window.analyzeTransmission = function() {
         detectedCode += (el.duration < unit * 2) ? "." : "-";
     });
 
-    console.log("TX_DEBUG: Detected", detectedCode, "Target", targetCode);
+    window.logDebug("TX: Detected", detectedCode, "Target", targetCode);
 
     if (detectedCode !== targetCode) {
         window.showTxDetailedResult(false, "Sequenza errata! Riprova.");
@@ -288,7 +288,7 @@ window.showTxDetailedResult = function(isCorrect, msg, dotAcc=0, dashAcc=0, spac
     const feedback = document.getElementById('txFeedbackText');
     const detailArea = document.getElementById('txDetailedAccuracy');
 
-    console.log(`TX_DEBUG: Result -> Correct: ${isCorrect}, Dot: ${dotAcc}%, Dash: ${dashAcc}%, Space: ${spaceAcc}%`);
+    window.logDebug(`TX: Result -> Correct: ${isCorrect}, Dot: ${dotAcc}%, Dash: ${dashAcc}%, Space: ${spaceAcc}%`);
 
     if (feedback) {
         // Fix Alert #124: Encoding completo e sostituzione globale dei newline

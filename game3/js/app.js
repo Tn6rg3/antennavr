@@ -55,10 +55,16 @@ const STORAGE_PREF_WORDS = "cwgame_pref_words";
 const STORAGE_PREF_TONE = "cwgame_pref_tone";
 const STORAGE_PREF_CHAR_SPACE = "cwgame_pref_char_space";
 const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space";
+const STORAGE_PREF_FIXED = "cwgame_pref_fixed";
+const STORAGE_PREF_EASY = "cwgame_pref_easy";
+const STORAGE_PREF_SPECTATE = "cwgame_pref_spectate";
 const STORAGE_DAILY_SHOWN = "cwgame_daily_shown";
 const STORAGE_CHAT_CW_ENABLED = "cwgame_chat_cw_enabled";
 const STORAGE_CHAT_CW_WPM = "cwgame_chat_cw_wpm";
 const STORAGE_CHAT_CW_TONE = "cwgame_chat_cw_tone";
+
+const DEBUG_MODE = false;
+window.logDebug = (...args) => { if (DEBUG_MODE) console.log(...args); };
 
 // --- STATO GLOBALE ---
 let myName = "", myId = "", myPrivacy = false;
@@ -137,8 +143,21 @@ function fisherYatesShuffle(array) {
 }
 
 function clearAllTimers() {
-    [lobbyTimerInterval, quizTimerInterval, ppTimerInterval, brTimerInterval, coopTimerInterval, coopDecayInterval, courseSessionTimer, coursePauseInterval].forEach(t => { if(t) clearInterval(t); });
-    lobbyTimerInterval = quizTimerInterval = ppTimerInterval = brTimerInterval = coopTimerInterval = coopDecayInterval = courseSessionTimer = coursePauseInterval = null;
+    // Fermiamo tutti gli intervalli e timeout di sistema
+    const timers = [
+        lobbyTimerInterval, quizTimerInterval, ppTimerInterval,
+        brTimerInterval, brCheckInterval,
+        coopTimerInterval, coopDecayInterval,
+        courseSessionTimer, coursePauseInterval,
+        arcadeNextBrickTimeout
+    ];
+    timers.forEach(t => { if(t) { clearInterval(t); clearTimeout(t); } });
+
+    lobbyTimerInterval = quizTimerInterval = ppTimerInterval = null;
+    brTimerInterval = brCheckInterval = null;
+    coopTimerInterval = coopDecayInterval = null;
+    courseSessionTimer = coursePauseInterval = null;
+    arcadeNextBrickTimeout = null;
 }
 
 window.forceAppUpdate = function() {
@@ -149,11 +168,6 @@ window.forceAppUpdate = function() {
 };
 
 if (els.updateBannerBtn) els.updateBannerBtn.addEventListener('click', window.forceAppUpdate);
-
-function escapeHTML(str) {
-    if (!str && str !== 0) return "";
-    return String(str).replace(/[&<>'"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m]));
-}
 
 function showToast(message) {
     // DISATTIVIAMO LE NOTIFICHE VISIVE DURANTE IL GIOCO
@@ -245,9 +259,9 @@ function initGame() {
     // RIPRISTINO IMPOSTAZIONI AGGIUNTIVE
     if (els.charSpaceInput) els.charSpaceInput.value = localStorage.getItem(STORAGE_PREF_CHAR_SPACE) || "";
     if (els.wordSpaceSelect) els.wordSpaceSelect.value = localStorage.getItem(STORAGE_PREF_WORD_SPACE) || "1.0";
-    if (els.fixedSpeedCheckbox) els.fixedSpeedCheckbox.checked = localStorage.getItem("cwgame_pref_fixed") === 'true';
-    if (els.easyModeCheckbox) els.easyModeCheckbox.checked = localStorage.getItem("cwgame_pref_easy") === 'true';
-    if (els.allowSpectatorsCheckbox) els.allowSpectatorsCheckbox.checked = localStorage.getItem("cwgame_pref_spectate") === 'true';
+    if (els.fixedSpeedCheckbox) els.fixedSpeedCheckbox.checked = localStorage.getItem(STORAGE_PREF_FIXED) === 'true';
+    if (els.easyModeCheckbox) els.easyModeCheckbox.checked = localStorage.getItem(STORAGE_PREF_EASY) === 'true';
+    if (els.allowSpectatorsCheckbox) els.allowSpectatorsCheckbox.checked = localStorage.getItem(STORAGE_PREF_SPECTATE) === 'true';
 
     // SALVATAGGIO AUTOMATICO DELLE PREFERENZE AL CAMBIO
     const savePref = (key, val) => localStorage.setItem(key, val);
@@ -256,9 +270,9 @@ function initGame() {
     els.toneInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_TONE, e.target.value));
     els.charSpaceInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_CHAR_SPACE, e.target.value));
     els.wordSpaceSelect?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORD_SPACE, e.target.value));
-    els.fixedSpeedCheckbox?.addEventListener('change', (e) => savePref("cwgame_pref_fixed", e.target.checked));
-    els.easyModeCheckbox?.addEventListener('change', (e) => savePref("cwgame_pref_easy", e.target.checked));
-    els.allowSpectatorsCheckbox?.addEventListener('change', (e) => savePref("cwgame_pref_spectate", e.target.checked));
+    els.fixedSpeedCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_FIXED, e.target.checked));
+    els.easyModeCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_EASY, e.target.checked));
+    els.allowSpectatorsCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_SPECTATE, e.target.checked));
 
     isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
     chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;

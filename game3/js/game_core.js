@@ -2,7 +2,6 @@
 
 window.showScreen = function(screenId) {
     clearAllTimers();
-    if (courseSessionTimer) { clearInterval(courseSessionTimer); courseSessionTimer = null; }
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
     }
@@ -1627,7 +1626,10 @@ document.addEventListener('visibilitychange', () => {
                     tdTyped.style.fontSize = "0.8em";
 
                     const tdReal = document.createElement('td');
-                    tdReal.innerHTML = `<b>${escapeHTML(missedWord)}</b>`;
+                    tdReal.innerHTML = "";
+      const b = document.createElement('b');
+      b.textContent = missedWord;
+      tdReal.appendChild(b);
 
                     const tdPoints = document.createElement('td');
                     tdPoints.style.color = "#d32f2f";

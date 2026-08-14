@@ -205,7 +205,7 @@ window.renderBRPlayers = function(players) {
         if (safePLives > 5) safePLives = 5;
         let icon = heartsList[safePLives];
 
-        info.innerHTML = `<b style="color:var(--link-color);">${escapeHTML(p.name)}</b> <small>${icon}</small>`;
+        info.innerHTML = `<b style="color:var(--link-color);">${window.escapeHtml(p.name)}</b> <small>${icon}</small>`;
 
         const status = document.createElement('span');
         status.style.fontSize = "0.85em";

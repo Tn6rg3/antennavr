@@ -368,8 +368,8 @@ window.renderActiveTournament = function(trnSnap) {
                     btnA.style.padding = "8px 4px";
                     btnA.style.fontSize = "0.85em";
                     btnA.innerHTML = m.playerA
-                        ? `✅ <b>${escapeHTML(m.playerA.name)}</b><br><small>(${escapeHTML(m.teamAName)})</small>`
-                        : `🟢 <b>Scegli per ${escapeHTML(m.teamAName)}</b><br><small>(Posto A)</small>`;
+                        ? `✅ <b>${window.escapeHtml(m.playerA.name)}</b><br><small>(${window.escapeHtml(m.teamAName)})</small>`
+                        : `🟢 <b>Scegli per ${window.escapeHtml(m.teamAName)}</b><br><small>(Posto A)</small>`;
                     btnA.onclick = () => window.toggleTrnSlot(mId, 'A', m.teamA, m.teamAName);
 
                     const btnB = document.createElement('button');
@@ -380,8 +380,8 @@ window.renderActiveTournament = function(trnSnap) {
                     btnB.style.padding = "8px 4px";
                     btnB.style.fontSize = "0.85em";
                     btnB.innerHTML = m.playerB
-                        ? `✅ <b>${escapeHTML(m.playerB.name)}</b><br><small>(${escapeHTML(m.teamBName)})</small>`
-                        : `🟢 <b>Scegli per ${escapeHTML(m.teamBName)}</b><br><small>(Posto B)</small>`;
+                        ? `✅ <b>${window.escapeHtml(m.playerB.name)}</b><br><small>(${window.escapeHtml(m.teamBName)})</small>`
+                        : `🟢 <b>Scegli per ${window.escapeHtml(m.teamBName)}</b><br><small>(Posto B)</small>`;
                     btnB.onclick = () => window.toggleTrnSlot(mId, 'B', m.teamB, m.teamBName);
 
                     slotsDiv.appendChild(btnA);
