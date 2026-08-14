@@ -95,18 +95,8 @@ window.processChatCwQueue = async function() {
     isChatCwPlaying = false;
 };
 
-window.deleteChatMessage = function(path, msgId) {
-    if (!confirm(currentLang === 'it' ? "Vuoi eliminare questo messaggio?" : "Delete this message?")) return;
-    db.ref(`${path}/${msgId}`).remove().then(() => {
-        showToast(currentLang === 'it' ? "Messaggio eliminato" : "Message deleted");
-    }).catch(e => console.error("Delete Error:", e));
-};
-
 window.setupChat = function(ref, containerId, limit = 50) {
-    if (!els[containerId]) return;
-
-    // Identifichiamo il percorso del database per le eliminazioni
-    const dbPath = ref.path.toString();
+    if (!els[containerId] || !ref) return;
 
     if (!listeners.activeChat) listeners.activeChat = {};
 
@@ -166,7 +156,11 @@ window.setupChat = function(ref, containerId, limit = 50) {
                 delBtn.innerHTML = " 🗑️";
                 delBtn.style.cursor = 'pointer';
                 delBtn.style.marginLeft = '5px';
-                delBtn.onclick = () => window.deleteChatMessage(dbPath, m.id);
+                delBtn.onclick = () => {
+                    if (confirm(currentLang === 'it' ? "Eliminare il messaggio?" : "Delete message?")) {
+                        ref.child(m.id).remove().catch(e => console.error("Delete Error:", e));
+                    }
+                };
                 header.appendChild(delBtn);
             }
 

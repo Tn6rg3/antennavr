@@ -418,20 +418,22 @@ function initGame() {
         if (els.playerName) els.playerName.textContent = myName;
 
         // --- SISTEMA LAZY CLEANUP GIORNALIERO ---
-        const cleanupRef = db.ref('appConfig/lastCleanupTs');
-        cleanupRef.once('value', snap => {
-            const lastCleanup = snap.val() || 0;
-            const now = Date.now();
-            const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+        try {
+            const cleanupRef = db.ref('appConfig/lastCleanupTs');
+            cleanupRef.once('value', snap => {
+                const lastCleanup = snap.val() || 0;
+                const now = Date.now();
+                const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-            if (now - lastCleanup > ONE_DAY_MS) {
-                console.log("CW Game: Running daily chat cleanup...");
-                // Svuotiamo le chat principali per mantenere il DB leggero
-                db.ref('globalChat').remove();
-                db.ref('courseChat').remove();
-                cleanupRef.set(now);
-            }
-        });
+                if (now - lastCleanup > ONE_DAY_MS) {
+                    console.log("CW Game: Running daily chat cleanup...");
+                    // Svuotiamo le chat principali per mantenere il DB leggero
+                    db.ref('globalChat').remove();
+                    db.ref('courseChat').remove();
+                    cleanupRef.set(now);
+                }
+            });
+        } catch(e) { console.warn("Cleanup error:", e); }
 
         // --- PULIZIA SESSIONI PRECEDENTI ---
         // Se l'app si è chiusa male, l'utente potrebbe avere ancora una stanza "waiting" a suo nome.
