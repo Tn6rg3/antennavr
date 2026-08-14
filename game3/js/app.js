@@ -263,16 +263,12 @@ async function startApp() {
     if (statusText) statusText.textContent = "Verifica identità Morse...";
 
     try {
-        const isVerifiedData = await validateIdentity();
-        if (!isVerifiedData || !isVerifiedData.verified) {
+        const isVerified = await validateIdentity();
+        if (!isVerified) {
             if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
             if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
             return;
         }
-
-        // Identità Certificata: Usiamo l'ID restituito dal server sicuro
-        myId = isVerifiedData.userId;
-        myName = tgUser.first_name;
     } catch (e) {
         console.error("Validation failed:", e);
         if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
@@ -281,17 +277,18 @@ async function startApp() {
     }
 
     // 2. Proseguiamo con l'avvio normale
+    myName = tgUser.first_name;
+    myId = tgUser.id.toString();
     initGame();
 }
 
 async function validateIdentity() {
     if (!VALIDATION_SERVER_URL || !VALIDATION_SERVER_URL.startsWith("http")) {
-        console.error("Security: Validation URL is missing or invalid!");
-        return { verified: false };
+        console.warn("Security: Validation URL not set, skipping.");
+        return true;
     }
 
     try {
-        // Usiamo GET con initData in query string per la massima compatibilità CORS con Google Apps Script
         const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(tg.initData);
 
         const response = await fetch(url, {
@@ -300,23 +297,13 @@ async function validateIdentity() {
             redirect: 'follow'
         });
 
-        if (!response.ok) {
-            console.error("Validation: HTTP Error", response.status);
-            return { verified: false };
-        }
+        if (!response.ok) return false;
 
         const result = await response.json();
-        console.log("Validation Result from Google:", result);
-
-        if (result.status === 'ok') {
-            return { verified: true, userId: result.userId };
-        }
-
-        console.error("Validation Denied:", result.message);
-        return { verified: false };
+        return result.status === 'ok';
     } catch (err) {
         console.error("Validation: Request failed", err);
-        return { verified: false };
+        return false;
     }
 }
 window.startApp = startApp;
