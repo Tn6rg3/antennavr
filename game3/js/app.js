@@ -215,7 +215,22 @@ window.loadRegolamento = async function() {
     try {
         const response = await fetch('regolamento.html');
         if (!response.ok) throw new Error();
-        els.regolamentoContainer.innerHTML = await response.text();
+        const html = await response.text();
+
+        // Creiamo un elemento temporaneo per il parsing sicuro
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        // Rimuoviamo eventuali script malevoli se presenti (ulteriori precauzione)
+        const scripts = doc.querySelectorAll('script');
+        scripts.forEach(s => s.remove());
+
+        // Pulizia sicura del contenitore e inserimento
+        els.regolamentoContainer.innerHTML = '';
+        while (doc.body.firstChild) {
+            els.regolamentoContainer.appendChild(doc.body.firstChild);
+        }
+
         if (els.sendFeedbackBtn) {
             els.sendFeedbackBtn.onclick = () => {
                 const url = `https://t.me/share/url?text=${encodeURIComponent("💡 Suggerimento: \n\n[Scrivi qui...]")}`;
@@ -223,6 +238,7 @@ window.loadRegolamento = async function() {
             };
         }
     } catch (e) {
+        console.error("Regolamento load error:", e);
         els.regolamentoContainer.innerHTML = `<div style="text-align:center;padding:15px;"><h3>📜 Regole</h3><p>Decodifica il Morse e scala la classifica!</p></div>`;
     }
 };
