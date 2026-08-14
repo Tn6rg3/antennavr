@@ -86,9 +86,6 @@ window.renderTutorPanel = function() {
             const p = userDataSnap.val() || {};
             const enroll = enrollments[uid];
 
-            const div = document.createElement('div');
-            div.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px;";
-
             const lesson = p.current_lesson || 2;
             const lastDate = p.last_session_date || "Mai";
             const accuracy = p.last_z2_accuracy ? Math.round(p.last_z2_accuracy * 100) : 0;

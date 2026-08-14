@@ -7,7 +7,7 @@ const WEBAPP_NAME = "cwgame";
 const APP_VERSION = "20260807.222";
 
 // URL della Web App di Google Apps Script per la validazione identità
-const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbxlHkLUpYE0tFGyBa4eVfnjLj_uIMdpnBKYDZXHKoNA9XX_TXcX8_AHXZPKiA1VBZfI/exec";
+const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbwkxU6EuvPt-YBF5hGZGM5Pr8tWNPLJHTnvLGR8dQE0DVq12WmUFeX_S_jKt3E0qr__zA/exec";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -291,13 +291,15 @@ async function validateIdentity() {
     }
 
     try {
-        // Usiamo GET con initData in query string per la massima compatibilità CORS con Google Apps Script
-        const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(tg.initData);
+        // Usiamo POST con application/x-www-form-urlencoded per evitare pre-flight CORS
+        const params = new URLSearchParams();
+        params.append('initData', tg.initData);
 
-        const response = await fetch(url, {
-            method: 'GET',
+        const response = await fetch(VALIDATION_SERVER_URL, {
+            method: 'POST',
             mode: 'cors',
-            redirect: 'follow'
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
         });
 
         if (!response.ok) {
