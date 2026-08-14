@@ -7,8 +7,7 @@ const WEBAPP_NAME = "cwgame";
 const APP_VERSION = "20260807.222";
 
 // URL della Web App di Google Apps Script per la validazione identità
-const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbzv8xVnuNOLXhyKBexqJfmTE9VKxbl93rV25qxXQFlISrM8lf5PJR_8hPtCcOds_zb3VA/exec";
-
+const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbxkJ6KwZFKiUps1SotTxS_pd7qcH5IIKZbf0jsXqdW60s8xlpaG7zIkIc1y644VbyYdbQ/exec";
 
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
@@ -875,6 +874,7 @@ if (els.createRoomBtn) {
         window.outgoingChallengeId = null;
         window.incomingChallengeId = null;
         currentMode = gMode || 'standard';
+        isSinglePlayer = (gType === 'single');
         currentWpm = baseWpm = (currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
         requestedWordCount = (currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         currentTone = parseInt(els.toneInput?.value) || 600;
@@ -932,4 +932,3 @@ if (els.createRoomBtn) {
 }
 
 // --- LISTA STANZE (SPOSTATO IN SOCIAL_MANAGER.JS) ---
-
