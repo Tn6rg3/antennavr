@@ -256,8 +256,20 @@ window.handleNewChatMessage = function(refKey, msg, msgKey) {
 };
 
 // --- PRESENZA ONLINE E LISTE UTENTI ---
+window.onlineUsersCache = {};
+
+window.refreshOnlineUsersList = function() {
+    if (!els.onlineUsersList) return;
+    Object.entries(window.onlineUsersCache).forEach(([uid, data]) => {
+        window.renderOrUpdateUserListItem(uid, data);
+    });
+};
+
 window.renderOrUpdateUserListItem = function(userId, u) {
     if (!els.onlineUsersList || userId === myId) return;
+
+    // Aggiorniamo la cache locale per rinfreschi futuri
+    window.onlineUsersCache[userId] = u;
 
     let li = document.getElementById(`user_list_item_${userId}`);
     if (!li) {
@@ -378,6 +390,7 @@ window.listenToOnlineUsers = function() {
     });
 
     const onRemoved = presenceRef.on('child_removed', snap => {
+        delete window.onlineUsersCache[snap.key];
         window.removeUserListItem(snap.key);
     });
 
@@ -423,6 +436,7 @@ window.openInviteModal = function(targetId, targetName) {
                 isChallenging = true;
                 window.listenToOutgoingInvite(targetId);
                 window.closeInviteModal();
+                window.refreshOnlineUsersList();
             }).catch(err => {
                 showToast("Errore invio: " + err.message);
             });
@@ -548,6 +562,8 @@ window.resetLocalChallengeState = function() {
         db.ref(`invites/${listeners.outgoingInvite.target}`).off();
         listeners.outgoingInvite = null;
     }
+    // Rinfresca la UI per rimuovere i badge
+    window.refreshOnlineUsersList();
 };
 
 window.listenToInviteAccepted = function() {
@@ -592,6 +608,11 @@ window.listenToOutgoingInvite = function(targetId) {
 window.listenToInvites = function() {
     db.ref(`invites/${myId}`).on('value', snap => {
         const inv = snap.val();
+
+        // Aggiorniamo l'invito globale per la lista utenti (Badge "TI SFIDA")
+        window.lastIncomingInvite = inv;
+        window.refreshOnlineUsersList();
+
         if (!inv || roomCode || gameRunning) return;
         if (Date.now() - inv.ts > 60000) return db.ref(`invites/${myId}`).remove();
 
