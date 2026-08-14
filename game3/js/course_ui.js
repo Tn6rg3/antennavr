@@ -646,6 +646,17 @@ window.initCourseChat = function() {
             nameB.textContent = msg.name + ": ";
             div.appendChild(nameB);
 
+            // TASTO ELIMINA (XSS Safe)
+            if (msg.senderId === myId) {
+                const delBtn = document.createElement('span');
+                delBtn.innerHTML = " 🗑️";
+                delBtn.style.cursor = 'pointer';
+                delBtn.onclick = () => {
+                    if (confirm("Eliminare?")) db.ref(`courseChat/${key}`).remove();
+                };
+                div.appendChild(delBtn);
+            }
+
             // Testo Messaggio (XSS Safe via textContent)
             const textSpan = document.createElement('span');
             textSpan.style.fontSize = "0.95em";
@@ -675,6 +686,7 @@ window.initCourseChat = function() {
                 username: myPrivacy ? "" : tgUsername,
                 text: txt,
                 ts: firebase.database.ServerValue.TIMESTAMP,
+                senderId: myId, // Aggiunto per eliminazione
                 role: window.courseData.role // Salviamo il ruolo nel messaggio
             });
             els.courseChatInput.value = '';

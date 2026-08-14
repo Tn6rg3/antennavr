@@ -417,6 +417,22 @@ function initGame() {
 
         if (els.playerName) els.playerName.textContent = myName;
 
+        // --- SISTEMA LAZY CLEANUP GIORNALIERO ---
+        const cleanupRef = db.ref('appConfig/lastCleanupTs');
+        cleanupRef.once('value', snap => {
+            const lastCleanup = snap.val() || 0;
+            const now = Date.now();
+            const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+            if (now - lastCleanup > ONE_DAY_MS) {
+                console.log("CW Game: Running daily chat cleanup...");
+                // Svuotiamo le chat principali per mantenere il DB leggero
+                db.ref('globalChat').remove();
+                db.ref('courseChat').remove();
+                cleanupRef.set(now);
+            }
+        });
+
         // --- PULIZIA SESSIONI PRECEDENTI ---
         // Se l'app si è chiusa male, l'utente potrebbe avere ancora una stanza "waiting" a suo nome.
         // La puliamo all'avvio per evitare "ghost rooms" in bacheca.
@@ -833,7 +849,13 @@ if (els.sendChatBtn) {
 
         window.lastChatSentTs = now;
         let ref = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
-        ref.set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+        ref.set({
+            name: myName,
+            username: myPrivacy ? "" : tgUsername,
+            text: txt,
+            ts: firebase.database.ServerValue.TIMESTAMP,
+            senderId: myId // Necessario per eliminazione e sicurezza
+        });
         if (els.chatInput) els.chatInput.value = '';
     };
 }
@@ -848,7 +870,13 @@ if (els.sendLobbyChatBtn) {
         if (txt.length > 200) return showToast(currentLang === 'it' ? "⚠️ Messaggio troppo lungo (max 200 car.)" : "⚠️ Message too long (max 200 chars)");
 
         window.lastChatSentTs = now;
-        db.ref(`rooms/${roomCode}/chat`).push().set({ name: myName, username: myPrivacy ? "" : tgUsername, text: txt, ts: firebase.database.ServerValue.TIMESTAMP });
+        db.ref(`rooms/${roomCode}/chat`).push().set({
+            name: myName,
+            username: myPrivacy ? "" : tgUsername,
+            text: txt,
+            ts: firebase.database.ServerValue.TIMESTAMP,
+            senderId: myId
+        });
         if (els.lobbyChatInput) els.lobbyChatInput.value = '';
     };
 }
