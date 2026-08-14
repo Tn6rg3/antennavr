@@ -815,3 +815,43 @@ window.actualStartCourseGame = function() {
 };
 
 setTimeout(window.attachCourseUIListeners, 2000);
+
+window.initTutorCourseChatNotification = function() {
+    if (!db || !myId) return;
+
+    const chatRef = db.ref('courseChat');
+    let initialLoad = true;
+
+    chatRef.limitToLast(1).on('child_added', snap => {
+        if (initialLoad) {
+            initialLoad = false;
+            return;
+        }
+
+        const msg = snap.val();
+        if (!msg) return;
+
+        // Solo per Tutor
+        const isTutor = window.courseData && window.courseData.role === 'tutor';
+        if (!isTutor) return;
+
+        // Se il messaggio è mio, non notificare
+        if (msg.name === myName) return;
+
+        // Se siamo già nel tab corso, non mostrare il badge
+        const courseArea = document.getElementById('profileCourseArea');
+        const isViewingCourse = (courseArea && courseArea.style.display === 'flex');
+
+        if (!isViewingCourse) {
+            const badge = document.getElementById('courseMessageBadge');
+            if (badge) badge.style.display = 'flex';
+        }
+    }, (error) => {
+        console.error("Course Chat Notif Error:", error);
+    });
+};
+
+window.hideCourseMessageBadge = function() {
+    const badge = document.getElementById('courseMessageBadge');
+    if (badge) badge.style.display = 'none';
+};

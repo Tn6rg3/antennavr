@@ -165,6 +165,7 @@ window.switchProfileTab = function(tabId) {
         // Nascondiamo l'header dei tab principali per vedere solo Dashboard e Trasmissione
         if (tabsHeader) tabsHeader.style.display = 'none';
         if (courseArea) courseArea.style.display = 'flex';
+        if (typeof window.hideCourseMessageBadge === 'function') window.hideCourseMessageBadge();
         if (typeof window.renderCourseTabView === 'function') window.renderCourseTabView();
     }
 };
