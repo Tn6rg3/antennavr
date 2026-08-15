@@ -30,6 +30,7 @@ window.renderCourseTabView = function() {
         window.populateCourseSettingsInputs();
         window.renderTutorSelectionList(); // Popola select in settings e wizard
         window.initCourseChat();
+        window.initTutorCourseChatNotification(); // Aggiorna listener notifiche
 
         // Di default mostriamo la dashboard
         window.switchCourseSubTab('dash');
@@ -437,6 +438,15 @@ window.finishWizard = function() {
 /**
  * UTILS E HELPERS UI
  */
+window.toggleVisibility = function(contId, btnId) {
+    const cont = document.getElementById(contId);
+    const btn = document.getElementById(btnId);
+    if (!cont || !btn) return;
+    const vis = cont.style.display === 'none';
+    cont.style.display = vis ? (contId.includes('Content') ? 'flex' : 'block') : 'none';
+    btn.textContent = vis ? 'Nascondi' : 'Mostra';
+};
+
 window.populateLessonDropdowns = function() {
     const wSelect = document.getElementById('wizardStartLesson');
     const sSelect = document.getElementById('courseTabLessonInput');
@@ -713,20 +723,41 @@ window.attachCourseUIListeners = function() {
  */
 window.initTutorCourseChatNotification = function() {
     if (!db || !window.myId) return;
+
+    // Pulizia listener esistente per evitare duplicati
+    if (window.listeners && window.listeners.tutorChatNotifRef) {
+        window.listeners.tutorChatNotifRef.off('child_added', window.listeners.tutorChatNotifCallback);
+    }
+
     const isTutor = window.courseData && window.courseData.role === 'tutor';
     const tutorId = isTutor ? window.myId : (window.courseData?.tutor_id || null);
     const path = tutorId ? `courseChats/${tutorId}` : 'courseChat';
     const ref = db.ref(path);
+
+    console.log("Course Notification: Listening on", path);
+
     let init = true;
-    ref.limitToLast(1).on('child_added', snap => {
+    const callback = snap => {
         if (init) { init = false; return; }
         const m = snap.val(); if (!m || m.senderId === window.myId) return;
+
+        // Se non siamo nella tab corso, mostriamo il badge
         const area = document.getElementById('profileCourseArea');
         if (!(area && area.style.display === 'flex')) {
             const b = document.getElementById('courseMessageBadge');
-            if (b) b.style.display = 'flex';
+            if (b) {
+                b.style.display = 'flex';
+                // Assicuriamoci che il testo sia "M" se tutor, o magari "!" se corsista (opzionale)
+                // b.textContent = isTutor ? 'M' : '!';
+            }
         }
-    });
+    };
+
+    ref.limitToLast(1).on('child_added', callback);
+
+    if (!window.listeners) window.listeners = {};
+    window.listeners.tutorChatNotifRef = ref;
+    window.listeners.tutorChatNotifCallback = callback;
 };
 
 window.hideCourseMessageBadge = function() {

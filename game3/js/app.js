@@ -605,7 +605,6 @@ function initGame() {
         window.loadRegolamento();
         window.initProgression?.();
         window.initCourseManager?.();
-        window.initTutorCourseChatNotification?.();
         window.setupBugSystem?.();
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
