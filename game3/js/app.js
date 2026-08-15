@@ -340,8 +340,12 @@ function initGame() {
         appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
     };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    db = firebase.database();
-    auth = firebase.auth();
+
+    // --- ESPORTAZIONE GLOBALE PER CONSOLE E DEBUG ---
+    window.db = firebase.database();
+    window.auth = firebase.auth();
+    db = window.db;
+    auth = window.auth;
 
     isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
     if (els.startWpmInput) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM) || 20;
@@ -698,6 +702,34 @@ window.setupBugSystem = function() {
     }
     if (els.btnReadTutorRequests) {
         els.btnReadTutorRequests.onclick = () => window.loadAdminTutorRequests();
+    }
+
+    // --- TASTO DEV: RESET SFIDA GIORNALIERA ---
+    if (els.btnDevResetDaily) {
+        els.btnDevResetDaily.onclick = async () => {
+            if (!confirm("Sei lo Sviluppatore. Vuoi resettare la tua sfida di oggi?")) return;
+            const today = new Date().toISOString().split('T')[0];
+
+            try {
+                // 1. Rimuove dalla classifica
+                await db.ref(`leaderboard/daily_challenge/${today}/${myId}`).remove();
+
+                // 2. Rimuove dallo storico
+                const hSnap = await db.ref(`users/${myId}/history`).orderByChild('mode').equalTo('daily_challenge').once('value');
+                hSnap.forEach(s => {
+                    const val = s.val();
+                    if (val && val.date && new Date(val.date).toISOString().split('T')[0] === today) {
+                        s.ref.remove();
+                    }
+                });
+
+                // 3. Pulisce cache locale
+                localStorage.removeItem(STORAGE_DAILY_SHOWN);
+
+                showToast("Sfida resettata! Ricarica l'app.");
+                setTimeout(() => location.reload(), 1000);
+            } catch(e) { alert("Errore: " + e.message); }
+        };
     }
 };
 
