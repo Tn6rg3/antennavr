@@ -208,6 +208,16 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10; }
 }
 .badge-active { display: flex !important; }
 
+.badge-pulse {
+    animation: badge-pulse-anim 1s infinite;
+}
+
+@keyframes badge-pulse-anim {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.7); }
+    70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(229, 57, 53, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(229, 57, 53, 0); }
+}
+
 .leaderboard-row {
     display: flex;
     justify-content: space-between;
