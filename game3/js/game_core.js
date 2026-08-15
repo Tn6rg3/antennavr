@@ -796,10 +796,11 @@ window.playNextWord = function() {
     usedReplay = false;
     const currentWord = gameWords[wordIndex].toUpperCase();
 
-    // LOGICA MODALITÀ SEMPLICE (EASY MODE)
+    // LOGICA MODALITÀ SEMPLICE (EASY MODE) - Mostra caratteri mescolati
     const easyHint = document.getElementById('easyModeHint');
     if (isEasyMode && easyHint) {
-        easyHint.textContent = currentWord;
+        const shuffled = currentWord.split('').sort(() => Math.random() - 0.5).join('');
+        easyHint.textContent = shuffled;
         easyHint.style.display = 'block';
     } else if (easyHint) {
         easyHint.style.display = 'none';
