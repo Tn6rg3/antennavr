@@ -274,105 +274,77 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
 
 // Listener silenzioso quando l'utente naviga l'app ma è in una stanza
 window.listenToRoomInBackground = function() {
-    // Se non c'è una stanza o il monitor è già attivo, non lo riattiviamo
     if (!roomCode || window.isRoomMonitorActive) return;
 
     console.log("Room: Enabling Unified Monitor for " + roomCode);
     window.isRoomMonitorActive = true;
 
-    // Pulizia listener esistenti per evitare sovrapposizioni
     if (listeners.room) { listeners.room.off(); listeners.room = null; }
-
     listeners.room = db.ref(`rooms/${roomCode}`);
 
-    // Usiamo variabili persistenti per evitare di perdere eventi durante i cambi pagina
-    if (typeof window.lastAcceptedCount === 'undefined') window.lastAcceptedCount = 0;
+    // Inizializziamo i contatori con i valori attuali per evitare notifiche al primo avvio
+    listeners.room.once('value', snap => {
+        const d = snap.val() || {};
+        const p = d.players || {};
+        window.lastPlayerCount = Object.keys(p).length;
+        window.lastAcceptedCount = Object.values(p).filter(u => u.accepted).length;
 
-    listeners.room.on('value', snap => {
-        if (!snap.exists()) {
-            window.isRoomMonitorActive = false;
-            roomCode = "";
-            localStorage.removeItem(STORAGE_ROOM_KEY);
-            return window.exitRoomCleanly(true);
-        }
-
-        const rData = snap.val();
-
-        // --- SINCRONIZZAZIONE STATO GLOBALE ---
-        currentMode = rData.mode;
-        requestedWordCount = rData.wordCount;
-        isSinglePlayer = rData.type === 'single';
-        isFixedSpeed = !!rData.fixedSpeed;
-        isEasyMode = !!rData.easyMode;
-        roomHostId = rData.hostId;
-        window.roomCreatedAt = rData.createdAt || 0;
-        window.charSpaceWpm = rData.charSpaceWpm || 0;
-        window.wordSpaceMult = rData.wordSpaceMult || 1.0;
-
-        const amIHost = (myId === rData.hostId);
-        const players = rData.players || {};
-        const pCount = Object.keys(players).length;
-        const acceptedCount = Object.values(players).filter(p => p.accepted).length;
-
-        // 1. AGGIORNAMENTO BACHECA (Priorità assoluta se Host)
-        if (amIHost && rData.status === 'waiting') {
-            db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(acceptedCount);
-        }
-
-        // 2. GESTIONE UI E NOTIFICHE
-        const isLobbyVisible = (els.lobbyScreen && els.lobbyScreen.classList.contains('active-screen'));
-
-        if (isLobbyVisible) {
-            window.renderPlayersList(players, rData.hostId);
-            window.lastPlayerCount = pCount;
-            window.lastAcceptedCount = acceptedCount;
-
-            // Gestione Timer Lobby
-            if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
-            if (rData.expiresAt && !isSinglePlayer) {
-                lobbyTimerInterval = setInterval(() => {
-                    const diff = rData.expiresAt - Date.now();
-                    if (diff <= 0) {
-                        clearInterval(lobbyTimerInterval);
-                        if (els.lobbyTimerText) els.lobbyTimerText.textContent = "Tempo scaduto!";
-                    } else if (els.lobbyTimerText) {
-                        els.lobbyTimerText.textContent = `Scade tra: ${Math.floor(diff/60000)}:${Math.floor((diff%60000)/1000).toString().padStart(2, '0')}`;
-                    }
-                }, 1000);
+        listeners.room.on('value', snap => {
+            if (!snap.exists()) {
+                window.isRoomMonitorActive = false;
+                roomCode = "";
+                localStorage.removeItem(STORAGE_ROOM_KEY);
+                return window.exitRoomCleanly(true);
             }
-        } else if (!gameRunning && !isCourseMode) {
-            // NOTIFICA: Qualcuno è entrato O ha accettato la sfida
-            if (amIHost && (pCount > window.lastPlayerCount || acceptedCount > window.lastAcceptedCount)) {
-                const msg = acceptedCount > window.lastAcceptedCount ? "Un giocatore ha accettato la sfida! 🚀" : "Qualcuno è entrato nella tua stanza.";
-                if (typeof window.showRoomEventModal === 'function') {
-                    window.showRoomEventModal("Aggiornamento Stanza", msg);
-                    if (typeof window.playBeep === 'function') {
-                        window.playBeep(880, 0.1);
-                        setTimeout(() => window.playBeep(1100, 0.15), 100);
+
+            const rData = snap.val();
+            const players = rData.players || {};
+            const pCount = Object.keys(players).length;
+            const acceptedCount = Object.values(players).filter(p => p.accepted).length;
+            const amIHost = (myId === rData.hostId);
+
+            // 1. AGGIORNAMENTO BACHECA (Sempre se Host, basato su presenze reali)
+            if (amIHost && rData.status === 'waiting') {
+                db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(pCount);
+            }
+
+            // 2. GESTIONE UI E NOTIFICHE
+            const isLobbyVisible = (els.lobbyScreen && els.lobbyScreen.classList.contains('active-screen'));
+
+            if (isLobbyVisible) {
+                window.renderPlayersList(players, rData.hostId);
+                window.lastPlayerCount = pCount;
+                window.lastAcceptedCount = acceptedCount;
+            } else if (!gameRunning && !isCourseMode) {
+                // NOTIFICA DIFFERENZIATA
+                if (amIHost) {
+                    if (acceptedCount > window.lastAcceptedCount) {
+                        window.showRoomEventModal("Sfida Accettata! 🚀", "Un giocatore è pronto a partire.");
+                        if (typeof window.playBeep === 'function') window.playBeep(900, 0.2);
+                    } else if (pCount > window.lastPlayerCount) {
+                        window.showRoomEventModal("Nuovo Ingresso 👤", "Qualcuno è entrato nella tua stanza.");
+                        if (typeof window.playBeep === 'function') window.playBeep(700, 0.15);
                     }
                 }
             }
-        }
 
-        window.lastPlayerCount = pCount;
-        window.lastAcceptedCount = acceptedCount;
+            window.lastPlayerCount = pCount;
+            window.lastAcceptedCount = acceptedCount;
 
-        // 3. LOGICA DI PASSAGGIO AL GIOCO
-        if (rData.status === 'playing' || rData.status === 'countdown') {
-            localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
-            window.isRoomMonitorActive = false;
-
-            if (rData.status === 'playing' && !gameRunning) {
-                currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
-                if (rData.words) gameWords = rData.words;
-                return window.resumeGameSequence();
+            // 3. LOGICA DI PASSAGGIO AL GIOCO
+            if (rData.status === 'playing' || rData.status === 'countdown') {
+                localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
+                window.isRoomMonitorActive = false;
+                if (rData.status === 'playing' && !gameRunning) {
+                    currentWpm = rData.wpm; baseWpm = rData.wpm; if (rData.words) gameWords = rData.words;
+                    return window.resumeGameSequence();
+                }
+                if (rData.status === 'countdown' && !gameRunning) {
+                    currentWpm = rData.wpm; baseWpm = rData.wpm; if (rData.words) gameWords = rData.words;
+                    return window.startCountdownSequence();
+                }
             }
-            if (rData.status === 'countdown' && !gameRunning) {
-                currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
-                if (rData.words) gameWords = rData.words;
-                return window.startCountdownSequence();
-            }
-        }
+        });
     });
 };
 
