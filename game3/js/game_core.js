@@ -521,8 +521,6 @@ window.renderPlayersList = function(playersData, hostId) {
                 });
             });
         };
-            });
-        };
     }
 
     if (els.startMultiplayerBtn) els.startMultiplayerBtn.style.display = (amIHost && !isTrnOrPP) ? 'block' : 'none';
