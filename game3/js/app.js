@@ -156,7 +156,7 @@ let lastActivityTs = Date.now();
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minuti
 
 // GESTORE CENTRALE LISTENER
-const listeners = {
+window.listeners = {
     room: null, chat: null, pingPong: null, players: null, quizState: null,
     roomLb: null, presence: null, roomsList: null, invites: null, inviteAccepted: null,
     outgoingInvite: null, team: null, allTeams: null, trn: null, activeChat: {}

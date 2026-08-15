@@ -318,7 +318,7 @@ window.loadCourseState = async function() {
         if (window.courseData.active_plan === true) {
             window.updateGlobalEnrollmentRecord(true);
             // Se l'utente è nel tab corso, rinfreschiamo la vista
-            if (els.courseTabActiveView && els.courseTabActiveView.offsetParent !== null) {
+            if (els.courseTabActiveView && els.courseTabActiveView.offsetParent) {
                 window.renderCourseTabView();
             }
         }

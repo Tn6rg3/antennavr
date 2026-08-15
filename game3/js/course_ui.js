@@ -1,5 +1,61 @@
 // js/course_ui.js
 
+window.renderAdvancedCourseStats = function(selectedChar) {
+    const panel = document.getElementById('courseAdvancedStatsPanel');
+    const container = document.getElementById('courseAdvancedStats');
+    if (!container || !panel) return;
+
+    panel.style.display = 'block';
+    container.innerHTML = '';
+
+    const statsByType = window.courseData.progress.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
+    const dbChar = window.firebaseEscape(selectedChar);
+
+    const title = document.createElement('div');
+    title.style.cssText = "font-size: 1.1em; font-weight: bold; text-align: center; margin-bottom: 10px; color: var(--champ-color); text-shadow: 0 0 5px rgba(255,152,0,0.3);";
+    title.textContent = `Analisi Carattere: ${selectedChar}`;
+    container.appendChild(title);
+
+    const types = [
+        { id: 'Z2', label: 'Base', icon: '🟢' },
+        { id: 'WORK', label: 'Lavoro', icon: '🟡' },
+        { id: 'LONG', label: 'Lungo', icon: '🟣' }
+    ];
+
+    types.forEach(type => {
+        const s = (statsByType[type.id] && statsByType[type.id][dbChar]) ? statsByType[type.id][dbChar] : { attempts: 0, errors: 0 };
+        const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
+        const perc = Math.round(accuracy * 100);
+
+        const row = document.createElement('div');
+        row.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
+
+        const labelRow = document.createElement('div');
+        labelRow.style.cssText = "display: flex; justify-content: space-between; font-size: 0.8em; font-weight: bold;";
+        labelRow.innerHTML = `<span>${type.icon} ${type.label}</span> <span style="color:var(--hint-color)">${s.attempts} tentativi</span>`;
+
+        const barContainer = document.createElement('div');
+        barContainer.style.cssText = "height: 18px; background: rgba(255,255,255,0.05); border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; position: relative;";
+
+        const bar = document.createElement('div');
+        bar.style.width = s.attempts > 0 ? `${perc}%` : "0%";
+        bar.style.height = "100%";
+        bar.style.background = s.attempts === 0 ? '#444' : (accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f');
+        bar.style.boxShadow = "inset 0 0 10px rgba(0,0,0,0.3)";
+        bar.style.transition = "width 0.8s cubic-bezier(0.17, 0.67, 0.83, 0.67)";
+
+        const percLabel = document.createElement('span');
+        percLabel.style.cssText = "position: absolute; width: 100%; text-align: center; font-size: 0.7em; font-weight: bold; color: #fff; text-shadow: 1px 1px 2px #000;";
+        percLabel.textContent = s.attempts > 0 ? `${perc}%` : "NESSUN DATO";
+
+        barContainer.appendChild(bar);
+        barContainer.appendChild(percLabel);
+        row.appendChild(labelRow);
+        row.appendChild(barContainer);
+        container.appendChild(row);
+    });
+};
+
 window.renderCourseTabView = function() {
     const activeView = document.getElementById('courseTabActiveView');
     const initialPrompt = document.getElementById('courseTabInitialPrompt');
@@ -65,11 +121,11 @@ window.renderTutorPanel = function() {
     const list = document.getElementById('tutorStudentList');
     if (!list || !db) return;
 
-    if (listeners.tutorPanel) db.ref('courseActiveEnrollments').off('value', listeners.tutorPanel);
+    if (window.listeners.tutorPanel) db.ref('courseActiveEnrollments').off('value', window.listeners.tutorPanel);
 
     list.innerHTML = '<p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Sincronizzazione corsisti...</p>';
 
-    listeners.tutorPanel = db.ref('courseActiveEnrollments').on('value', async (snap) => {
+    window.listeners.tutorPanel = db.ref('courseActiveEnrollments').on('value', async (snap) => {
         const enrollments = snap.val() || {};
         list.innerHTML = '';
 
@@ -84,7 +140,7 @@ window.renderTutorPanel = function() {
             const enroll = enrollments[uid];
 
             // FILTRO: Mostriamo solo i corsisti assegnati a questo tutor
-            if (enroll.role === 'tutor' || enroll.tutorId !== myId) continue;
+            if (!enroll || enroll.role === 'tutor' || enroll.tutorId !== myId) continue;
 
             // Carichiamo i progressi (Koch) per ogni iscritto
             const userDataSnap = await db.ref(`users/${uid}/course/progress`).once('value');
@@ -448,63 +504,6 @@ window.renderCourseTabDashboard = function() {
     }
 };
 
-window.renderAdvancedCourseStats = function(selectedChar) {
-    const panel = document.getElementById('courseAdvancedStatsPanel');
-    const container = document.getElementById('courseAdvancedStats');
-    if (!container || !panel) return;
-
-    panel.style.display = 'block';
-    container.innerHTML = '';
-
-    const statsByType = window.courseData.progress.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
-    const dbChar = window.firebaseEscape(selectedChar);
-
-    const title = document.createElement('div');
-    title.style.cssText = "font-size: 1.1em; font-weight: bold; text-align: center; margin-bottom: 10px; color: var(--champ-color); text-shadow: 0 0 5px rgba(255,152,0,0.3);";
-    title.textContent = `Analisi Carattere: ${selectedChar}`;
-    container.appendChild(title);
-
-    const types = [
-        { id: 'Z2', label: 'Base', icon: '🟢' },
-        { id: 'WORK', label: 'Lavoro', icon: '🟡' },
-        { id: 'LONG', label: 'Lungo', icon: '🟣' }
-    ];
-
-    types.forEach(type => {
-        const s = (statsByType[type.id] && statsByType[type.id][dbChar]) ? statsByType[type.id][dbChar] : { attempts: 0, errors: 0 };
-        const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
-        const perc = Math.round(accuracy * 100);
-
-        const row = document.createElement('div');
-        row.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
-
-        const labelRow = document.createElement('div');
-        labelRow.style.cssText = "display: flex; justify-content: space-between; font-size: 0.8em; font-weight: bold;";
-        labelRow.innerHTML = `<span>${type.icon} ${type.label}</span> <span style="color:var(--hint-color)">${s.attempts} tentativi</span>`;
-
-        const barContainer = document.createElement('div');
-        barContainer.style.cssText = "height: 18px; background: rgba(255,255,255,0.05); border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; position: relative;";
-
-        const bar = document.createElement('div');
-        bar.style.width = s.attempts > 0 ? `${perc}%` : "0%";
-        bar.style.height = "100%";
-        bar.style.background = s.attempts === 0 ? '#444' : (accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f');
-        bar.style.boxShadow = "inset 0 0 10px rgba(0,0,0,0.3)";
-        bar.style.transition = "width 0.8s cubic-bezier(0.17, 0.67, 0.83, 0.67)";
-
-        const percLabel = document.createElement('span');
-        percLabel.style.cssText = "position: absolute; width: 100%; text-align: center; font-size: 0.7em; font-weight: bold; color: #fff; text-shadow: 1px 1px 2px #000;";
-        percLabel.textContent = s.attempts > 0 ? `${perc}%` : "NESSUN DATO";
-
-        barContainer.appendChild(bar);
-        barContainer.appendChild(percLabel);
-        row.appendChild(labelRow);
-        row.appendChild(barContainer);
-        container.appendChild(row);
-    });
-
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-};
 
 window.startCourseWizard = function() {
     if (els.courseTabInitialPrompt) els.courseTabInitialPrompt.style.display = 'none';
@@ -662,12 +661,7 @@ window.finishWizard = function() {
     window.updateGlobalEnrollmentRecord(true); // Aggiorna contatore globale iscritti
     window.renderCourseTabView();
 
-    if (role === 'tutor') {
-        showToast("Profilo TUTOR attivato! 🎓");
-    } else {
-        showToast(isElite ? "Piano ELITE attivato! ⚡" : "Corso attivato con successo! 🚀");
     }
-};
 };
 
 window.finishCourseSession = function() {
@@ -845,9 +839,9 @@ window.initCourseChat = function() {
     const chatRef = db.ref(chatPath);
     const messagesCont = document.getElementById('courseChatMessages');
 
-    if (listeners.courseChat) chatRef.off('value', listeners.courseChat);
+    if (window.listeners.courseChat) chatRef.off('value', window.listeners.courseChat);
 
-    listeners.courseChat = chatRef.limitToLast(50).on('value', async (snap) => {
+    window.listeners.courseChat = chatRef.limitToLast(50).on('value', async (snap) => {
         if (!messagesCont) return;
         const data = snap.val() || {};
         messagesCont.innerHTML = '';
@@ -1117,9 +1111,9 @@ window.initTutorCourseChatNotification = function() {
     const chatRef = db.ref(chatPath);
     let initialLoad = true;
 
-    if (listeners.courseChatNotif) chatRef.off('child_added', listeners.courseChatNotif);
+    if (window.listeners.courseChatNotif) chatRef.off('child_added', window.listeners.courseChatNotif);
 
-    listeners.courseChatNotif = chatRef.limitToLast(1).on('child_added', snap => {
+    window.listeners.courseChatNotif = chatRef.limitToLast(1).on('child_added', snap => {
         if (initialLoad) {
             initialLoad = false;
             return;
@@ -1145,6 +1139,39 @@ window.initTutorCourseChatNotification = function() {
         }
     }, (error) => {
         console.error("Course Chat Notif Error:", error);
+    });
+};
+
+window.actualStartCourseGame = function() {
+    if (!window.courseData.current_day_session) return;
+
+    // Chiudiamo il modale esplicitamente
+    const modal = document.getElementById('courseSessionModal');
+    if (modal) modal.style.display = 'none';
+
+    currentMode = 'course';
+    isSinglePlayer = true;
+    currentWpm = parseInt(window.courseData.settings.start_wpm);
+    roomCode = "COURSE_" + myId;
+
+    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+
+    // Inizializzazione audio contesto
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    // Segnaliamo il roomCode ai tutor e impostiamo pulizia automatica al distacco
+    const enrollmentRef = db.ref(`courseActiveEnrollments/${myId}`);
+    enrollmentRef.update({ roomCode: roomCode });
+    enrollmentRef.child('roomCode').onDisconnect().set(null);
+
+    db.ref('rooms/' + roomCode).set({
+        status: 'countdown', type: 'single', mode: 'course', wpm: currentWpm, tone: 600,
+        createdAt: firebase.database.ServerValue.TIMESTAMP, hostId: myId
+    }).then(() => {
+        if (typeof window.joinRoomLogic === 'function') {
+            window.joinRoomLogic(false);
+        }
     });
 };
 
