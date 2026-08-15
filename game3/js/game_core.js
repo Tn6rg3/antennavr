@@ -32,7 +32,7 @@ window.showScreen = function(screenId) {
     }
 
     // Se stiamo navigando fuori da una stanza e siamo in una stanza attiva
-    if (!isPlayingScreen && roomCode && !gameRunning) {
+    if (!isPlayingScreen && roomCode && !window.gameRunning) {
         // Se non abbiamo ancora accettato la sfida, usciamo del tutto per pulire il contatore
         db.ref(`rooms/${roomCode}/players/${myId}/accepted`).once('value', s => {
             if (s.exists() && s.val() === false) {
@@ -133,7 +133,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
 
     // Reset variabili di gioco per evitare leakage tra sessioni
-    gameRunning = false;
+    window.gameRunning = false;
     inputActive = false;
     gameWords = [];
     wordIndex = 0;
@@ -277,7 +277,7 @@ window.listenToRoomInBackground = function() {
         const rData = snap.val();
 
         // Se la partita sta per iniziare o è iniziata, riportiamo l'utente dentro
-        if ((rData.status === 'playing' || rData.status === 'countdown') && !gameRunning) {
+        if ((rData.status === 'playing' || rData.status === 'countdown') && !window.gameRunning) {
             window.joinRoomLogic(true);
         }
     });
@@ -375,13 +375,13 @@ window.joinRoomLogic = function(isReconnect = false) {
                 localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
             }
 
-            if (rData.status === 'playing' && !gameRunning) {
-                currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
+            if (rData.status === 'playing' && !window.gameRunning) {
+                window.currentWpm = rData.wpm; window.baseWpm = rData.wpm; window.currentTone = rData.tone;
                 if (rData.words) gameWords = rData.words;
                 return window.resumeGameSequence();
             }
-            if (rData.status === 'countdown' && !gameRunning) {
-                currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
+            if (rData.status === 'countdown' && !window.gameRunning) {
+                window.currentWpm = rData.wpm; window.baseWpm = rData.wpm; window.currentTone = rData.tone;
                 if (rData.words) gameWords = rData.words;
                 return window.startCountdownSequence();
             }
@@ -534,6 +534,8 @@ window.renderPlayersList = function(playersData, hostId) {
 };
 
 window.startCountdownSequence = function() {
+    window.gameRunning = true;
+    window.gameStartPlayerCount = isSinglePlayer ? 1 : 0;
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (listeners.room) listeners.room.off();
 
@@ -542,14 +544,14 @@ window.startCountdownSequence = function() {
         // Recuperiamo il conteggio iniziale dei giocatori che iniziano la sfida
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
             const initialPlayers = snap.val() || {};
-            gameStartPlayerCount = Object.keys(initialPlayers).length;
+            window.gameStartPlayerCount = Object.keys(initialPlayers).length;
 
-            console.log("Match Start: Player count =", gameStartPlayerCount);
+            console.log("Match Start: Player count =", window.gameStartPlayerCount);
 
             if (listeners.players) db.ref(`rooms/${roomCode}/players`).off('value', listeners.players);
             listeners.players = db.ref(`rooms/${roomCode}/players`).on('value', pSnap => {
                 // Monitoriamo solo se la partita è effettivamente in corso o nel countdown
-                if (!gameRunning) return;
+                if (!window.gameRunning) return;
 
                 const players = pSnap.val() || {};
                 const currentPCount = Object.keys(players).length;
@@ -557,10 +559,10 @@ window.startCountdownSequence = function() {
                 // --- NUOVA LOGICA DI RILEVAMENTO ABBANDONO (Più robusta) ---
 
                 // Caso 1: Qualcuno è stato rimosso dal nodo players (Abbandono esplicito)
-                if (gameStartPlayerCount >= 2 && currentPCount < gameStartPlayerCount) {
-                    if (gameStartPlayerCount === 2 && players[myId]) {
+                if (window.gameStartPlayerCount >= 2 && currentPCount < window.gameStartPlayerCount) {
+                    if (window.gameStartPlayerCount === 2 && players[myId]) {
                         // In 1vs1 la vittoria è a tavolino
-                        gameRunning = false;
+                        window.gameRunning = false;
                         const msg = currentLang === 'it' ? "L'avversario si è ritirato. Hai vinto a tavolino! 🏆" : "Opponent withdrew. You win by default! 🏆";
 
                         if (window.tg && window.tg.showAlert) {
@@ -578,18 +580,18 @@ window.startCountdownSequence = function() {
 
                 // Caso 2: Qualcuno è ancora nel nodo ma è andato Offline (Crash o chiusura app)
                 // Lo gestiamo solo per il match 1vs1 per ora
-                if (gameStartPlayerCount === 2 && currentPCount === 2) {
+                if (window.gameStartPlayerCount === 2 && currentPCount === 2) {
                     const myNameLower = (myName || "").toLowerCase();
                     const opponent = Object.values(players).find(p => (p.name || "").toLowerCase() !== myNameLower);
 
                     if (opponent && opponent.online === false) {
                         // Aspettiamo un momento per vedere se rientra
                         setTimeout(() => {
-                            if (!gameRunning) return;
+                            if (!window.gameRunning) return;
                             db.ref(`rooms/${roomCode}/players`).once('value', s => {
                                 const latestPlayers = s.val() || {};
                                 const latestOpp = Object.values(latestPlayers).find(p => (p.name || "").toLowerCase() !== myNameLower);
-                                if (gameRunning && latestOpp && latestOpp.online === false) {
+                                if (window.gameRunning && latestOpp && latestOpp.online === false) {
                                     showToast(currentLang === 'it' ? "L'avversario sembra offline..." : "Opponent seems offline...");
                                 }
                             });
@@ -599,7 +601,7 @@ window.startCountdownSequence = function() {
             });
         });
     }
-    if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
+    if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${window.currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
     if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: 0`;
 
     if (isSinglePlayer && els.allowSpectatorsCheckbox && els.allowSpectatorsCheckbox.checked) {
@@ -616,8 +618,8 @@ window.startCountdownSequence = function() {
     }
 
     if (!isRejoining) {
-        totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0; usedReplay = false;
-        peakWpm = currentWpm;
+        window.totalScore = 0; window.currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0; usedReplay = false;
+        window.peakWpm = window.currentWpm;
         sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
     }
     if (els.tableBody) els.tableBody.innerHTML = "";
@@ -639,7 +641,7 @@ window.startCountdownSequence = function() {
     const share = document.getElementById('matchShareContainer');
     if (share) share.style.display = 'none';
 
-    gameRunning = true;
+    window.gameRunning = true;
     let count = 3;
     if (els.countdownNumber) els.countdownNumber.textContent = count;
 
@@ -687,15 +689,15 @@ window.startCountdownSequence = function() {
 
 window.resumeGameSequence = function() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    gameRunning = true;
-    isRejoining = false;
+    window.gameRunning = true;
+    window.isRejoining = false;
 
     isCoopMode = (currentMode === 'conquest');
     if (els.coopArea) els.coopArea.style.display = 'none';
     if (els.tableWrapper) els.tableWrapper.style.display = 'block';
 
-    if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
-    if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: ${totalScore}`;
+    if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${window.currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
+    if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: ${window.totalScore}`;
 
     if (domCache.tableBody) {
         domCache.tableBody.innerHTML = "";
@@ -725,7 +727,7 @@ window.resumeGameSequence = function() {
 };
 
 window.playNextWord = function() {
-    if (!gameRunning || currentMode === 'pingpong') return;
+    if (!window.gameRunning || window.currentMode === 'pingpong') return;
     if (isCourseMode) return window.playNextCourseGroup?.();
     if (wordIndex >= requestedWordCount) return window.finishGame();
     if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
@@ -751,11 +753,11 @@ window.playNextWord = function() {
 
 window.finishGame = function() {
     // Se vinciamo a tavolino con 0 punti, diamo un punto simbolico per attivare il salvataggio
-    if (totalScore === 0 && !isSinglePlayer && !isCourseMode) {
-        totalScore = 1;
+    if (window.totalScore === 0 && !isSinglePlayer && !isCourseMode) {
+        window.totalScore = 1;
     }
 
-    gameRunning = false;
+    window.gameRunning = false;
     inputActive = false;
     if (els.permanentGameInput) els.permanentGameInput.blur();
     clearAllTimers();
@@ -777,7 +779,7 @@ window.finishGame = function() {
 
     if (roomCode) {
         const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-        myPlayerRef.update({ finished: true, score: totalScore, wpm: peakWpm, matchDetails: matchDetailsArray });
+        myPlayerRef.update({ finished: true, score: window.totalScore, wpm: window.peakWpm, matchDetails: matchDetailsArray });
         myPlayerRef.onDisconnect().cancel();
     }
 
@@ -830,13 +832,13 @@ window.finishGame = function() {
         });
     }
 
-    if (matchDetailsArray.length > 0) {
-        db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: currentMode, score: totalScore, wpm: peakWpm, type: isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
-        if (typeof window.updateActivity === 'function') window.updateActivity(totalScore > 0);
+    if (window.matchDetailsArray.length > 0) {
+        db.ref(`users/${window.myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: window.currentMode, score: window.totalScore, wpm: window.peakWpm, type: window.isSinglePlayer ? 'single' : 'multi', wordCount: window.requestedWordCount, details: window.matchDetailsArray });
+        if (typeof window.updateActivity === 'function') window.updateActivity(window.totalScore > 0);
 
         // --- ASSEGNAZIONE XP FINALE (RPG) ---
         if (typeof window.addXP === 'function') {
-            const xpGain = Math.floor(totalScore / 10) + 50; // XP base + bonus partita
+            const xpGain = Math.floor(window.totalScore / 10) + 50; // XP base + bonus partita
             window.addXP(xpGain, "Match Finished");
         }
 
@@ -1101,7 +1103,7 @@ window.renderDiffSecure = function(container, real, typed) {
 
 if (els.replayWordBtn) {
     els.replayWordBtn.addEventListener('click', () => {
-        if (!gameRunning || !inputActive) return;
+        if (!window.gameRunning || !inputActive) return;
         usedReplay = true;
         if (typeof playMorseAudio === 'function') playMorseAudio(gameWords[wordIndex].toUpperCase(), currentWpm);
         if (domCache.permanentGameInput) domCache.permanentGameInput.focus();
@@ -1110,7 +1112,7 @@ if (els.replayWordBtn) {
 
 if (els.permanentGameInput) {
     els.permanentGameInput.addEventListener('input', function() {
-        if (isCourseMode && inputActive && gameRunning) {
+        if (isCourseMode && inputActive && window.gameRunning) {
             const val = els.permanentGameInput.value.trim().toUpperCase();
             if (val.length >= 5) {
                 window.handleWordSubmission(val.substring(0, 5));
@@ -1118,7 +1120,7 @@ if (els.permanentGameInput) {
             }
             return;
         }
-        if (currentMode === 'chars' && inputActive && gameRunning) {
+        if (window.currentMode === 'chars' && inputActive && window.gameRunning) {
             const rawVal = els.permanentGameInput.value;
             // Estraiamo solo il carattere digitato ignorando spazi/controlli aggiunti dal tablet
             const cleanVal = rawVal.replace(/\s/g, '').toUpperCase();
@@ -1130,7 +1132,7 @@ if (els.permanentGameInput) {
         }
     });
     els.permanentGameInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && inputActive && gameRunning && currentMode !== 'chars') {
+        if (e.key === 'Enter' && inputActive && window.gameRunning && window.currentMode !== 'chars') {
             const val = els.permanentGameInput.value.trim().toUpperCase();
             if (val) {
                 window.handleWordSubmission(val);
@@ -1346,8 +1348,8 @@ window.handleWordSubmission = function(userWord) {
 
     if (!isFixedSpeed && currentMode !== 'chars') {
         if (levDist === 0 && !usedReplay) {
-            currentWpm += 2;
-            if (currentWpm > peakWpm) peakWpm = currentWpm;
+            window.currentWpm += 2;
+            if (window.currentWpm > window.peakWpm) window.peakWpm = window.currentWpm;
             window.addXP?.(10, "Correct Word");
             window.updateMissionProgress?.('count', 1);
             window.updateMissionProgress?.('wpm_min', currentWpm);
