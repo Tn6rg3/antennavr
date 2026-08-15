@@ -812,11 +812,20 @@ window.finishGame = function() {
 
     gameRunning = false;
     inputActive = false;
+    window.isRoomMonitorActive = false; // Disattiva il monitor di background per questa stanza
+
+    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
     if (els.permanentGameInput) els.permanentGameInput.blur();
     clearAllTimers();
 
+    if (listeners.room) { listeners.room.off(); listeners.room = null; }
     if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
+
+    // Se è una partita singola, segnamo la stanza come finita sul server
+    if (roomCode && isSinglePlayer) {
+        db.ref(`rooms/${roomCode}/status`).set('finished');
+    }
 
     localStorage.removeItem(STORAGE_ROOM_KEY);
     window.isRejoining = false;
@@ -981,9 +990,18 @@ window.finishGame = function() {
     if (els.gameInputArea) els.gameInputArea.style.display = 'none';
     if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<b style="color:var(--champ-color)">FINITO!</b> PT: ${totalScore}`;
 
-    // --- NUOVO: BOTTONI CONDIVISIONE NELLA SCHERMATA DI REVISIONE ---
-    window.showMatchShareButtons();
-};
+    // --- NUOVO: AUTO-NAVIGAZIONE PER SFIDA GIORNALIERA ---
+    if (currentMode === 'daily_challenge' && totalScore > 0) {
+        setTimeout(() => {
+            if (typeof window.finishGameNavigation === 'function') {
+                const savedRoom = roomCode;
+                window.lbManualRouting = true;
+                window.exitRoomCleanly(false, false);
+                window.finishGameNavigation('daily_challenge', 20, true, savedRoom);
+            }
+        }, 3000);
+    }
+}
 
 window.showMatchShareButtons = function() {
     if (currentMode === 'course') return; // OTTIMIZZAZIONE: Nessun social nel corso
