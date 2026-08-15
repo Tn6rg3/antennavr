@@ -159,6 +159,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     if (listeners.roomLb && roomCode) { db.ref(`rooms/${roomCode}`).off('value', listeners.roomLb); listeners.roomLb = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
     if (listeners.room) { listeners.room.off(); listeners.room = null; }
+    window.isRoomMonitorActive = false;
     if (listeners.pingPong && roomCode) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (roomCode) { db.ref(`rooms/${roomCode}/coop_state`).off(); }
 
@@ -273,46 +274,99 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
 
 // Listener silenzioso quando l'utente naviga l'app ma è in una stanza
 window.listenToRoomInBackground = function() {
-    if (!roomCode || listeners.room) return;
+    // Se non c'è una stanza o il monitor è già attivo, non lo riattiviamo
+    if (!roomCode || window.isRoomMonitorActive) return;
 
-    console.log("Room: Enabling Background Monitor for " + roomCode);
+    console.log("Room: Enabling Unified Monitor for " + roomCode);
+    window.isRoomMonitorActive = true;
+
+    // Pulizia listener esistenti per evitare sovrapposizioni
+    if (listeners.room) { listeners.room.off(); listeners.room = null; }
+
     listeners.room = db.ref(`rooms/${roomCode}`);
 
-    // Variabile per tracciare il numero di giocatori ed evitare notifiche doppie
+    // Variabile locale per il monitoraggio variazioni conteggio
     let localPlayerCount = 0;
 
     listeners.room.on('value', snap => {
         if (!snap.exists()) {
+            window.isRoomMonitorActive = false;
             roomCode = "";
             localStorage.removeItem(STORAGE_ROOM_KEY);
             return window.exitRoomCleanly(true);
         }
 
         const rData = snap.val();
+
+        // --- SINCRONIZZAZIONE STATO GLOBALE ---
+        currentMode = rData.mode;
+        requestedWordCount = rData.wordCount;
+        isSinglePlayer = rData.type === 'single';
+        isFixedSpeed = !!rData.fixedSpeed;
+        isEasyMode = !!rData.easyMode;
+        roomHostId = rData.hostId;
+        window.roomCreatedAt = rData.createdAt || 0;
+        window.charSpaceWpm = rData.charSpaceWpm || 0;
+        window.wordSpaceMult = rData.wordSpaceMult || 1.0;
+
         const amIHost = (myId === rData.hostId);
         const players = rData.players || {};
         const pCount = Object.keys(players).length;
         const acceptedCount = Object.values(players).filter(p => p.accepted).length;
 
-        // 1. SINCRONIZZAZIONE BACHECA (Solo se Host)
-        // Se il conteggio accettati è cambiato, aggiorniamo la bacheca pubblica
+        // 1. SINCRONIZZAZIONE BACHECA (Sempre, se Host)
         if (amIHost && rData.status === 'waiting') {
             db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(acceptedCount);
         }
 
-        // 2. NOTIFICA INGRESSO (Solo se Host e conteggio aumentato)
-        if (amIHost && pCount > localPlayerCount && localPlayerCount > 0) {
-            if (typeof window.showRoomEventModal === 'function') {
-                window.showRoomEventModal("Qualcuno è entrato!", "Un nuovo giocatore è appena entrato nella tua stanza.");
-                if (typeof window.playBeep === 'function') window.playBeep(700, 0.2);
+        // 2. GESTIONE UI E NOTIFICHE
+        const isLobbyVisible = (els.lobbyScreen && els.lobbyScreen.classList.contains('active-screen'));
+
+        if (isLobbyVisible) {
+            window.renderPlayersList(players, rData.hostId);
+            lastPlayerCount = pCount;
+
+            // Gestione Timer Lobby
+            if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
+            if (rData.expiresAt && !isSinglePlayer) {
+                lobbyTimerInterval = setInterval(() => {
+                    const diff = rData.expiresAt - Date.now();
+                    if (diff <= 0) {
+                        clearInterval(lobbyTimerInterval);
+                        if (els.lobbyTimerText) els.lobbyTimerText.textContent = "Tempo scaduto!";
+                    } else if (els.lobbyTimerText) {
+                        els.lobbyTimerText.textContent = `Scade tra: ${Math.floor(diff/60000)}:${Math.floor((diff%60000)/1000).toString().padStart(2, '0')}`;
+                    }
+                }, 1000);
+            } else if (els.lobbyTimerText) {
+                els.lobbyTimerText.textContent = "";
+            }
+        } else if (!gameRunning && !isCourseMode) {
+            // Se siamo fuori dalla lobby e NON in partita, mostriamo notifica
+            if (amIHost && pCount > localPlayerCount && localPlayerCount > 0) {
+                if (typeof window.showRoomEventModal === 'function') {
+                    window.showRoomEventModal("Qualcuno è entrato!", "Un nuovo sfidante ti aspetta in stanza.");
+                    if (typeof window.playBeep === 'function') window.playBeep(700, 0.2);
+                }
             }
         }
         localPlayerCount = pCount;
 
-        // 3. AUTO-RIENTRO SE PARTE LA PARTITA
-        if ((rData.status === 'playing' || rData.status === 'countdown') && !gameRunning) {
-            console.log("Room: Match starting, rejoining lobby...");
-            window.joinRoomLogic(true);
+        // 3. LOGICA DI PASSAGGIO AL GIOCO
+        if (rData.status === 'playing' || rData.status === 'countdown') {
+            localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
+            window.isRoomMonitorActive = false; // Passiamo alla gestione match
+
+            if (rData.status === 'playing' && !gameRunning) {
+                currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
+                if (rData.words) gameWords = rData.words;
+                return window.resumeGameSequence();
+            }
+            if (rData.status === 'countdown' && !gameRunning) {
+                currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
+                if (rData.words) gameWords = rData.words;
+                return window.startCountdownSequence();
+            }
         }
     });
 };
@@ -383,75 +437,10 @@ window.joinRoomLogic = function(isReconnect = false) {
         }
 
         if (typeof window.listenToChat === 'function') window.listenToChat();
-        if (listeners.room && !isReconnect) listeners.room.off();
-        listeners.room = db.ref(`rooms/${roomCode}`);
-        listeners.room.on('value', snap => {
-            if (!snap.exists()) return window.exitRoomCleanly(true);
-            const rData = snap.val();
-            currentMode = rData.mode;
-            requestedWordCount = rData.wordCount;
-            isSinglePlayer = rData.type === 'single';
-            isFixedSpeed = !!rData.fixedSpeed;
-            isEasyMode = !!rData.easyMode;
-            roomHostId = rData.hostId;
-            window.roomCreatedAt = rData.createdAt || 0;
 
-            // Se sono l'Host, assicuriamoci che la stanza si chiuda se sparisco (crash o chiusura tab)
-            if (myId === roomHostId && rData.status === 'waiting') {
-                db.ref(`rooms/${roomCode}`).onDisconnect().remove();
-                db.ref(`public_lobby_rooms/${roomCode}`).onDisconnect().remove();
-            }
-
-            // Se charSpaceWpm è 0 o mancante, l'audio engine userà automaticamente la velocità corrente (WPM)
-            window.charSpaceWpm = rData.charSpaceWpm || 0;
-            window.wordSpaceMult = rData.wordSpaceMult || 1.0;
-
-            if (rData.status === 'playing' || rData.status === 'countdown') {
-                localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
-            }
-
-            if (rData.status === 'playing' && !gameRunning) {
-                currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
-                if (rData.words) gameWords = rData.words;
-                return window.resumeGameSequence();
-            }
-            if (rData.status === 'countdown' && !gameRunning) {
-                currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
-                if (rData.words) gameWords = rData.words;
-                return window.startCountdownSequence();
-            }
-            if (rData.status === 'waiting') {
-                window.renderPlayersList(rData.players || {}, rData.hostId);
-                const players = rData.players || {};
-                const pCount = Object.keys(players).length;
-                const acceptedCount = Object.values(players).filter(p => p.accepted).length;
-
-                // --- AGGIORNAMENTO BACHECA REAL-TIME ---
-                // Ogni volta che cambia qualcosa nella lobby, l'host aggiorna il record pubblico
-                if (myId === rData.hostId) {
-                    db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(acceptedCount);
-                }
-
-                if (myId === rData.hostId && pCount > lastPlayerCount && activeChatContext !== 'room') {
-                    if (typeof window.showRoomEventModal === 'function') window.showRoomEventModal("Qualcuno è entrato!", "Un nuovo giocatore è appena entrato.");
-                }
-                lastPlayerCount = pCount;
-                if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
-                if (rData.expiresAt && !isSinglePlayer) {
-                    lobbyTimerInterval = setInterval(() => {
-                        const diff = rData.expiresAt - Date.now();
-                        if (diff <= 0) {
-                            clearInterval(lobbyTimerInterval);
-                            if (els.lobbyTimerText) els.lobbyTimerText.textContent = "Tempo scaduto!";
-                        } else if (els.lobbyTimerText) {
-                            els.lobbyTimerText.textContent = `Scade tra: ${Math.floor(diff/60000)}:${Math.floor((diff%60000)/1000).toString().padStart(2, '0')}`;
-                        }
-                    }, 1000);
-                } else if (els.lobbyTimerText) {
-                    els.lobbyTimerText.textContent = "";
-                }
-            }
-        });
+        // Attiviamo il monitor unificato (che gestirà sia UI che Background)
+        window.isRoomMonitorActive = false;
+        window.listenToRoomInBackground();
     });
 };
 
