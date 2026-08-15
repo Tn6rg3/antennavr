@@ -36,7 +36,7 @@ window.updateDictionary = function() {
 window.getDailyWords = function(num) {
     let todayStr = new Date().toISOString().split('T')[0];
     let seed = parseInt(todayStr.replace(/-/g, ''));
-    let prng = mulberry32(seed);
+    let prng = window.mulberry32(seed);
     let dict = [...window.masterDictionary];
     for (let i = dict.length - 1; i > 0; i--) {
         const j = Math.floor(prng() * (i + 1));
@@ -104,7 +104,7 @@ setTimeout(() => {
     }
 }, 2000);
 
-function mulberry32(a) {
+window.mulberry32 = function(a) {
     return function() {
         var t = a += 0x6D2B79F5;
         t = Math.imul(t ^ t >>> 15, t | 1);

@@ -710,8 +710,20 @@ window.listenToInvites = function() {
                     els.acceptInviteBtn.textContent = "⌛ Avvio...";
 
                     const roomCodeNew = Math.floor(1000 + Math.random() * 9000).toString();
+
+                    // Assicuriamoci che le utility siano pronte
+                    if (typeof window.getGameWords !== 'function') {
+                        els.acceptInviteBtn.disabled = false;
+                        els.acceptInviteBtn.textContent = "ACCETTA ✅";
+                        return showToast("Errore: Sistema non pronto. Riprova.");
+                    }
+
                     const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard');
                     const isCoop = (inv.mode === 'conquest');
+
+                    // Impostiamo l'Host ID prima del salvataggio su Firebase
+                    window.roomHostId = inv.fromId;
+                    window.roomCode = roomCodeNew;
 
                     db.ref(`rooms/${roomCodeNew}`).set({
                         status: 'countdown',
@@ -736,13 +748,12 @@ window.listenToInvites = function() {
                         els.acceptInviteBtn.disabled = false;
                         els.acceptInviteBtn.textContent = "ACCETTA ✅";
 
-                        roomCode = roomCodeNew;
                         window.joinRoomLogic(false);
                     }).catch(err => {
                         console.error("Accept Invite Error:", err);
                         els.acceptInviteBtn.disabled = false;
                         els.acceptInviteBtn.textContent = "ACCETTA ✅";
-                        showToast("Errore durante l'accettazione.");
+                        showToast("Errore Firebase: " + err.message);
                     });
                 };
             }

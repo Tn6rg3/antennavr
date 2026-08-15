@@ -163,7 +163,7 @@ const listeners = {
 };
 
 // --- UTILS ---
-function fisherYatesShuffle(array) {
+window.fisherYatesShuffle = function(array) {
     if (!Array.isArray(array)) return [];
     const arr = [...array];
     for (let i = arr.length - 1; i > 0; i--) {
