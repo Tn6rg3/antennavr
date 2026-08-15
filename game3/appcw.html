@@ -454,6 +454,19 @@
                 <p id="roleSelectionHint" style="font-size:0.7em; color:var(--hint-color); font-style:italic;">I tutor non hanno un piano di studio ma possono aiutare i corsisti in chat.</p>
             </div>
 
+            <!-- STEP 0.1: SCELTA TUTOR (SOLO PER CORSISTI) -->
+            <div id="wizardStepTutor" style="display:none;">
+                <h3>🎓 Scegli il tuo Tutor</h3>
+                <p style="font-size:0.85em; margin-bottom: 15px;">Seleziona un esperto che seguirà i tuoi progressi e ti aiuterà nella Radio-Aula.</p>
+                <div id="tutorSelectionList" style="display:flex; flex-direction:column; gap:10px; margin-bottom:15px; max-height:200px; overflow-y:auto;">
+                    <p style="font-size:0.75em; color:var(--hint-color);">Caricamento tutor disponibili...</p>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-secondary" onclick="window.nextWizardStep(0)" style="flex:1;">⬅️ Indietro</button>
+                    <button id="btnConfirmTutor" class="btn-success" style="flex:1;" disabled>Avanti ➡️</button>
+                </div>
+            </div>
+
             <div id="wizardStep1" style="display:none;">
                 <h3>🗓️ Passo 1: Frequenza</h3>
                 <p style="font-size:0.85em;">Quanti giorni a settimana vuoi allenarti? La costanza è più importante della durata.</p>
@@ -1425,6 +1438,17 @@
     </div>
 
     <button id="btnCloseCourseResults" class="btn-success" style="width: 100%; padding: 12px;">TORNA AL MENU 🚀</button>
+</div>
+
+<!-- MODAL: STATISTICHE DETTAGLIATE CORSISTA (PER TUTOR) -->
+<div id="studentStatsModal" style="display: none; position: fixed; top: 5%; left: 5%; width: 90%; height: 90%; background: var(--bg-color); z-index: 9000; border: 2px solid #673ab7; border-radius: 12px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
+    <h3 id="studentStatsTitle" style="margin-top:0; text-align: center; color: #b39ddb;">Analisi Progressi Corsista</h3>
+
+    <div id="studentStatsContent">
+        <!-- Popolato via JS -->
+    </div>
+
+    <button onclick="document.getElementById('studentStatsModal').style.display='none'" class="btn-secondary" style="margin-top:auto; padding: 12px;">Chiudi</button>
 </div>
 
 <!-- CARICAMENTO DINAMICO ANTI-CACHE PER TELEGRAM MOBILE -->
