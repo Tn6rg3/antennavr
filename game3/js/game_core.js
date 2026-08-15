@@ -995,19 +995,11 @@ window.showMatchShareButtons = function() {
 };
 
 window.saveMatchSummary = function(playersData) {
-    if (!playersData || window.isSinglePlayer || isCourseMode) return;
+    if (!playersData || window.isSinglePlayer || isCourseMode || !roomCode) return;
 
-    // Identificativo unico per il match (Room + Timestamp Creazione Stanza)
-    // Usiamo roomCreatedAt per rendere l'ID deterministico tra i vari client
-    let matchSuffix = "";
-    if (window.roomCreatedAt && typeof window.roomCreatedAt === 'number' && window.roomCreatedAt > 0) {
-        matchSuffix = window.roomCreatedAt.toString().substring(7);
-    } else {
-        // Fallback: usiamo un timestamp troncato basato sul tempo corrente arrotondato al minuto
-        matchSuffix = Math.floor(Date.now() / 60000).toString().substring(3);
-    }
-
-    const matchId = roomCode + "_" + matchSuffix;
+    // --- FIX: Usiamo roomCode come ID univoco del match per garantire la sincronizzazione ---
+    // Essendo il roomCode unico per sessione, entrambi i giocatori scriveranno nello stesso nodo.
+    const matchId = roomCode;
     const safeWordCount = requestedWordCount || 10;
 
     // Recuperiamo i dati dei giocatori
@@ -1021,9 +1013,9 @@ window.saveMatchSummary = function(playersData) {
         abandoned: !!p.abandoned
     }));
 
-    // Se c'è solo un giocatore e non è abbandonato, non salviamo il riepilogo multi
+    // Se c'è solo un giocatore (e non è abbandonato), non è un match multiplayer valido da salvare
     if (players.length < 2) {
-        console.log("Summary: Skipping save, only 1 player found (incomplete match).");
+        console.log("Summary: Skipping save, match not multiplayer (only 1 player).");
         return;
     }
 

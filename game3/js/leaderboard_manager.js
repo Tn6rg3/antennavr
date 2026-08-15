@@ -344,7 +344,8 @@ window.renderRoomLeaderboard = function(players) {
             username: data.username,
             score: data.score || 0,
             wpm: data.wpm || 0,
-            finished: data.finished,
+            finished: !!data.finished,
+            abandoned: !!data.abandoned,
             matchDetails: data.matchDetails || []
         }));
 
@@ -352,12 +353,16 @@ window.renderRoomLeaderboard = function(players) {
     playersArray.forEach(p => { if (!p.finished) allFinished = false; });
     if (els.waitingOthersText) els.waitingOthersText.style.display = allFinished ? 'none' : 'block';
 
-    if (allFinished && (roomCode && (roomCode.startsWith("TRN_") || currentMode === 'pingpong' || playersArray.length > 1))) {
+    // --- FIX: Mostriamo la vista affiancata (H2H) se ci sono più giocatori, anche se non tutti hanno finito ---
+    const isMultiOrSpecial = (roomCode && (roomCode.startsWith("TRN_") || currentMode === 'pingpong' || playersArray.length > 1));
+
+    if (isMultiOrSpecial) {
         window.renderHeadToHeadView(playersArray, els.leaderboardContainer);
     } else {
         playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm)).forEach((player, index) => {
             const row = document.createElement('div'); row.className = 'leaderboard-row';
             let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+            // ... (rest of individual rendering) ...
 
             const leftSpan = document.createElement('span');
             leftSpan.appendChild(document.createTextNode(medal + " "));
@@ -397,10 +402,16 @@ window.renderRoomLeaderboard = function(players) {
 };
 
 window.renderHeadToHeadView = function(players, container) {
+    if (!players) return;
+
+    // Convertiamo in array se i dati sono arrivati come oggetto (comune in Firebase)
+    let playersArray = Array.isArray(players) ? [...players] : Object.values(players);
+    if (playersArray.length === 0) return;
+
     const h2h = document.createElement('div'); h2h.className = 'h2h-container';
-    players.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
-    const maxScore = players[0].score;
-    players.forEach((p) => {
+    playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
+    const maxScore = playersArray[0].score;
+    playersArray.forEach((p) => {
         const card = document.createElement('div');
         card.className = 'h2h-card' + (p.score === maxScore && maxScore > 0 ? ' winner' : '');
 
@@ -431,6 +442,10 @@ window.renderHeadToHeadView = function(players, container) {
             const rowAb = document.createElement('div'); rowAb.className = 'h2h-stat-row';
             rowAb.innerHTML = `<span style="color:#d32f2f; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px;">${currentLang==='it'?'ABBANDONATO':'WITHDRAWN'}</span>`;
             statsDiv.appendChild(rowAb);
+        } else if (!p.finished) {
+            const rowProg = document.createElement('div'); rowProg.className = 'h2h-stat-row';
+            rowProg.innerHTML = `<span style="color:#ff9800; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px; animation: pulse 1s infinite;">${currentLang==='it'?'IN CORSO...':'PLAYING...'}</span>`;
+            statsDiv.appendChild(rowProg);
         }
 
         card.appendChild(statsDiv);
