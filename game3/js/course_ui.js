@@ -25,6 +25,7 @@ window.renderCourseTabView = function() {
 
         window.renderCourseTabDashboard();
         window.populateCourseSettingsInputs();
+        window.renderTutorSelectionList(); // Popola select in settings
         window.initCourseChat();
 
         // Di default mostriamo la dashboard
@@ -453,13 +454,6 @@ window.renderAdvancedCourseStats = function(selectedChar) {
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 };
 
-window.startCourseWizard = function() {
-    if (els.courseTabInitialPrompt) els.courseTabInitialPrompt.style.display = 'none';
-    if (els.courseWizardContainer) els.courseWizardContainer.style.display = 'block';
-    window.populateLessonDropdowns();
-    window.nextWizardStep(1);
-};
-
 window.populateLessonDropdowns = function() {
     const wizardSelect = document.getElementById('wizardStartLesson');
     const settingsSelect = document.getElementById('courseTabLessonInput');
@@ -538,7 +532,7 @@ window.renderTutorSelectionList = function(containerId) {
         if (container) {
             container.innerHTML = '';
             if (tutors.length === 0) {
-                container.innerHTML = '<p style="font-size:0.8em; color:var(--hint-color); text-align:center;">Nessun Tutor disponibile al momento. Verrai assegnato a un'aula globale.</p>';
+                container.innerHTML = '<p style="font-size:0.8em; color:var(--hint-color); text-align:center;">Nessun Tutor disponibile al momento. Verrai assegnato a un\'aula globale.</p>';
                 const btn = document.getElementById('btnConfirmTutor');
                 if (btn) {
                     btn.disabled = false;
@@ -795,7 +789,7 @@ window.initCourseChat = function() {
 
     // --- FIX: AULE VIRTUALI (Chat filtrata per Tutor) ---
     const isTutor = window.courseData.role === 'tutor';
-    const tutorId = isTutor ? myId : window.courseData.tutor_id;
+    const tutorId = isTutor ? myId : (window.courseData?.tutor_id || null);
     const chatPath = tutorId ? `courseChats/${tutorId}` : 'courseChat';
     const chatRef = db.ref(chatPath);
 
