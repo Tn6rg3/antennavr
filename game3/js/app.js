@@ -1013,7 +1013,14 @@ if (els.createRoomBtn) {
                 roomRef.onDisconnect().remove();
 
                 const lobbyRef = db.ref(`public_lobby_rooms/${window.roomCode}`);
-                lobbyRef.set({ mode: window.currentMode, pCount: 1, wpm: window.currentWpm, status: 'waiting', expiresAt: expires });
+                lobbyRef.set({
+                    mode: window.currentMode,
+                    pCount: 1,
+                    wpm: window.currentWpm,
+                    status: 'waiting',
+                    expiresAt: expires,
+                    hostId: window.myId // Fondamentale per identificare la propria stanza in bacheca
+                });
                 lobbyRef.onDisconnect().remove();
             }
 

@@ -788,20 +788,17 @@ window.addOrUpdateRoomCard = function(code, room) {
                  : (room.mode === 'conquest' || room.type === 'coop') ? '⚔️ Conquista'
                  : '🔤 Parole';
 
-    const pCount = Object.keys(room.players || {}).length || (room.pCount || 1);
+    // Se leggiamo da public_lobby_rooms non abbiamo .players, usiamo .pCount
+    const pCount = (room.players ? Object.keys(room.players).length : 0) || (room.pCount || 1);
     const prevCount = window.lastKnownRoomPlayersCount[code] || 1;
     const isMyRoom = (room.hostId === myId);
+
     const isOutsideRoom = (roomCode !== code || (els.lobbyScreen && !els.lobbyScreen.classList.contains('active-screen')));
 
     if (isMyRoom && pCount > prevCount && pCount >= 2) {
-        // Se sono l'Host e qualcuno entra nella mia stanza (indipendentemente dalla schermata)
+        // Notifica secondaria via Toast se siamo nel menu
         showToast(`👤 Un giocatore è appena entrato nella tua stanza #${code}!`);
         if (typeof playNotificationSound === 'function') playNotificationSound();
-
-        // Se non sono nella lobby, potremmo mostrare un avviso più evidente o gestire il rientro
-        if (els.lobbyScreen && !els.lobbyScreen.classList.contains('active-screen')) {
-            console.log("Host in background: Player joined room", code);
-        }
     }
     window.lastKnownRoomPlayersCount[code] = pCount;
 
@@ -846,15 +843,13 @@ window.listenToRooms = function() {
     }
 
     if (els.waitingRoomsList) els.waitingRoomsList.innerHTML = '';
-    const lobbyQuery = db.ref('rooms').orderByChild('status').equalTo('waiting').limitToLast(20);
+
+    // --- FIX: Usiamo public_lobby_rooms per la bacheca (più leggero e affidabile) ---
+    const lobbyQuery = db.ref('public_lobby_rooms').orderByChild('status').equalTo('waiting').limitToLast(20);
 
     const onAdded = lobbyQuery.on('child_added', snap => {
         const room = snap.val();
-        const now = Date.now();
-        // Se la stanza non è stata toccata da più di 20 minuti, la ignoriamo (auto-cleanup per bacheca)
-        if (room.createdAt && (now - room.createdAt > 20 * 60 * 1000) && (!room.players || Object.keys(room.players).length < 2)) {
-            return;
-        }
+        // Le stanze in public_lobby_rooms sono già filtrate per validità
         window.addOrUpdateRoomCard(snap.key, room);
     });
     const onChanged = lobbyQuery.on('child_changed', snap => window.addOrUpdateRoomCard(snap.key, snap.val()));

@@ -188,12 +188,12 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
             } else {
                 db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
                 db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
-                    // Decrementa conteggio pubblico se la stanza esiste ancora
+                    // Aggiorna conteggio totale in bacheca
                     if (roomCode && !roomCode.startsWith("TRN_")) {
                         db.ref(`rooms/${roomCode}/players`).once('value', s => {
                             if (s.exists()) {
-                                const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
-                                db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
+                                const totalCount = Object.keys(s.val() || {}).length;
+                                db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(totalCount);
                             }
                         });
                     }
@@ -204,8 +204,6 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
         else if (isExplicitQuit) {
             db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
 
-            // --- FIX: Se la partita è in corso, non rimuoviamo il player ma lo segnamo come abbandonato ---
-            // Questo permette alla logica di fine partita dell'altro giocatore di includerlo nel riepilogo.
             if (gameRunning) {
                 db.ref(`rooms/${roomCode}/players/${myId}`).update({ finished: true, abandoned: true, online: false });
             } else {
@@ -213,8 +211,8 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
                     if (roomCode && !roomCode.startsWith("TRN_")) {
                         db.ref(`rooms/${roomCode}/players`).once('value', s => {
                             if (s.exists()) {
-                                const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
-                                db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
+                                const totalCount = Object.keys(s.val() || {}).length;
+                                db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(totalCount);
                             } else if (!amIHost) {
                                 db.ref(`public_lobby_rooms/${roomCode}`).remove();
                             }
@@ -225,19 +223,20 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
             roomCode = "";
         }
         else {
-            // Se l'utente non ha accettato la sfida, rimuoviamolo comunque per non "sporcare" il contatore
-            // Se l'ha accettata, lo segniamo come offline per permettere il rientro (rejoin)
             db.ref(`rooms/${roomCode}/players/${myId}`).once('value', s => {
                 const p = s.val();
                 if (p && !p.accepted) {
                     db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
                         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
-                            const accCount = Object.values(snap.val() || {}).filter(p => p.accepted).length;
-                            db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
+                            const totalCount = snap.exists() ? Object.keys(snap.val() || {}).length : 0;
+                            db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(totalCount);
                         });
                     });
                 } else {
                     db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
+                }
+            });
+        }
                     // NOTA: Se l'Host esce ma resta nell'app, la stanza rimane aperta e lui riceverà notifiche.
                 }
             });
@@ -276,75 +275,89 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
 window.listenToRoomInBackground = function() {
     if (!roomCode || window.isRoomMonitorActive) return;
 
-    console.log("Room: Enabling Unified Monitor for " + roomCode);
+    console.log("Room Monitor: Enabling for " + roomCode);
     window.isRoomMonitorActive = true;
 
     if (listeners.room) { listeners.room.off(); listeners.room = null; }
     listeners.room = db.ref(`rooms/${roomCode}`);
 
-    // Inizializziamo i contatori con i valori attuali per evitare notifiche al primo avvio
-    listeners.room.once('value', snap => {
-        const d = snap.val() || {};
-        const p = d.players || {};
-        window.lastPlayerCount = Object.keys(p).length;
-        window.lastAcceptedCount = Object.values(p).filter(u => u.accepted).length;
+    // Inizializziamo i contatori globali
+    window.lastPlayerCount = window.lastPlayerCount || 0;
+    window.lastAcceptedCount = window.lastAcceptedCount || 0;
 
-        listeners.room.on('value', snap => {
-            if (!snap.exists()) {
-                window.isRoomMonitorActive = false;
-                roomCode = "";
-                localStorage.removeItem(STORAGE_ROOM_KEY);
-                return window.exitRoomCleanly(true);
-            }
+    let isFirstRun = true;
 
-            const rData = snap.val();
-            const players = rData.players || {};
-            const pCount = Object.keys(players).length;
-            const acceptedCount = Object.values(players).filter(p => p.accepted).length;
-            const amIHost = (myId === rData.hostId);
+    listeners.room.on('value', snap => {
+        if (!snap.exists()) {
+            console.log("Room Monitor: Room deleted, cleaning up.");
+            window.isRoomMonitorActive = false;
+            roomCode = "";
+            localStorage.removeItem(STORAGE_ROOM_KEY);
+            return window.exitRoomCleanly(true);
+        }
 
-            // 1. AGGIORNAMENTO BACHECA (Sempre se Host, basato su presenze reali)
-            if (amIHost && rData.status === 'waiting') {
-                db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(pCount);
-            }
+        const rData = snap.val();
+        const players = rData.players || {};
+        const pCount = Object.keys(players).length;
+        const acceptedCount = Object.values(players).filter(p => p.accepted).length;
+        const amIHost = (myId === rData.hostId);
 
-            // 2. GESTIONE UI E NOTIFICHE
-            const isLobbyVisible = (els.lobbyScreen && els.lobbyScreen.classList.contains('active-screen'));
-
-            if (isLobbyVisible) {
-                window.renderPlayersList(players, rData.hostId);
-                window.lastPlayerCount = pCount;
-                window.lastAcceptedCount = acceptedCount;
-            } else if (!gameRunning && !isCourseMode) {
-                // NOTIFICA DIFFERENZIATA
-                if (amIHost) {
-                    if (acceptedCount > window.lastAcceptedCount) {
-                        window.showRoomEventModal("Sfida Accettata! 🚀", "Un giocatore è pronto a partire.");
-                        if (typeof window.playBeep === 'function') window.playBeep(900, 0.2);
-                    } else if (pCount > window.lastPlayerCount) {
-                        window.showRoomEventModal("Nuovo Ingresso 👤", "Qualcuno è entrato nella tua stanza.");
-                        if (typeof window.playBeep === 'function') window.playBeep(700, 0.15);
-                    }
-                }
-            }
-
+        if (isFirstRun) {
             window.lastPlayerCount = pCount;
             window.lastAcceptedCount = acceptedCount;
+            isFirstRun = false;
+            console.log("Room Monitor: Initial sync. Players:", pCount, "Accepted:", acceptedCount);
+        }
 
-            // 3. LOGICA DI PASSAGGIO AL GIOCO
-            if (rData.status === 'playing' || rData.status === 'countdown') {
-                localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
-                window.isRoomMonitorActive = false;
-                if (rData.status === 'playing' && !gameRunning) {
-                    currentWpm = rData.wpm; baseWpm = rData.wpm; if (rData.words) gameWords = rData.words;
-                    return window.resumeGameSequence();
-                }
-                if (rData.status === 'countdown' && !gameRunning) {
-                    currentWpm = rData.wpm; baseWpm = rData.wpm; if (rData.words) gameWords = rData.words;
-                    return window.startCountdownSequence();
+        // 1. SINCRONIZZAZIONE BACHECA PUBBLICA (Sempre se Host)
+        // Garantiamo che gli altri utenti vedano il numero reale di persone in lobby
+        if (amIHost && rData.status === 'waiting') {
+            db.ref(`public_lobby_rooms/${roomCode}`).update({ pCount: pCount });
+        }
+
+        // 2. GESTIONE UI E NOTIFICHE
+        const isLobbyVisible = (els.lobbyScreen && els.lobbyScreen.classList.contains('active-screen'));
+
+        if (isLobbyVisible) {
+            window.renderPlayersList(players, rData.hostId);
+            window.lastPlayerCount = pCount;
+            window.lastAcceptedCount = acceptedCount;
+        } else if (!gameRunning && !isCourseMode) {
+            // Logica Notifiche in Background
+            if (amIHost) {
+                if (acceptedCount > window.lastAcceptedCount) {
+                    console.log("Room Monitor: Challenge accepted detected!");
+                    window.showRoomEventModal("Sfida Accettata! 🚀", "Un giocatore è pronto a partire.");
+                    if (typeof window.playBeep === 'function') {
+                        window.playBeep(880, 0.1);
+                        setTimeout(() => window.playBeep(1100, 0.15), 100);
+                    }
+                } else if (pCount > window.lastPlayerCount) {
+                    console.log("Room Monitor: New player join detected!");
+                    window.showRoomEventModal("Nuovo Ingresso 👤", "Qualcuno è entrato nella tua stanza.");
+                    if (typeof window.playBeep === 'function') window.playBeep(700, 0.2);
                 }
             }
-        });
+        }
+
+        // Aggiorniamo i contatori per il prossimo evento
+        window.lastPlayerCount = pCount;
+        window.lastAcceptedCount = acceptedCount;
+
+        // 3. GESTIONE TRANSIZIONI DI STATO (Countdown / Playing)
+        if ((rData.status === 'playing' || rData.status === 'countdown') && !gameRunning) {
+            console.log("Room Monitor: Match starting, switching to game mode.");
+            localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
+            window.isRoomMonitorActive = false;
+
+            if (rData.status === 'playing') {
+                currentWpm = rData.wpm; baseWpm = rData.wpm; if (rData.words) gameWords = rData.words;
+                return window.resumeGameSequence();
+            } else {
+                currentWpm = rData.wpm; baseWpm = rData.wpm; if (rData.words) gameWords = rData.words;
+                return window.startCountdownSequence();
+            }
+        }
     });
 };
 
@@ -395,7 +408,8 @@ window.joinRoomLogic = function(isReconnect = false) {
                 online: true,
                 accepted: shouldAutoAccept // true se single player o host o invito diretto
             }).then(() => {
-                if (!isSinglePlayer && !roomCode.startsWith("TRN_") && shouldAutoAccept) {
+                // --- AGGIORNAMENTO BACHECA REAL-TIME (GUEST) ---
+                if (!isSinglePlayer && !roomCode.startsWith("TRN_")) {
                     db.ref(`rooms/${roomCode}/players`).once('value', s => {
                         const count = s.exists() ? Object.keys(s.val()).length : 1;
                         db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(count);
@@ -486,8 +500,9 @@ window.renderPlayersList = function(playersData, hostId) {
 
             db.ref(`rooms/${roomCode}/players/${myId}`).update({ accepted: true }).then(() => {
                 db.ref(`rooms/${roomCode}/players`).once('value', s => {
-                    const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
-                    db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
+                    // --- FIX: Usiamo il conteggio totale dei presenti per coerenza bacheca ---
+                    const totalCount = s.exists() ? Object.keys(s.val()).length : 1;
+                    db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(totalCount);
 
                     els.acceptChallengeBtn.disabled = false;
                     els.acceptChallengeBtn.textContent = "ACCETTA LA SFIDA ✅";
@@ -505,9 +520,11 @@ window.renderPlayersList = function(playersData, hostId) {
         els.withdrawChallengeBtn.onclick = () => {
             db.ref(`rooms/${roomCode}/players/${myId}`).update({ accepted: false, ready: false }).then(() => {
                 db.ref(`rooms/${roomCode}/players`).once('value', s => {
-                    const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
-                    db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
+                    const totalCount = s.exists() ? Object.keys(s.val()).length : 1;
+                    db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(totalCount);
                 });
+            });
+        };
             });
         };
     }
@@ -580,24 +597,22 @@ window.startCountdownSequence = function() {
                 const hasAbandoned = playersArray.some(p => p.abandoned);
 
                 if (gameStartPlayerCount >= 2 && (currentPCount < gameStartPlayerCount || hasAbandoned)) {
-                    // Verifichiamo che non sia un falso positivo iniziale
-                    if (currentPCount === 1 && players[myId]) {
-                        // In 1vs1 la vittoria è a tavolino solo se il match era effettivamente iniziato
-                        // o se l'altro ha proprio cliccato "abbandona" (flag abandoned)
-                        gameRunning = false;
-                        const msg = currentLang === 'it' ? "L'avversario si è ritirato. Hai vinto a tavolino! 🏆" : "Opponent withdrew. You win by default! 🏆";
+                    // Verifichiamo lo stato reale della stanza prima di chiudere
+                    db.ref(`rooms/${roomCode}/status`).once('value', sSnap => {
+                        const currentStatus = sSnap.val();
 
-                        if (window.tg && window.tg.showAlert) {
-                            window.tg.showAlert(msg);
-                        } else {
-                            alert(msg);
+                        // Chiudiamo a tavolino solo se la partita era iniziata o se l'abbandono è esplicito
+                        if (currentStatus === 'playing' || hasAbandoned) {
+                            if (currentPCount === 1 && players[myId]) {
+                                gameRunning = false;
+                                const msg = currentLang === 'it' ? "L'avversario si è ritirato. Hai vinto a tavolino! 🏆" : "Opponent withdrew. You win by default! 🏆";
+                                if (window.tg && window.tg.showAlert) window.tg.showAlert(msg); else alert(msg);
+                                window.finishGame();
+                            } else if (!players[myId]?.abandoned) {
+                                showToast(currentLang === 'it' ? "Un giocatore ha abbandonato." : "A player left the game.");
+                            }
                         }
-
-                        window.finishGame();
-                    } else if (!players[myId]?.abandoned) {
-                        // In più di 2 giocatori, mostriamo solo un avviso
-                        showToast(currentLang === 'it' ? "Un giocatore ha abbandonato." : "A player left the game.");
-                    }
+                    });
                 }
 
                 // Caso 2: Qualcuno è ancora nel nodo ma è andato Offline (Crash o chiusura app)

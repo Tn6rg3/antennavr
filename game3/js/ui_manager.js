@@ -146,6 +146,26 @@ window.checkGameTypeUI = function() {
     }
 };
 
+window.showRoomEventModal = function(title, message) {
+    const modal = document.getElementById('roomEventModal');
+    const titleEl = document.getElementById('roomEventTitle');
+    const textEl = document.getElementById('roomEventText');
+    const goToBtn = document.getElementById('goToRoomBtn');
+
+    if (modal && titleEl && textEl) {
+        titleEl.textContent = title;
+        textEl.textContent = message;
+        modal.style.display = 'flex';
+
+        if (goToBtn) {
+            goToBtn.onclick = () => {
+                modal.style.display = 'none';
+                window.joinRoomLogic(true);
+            };
+        }
+    }
+};
+
 window.setLanguage = function(lang) {
     currentLang = lang;
     localStorage.setItem('gameLang', lang);
