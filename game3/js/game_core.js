@@ -258,9 +258,12 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     // Se non è un'uscita forzata/esplicita e siamo in un contesto particolare (es. Torneo), restiamo lì
     if (currentCode && currentCode.startsWith("TRN_")) targetScreen = 'teamsScreen';
 
-    // Se stiamo navigando verso la classifica (lbManualRouting attivo), non cambiamo schermata qui
+    // Se stiamo navigando verso la classifica (lbManualRouting attivo), NON cambiamo schermata qui
+    // altrimenti sovrascriviamo la destinazione desiderata (es. Leaderboard)
     if (!window.lbManualRouting) {
         window.showScreen(targetScreen);
+    } else {
+        console.log("Exit: Suppressing screen change due to lbManualRouting");
     }
 
     if (targetScreen === 'setupScreen' && !window.lbManualRouting) {
@@ -917,6 +920,9 @@ window.finishGame = function() {
             const singleToRoute = savedSinglePlayer;
             const codeToRoute = savedRoomCode;
 
+            // --- FIX: Impostiamo lbManualRouting PRIMA di uscire per evitare redirect alla Home ---
+            window.lbManualRouting = (modeToRoute !== 'course');
+
             // Pulizia UI e ripristino bottone originale
             els.quitGameBtn.textContent = currentLang === 'it' ? "Abbandona" : "Quit";
             els.quitGameBtn.classList.add('btn-danger');
@@ -935,10 +941,10 @@ window.finishGame = function() {
                 return;
             }
 
-            // Usciamo dalla stanza ma SENZA cambiare schermata (restiamo in transizione)
+            // Usciamo dalla stanza (ora rispetterà lbManualRouting)
             window.exitRoomCleanly(false, false);
 
-            // Eseguiamo la navigazione forzata alla classifica corretta
+            // Eseguiamo la navigazione alla classifica
             window.finishGameNavigation(modeToRoute, wcToRoute, singleToRoute, codeToRoute);
         };
     }
@@ -1002,16 +1008,16 @@ window.saveMatchSummary = function(playersData) {
     if (window.roomCreatedAt && typeof window.roomCreatedAt === 'number' && window.roomCreatedAt > 0) {
         matchSuffix = window.roomCreatedAt.toString().substring(7);
     } else {
-        // Fallback estremo se il timestamp non è ancora sincronizzato
         matchSuffix = Date.now().toString().substring(7);
     }
 
     const matchId = roomCode + "_" + matchSuffix;
+    const safeWordCount = requestedWordCount || 10;
 
-    // Usiamo Object.entries per recuperare l'ID del giocatore dalle chiavi
+    // Recuperiamo i dati dei giocatori
     const players = Object.entries(playersData).map(([pid, p]) => ({
         id: pid,
-        name: p.name,
+        name: p.name || "Sconosciuto",
         username: p.username || "",
         score: p.score || 0,
         wpm: p.wpm || 0,
@@ -1019,15 +1025,19 @@ window.saveMatchSummary = function(playersData) {
         abandoned: !!p.abandoned
     }));
 
-    // Determiniamo il percorso corretto per la classifica Multiplayer
+    // Se c'è solo un giocatore e non è abbandonato, non salviamo il riepilogo multi
+    if (players.length < 2) {
+        console.log("Summary: Skipping save, only 1 player found.");
+        return;
+    }
+
+    // Determiniamo il percorso corretto
     let baseMode = currentMode;
     if (baseMode === 'std') baseMode = 'standard';
 
-    // Mappatura esatta tra modalità di gioco e categorie classifica
     const validModes = ['standard', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign'];
     let category = validModes.includes(baseMode) ? baseMode : 'standard';
 
-    // Aggiungiamo il suffisso _multi tranne che per i modi che sono intrinsecamente multi
     if (category !== 'pingpong' && category !== 'conquest') {
         category += "_multi";
     }
@@ -1035,12 +1045,12 @@ window.saveMatchSummary = function(playersData) {
     const matchSummary = {
         players: players,
         mode: currentMode,
-        wordCount: requestedWordCount,
+        wordCount: safeWordCount,
         date: new Date().toLocaleDateString('it-IT'),
         ts: firebase.database.ServerValue.TIMESTAMP
     };
 
-    const summaryPath = `leaderboard/recent_matches/${category}/${requestedWordCount}/${matchId}`;
+    const summaryPath = `leaderboard/recent_matches/${category}/${safeWordCount}/${matchId}`;
     console.log("Summary: Saving match result to:", summaryPath);
     db.ref(summaryPath).set(matchSummary).catch(e => console.error("Summary Save Error:", e));
 };
