@@ -202,18 +202,25 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
         }
         else if (isExplicitQuit) {
             db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
-            db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
-                if (roomCode && !roomCode.startsWith("TRN_")) {
-                    db.ref(`rooms/${roomCode}/players`).once('value', s => {
-                        if (s.exists()) {
-                            const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
-                            db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
-                        } else if (!amIHost) {
-                            db.ref(`public_lobby_rooms/${roomCode}`).remove();
-                        }
-                    });
-                }
-            });
+
+            // --- FIX: Se la partita è in corso, non rimuoviamo il player ma lo segnamo come abbandonato ---
+            // Questo permette alla logica di fine partita dell'altro giocatore di includerlo nel riepilogo.
+            if (gameRunning) {
+                db.ref(`rooms/${roomCode}/players/${myId}`).update({ finished: true, abandoned: true, online: false });
+            } else {
+                db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
+                    if (roomCode && !roomCode.startsWith("TRN_")) {
+                        db.ref(`rooms/${roomCode}/players`).once('value', s => {
+                            if (s.exists()) {
+                                const accCount = Object.values(s.val() || {}).filter(p => p.accepted).length;
+                                db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(accCount);
+                            } else if (!amIHost) {
+                                db.ref(`public_lobby_rooms/${roomCode}`).remove();
+                            }
+                        });
+                    }
+                });
+            }
             roomCode = "";
         }
         else {
@@ -360,6 +367,7 @@ window.joinRoomLogic = function(isReconnect = false) {
             isFixedSpeed = !!rData.fixedSpeed;
             isEasyMode = !!rData.easyMode;
             roomHostId = rData.hostId;
+            window.roomCreatedAt = rData.createdAt || 0;
 
             // Se sono l'Host, assicuriamoci che la stanza si chiuda se sparisco (crash o chiusura tab)
             if (myId === roomHostId && rData.status === 'waiting') {
@@ -554,12 +562,15 @@ window.startCountdownSequence = function() {
                 const players = pSnap.val() || {};
                 const currentPCount = Object.keys(players).length;
 
-                // --- NUOVA LOGICA DI RILEVAMENTO ABBANDONO (Più robusta) ---
+                // --- LOGICA DI RILEVAMENTO ABBANDONO (Più robusta) ---
 
-                // Caso 1: Qualcuno è stato rimosso dal nodo players (Abbandono esplicito)
-                if (gameStartPlayerCount >= 2 && currentPCount < gameStartPlayerCount) {
-                    if (gameStartPlayerCount === 2 && players[myId]) {
-                        // In 1vs1 la vittoria è a tavolino
+                // Caso 1: Qualcuno è stato rimosso (Lobby) o ha il flag abandoned (In Match)
+                const playersArray = Object.values(players);
+                const hasAbandoned = playersArray.some(p => p.abandoned);
+
+                if (gameStartPlayerCount >= 2 && (currentPCount < gameStartPlayerCount || hasAbandoned)) {
+                    if (gameStartPlayerCount === 2 && players[myId] && !players[myId].abandoned) {
+                        // In 1vs1 la vittoria è a tavolino per chi resta
                         gameRunning = false;
                         const msg = currentLang === 'it' ? "L'avversario si è ritirato. Hai vinto a tavolino! 🏆" : "Opponent withdrew. You win by default! 🏆";
 
@@ -570,8 +581,8 @@ window.startCountdownSequence = function() {
                         }
 
                         window.finishGame();
-                    } else {
-                        // In più di 2 giocatori, mostriamo solo un avviso
+                    } else if (!players[myId]?.abandoned) {
+                        // In più di 2 giocatori, mostriamo solo un avviso se non siamo noi ad aver abbandonato
                         showToast(currentLang === 'it' ? "Un giocatore ha abbandonato." : "A player left the game.");
                     }
                 }
@@ -964,9 +975,21 @@ window.showMatchShareButtons = function() {
 window.saveMatchSummary = function(playersData) {
     if (!playersData || window.isSinglePlayer || isCourseMode) return;
 
-    // Identificativo unico per il match (Room + Timestamp)
-    const matchId = roomCode + "_" + Date.now().toString().substring(7);
-    const players = Object.values(playersData);
+    // Identificativo unico per il match (Room + Timestamp Creazione Stanza)
+    // Usiamo roomCreatedAt per rendere l'ID deterministico tra i vari client ed evitare duplicati
+    const matchSuffix = window.roomCreatedAt ? window.roomCreatedAt.toString().substring(7) : Date.now().toString().substring(7);
+    const matchId = roomCode + "_" + matchSuffix;
+
+    // Usiamo Object.entries per recuperare l'ID del giocatore dalle chiavi
+    const players = Object.entries(playersData).map(([pid, p]) => ({
+        id: pid,
+        name: p.name,
+        username: p.username || "",
+        score: p.score || 0,
+        wpm: p.wpm || 0,
+        finished: !!p.finished,
+        abandoned: !!p.abandoned
+    }));
 
     // Determiniamo il percorso corretto per la classifica Multiplayer
     let baseMode = currentMode;
@@ -980,14 +1003,7 @@ window.saveMatchSummary = function(playersData) {
     }
 
     const matchSummary = {
-        players: players.map(p => ({
-            id: p.id || "",
-            name: p.name,
-            username: p.username || "",
-            score: p.score || 0,
-            wpm: p.wpm || 0,
-            finished: !!p.finished
-        })),
+        players: players,
         mode: currentMode,
         wordCount: requestedWordCount,
         date: new Date().toLocaleDateString('it-IT'),

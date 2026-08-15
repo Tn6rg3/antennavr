@@ -426,6 +426,12 @@ window.renderHeadToHeadView = function(players, container) {
         const sSpVal = document.createElement('span'); sSpVal.className = 'h2h-val'; sSpVal.style.color = 'var(--link-color)'; sSpVal.textContent = `${p.wpm} WPM`;
         rowSp.appendChild(sSpLbl); rowSp.appendChild(sSpVal); statsDiv.appendChild(rowSp);
 
+        if (p.abandoned) {
+            const rowAb = document.createElement('div'); rowAb.className = 'h2h-stat-row';
+            rowAb.innerHTML = `<span style="color:#d32f2f; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px;">${currentLang==='it'?'ABBANDONATO':'WITHDRAWN'}</span>`;
+            statsDiv.appendChild(rowAb);
+        }
+
         card.appendChild(statsDiv);
 
         const hintDiv = document.createElement('div'); hintDiv.className = 'h2h-hint';
