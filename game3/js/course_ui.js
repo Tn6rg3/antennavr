@@ -204,23 +204,41 @@ window.showStudentDetailedStats = function(uid, name) {
 /**
  * CHAT RADIO-AULA: Gestione messaggi classe/tutor
  */
+window.courseChatMode = 'aula'; // 'aula' o 'global'
+
+window.switchCourseChatMode = function(mode) {
+    window.courseChatMode = mode;
+    const btnAula = document.getElementById('btnCourseChatAula');
+    const btnGlobal = document.getElementById('btnCourseChatGlobal');
+
+    if (mode === 'aula') {
+        if (btnAula) { btnAula.style.color = 'var(--champ-color)'; btnAula.style.borderBottom = '2px solid var(--champ-color)'; }
+        if (btnGlobal) { btnGlobal.style.color = 'var(--hint-color)'; btnGlobal.style.borderBottom = 'none'; }
+    } else {
+        if (btnAula) { btnAula.style.color = 'var(--hint-color)'; btnAula.style.borderBottom = 'none'; }
+        if (btnGlobal) { btnGlobal.style.color = 'var(--champ-color)'; btnGlobal.style.borderBottom = '2px solid var(--champ-color)'; }
+    }
+
+    window.initCourseChat();
+};
+
 window.initCourseChat = function() {
     if (!db || !window.courseData) return;
 
     const isTutor = window.courseData.role === 'tutor';
     const currentUid = window.myId;
-    // Un tutor monitora la chat della SUA aula (il suo UID)
-    const tutorId = isTutor ? currentUid : (window.courseData.tutor_id || null);
 
-    // Percorso chat: courseChats/{tutorId} oppure courseChat (globale legacy)
-    const chatPath = tutorId ? `courseChats/${tutorId}` : 'courseChat';
-    const chatRef = db.ref(chatPath);
+    let chatPath = 'courseChat';
+    if (window.courseChatMode === 'aula') {
+        const tutorId = isTutor ? currentUid : (window.courseData.tutor_id || null);
+        chatPath = tutorId ? `courseChats/${tutorId}` : 'courseChat';
+    }
 
     const messagesCont = document.getElementById('courseChatMessages');
-    const chatTitle = document.querySelector('#courseChatArea h4');
+    const inputField = document.getElementById('courseChatInput');
 
-    if (chatTitle) {
-        chatTitle.textContent = tutorId ? (isTutor ? "💬 Radio-Aula (La tua Classe)" : "💬 Radio-Aula (Classe Tutor)") : "🌎 Radio-Aula (Globale)";
+    if (inputField) {
+        inputField.placeholder = window.courseChatMode === 'aula' ? "Scrivi alla classe..." : "Scrivi a tutti (Generale)...";
     }
 
     // Pulizia listener centralizzata
@@ -228,6 +246,7 @@ window.initCourseChat = function() {
         window.listeners.courseChatRef.off('value', window.listeners.courseChatCallback);
     }
 
+    const chatRef = db.ref(chatPath);
     const chatCallback = async (snap) => {
         if (!messagesCont) return;
         const data = snap.val() || {};
@@ -333,10 +352,8 @@ window.selectWizardRole = function(role) {
     if (role === 'tutor') {
         window.requestTutorRole();
     } else {
-        const sRole = document.getElementById('wizardStepRole');
-        const s1 = document.getElementById('wizardStep1');
-        if (sRole) sRole.style.display = 'none';
-        if (s1) s1.style.display = 'block';
+        // Mostriamo la scelta del tutor prima dei passi successivi
+        window.nextWizardStep(0.5);
     }
 };
 
