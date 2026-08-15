@@ -285,8 +285,8 @@ window.listenToRoomInBackground = function() {
 
     listeners.room = db.ref(`rooms/${roomCode}`);
 
-    // Variabile locale per il monitoraggio variazioni conteggio
-    let localPlayerCount = 0;
+    // Usiamo variabili persistenti per evitare di perdere eventi durante i cambi pagina
+    if (typeof window.lastAcceptedCount === 'undefined') window.lastAcceptedCount = 0;
 
     listeners.room.on('value', snap => {
         if (!snap.exists()) {
@@ -314,7 +314,7 @@ window.listenToRoomInBackground = function() {
         const pCount = Object.keys(players).length;
         const acceptedCount = Object.values(players).filter(p => p.accepted).length;
 
-        // 1. SINCRONIZZAZIONE BACHECA (Sempre, se Host)
+        // 1. AGGIORNAMENTO BACHECA (Priorità assoluta se Host)
         if (amIHost && rData.status === 'waiting') {
             db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(acceptedCount);
         }
@@ -324,7 +324,8 @@ window.listenToRoomInBackground = function() {
 
         if (isLobbyVisible) {
             window.renderPlayersList(players, rData.hostId);
-            lastPlayerCount = pCount;
+            window.lastPlayerCount = pCount;
+            window.lastAcceptedCount = acceptedCount;
 
             // Gestione Timer Lobby
             if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
@@ -338,24 +339,28 @@ window.listenToRoomInBackground = function() {
                         els.lobbyTimerText.textContent = `Scade tra: ${Math.floor(diff/60000)}:${Math.floor((diff%60000)/1000).toString().padStart(2, '0')}`;
                     }
                 }, 1000);
-            } else if (els.lobbyTimerText) {
-                els.lobbyTimerText.textContent = "";
             }
         } else if (!gameRunning && !isCourseMode) {
-            // Se siamo fuori dalla lobby e NON in partita, mostriamo notifica
-            if (amIHost && pCount > localPlayerCount && localPlayerCount > 0) {
+            // NOTIFICA: Qualcuno è entrato O ha accettato la sfida
+            if (amIHost && (pCount > window.lastPlayerCount || acceptedCount > window.lastAcceptedCount)) {
+                const msg = acceptedCount > window.lastAcceptedCount ? "Un giocatore ha accettato la sfida! 🚀" : "Qualcuno è entrato nella tua stanza.";
                 if (typeof window.showRoomEventModal === 'function') {
-                    window.showRoomEventModal("Qualcuno è entrato!", "Un nuovo sfidante ti aspetta in stanza.");
-                    if (typeof window.playBeep === 'function') window.playBeep(700, 0.2);
+                    window.showRoomEventModal("Aggiornamento Stanza", msg);
+                    if (typeof window.playBeep === 'function') {
+                        window.playBeep(880, 0.1);
+                        setTimeout(() => window.playBeep(1100, 0.15), 100);
+                    }
                 }
             }
         }
-        localPlayerCount = pCount;
+
+        window.lastPlayerCount = pCount;
+        window.lastAcceptedCount = acceptedCount;
 
         // 3. LOGICA DI PASSAGGIO AL GIOCO
         if (rData.status === 'playing' || rData.status === 'countdown') {
             localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
-            window.isRoomMonitorActive = false; // Passiamo alla gestione match
+            window.isRoomMonitorActive = false;
 
             if (rData.status === 'playing' && !gameRunning) {
                 currentWpm = rData.wpm; baseWpm = rData.wpm; currentTone = rData.tone;
