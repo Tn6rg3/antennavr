@@ -84,7 +84,7 @@
         • Inizia dalla modalità <b>Parole Comuni</b> per fare pratica.<br>
         • Se vuoi, imposta un <b>Alias</b> nella sezione Profilo.
     </div>
-    <button id="btnCloseWelcomeModal" class="btn-champ">INIZIA AD ALLENARTI 🚀</button>
+    <button id="btnCloseWelcomeModal" onclick="document.getElementById('welcomeNewUserModal').style.display='none'" class="btn-champ">INIZIA AD ALLENARTI 🚀</button>
 </div>
 <!-- CHAT GLOBALE (DRAWER) -->
 <div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:55%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
@@ -586,7 +586,10 @@
             <!-- CHAT DEL CORSO (RADIO-AULA) -->
             <div id="courseChatArea" class="box-panel" style="border-color: var(--champ-color); padding:5px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; padding:0 5px;">
-                    <h4 style="margin:0; font-size:0.9em; color:var(--champ-color);">💬 Radio-Aula (Chat Corso)</h4>
+                    <div id="courseChatTabSwitcher" style="display:flex; gap:10px; align-items:center; cursor:pointer;">
+                        <div id="btnCourseChatAula" onclick="window.switchCourseChatMode('aula')" style="font-size:0.85em; font-weight:bold; color:var(--champ-color); border-bottom: 2px solid var(--champ-color); padding: 2px 0;">💬 Aula</div>
+                        <div id="btnCourseChatGlobal" onclick="window.switchCourseChatMode('global')" style="font-size:0.85em; font-weight:bold; color:var(--hint-color); padding: 2px 0;">🌎 Generale</div>
+                    </div>
                     <div style="display:flex; gap:5px;">
                         <button id="clearCourseChatBtn" class="action-btn-small btn-danger" style="width:auto; padding:2px 8px; font-size:0.75em;">🗑️</button>
                         <button id="btnToggleCourseChat" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi</button>
