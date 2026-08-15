@@ -92,13 +92,29 @@ window.isRejoining = false;
 window.outgoingChallengeId = null; // ID dell'utente che HO sfidato
 window.incomingChallengeId = null; // ID dell'utente che MI sfida
 window.activeTrnId = null;
-let roomCode = "", roomHostId = null;
-let lastPlayerCount = 0, gameStartPlayerCount = 0;
-let gameRunning = false, inputActive = false, audioCtx = null;
-let gameWords = [], wordIndex = 0, currentWpm = 20, baseWpm = 20, currentTone = 600, peakWpm = 0;
-let totalScore = 0, currentStreak = 0, usedReplay = false, matchDetailsArray = [];
-let isSinglePlayer = false, currentMode = "standard", requestedWordCount = 10;
-let isFixedSpeed = false, isEasyMode = false, lastWordStartTime = 0;
+window.roomCode = "";
+window.roomHostId = null;
+window.lastPlayerCount = 0;
+window.gameStartPlayerCount = 0;
+window.gameRunning = false;
+window.inputActive = false;
+window.audioCtx = null;
+window.gameWords = [];
+window.wordIndex = 0;
+window.currentWpm = 20;
+window.baseWpm = 20;
+window.currentTone = 600;
+window.peakWpm = 0;
+window.totalScore = 0;
+window.currentStreak = 0;
+window.usedReplay = false;
+window.matchDetailsArray = [];
+window.isSinglePlayer = false;
+window.currentMode = "standard";
+window.requestedWordCount = 10;
+window.isFixedSpeed = false;
+window.isEasyMode = false;
+window.lastWordStartTime = 0;
 
 // STATO CORSO CW
 let isCourseMode = false, courseSessionTimer = null, coursePauseInterval = null;
@@ -466,7 +482,7 @@ function initGame() {
         // --- PULIZIA SESSIONI PRECEDENTI ---
         // Se l'app si è chiusa male, l'utente potrebbe avere ancora una stanza "waiting" a suo nome.
         // La puliamo all'avvio per evitare "ghost rooms" in bacheca.
-        db.ref('rooms').orderByChild('hostId').equalTo(myId).once('value', s => {
+        db.ref('rooms').orderByChild('hostId').equalTo(window.myId).once('value', s => {
             s.forEach(roomSnap => {
                 if (roomSnap.val().status === 'waiting') {
                     roomSnap.ref.remove();
@@ -622,16 +638,30 @@ function initGame() {
 window.setupBugSystem = function() {
     const badge = document.getElementById('bugsBadge');
 
+    // Backup: Rilevamento Admin basato su ID Telegram se disponibile subito
+    if (String(window.myId) === '352908417') {
+        window.isAdmin = true;
+        if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
+    }
+
     // 1. Bug Reports Listener (Rilevamento Admin basato su Permessi Firebase)
-    // Se le Regole Firebase permettono la lettura, l'utente è considerato Admin
     db.ref('bugReports').limitToLast(20).on('value', snap => {
         window.isAdmin = true;
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
         window.updateAdminBadge();
     }, (error) => {
-        window.isAdmin = false;
-        if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
-        console.log("Bug System: Standard user access.");
+        // Se Firebase nega l'accesso, verifichiamo comunque l'ID come ultima risorsa
+        if (String(window.myId) !== '352908417') {
+            window.isAdmin = false;
+            if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
+            console.log("Bug System: Standard user access.");
+        } else {
+            // Se sono io (ID 352908417) ma Firebase ha dato errore (magari ritardo mapping)
+            // considerami Admin ma segnala il problema dei permessi
+            window.isAdmin = true;
+            if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
+            console.warn("Bug System: Admin detected by ID, but Firebase rules denied access.");
+        }
     });
 
     // 2. Tutor Requests Listener (Real-time per Admin Badge)
@@ -940,56 +970,56 @@ if (els.createRoomBtn) {
         window.isChallenging = false;
         window.outgoingChallengeId = null;
         window.incomingChallengeId = null;
-        currentMode = gMode || 'standard';
-        isSinglePlayer = (gType === 'single');
-        currentWpm = baseWpm = (currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
-        requestedWordCount = (currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
-        currentTone = parseInt(els.toneInput?.value) || 600;
+        window.currentMode = gMode || 'standard';
+        window.isSinglePlayer = (gType === 'single');
+        window.currentWpm = window.baseWpm = (window.currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
+        window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
+        window.currentTone = parseInt(els.toneInput?.value) || 600;
 
         // --- LETTURA OPZIONI AVANZATE ---
-        const isFixed = isSinglePlayer && els.fixedSpeedCheckbox?.checked;
-        const isEasy = isSinglePlayer && els.easyModeCheckbox?.checked;
-        const allowSpectators = isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
+        const isFixed = window.isSinglePlayer && els.fixedSpeedCheckbox?.checked;
+        const isEasy = window.isSinglePlayer && els.easyModeCheckbox?.checked;
+        const allowSpectators = window.isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
 
         // Se l'input è vuoto o non siamo in Solo, impostiamo 0 (spaziatura automatica proporzionale)
-        let cSpace = (isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
-        let wSpace = isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
+        let cSpace = (window.isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
+        let wSpace = window.isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
 
-        roomCode = Math.floor(1000 + Math.random() * 9000).toString();
-        gameWords = window.getGameWords(requestedWordCount, currentMode);
+        window.roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+        window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode);
 
-        const expires = isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
+        const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
-        const roomRef = db.ref('rooms/' + roomCode);
+        const roomRef = db.ref('rooms/' + window.roomCode);
         roomRef.set({
-            status: isSinglePlayer ? 'countdown' : 'waiting',
-            type: isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
-            mode: currentMode,
-            wpm: currentWpm,
-            tone: currentTone,
-            wordCount: requestedWordCount,
-            words: gameWords,
+            status: window.isSinglePlayer ? 'countdown' : 'waiting',
+            type: window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
+            mode: window.currentMode,
+            wpm: window.currentWpm,
+            tone: window.currentTone,
+            wordCount: window.requestedWordCount,
+            words: window.gameWords,
             fixedSpeed: !!isFixed,
             easyMode: !!isEasy,
             charSpaceWpm: cSpace,
             wordSpaceMult: wSpace,
             createdAt: firebase.database.ServerValue.TIMESTAMP,
             expiresAt: expires,
-            hostId: myId
+            hostId: window.myId
         }).then(() => {
-            if (!isSinglePlayer) {
+            if (!window.isSinglePlayer) {
                 // PULIZIA AUTOMATICA: Se l'Host si disconnette completamente da Firebase, rimuovi la stanza
                 roomRef.onDisconnect().remove();
 
-                const lobbyRef = db.ref(`public_lobby_rooms/${roomCode}`);
-                lobbyRef.set({ mode: currentMode, pCount: 1, wpm: currentWpm, status: 'waiting', expiresAt: expires });
+                const lobbyRef = db.ref(`public_lobby_rooms/${window.roomCode}`);
+                lobbyRef.set({ mode: window.currentMode, pCount: 1, wpm: window.currentWpm, status: 'waiting', expiresAt: expires });
                 lobbyRef.onDisconnect().remove();
             }
 
-            if (isSinglePlayer && allowSpectators) {
-                db.ref(`presence/${myId}`).update({
+            if (window.isSinglePlayer && allowSpectators) {
+                db.ref(`presence/${window.myId}`).update({
                     allowSpectators: true,
-                    activeRoomCode: roomCode
+                    activeRoomCode: window.roomCode
                 });
             }
 

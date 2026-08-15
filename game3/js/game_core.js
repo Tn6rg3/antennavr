@@ -781,19 +781,19 @@ window.finishGame = function() {
         myPlayerRef.onDisconnect().cancel();
     }
 
-    if (totalScore > 0 && !roomCode.startsWith("TRN_")) {
+    if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {
         // --- FIX CLASSIFICA SFIDE ---
         // Determiniamo se era un multiplayer basandoci su gameStartPlayerCount salvato all'inizio
-        const isActuallyMulti = (gameStartPlayerCount >= 2);
+        const isActuallyMulti = (window.gameStartPlayerCount >= 2);
 
-        db.ref(`rooms/${roomCode}/players`).once('value', snap => {
+        db.ref(`rooms/${window.roomCode}/players`).once('value', snap => {
             let dbPath;
-            if (currentMode === 'daily_challenge') {
+            if (window.currentMode === 'daily_challenge') {
                 let todayStr = new Date().toISOString().split('T')[0];
-                dbPath = `leaderboard/daily_challenge/${todayStr}/${myId}`;
+                dbPath = `leaderboard/daily_challenge/${todayStr}/${window.myId}`;
             } else {
-                const modeFolder = currentMode === 'callsign' ? 'callsign/global' : `${currentMode === 'quiz' ? 'quiz' : currentMode === 'chars' ? 'chars' : currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${!isActuallyMulti ? 'single' : 'multi'}_${requestedWordCount}`;
-                dbPath = `leaderboard/${modeFolder}/${myId}`;
+                const modeFolder = window.currentMode === 'callsign' ? 'callsign/global' : `${window.currentMode === 'quiz' ? 'quiz' : window.currentMode === 'chars' ? 'chars' : window.currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${!isActuallyMulti ? 'single' : 'multi'}_${window.requestedWordCount}`;
+                dbPath = `leaderboard/${modeFolder}/${window.myId}`;
             }
 
             db.ref(dbPath).once('value', s => {
@@ -803,14 +803,14 @@ window.finishGame = function() {
                 const myLevel = window.userProgression?.level || 1;
 
                 // Aggiorniamo se il punteggio è migliore, OPPURE se il punteggio è uguale ma la velocità è superiore
-                if (!oldData || totalScore > oldScore || (totalScore === oldScore && peakWpm > oldWpm)) {
+                if (!oldData || window.totalScore > oldScore || (window.totalScore === oldScore && window.peakWpm > oldWpm)) {
                     db.ref(dbPath).set({
-                        name: myName,
-                        username: myPrivacy ? "" : tgUsername,
-                        score: totalScore,
-                        wpm: peakWpm,
+                        name: window.myName,
+                        username: window.myPrivacy ? "" : tgUsername,
+                        score: window.totalScore,
+                        wpm: window.peakWpm,
                         level: myLevel,
-                        wordCount: requestedWordCount,
+                        wordCount: window.requestedWordCount,
                         date: new Date().toLocaleDateString('it-IT')
                     });
                     window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
@@ -962,19 +962,26 @@ window.showMatchShareButtons = function() {
 };
 
 window.saveMatchSummary = function(playersData) {
-    if (!playersData || isSinglePlayer || isCourseMode) return;
+    if (!playersData || window.isSinglePlayer || isCourseMode) return;
 
     // Identificativo unico per il match (Room + Timestamp)
     const matchId = roomCode + "_" + Date.now().toString().substring(7);
     const players = Object.values(playersData);
 
-    // Determiniamo il percorso in base al tipo di gioco
-    let baseMode = currentMode === 'std' ? 'standard' : (currentMode === 'chars' ? 'chars' : (currentMode === 'quiz' ? 'quiz' : 'pingpong'));
-    let category = baseMode;
-    if (baseMode !== 'pingpong') category += "_multi";
+    // Determiniamo il percorso corretto per la classifica Multiplayer
+    let baseMode = currentMode;
+    if (baseMode === 'std') baseMode = 'standard';
+
+    const validModes = ['standard', 'chars', 'quiz', 'pingpong', 'conquest'];
+    let category = validModes.includes(baseMode) ? baseMode : 'standard';
+
+    if (category !== 'pingpong' && category !== 'conquest') {
+        category += "_multi";
+    }
 
     const matchSummary = {
         players: players.map(p => ({
+            id: p.id || "",
             name: p.name,
             username: p.username || "",
             score: p.score || 0,
@@ -988,6 +995,7 @@ window.saveMatchSummary = function(playersData) {
     };
 
     const summaryPath = `leaderboard/recent_matches/${category}/${requestedWordCount}/${matchId}`;
+    console.log("Summary: Saving match result to:", summaryPath);
     db.ref(summaryPath).set(matchSummary).catch(e => console.error("Summary Save Error:", e));
 };
 

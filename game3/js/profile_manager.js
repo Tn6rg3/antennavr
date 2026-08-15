@@ -524,11 +524,12 @@ if (els.saveAliasBtn) {
         const newName = alias || tgUser.first_name;
         const currentUsername = privacy ? "" : tgUsername;
         try {
-            await db.ref(`users/${myId}`).update({ alias: alias || null, privacyUsername: privacy });
-            myName = newName; myPrivacy = privacy;
-            if (els.playerName) els.playerName.textContent = myName;
+            await db.ref(`users/${window.myId}`).update({ alias: alias || null, privacyUsername: privacy });
+            window.myName = newName;
+            window.myPrivacy = privacy;
+            if (els.playerName) els.playerName.textContent = window.myName;
             showToast("Profilo aggiornato!");
-            await window.syncUserNameEverywhere(myId, newName, currentUsername);
+            await window.syncUserNameEverywhere(window.myId, newName, currentUsername);
         } catch(e) {
             alert("Errore durante il salvataggio: " + e.message);
         }

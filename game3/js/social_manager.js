@@ -14,9 +14,9 @@ window.hideChat = function() {
 };
 
 window.listenToChat = function() {
-    if (activeChatContext === 'room' && roomCode) {
-        window.setupChat(db.ref(`rooms/${roomCode}/chat`), 'lobbyChatMessages', 50);
-        window.setupChat(db.ref(`rooms/${roomCode}/chat`), 'chatMessages', 50);
+    if (window.activeChatContext === 'room' && window.roomCode) {
+        window.setupChat(db.ref(`rooms/${window.roomCode}/chat`), 'lobbyChatMessages', 50);
+        window.setupChat(db.ref(`rooms/${window.roomCode}/chat`), 'chatMessages', 50);
         if (els.chatTitle) els.chatTitle.textContent = "💬 Chat Stanza";
     } else {
         window.setupChat(db.ref('globalChat'), 'chatMessages', 50);
@@ -25,7 +25,7 @@ window.listenToChat = function() {
 };
 
 window.openGlobalChat = function() {
-    activeChatContext = 'global';
+    window.activeChatContext = 'global';
     window.listenToChat();
     window.toggleChat();
 };
@@ -45,12 +45,12 @@ window.toggleChat = function() {
 window.canUserChat = async function() {
     // 1. Controllo Override Admin (Sempre prioritario)
     try {
-        const overrideSnap = await db.ref(`users/${myId}/chatEnabledOverride`).once('value');
+        const overrideSnap = await db.ref(`users/${window.myId}/chatEnabledOverride`).once('value');
         if (overrideSnap.val() === true) return true;
     } catch(e) { console.error("Chat Auth Logic Error:", e); }
 
     // 2. Controlli Standard
-    if (!tgUsername) {
+    if (!window.tgUsername) {
         showToast(currentLang === 'it' ? "⚠️ Imposta uno username su Telegram per scrivere!" : "⚠️ Set a Telegram username to chat!");
         return false;
     }
@@ -129,7 +129,7 @@ window.setupChat = function(ref, containerId, limit = 50) {
         messages.forEach(m => {
             const div = document.createElement('div');
             div.className = 'chat-msg';
-            if (m.name === myName) div.classList.add('chat-msg-own');
+            if (m.name === window.myName) div.classList.add('chat-msg-own');
             div.style.marginBottom = '6px';
 
             const header = document.createElement('div');
@@ -139,13 +139,8 @@ window.setupChat = function(ref, containerId, limit = 50) {
             const nameSpan = document.createElement('b');
             nameSpan.textContent = m.name;
 
-            // --- PRIVACY DINAMICA: Link attivo solo se lo username è presente ---
-            if (m.username && String(m.username).trim() !== "") {
-                nameSpan.style.color = 'var(--link-color)';
-                nameSpan.style.cursor = 'pointer';
-                nameSpan.style.textDecoration = 'underline';
-                nameSpan.onclick = () => window.openTelegramProfile(m.username);
-            }
+            // PRIVACY: I nomi in chat non sono più link cliccabili a profili Telegram esterni
+            // Il collegamento è rimosso per tutti per massima sicurezza e semplicità.
 
             const timeSpan = document.createElement('span');
             timeSpan.textContent = timeStr;
@@ -154,7 +149,7 @@ window.setupChat = function(ref, containerId, limit = 50) {
             header.appendChild(timeSpan);
 
             // TASTO ELIMINA (Solo per i propri messaggi)
-            if (m.senderId === myId) {
+            if (m.senderId === window.myId) {
                 const delBtn = document.createElement('span');
                 delBtn.innerHTML = " 🗑️";
                 delBtn.style.cursor = 'pointer';
@@ -443,9 +438,9 @@ window.openInviteModal = function(targetId, targetName) {
             console.log("RPG: Sending Game Invite to:", targetId, "Mode:", mode);
 
             db.ref(`invites/${targetId}`).set({
-                fromId: myId,
-                fromName: myName,
-                fromUsername: myPrivacy ? "" : tgUsername,
+                fromId: window.myId,
+                fromName: window.myName,
+                fromUsername: window.myPrivacy ? "" : tgUsername,
                 type: 'game',
                 mode: mode,
                 wpm: wpm,

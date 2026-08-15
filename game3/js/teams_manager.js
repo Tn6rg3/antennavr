@@ -4,17 +4,17 @@ window.checkMyTeamStatus = async function() {
     // OTTIMIZZAZIONE: Cerchiamo prima il teamId nel profilo utente per evitare di scaricare TUTTI i team
     let tId = null;
     try {
-        const uSnap = await db.ref(`users/${myId}/teamId`).once('value');
+        const uSnap = await db.ref(`users/${window.myId}/teamId`).once('value');
         tId = uSnap.val();
     } catch(e) {}
 
     if (tId) {
         db.ref(`teams/${tId}`).once('value', snap => {
             const team = snap.val();
-            if (team && team.members && team.members[myId] && team.status !== 'retired') {
-                myTeamId = tId;
-                myTeamName = team.name;
-                isTeamCaptain = (team.captainId === myId);
+            if (team && team.members && team.members[window.myId] && team.status !== 'retired') {
+                window.myTeamId = tId;
+                window.myTeamName = team.name;
+                window.isTeamCaptain = (team.captainId === window.myId);
 
                 if (els.noTeamView) els.noTeamView.style.display = 'none';
                 if (els.myTeamView) els.myTeamView.style.display = 'flex';
@@ -25,7 +25,7 @@ window.checkMyTeamStatus = async function() {
                 return;
             } else {
                 // Se il team non esiste o non siamo più membri, puliamo il riferimento
-                db.ref(`users/${myId}/teamId`).remove();
+                db.ref(`users/${window.myId}/teamId`).remove();
                 window.checkMyTeamStatusFallback();
             }
         });
@@ -148,8 +148,8 @@ window.listenToAllTeams = function(isAlreadyInTeam) {
 };
 
 window.joinTeam = function(tId) {
-    db.ref(`teams/${tId}/members/${myId}`).set({ name: myName, username: myPrivacy ? "" : tgUsername }).then(() => {
-        db.ref(`users/${myId}/teamId`).set(tId);
+    db.ref(`teams/${tId}/members/${window.myId}`).set({ name: window.myName, username: window.myPrivacy ? "" : tgUsername }).then(() => {
+        db.ref(`users/${window.myId}/teamId`).set(tId);
         window.checkMyTeamStatus();
     });
 };
@@ -166,18 +166,10 @@ window.listenToMyTeam = function() {
 
         Object.entries(team.members || {}).forEach(([id, mem]) => {
             const span = document.createElement('span');
+            span.style.fontWeight = 'bold';
             span.textContent = mem.name;
 
-            // --- PRIVACY DINAMICA ---
-            if (mem.username && String(mem.username).trim() !== "") {
-                span.style.color = 'var(--link-color)';
-                span.style.cursor = 'pointer';
-                span.style.textDecoration = 'underline';
-                span.style.fontWeight = 'bold';
-                span.onclick = () => openTelegramProfile(mem.username);
-            } else {
-                span.style.fontWeight = 'bold';
-            }
+            // PRIVACY: Link Telegram rimosso dai nomi dei membri della squadra
 
             if (id === team.captainId) {
                 if (els.captainName) els.captainName.appendChild(span);
@@ -189,6 +181,21 @@ window.listenToMyTeam = function() {
             }
         });
         if (els.captainActions) els.captainActions.style.display = isTeamCaptain ? 'block' : 'none';
+
+        if (els.renameTeamBtn) {
+            els.renameTeamBtn.style.display = (isTeamCaptain || window.isAdmin) ? 'block' : 'none';
+            els.renameTeamBtn.onclick = () => {
+                const currentName = team.name || "";
+                const newName = prompt(currentLang === 'it' ? "Nuovo nome della squadra:" : "New team name:", currentName);
+                if (newName && newName.trim() !== "" && newName !== currentName) {
+                    db.ref(`teams/${window.myTeamId}/name`).set(newName.trim()).then(() => {
+                        window.myTeamName = newName.trim();
+                        showToast("Nome squadra aggiornato!");
+                    }).catch(e => console.error("Rename Team Error:", e));
+                }
+            };
+        }
+
         if (els.toggleTeamLockBtn) {
             els.toggleTeamLockBtn.textContent = team.status === 'open' ? "Chiudi Adesioni" : "Riapri Adesioni";
             els.toggleTeamLockBtn.onclick = () => db.ref(`teams/${myTeamId}/status`).set(team.status === 'open' ? 'closed' : 'open');
@@ -206,23 +213,26 @@ window.listenToTournaments = function() {
     // OTTIMIZZAZIONE: Limitiamo ai 20 tornei più recenti
     const trnRef = db.ref('tournaments').limitToLast(20);
     listeners.trn = trnRef.on('value', snap => {
-        activeTrnId = null;
+        window.activeTrnId = null;
         if (els.openTournamentsList) els.openTournamentsList.innerHTML = '';
         if (els.pastTournamentsList) els.pastTournamentsList.innerHTML = '';
 
         // Pannello creazione visibile a Capitani o Admin
-        if (els.createTrnPanel) els.createTrnPanel.style.display = (isTeamCaptain || window.isAdmin) ? 'flex' : 'none';
+        if (els.createTrnPanel) els.createTrnPanel.style.display = (window.isTeamCaptain || window.isAdmin) ? 'flex' : 'none';
 
         let foundActive = null;
         snap.forEach(child => {
-            const trn = child.val(); const trnId = child.key; const isMember = myTeamId && trn.teams && trn.teams[myTeamId]; const isHost = trn.hostId === myId;
+            const trn = child.val(); const trnId = child.key;
+            const isMember = window.myTeamId && trn.teams && trn.teams[window.myTeamId];
+            const isHost = trn.hostId === window.myId;
+
             if ((isMember || isHost) && trn.status !== 'finished') {
                 if (!foundActive) foundActive = child;
                 else if (trn.status === 'playing' && foundActive.val().status !== 'playing') foundActive = child;
             }
             if (trn.status === 'open') {
                 const li = document.createElement('li'); const leftSpan = document.createElement('span'); const nameB = document.createElement('b'); nameB.textContent = trn.name; const countSmall = document.createElement('small'); countSmall.textContent = ` (${Object.keys(trn.teams || {}).length} sq.)`; leftSpan.appendChild(nameB); leftSpan.appendChild(countSmall); li.appendChild(leftSpan);
-                if (isTeamCaptain && !isMember) {
+                if (window.isTeamCaptain && !isMember) {
                     const btn = document.createElement('button'); btn.className = 'action-btn-small btn-champ'; btn.textContent = 'Iscrivi'; btn.onclick = () => window.joinTournament(trnId); li.appendChild(btn);
                 } else if (isMember) {
                     const joinedSmall = document.createElement('small'); joinedSmall.style.color = 'var(--link-color)'; joinedSmall.style.fontWeight = 'bold'; joinedSmall.textContent = ' (Iscritto)'; li.appendChild(joinedSmall);
@@ -236,7 +246,7 @@ window.listenToTournaments = function() {
             }
         });
         if (foundActive) {
-            activeTrnId = foundActive.key;
+            window.activeTrnId = foundActive.key;
             window.renderActiveTournament(foundActive);
         } else {
             if (els.trnLobbyArea) els.trnLobbyArea.style.display = 'flex';
@@ -254,7 +264,7 @@ window.listenToTournaments = function() {
 window.viewTournament = function(tId) {
     db.ref(`tournaments/${tId}`).once('value', snap => {
         if (snap.exists()) {
-            activeTrnId = tId;
+            window.activeTrnId = tId;
             window.renderActiveTournament(snap);
             if (els.trnLobbyArea) els.trnLobbyArea.style.display = 'none';
             if (els.trnActiveArea) els.trnActiveArea.style.display = 'flex';
@@ -263,9 +273,9 @@ window.viewTournament = function(tId) {
 };
 
 window.joinTournament = function(tId) {
-    if (!isTeamCaptain) return;
-    db.ref(`tournaments/${tId}/teams/${myTeamId}`).set({ name: myTeamName });
-    db.ref(`tournaments/${tId}/standings/${myTeamId}`).set({ points: 0, name: myTeamName });
+    if (!window.isTeamCaptain) return;
+    db.ref(`tournaments/${tId}/teams/${window.myTeamId}`).set({ name: window.myTeamName });
+    db.ref(`tournaments/${tId}/standings/${window.myTeamId}`).set({ points: 0, name: window.myTeamName });
 };
 
 window.renderActiveTournament = function(trnSnap) {
@@ -284,7 +294,7 @@ window.renderActiveTournament = function(trnSnap) {
     if (els.editTrnNameBtn) {
         els.editTrnNameBtn.style.display = (amIHost && !isFinished) ? 'block' : 'none';
         els.editTrnNameBtn.onclick = () => {
-            const currentTrnId = window.activeTrnId;
+            const currentTrnId = window.activeTrnId; // Usa variabile globale
             if (!currentTrnId) {
                 console.error("Tournament: activeTrnId is null");
                 return showToast("Errore: ID Torneo non trovato.");
@@ -483,11 +493,11 @@ if (els.createTeamBtn) {
         const newTeamRef = db.ref('teams').push();
         newTeamRef.set({
             name: tName,
-            captainId: myId,
+            captainId: window.myId,
             status: 'open',
-            members: { [myId]: { name: myName, username: myPrivacy ? "" : tgUsername } }
+            members: { [window.myId]: { name: window.myName, username: window.myPrivacy ? "" : tgUsername } }
         }).then(() => {
-            db.ref(`users/${myId}/teamId`).set(newTeamRef.key);
+            db.ref(`users/${window.myId}/teamId`).set(newTeamRef.key);
             window.checkMyTeamStatus();
         });
     });
@@ -567,14 +577,14 @@ window.joinTournament = function(tId) {
 };
 
 window.toggleTrnSlot = function(matchId, side, teamId, targetTeamName = "questa squadra") {
-    if (teamId !== myTeamId) {
-        return alert(`⚠️ Questo posto è riservato alla squadra "${targetTeamName}"!\n\nTu fai parte della squadra "${myTeamName || 'Nessuna'}": premi sul pulsante destinato alla tua squadra.`);
+    if (teamId !== window.myTeamId) {
+        return alert(`⚠️ Questo posto è riservato alla squadra "${targetTeamName}"!\n\nTu fai parte della squadra "${window.myTeamName || 'Nessuna'}": premi sul pulsante destinato alla tua squadra.`);
     }
-    const slotRef = db.ref(`tournaments/${activeTrnId}/matches/${matchId}/player${side}`);
+    const slotRef = db.ref(`tournaments/${window.activeTrnId}/matches/${matchId}/player${side}`);
     slotRef.once('value', snap => {
         if (!snap.exists()) {
-            slotRef.set({ id: myId, name: myName });
-        } else if (snap.val().id === myId) {
+            slotRef.set({ id: window.myId, name: window.myName });
+        } else if (snap.val().id === window.myId) {
             slotRef.remove();
         } else {
             alert("⚠️ Questo posto è già stato occupato da " + snap.val().name);
@@ -584,6 +594,7 @@ window.toggleTrnSlot = function(matchId, side, teamId, targetTeamName = "questa 
 
 window.startTrnMatch = function(matchId) {
     const rc = "TRN_" + matchId;
+    window.roomCode = rc; // Assicuriamoci di impostare la variabile globale
     db.ref(`rooms/${rc}`).once('value', s => {
         if (s.exists()) {
             window.joinSpecificRoom(rc);
@@ -598,7 +609,7 @@ window.startTrnMatch = function(matchId) {
                 fixedSpeed: false,
                 createdAt: firebase.database.ServerValue.TIMESTAMP,
                 expiresAt: Date.now() + 1800000,
-                hostId: myId
+                hostId: window.myId
             }).then(() => window.joinSpecificRoom(rc));
         }
     });
