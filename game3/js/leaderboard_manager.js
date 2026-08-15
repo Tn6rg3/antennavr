@@ -9,6 +9,7 @@ window.lbGroups = {
         { val: 'std_multi', it: '⚔️ Sfide Parole (Multi)', en: '⚔️ Words Challenges' },
         { val: 'chars_multi', it: '⚔️ Sfide Caratteri (Multi)', en: '⚔️ Chars Challenges' },
         { val: 'quiz_multi', it: '⚔️ Sfide Quiz (Multi)', en: '⚔️ Quiz Challenges' },
+        { val: 'callsign_multi', it: '🎙️ Sfide Nominativi (Multi)', en: '🎙️ Callsign Challenges' },
         { val: 'pingpong', it: '🏓 Sfide Ping Pong', en: '🏓 Ping Pong Challenges' },
         { val: 'trn_global', it: '🏆 Classifica Tornei (Team)', en: '🏆 Tournament Standings' }
     ],
@@ -77,7 +78,7 @@ window.showLeaderboardTab = function(modeValue) {
         // Gestione dinamica Multi/Single per Parole, Caratteri, Quiz, Ping Pong
         if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
 
-        let baseMode = modeValue.includes('std') ? 'standard' : (modeValue.includes('chars') ? 'chars' : (modeValue.includes('quiz') ? 'quiz' : 'pingpong'));
+        let baseMode = modeValue.includes('std') ? 'standard' : (modeValue.includes('chars') ? 'chars' : (modeValue.includes('quiz') ? 'quiz' : (modeValue.includes('callsign') ? 'callsign' : 'pingpong')));
         let isMulti = modeValue.endsWith('_multi') || modeValue === 'pingpong';
 
         console.log("LB: BaseMode determined:", baseMode, "isMulti:", isMulti);

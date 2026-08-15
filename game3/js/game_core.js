@@ -987,8 +987,15 @@ window.saveMatchSummary = function(playersData) {
     if (!playersData || window.isSinglePlayer || isCourseMode) return;
 
     // Identificativo unico per il match (Room + Timestamp Creazione Stanza)
-    // Usiamo roomCreatedAt per rendere l'ID deterministico tra i vari client ed evitare duplicati
-    const matchSuffix = window.roomCreatedAt ? window.roomCreatedAt.toString().substring(7) : Date.now().toString().substring(7);
+    // Usiamo roomCreatedAt per rendere l'ID deterministico tra i vari client
+    let matchSuffix = "";
+    if (window.roomCreatedAt && typeof window.roomCreatedAt === 'number' && window.roomCreatedAt > 0) {
+        matchSuffix = window.roomCreatedAt.toString().substring(7);
+    } else {
+        // Fallback estremo se il timestamp non è ancora sincronizzato
+        matchSuffix = Date.now().toString().substring(7);
+    }
+
     const matchId = roomCode + "_" + matchSuffix;
 
     // Usiamo Object.entries per recuperare l'ID del giocatore dalle chiavi
@@ -1006,9 +1013,11 @@ window.saveMatchSummary = function(playersData) {
     let baseMode = currentMode;
     if (baseMode === 'std') baseMode = 'standard';
 
-    const validModes = ['standard', 'chars', 'quiz', 'pingpong', 'conquest'];
+    // Mappatura esatta tra modalità di gioco e categorie classifica
+    const validModes = ['standard', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign'];
     let category = validModes.includes(baseMode) ? baseMode : 'standard';
 
+    // Aggiungiamo il suffisso _multi tranne che per i modi che sono intrinsecamente multi
     if (category !== 'pingpong' && category !== 'conquest') {
         category += "_multi";
     }
