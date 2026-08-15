@@ -550,9 +550,15 @@ window.startCountdownSequence = function() {
         // Recuperiamo il conteggio iniziale dei giocatori che iniziano la sfida
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
             const initialPlayers = snap.val() || {};
-            gameStartPlayerCount = Object.keys(initialPlayers).length;
+            let count = Object.keys(initialPlayers).length;
 
-            console.log("Match Start: Player count =", gameStartPlayerCount);
+            // --- FIX SFIDE DIRETTE: Se la stanza è multiplayer/coop ci aspettiamo almeno 2 persone ---
+            // Se ne troviamo 1 sola all'avvio del countdown, è probabile che l'host stia ancora entrando.
+            // Forziamo a 2 per abilitare la logica di abbandono/vittoria a tavolino.
+            if (count < 2 && !isSinglePlayer) count = 2;
+
+            gameStartPlayerCount = count;
+            console.log("Match Start: Player count (adjusted) =", gameStartPlayerCount);
 
             if (listeners.players) db.ref(`rooms/${roomCode}/players`).off('value', listeners.players);
             listeners.players = db.ref(`rooms/${roomCode}/players`).on('value', pSnap => {
@@ -793,11 +799,16 @@ window.finishGame = function() {
     }
 
     if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {
-        // --- FIX CLASSIFICA SFIDE ---
-        // Determiniamo se era un multiplayer basandoci su gameStartPlayerCount salvato all'inizio
-        const isActuallyMulti = (window.gameStartPlayerCount >= 2);
-
         db.ref(`rooms/${window.roomCode}/players`).once('value', snap => {
+            const playersData = snap.val() || {};
+            const pArray = Object.values(playersData);
+
+            // --- FIX CLASSIFICA SFIDE ---
+            // Determiniamo se è un multiplayer se:
+            // 1. Ci sono effettivamente 2 o più persone nel nodo finale
+            // 2. OPPURE la stanza non era single player e il conteggio iniziale era >= 2
+            const isActuallyMulti = (pArray.length >= 2) || (!isSinglePlayer && gameStartPlayerCount >= 2);
+
             let dbPath;
             if (window.currentMode === 'daily_challenge') {
                 let todayStr = new Date().toISOString().split('T')[0];
