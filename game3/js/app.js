@@ -643,36 +643,24 @@ function initGame() {
 window.setupBugSystem = function() {
     const badge = document.getElementById('bugsBadge');
 
-    // Backup: Rilevamento Admin basato su ID Telegram se disponibile subito
-    if (String(window.myId) === '352908417') {
-        window.isAdmin = true;
-        if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
-    }
-
-    // 1. Bug Reports Listener (Rilevamento Admin basato su Permessi Firebase)
-    db.ref('bugReports').limitToLast(20).on('value', snap => {
+    // Rilevamento Admin basato su Permessi Firebase (Nessun ID in chiaro nel codice)
+    // Tentiamo di leggere bugReports: se Firebase lo permette, siamo admin.
+    db.ref('bugReports').limitToLast(1).on('value', snap => {
         window.isAdmin = true;
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
         window.updateAdminBadge();
+
+        // 2. Tutor Requests Listener (Attivo solo se siamo effettivamente admin)
+        db.ref('tutorRequests').off('value');
+        db.ref('tutorRequests').on('value', () => {
+            window.updateAdminBadge();
+        });
     }, (error) => {
-        // Se Firebase nega l'accesso, verifichiamo comunque l'ID come ultima risorsa
-        if (String(window.myId) !== '352908417') {
-            window.isAdmin = false;
-            if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
-            console.log("Bug System: Standard user access.");
-        } else {
-            // Se sono io (ID 352908417) ma Firebase ha dato errore (magari ritardo mapping)
-            // considerami Admin ma segnala il problema dei permessi
-            window.isAdmin = true;
-            if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
-            console.warn("Bug System: Admin detected by ID, but Firebase rules denied access.");
-        }
+        // Se Firebase nega l'accesso (standard user), nascondiamo pannello e badge
+        window.isAdmin = false;
+        if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
+        if (badge) badge.style.display = 'none';
     });
-
-    // 2. Tutor Requests Listener (Real-time per Admin Badge)
-    db.ref('tutorRequests').on('value', snap => {
-        window.updateAdminBadge();
-    }, (error) => { /* Silent for non-admin */ });
 
     // 3. Invio Bug (Per tutti)
     if (document.getElementById('btnSendBugReport')) {
@@ -1018,7 +1006,7 @@ if (els.createRoomBtn) {
         let cSpace = (window.isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
         let wSpace = window.isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
 
-        window.roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+        window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
         window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode);
 
         const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
