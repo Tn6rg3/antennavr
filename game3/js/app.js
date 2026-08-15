@@ -562,8 +562,7 @@ function initGame() {
 
             if (startParam) return;
 
-            // Verifichiamo se l'utente ha già giocato OGGI consultando la history su Firebase
-            // Ignoriamo il localStorage così se l'utente ha rifiutato per errore può ritentare riaprendo l'app
+            // Verifichiamo se l'utente ha già giocato o rifiutato la sfida OGGI
             db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value', histSnap => {
                 let alreadyPlayedToday = false;
                 histSnap.forEach(matchSnap => {
@@ -573,7 +572,9 @@ function initGame() {
                     if (m.mode === 'daily_challenge' && mDate === today) alreadyPlayedToday = true;
                 });
 
-                if (!alreadyPlayedToday && els.dailyChallengeModal) {
+                const alreadyShownToday = localStorage.getItem(STORAGE_DAILY_SHOWN) === today;
+
+                if (!alreadyPlayedToday && !alreadyShownToday && els.dailyChallengeModal) {
                     els.dailyChallengeModal.style.display = 'flex';
                 } else if (alreadyPlayedToday) {
                     // Aggiorniamo il cache locale se Firebase dice che abbiamo giocato
