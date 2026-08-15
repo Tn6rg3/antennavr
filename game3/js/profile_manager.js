@@ -582,3 +582,63 @@ document.getElementById('btnCreateErrorDict')?.addEventListener('click', () => {
         }
     });
 });
+
+if (els.deleteDataBtn) {
+    els.deleteDataBtn.onclick = async () => {
+        if (!confirm("ATTENZIONE: Questa azione eliminerà DEFINITIVAMENTE tutto il tuo profilo, i progressi del corso, le statistiche e lo storico. Non potrai tornare indietro.\n\nVuoi procedere?")) return;
+        if (!confirm("CONFERMA FINALE: Sei assolutamente sicuro? Tutti i record in classifica verranno rimossi.")) return;
+
+        showToast("Eliminazione dati in corso...");
+
+        try {
+            // 1. Dati Utente e Presenza
+            await db.ref(`users/${window.myId}`).remove();
+            await db.ref(`presence/${window.myId}`).remove();
+            await db.ref(`courseActiveEnrollments/${window.myId}`).remove();
+
+            // 2. Attività (Storico classifiche partecipazione)
+            const now = new Date();
+            const dKey = now.toISOString().split('T')[0];
+            const wKey = window.getWeekNumber(now);
+            const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+
+            await Promise.all([
+                db.ref(`activity/daily/${dKey}/${window.myId}`).remove(),
+                db.ref(`activity/weekly/${wKey}/${window.myId}`).remove(),
+                db.ref(`activity/monthly/${mKey}/${window.myId}`).remove()
+            ]);
+
+            // 3. Rimozione da tutte le Leaderboard (Standard, Chars, etc)
+            const categories = ['standard', 'chars', 'quiz', 'pingpong'];
+            for (const cat of categories) {
+                try {
+                    const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
+                    if (catSnap.exists()) {
+                        catSnap.forEach(subNode => {
+                            if (subNode.hasChild(window.myId)) {
+                                subNode.child(window.myId).ref.remove();
+                            }
+                        });
+                    }
+                } catch(e) { console.warn(`Clean LB ${cat} error:`, e); }
+            }
+
+            // Leaderboard con percorsi fissi
+            await db.ref(`leaderboard/callsign/global/${window.myId}`).remove();
+            await db.ref(`leaderboard/arcade/all/${window.myId}`).remove();
+            await db.ref(`leaderboard/arcade/global/${window.myId}`).remove();
+
+            showToast("Profilo eliminato con successo.");
+
+            // 4. Pulizia Locale e Riavvio
+            localStorage.clear();
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+
+        } catch (e) {
+            console.error("Delete Data Error:", e);
+            alert("Errore durante l'eliminazione: " + e.message);
+        }
+    };
+}
