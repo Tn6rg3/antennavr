@@ -49,13 +49,10 @@ window.canUserChat = async function() {
         if (overrideSnap.val() === true) return true;
     } catch(e) { console.error("Chat Auth Logic Error:", e); }
 
-    // 2. Controlli Standard
-    if (!window.tgUsername) {
-        showToast(currentLang === 'it' ? "⚠️ Imposta uno username su Telegram per scrivere!" : "⚠️ Set a Telegram username to chat!");
-        return false;
-    }
+    // 2. XP Gate o Corso Attivo
+    // Rimuoviamo l'obbligo dello username telegram per permettere a tutti di partecipare
+    // basandoci sulla progressione o l'impegno nel corso.
 
-    // 3. XP Gate o Corso Attivo
     const level = window.userProgression?.level || 1;
     const isStudent = window.courseData && window.courseData.active_plan === true;
 

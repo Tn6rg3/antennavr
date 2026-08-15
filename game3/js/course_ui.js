@@ -66,6 +66,21 @@ window.switchCourseSubTab = function(tabId) {
 };
 
 /**
+ * AVVIO WIZARD ISCRIZIONE
+ */
+window.startCourseWizard = function() {
+    const prompt = document.getElementById('courseTabInitialPrompt');
+    const wizard = document.getElementById('courseWizardContainer');
+    if (prompt) prompt.style.display = 'none';
+    if (wizard) {
+        wizard.style.display = 'block';
+        window.nextWizardStep(0);
+        window.renderTutorSelectionList('wizardTutorList');
+        window.populateLessonDropdowns();
+    }
+};
+
+/**
  * PANNELLO TUTOR: Lista corsisti assegnati
  */
 window.renderTutorPanel = function() {
