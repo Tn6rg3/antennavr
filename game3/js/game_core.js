@@ -568,15 +568,25 @@ window.startCountdownSequence = function() {
                 const players = pSnap.val() || {};
                 const currentPCount = Object.keys(players).length;
 
-                // --- LOGICA DI RILEVAMENTO ABBANDONO (Più robusta) ---
+                // --- NUOVA LOGICA DI RILEVAMENTO ABBANDONO (Più robusta) ---
 
-                // Caso 1: Qualcuno è stato rimosso (Lobby) o ha il flag abandoned (In Match)
+                // 1. Durante il countdown, aggiorniamo il conteggio di partenza se entrano nuovi giocatori
+                // Questo risolve il problema delle sfide dirette dove l'host entra un istante dopo l'accept
+                if (currentPCount > gameStartPlayerCount) {
+                    gameStartPlayerCount = currentPCount;
+                    console.log("Match Countdown: Player count updated to", gameStartPlayerCount);
+                    return;
+                }
+
+                // 2. Verifichiamo l'abbandono solo se siamo oltre il countdown (o se il calo è drastico)
                 const playersArray = Object.values(players);
                 const hasAbandoned = playersArray.some(p => p.abandoned);
 
                 if (gameStartPlayerCount >= 2 && (currentPCount < gameStartPlayerCount || hasAbandoned)) {
-                    if (gameStartPlayerCount === 2 && players[myId] && !players[myId].abandoned) {
-                        // In 1vs1 la vittoria è a tavolino per chi resta
+                    // Verifichiamo che non sia un falso positivo iniziale
+                    if (currentPCount === 1 && players[myId]) {
+                        // In 1vs1 la vittoria è a tavolino solo se il match era effettivamente iniziato
+                        // o se l'altro ha proprio cliccato "abbandona" (flag abandoned)
                         gameRunning = false;
                         const msg = currentLang === 'it' ? "L'avversario si è ritirato. Hai vinto a tavolino! 🏆" : "Opponent withdrew. You win by default! 🏆";
 
@@ -588,7 +598,7 @@ window.startCountdownSequence = function() {
 
                         window.finishGame();
                     } else if (!players[myId]?.abandoned) {
-                        // In più di 2 giocatori, mostriamo solo un avviso se non siamo noi ad aver abbandonato
+                        // In più di 2 giocatori, mostriamo solo un avviso
                         showToast(currentLang === 'it' ? "Un giocatore ha abbandonato." : "A player left the game.");
                     }
                 }
