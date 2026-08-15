@@ -275,19 +275,43 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
 window.listenToRoomInBackground = function() {
     if (!roomCode || listeners.room) return;
 
-    // Usiamo lo stesso listener di joinRoomLogic ma senza cambiare schermata subito
-    // per intercettare lo stato 'countdown' o 'playing'
+    console.log("Room: Enabling Background Monitor for " + roomCode);
     listeners.room = db.ref(`rooms/${roomCode}`);
+
+    // Variabile per tracciare il numero di giocatori ed evitare notifiche doppie
+    let localPlayerCount = 0;
+
     listeners.room.on('value', snap => {
         if (!snap.exists()) {
             roomCode = "";
             localStorage.removeItem(STORAGE_ROOM_KEY);
             return window.exitRoomCleanly(true);
         }
-        const rData = snap.val();
 
-        // Se la partita sta per iniziare o è iniziata, riportiamo l'utente dentro
+        const rData = snap.val();
+        const amIHost = (myId === rData.hostId);
+        const players = rData.players || {};
+        const pCount = Object.keys(players).length;
+        const acceptedCount = Object.values(players).filter(p => p.accepted).length;
+
+        // 1. SINCRONIZZAZIONE BACHECA (Solo se Host)
+        // Se il conteggio accettati è cambiato, aggiorniamo la bacheca pubblica
+        if (amIHost && rData.status === 'waiting') {
+            db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(acceptedCount);
+        }
+
+        // 2. NOTIFICA INGRESSO (Solo se Host e conteggio aumentato)
+        if (amIHost && pCount > localPlayerCount && localPlayerCount > 0) {
+            if (typeof window.showRoomEventModal === 'function') {
+                window.showRoomEventModal("Qualcuno è entrato!", "Un nuovo giocatore è appena entrato nella tua stanza.");
+                if (typeof window.playBeep === 'function') window.playBeep(700, 0.2);
+            }
+        }
+        localPlayerCount = pCount;
+
+        // 3. AUTO-RIENTRO SE PARTE LA PARTITA
         if ((rData.status === 'playing' || rData.status === 'countdown') && !gameRunning) {
+            console.log("Room: Match starting, rejoining lobby...");
             window.joinRoomLogic(true);
         }
     });
@@ -398,7 +422,16 @@ window.joinRoomLogic = function(isReconnect = false) {
             }
             if (rData.status === 'waiting') {
                 window.renderPlayersList(rData.players || {}, rData.hostId);
-                const pCount = Object.keys(rData.players || {}).length;
+                const players = rData.players || {};
+                const pCount = Object.keys(players).length;
+                const acceptedCount = Object.values(players).filter(p => p.accepted).length;
+
+                // --- AGGIORNAMENTO BACHECA REAL-TIME ---
+                // Ogni volta che cambia qualcosa nella lobby, l'host aggiorna il record pubblico
+                if (myId === rData.hostId) {
+                    db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(acceptedCount);
+                }
+
                 if (myId === rData.hostId && pCount > lastPlayerCount && activeChatContext !== 'room') {
                     if (typeof window.showRoomEventModal === 'function') window.showRoomEventModal("Qualcuno è entrato!", "Un nuovo giocatore è appena entrato.");
                 }
