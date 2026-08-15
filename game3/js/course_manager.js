@@ -325,7 +325,9 @@ window.getDefaultCourseData = function() {
     return {
         active_plan: false,
         elite_mode: false,
-        role: 'corsista', // Default role
+        role: 'corsista',
+        tutor_id: null,
+        init_date: new Date().toISOString().split('T')[0],
         settings: {
             days_per_week: 3,
             start_wpm: 15,
@@ -364,13 +366,17 @@ window.updateGlobalEnrollmentRecord = function(isActive) {
 
     if (isActive) {
         activeRef.once('value', snap => {
-            // Aggiorniamo sempre il nome per uniformità (Alias)
-            const updateData = { name: myName, role: window.courseData?.role || 'corsista', ts: firebase.database.ServerValue.TIMESTAMP };
+            const updateData = {
+                name: myName,
+                role: window.courseData?.role || 'corsista',
+                tutorId: window.courseData?.tutor_id || null,
+                ts: firebase.database.ServerValue.TIMESTAMP
+            };
 
             if (!snap.exists()) {
                 activeRef.set(updateData);
             } else {
-                activeRef.update({ name: myName, role: window.courseData?.role || 'corsista' });
+                activeRef.update(updateData);
             }
         });
     } else {
@@ -400,6 +406,11 @@ window.generateWeeklySchedule = function() {
         if (i === workDays.length - 1) type = 'LONG';
         else if (i % 2 === 0) type = 'Z2';
 
+        // REGOLA: Se siamo nella settimana di inizio e non è ancora lunedì, forziamo Z2
+        if (window.isFirstPartialWeek()) {
+            type = 'Z2';
+        }
+
         let sessions = [{ type: type, completed: false }];
         if (isElite) {
             sessions.push({ type: 'Z2', completed: false, elite: true });
@@ -409,6 +420,22 @@ window.generateWeeklySchedule = function() {
 
     window.courseData.weekly_schedule = schedule;
     window.saveCourseState();
+};
+
+window.isFirstPartialWeek = function() {
+    if (!window.courseData || !window.courseData.init_date) return false;
+    const initDate = new Date(window.courseData.init_date);
+    const today = new Date();
+
+    // Calcoliamo il lunedì successivo alla data di inizio
+    const firstMonday = new Date(initDate);
+    firstMonday.setDate(initDate.getDate() + (1 + 7 - initDate.getDay()) % 7);
+    if (initDate.getDay() === 1) firstMonday.setDate(initDate.getDate() + 7); // Se ha iniziato di lunedì, la regola non si applica (inizia subito bene)
+
+    firstMonday.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+
+    return today < firstMonday;
 };
 
 window.generateAdaptiveGroup = function() {

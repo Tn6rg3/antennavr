@@ -81,10 +81,14 @@ window.renderTutorPanel = function() {
 
         for (const uid of uids) {
             if (uid === myId) continue;
+            const enroll = enrollments[uid];
+
+            // FILTRO: Mostriamo solo i corsisti assegnati a questo tutor
+            if (enroll.role === 'tutor' || enroll.tutorId !== myId) continue;
+
             // Carichiamo i progressi (Koch) per ogni iscritto
             const userDataSnap = await db.ref(`users/${uid}/course/progress`).once('value');
             const p = userDataSnap.val() || {};
-            const enroll = enrollments[uid];
 
             const lesson = p.current_lesson || 2;
             const lastDate = p.last_session_date || "Mai";
@@ -100,7 +104,10 @@ window.renderTutorPanel = function() {
 
             const nameB = document.createElement('b');
             nameB.style.color = "#b39ddb";
+            nameB.style.cursor = "pointer";
+            nameB.style.textDecoration = "underline";
             nameB.textContent = `👤 ${enroll.name || 'Anonimo'} `;
+            nameB.onclick = () => window.showStudentStats(uid, enroll.name || 'Anonimo');
 
             if (enroll.roomCode) {
                 const liveBadge = document.createElement('span');
@@ -157,23 +164,124 @@ window.watchStudentSession = function(targetRoomCode, studentName) {
     if (typeof window.exitRoomCleanly === 'function') window.exitRoomCleanly(false);
 
     // Utilizziamo la funzione nativa degli spettatori per abilitare audio e monitoraggio
-    if (typeof window.watchSpecificRoom === 'function') {
-        window.watchSpecificRoom(targetRoomCode, studentName);
     } else {
         showToast("Errore: Funzione spettatore non disponibile.");
     }
 };
 
+window.showStudentStats = async function(uid, studentName) {
+    const modal = document.getElementById('studentStatsModal');
+    const content = document.getElementById('studentStatsContent');
+    const title = document.getElementById('studentStatsTitle');
+
+    if (!modal || !content || !db) return;
+
+    title.textContent = "Analisi Progressi: " + studentName;
+    content.innerHTML = '<p style="text-align:center; padding:20px;">Caricamento dati...</p>';
+    modal.style.display = 'flex';
+
+    try {
+        const snap = await db.ref(`users/${uid}/course`).once('value');
+        const data = snap.val();
+
+        if (!data) {
+            content.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Nessun dato disponibile per questo utente.</p>';
+            return;
+        }
+
+        const p = data.progress || {};
+        const s = data.settings || {};
+
+        // --- COSTRUZIONE DASHBOARD STATISTICHE ---
+        let html = `
+            <div class="box-panel" style="margin-bottom:15px; border-color:#673ab7;">
+                <h4 style="margin-top:0; color:#b39ddb;">📈 Stato Generale</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:0.85em;">
+                    <div><b>Lezione Attuale:</b> ${p.current_lesson || 2}</div>
+                    <div><b>XP Totali:</b> ${p.total_xp || 0}</div>
+                    <div><b>Accuratezza Z2:</b> ${p.last_z2_accuracy ? Math.round(p.last_z2_accuracy*100) : 0}%</div>
+                    <div><b>Ultima Sessione:</b> ${p.last_session_date || 'N/A'}</div>
+                </div>
+            </div>
+
+            <div class="box-panel" style="margin-bottom:15px;">
+                <h4 style="margin-top:0; color:var(--link-color);">⚙️ Impostazioni Utente</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:0.85em;">
+                    <div><b>WPM:</b> ${s.start_wpm || 15}</div>
+                    <div><b>Farnsworth:</b> ${s.farnsworth_wpm || 12}</div>
+                    <div><b>GG/Sett:</b> ${s.days_per_week || 3}</div>
+                    <div><b>Modalità Elite:</b> ${data.elite_mode ? 'SÌ ⚡' : 'NO'}</div>
+                </div>
+            </div>
+
+            <div class="box-panel">
+                <h4 style="margin-top:0; color:var(--champ-color);">📊 Padronanza Caratteri (Heatmap)</h4>
+                <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px;">
+        `;
+
+        const charStats = p.char_stats || {};
+        window.KOCH_SEQUENCE.forEach((char, idx) => {
+            const dbChar = window.firebaseEscape(char);
+            const cs = charStats[dbChar] || { attempts: 0, errors: 0 };
+            const acc = cs.attempts > 0 ? (cs.attempts - cs.errors) / cs.attempts : 0;
+
+            let color = 'rgba(255,255,255,0.05)';
+            if (idx < (p.current_lesson || 2)) {
+                color = cs.attempts === 0 ? 'var(--hint-color)' : (acc >= 0.9 ? '#4caf50' : acc >= 0.7 ? '#ff9800' : '#d32f2f');
+            }
+
+            html += `<div style="width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-size:0.7em; font-weight:bold; background:${color}; color:#fff; border-radius:4px; opacity:${idx < (p.current_lesson || 2) ? 1 : 0.3};" title="${char}: ${Math.round(acc*100)}%">${char}</div>`;
+        });
+
+        html += `
+                </div>
+            </div>
+
+            <div class="box-panel" style="margin-top:15px;">
+                <h4 style="margin-top:0;">📜 Storico Ultime Sessioni</h4>
+                <div id="studentHistoryList" style="font-size:0.8em; display:flex; flex-direction:column; gap:5px;">
+                    <!-- Caricamento history... -->
+                </div>
+            </div>
+        `;
+
+        content.innerHTML = html;
+
+        // Carichiamo anche le ultime 5 partite del corso dalla history generale
+        db.ref(`users/${uid}/history`).orderByChild('mode').equalTo('course').limitToLast(10).once('value', hSnap => {
+            const historyCont = document.getElementById('studentHistoryList');
+            if (!historyCont) return;
+
+            const hist = hSnap.val() || {};
+            const entries = Object.values(hist).sort((a,b) => b.date - a.date);
+
+            if (entries.length === 0) {
+                historyCont.innerHTML = '<p style="text-align:center; opacity:0.6;">Nessuna sessione registrata.</p>';
+                return;
+            }
+
+            historyCont.innerHTML = '';
+            entries.forEach(m => {
+                const dateStr = new Date(m.date).toLocaleDateString();
+                const div = document.createElement('div');
+                div.style.cssText = "display:flex; justify-content:space-between; padding:5px; background:rgba(255,255,255,0.03); border-radius:4px;";
+                div.innerHTML = `<span>📅 ${dateStr}</span> <span><b>${m.wpm}</b> WPM</span> <span><b>${m.score}</b> PT</span>`;
+                historyCont.appendChild(div);
+            });
+        });
+
+    } catch (e) {
+        console.error("Show Student Stats Error:", e);
+        content.innerHTML = '<p style="text-align:center; color:#f44336;">Errore nel caricamento dei dati.</p>';
+    }
+};
+
 window.selectWizardRole = function(role) {
     window.tempWizardRole = role;
-    const sRole = document.getElementById('wizardStepRole');
-    const s1 = document.getElementById('wizardStep1');
-
     if (role === 'tutor') {
         window.requestTutorRole();
     } else {
-        if (sRole) sRole.style.display = 'none';
-        if (s1) s1.style.display = 'block';
+        window.nextWizardStep('Tutor');
     }
 };
 
@@ -302,6 +410,24 @@ window.renderCourseTabDashboard = function() {
             planList.appendChild(dayDiv);
         });
     }
+
+    // 3. Aggiornamento Bottone Avvio Sessione
+    const startBtn = document.getElementById('btnTabStartCourseSession');
+    if (startBtn) {
+        const todayIdx = (new Date().getDay() + 6) % 7;
+        const dayData = window.courseData.weekly_schedule[todayIdx];
+        const mandatoryDone = !dayData || dayData.sessions.every(s => s.completed || s.type === 'REST');
+
+        if (mandatoryDone) {
+            startBtn.textContent = "AVVIA SESSIONE EXTRA 🏆";
+            startBtn.classList.remove('btn-success');
+            startBtn.classList.add('btn-champ');
+        } else {
+            startBtn.textContent = "AVVIA SESSIONE ODIERNA 🚀";
+            startBtn.classList.remove('btn-champ');
+            startBtn.classList.add('btn-success');
+        }
+    }
 };
 
 window.renderAdvancedCourseStats = function(selectedChar) {
@@ -398,14 +524,78 @@ window.populateLessonDropdowns = function() {
 };
 
 window.nextWizardStep = function(step) {
-    for(let i=1; i<=4; i++) {
-        const el = document.getElementById('wizardStep'+i);
-        if(el) el.style.display = (i === step) ? 'block' : 'none';
+    const steps = ['Role', 'Tutor', '1', '2', '3', '4'];
+    steps.forEach(s => {
+        const el = document.getElementById('wizardStep' + s);
+        if (el) el.style.display = 'none';
+    });
+
+    let currentStepId = 'wizardStep' + step;
+    if (step === 0) currentStepId = 'wizardStepRole';
+
+    const currentEl = document.getElementById(currentStepId);
+    if (currentEl) currentEl.style.display = 'block';
+
+    if (step === 'Tutor') {
+        window.renderTutorSelection();
     }
     if (step === 4) {
         window.updateWizardDurationsPreview();
         if (els.wizardMinZ2) els.wizardMinZ2.oninput = window.updateWizardDurationsPreview;
     }
+};
+
+window.renderTutorSelection = function() {
+    const list = document.getElementById('tutorSelectionList');
+    const confirmBtn = document.getElementById('btnConfirmTutor');
+    if (!list || !db) return;
+
+    list.innerHTML = '<p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Ricerca tutor disponibili...</p>';
+
+    db.ref('courseActiveEnrollments').once('value', snap => {
+        const enrollments = snap.val() || {};
+        list.innerHTML = '';
+        let foundTutors = 0;
+
+        Object.entries(enrollments).forEach(([uid, data]) => {
+            if (data.role === 'tutor' && uid !== myId) {
+                foundTutors++;
+                const div = document.createElement('div');
+                div.className = 'box-panel';
+                div.style.cssText = "padding:10px; cursor:pointer; border:1px solid var(--hint-color); transition:all 0.2s;";
+                div.innerHTML = `<b>🎓 ${data.name}</b>`;
+
+                div.onclick = () => {
+                    // Deseleziona altri
+                    Array.from(list.children).forEach(c => c.style.borderColor = 'var(--hint-color)');
+                    div.style.borderColor = 'var(--link-color)';
+                    div.style.background = 'rgba(33,150,243,0.1)';
+
+                    window.tempSelectedTutorId = uid;
+                    if (confirmBtn) {
+                        confirmBtn.disabled = false;
+                        confirmBtn.onclick = () => {
+                            window.courseData.tutor_id = uid;
+                            window.nextWizardStep(1);
+                        };
+                    }
+                };
+                list.appendChild(div);
+            }
+        });
+
+        if (foundTutors === 0) {
+            list.innerHTML = '<p style="font-size:0.8em; color:var(--hint-color); text-align:center;">Nessun tutor disponibile al momento.<br><br>Puoi comunque iniziare il corso e sceglierne uno in seguito.</p>';
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = "Continua senza Tutor";
+                confirmBtn.onclick = () => {
+                    window.courseData.tutor_id = null;
+                    window.nextWizardStep(1);
+                };
+            }
+        }
+    });
 };
 
 window.updateWizardDurationsPreview = function() {
@@ -422,10 +612,14 @@ window.finishWizard = function() {
     const startLesson = parseInt(els.wizardStartLesson?.value) || 2;
     const isElite = document.getElementById('wizardEliteMode')?.checked === true;
 
+    if (!window.courseData) window.courseData = window.getDefaultCourseData();
     window.courseData.active_plan = true;
     window.courseData.role = role;
+    window.courseData.init_date = new Date().toISOString().split('T')[0];
 
     if (role === 'corsista') {
+        // Il tutor_id viene salvato nello step 'Tutor' (window.tempSelectedTutorId)
+        window.courseData.tutor_id = window.tempSelectedTutorId || null;
         window.courseData.elite_mode = isElite;
         window.courseData.progress.current_lesson = startLesson;
         window.courseData.settings = {
@@ -443,8 +637,10 @@ window.finishWizard = function() {
     } else {
         // Tutor non ha settings di studio
         window.courseData.elite_mode = false;
+        window.courseData.tutor_id = null;
     }
 
+    window.saveCourseState();
     window.updateGlobalEnrollmentRecord(true); // Aggiorna contatore globale iscritti
     window.renderCourseTabView();
 
@@ -453,6 +649,7 @@ window.finishWizard = function() {
     } else {
         showToast(isElite ? "Piano ELITE attivato! ⚡" : "Corso attivato con successo! 🚀");
     }
+};
 };
 
 window.finishCourseSession = function() {
@@ -612,11 +809,27 @@ window.finishCourseSession = function() {
 
 window.initCourseChat = function() {
     if (!db) return;
-    const chatRef = db.ref('courseChat');
+
+    // SETUP CHAT SCOPED PER TUTOR (Classe)
+    const tutorId = window.courseData?.tutor_id;
+    const isTutor = window.courseData?.role === 'tutor';
+    const effectiveTutorId = isTutor ? myId : tutorId;
+
+    if (!effectiveTutorId) {
+        const messagesCont = document.getElementById('courseChatMessages');
+        if (messagesCont) messagesCont.innerHTML = '<p style="text-align:center; font-size:0.8em; color:var(--hint-color); padding:20px;">Scegli un Tutor per sbloccare la Radio-Aula.</p>';
+        if (els.sendCourseChatBtn) els.sendCourseChatBtn.disabled = true;
+        return;
+    }
+
+    if (els.sendCourseChatBtn) els.sendCourseChatBtn.disabled = false;
+    const chatPath = `courseClassrooms/${effectiveTutorId}/chat`;
+    const chatRef = db.ref(chatPath);
     const messagesCont = document.getElementById('courseChatMessages');
 
-    // SETUP CHAT PERSONALIZZATO PER TAG TUTOR
-    chatRef.limitToLast(50).on('value', async (snap) => {
+    if (listeners.courseChat) chatRef.off('value', listeners.courseChat);
+
+    listeners.courseChat = chatRef.limitToLast(50).on('value', async (snap) => {
         if (!messagesCont) return;
         const data = snap.val() || {};
         messagesCont.innerHTML = '';
@@ -652,7 +865,7 @@ window.initCourseChat = function() {
                 delBtn.innerHTML = " 🗑️";
                 delBtn.style.cursor = 'pointer';
                 delBtn.onclick = () => {
-                    if (confirm("Eliminare?")) db.ref(`courseChat/${key}`).remove();
+                    if (confirm("Eliminare?")) db.ref(`${chatPath}/${key}`).remove();
                 };
                 div.appendChild(delBtn);
             }
@@ -686,8 +899,8 @@ window.initCourseChat = function() {
                 username: myPrivacy ? "" : tgUsername,
                 text: txt,
                 ts: firebase.database.ServerValue.TIMESTAMP,
-                senderId: myId, // Aggiunto per eliminazione
-                role: window.courseData.role // Salviamo il ruolo nel messaggio
+                senderId: myId,
+                role: window.courseData?.role || 'corsista'
             });
             els.courseChatInput.value = '';
         };
@@ -696,8 +909,9 @@ window.initCourseChat = function() {
 
     if (els.clearCourseChatBtn) {
         els.clearCourseChatBtn.onclick = () => {
-            if (confirm("Vuoi cancellare la cronologia della Radio-Aula per TUTTI?")) {
-                chatRef.remove().then(() => showToast("Chat cancellata"));
+            if (!isTutor) return alert("Solo il Tutor può cancellare l'aula.");
+            if (confirm("Vuoi cancellare la cronologia della Radio-Aula per TUTTA LA TUA CLASSE?")) {
+                chatRef.remove().then(() => showToast("Aula pulita"));
             }
         };
     }
@@ -778,15 +992,14 @@ window.attachCourseUIListeners = function() {
         els.btnTabStartCourseSession.onclick = () => {
              const todayIdx = (new Date().getDay() + 6) % 7;
              const dayData = window.courseData.weekly_schedule[todayIdx];
-             if (!dayData || dayData.sessions[0].type === 'REST') return alert("Oggi è previsto riposo!");
 
              // Cerchiamo la prima sessione non completata
-             let session = dayData.sessions.find(s => !s.completed);
+             let session = dayData ? dayData.sessions.find(s => !s.completed && s.type !== 'REST') : null;
              let isExtra = false;
 
              if (!session) {
-                 // Se tutte completate, offriamo sessione extra
-                 session = { type: 'LONG', completed: false };
+                 // Se tutte completate o giorno di riposo, offriamo sessione extra
+                 session = { type: 'Z2', completed: false };
                  isExtra = true;
              }
 
@@ -867,10 +1080,17 @@ setTimeout(window.attachCourseUIListeners, 2000);
 window.initTutorCourseChatNotification = function() {
     if (!db || !myId) return;
 
-    const chatRef = db.ref('courseChat');
+    // Solo per Tutor
+    const isTutor = window.courseData && window.courseData.role === 'tutor';
+    if (!isTutor) return;
+
+    const chatPath = `courseClassrooms/${myId}/chat`;
+    const chatRef = db.ref(chatPath);
     let initialLoad = true;
 
-    chatRef.limitToLast(1).on('child_added', snap => {
+    if (listeners.courseChatNotif) chatRef.off('child_added', listeners.courseChatNotif);
+
+    listeners.courseChatNotif = chatRef.limitToLast(1).on('child_added', snap => {
         if (initialLoad) {
             initialLoad = false;
             return;
@@ -879,20 +1099,20 @@ window.initTutorCourseChatNotification = function() {
         const msg = snap.val();
         if (!msg) return;
 
-        // Solo per Tutor
-        const isTutor = window.courseData && window.courseData.role === 'tutor';
-        if (!isTutor) return;
-
         // Se il messaggio è mio, non notificare
-        if (msg.name === myName) return;
+        if (msg.senderId === myId) return;
 
-        // Se siamo già nel tab corso, non mostrare il badge
+        // Se siamo già nel tab corso e l'aula è visibile, non mostrare il badge
         const courseArea = document.getElementById('profileCourseArea');
         const isViewingCourse = (courseArea && courseArea.style.display === 'flex');
 
         if (!isViewingCourse) {
             const badge = document.getElementById('courseMessageBadge');
-            if (badge) badge.style.display = 'flex';
+            if (badge) {
+                badge.style.display = 'flex';
+                // Effetto pulsante per attirare attenzione
+                badge.classList.add('badge-pulse');
+            }
         }
     }, (error) => {
         console.error("Course Chat Notif Error:", error);
@@ -901,5 +1121,8 @@ window.initTutorCourseChatNotification = function() {
 
 window.hideCourseMessageBadge = function() {
     const badge = document.getElementById('courseMessageBadge');
-    if (badge) badge.style.display = 'none';
+    if (badge) {
+        badge.style.display = 'none';
+        badge.classList.remove('badge-pulse');
+    }
 };
