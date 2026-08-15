@@ -33,14 +33,21 @@ window.showScreen = function(screenId) {
 
     // Se stiamo navigando fuori da una stanza e siamo in una stanza attiva
     if (!isPlayingScreen && roomCode && !gameRunning) {
-        // Se non abbiamo ancora accettato la sfida, usciamo del tutto per pulire il contatore
-        db.ref(`rooms/${roomCode}/players/${myId}/accepted`).once('value', s => {
-            if (s.exists() && s.val() === false) {
-                window.exitRoomCleanly(false, true); // Uscita esplicita per rimuovere il player non confermato
-            } else {
-                window.listenToRoomInBackground();
-            }
-        });
+        // --- FIX: Se sono l'Host, NON devo mai essere rimosso automaticamente ---
+        const amIHost = (myId === roomHostId);
+
+        if (amIHost) {
+            window.listenToRoomInBackground();
+        } else {
+            // Se sono un ospite, controllo se ho accettato
+            db.ref(`rooms/${roomCode}/players/${myId}/accepted`).once('value', s => {
+                if (s.exists() && s.val() === false) {
+                    window.exitRoomCleanly(false, true);
+                } else {
+                    window.listenToRoomInBackground();
+                }
+            });
+        }
     }
 
     if (db && myId) {
@@ -364,70 +371,77 @@ window.joinSpecificRoom = function(code) {
 
 window.joinRoomLogic = function(isReconnect = false) {
     gameRunning = false;
-    const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-    playerRef.once('value', snapshot => {
-        const pData = snapshot.val();
-        if (pData?.finished) {
-            window.showScreen('leaderboardScreen');
-            activeTab = "room";
-            if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn');
-            localStorage.removeItem(STORAGE_ROOM_KEY);
-            return;
-        }
-        if (pData) {
-            totalScore = pData.score || 0;
-            wordIndex = pData.wordIndex || 0;
-            quizQuestionIndex = pData.wordIndex || 0;
-            matchDetailsArray = pData.matchDetails || [];
-            if (isRejoining) window.showToast("🔄 Partita recuperata!");
-        }
-        window.showScreen('lobbyScreen');
-        if (els.lobbyTitleText) els.lobbyTitleText.textContent = roomCode.startsWith("TRN_") ? "Lobby Incontro Torneo 🥊" : "Lobby Stanza Libera";
-        if (els.permanentGameInput) els.permanentGameInput.blur();
-        playerRef.onDisconnect().update({ online: false });
 
-        if (!pData) {
-            // Se la stanza non è single player, l'utente entra come "prospect" (non ancora confermato)
-            // tranne se è il proprietario o è un invito accettato
-            const isInviteAccepted = window.lastIncomingInvite && window.lastIncomingInvite.fromId === roomHostId;
-            const amIHost = (myId === roomHostId);
-            const shouldAutoAccept = isSinglePlayer || amIHost || isInviteAccepted || roomCode.startsWith("TRN_");
+    // 1. Recuperiamo prima i dati della stanza per sapere chi è l'Host
+    db.ref(`rooms/${roomCode}`).once('value', roomSnap => {
+        const rData = roomSnap.val();
+        if (!rData) return window.exitRoomCleanly(true);
 
-            playerRef.set({
-                name: myName,
-                username: myPrivacy ? "" : tgUsername,
-                score: 0,
-                wpm: 0,
-                finished: false,
-                teamId: myTeamId,
-                ready: false,
-                online: true,
-                accepted: shouldAutoAccept // true se single player o host o invito diretto
-            }).then(() => {
-                // --- AGGIORNAMENTO BACHECA REAL-TIME (GUEST) ---
-                if (!isSinglePlayer && !roomCode.startsWith("TRN_")) {
+        // Sincronizziamo l'Host ID fondamentale
+        roomHostId = rData.hostId;
+        window.roomCreatedAt = rData.createdAt || 0;
+
+        const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
+        playerRef.once('value', snapshot => {
+            const pData = snapshot.val();
+
+            if (pData?.finished) {
+                window.showScreen('leaderboardScreen');
+                activeTab = "room";
+                if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn');
+                localStorage.removeItem(STORAGE_ROOM_KEY);
+                return;
+            }
+
+            if (pData) {
+                totalScore = pData.score || 0;
+                wordIndex = pData.wordIndex || 0;
+                quizQuestionIndex = pData.wordIndex || 0;
+                matchDetailsArray = pData.matchDetails || [];
+                if (isRejoining) window.showToast("🔄 Partita recuperata!");
+            }
+
+            window.showScreen('lobbyScreen');
+            if (els.lobbyTitleText) els.lobbyTitleText.textContent = roomCode.startsWith("TRN_") ? "Lobby Incontro Torneo 🥊" : "Lobby Stanza Libera";
+            if (els.permanentGameInput) els.permanentGameInput.blur();
+            playerRef.onDisconnect().update({ online: false });
+
+            if (!pData) {
+                // Se sono l'Host o è un invito accettato, accepted è sempre true
+                const isInviteAccepted = window.lastIncomingInvite && window.lastIncomingInvite.fromId === roomHostId;
+                const amIHost = (myId === roomHostId);
+                const shouldAutoAccept = isSinglePlayer || amIHost || isInviteAccepted || roomCode.startsWith("TRN_");
+
+                playerRef.set({
+                    name: myName,
+                    username: myPrivacy ? "" : tgUsername,
+                    score: 0,
+                    wpm: 0,
+                    finished: false,
+                    teamId: myTeamId,
+                    ready: false,
+                    online: true,
+                    accepted: shouldAutoAccept
+                }).then(() => {
+                    // Aggiornamento bacheca real-time
                     db.ref(`rooms/${roomCode}/players`).once('value', s => {
                         const count = s.exists() ? Object.keys(s.val()).length : 1;
                         db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(count);
                     });
-                }
-            });
-        } else {
-            playerRef.update({ online: true, name: myName, username: myPrivacy ? "" : tgUsername });
-            // Aggiorna conteggio anche al rientro per sicurezza
-            if (!isSinglePlayer && !roomCode.startsWith("TRN_")) {
+                });
+            } else {
+                playerRef.update({ online: true, name: myName, username: myPrivacy ? "" : tgUsername });
+                // Sincronizziamo bacheca al rientro
                 db.ref(`rooms/${roomCode}/players`).once('value', s => {
                     const count = s.exists() ? Object.keys(s.val()).length : 1;
                     db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(count);
                 });
             }
-        }
 
-        if (typeof window.listenToChat === 'function') window.listenToChat();
-
-        // Attiviamo il monitor unificato (che gestirà sia UI che Background)
-        window.isRoomMonitorActive = false;
-        window.listenToRoomInBackground();
+            if (typeof window.listenToChat === 'function') window.listenToChat();
+            window.isRoomMonitorActive = false;
+            window.listenToRoomInBackground();
+        });
     });
 };
 
