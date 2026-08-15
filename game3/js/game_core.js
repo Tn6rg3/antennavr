@@ -553,15 +553,10 @@ window.startCountdownSequence = function() {
         // Recuperiamo il conteggio iniziale dei giocatori che iniziano la sfida
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
             const initialPlayers = snap.val() || {};
-            let count = Object.keys(initialPlayers).length;
+            // Non forziamo più a 2, lasciamo che il listener aggiorni il conteggio dinamico
+            gameStartPlayerCount = Object.keys(initialPlayers).length;
 
-            // --- FIX SFIDE DIRETTE: Se la stanza è multiplayer/coop ci aspettiamo almeno 2 persone ---
-            // Se ne troviamo 1 sola all'avvio del countdown, è probabile che l'host stia ancora entrando.
-            // Forziamo a 2 per abilitare la logica di abbandono/vittoria a tavolino.
-            if (count < 2 && !isSinglePlayer) count = 2;
-
-            gameStartPlayerCount = count;
-            console.log("Match Start: Player count (adjusted) =", gameStartPlayerCount);
+            console.log("Match Start: Initial player count =", gameStartPlayerCount);
 
             if (listeners.players) db.ref(`rooms/${roomCode}/players`).off('value', listeners.players);
             listeners.players = db.ref(`rooms/${roomCode}/players`).on('value', pSnap => {
@@ -1008,7 +1003,8 @@ window.saveMatchSummary = function(playersData) {
     if (window.roomCreatedAt && typeof window.roomCreatedAt === 'number' && window.roomCreatedAt > 0) {
         matchSuffix = window.roomCreatedAt.toString().substring(7);
     } else {
-        matchSuffix = Date.now().toString().substring(7);
+        // Fallback: usiamo un timestamp troncato basato sul tempo corrente arrotondato al minuto
+        matchSuffix = Math.floor(Date.now() / 60000).toString().substring(3);
     }
 
     const matchId = roomCode + "_" + matchSuffix;
@@ -1027,7 +1023,7 @@ window.saveMatchSummary = function(playersData) {
 
     // Se c'è solo un giocatore e non è abbandonato, non salviamo il riepilogo multi
     if (players.length < 2) {
-        console.log("Summary: Skipping save, only 1 player found.");
+        console.log("Summary: Skipping save, only 1 player found (incomplete match).");
         return;
     }
 
@@ -1038,8 +1034,9 @@ window.saveMatchSummary = function(playersData) {
     const validModes = ['standard', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign'];
     let category = validModes.includes(baseMode) ? baseMode : 'standard';
 
+    // Aggiungiamo sempre il suffisso _multi per la classifica "Sfide"
     if (category !== 'pingpong' && category !== 'conquest') {
-        category += "_multi";
+        if (!category.endsWith("_multi")) category += "_multi";
     }
 
     const matchSummary = {
@@ -1051,8 +1048,13 @@ window.saveMatchSummary = function(playersData) {
     };
 
     const summaryPath = `leaderboard/recent_matches/${category}/${safeWordCount}/${matchId}`;
-    console.log("Summary: Saving match result to:", summaryPath);
-    db.ref(summaryPath).set(matchSummary).catch(e => console.error("Summary Save Error:", e));
+    console.log("Summary: Saving match to " + summaryPath, matchSummary);
+
+    db.ref(summaryPath).set(matchSummary).then(() => {
+        console.log("Summary: Match saved successfully.");
+    }).catch(e => {
+        console.error("Summary Save Error:", e);
+    });
 };
 
 window.showPostMatchReplayButtons = function() {
