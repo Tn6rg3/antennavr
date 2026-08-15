@@ -361,11 +361,19 @@ window.listenToRoomInBackground = function() {
             localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
             window.isRoomMonitorActive = false;
 
+            // Sincronizzazione parametri avanzati della stanza
+            currentWpm = rData.wpm;
+            baseWpm = rData.wpm;
+            if (rData.words) gameWords = rData.words;
+
+            window.isFixedSpeed = !!rData.fixedSpeed;
+            window.isEasyMode = !!rData.easyMode;
+            window.charSpaceWpm = rData.charSpaceWpm || 0;
+            window.wordSpaceMult = rData.wordSpaceMult || 1.0;
+
             if (rData.status === 'playing') {
-                currentWpm = rData.wpm; baseWpm = rData.wpm; if (rData.words) gameWords = rData.words;
                 return window.resumeGameSequence();
             } else {
-                currentWpm = rData.wpm; baseWpm = rData.wpm; if (rData.words) gameWords = rData.words;
                 return window.startCountdownSequence();
             }
         }
@@ -788,6 +796,15 @@ window.playNextWord = function() {
     usedReplay = false;
     const currentWord = gameWords[wordIndex].toUpperCase();
 
+    // LOGICA MODALITÀ SEMPLICE (EASY MODE)
+    const easyHint = document.getElementById('easyModeHint');
+    if (isEasyMode && easyHint) {
+        easyHint.textContent = currentWord;
+        easyHint.style.display = 'block';
+    } else if (easyHint) {
+        easyHint.style.display = 'none';
+    }
+
     if (typeof playMorseAudio === 'function') playMorseAudio(currentWord, currentWpm);
     lastWordStartTime = Date.now();
 
@@ -816,6 +833,10 @@ window.finishGame = function() {
 
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
     if (els.permanentGameInput) els.permanentGameInput.blur();
+
+    const easyHint = document.getElementById('easyModeHint');
+    if (easyHint) easyHint.style.display = 'none';
+
     clearAllTimers();
 
     if (listeners.room) { listeners.room.off(); listeners.room = null; }
@@ -1240,6 +1261,11 @@ if (els.permanentGameInput) {
 
 window.handleWordSubmission = function(userWord) {
     if (!userWord) return;
+
+    // NASCONDI SUGGERIMENTO MODALITÀ SEMPLICE ALLA SOTTOMISSIONE
+    const easyHint = document.getElementById('easyModeHint');
+    if (easyHint) easyHint.style.display = 'none';
+
     userWord = userWord.substring(0, 50).trim().toUpperCase();
 
     if (isCourseMode) {
