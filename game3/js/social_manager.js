@@ -706,6 +706,12 @@ window.listenToInvites = function() {
                 els.acceptInviteBtn.onclick = () => {
                     // Evitiamo click multipli
                     if (els.acceptInviteBtn.disabled) return;
+
+                    // 1. Verifica autenticazione Firebase
+                    if (!auth.currentUser) {
+                        return showToast("Connessione al server in corso... riprova tra un istante.");
+                    }
+
                     els.acceptInviteBtn.disabled = true;
                     els.acceptInviteBtn.textContent = "⌛ Avvio...";
 
@@ -715,16 +721,13 @@ window.listenToInvites = function() {
                     if (typeof window.getGameWords !== 'function') {
                         els.acceptInviteBtn.disabled = false;
                         els.acceptInviteBtn.textContent = "ACCETTA ✅";
-                        return showToast("Errore: Sistema non pronto. Riprova.");
+                        return showToast("Errore: Dizionari non pronti. Riprova.");
                     }
 
                     const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard');
                     const isCoop = (inv.mode === 'conquest');
 
-                    // Impostiamo l'Host ID prima del salvataggio su Firebase
-                    window.roomHostId = inv.fromId;
-                    window.roomCode = roomCodeNew;
-
+                    // 2. Creazione stanza: chi accetta diventa l'Host tecnico per avere i permessi Firebase
                     db.ref(`rooms/${roomCodeNew}`).set({
                         status: 'countdown',
                         type: isCoop ? 'coop' : 'multi',
@@ -734,15 +737,22 @@ window.listenToInvites = function() {
                         wordCount: inv.wordCount || 10,
                         words: words,
                         createdAt: firebase.database.ServerValue.TIMESTAMP,
-                        hostId: inv.fromId
+                        hostId: myId // Io accetto, io sono l'host fisico della stanza
                     }).then(() => {
+                        // 3. Sincronizzazione: Informiamo chi ha inviato la sfida che la stanza è pronta
                         db.ref(`invite_accepted/${inv.fromId}`).set({
                             roomCode: roomCodeNew,
                             ts: firebase.database.ServerValue.TIMESTAMP
                         });
+
+                        // 4. Pulizia e ingresso
                         db.ref(`invites/${myId}`).remove();
                         window.resetLocalChallengeState();
                         window.closeInviteModal();
+
+                        // Impostiamo lo stato locale solo dopo il successo
+                        window.roomHostId = myId;
+                        window.roomCode = roomCodeNew;
 
                         // Reset bottone per futuro uso
                         els.acceptInviteBtn.disabled = false;
@@ -753,7 +763,12 @@ window.listenToInvites = function() {
                         console.error("Accept Invite Error:", err);
                         els.acceptInviteBtn.disabled = false;
                         els.acceptInviteBtn.textContent = "ACCETTA ✅";
-                        showToast("Errore Firebase: " + err.message);
+                        // Se l'errore è permission denied, diamo un consiglio
+                        if (err.code === 'PERMISSION_DENIED') {
+                            showToast("Errore di sincronizzazione. Riprova tra 2 secondi.");
+                        } else {
+                            showToast("Errore Firebase: " + err.message);
+                        }
                     });
                 };
             }
