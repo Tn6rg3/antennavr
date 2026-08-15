@@ -304,6 +304,12 @@ window.loadCourseState = async function() {
         if (data) {
             if (data.active_plan === "true") data.active_plan = true;
             if (data.active_plan === "false") data.active_plan = false;
+
+            // Retrocompatibilità: inizializziamo init_date se manca
+            if (data.active_plan === true && !data.init_date) {
+                data.init_date = new Date().toISOString().split('T')[0];
+            }
+
             window.courseData = data;
         } else {
             window.courseData = window.getDefaultCourseData();

@@ -324,6 +324,24 @@ window.populateCourseSettingsInputs = function() {
     if (els.courseTabPauseDurationInput) els.courseTabPauseDurationInput.value = s.pause_duration || 10;
     if (els.courseTabMinZ2) els.courseTabMinZ2.value = s.minutes_z2;
     if (els.courseTabEliteInput) els.courseTabEliteInput.checked = window.courseData.elite_mode === true;
+
+    // Popolamento Tutor Dropdown nelle impostazioni
+    const tutorSelect = document.getElementById('courseTabTutorInput');
+    if (tutorSelect) {
+        db.ref('courseActiveEnrollments').once('value', snap => {
+            const enrollments = snap.val() || {};
+            tutorSelect.innerHTML = '<option value="">Nessun Tutor</option>';
+            Object.entries(enrollments).forEach(([uid, data]) => {
+                if (data.role === 'tutor' && uid !== myId) {
+                    const opt = document.createElement('option');
+                    opt.value = uid;
+                    opt.textContent = `🎓 ${data.name}`;
+                    if (window.courseData.tutor_id === uid) opt.selected = true;
+                    tutorSelect.appendChild(opt);
+                }
+            });
+        });
+    }
 };
 
 window.renderCourseTabDashboard = function() {
@@ -946,8 +964,12 @@ window.attachCourseUIListeners = function() {
     if (els.btnTabSavePlan) {
         els.btnTabSavePlan.onclick = () => {
             const z2 = parseInt(els.courseTabMinZ2.value) || 10;
+            const oldTutorId = window.courseData.tutor_id;
+            const newTutorId = document.getElementById('courseTabTutorInput')?.value || null;
+
             window.courseData.progress.current_lesson = parseInt(els.courseTabLessonInput.value) || 2;
             window.courseData.elite_mode = els.courseTabEliteInput?.checked === true;
+            window.courseData.tutor_id = newTutorId;
             window.courseData.settings.days_per_week = els.courseTabDaysInput.value;
             window.courseData.settings.start_wpm = els.courseTabWpmInput.value;
             window.courseData.settings.farnsworth_wpm = els.courseTabFarnsworthInput.value;
@@ -959,8 +981,15 @@ window.attachCourseUIListeners = function() {
             window.courseData.settings.minutes_long = Math.round(z2 * (50/30));
 
             window.generateWeeklySchedule();
+
+            // Se il tutor è cambiato, reinizializziamo la chat
+            if (oldTutorId !== newTutorId) {
+                window.initCourseChat();
+                window.updateGlobalEnrollmentRecord(true);
+            }
+
             window.renderCourseTabView();
-            showToast("Impostazioni salvate! 💾");
+            showToast("Impostazioni e Tutor salvati! 💾");
         };
     }
 
