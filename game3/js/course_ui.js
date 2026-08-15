@@ -1,5 +1,8 @@
 // js/course_ui.js
 
+/**
+ * RENDERIZZAZIONE PRINCIPALE DEL TAB CORSO
+ */
 window.renderCourseTabView = function() {
     const activeView = document.getElementById('courseTabActiveView');
     const initialPrompt = document.getElementById('courseTabInitialPrompt');
@@ -25,7 +28,7 @@ window.renderCourseTabView = function() {
 
         window.renderCourseTabDashboard();
         window.populateCourseSettingsInputs();
-        window.renderTutorSelectionList(); // Popola select in settings
+        window.renderTutorSelectionList(); // Popola select in settings e wizard
         window.initCourseChat();
 
         // Di default mostriamo la dashboard
@@ -35,42 +38,48 @@ window.renderCourseTabView = function() {
     }
 };
 
+/**
+ * SWITCH SOTTO-TAB (DASHBOARD / TRASMISSIONE)
+ */
 window.switchCourseSubTab = function(tabId) {
     const dashBtn = document.getElementById('btnCourseSubTabDash');
     const txBtn = document.getElementById('btnCourseSubTabTx');
-    const dashView = document.getElementById('courseDashboardView');
+    const dashView = document.getElementById('courseTabDashboardView');
     const txView = document.getElementById('courseTransmissionView');
-
-    // NOTA: dashView nel file HTML è diventato courseTabDashboardView per evitare duplicati
-    const realDashView = document.getElementById('courseTabDashboardView') || dashView;
 
     if (tabId === 'dash') {
         dashBtn?.classList.add('active-tab');
         txBtn?.classList.remove('active-tab');
-        if (realDashView) realDashView.style.display = 'flex';
+        if (dashView) dashView.style.display = 'flex';
         if (txView) txView.style.display = 'none';
     } else if (tabId === 'tx') {
         dashBtn?.classList.remove('active-tab');
         txBtn?.classList.add('active-tab');
-        if (realDashView) realDashView.style.display = 'none';
+        if (dashView) dashView.style.display = 'none';
         if (txView) txView.style.display = 'flex';
 
-        // Inizializziamo il manager della trasmissione
         if (typeof window.initTransmissionManager === 'function') {
             window.initTransmissionManager();
         }
     }
 };
 
+/**
+ * PANNELLO TUTOR: Lista corsisti assegnati
+ */
 window.renderTutorPanel = function() {
     const list = document.getElementById('tutorStudentList');
     if (!list || !db) return;
 
-    if (listeners.tutorPanel) db.ref('courseActiveEnrollments').off('value', listeners.tutorPanel);
+    // Pulizia listener esistente
+    if (window.listeners && window.listeners.tutorPanelRef) {
+        window.listeners.tutorPanelRef.off('value', window.listeners.tutorPanelCallback);
+    }
 
     list.innerHTML = '<p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Sincronizzazione corsisti...</p>';
 
-    listeners.tutorPanel = db.ref('courseActiveEnrollments').on('value', async (snap) => {
+    const ref = db.ref('courseActiveEnrollments');
+    const callback = async (snap) => {
         const enrollments = snap.val() || {};
         list.innerHTML = '';
 
@@ -80,102 +89,70 @@ window.renderTutorPanel = function() {
             return;
         }
 
-        // Filtriamo solo gli studenti assegnati a questo tutor
+        let foundAny = false;
         for (const uid of uids) {
-            if (uid === myId) continue;
+            if (uid === window.myId) continue;
 
             const userDataSnap = await db.ref(`users/${uid}/course`).once('value');
             const cData = userDataSnap.val() || {};
 
             // FILTRO AULA: Mostra solo corsisti assegnati a questo tutor
-            if (cData.tutor_id !== myId) continue;
+            if (cData.tutor_id !== window.myId) continue;
+            foundAny = true;
 
             const p = cData.progress || {};
             const enroll = enrollments[uid];
-
             const lesson = p.current_lesson || 2;
-            const lastDate = p.last_session_date || "Mai";
             const accuracy = p.last_z2_accuracy ? Math.round(p.last_z2_accuracy * 100) : 0;
-            const reminders = p.reminders_count || 0;
 
-            const tutorRow = document.createElement('div');
-            tutorRow.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px; cursor:pointer;";
-            tutorRow.onclick = () => window.showStudentDetailedStats(uid, enroll.name || 'Corsista');
+            const row = document.createElement('div');
+            row.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px; cursor:pointer;";
+            row.onclick = () => window.showStudentDetailedStats(uid, enroll.name || 'Corsista');
 
-            const headerRow = document.createElement('div');
-            headerRow.style.cssText = "display:flex; justify-content:space-between; align-items:center;";
-
-            const nameB = document.createElement('b');
-            nameB.style.color = "#b39ddb";
-            nameB.textContent = `👤 ${enroll.name || 'Anonimo'} `;
-
-            if (enroll.roomCode) {
-                const liveBadge = document.createElement('span');
-                liveBadge.style.cssText = "background:#f44336; color:white; padding:1px 4px; border-radius:4px; font-size:0.7em; animation:pulse 1s infinite;";
-                liveBadge.textContent = "LIVE 🔴";
-                nameB.appendChild(liveBadge);
-            }
-            headerRow.appendChild(nameB);
-
-            const actionDiv = document.createElement('div');
-            actionDiv.style.cssText = "display:flex; gap:5px; align-items:center;";
-
-            const remSpan = document.createElement('span');
-            remSpan.style.color = reminders > 0 ? '#f44336' : '#4caf50';
-            remSpan.textContent = `⚠️ ${reminders}`;
-            actionDiv.appendChild(remSpan);
-
-            if (enroll.roomCode) {
-                const watchBtn = document.createElement('button');
-                watchBtn.style.cssText = "width:auto; margin:0; padding:2px 8px; font-size:0.8em; background:#673ab7;";
-                watchBtn.textContent = "OSSERVA";
-                watchBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    window.watchStudentSession(enroll.roomCode, enroll.name || 'Anonimo');
-                };
-                actionDiv.appendChild(watchBtn);
-            }
-            headerRow.appendChild(actionDiv);
-
-            const gridDiv = document.createElement('div');
-            gridDiv.style.cssText = "display:grid; grid-template-columns: 1fr 1fr; gap:5px; font-size:0.9em; color:var(--hint-color);";
-
-            const infoItems = [
-                `Lez: ${lesson}`, `Acc: ${accuracy}%`,
-                `XP: ${p.total_xp || 0}`, `Data: ${lastDate}`
-            ];
-            infoItems.forEach(txt => {
-                const s = document.createElement('span');
-                s.textContent = txt;
-                gridDiv.appendChild(s);
-            });
-
-            tutorRow.appendChild(headerRow);
-            tutorRow.appendChild(gridDiv);
-            list.appendChild(tutorRow);
+            row.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <b style="color:#b39ddb;">👤 ${enroll.name || 'Anonimo'}</b>
+                    <div style="display:flex; gap:5px; align-items:center;">
+                        <span style="color:${p.reminders_count > 0 ? '#f44336' : '#4caf50'}">⚠️ ${p.reminders_count || 0}</span>
+                        ${enroll.roomCode ? '<span style="background:#f44336; color:white; padding:1px 4px; border-radius:4px; font-size:0.7em; animation:pulse 1s infinite;">LIVE 🔴</span>' : ''}
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; font-size:0.9em; color:var(--hint-color);">
+                    <span>Lez: ${lesson}</span><span>Acc: ${accuracy}%</span>
+                    <span>XP: ${p.total_xp || 0}</span><span>Data: ${p.last_session_date || 'Mai'}</span>
+                </div>
+            `;
+            list.appendChild(row);
         }
-    }, (error) => {
-        list.innerHTML = '<p style="color:#f44336; font-size:0.75em;">Errore nel caricamento dati.</p>';
-    });
+
+        if (!foundAny) {
+            list.innerHTML = '<p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Non hai ancora corsisti assegnati alla tua aula.</p>';
+        }
+    };
+
+    ref.on('value', callback);
+    if (!window.listeners) window.listeners = {};
+    window.listeners.tutorPanelRef = ref;
+    window.listeners.tutorPanelCallback = callback;
 };
 
+/**
+ * MODALE STATISTICHE STUDENTE (DETTAGLIO PER TUTOR)
+ */
 window.showStudentDetailedStats = function(uid, name) {
     const modal = document.getElementById('tutorStudentStatsModal');
-    const title = document.getElementById('tutorStudentStatsTitle');
-    if (!modal || !title) return;
-
-    title.textContent = `Statistiche: ${name}`;
+    if (!modal) return;
+    document.getElementById('tutorStudentStatsTitle').textContent = `Statistiche: ${name}`;
     modal.style.display = 'flex';
 
     db.ref(`users/${uid}`).once('value', snap => {
         const u = snap.val() || {};
-        const c = u.course || { progress: {} };
-        const p = c.progress || {};
+        const p = (u.course && u.course.progress) || {};
 
-        // 1. Heatmap
-        const heatmapCont = document.getElementById('tutorStudentHeatmap');
-        if (heatmapCont) {
-            heatmapCont.innerHTML = '';
+        // Heatmap
+        const hm = document.getElementById('tutorStudentHeatmap');
+        if (hm) {
+            hm.innerHTML = '';
             const stats = p.char_stats || {};
             window.KOCH_SEQUENCE.forEach((char, idx) => {
                 const box = document.createElement('div');
@@ -183,104 +160,312 @@ window.showStudentDetailedStats = function(uid, name) {
                 box.textContent = char;
                 const dbChar = window.firebaseEscape(char);
                 const s = stats[dbChar] || { attempts: 0, errors: 0 };
-                const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
-
-                if (idx >= (p.current_lesson || 2)) {
-                    box.style.backgroundColor = 'rgba(255,255,255,0.05)';
-                    box.style.opacity = '0.3';
-                } else {
-                    box.style.backgroundColor = s.attempts === 0 ? '#444' : (accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f');
-                    box.style.color = '#fff';
-                }
-                heatmapCont.appendChild(box);
+                const acc = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
+                if (idx >= (p.current_lesson || 2)) { box.style.backgroundColor = 'rgba(255,255,255,0.05)'; box.style.opacity = '0.3'; }
+                else { box.style.backgroundColor = s.attempts === 0 ? '#444' : (acc >= 0.9 ? '#4caf50' : acc >= 0.7 ? '#ff9800' : '#d32f2f'); box.style.color = '#fff'; }
+                hm.appendChild(box);
             });
         }
 
-        // 2. History
-        const histCont = document.getElementById('tutorStudentHistory');
-        if (histCont) {
-            histCont.innerHTML = '';
+        // Storia sessioni
+        const hs = document.getElementById('tutorStudentHistory');
+        if (hs) {
+            hs.innerHTML = '';
             const history = Object.values(u.history || {}).filter(h => h.mode === 'course').slice(-10).reverse();
-            if (history.length === 0) {
-                histCont.innerHTML = '<p style="text-align:center; opacity:0.5;">Nessuna sessione registrata.</p>';
-            } else {
-                history.forEach(h => {
-                    const div = document.createElement('div');
-                    div.style.cssText = "padding:5px; background:rgba(0,0,0,0.1); border-radius:4px; margin-bottom:2px; display:flex; justify-content:space-between;";
-                    const date = new Date(h.date).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit'});
-                    div.innerHTML = `<span>${date} - <b>${h.score} XP</b></span> <small>${h.wpm} WPM</small>`;
-                    histCont.appendChild(div);
-                });
-            }
+            if (history.length === 0) hs.innerHTML = '<p style="text-align:center; opacity:0.5;">Nessuna sessione registrata.</p>';
+            else history.forEach(h => {
+                const div = document.createElement('div'); div.style.cssText = "padding:5px; background:rgba(0,0,0,0.1); border-radius:4px; margin-bottom:2px; display:flex; justify-content:space-between;";
+                div.innerHTML = `<span>${new Date(h.date).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit'})} - <b>${h.score} XP</b></span> <small>${h.wpm} WPM</small>`;
+                hs.appendChild(div);
+            });
         }
 
-        // 3. Trend (Semplice)
-        const trendCont = document.getElementById('tutorStudentTrend');
-        if (trendCont) {
-            trendCont.textContent = `Costanza: ${p.consecutive_days || 0} giorni consecutivi. Richiami: ${p.reminders_count || 0}/3.`;
-        }
+        const tr = document.getElementById('tutorStudentTrend');
+        if (tr) tr.textContent = `Costanza: ${p.consecutive_days || 0} giorni consecutivi. Richiami: ${p.reminders_count || 0}/3.`;
     });
 };
 
-window.watchStudentSession = function(targetRoomCode, studentName) {
-    if (!targetRoomCode) return;
-    if (!confirm(`Vuoi entrare come spettatore nell'allenamento di ${studentName}?`)) return;
+/**
+ * CHAT RADIO-AULA: Gestione messaggi classe/tutor
+ */
+window.initCourseChat = function() {
+    if (!db || !window.courseData) return;
 
-    // Usciamo da eventuali stanze attuali
-    if (typeof window.exitRoomCleanly === 'function') window.exitRoomCleanly(false);
+    const isTutor = window.courseData.role === 'tutor';
+    const currentUid = window.myId;
+    // Un tutor monitora la chat della SUA aula (il suo UID)
+    const tutorId = isTutor ? currentUid : (window.courseData.tutor_id || null);
 
-    // Utilizziamo la funzione nativa degli spettatori per abilitare audio e monitoraggio
-    if (typeof window.watchSpecificRoom === 'function') {
-        window.watchSpecificRoom(targetRoomCode, studentName);
-    } else {
-        showToast("Errore: Funzione spettatore non disponibile.");
+    // Percorso chat: courseChats/{tutorId} oppure courseChat (globale legacy)
+    const chatPath = tutorId ? `courseChats/${tutorId}` : 'courseChat';
+    const chatRef = db.ref(chatPath);
+
+    const messagesCont = document.getElementById('courseChatMessages');
+    const chatTitle = document.querySelector('#courseChatArea h4');
+
+    if (chatTitle) {
+        chatTitle.textContent = tutorId ? (isTutor ? "💬 Radio-Aula (La tua Classe)" : "💬 Radio-Aula (Classe Tutor)") : "🌎 Radio-Aula (Globale)";
+    }
+
+    // Pulizia listener centralizzata
+    if (window.listeners && window.listeners.courseChatRef) {
+        window.listeners.courseChatRef.off('value', window.listeners.courseChatCallback);
+    }
+
+    const chatCallback = async (snap) => {
+        if (!messagesCont) return;
+        const data = snap.val() || {};
+        messagesCont.innerHTML = '';
+
+        const entries = Object.entries(data).sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0));
+
+        if (entries.length === 0) {
+            messagesCont.innerHTML = '<p style="text-align:center; opacity:0.4; font-size:0.8em; margin-top:20px;">Nessun messaggio in questa aula.<br>Inizia la conversazione!</p>';
+            return;
+        }
+
+        for (const [key, msg] of entries) {
+            const div = document.createElement('div');
+            div.style.marginBottom = '5px';
+            div.style.wordBreak = 'break-word';
+
+            const timeStr = new Date(msg.ts || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+            div.innerHTML = `
+                <span style="font-size:0.75em; color:var(--hint-color);">${timeStr} </span>
+                ${msg.role === 'tutor' ? '<b style="color:#673ab7; font-size:0.65em; background:#eee; padding:1px 4px; border-radius:4px; margin-right:4px;">TUTOR</b>' : ''}
+                <b style="color:var(--link-color); font-size:0.85em;">${msg.name || 'Anonimo'}: </b>
+                <span style="font-size:0.9em;"> ${msg.text || ""}</span>
+            `;
+
+            // Tasto elimina per il mittente o per il tutor dell'aula
+            if (msg.senderId === currentUid || isTutor) {
+                const delBtn = document.createElement('span');
+                delBtn.innerHTML = " 🗑️";
+                delBtn.style.cssText = "cursor:pointer; font-size:0.8em; opacity:0.5; margin-left:5px;";
+                delBtn.onclick = () => {
+                    if (confirm("Eliminare questo messaggio?")) db.ref(`${chatPath}/${key}`).remove();
+                };
+                div.querySelector('b:last-of-type').appendChild(delBtn);
+            }
+
+            messagesCont.appendChild(div);
+        }
+        messagesCont.scrollTop = messagesCont.scrollHeight;
+    };
+
+    chatRef.limitToLast(50).on('value', chatCallback);
+
+    if (!window.listeners) window.listeners = {};
+    window.listeners.courseChatRef = chatRef;
+    window.listeners.courseChatCallback = chatCallback;
+
+    // Bottone Invia
+    if (els.sendCourseChatBtn && els.courseChatInput) {
+        els.sendCourseChatBtn.onclick = async () => {
+            const now = Date.now();
+            if (window.lastChatSentTs && now - window.lastChatSentTs < 1000) return;
+
+            const txt = els.courseChatInput.value.trim();
+            if (!txt) return;
+
+            // Controllo XP/Piano tramite canUserChat (social_manager.js)
+            if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
+
+            if (txt.length > 200) return alert("Messaggio troppo lungo!");
+
+            window.lastChatSentTs = now;
+
+            const newMsg = {
+                name: window.myName,
+                text: txt,
+                ts: firebase.database.ServerValue.TIMESTAMP,
+                senderId: currentUid,
+                role: window.courseData.role || 'corsista'
+            };
+
+            console.log("Course Chat: Sending to", chatPath);
+            chatRef.push(newMsg).then(() => {
+                els.courseChatInput.value = '';
+            }).catch(err => {
+                console.error("Course Chat: Push error", err);
+                showToast("Errore invio: " + err.message);
+            });
+        };
+
+        els.courseChatInput.onkeypress = (e) => {
+            if (e.key === 'Enter') els.sendCourseChatBtn.click();
+        };
+    }
+
+    // Bottone Pulisci Aula (Solo Tutor)
+    if (els.clearCourseChatBtn) {
+        els.clearCourseChatBtn.style.display = isTutor ? 'block' : 'none';
+        els.clearCourseChatBtn.onclick = () => {
+            if (confirm("Vuoi cancellare TUTTA la cronologia di questa aula?")) {
+                chatRef.remove().then(() => showToast("Aula pulita."));
+            }
+        };
     }
 };
 
+/**
+ * WIZARD ISCRIZIONE: Step e Scelta Ruolo
+ */
 window.selectWizardRole = function(role) {
     window.tempWizardRole = role;
-    const sRole = document.getElementById('wizardStepRole');
-    const s1 = document.getElementById('wizardStep1');
-
     if (role === 'tutor') {
         window.requestTutorRole();
     } else {
+        const sRole = document.getElementById('wizardStepRole');
+        const s1 = document.getElementById('wizardStep1');
         if (sRole) sRole.style.display = 'none';
         if (s1) s1.style.display = 'block';
     }
 };
 
 window.requestTutorRole = function() {
-    if (!confirm("Vuoi inviare una richiesta all'amministratore per diventare TUTOR?\nPotrai accedere al corso solo dopo l'approvazione.")) return;
-
+    if (!confirm("Inviare richiesta per diventare TUTOR all'amministratore?")) return;
     db.ref('tutorRequests').push({
-        uid: myId,
-        name: myName,
-        username: tgUsername || "N/A",
+        uid: window.myId,
+        name: window.myName,
+        username: window.tgUsername || "N/A",
         ts: firebase.database.ServerValue.TIMESTAMP
     }).then(() => {
-        alert("Richiesta inviata! Riceverai l'abilitazione non appena l'amministratore avrà approvato il tuo profilo.");
-        // Non attiviamo il piano ora, l'utente resta "non iscritto"
+        alert("Richiesta inviata! Verrai abilitato dopo l'approvazione.");
         goBackToMenu();
-    }).catch(e => {
-        showToast("Errore nell'invio della richiesta.");
+    }).catch(() => showToast("Errore nell'invio della richiesta."));
+};
+
+window.nextWizardStep = function(step) {
+    const steps = { 0: 'wizardStepRole', 0.5: 'wizardStepTutor', 1: 'wizardStep1', 2: 'wizardStep2', 3: 'wizardStep3', 4: 'wizardStep4' };
+    Object.values(steps).forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    const curr = document.getElementById(steps[step]);
+    if (curr) curr.style.display = 'block';
+
+    if (step === 4) {
+        window.updateWizardDurationsPreview();
+        if (els.wizardMinZ2) els.wizardMinZ2.oninput = window.updateWizardDurationsPreview;
+    }
+};
+
+window.renderTutorSelectionList = function(containerId = null) {
+    const container = containerId ? document.getElementById(containerId) : null;
+    const select = document.getElementById('courseTabTutorSelect');
+    if (!container && !select) return;
+
+    db.ref('users').once('value', snap => {
+        const tutors = Object.entries(snap.val() || {})
+            .filter(([u, d]) => d.course && d.course.role === 'tutor')
+            .map(([u, d]) => ({ id: u, name: d.alias || d.name || "Tutor" }));
+
+        if (container) {
+            container.innerHTML = tutors.length === 0 ? '<p style="font-size:0.8em; text-align:center; opacity:0.5;">Nessun Tutor disponibile.</p>' : '';
+            if (tutors.length === 0) {
+                const b = document.getElementById('btnConfirmTutor');
+                if (b) { b.disabled = false; b.onclick = () => { window.tempSelectedTutorId = null; window.nextWizardStep(1); }; }
+                return;
+            }
+            tutors.forEach(t => {
+                const b = document.createElement('button');
+                b.className = 'action-btn-small btn-secondary';
+                b.style.cssText = "width:100%; text-align:left; padding:10px; margin-bottom:5px; background:rgba(255,255,255,0.05); border:1px solid var(--link-color);";
+                b.innerHTML = `🎓 <b>${t.name}</b>`;
+                b.onclick = () => {
+                    document.querySelectorAll('#wizardTutorList button').forEach(x => x.style.background = 'rgba(255,255,255,0.05)');
+                    b.style.background = 'var(--link-color)';
+                    window.tempSelectedTutorId = t.id;
+                    const cb = document.getElementById('btnConfirmTutor'); if (cb) cb.disabled = false;
+                };
+                container.appendChild(b);
+            });
+        }
+
+        if (select) {
+            const curr = window.courseData?.tutor_id;
+            select.innerHTML = '<option value="">Aula Globale</option>';
+            tutors.forEach(t => {
+                const o = document.createElement('option'); o.value = t.id; o.textContent = t.name;
+                if (t.id === curr) o.selected = true;
+                select.appendChild(o);
+            });
+            select.onchange = () => {
+                window.courseData.tutor_id = select.value || null;
+                window.saveCourseState();
+                window.initCourseChat();
+                showToast("Aula aggiornata!");
+            };
+        }
     });
 };
 
-window.toggleVisibility = function(contentId, btnId) {
-    const el = document.getElementById(contentId);
-    const btn = document.getElementById(btnId);
-    if (!el || !btn) return;
-    const isHidden = el.style.display === 'none';
-    el.style.display = isHidden ? 'block' : 'none';
-    btn.textContent = isHidden ? 'Nascondi' : 'Mostra';
+/**
+ * COMPLETAMENTO WIZARD E SALVATAGGIO INIZIALE
+ */
+window.finishWizard = function() {
+    const role = window.tempWizardRole || 'corsista';
+    const z2 = parseInt(els.wizardMinZ2?.value) || 10;
+    const isElite = document.getElementById('wizardEliteMode')?.checked === true;
+
+    window.courseData.active_plan = true;
+    window.courseData.role = role;
+    window.courseData.enrollment_date = new Date().toISOString();
+
+    if (role === 'corsista') {
+        window.courseData.tutor_id = window.tempSelectedTutorId || null;
+        window.courseData.elite_mode = isElite;
+        window.courseData.progress.current_lesson = parseInt(els.wizardStartLesson?.value) || 2;
+        window.courseData.settings = {
+            days_per_week: els.wizardDays.value,
+            start_wpm: parseInt(els.wizardWpm?.value) || 15,
+            farnsworth_wpm: parseInt(els.wizardFarnsworth?.value) || 12,
+            group_spacing: els.wizardGroupSpacing?.value || "3.0",
+            pause_interval: parseInt(els.wizardPauseInterval?.value) || 60,
+            pause_duration: parseInt(els.wizardPauseDuration?.value) || 10,
+            minutes_z2: z2,
+            minutes_work: Math.round(z2 * 0.66),
+            minutes_long: Math.round(z2 * 1.66)
+        };
+        window.generateWeeklySchedule();
+    }
+
+    window.updateGlobalEnrollmentRecord(true);
+    window.renderCourseTabView();
+    showToast(role === 'tutor' ? "Profilo TUTOR attivato! 🎓" : "Corso attivato! 🚀");
+};
+
+/**
+ * UTILS E HELPERS UI
+ */
+window.populateLessonDropdowns = function() {
+    const wSelect = document.getElementById('wizardStartLesson');
+    const sSelect = document.getElementById('courseTabLessonInput');
+    const pop = (sel) => {
+        if (!sel) return; sel.innerHTML = '';
+        for (let i = 2; i <= window.KOCH_SEQUENCE.length; i++) {
+            const o = document.createElement('option'); o.value = i; o.textContent = `Lezione ${i} (${window.KOCH_SEQUENCE[i-1]})`;
+            sel.appendChild(o);
+        }
+    };
+    pop(wSelect); pop(sSelect);
+    if (wSelect) wSelect.onchange = () => {
+        const n = parseInt(wSelect.value);
+        const info = document.getElementById('wizardLessonChars');
+        if (info) info.textContent = `Caratteri: ${window.KOCH_SEQUENCE.slice(0, n).join(", ")}`;
+    };
+};
+
+window.updateWizardDurationsPreview = function() {
+    const z = parseInt(els.wizardMinZ2?.value) || 10;
+    const p = document.getElementById('wizardDurationsPreview');
+    if (p) p.textContent = `Base: ${z} min | Lavoro: ${Math.round(z*0.66)} min | Lungo: ${Math.round(z*1.66)} min`;
 };
 
 window.populateCourseSettingsInputs = function() {
+    if (!window.courseData || !window.courseData.settings) return;
     window.populateLessonDropdowns();
-    const s = window.courseData.settings;
-    const currentLesson = window.courseData.progress.current_lesson;
-    if (els.courseTabLessonInput) els.courseTabLessonInput.value = currentLesson;
+    const s = window.courseData.settings, p = window.courseData.progress;
+    if (els.courseTabLessonInput) els.courseTabLessonInput.value = p.current_lesson;
     if (els.courseTabDaysInput) els.courseTabDaysInput.value = s.days_per_week;
     if (els.courseTabWpmInput) els.courseTabWpmInput.value = s.start_wpm;
     if (els.courseTabFarnsworthInput) els.courseTabFarnsworthInput.value = s.farnsworth_wpm;
@@ -298,101 +483,52 @@ window.renderCourseTabDashboard = function() {
     if (heatmap) {
         heatmap.innerHTML = '';
         const stats = window.courseData.progress.char_stats || {};
-        const currentLesson = window.courseData.progress.current_lesson;
-
+        const lesson = window.courseData.progress.current_lesson;
         window.KOCH_SEQUENCE.forEach((char, idx) => {
             const box = document.createElement('div');
             box.style.cssText = "width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:0.75em; font-weight:bold; border-radius:4px; border:1px solid rgba(255,255,255,0.1); cursor:pointer;";
             box.textContent = char;
-
-            const dbChar = (typeof firebaseEscape === 'function') ? firebaseEscape(char) : char.replace(/\./g, '_dot_');
+            const dbChar = window.firebaseEscape(char);
             const s = stats[dbChar] || { attempts: 0, errors: 0 };
-            const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
-
-            if (idx >= currentLesson) {
-                box.style.backgroundColor = 'rgba(255,255,255,0.05)';
-                box.style.opacity = '0.3';
-                box.title = "Non ancora sbloccato";
-            } else {
-                if (s.attempts === 0) {
-                    box.style.backgroundColor = 'var(--hint-color)';
-                } else {
-                    box.style.backgroundColor = accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f';
-                }
-                box.style.color = '#fff';
-                box.title = `${char}: ${Math.round(accuracy * 100)}% (${s.attempts} tentativi)`;
-            }
-
-            box.onclick = () => {
-                window.renderAdvancedCourseStats(char);
-            };
+            const acc = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
+            if (idx >= lesson) { box.style.backgroundColor = 'rgba(255,255,255,0.05)'; box.style.opacity = '0.3'; }
+            else { box.style.backgroundColor = s.attempts === 0 ? 'var(--hint-color)' : (acc >= 0.9 ? '#4caf50' : acc >= 0.7 ? '#ff9800' : '#d32f2f'); box.style.color = '#fff'; }
+            box.onclick = () => window.renderAdvancedCourseStats(char);
             heatmap.appendChild(box);
         });
-
-        const activeCharsStr = window.KOCH_SEQUENCE.slice(0, currentLesson).join(", ");
-        if (lessonInfo) lessonInfo.textContent = `Caratteri attivi (${currentLesson}): ${activeCharsStr}`;
-
-        // Render iniziale statistiche (primo carattere sbloccato)
+        if (lessonInfo) lessonInfo.textContent = `Caratteri attivi (${lesson}): ${window.KOCH_SEQUENCE.slice(0, lesson).join(", ")}`;
         window.renderAdvancedCourseStats(window.KOCH_SEQUENCE[0]);
     }
 
-    // 2. Weekly Plan
+    // 2. Piano Settimanale
     const planList = document.getElementById('courseTabWeeklyPlan');
     if (planList) {
         planList.innerHTML = '';
         const days = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
         if (!window.courseData.weekly_schedule) window.generateWeeklySchedule();
-
         window.courseData.weekly_schedule.forEach((dayData, idx) => {
-            const sessions = dayData.sessions || [];
             const dayDiv = document.createElement('div');
             dayDiv.style.cssText = "display:flex; flex-direction:column; gap:4px; padding:8px; background:var(--sec-bg-color); border-radius:8px;";
-
-            const title = document.createElement('b');
-            title.style.fontSize = "0.85em";
-            title.textContent = days[idx];
-            dayDiv.appendChild(title);
-
-            sessions.forEach(session => {
+            dayDiv.innerHTML = `<b style="font-size:0.85em;">${days[idx]}</b>`;
+            (dayData.sessions || []).forEach(session => {
                 const div = document.createElement('div');
                 div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:4px 8px; background:rgba(255,255,255,0.03); border-radius:6px; font-size:0.8em;";
-
                 const typeCfg = window.COURSE_TYPES[session.type] || { labelIt: 'Riposo', color: '#999' };
-                const label = document.createElement('span');
-                const typeSpan = document.createElement('b');
-                typeSpan.textContent = (currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn) + (session.elite ? " ⚡" : "");
-                typeSpan.style.color = typeCfg.color;
-                label.appendChild(typeSpan);
-
-                const status = document.createElement('span');
-                status.textContent = session.completed ? "✅ Fatto" : (session.type === 'REST' ? "😴" : "⏳");
-
-                div.appendChild(label);
-                div.appendChild(status);
+                div.innerHTML = `<span style="color:${typeCfg.color}"><b>${currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn}${session.elite ? " ⚡" : ""}</b></span><span>${session.completed ? "✅ Fatto" : (session.type === 'REST' ? "😴" : "⏳")}</span>`;
                 dayDiv.appendChild(div);
             });
-
             planList.appendChild(dayDiv);
         });
     }
 
-    // --- AGGIORNAMENTO DINAMICO TESTO BOTTONE AVVIO ---
+    // 3. Bottone Avvio
     const startBtn = document.getElementById('btnTabStartCourseSession');
     if (startBtn) {
         const todayIdx = (new Date().getDay() + 6) % 7;
         const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
-        const allCompleted = dayData ? dayData.sessions.every(s => s.completed || s.type === 'REST') : true;
-        const isRestDay = dayData ? dayData.sessions[0].type === 'REST' : false;
-
-        if (allCompleted || isRestDay) {
-            startBtn.textContent = "INIZIA SESSIONE EXTRA 🧪";
-            startBtn.classList.remove('btn-success');
-            startBtn.classList.add('btn-secondary');
-        } else {
-            startBtn.textContent = "AVVIA SESSIONE ODIERNA 🚀";
-            startBtn.classList.add('btn-success');
-            startBtn.classList.remove('btn-secondary');
-        }
+        const done = dayData ? dayData.sessions.every(s => s.completed || s.type === 'REST') : true;
+        startBtn.textContent = done ? "INIZIA SESSIONE EXTRA 🧪" : "AVVIA SESSIONE ODIERNA 🚀";
+        startBtn.className = done ? "btn-secondary" : "btn-success";
     }
 };
 
@@ -400,694 +536,203 @@ window.renderAdvancedCourseStats = function(selectedChar) {
     const panel = document.getElementById('courseAdvancedStatsPanel');
     const container = document.getElementById('courseAdvancedStats');
     if (!container || !panel) return;
-
     panel.style.display = 'block';
-    container.innerHTML = '';
-
+    container.innerHTML = `<div style="font-size:1.1em; font-weight:bold; text-align:center; margin-bottom:10px; color:var(--champ-color);">Analisi Carattere: ${selectedChar}</div>`;
     const statsByType = window.courseData.progress.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
     const dbChar = window.firebaseEscape(selectedChar);
-
-    const title = document.createElement('div');
-    title.style.cssText = "font-size: 1.1em; font-weight: bold; text-align: center; margin-bottom: 10px; color: var(--champ-color); text-shadow: 0 0 5px rgba(255,152,0,0.3);";
-    title.textContent = `Analisi Carattere: ${selectedChar}`;
-    container.appendChild(title);
-
-    const types = [
-        { id: 'Z2', label: 'Base', icon: '🟢' },
-        { id: 'WORK', label: 'Lavoro', icon: '🟡' },
-        { id: 'LONG', label: 'Lungo', icon: '🟣' }
-    ];
-
-    types.forEach(type => {
+    [{ id: 'Z2', label: 'Base', icon: '🟢' }, { id: 'WORK', label: 'Lavoro', icon: '🟡' }, { id: 'LONG', label: 'Lungo', icon: '🟣' }].forEach(type => {
         const s = (statsByType[type.id] && statsByType[type.id][dbChar]) ? statsByType[type.id][dbChar] : { attempts: 0, errors: 0 };
-        const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
-        const perc = Math.round(accuracy * 100);
-
+        const acc = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
+        const perc = Math.round(acc * 100);
         const row = document.createElement('div');
-        row.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
-
-        const labelRow = document.createElement('div');
-        labelRow.style.cssText = "display: flex; justify-content: space-between; font-size: 0.8em; font-weight: bold;";
-        labelRow.innerHTML = `<span>${type.icon} ${type.label}</span> <span style="color:var(--hint-color)">${s.attempts} tentativi</span>`;
-
-        const barContainer = document.createElement('div');
-        barContainer.style.cssText = "height: 18px; background: rgba(255,255,255,0.05); border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; position: relative;";
-
-        const bar = document.createElement('div');
-        bar.style.width = s.attempts > 0 ? `${perc}%` : "0%";
-        bar.style.height = "100%";
-        bar.style.background = s.attempts === 0 ? '#444' : (accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f');
-        bar.style.boxShadow = "inset 0 0 10px rgba(0,0,0,0.3)";
-        bar.style.transition = "width 0.8s cubic-bezier(0.17, 0.67, 0.83, 0.67)";
-
-        const percLabel = document.createElement('span');
-        percLabel.style.cssText = "position: absolute; width: 100%; text-align: center; font-size: 0.7em; font-weight: bold; color: #fff; text-shadow: 1px 1px 2px #000;";
-        percLabel.textContent = s.attempts > 0 ? `${perc}%` : "NESSUN DATO";
-
-        barContainer.appendChild(bar);
-        barContainer.appendChild(percLabel);
-        row.appendChild(labelRow);
-        row.appendChild(barContainer);
+        row.style.cssText = "display:flex; flex-direction:column; gap:4px; margin-bottom:8px;";
+        row.innerHTML = `
+            <div style="display:flex; justify-content:space-between; font-size:0.8em; font-weight:bold;">
+                <span>${type.icon} ${type.label}</span><span style="color:var(--hint-color)">${s.attempts} tentativi</span>
+            </div>
+            <div style="height:18px; background:rgba(255,255,255,0.05); border-radius:9px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; position:relative;">
+                <div style="width:${s.attempts > 0 ? perc : 0}%; height:100%; background:${s.attempts === 0 ? '#444' : (acc >= 0.9 ? '#4caf50' : acc >= 0.7 ? '#ff9800' : '#d32f2f')}; transition:width 0.8s;"></div>
+                <span style="position:absolute; width:100%; text-align:center; font-size:0.7em; font-weight:bold; color:#fff;">${s.attempts > 0 ? perc + '%' : 'NESSUN DATO'}</span>
+            </div>
+        `;
         container.appendChild(row);
     });
-
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 };
 
-window.populateLessonDropdowns = function() {
-    const wizardSelect = document.getElementById('wizardStartLesson');
-    const settingsSelect = document.getElementById('courseTabLessonInput');
-
-    const populate = (select) => {
-        if (!select) return;
-        select.innerHTML = '';
-        for (let i = 2; i <= window.KOCH_SEQUENCE.length; i++) {
-            const opt = document.createElement('option');
-            opt.value = i;
-            opt.textContent = `Lezione ${i} (${window.KOCH_SEQUENCE[i-1]})`;
-            select.appendChild(opt);
-        }
-    };
-    populate(wizardSelect);
-    populate(settingsSelect);
-
-    if (wizardSelect) {
-        wizardSelect.onchange = () => {
-            const num = parseInt(wizardSelect.value);
-            const chars = window.KOCH_SEQUENCE.slice(0, num).join(", ");
-            const info = document.getElementById('wizardLessonChars');
-            if (info) info.textContent = `Caratteri: ${chars}`;
-        };
-        wizardSelect.onchange();
-    }
-};
-
-window.startCourseWizard = function() {
-    if (els.courseTabInitialPrompt) els.courseTabInitialPrompt.style.display = 'none';
-    if (els.courseWizardContainer) els.courseWizardContainer.style.display = 'block';
-    window.populateLessonDropdowns();
-    window.renderTutorSelectionList('wizardTutorList');
-    window.nextWizardStep(0);
-};
-
-window.nextWizardStep = function(step) {
-    const steps = [0, 0.5, 1, 2, 3, 4];
-    const stepIds = {
-        0: 'wizardStepRole',
-        0.5: 'wizardStepTutor',
-        1: 'wizardStep1',
-        2: 'wizardStep2',
-        3: 'wizardStep3',
-        4: 'wizardStep4'
-    };
-
-    Object.values(stepIds).forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-    });
-
-    const currentId = stepIds[step];
-    if (currentId) {
-        const el = document.getElementById(currentId);
-        if (el) el.style.display = 'block';
-    }
-
-    if (step === 4) {
-        window.updateWizardDurationsPreview();
-        if (els.wizardMinZ2) els.wizardMinZ2.oninput = window.updateWizardDurationsPreview;
-    }
-};
-
-window.renderTutorSelectionList = function(containerId) {
-    const container = document.getElementById(containerId);
-    const select = document.getElementById('courseTabTutorSelect');
-    if (!container && !select) return;
-
-    db.ref('users').once('value', snap => {
-        const users = snap.val() || {};
-        const tutors = Object.entries(users)
-            .filter(([uid, data]) => data.course && data.course.role === 'tutor')
-            .map(([uid, data]) => ({ id: uid, name: data.alias || data.name || "Tutor Anonimo" }));
-
-        if (container) {
-            container.innerHTML = '';
-            if (tutors.length === 0) {
-                container.innerHTML = '<p style="font-size:0.8em; color:var(--hint-color); text-align:center;">Nessun Tutor disponibile al momento. Verrai assegnato a un\'aula globale.</p>';
-                const btn = document.getElementById('btnConfirmTutor');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.onclick = () => {
-                        window.tempSelectedTutorId = null;
-                        window.nextWizardStep(1);
-                    };
-                }
-                return;
-            }
-
-            tutors.forEach(t => {
-                const btn = document.createElement('button');
-                btn.className = 'action-btn-small btn-secondary';
-                btn.style.cssText = "width:100%; text-align:left; padding:10px; margin-bottom:5px; background:rgba(255,255,255,0.05); border:1px solid var(--link-color); color:var(--text-color);";
-                btn.innerHTML = `🎓 <b>${t.name}</b>`;
-                btn.onclick = () => {
-                    document.querySelectorAll('#wizardTutorList button').forEach(b => b.style.background = 'rgba(255,255,255,0.05)');
-                    btn.style.background = 'var(--link-color)';
-                    window.tempSelectedTutorId = t.id;
-                    const confirmBtn = document.getElementById('btnConfirmTutor');
-                    if (confirmBtn) confirmBtn.disabled = false;
-                };
-                container.appendChild(btn);
-            });
-        }
-
-        if (select) {
-            const currentTutor = window.courseData.tutor_id;
-            select.innerHTML = '<option value="">Aula Globale (Nessun Tutor)</option>';
-            tutors.forEach(t => {
-                const opt = document.createElement('option');
-                opt.value = t.id;
-                opt.textContent = t.name;
-                if (t.id === currentTutor) opt.selected = true;
-                select.appendChild(opt);
-            });
-            select.onchange = () => {
-                window.courseData.tutor_id = select.value || null;
-                window.saveCourseState();
-                window.initCourseChat(); // Ricarica la chat dell'aula
-                showToast("Aula aggiornata! 🎓");
-            };
-        }
-    });
-};
-
-window.updateWizardDurationsPreview = function() {
-    const z2 = parseInt(els.wizardMinZ2?.value) || 10;
-    const work = Math.round(z2 * (20/30));
-    const long = Math.round(z2 * (50/30));
-    const preview = document.getElementById('wizardDurationsPreview');
-    if (preview) preview.textContent = `Base: ${z2} min | Lavoro: ${work} min | Lungo: ${long} min`;
-};
-
-window.finishWizard = function() {
-    const role = window.tempWizardRole || 'corsista';
-    const z2 = parseInt(els.wizardMinZ2?.value) || 10;
-    const startLesson = parseInt(els.wizardStartLesson?.value) || 2;
-    const isElite = document.getElementById('wizardEliteMode')?.checked === true;
-
-    window.courseData.active_plan = true;
-    window.courseData.role = role;
-    window.courseData.enrollment_date = new Date().toISOString();
-
-    if (role === 'corsista') {
-        window.courseData.tutor_id = window.tempSelectedTutorId || null;
-        window.courseData.elite_mode = isElite;
-        window.courseData.progress.current_lesson = startLesson;
-        window.courseData.settings = {
-            days_per_week: els.wizardDays.value,
-            start_wpm: parseInt(els.wizardWpm?.value) || 15,
-            farnsworth_wpm: parseInt(els.wizardFarnsworth?.value) || 12,
-            group_spacing: els.wizardGroupSpacing?.value || "3.0",
-            pause_interval: parseInt(els.wizardPauseInterval?.value) || 60,
-            pause_duration: parseInt(els.wizardPauseDuration?.value) || 10,
-            minutes_z2: z2,
-            minutes_work: Math.round(z2 * (20/30)),
-            minutes_long: Math.round(z2 * (50/30))
-        };
-        window.generateWeeklySchedule();
-    } else {
-        // Tutor non ha settings di studio
-        window.courseData.elite_mode = false;
-    }
-
-    window.updateGlobalEnrollmentRecord(true); // Aggiorna contatore globale iscritti
-    window.renderCourseTabView();
-
-    if (role === 'tutor') {
-        showToast("Profilo TUTOR attivato! 🎓");
-    } else {
-        showToast(isElite ? "Piano ELITE attivato! ⚡" : "Corso attivato con successo! 🚀");
-    }
-};
-
+/**
+ * GESTIONE SESSIONE DI GIOCO (START / FINISH)
+ */
 window.finishCourseSession = function() {
-    const stats = window.courseData.progress.char_stats || {};
-    const statsByType = window.courseData.progress.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
-    const currentLesson = window.courseData.progress.current_lesson;
-    const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson);
-    const sessionType = window.courseData.current_day_session.type;
-    let totalAttempts = 0, totalErrors = 0;
-    let worstChars = [];
+    const p = window.courseData.progress, s = p.char_stats || {}, st = p.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
+    const lesson = p.current_lesson, active = window.KOCH_SEQUENCE.slice(0, lesson), type = window.courseData.current_day_session.type;
+    let attempts = 0, errors = 0, worst = [];
 
-    activeChars.forEach(char => {
-        const dbChar = window.firebaseEscape(char);
-        const s = stats[dbChar] || { attempts: 0, errors: 0 };
-        totalAttempts += s.attempts;
-        totalErrors += s.errors;
-
-        if (!statsByType[sessionType]) statsByType[sessionType] = {};
-        if (!statsByType[sessionType][dbChar]) statsByType[sessionType][dbChar] = { attempts: 0, errors: 0 };
-
-        if (s.attempts > 0 && (s.errors / s.attempts) > 0.15) {
-            worstChars.push(char);
-        }
+    active.forEach(c => {
+        const dbC = window.firebaseEscape(c), sc = s[dbC] || { attempts: 0, errors: 0 };
+        attempts += sc.attempts; errors += sc.errors;
+        if (!st[type]) st[type] = {}; if (!st[type][dbC]) st[type][dbC] = { attempts: 0, errors: 0 };
+        if (sc.attempts > 0 && (sc.errors/sc.attempts) > 0.15) worst.push(c);
     });
 
-    const accuracy = totalAttempts > 0 ? ((totalAttempts - totalErrors) / totalAttempts) : 1.0;
+    const acc = attempts > 0 ? (attempts - errors) / attempts : 1.0;
+    const xp = Math.round((type === 'WORK' ? 100 : type === 'LONG' ? 200 : 50) * acc);
 
-    // --- ASSEGNAZIONE XP SPECIFICI CORSO ---
-    let sessionBaseXP = 50; // Default Z2
-    if (sessionType === 'WORK') sessionBaseXP = 100;
-    else if (sessionType === 'LONG') sessionBaseXP = 200;
-
-    // Gli XP guadagnati sono proporzionali all'accuratezza
-    const sessionEarnedXP = Math.round(sessionBaseXP * accuracy);
-
-    if (!window.courseData.progress.total_xp) window.courseData.progress.total_xp = 0;
-    window.courseData.progress.total_xp += sessionEarnedXP;
-
-    // Sincronizziamo anche con il livello globale dell'RPG
-    if (typeof window.addXP === 'function') {
-        window.addXP(sessionEarnedXP, `Course Session ${sessionType}`);
-    }
-
-    if (window.courseData.current_day_session.type === 'Z2') {
-        window.courseData.progress.last_z2_accuracy = accuracy;
-    }
+    p.total_xp = (p.total_xp || 0) + xp;
+    if (typeof window.addXP === 'function') window.addXP(xp, `Course ${type}`);
+    if (type === 'Z2') p.last_z2_accuracy = acc;
 
     window.courseData.current_day_session.completed = true;
-    requestedWordCount = wordIndex;
+    const todayIdx = (new Date().getDay() + 6) % 7, dayData = window.courseData.weekly_schedule[todayIdx];
+    if (dayData) { const sess = dayData.sessions.find(s => s.type === type && !s.completed); if (sess) sess.completed = true; }
 
-    const todayIdx = (new Date().getDay() + 6) % 7;
-    const dayData = window.courseData.weekly_schedule[todayIdx];
-    if (dayData && dayData.sessions) {
-        const sessionObj = dayData.sessions.find(s => s.type === sessionType && !s.completed);
-        if (sessionObj) sessionObj.completed = true;
-    }
+    let canAdv = true;
+    active.forEach(c => { const sc = s[window.firebaseEscape(c)] || { attempts: 0, errors: 0 }; if (sc.attempts < 50 || (sc.attempts - sc.errors)/sc.attempts < 0.9) canAdv = false; });
 
-    let canAdvance = true;
-    activeChars.forEach(char => {
-        const dbChar = window.firebaseEscape(char);
-        const s = stats[dbChar] || { attempts: 0, errors: 0 };
-        if (s.attempts < 50 || (s.attempts - s.errors) / s.attempts < 0.9) canAdvance = false;
-    });
+    let msg = "";
+    if (window.courseData.current_day_session.isExtra) msg = "\n\n✨ Allenamento Extra completato!";
+    else if (canAdv && lesson < window.KOCH_SEQUENCE.length) { p.current_lesson++; msg = `\n\n🚀 NUOVO CARATTERE: ${window.KOCH_SEQUENCE[p.current_lesson-1]}!`; }
 
-    let advanceMsg = "";
-    const isExtra = window.courseData.current_day_session.isExtra === true;
+    const today = new Date().toISOString().split('T')[0];
+    if (p.last_session_date) {
+        const diff = Math.floor((new Date(today) - new Date(p.last_session_date))/(1000*60*60*24));
+        if (diff === 1) p.consecutive_days = (p.consecutive_days || 0) + 1; else if (diff > 1) p.consecutive_days = 1;
+    } else p.consecutive_days = 1;
 
-    if (!isExtra && canAdvance && currentLesson < window.KOCH_SEQUENCE.length) {
-        window.courseData.progress.current_lesson++;
-        advanceMsg = `\n\n🚀 NUOVO CARATTERE SBLOCCATO: ${window.KOCH_SEQUENCE[window.courseData.progress.current_lesson - 1]}!`;
-    }
+    if (p.consecutive_days % 2 === 0 && p.reminders_count > 0) { p.reminders_count--; showToast("Richiamo rimosso!"); }
 
-    if (isExtra) {
-        advanceMsg = "\n\n✨ Allenamento Extra completato. Ottimo per la tua memoria muscolare!";
-    }
-
-    window.courseData.progress.char_stats_by_type = statsByType;
-
-    // --- GESTIONE RICHIAMI E GIORNI CONSECUTIVI ---
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    const lastSession = window.courseData.progress.last_session_date;
-
-    if (lastSession) {
-        const lastDate = new Date(lastSession);
-        const diffDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
-        if (diffDays === 1) {
-            window.courseData.progress.consecutive_days = (window.courseData.progress.consecutive_days || 0) + 1;
-        } else if (diffDays > 1) {
-            window.courseData.progress.consecutive_days = 1;
-        }
-    } else {
-        window.courseData.progress.consecutive_days = 1;
-    }
-
-    // Se fatti 2 giorni consecutivi, scali un richiamo (se presente)
-    if (window.courseData.progress.consecutive_days > 0 && window.courseData.progress.consecutive_days % 2 === 0) {
-        if ((window.courseData.progress.reminders_count || 0) > 0) {
-            window.courseData.progress.reminders_count--;
-            showToast(currentLang === 'it' ? "Bravo! Per la tua costanza ti è stato rimosso un richiamo." : "Well done! A reminder has been removed due to your consistency.");
-        }
-    }
-
-    window.courseData.progress.last_session_date = todayStr;
+    p.last_session_date = today;
     window.saveCourseState();
+    db.ref(`courseActiveEnrollments/${window.myId}`).update({ roomCode: null });
 
-    // Rimuoviamo il segnale LIVE per i tutor a fine sessione
-    db.ref(`courseActiveEnrollments/${myId}`).update({ roomCode: null });
-    db.ref(`courseActiveEnrollments/${myId}`).child('roomCode').onDisconnect().cancel();
-
-    // --- VISUALIZZAZIONE DEBRIEFING GRAFICO ---
-    const modal = document.getElementById('courseResultsModal');
-    const accTxt = document.getElementById('courseResultsAccuracy');
-    const msgDiv = document.getElementById('courseResultsMessage');
-    const focusP = document.getElementById('courseResultsFocus');
-
-    if (modal && accTxt && msgDiv && focusP) {
-        accTxt.textContent = `Accuratezza Finale: ${Math.round(accuracy * 100)}%`;
-        accTxt.style.color = accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f';
-
-        const debriefing = window.getCourseDebriefing(accuracy, worstChars.slice(0, 3));
-
-        // Messa in sicurezza debriefing (XSS Fix)
-        msgDiv.innerHTML = "";
-        msgDiv.appendChild(document.createTextNode(`"${debriefing}"`));
-        if (advanceMsg) {
-            const advDiv = document.createElement('div');
-            advDiv.style.marginTop = "10px";
-            advDiv.style.color = "var(--link-color)";
-            advDiv.style.fontWeight = "bold";
-            advDiv.textContent = advanceMsg.trim();
-            msgDiv.appendChild(advDiv);
-        }
-
-        if (worstChars.length > 0) {
-            focusP.innerHTML = "";
-            const b = document.createElement('b');
-            b.textContent = "⚠️ Focus per domani: ";
-            focusP.appendChild(b);
-            focusP.appendChild(document.createTextNode(worstChars.slice(0, 5).join(", ")));
-        } else {
-            focusP.textContent = "Ottima sessione, nessun carattere critico rilevato.";
-        }
-
-        modal.style.display = 'flex';
-
-        document.getElementById('btnCloseCourseResults').onclick = () => {
-            modal.style.display = 'none';
-            window.showProfileScreen();
-            window.switchProfileTab('course');
-        };
+    const m = document.getElementById('courseResultsModal'), a = document.getElementById('courseResultsAccuracy'), ms = document.getElementById('courseResultsMessage'), f = document.getElementById('courseResultsFocus');
+    if (m && a && ms && f) {
+        a.textContent = `Accuratezza: ${Math.round(acc*100)}%`;
+        a.style.color = acc >= 0.9 ? '#4caf50' : acc >= 0.7 ? '#ff9800' : '#d32f2f';
+        ms.innerHTML = `"${window.getCourseDebriefing(acc, worst.slice(0,3))}"${msg ? '<div style="margin-top:10px; color:var(--link-color); font-weight:bold;">'+msg+'</div>' : ''}`;
+        f.textContent = worst.length > 0 ? "⚠️ Focus: " + worst.slice(0,5).join(", ") : "Ottima sessione!";
+        m.style.display = 'flex';
+        document.getElementById('btnCloseCourseResults').onclick = () => { m.style.display = 'none'; window.showProfileScreen(); window.switchProfileTab('course'); };
     } else {
-        alert(`Sessione completata! Accuratezza: ${Math.round(accuracy * 100)}%`);
+        alert(`Sessione completata! Accuratezza: ${Math.round(acc*100)}%`);
         window.finishGame();
-    }
-};
-
-window.initCourseChat = function() {
-    if (!db) return;
-
-    // --- FIX: AULE VIRTUALI (Chat filtrata per Tutor) ---
-    const isTutor = window.courseData.role === 'tutor';
-    const tutorId = isTutor ? myId : (window.courseData?.tutor_id || null);
-    const chatPath = tutorId ? `courseChats/${tutorId}` : 'courseChat';
-    const chatRef = db.ref(chatPath);
-
-    const messagesCont = document.getElementById('courseChatMessages');
-    const chatTitle = document.querySelector('#courseChatArea h4');
-
-    if (chatTitle) {
-        chatTitle.textContent = tutorId ? "💬 Radio-Aula (Classe Tutor)" : "🌎 Radio-Aula (Globale)";
-    }
-
-    // SETUP CHAT PERSONALIZZATO PER TAG TUTOR
-    chatRef.limitToLast(50).on('value', async (snap) => {
-        if (!messagesCont) return;
-        const data = snap.val() || {};
-        messagesCont.innerHTML = '';
-
-        const entries = Object.entries(data);
-        for (const [key, msg] of entries) {
-            const div = document.createElement('div');
-            div.style.marginBottom = '5px';
-
-            // Timestamp
-            const timeSpan = document.createElement('span');
-            timeSpan.style.cssText = "font-size:0.8em; color:var(--hint-color);";
-            timeSpan.textContent = new Date(msg.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + " ";
-            div.appendChild(timeSpan);
-
-            // Tag Tutor
-            if (msg.role === 'tutor') {
-                const roleTag = document.createElement('b');
-                roleTag.style.cssText = "color:#673ab7; font-size:0.7em; background:#eee; padding:1px 4px; border-radius:4px; margin-right:4px;";
-                roleTag.textContent = "TUTOR";
-                div.appendChild(roleTag);
-            }
-
-            // Nome Mittente
-            const nameB = document.createElement('b');
-            nameB.style.cssText = "color:var(--link-color); font-size:0.9em;";
-            nameB.textContent = msg.name + ": ";
-            div.appendChild(nameB);
-
-            // TASTO ELIMINA (XSS Safe)
-            if (msg.senderId === myId || window.courseData.role === 'tutor') {
-                const delBtn = document.createElement('span');
-                delBtn.innerHTML = " 🗑️";
-                delBtn.style.cursor = 'pointer';
-                delBtn.onclick = () => {
-                    if (confirm("Eliminare?")) db.ref(`${chatPath}/${key}`).remove();
-                };
-                div.appendChild(delBtn);
-            }
-
-            // Testo Messaggio (XSS Safe via textContent)
-            const textSpan = document.createElement('span');
-            textSpan.style.fontSize = "0.95em";
-            textSpan.textContent = msg.text;
-            div.appendChild(textSpan);
-
-            messagesCont.appendChild(div);
-        }
-        messagesCont.scrollTop = messagesCont.scrollHeight;
-    });
-
-    if (els.sendCourseChatBtn && els.courseChatInput) {
-        els.sendCourseChatBtn.onclick = async () => {
-            const now = Date.now();
-            if (window.lastChatSentTs && now - window.lastChatSentTs < 2000) {
-                return alert("🐌 Vai più piano! Attendi 2 secondi.");
-            }
-
-            if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
-            const txt = els.courseChatInput.value.trim();
-            if (!txt) return;
-            if (txt.length > 200) return alert(currentLang === 'it' ? "⚠️ Messaggio troppo lungo (max 200 car.)" : "⚠️ Message too long (max 200 chars)");
-
-            window.lastChatSentTs = now;
-            chatRef.push({
-                name: myName,
-                username: myPrivacy ? "" : tgUsername,
-                text: txt,
-                ts: firebase.database.ServerValue.TIMESTAMP,
-                senderId: myId, // Aggiunto per eliminazione
-                role: window.courseData.role // Salviamo il ruolo nel messaggio
-            });
-            els.courseChatInput.value = '';
-        };
-        els.courseChatInput.onkeypress = (e) => { if (e.key === 'Enter') els.sendCourseChatBtn.click(); };
-    }
-
-    if (els.clearCourseChatBtn) {
-        els.clearCourseChatBtn.onclick = () => {
-            if (confirm("Vuoi cancellare la cronologia della Radio-Aula per TUTTI?")) {
-                chatRef.remove().then(() => showToast("Chat cancellata"));
-            }
-        };
-    }
-};
-
-window.attachCourseUIListeners = function() {
-    const togglePairs = [
-        { btn: 'btnToggleCourseChat', content: 'courseChatContent' },
-        { btn: 'btnToggleCourseSettings', content: 'courseTabSettingsContent' },
-        { btn: 'btnToggleCourseHeatmap', content: 'courseTabHeatmapContent' },
-        { btn: 'btnToggleCoursePlan', content: 'courseTabWeeklyPlanContent' }
-    ];
-
-    togglePairs.forEach(p => {
-        const btn = document.getElementById(p.btn);
-        const content = document.getElementById(p.content);
-        if (btn && content) {
-            btn.onclick = () => {
-                const isHidden = content.style.display === 'none';
-                content.style.display = isHidden ? (p.content.includes('Content') ? 'flex' : 'block') : 'none';
-                btn.textContent = isHidden ? 'Nascondi' : 'Mostra';
-            };
-        }
-    });
-
-    if (els.btnCloseAdvancedStats) {
-        els.btnCloseAdvancedStats.onclick = () => {
-            if (els.courseAdvancedStatsPanel) els.courseAdvancedStatsPanel.style.display = 'none';
-        };
-    }
-
-    if (els.btnTabSavePlan) {
-        els.btnTabSavePlan.onclick = () => {
-            const z2 = parseInt(els.courseTabMinZ2.value) || 10;
-            window.courseData.progress.current_lesson = parseInt(els.courseTabLessonInput.value) || 2;
-            window.courseData.elite_mode = els.courseTabEliteInput?.checked === true;
-            window.courseData.settings.days_per_week = els.courseTabDaysInput.value;
-            window.courseData.settings.start_wpm = els.courseTabWpmInput.value;
-            window.courseData.settings.farnsworth_wpm = els.courseTabFarnsworthInput.value;
-            window.courseData.settings.group_spacing = els.courseTabGroupSpacingInput.value;
-            window.courseData.settings.pause_interval = parseInt(els.courseTabPauseIntervalInput.value) || 60;
-            window.courseData.settings.pause_duration = parseInt(els.courseTabPauseDurationInput.value) || 0;
-            window.courseData.settings.minutes_z2 = z2;
-            window.courseData.settings.minutes_work = Math.round(z2 * (20/30));
-            window.courseData.settings.minutes_long = Math.round(z2 * (50/30));
-
-            window.generateWeeklySchedule();
-            window.renderCourseTabView();
-            showToast("Impostazioni salvate! 💾");
-        };
-    }
-
-    if (els.btnTabResetCourse) {
-        els.btnTabResetCourse.onclick = () => {
-            if (confirm("ATTENZIONE: Stai per ABBANDONARE il Corso. I progressi verranno resettati. Vuoi procedere?")) {
-                window.updateGlobalEnrollmentRecord(false); // Sottrae dal contatore globale
-                window.courseData = window.getDefaultCourseData();
-                window.saveCourseState();
-                window.renderCourseTabView();
-                showToast("Corso abbandonato.");
-            }
-        };
-    }
-
-    if (els.btnTabExitTutor) {
-        els.btnTabExitTutor.onclick = () => {
-            if (confirm("Vuoi davvero rinunciare al ruolo di TUTOR?\nNon avrai più accesso ai dati dei corsisti.")) {
-                window.updateGlobalEnrollmentRecord(false);
-                window.courseData = window.getDefaultCourseData();
-                window.saveCourseState();
-                window.renderCourseTabView();
-                showToast("Ruolo Tutor rimosso.");
-            }
-        };
-    }
-
-    if (els.btnTabStartCourseSession) {
-        els.btnTabStartCourseSession.onclick = () => {
-             const todayIdx = (new Date().getDay() + 6) % 7;
-             const dayData = window.courseData.weekly_schedule[todayIdx];
-
-             // Cerchiamo la prima sessione non completata
-             let session = dayData ? dayData.sessions.find(s => !s.completed) : null;
-             let isExtra = false;
-
-             if (!session || (dayData && dayData.sessions[0].type === 'REST')) {
-                 // Se tutte completate o è riposo, offriamo sessione extra
-                 session = { type: 'Z2', completed: false };
-                 isExtra = true;
-             }
-
-             if (!isExtra && dayData.sessions.filter(s => !s.completed).length > 1) {
-                 const label = session.elite ? "ELITE (Base Z2)" : "STANDARD";
-                 if (!confirm(`Oggi hai doppia sessione! Vuoi iniziare la sessione ${label}?`)) return;
-             }
-
-             const todayStr = new Date().toISOString().split('T')[0];
-
-             // Durata sessione
-             let duration = 10; // Default extra
-             if (!isExtra) {
-                if (session.type === 'Z2') duration = window.courseData.settings.minutes_z2;
-                else if (session.type === 'WORK') duration = window.courseData.settings.minutes_work;
-                else if (session.type === 'LONG') duration = window.courseData.settings.minutes_long;
-             }
-
-             window.courseData.current_day_session = {
-                 type: session.type, total_seconds: duration * 60,
-                 remaining_seconds: duration * 60, completed: false, date: todayStr,
-                 isExtra: isExtra
-             };
-             window.saveCourseState();
-
-             // Aggiornamento testo bottone dopo il click se extra
-             if (isExtra) els.btnTabStartCourseSession.textContent = "INIZIA SESSIONE EXTRA";
-
-             // MOSTRA IL MODALE CON IL WARM-UP
-             if (typeof window.showCourseSessionModal === 'function') {
-                 window.showCourseSessionModal(window.courseData.current_day_session, isExtra);
-             } else {
-                 window.actualStartCourseGame();
-             }
-        };
-    }
-
-    if (els.btnPlayCourseNow) {
-        els.btnPlayCourseNow.onclick = () => {
-            if (els.courseSessionModal) els.courseSessionModal.style.display = 'none';
-            window.actualStartCourseGame();
-        };
     }
 };
 
 window.actualStartCourseGame = function() {
     if (!window.courseData.current_day_session) return;
-
-    // Chiudiamo il modale esplicitamente
     const modal = document.getElementById('courseSessionModal');
     if (modal) modal.style.display = 'none';
 
     currentMode = 'course';
     isSinglePlayer = true;
     currentWpm = parseInt(window.courseData.settings.start_wpm);
-    roomCode = "COURSE_" + myId;
+    roomCode = "COURSE_" + window.myId;
 
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
-
-    // Inizializzazione audio contesto
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
-    // Segnaliamo il roomCode ai tutor e impostiamo pulizia automatica al distacco
-    const enrollmentRef = db.ref(`courseActiveEnrollments/${myId}`);
-    enrollmentRef.update({ roomCode: roomCode });
-    enrollmentRef.child('roomCode').onDisconnect().set(null);
+    db.ref(`courseActiveEnrollments/${window.myId}`).update({ roomCode: roomCode });
+    db.ref(`courseActiveEnrollments/${window.myId}`).child('roomCode').onDisconnect().set(null);
 
     db.ref('rooms/' + roomCode).set({
         status: 'countdown', type: 'single', mode: 'course', wpm: currentWpm, tone: 600,
-        createdAt: firebase.database.ServerValue.TIMESTAMP, hostId: myId
+        createdAt: firebase.database.ServerValue.TIMESTAMP, hostId: window.myId
     }).then(() => {
-        if (typeof window.joinRoomLogic === 'function') {
-            window.joinRoomLogic(false);
-        }
+        if (typeof window.joinRoomLogic === 'function') window.joinRoomLogic(false);
     });
 };
 
-setTimeout(window.attachCourseUIListeners, 2000);
+/**
+ * EVENT LISTENERS UI
+ */
+window.attachCourseUIListeners = function() {
+    // Accordion / Toggle
+    const pairs = [
+        { b: 'btnToggleCourseChat', c: 'courseChatContent' },
+        { b: 'btnToggleCourseSettings', c: 'courseTabSettingsContent' },
+        { b: 'btnToggleCourseHeatmap', c: 'courseTabHeatmapContent' },
+        { b: 'btnToggleCoursePlan', c: 'courseTabWeeklyPlanContent' }
+    ];
+    pairs.forEach(p => {
+        const btn = document.getElementById(p.b), cont = document.getElementById(p.c);
+        if (btn && cont) btn.onclick = () => {
+            const vis = cont.style.display === 'none';
+            cont.style.display = vis ? (p.c.includes('Content') ? 'flex' : 'block') : 'none';
+            btn.textContent = vis ? 'Nascondi' : 'Mostra';
+        };
+    });
 
+    if (els.btnCloseAdvancedStats) els.btnCloseAdvancedStats.onclick = () => { if (els.courseAdvancedStatsPanel) els.courseAdvancedStatsPanel.style.display = 'none'; };
+
+    // Salvataggio Impostazioni
+    if (els.btnTabSavePlan) {
+        els.btnTabSavePlan.onclick = () => {
+            const z = parseInt(els.courseTabMinZ2.value) || 10;
+            window.courseData.progress.current_lesson = parseInt(els.courseTabLessonInput.value) || 2;
+            window.courseData.elite_mode = els.courseTabEliteInput?.checked === true;
+            window.courseData.settings = {
+                ...window.courseData.settings,
+                days_per_week: els.courseTabDaysInput.value,
+                start_wpm: els.courseTabWpmInput.value,
+                farnsworth_wpm: els.courseTabFarnsworthInput.value,
+                group_spacing: els.courseTabGroupSpacingInput.value,
+                pause_interval: parseInt(els.courseTabPauseIntervalInput.value) || 60,
+                pause_duration: parseInt(els.courseTabPauseDurationInput.value) || 10,
+                minutes_z2: z,
+                minutes_work: Math.round(z * 0.66),
+                minutes_long: Math.round(z * 1.66)
+            };
+            window.generateWeeklySchedule();
+            window.renderCourseTabView();
+            showToast("Impostazioni salvate! 💾");
+        };
+    }
+
+    if (els.btnTabResetCourse) els.btnTabResetCourse.onclick = () => { if (confirm("Abbandonare il Corso?")) { window.updateGlobalEnrollmentRecord(false); window.courseData = window.getDefaultCourseData(); window.saveCourseState(); window.renderCourseTabView(); showToast("Abbandonato."); } };
+    if (els.btnTabExitTutor) els.btnTabExitTutor.onclick = () => { if (confirm("Rinunciare al ruolo TUTOR?")) { window.updateGlobalEnrollmentRecord(false); window.courseData = window.getDefaultCourseData(); window.saveCourseState(); window.renderCourseTabView(); showToast("Ruolo rimosso."); } };
+
+    // Avvio Sessione
+    if (els.btnTabStartCourseSession) {
+        els.btnTabStartCourseSession.onclick = () => {
+             const todayIdx = (new Date().getDay() + 6) % 7, dayData = window.courseData.weekly_schedule[todayIdx];
+             let sess = dayData ? dayData.sessions.find(s => !s.completed) : null, extra = false;
+             if (!sess || (dayData && dayData.sessions[0].type === 'REST')) { sess = { type: 'Z2', completed: false }; extra = true; }
+             if (!extra && dayData.sessions.filter(s => !s.completed).length > 1) if (!confirm(`Iniziare sessione ${sess.elite ? "ELITE" : "STANDARD"}?`)) return;
+             const dur = extra ? 10 : (sess.type==='Z2' ? window.courseData.settings.minutes_z2 : sess.type==='WORK' ? window.courseData.settings.minutes_work : window.courseData.settings.minutes_long);
+             window.courseData.current_day_session = { type: sess.type, total_seconds: dur*60, remaining_seconds: dur*60, completed: false, date: new Date().toISOString().split('T')[0], isExtra: extra };
+             window.saveCourseState(); if (extra) els.btnTabStartCourseSession.textContent = "INIZIA EXTRA";
+             if (typeof window.showCourseSessionModal === 'function') window.showCourseSessionModal(window.courseData.current_day_session, extra); else window.actualStartCourseGame();
+        };
+    }
+    if (els.btnPlayCourseNow) els.btnPlayCourseNow.onclick = () => { if (els.courseSessionModal) els.courseSessionModal.style.display = 'none'; window.actualStartCourseGame(); };
+};
+
+/**
+ * NOTIFICHE CHAT TUTOR (Badge)
+ */
 window.initTutorCourseChatNotification = function() {
-    if (!db || !myId) return;
-
-    // --- FIX: Monitoriamo l'aula corretta (Tutor monitora se stesso, Corsista monitora il suo tutor) ---
+    if (!db || !window.myId) return;
     const isTutor = window.courseData && window.courseData.role === 'tutor';
-    const tutorId = isTutor ? myId : (window.courseData?.tutor_id || null);
-    const chatPath = tutorId ? `courseChats/${tutorId}` : 'courseChat';
-
-    const chatRef = db.ref(chatPath);
-    let initialLoad = true;
-
-    chatRef.limitToLast(1).on('child_added', snap => {
-        if (initialLoad) {
-            initialLoad = false;
-            return;
+    const tutorId = isTutor ? window.myId : (window.courseData?.tutor_id || null);
+    const path = tutorId ? `courseChats/${tutorId}` : 'courseChat';
+    const ref = db.ref(path);
+    let init = true;
+    ref.limitToLast(1).on('child_added', snap => {
+        if (init) { init = false; return; }
+        const m = snap.val(); if (!m || m.senderId === window.myId) return;
+        const area = document.getElementById('profileCourseArea');
+        if (!(area && area.style.display === 'flex')) {
+            const b = document.getElementById('courseMessageBadge');
+            if (b) b.style.display = 'flex';
         }
-
-        const msg = snap.val();
-        if (!msg) return;
-
-        // Se il messaggio è mio, non notificare
-        if (msg.senderId === myId) return;
-
-        // Se siamo già nel tab corso, non mostrare il badge
-        const courseArea = document.getElementById('profileCourseArea');
-        const isViewingCourse = (courseArea && courseArea.style.display === 'flex');
-
-        if (!isViewingCourse) {
-            const badge = document.getElementById('courseMessageBadge');
-            if (badge) badge.style.display = 'flex';
-        }
-    }, (error) => {
-        console.error("Course Chat Notif Error:", error);
     });
 };
 
 window.hideCourseMessageBadge = function() {
-    const badge = document.getElementById('courseMessageBadge');
-    if (badge) badge.style.display = 'none';
+    const b = document.getElementById('courseMessageBadge');
+    if (b) b.style.display = 'none';
 };
+
+// Avvio listener iniziali
+setTimeout(window.attachCourseUIListeners, 2000);
