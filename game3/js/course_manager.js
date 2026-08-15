@@ -335,7 +335,9 @@ window.getDefaultCourseData = function() {
     return {
         active_plan: false,
         elite_mode: false,
-        role: 'corsista', // Default role
+        role: 'corsista',
+        tutor_id: null,
+        enrollment_date: "",
         settings: {
             days_per_week: 3,
             start_wpm: 15,
@@ -396,6 +398,37 @@ window.generateWeeklySchedule = function() {
     if (!window.courseData || !window.courseData.settings) return;
     const daysPerWeek = parseInt(window.courseData.settings.days_per_week);
     const isElite = window.courseData.elite_mode === true;
+
+    // --- LOGICA SOFT START (SOLO Z2 NELLA PRIMA SETTIMANA) ---
+    let isSoftStart = false;
+    if (window.courseData.enrollment_date) {
+        const enrollDate = new Date(window.courseData.enrollment_date);
+        const today = new Date();
+
+        // Se non è lunedì (1), è Soft Start fino a domenica
+        if (enrollDate.getDay() !== 1) {
+            // Calcoliamo il lunedì della settimana di iscrizione
+            const enrollMonday = new Date(enrollDate);
+            const day = enrollMonday.getDay();
+            const diff = enrollMonday.getDate() - day + (day === 0 ? -6 : 1);
+            enrollMonday.setDate(diff);
+            enrollMonday.setHours(0,0,0,0);
+
+            // Calcoliamo il lunedì di questa settimana
+            const currentMonday = new Date(today);
+            const cDay = currentMonday.getDay();
+            const cDiff = currentMonday.getDate() - cDay + (cDay === 0 ? -6 : 1);
+            currentMonday.setDate(cDiff);
+            currentMonday.setHours(0,0,0,0);
+
+            // Se siamo ancora nella stessa settimana dell'iscrizione, è Soft Start
+            if (currentMonday.getTime() === enrollMonday.getTime()) {
+                isSoftStart = true;
+                console.log("Course: Soft Start active for this week (Z2 only).");
+            }
+        }
+    }
+
     let schedule = Array(7).fill(null).map(() => ({ sessions: [{ type: 'REST', completed: false }] }));
 
     let workDays = [];
@@ -406,9 +439,11 @@ window.generateWeeklySchedule = function() {
     }
 
     workDays.forEach((dayIdx, i) => {
-        let type = 'WORK';
-        if (i === workDays.length - 1) type = 'LONG';
-        else if (i % 2 === 0) type = 'Z2';
+        let type = isSoftStart ? 'Z2' : 'WORK';
+        if (!isSoftStart) {
+            if (i === workDays.length - 1) type = 'LONG';
+            else if (i % 2 === 0) type = 'Z2';
+        }
 
         let sessions = [{ type: type, completed: false }];
         if (isElite) {

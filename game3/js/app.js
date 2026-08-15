@@ -478,6 +478,7 @@ function initGame() {
                     // Svuotiamo le chat principali per mantenere il DB leggero
                     db.ref('globalChat').remove();
                     db.ref('courseChat').remove();
+                    db.ref('courseChats').remove(); // Pulizia aule tutor
                     cleanupRef.set(now);
                 }
             });

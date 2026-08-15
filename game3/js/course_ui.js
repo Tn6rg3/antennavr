@@ -79,11 +79,17 @@ window.renderTutorPanel = function() {
             return;
         }
 
+        // Filtriamo solo gli studenti assegnati a questo tutor
         for (const uid of uids) {
             if (uid === myId) continue;
-            // Carichiamo i progressi (Koch) per ogni iscritto
-            const userDataSnap = await db.ref(`users/${uid}/course/progress`).once('value');
-            const p = userDataSnap.val() || {};
+
+            const userDataSnap = await db.ref(`users/${uid}/course`).once('value');
+            const cData = userDataSnap.val() || {};
+
+            // FILTRO AULA: Mostra solo corsisti assegnati a questo tutor
+            if (cData.tutor_id !== myId) continue;
+
+            const p = cData.progress || {};
             const enroll = enrollments[uid];
 
             const lesson = p.current_lesson || 2;
@@ -91,9 +97,9 @@ window.renderTutorPanel = function() {
             const accuracy = p.last_z2_accuracy ? Math.round(p.last_z2_accuracy * 100) : 0;
             const reminders = p.reminders_count || 0;
 
-            // --- COSTRUZIONE SICURA DOM (XSS Fix) ---
             const tutorRow = document.createElement('div');
-            tutorRow.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px;";
+            tutorRow.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px; cursor:pointer;";
+            tutorRow.onclick = () => window.showStudentDetailedStats(uid, enroll.name || 'Corsista');
 
             const headerRow = document.createElement('div');
             headerRow.style.cssText = "display:flex; justify-content:space-between; align-items:center;";
@@ -122,7 +128,10 @@ window.renderTutorPanel = function() {
                 const watchBtn = document.createElement('button');
                 watchBtn.style.cssText = "width:auto; margin:0; padding:2px 8px; font-size:0.8em; background:#673ab7;";
                 watchBtn.textContent = "OSSERVA";
-                watchBtn.onclick = () => window.watchStudentSession(enroll.roomCode, enroll.name || 'Anonimo');
+                watchBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    window.watchStudentSession(enroll.roomCode, enroll.name || 'Anonimo');
+                };
                 actionDiv.appendChild(watchBtn);
             }
             headerRow.appendChild(actionDiv);
@@ -146,6 +155,69 @@ window.renderTutorPanel = function() {
         }
     }, (error) => {
         list.innerHTML = '<p style="color:#f44336; font-size:0.75em;">Errore nel caricamento dati.</p>';
+    });
+};
+
+window.showStudentDetailedStats = function(uid, name) {
+    const modal = document.getElementById('tutorStudentStatsModal');
+    const title = document.getElementById('tutorStudentStatsTitle');
+    if (!modal || !title) return;
+
+    title.textContent = `Statistiche: ${name}`;
+    modal.style.display = 'flex';
+
+    db.ref(`users/${uid}`).once('value', snap => {
+        const u = snap.val() || {};
+        const c = u.course || { progress: {} };
+        const p = c.progress || {};
+
+        // 1. Heatmap
+        const heatmapCont = document.getElementById('tutorStudentHeatmap');
+        if (heatmapCont) {
+            heatmapCont.innerHTML = '';
+            const stats = p.char_stats || {};
+            window.KOCH_SEQUENCE.forEach((char, idx) => {
+                const box = document.createElement('div');
+                box.style.cssText = "width:20px; height:20px; display:flex; align-items:center; justify-content:center; font-size:0.65em; font-weight:bold; border-radius:3px;";
+                box.textContent = char;
+                const dbChar = window.firebaseEscape(char);
+                const s = stats[dbChar] || { attempts: 0, errors: 0 };
+                const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
+
+                if (idx >= (p.current_lesson || 2)) {
+                    box.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                    box.style.opacity = '0.3';
+                } else {
+                    box.style.backgroundColor = s.attempts === 0 ? '#444' : (accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f');
+                    box.style.color = '#fff';
+                }
+                heatmapCont.appendChild(box);
+            });
+        }
+
+        // 2. History
+        const histCont = document.getElementById('tutorStudentHistory');
+        if (histCont) {
+            histCont.innerHTML = '';
+            const history = Object.values(u.history || {}).filter(h => h.mode === 'course').slice(-10).reverse();
+            if (history.length === 0) {
+                histCont.innerHTML = '<p style="text-align:center; opacity:0.5;">Nessuna sessione registrata.</p>';
+            } else {
+                history.forEach(h => {
+                    const div = document.createElement('div');
+                    div.style.cssText = "padding:5px; background:rgba(0,0,0,0.1); border-radius:4px; margin-bottom:2px; display:flex; justify-content:space-between;";
+                    const date = new Date(h.date).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit'});
+                    div.innerHTML = `<span>${date} - <b>${h.score} XP</b></span> <small>${h.wpm} WPM</small>`;
+                    histCont.appendChild(div);
+                });
+            }
+        }
+
+        // 3. Trend (Semplice)
+        const trendCont = document.getElementById('tutorStudentTrend');
+        if (trendCont) {
+            trendCont.textContent = `Costanza: ${p.consecutive_days || 0} giorni consecutivi. Richiami: ${p.reminders_count || 0}/3.`;
+        }
     });
 };
 
@@ -302,6 +374,25 @@ window.renderCourseTabDashboard = function() {
             planList.appendChild(dayDiv);
         });
     }
+
+    // --- AGGIORNAMENTO DINAMICO TESTO BOTTONE AVVIO ---
+    const startBtn = document.getElementById('btnTabStartCourseSession');
+    if (startBtn) {
+        const todayIdx = (new Date().getDay() + 6) % 7;
+        const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
+        const allCompleted = dayData ? dayData.sessions.every(s => s.completed || s.type === 'REST') : true;
+        const isRestDay = dayData ? dayData.sessions[0].type === 'REST' : false;
+
+        if (allCompleted || isRestDay) {
+            startBtn.textContent = "INIZIA SESSIONE EXTRA 🧪";
+            startBtn.classList.remove('btn-success');
+            startBtn.classList.add('btn-secondary');
+        } else {
+            startBtn.textContent = "AVVIA SESSIONE ODIERNA 🚀";
+            startBtn.classList.add('btn-success');
+            startBtn.classList.remove('btn-secondary');
+        }
+    }
 };
 
 window.renderAdvancedCourseStats = function(selectedChar) {
@@ -397,15 +488,102 @@ window.populateLessonDropdowns = function() {
     }
 };
 
+window.startCourseWizard = function() {
+    if (els.courseTabInitialPrompt) els.courseTabInitialPrompt.style.display = 'none';
+    if (els.courseWizardContainer) els.courseWizardContainer.style.display = 'block';
+    window.populateLessonDropdowns();
+    window.renderTutorSelectionList('wizardTutorList');
+    window.nextWizardStep(0);
+};
+
 window.nextWizardStep = function(step) {
-    for(let i=1; i<=4; i++) {
-        const el = document.getElementById('wizardStep'+i);
-        if(el) el.style.display = (i === step) ? 'block' : 'none';
+    const steps = [0, 0.5, 1, 2, 3, 4];
+    const stepIds = {
+        0: 'wizardStepRole',
+        0.5: 'wizardStepTutor',
+        1: 'wizardStep1',
+        2: 'wizardStep2',
+        3: 'wizardStep3',
+        4: 'wizardStep4'
+    };
+
+    Object.values(stepIds).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+
+    const currentId = stepIds[step];
+    if (currentId) {
+        const el = document.getElementById(currentId);
+        if (el) el.style.display = 'block';
     }
+
     if (step === 4) {
         window.updateWizardDurationsPreview();
         if (els.wizardMinZ2) els.wizardMinZ2.oninput = window.updateWizardDurationsPreview;
     }
+};
+
+window.renderTutorSelectionList = function(containerId) {
+    const container = document.getElementById(containerId);
+    const select = document.getElementById('courseTabTutorSelect');
+    if (!container && !select) return;
+
+    db.ref('users').once('value', snap => {
+        const users = snap.val() || {};
+        const tutors = Object.entries(users)
+            .filter(([uid, data]) => data.course && data.course.role === 'tutor')
+            .map(([uid, data]) => ({ id: uid, name: data.alias || data.name || "Tutor Anonimo" }));
+
+        if (container) {
+            container.innerHTML = '';
+            if (tutors.length === 0) {
+                container.innerHTML = '<p style="font-size:0.8em; color:var(--hint-color); text-align:center;">Nessun Tutor disponibile al momento. Verrai assegnato a un'aula globale.</p>';
+                const btn = document.getElementById('btnConfirmTutor');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.onclick = () => {
+                        window.tempSelectedTutorId = null;
+                        window.nextWizardStep(1);
+                    };
+                }
+                return;
+            }
+
+            tutors.forEach(t => {
+                const btn = document.createElement('button');
+                btn.className = 'action-btn-small btn-secondary';
+                btn.style.cssText = "width:100%; text-align:left; padding:10px; margin-bottom:5px; background:rgba(255,255,255,0.05); border:1px solid var(--link-color); color:var(--text-color);";
+                btn.innerHTML = `🎓 <b>${t.name}</b>`;
+                btn.onclick = () => {
+                    document.querySelectorAll('#wizardTutorList button').forEach(b => b.style.background = 'rgba(255,255,255,0.05)');
+                    btn.style.background = 'var(--link-color)';
+                    window.tempSelectedTutorId = t.id;
+                    const confirmBtn = document.getElementById('btnConfirmTutor');
+                    if (confirmBtn) confirmBtn.disabled = false;
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        if (select) {
+            const currentTutor = window.courseData.tutor_id;
+            select.innerHTML = '<option value="">Aula Globale (Nessun Tutor)</option>';
+            tutors.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.name;
+                if (t.id === currentTutor) opt.selected = true;
+                select.appendChild(opt);
+            });
+            select.onchange = () => {
+                window.courseData.tutor_id = select.value || null;
+                window.saveCourseState();
+                window.initCourseChat(); // Ricarica la chat dell'aula
+                showToast("Aula aggiornata! 🎓");
+            };
+        }
+    });
 };
 
 window.updateWizardDurationsPreview = function() {
@@ -424,8 +602,10 @@ window.finishWizard = function() {
 
     window.courseData.active_plan = true;
     window.courseData.role = role;
+    window.courseData.enrollment_date = new Date().toISOString();
 
     if (role === 'corsista') {
+        window.courseData.tutor_id = window.tempSelectedTutorId || null;
         window.courseData.elite_mode = isElite;
         window.courseData.progress.current_lesson = startLesson;
         window.courseData.settings = {
@@ -612,8 +792,19 @@ window.finishCourseSession = function() {
 
 window.initCourseChat = function() {
     if (!db) return;
-    const chatRef = db.ref('courseChat');
+
+    // --- FIX: AULE VIRTUALI (Chat filtrata per Tutor) ---
+    const isTutor = window.courseData.role === 'tutor';
+    const tutorId = isTutor ? myId : window.courseData.tutor_id;
+    const chatPath = tutorId ? `courseChats/${tutorId}` : 'courseChat';
+    const chatRef = db.ref(chatPath);
+
     const messagesCont = document.getElementById('courseChatMessages');
+    const chatTitle = document.querySelector('#courseChatArea h4');
+
+    if (chatTitle) {
+        chatTitle.textContent = tutorId ? "💬 Radio-Aula (Classe Tutor)" : "🌎 Radio-Aula (Globale)";
+    }
 
     // SETUP CHAT PERSONALIZZATO PER TAG TUTOR
     chatRef.limitToLast(50).on('value', async (snap) => {
@@ -647,12 +838,12 @@ window.initCourseChat = function() {
             div.appendChild(nameB);
 
             // TASTO ELIMINA (XSS Safe)
-            if (msg.senderId === myId) {
+            if (msg.senderId === myId || window.courseData.role === 'tutor') {
                 const delBtn = document.createElement('span');
                 delBtn.innerHTML = " 🗑️";
                 delBtn.style.cursor = 'pointer';
                 delBtn.onclick = () => {
-                    if (confirm("Eliminare?")) db.ref(`courseChat/${key}`).remove();
+                    if (confirm("Eliminare?")) db.ref(`${chatPath}/${key}`).remove();
                 };
                 div.appendChild(delBtn);
             }
@@ -778,15 +969,14 @@ window.attachCourseUIListeners = function() {
         els.btnTabStartCourseSession.onclick = () => {
              const todayIdx = (new Date().getDay() + 6) % 7;
              const dayData = window.courseData.weekly_schedule[todayIdx];
-             if (!dayData || dayData.sessions[0].type === 'REST') return alert("Oggi è previsto riposo!");
 
              // Cerchiamo la prima sessione non completata
-             let session = dayData.sessions.find(s => !s.completed);
+             let session = dayData ? dayData.sessions.find(s => !s.completed) : null;
              let isExtra = false;
 
-             if (!session) {
-                 // Se tutte completate, offriamo sessione extra
-                 session = { type: 'LONG', completed: false };
+             if (!session || (dayData && dayData.sessions[0].type === 'REST')) {
+                 // Se tutte completate o è riposo, offriamo sessione extra
+                 session = { type: 'Z2', completed: false };
                  isExtra = true;
              }
 
@@ -811,6 +1001,9 @@ window.attachCourseUIListeners = function() {
                  isExtra: isExtra
              };
              window.saveCourseState();
+
+             // Aggiornamento testo bottone dopo il click se extra
+             if (isExtra) els.btnTabStartCourseSession.textContent = "INIZIA SESSIONE EXTRA";
 
              // MOSTRA IL MODALE CON IL WARM-UP
              if (typeof window.showCourseSessionModal === 'function') {
@@ -867,7 +1060,12 @@ setTimeout(window.attachCourseUIListeners, 2000);
 window.initTutorCourseChatNotification = function() {
     if (!db || !myId) return;
 
-    const chatRef = db.ref('courseChat');
+    // --- FIX: Monitoriamo l'aula corretta (Tutor monitora se stesso, Corsista monitora il suo tutor) ---
+    const isTutor = window.courseData && window.courseData.role === 'tutor';
+    const tutorId = isTutor ? myId : (window.courseData?.tutor_id || null);
+    const chatPath = tutorId ? `courseChats/${tutorId}` : 'courseChat';
+
+    const chatRef = db.ref(chatPath);
     let initialLoad = true;
 
     chatRef.limitToLast(1).on('child_added', snap => {
@@ -879,12 +1077,8 @@ window.initTutorCourseChatNotification = function() {
         const msg = snap.val();
         if (!msg) return;
 
-        // Solo per Tutor
-        const isTutor = window.courseData && window.courseData.role === 'tutor';
-        if (!isTutor) return;
-
         // Se il messaggio è mio, non notificare
-        if (msg.name === myName) return;
+        if (msg.senderId === myId) return;
 
         // Se siamo già nel tab corso, non mostrare il badge
         const courseArea = document.getElementById('profileCourseArea');
