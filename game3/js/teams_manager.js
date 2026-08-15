@@ -209,7 +209,9 @@ window.listenToTournaments = function() {
         activeTrnId = null;
         if (els.openTournamentsList) els.openTournamentsList.innerHTML = '';
         if (els.pastTournamentsList) els.pastTournamentsList.innerHTML = '';
-        if (els.createTrnPanel) els.createTrnPanel.style.display = isTeamCaptain ? 'flex' : 'none';
+
+        // Pannello creazione visibile a Capitani o Admin
+        if (els.createTrnPanel) els.createTrnPanel.style.display = (isTeamCaptain || window.isAdmin) ? 'flex' : 'none';
 
         let foundActive = null;
         snap.forEach(child => {
@@ -273,6 +275,8 @@ window.renderActiveTournament = function(trnSnap) {
     if (!trn) return;
 
     const isFinished = trn.status === 'finished';
+    const amIHost = (trn.hostId === myId || window.isAdmin);
+
     if (els.activeTrnTitle) {
         els.activeTrnTitle.textContent = trn.name + (isFinished ? (currentLang === 'it' ? " (Concluso)" : " (Finished)") : "");
     }
@@ -326,7 +330,28 @@ window.renderActiveTournament = function(trnSnap) {
         });
     }
 
-    if (els.trnHostControls) els.trnHostControls.style.display = (amIHost && !isFinished) ? 'block' : 'none';
+    if (els.trnHostControls) {
+        // I controlli host rimangono visibili per permettere l'eliminazione anche se concluso
+        els.trnHostControls.style.display = amIHost ? 'block' : 'none';
+    }
+
+    if (els.deleteTrnBtn) {
+        els.deleteTrnBtn.style.display = amIHost ? 'block' : 'none';
+        els.deleteTrnBtn.onclick = () => {
+            if (confirm(currentLang === 'it' ? "Vuoi eliminare definitivamente questo torneo e tutti i suoi incontri?" : "Do you want to permanently delete this tournament and all its matches?")) {
+                db.ref(`tournaments/${activeTrnId}`).remove().then(() => {
+                    showToast(currentLang === 'it' ? "Torneo eliminato." : "Tournament deleted.");
+                    activeTrnId = null;
+                    if (els.trnLobbyArea) els.trnLobbyArea.style.display = 'flex';
+                    if (els.trnActiveArea) els.trnActiveArea.style.display = 'none';
+                }).catch(e => {
+                    console.error("Delete Trn Error:", e);
+                    showToast("Errore durante l'eliminazione.");
+                });
+            }
+        };
+    }
+
     if (els.finishTrnBtn) {
         els.finishTrnBtn.style.display = (amIHost && trn.status === 'playing') ? 'block' : 'none';
         els.finishTrnBtn.onclick = () => {
@@ -507,16 +532,31 @@ if (els.leaveTeamBtn) {
 
 if (els.createTrnBtn) {
     els.createTrnBtn.addEventListener('click', () => {
-        if (!isTeamCaptain) return;
+        if (!isTeamCaptain && !window.isAdmin) return showToast("Solo i capitani o gli admin possono creare tornei.");
         const n = els.newTrnName ? els.newTrnName.value.trim() : "";
         if (n) {
-            db.ref('tournaments').push().set({
+            const trnData = {
                 name: n,
                 hostId: myId,
                 status: 'open',
-                teams: { [myTeamId]: { name: myTeamName } },
-                standings: { [myTeamId]: { points: 0, name: myTeamName } }
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            // Se sono capitano, iscrivo automaticamente la mia squadra
+            if (myTeamId && myTeamName) {
+                trnData.teams = { [myTeamId]: { name: myTeamName } };
+                trnData.standings = { [myTeamId]: { points: 0, name: myTeamName } };
+            }
+
+            db.ref('tournaments').push().set(trnData).then(() => {
+                showToast("Torneo creato!");
+                if (els.newTrnName) els.newTrnName.value = "";
+            }).catch(e => {
+                console.error("Create Trn Error:", e);
+                showToast("Errore durante la creazione.");
             });
+        } else {
+            showToast("Inserisci un nome per il torneo.");
         }
     });
 }
