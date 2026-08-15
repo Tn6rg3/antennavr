@@ -519,8 +519,8 @@ function initGame() {
         });
 
         // --- MONITORAGGIO INATTIVITÀ ---
-        const updateActivity = () => { lastActivityTs = Date.now(); };
-        ['mousedown', 'keydown', 'touchstart', 'input'].forEach(evt => window.addEventListener(evt, updateActivity));
+        const refreshInactivityTimer = () => { lastActivityTs = Date.now(); };
+        ['mousedown', 'keydown', 'touchstart', 'input'].forEach(evt => window.addEventListener(evt, refreshInactivityTimer));
 
         setInterval(() => {
             const now = Date.now();

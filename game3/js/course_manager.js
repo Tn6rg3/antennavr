@@ -207,17 +207,7 @@ window.firebaseEscape = function(key) {
         .replace(/\?/g, '_ques_');
 };
 
-window.firebaseUnescape = function(key) {
-    if (!key) return key;
-    return key.toString()
-        .replace(/_dot_/g, '.')
-        .replace(/_slash_/g, '/')
-        .replace(/_hash_/g, '#')
-        .replace(/_dollar_/g, '$')
-        .replace(/_lbrac_/g, '[')
-        .replace(/_rbrac_/g, ']')
-        .replace(/_ques_/g, '?');
-};
+
 
 window.initCourseManager = function() {
     console.log("Course: Initializing...");

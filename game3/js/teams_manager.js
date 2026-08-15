@@ -570,11 +570,6 @@ if (els.createTrnBtn) {
         }
     });
 }
-window.joinTournament = function(tId) {
-    if (!isTeamCaptain) return;
-    db.ref(`tournaments/${tId}/teams/${myTeamId}`).set({ name: myTeamName });
-    db.ref(`tournaments/${tId}/standings/${myTeamId}`).set({ points: 0, name: myTeamName });
-};
 
 window.toggleTrnSlot = function(matchId, side, teamId, targetTeamName = "questa squadra") {
     if (teamId !== window.myTeamId) {
@@ -615,27 +610,4 @@ window.startTrnMatch = function(matchId) {
     });
 };
 
-window.checkTournamentCompletion = function(trnId) {
-    db.ref(`tournaments/${trnId}`).once('value', snap => {
-        const trn = snap.val();
-        if (!trn || trn.status === 'finished' || !trn.matches) return;
-        let allFinished = true;
-        Object.values(trn.matches).forEach(m => { if (m.status !== 'finished') allFinished = false; });
-        if (allFinished) {
-            db.ref(`tournaments/${trnId}/status`).set('finished');
-            showToast("Torneo completato! Spostato in archivio.");
-            if (trn.standings) {
-                Object.entries(trn.standings).forEach(([tId, data]) => {
-                    if (data.points > 0) {
-                        db.ref(`leaderboard/tournaments/${tId}`).transaction(currentG => {
-                            if (!currentG) return { name: data.name, score: data.points, date: new Date().toLocaleDateString('it-IT') };
-                            currentG.score = (currentG.score || 0) + data.points;
-                            currentG.date = new Date().toLocaleDateString('it-IT');
-                            return currentG;
-                        });
-                    }
-                });
-            }
-        }
-    });
-};
+

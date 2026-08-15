@@ -1028,7 +1028,7 @@ window.showPostMatchReplayButtons = function() {
     });
 };
 
-function finishGameNavigation(mode, wordCount, isSingle, code) {
+window.finishGameNavigation = function(mode, wordCount, isSingle, code) {
     window.lbManualRouting = true;
     window.showScreen('leaderboardScreen');
 
@@ -1582,14 +1582,7 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-function mulberry32(a) {
-    return function() {
-        var t = a += 0x6D2B79F5;
-        t = Math.imul(t ^ t >>> 15, t | 1);
-        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-        return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
-}
+// mulberry32 rimosso (usa definizione in dictionary_manager.js)
 
 // --- AVVIO APP (SICUREZZA DOM E MODULI) ---
 function bootApp() {
