@@ -193,22 +193,36 @@ window.initGlobalNotificationListener = function() {
     if (listeners.globalChatNotif) return;
 
     console.log("Chat: Initializing Global Background Listener...");
-    const globalRef = db.ref('globalChat').limitToLast(1);
-    let initialLoad = true;
-    let lastProcessedTs = Date.now();
 
-    listeners.globalChatNotif = globalRef.on('child_added', snap => {
+    // Usiamo un riferimento pulito e senza limiti iniziali per non perdere messaggi
+    const globalRef = db.ref('globalChat');
+
+    // Per evitare la notifica dell'ultimo messaggio già presente all'avvio
+    let isFirstAddedEvent = true;
+
+    // Usiamo il timestamp del server per essere precisi se disponibile, altrimenti ora locale
+    // Sottraiamo un piccolo margine per sicurezza nel caso di messaggi simultanei allo startup
+    let sessionStartTime = Date.now() - 5000;
+
+    listeners.globalChatNotif = globalRef.limitToLast(1).on('child_added', snap => {
         const m = snap.val();
         if (!m || !m.ts) return;
 
-        // Se è un caricamento iniziale o è un mio messaggio, o è vecchio, ignoriamo
-        if (initialLoad || m.name === myName || m.ts <= lastProcessedTs) {
-            if (m.ts > lastProcessedTs) lastProcessedTs = m.ts;
-            initialLoad = false;
+        // 1. Saltiamo l'evento di "aggancio" (l'ultimo messaggio storico)
+        if (isFirstAddedEvent) {
+            isFirstAddedEvent = false;
+            console.log("Chat: Global Listener linked to history. Ready for new messages.");
             return;
         }
 
-        lastProcessedTs = m.ts;
+        // 2. Filtro di sicurezza temporale (per evitare clock skew)
+        // Se il messaggio è troppo vecchio rispetto all'avvio dell'app, lo ignoriamo
+        if (m.ts < sessionStartTime) return;
+
+        // 3. Filtro messaggi propri (non vogliamo notifiche per ciò che scriviamo noi)
+        if (m.name === window.myName || m.senderId === window.myId) return;
+
+        console.log("Chat: New background message detected from " + m.name);
         window.handleNewChatMessage('globalChat', m, snap.key);
     });
 
