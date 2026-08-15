@@ -156,14 +156,14 @@ let lastActivityTs = Date.now();
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minuti
 
 // GESTORE CENTRALE LISTENER
-window.listeners = {
+const listeners = {
     room: null, chat: null, pingPong: null, players: null, quizState: null,
     roomLb: null, presence: null, roomsList: null, invites: null, inviteAccepted: null,
     outgoingInvite: null, team: null, allTeams: null, trn: null, activeChat: {}
 };
 
 // --- UTILS ---
-window.fisherYatesShuffle = function(array) {
+function fisherYatesShuffle(array) {
     if (!Array.isArray(array)) return [];
     const arr = [...array];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -519,8 +519,8 @@ function initGame() {
         });
 
         // --- MONITORAGGIO INATTIVITÀ ---
-        const refreshInactivityTimer = () => { lastActivityTs = Date.now(); };
-        ['mousedown', 'keydown', 'touchstart', 'input'].forEach(evt => window.addEventListener(evt, refreshInactivityTimer));
+        const updateActivity = () => { lastActivityTs = Date.now(); };
+        ['mousedown', 'keydown', 'touchstart', 'input'].forEach(evt => window.addEventListener(evt, updateActivity));
 
         setInterval(() => {
             const now = Date.now();
@@ -562,10 +562,8 @@ function initGame() {
 
             if (startParam) return;
 
-            // Verifichiamo se l'utente ha già giocato o RIFIUTATO oggi
-            const lastShown = localStorage.getItem(STORAGE_DAILY_SHOWN);
-            if (lastShown === today) return;
-
+            // Verifichiamo se l'utente ha già giocato OGGI consultando la history su Firebase
+            // Ignoriamo il localStorage così se l'utente ha rifiutato per errore può ritentare riaprendo l'app
             db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value', histSnap => {
                 let alreadyPlayedToday = false;
                 histSnap.forEach(matchSnap => {

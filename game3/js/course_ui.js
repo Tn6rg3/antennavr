@@ -1,61 +1,5 @@
 // js/course_ui.js
 
-window.renderAdvancedCourseStats = function(selectedChar) {
-    const panel = document.getElementById('courseAdvancedStatsPanel');
-    const container = document.getElementById('courseAdvancedStats');
-    if (!container || !panel) return;
-
-    panel.style.display = 'block';
-    container.innerHTML = '';
-
-    const statsByType = window.courseData.progress.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
-    const dbChar = window.firebaseEscape(selectedChar);
-
-    const title = document.createElement('div');
-    title.style.cssText = "font-size: 1.1em; font-weight: bold; text-align: center; margin-bottom: 10px; color: var(--champ-color); text-shadow: 0 0 5px rgba(255,152,0,0.3);";
-    title.textContent = `Analisi Carattere: ${selectedChar}`;
-    container.appendChild(title);
-
-    const types = [
-        { id: 'Z2', label: 'Base', icon: '🟢' },
-        { id: 'WORK', label: 'Lavoro', icon: '🟡' },
-        { id: 'LONG', label: 'Lungo', icon: '🟣' }
-    ];
-
-    types.forEach(type => {
-        const s = (statsByType[type.id] && statsByType[type.id][dbChar]) ? statsByType[type.id][dbChar] : { attempts: 0, errors: 0 };
-        const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
-        const perc = Math.round(accuracy * 100);
-
-        const row = document.createElement('div');
-        row.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
-
-        const labelRow = document.createElement('div');
-        labelRow.style.cssText = "display: flex; justify-content: space-between; font-size: 0.8em; font-weight: bold;";
-        labelRow.innerHTML = `<span>${type.icon} ${type.label}</span> <span style="color:var(--hint-color)">${s.attempts} tentativi</span>`;
-
-        const barContainer = document.createElement('div');
-        barContainer.style.cssText = "height: 18px; background: rgba(255,255,255,0.05); border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; position: relative;";
-
-        const bar = document.createElement('div');
-        bar.style.width = s.attempts > 0 ? `${perc}%` : "0%";
-        bar.style.height = "100%";
-        bar.style.background = s.attempts === 0 ? '#444' : (accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f');
-        bar.style.boxShadow = "inset 0 0 10px rgba(0,0,0,0.3)";
-        bar.style.transition = "width 0.8s cubic-bezier(0.17, 0.67, 0.83, 0.67)";
-
-        const percLabel = document.createElement('span');
-        percLabel.style.cssText = "position: absolute; width: 100%; text-align: center; font-size: 0.7em; font-weight: bold; color: #fff; text-shadow: 1px 1px 2px #000;";
-        percLabel.textContent = s.attempts > 0 ? `${perc}%` : "NESSUN DATO";
-
-        barContainer.appendChild(bar);
-        barContainer.appendChild(percLabel);
-        row.appendChild(labelRow);
-        row.appendChild(barContainer);
-        container.appendChild(row);
-    });
-};
-
 window.renderCourseTabView = function() {
     const activeView = document.getElementById('courseTabActiveView');
     const initialPrompt = document.getElementById('courseTabInitialPrompt');
@@ -121,11 +65,11 @@ window.renderTutorPanel = function() {
     const list = document.getElementById('tutorStudentList');
     if (!list || !db) return;
 
-    if (window.listeners.tutorPanel) db.ref('courseActiveEnrollments').off('value', window.listeners.tutorPanel);
+    if (listeners.tutorPanel) db.ref('courseActiveEnrollments').off('value', listeners.tutorPanel);
 
     list.innerHTML = '<p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Sincronizzazione corsisti...</p>';
 
-    window.listeners.tutorPanel = db.ref('courseActiveEnrollments').on('value', async (snap) => {
+    listeners.tutorPanel = db.ref('courseActiveEnrollments').on('value', async (snap) => {
         const enrollments = snap.val() || {};
         list.innerHTML = '';
 
@@ -137,14 +81,10 @@ window.renderTutorPanel = function() {
 
         for (const uid of uids) {
             if (uid === myId) continue;
-            const enroll = enrollments[uid];
-
-            // FILTRO: Mostriamo solo i corsisti assegnati a questo tutor
-            if (!enroll || enroll.role === 'tutor' || enroll.tutorId !== myId) continue;
-
             // Carichiamo i progressi (Koch) per ogni iscritto
             const userDataSnap = await db.ref(`users/${uid}/course/progress`).once('value');
             const p = userDataSnap.val() || {};
+            const enroll = enrollments[uid];
 
             const lesson = p.current_lesson || 2;
             const lastDate = p.last_session_date || "Mai";
@@ -160,10 +100,7 @@ window.renderTutorPanel = function() {
 
             const nameB = document.createElement('b');
             nameB.style.color = "#b39ddb";
-            nameB.style.cursor = "pointer";
-            nameB.style.textDecoration = "underline";
             nameB.textContent = `👤 ${enroll.name || 'Anonimo'} `;
-            nameB.onclick = () => window.showStudentStats(uid, enroll.name || 'Anonimo');
 
             if (enroll.roomCode) {
                 const liveBadge = document.createElement('span');
@@ -220,124 +157,23 @@ window.watchStudentSession = function(targetRoomCode, studentName) {
     if (typeof window.exitRoomCleanly === 'function') window.exitRoomCleanly(false);
 
     // Utilizziamo la funzione nativa degli spettatori per abilitare audio e monitoraggio
+    if (typeof window.watchSpecificRoom === 'function') {
+        window.watchSpecificRoom(targetRoomCode, studentName);
     } else {
         showToast("Errore: Funzione spettatore non disponibile.");
     }
 };
 
-window.showStudentStats = async function(uid, studentName) {
-    const modal = document.getElementById('studentStatsModal');
-    const content = document.getElementById('studentStatsContent');
-    const title = document.getElementById('studentStatsTitle');
-
-    if (!modal || !content || !db) return;
-
-    title.textContent = "Analisi Progressi: " + studentName;
-    content.innerHTML = '<p style="text-align:center; padding:20px;">Caricamento dati...</p>';
-    modal.style.display = 'flex';
-
-    try {
-        const snap = await db.ref(`users/${uid}/course`).once('value');
-        const data = snap.val();
-
-        if (!data) {
-            content.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Nessun dato disponibile per questo utente.</p>';
-            return;
-        }
-
-        const p = data.progress || {};
-        const s = data.settings || {};
-
-        // --- COSTRUZIONE DASHBOARD STATISTICHE ---
-        let html = `
-            <div class="box-panel" style="margin-bottom:15px; border-color:#673ab7;">
-                <h4 style="margin-top:0; color:#b39ddb;">📈 Stato Generale</h4>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:0.85em;">
-                    <div><b>Lezione Attuale:</b> ${p.current_lesson || 2}</div>
-                    <div><b>XP Totali:</b> ${p.total_xp || 0}</div>
-                    <div><b>Accuratezza Z2:</b> ${p.last_z2_accuracy ? Math.round(p.last_z2_accuracy*100) : 0}%</div>
-                    <div><b>Ultima Sessione:</b> ${p.last_session_date || 'N/A'}</div>
-                </div>
-            </div>
-
-            <div class="box-panel" style="margin-bottom:15px;">
-                <h4 style="margin-top:0; color:var(--link-color);">⚙️ Impostazioni Utente</h4>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:0.85em;">
-                    <div><b>WPM:</b> ${s.start_wpm || 15}</div>
-                    <div><b>Farnsworth:</b> ${s.farnsworth_wpm || 12}</div>
-                    <div><b>GG/Sett:</b> ${s.days_per_week || 3}</div>
-                    <div><b>Modalità Elite:</b> ${data.elite_mode ? 'SÌ ⚡' : 'NO'}</div>
-                </div>
-            </div>
-
-            <div class="box-panel">
-                <h4 style="margin-top:0; color:var(--champ-color);">📊 Padronanza Caratteri (Heatmap)</h4>
-                <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px;">
-        `;
-
-        const charStats = p.char_stats || {};
-        window.KOCH_SEQUENCE.forEach((char, idx) => {
-            const dbChar = window.firebaseEscape(char);
-            const cs = charStats[dbChar] || { attempts: 0, errors: 0 };
-            const acc = cs.attempts > 0 ? (cs.attempts - cs.errors) / cs.attempts : 0;
-
-            let color = 'rgba(255,255,255,0.05)';
-            if (idx < (p.current_lesson || 2)) {
-                color = cs.attempts === 0 ? 'var(--hint-color)' : (acc >= 0.9 ? '#4caf50' : acc >= 0.7 ? '#ff9800' : '#d32f2f');
-            }
-
-            html += `<div style="width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-size:0.7em; font-weight:bold; background:${color}; color:#fff; border-radius:4px; opacity:${idx < (p.current_lesson || 2) ? 1 : 0.3};" title="${char}: ${Math.round(acc*100)}%">${char}</div>`;
-        });
-
-        html += `
-                </div>
-            </div>
-
-            <div class="box-panel" style="margin-top:15px;">
-                <h4 style="margin-top:0;">📜 Storico Ultime Sessioni</h4>
-                <div id="studentHistoryList" style="font-size:0.8em; display:flex; flex-direction:column; gap:5px;">
-                    <!-- Caricamento history... -->
-                </div>
-            </div>
-        `;
-
-        content.innerHTML = html;
-
-        // Carichiamo anche le ultime 5 partite del corso dalla history generale
-        db.ref(`users/${uid}/history`).orderByChild('mode').equalTo('course').limitToLast(10).once('value', hSnap => {
-            const historyCont = document.getElementById('studentHistoryList');
-            if (!historyCont) return;
-
-            const hist = hSnap.val() || {};
-            const entries = Object.values(hist).sort((a,b) => b.date - a.date);
-
-            if (entries.length === 0) {
-                historyCont.innerHTML = '<p style="text-align:center; opacity:0.6;">Nessuna sessione registrata.</p>';
-                return;
-            }
-
-            historyCont.innerHTML = '';
-            entries.forEach(m => {
-                const dateStr = new Date(m.date).toLocaleDateString();
-                const div = document.createElement('div');
-                div.style.cssText = "display:flex; justify-content:space-between; padding:5px; background:rgba(255,255,255,0.03); border-radius:4px;";
-                div.innerHTML = `<span>📅 ${dateStr}</span> <span><b>${m.wpm}</b> WPM</span> <span><b>${m.score}</b> PT</span>`;
-                historyCont.appendChild(div);
-            });
-        });
-
-    } catch (e) {
-        console.error("Show Student Stats Error:", e);
-        content.innerHTML = '<p style="text-align:center; color:#f44336;">Errore nel caricamento dei dati.</p>';
-    }
-};
-
 window.selectWizardRole = function(role) {
     window.tempWizardRole = role;
+    const sRole = document.getElementById('wizardStepRole');
+    const s1 = document.getElementById('wizardStep1');
+
     if (role === 'tutor') {
         window.requestTutorRole();
     } else {
-        window.nextWizardStep('Tutor');
+        if (sRole) sRole.style.display = 'none';
+        if (s1) s1.style.display = 'block';
     }
 };
 
@@ -380,24 +216,6 @@ window.populateCourseSettingsInputs = function() {
     if (els.courseTabPauseDurationInput) els.courseTabPauseDurationInput.value = s.pause_duration || 10;
     if (els.courseTabMinZ2) els.courseTabMinZ2.value = s.minutes_z2;
     if (els.courseTabEliteInput) els.courseTabEliteInput.checked = window.courseData.elite_mode === true;
-
-    // Popolamento Tutor Dropdown nelle impostazioni
-    const tutorSelect = document.getElementById('courseTabTutorInput');
-    if (tutorSelect) {
-        db.ref('courseActiveEnrollments').once('value', snap => {
-            const enrollments = snap.val() || {};
-            tutorSelect.innerHTML = '<option value="">Nessun Tutor</option>';
-            Object.entries(enrollments).forEach(([uid, data]) => {
-                if (data.role === 'tutor' && uid !== myId) {
-                    const opt = document.createElement('option');
-                    opt.value = uid;
-                    opt.textContent = `🎓 ${data.name}`;
-                    if (window.courseData.tutor_id === uid) opt.selected = true;
-                    tutorSelect.appendChild(opt);
-                }
-            });
-        });
-    }
 };
 
 window.renderCourseTabDashboard = function() {
@@ -484,26 +302,65 @@ window.renderCourseTabDashboard = function() {
             planList.appendChild(dayDiv);
         });
     }
-
-    // 3. Aggiornamento Bottone Avvio Sessione
-    const startBtn = document.getElementById('btnTabStartCourseSession');
-    if (startBtn) {
-        const todayIdx = (new Date().getDay() + 6) % 7;
-        const dayData = window.courseData.weekly_schedule[todayIdx];
-        const mandatoryDone = !dayData || dayData.sessions.every(s => s.completed || s.type === 'REST');
-
-        if (mandatoryDone) {
-            startBtn.textContent = "AVVIA SESSIONE EXTRA 🏆";
-            startBtn.classList.remove('btn-success');
-            startBtn.classList.add('btn-champ');
-        } else {
-            startBtn.textContent = "AVVIA SESSIONE ODIERNA 🚀";
-            startBtn.classList.remove('btn-champ');
-            startBtn.classList.add('btn-success');
-        }
-    }
 };
 
+window.renderAdvancedCourseStats = function(selectedChar) {
+    const panel = document.getElementById('courseAdvancedStatsPanel');
+    const container = document.getElementById('courseAdvancedStats');
+    if (!container || !panel) return;
+
+    panel.style.display = 'block';
+    container.innerHTML = '';
+
+    const statsByType = window.courseData.progress.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
+    const dbChar = window.firebaseEscape(selectedChar);
+
+    const title = document.createElement('div');
+    title.style.cssText = "font-size: 1.1em; font-weight: bold; text-align: center; margin-bottom: 10px; color: var(--champ-color); text-shadow: 0 0 5px rgba(255,152,0,0.3);";
+    title.textContent = `Analisi Carattere: ${selectedChar}`;
+    container.appendChild(title);
+
+    const types = [
+        { id: 'Z2', label: 'Base', icon: '🟢' },
+        { id: 'WORK', label: 'Lavoro', icon: '🟡' },
+        { id: 'LONG', label: 'Lungo', icon: '🟣' }
+    ];
+
+    types.forEach(type => {
+        const s = (statsByType[type.id] && statsByType[type.id][dbChar]) ? statsByType[type.id][dbChar] : { attempts: 0, errors: 0 };
+        const accuracy = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
+        const perc = Math.round(accuracy * 100);
+
+        const row = document.createElement('div');
+        row.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
+
+        const labelRow = document.createElement('div');
+        labelRow.style.cssText = "display: flex; justify-content: space-between; font-size: 0.8em; font-weight: bold;";
+        labelRow.innerHTML = `<span>${type.icon} ${type.label}</span> <span style="color:var(--hint-color)">${s.attempts} tentativi</span>`;
+
+        const barContainer = document.createElement('div');
+        barContainer.style.cssText = "height: 18px; background: rgba(255,255,255,0.05); border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; position: relative;";
+
+        const bar = document.createElement('div');
+        bar.style.width = s.attempts > 0 ? `${perc}%` : "0%";
+        bar.style.height = "100%";
+        bar.style.background = s.attempts === 0 ? '#444' : (accuracy >= 0.9 ? '#4caf50' : accuracy >= 0.7 ? '#ff9800' : '#d32f2f');
+        bar.style.boxShadow = "inset 0 0 10px rgba(0,0,0,0.3)";
+        bar.style.transition = "width 0.8s cubic-bezier(0.17, 0.67, 0.83, 0.67)";
+
+        const percLabel = document.createElement('span');
+        percLabel.style.cssText = "position: absolute; width: 100%; text-align: center; font-size: 0.7em; font-weight: bold; color: #fff; text-shadow: 1px 1px 2px #000;";
+        percLabel.textContent = s.attempts > 0 ? `${perc}%` : "NESSUN DATO";
+
+        barContainer.appendChild(bar);
+        barContainer.appendChild(percLabel);
+        row.appendChild(labelRow);
+        row.appendChild(barContainer);
+        container.appendChild(row);
+    });
+
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
 
 window.startCourseWizard = function() {
     if (els.courseTabInitialPrompt) els.courseTabInitialPrompt.style.display = 'none';
@@ -541,78 +398,14 @@ window.populateLessonDropdowns = function() {
 };
 
 window.nextWizardStep = function(step) {
-    const steps = ['Role', 'Tutor', '1', '2', '3', '4'];
-    steps.forEach(s => {
-        const el = document.getElementById('wizardStep' + s);
-        if (el) el.style.display = 'none';
-    });
-
-    let currentStepId = 'wizardStep' + step;
-    if (step === 0) currentStepId = 'wizardStepRole';
-
-    const currentEl = document.getElementById(currentStepId);
-    if (currentEl) currentEl.style.display = 'block';
-
-    if (step === 'Tutor') {
-        window.renderTutorSelection();
+    for(let i=1; i<=4; i++) {
+        const el = document.getElementById('wizardStep'+i);
+        if(el) el.style.display = (i === step) ? 'block' : 'none';
     }
     if (step === 4) {
         window.updateWizardDurationsPreview();
         if (els.wizardMinZ2) els.wizardMinZ2.oninput = window.updateWizardDurationsPreview;
     }
-};
-
-window.renderTutorSelection = function() {
-    const list = document.getElementById('tutorSelectionList');
-    const confirmBtn = document.getElementById('btnConfirmTutor');
-    if (!list || !db) return;
-
-    list.innerHTML = '<p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Ricerca tutor disponibili...</p>';
-
-    db.ref('courseActiveEnrollments').once('value', snap => {
-        const enrollments = snap.val() || {};
-        list.innerHTML = '';
-        let foundTutors = 0;
-
-        Object.entries(enrollments).forEach(([uid, data]) => {
-            if (data.role === 'tutor' && uid !== myId) {
-                foundTutors++;
-                const div = document.createElement('div');
-                div.className = 'box-panel';
-                div.style.cssText = "padding:10px; cursor:pointer; border:1px solid var(--hint-color); transition:all 0.2s;";
-                div.innerHTML = `<b>🎓 ${data.name}</b>`;
-
-                div.onclick = () => {
-                    // Deseleziona altri
-                    Array.from(list.children).forEach(c => c.style.borderColor = 'var(--hint-color)');
-                    div.style.borderColor = 'var(--link-color)';
-                    div.style.background = 'rgba(33,150,243,0.1)';
-
-                    window.tempSelectedTutorId = uid;
-                    if (confirmBtn) {
-                        confirmBtn.disabled = false;
-                        confirmBtn.onclick = () => {
-                            window.courseData.tutor_id = uid;
-                            window.nextWizardStep(1);
-                        };
-                    }
-                };
-                list.appendChild(div);
-            }
-        });
-
-        if (foundTutors === 0) {
-            list.innerHTML = '<p style="font-size:0.8em; color:var(--hint-color); text-align:center;">Nessun tutor disponibile al momento.<br><br>Puoi comunque iniziare il corso e sceglierne uno in seguito.</p>';
-            if (confirmBtn) {
-                confirmBtn.disabled = false;
-                confirmBtn.textContent = "Continua senza Tutor";
-                confirmBtn.onclick = () => {
-                    window.courseData.tutor_id = null;
-                    window.nextWizardStep(1);
-                };
-            }
-        }
-    });
 };
 
 window.updateWizardDurationsPreview = function() {
@@ -629,14 +422,10 @@ window.finishWizard = function() {
     const startLesson = parseInt(els.wizardStartLesson?.value) || 2;
     const isElite = document.getElementById('wizardEliteMode')?.checked === true;
 
-    if (!window.courseData) window.courseData = window.getDefaultCourseData();
     window.courseData.active_plan = true;
     window.courseData.role = role;
-    window.courseData.init_date = new Date().toISOString().split('T')[0];
 
     if (role === 'corsista') {
-        // Il tutor_id viene salvato nello step 'Tutor' (window.tempSelectedTutorId)
-        window.courseData.tutor_id = window.tempSelectedTutorId || null;
         window.courseData.elite_mode = isElite;
         window.courseData.progress.current_lesson = startLesson;
         window.courseData.settings = {
@@ -654,13 +443,15 @@ window.finishWizard = function() {
     } else {
         // Tutor non ha settings di studio
         window.courseData.elite_mode = false;
-        window.courseData.tutor_id = null;
     }
 
-    window.saveCourseState();
     window.updateGlobalEnrollmentRecord(true); // Aggiorna contatore globale iscritti
     window.renderCourseTabView();
 
+    if (role === 'tutor') {
+        showToast("Profilo TUTOR attivato! 🎓");
+    } else {
+        showToast(isElite ? "Piano ELITE attivato! ⚡" : "Corso attivato con successo! 🚀");
     }
 };
 
@@ -821,27 +612,11 @@ window.finishCourseSession = function() {
 
 window.initCourseChat = function() {
     if (!db) return;
-
-    // SETUP CHAT SCOPED PER TUTOR (Classe)
-    const tutorId = window.courseData?.tutor_id;
-    const isTutor = window.courseData?.role === 'tutor';
-    const effectiveTutorId = isTutor ? myId : tutorId;
-
-    if (!effectiveTutorId) {
-        const messagesCont = document.getElementById('courseChatMessages');
-        if (messagesCont) messagesCont.innerHTML = '<p style="text-align:center; font-size:0.8em; color:var(--hint-color); padding:20px;">Scegli un Tutor per sbloccare la Radio-Aula.</p>';
-        if (els.sendCourseChatBtn) els.sendCourseChatBtn.disabled = true;
-        return;
-    }
-
-    if (els.sendCourseChatBtn) els.sendCourseChatBtn.disabled = false;
-    const chatPath = `courseClassrooms/${effectiveTutorId}/chat`;
-    const chatRef = db.ref(chatPath);
+    const chatRef = db.ref('courseChat');
     const messagesCont = document.getElementById('courseChatMessages');
 
-    if (window.listeners.courseChat) chatRef.off('value', window.listeners.courseChat);
-
-    window.listeners.courseChat = chatRef.limitToLast(50).on('value', async (snap) => {
+    // SETUP CHAT PERSONALIZZATO PER TAG TUTOR
+    chatRef.limitToLast(50).on('value', async (snap) => {
         if (!messagesCont) return;
         const data = snap.val() || {};
         messagesCont.innerHTML = '';
@@ -877,7 +652,7 @@ window.initCourseChat = function() {
                 delBtn.innerHTML = " 🗑️";
                 delBtn.style.cursor = 'pointer';
                 delBtn.onclick = () => {
-                    if (confirm("Eliminare?")) db.ref(`${chatPath}/${key}`).remove();
+                    if (confirm("Eliminare?")) db.ref(`courseChat/${key}`).remove();
                 };
                 div.appendChild(delBtn);
             }
@@ -911,8 +686,8 @@ window.initCourseChat = function() {
                 username: myPrivacy ? "" : tgUsername,
                 text: txt,
                 ts: firebase.database.ServerValue.TIMESTAMP,
-                senderId: myId,
-                role: window.courseData?.role || 'corsista'
+                senderId: myId, // Aggiunto per eliminazione
+                role: window.courseData.role // Salviamo il ruolo nel messaggio
             });
             els.courseChatInput.value = '';
         };
@@ -921,9 +696,8 @@ window.initCourseChat = function() {
 
     if (els.clearCourseChatBtn) {
         els.clearCourseChatBtn.onclick = () => {
-            if (!isTutor) return alert("Solo il Tutor può cancellare l'aula.");
-            if (confirm("Vuoi cancellare la cronologia della Radio-Aula per TUTTA LA TUA CLASSE?")) {
-                chatRef.remove().then(() => showToast("Aula pulita"));
+            if (confirm("Vuoi cancellare la cronologia della Radio-Aula per TUTTI?")) {
+                chatRef.remove().then(() => showToast("Chat cancellata"));
             }
         };
     }
@@ -958,12 +732,8 @@ window.attachCourseUIListeners = function() {
     if (els.btnTabSavePlan) {
         els.btnTabSavePlan.onclick = () => {
             const z2 = parseInt(els.courseTabMinZ2.value) || 10;
-            const oldTutorId = window.courseData.tutor_id;
-            const newTutorId = document.getElementById('courseTabTutorInput')?.value || null;
-
             window.courseData.progress.current_lesson = parseInt(els.courseTabLessonInput.value) || 2;
             window.courseData.elite_mode = els.courseTabEliteInput?.checked === true;
-            window.courseData.tutor_id = newTutorId;
             window.courseData.settings.days_per_week = els.courseTabDaysInput.value;
             window.courseData.settings.start_wpm = els.courseTabWpmInput.value;
             window.courseData.settings.farnsworth_wpm = els.courseTabFarnsworthInput.value;
@@ -975,15 +745,8 @@ window.attachCourseUIListeners = function() {
             window.courseData.settings.minutes_long = Math.round(z2 * (50/30));
 
             window.generateWeeklySchedule();
-
-            // Se il tutor è cambiato, reinizializziamo la chat
-            if (oldTutorId !== newTutorId) {
-                window.initCourseChat();
-                window.updateGlobalEnrollmentRecord(true);
-            }
-
             window.renderCourseTabView();
-            showToast("Impostazioni e Tutor salvati! 💾");
+            showToast("Impostazioni salvate! 💾");
         };
     }
 
@@ -1015,14 +778,15 @@ window.attachCourseUIListeners = function() {
         els.btnTabStartCourseSession.onclick = () => {
              const todayIdx = (new Date().getDay() + 6) % 7;
              const dayData = window.courseData.weekly_schedule[todayIdx];
+             if (!dayData || dayData.sessions[0].type === 'REST') return alert("Oggi è previsto riposo!");
 
              // Cerchiamo la prima sessione non completata
-             let session = dayData ? dayData.sessions.find(s => !s.completed && s.type !== 'REST') : null;
+             let session = dayData.sessions.find(s => !s.completed);
              let isExtra = false;
 
              if (!session) {
-                 // Se tutte completate o giorno di riposo, offriamo sessione extra
-                 session = { type: 'Z2', completed: false };
+                 // Se tutte completate, offriamo sessione extra
+                 session = { type: 'LONG', completed: false };
                  isExtra = true;
              }
 
@@ -1103,17 +867,10 @@ setTimeout(window.attachCourseUIListeners, 2000);
 window.initTutorCourseChatNotification = function() {
     if (!db || !myId) return;
 
-    // Solo per Tutor
-    const isTutor = window.courseData && window.courseData.role === 'tutor';
-    if (!isTutor) return;
-
-    const chatPath = `courseClassrooms/${myId}/chat`;
-    const chatRef = db.ref(chatPath);
+    const chatRef = db.ref('courseChat');
     let initialLoad = true;
 
-    if (window.listeners.courseChatNotif) chatRef.off('child_added', window.listeners.courseChatNotif);
-
-    window.listeners.courseChatNotif = chatRef.limitToLast(1).on('child_added', snap => {
+    chatRef.limitToLast(1).on('child_added', snap => {
         if (initialLoad) {
             initialLoad = false;
             return;
@@ -1122,63 +879,27 @@ window.initTutorCourseChatNotification = function() {
         const msg = snap.val();
         if (!msg) return;
 
-        // Se il messaggio è mio, non notificare
-        if (msg.senderId === myId) return;
+        // Solo per Tutor
+        const isTutor = window.courseData && window.courseData.role === 'tutor';
+        if (!isTutor) return;
 
-        // Se siamo già nel tab corso e l'aula è visibile, non mostrare il badge
+        // Se il messaggio è mio, non notificare
+        if (msg.name === myName) return;
+
+        // Se siamo già nel tab corso, non mostrare il badge
         const courseArea = document.getElementById('profileCourseArea');
         const isViewingCourse = (courseArea && courseArea.style.display === 'flex');
 
         if (!isViewingCourse) {
             const badge = document.getElementById('courseMessageBadge');
-            if (badge) {
-                badge.style.display = 'flex';
-                // Effetto pulsante per attirare attenzione
-                badge.classList.add('badge-pulse');
-            }
+            if (badge) badge.style.display = 'flex';
         }
     }, (error) => {
         console.error("Course Chat Notif Error:", error);
     });
 };
 
-window.actualStartCourseGame = function() {
-    if (!window.courseData.current_day_session) return;
-
-    // Chiudiamo il modale esplicitamente
-    const modal = document.getElementById('courseSessionModal');
-    if (modal) modal.style.display = 'none';
-
-    currentMode = 'course';
-    isSinglePlayer = true;
-    currentWpm = parseInt(window.courseData.settings.start_wpm);
-    roomCode = "COURSE_" + myId;
-
-    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
-
-    // Inizializzazione audio contesto
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-
-    // Segnaliamo il roomCode ai tutor e impostiamo pulizia automatica al distacco
-    const enrollmentRef = db.ref(`courseActiveEnrollments/${myId}`);
-    enrollmentRef.update({ roomCode: roomCode });
-    enrollmentRef.child('roomCode').onDisconnect().set(null);
-
-    db.ref('rooms/' + roomCode).set({
-        status: 'countdown', type: 'single', mode: 'course', wpm: currentWpm, tone: 600,
-        createdAt: firebase.database.ServerValue.TIMESTAMP, hostId: myId
-    }).then(() => {
-        if (typeof window.joinRoomLogic === 'function') {
-            window.joinRoomLogic(false);
-        }
-    });
-};
-
 window.hideCourseMessageBadge = function() {
     const badge = document.getElementById('courseMessageBadge');
-    if (badge) {
-        badge.style.display = 'none';
-        badge.classList.remove('badge-pulse');
-    }
+    if (badge) badge.style.display = 'none';
 };

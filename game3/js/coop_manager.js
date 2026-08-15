@@ -251,13 +251,13 @@ window.finishCoopGame = function(won) {
             els.roomWinnerBanner.textContent = "🏆 MISSIONE COMPIUTA CONTRO IL DISTURBO NEMICO!";
             els.roomWinnerBanner.style.color = "#4caf50";
         }
-        window.updateActivity(true);
+        updateActivity(true);
     } else {
         showToast("💀 TEMPO SCADUTO! Il disturbo nemico ha vinto.");
         if (els.roomWinnerBanner) {
             els.roomWinnerBanner.textContent = "💀 MISSIONE FALLITA: HA VINTO L'AVVERSARIO IRREALE";
             els.roomWinnerBanner.style.color = "#d32f2f";
         }
-        window.updateActivity(false);
+        updateActivity(false);
     }
 };
