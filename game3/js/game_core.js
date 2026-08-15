@@ -335,10 +335,18 @@ window.listenToRoomInBackground = function() {
                         window.playBeep(880, 0.1);
                         setTimeout(() => window.playBeep(1100, 0.15), 100);
                     }
+                } else if (acceptedCount < window.lastAcceptedCount) {
+                    console.log("Room Monitor: Withdrawal detected!");
+                    window.showRoomEventModal("Sfida Annullata ⚠️", "Un giocatore si è ritirato dalla sfida.");
+                    if (typeof window.playBeep === 'function') window.playBeep(440, 0.2);
                 } else if (pCount > window.lastPlayerCount) {
                     console.log("Room Monitor: New player join detected!");
                     window.showRoomEventModal("Nuovo Ingresso 👤", "Qualcuno è entrato nella tua stanza.");
                     if (typeof window.playBeep === 'function') window.playBeep(700, 0.2);
+                } else if (pCount < window.lastPlayerCount) {
+                    console.log("Room Monitor: Player left room.");
+                    // Notifica opzionale per l'uscita
+                    // window.showRoomEventModal("Abbandono 👤", "Un utente è uscito dalla stanza.");
                 }
             }
         }
