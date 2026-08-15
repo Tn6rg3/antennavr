@@ -237,10 +237,6 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
                 }
             });
         }
-                    // NOTA: Se l'Host esce ma resta nell'app, la stanza rimane aperta e lui riceverà notifiche.
-                }
-            });
-        }
     } else {
         if (listeners.room) { listeners.room.off(); listeners.room = null; }
     }
