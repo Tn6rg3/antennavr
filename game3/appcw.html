@@ -84,7 +84,7 @@
         • Inizia dalla modalità <b>Parole Comuni</b> per fare pratica.<br>
         • Se vuoi, imposta un <b>Alias</b> nella sezione Profilo.
     </div>
-    <button id="btnCloseWelcomeModal" class="btn-champ">INIZIA AD ALLENARTI 🚀</button>
+    <button id="btnCloseWelcomeModal" onclick="document.getElementById('welcomeNewUserModal').style.display='none'" class="btn-champ">INIZIA AD ALLENARTI 🚀</button>
 </div>
 <!-- CHAT GLOBALE (DRAWER) -->
 <div id="chatDrawer" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:55%; background:var(--sec-bg-color); border-top:2px solid var(--link-color); z-index:2000; box-sizing:border-box; flex-direction:column; padding:10px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
@@ -604,25 +604,25 @@
             <!-- VISTA DASHBOARD (ESISTENTE) -->
             <div id="courseTabDashboardView" style="display:flex; flex-direction:column; gap:10px;">
 
+                <!-- PRESENTAZIONE CORSO (ACCORDION) -->
+                <div id="coursePresentationPanel" class="box-panel" style="padding: 10px; border-color: var(--link-color);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.toggleVisibility('coursePresentationContent', 'btnTogglePresentation')">
+                        <b style="color:var(--link-color); font-size:0.9em;">📘 Presentazione Corso</b>
+                        <button id="btnTogglePresentation" class="btn-link" style="width:auto; margin-top:0; padding:5px;">Mostra</button>
+                    </div>
+                    <div id="coursePresentationContent" style="display:none; margin-top:10px; font-size:0.8em; line-height:1.4; text-align:left; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+                        <p>Benvenuto nel Corso Professionale CW. Ecco come funziona:</p>
+                        <ul style="padding-left:15px; margin-bottom:10px;">
+                            <li><b>Metodo Koch:</b> Imparerai un carattere alla volta solo dopo aver raggiunto il 90% di precisione.</li>
+                            <li><b>Piano 30/20/50:</b> Le sessioni variano tra Consolidamento, Studio e Resistenza.</li>
+                            <li><b>Allenamento Extra:</b> Disponibile dopo aver finito il piano giornaliero (non sblocca nuovi caratteri).</li>
+                            <li><b>Richiami:</b> La costanza è fondamentale. 3 giorni saltati portano all'espulsione automatica.</li>
+                        </ul>
+                    </div>
+                </div>
+
                 <!-- GESTIONE PIANO E IMPOSTAZIONI (NASCOSTO PER TUTOR) -->
                 <div id="courseTrainingControls" style="display:flex; flex-direction:column; gap:10px;">
-
-                    <!-- PRESENTAZIONE CORSO (ACCORDION) -->
-                    <div id="coursePresentationPanel" class="box-panel" style="padding: 10px; border-color: var(--link-color);">
-                        <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.toggleVisibility('coursePresentationContent', 'btnTogglePresentation')">
-                            <b style="color:var(--link-color); font-size:0.9em;">📘 Presentazione Corso</b>
-                            <button id="btnTogglePresentation" class="btn-link" style="width:auto; margin-top:0; padding:5px;">Mostra</button>
-                        </div>
-                        <div id="coursePresentationContent" style="display:none; margin-top:10px; font-size:0.8em; line-height:1.4; text-align:left; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
-                            <p>Benvenuto nel Corso Professionale CW. Ecco come funziona:</p>
-                            <ul style="padding-left:15px; margin-bottom:10px;">
-                                <li><b>Metodo Koch:</b> Imparerai un carattere alla volta solo dopo aver raggiunto il 90% di precisione.</li>
-                                <li><b>Piano 30/20/50:</b> Le sessioni variano tra Consolidamento, Studio e Resistenza.</li>
-                                <li><b>Allenamento Extra:</b> Disponibile dopo aver finito il piano giornaliero (non sblocca nuovi caratteri).</li>
-                                <li><b>Richiami:</b> La costanza è fondamentale. 3 giorni saltati portano all'espulsione automatica.</li>
-                            </ul>
-                        </div>
-                    </div>
 
                     <!-- Impostazioni -->
                     <div class="box-panel" style="border-color: var(--link-color);">
