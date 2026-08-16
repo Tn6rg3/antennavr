@@ -195,7 +195,7 @@ function clearAllTimers() {
 
 /**
  * RESET RIGOROSO DELLO STATO DI GIOCO
- * Da chiamare PRIMA di iniziare qualsiasi nuova partita/modalità
+ * Da chiamare PRIMA di inizializzare i parametri di una nuova sessione
  */
 window.resetGameState = function() {
     console.log("Game Core: Full state reset...");
@@ -206,13 +206,23 @@ window.resetGameState = function() {
     clearAllTimers();
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
 
-    // 2. Resetta flag di modalità
+    // 2. Resetta flag di modalità (Verranno reimpostati dalla logica di avvio)
     isCourseMode = false;
     isCoopMode = false;
     isArcadeMode = false;
     window.isSinglePlayer = false;
+    currentMode = 'standard';
 
-    // 3. Resetta variabili di sessione
+    // 3. Ripristina UI Input (Fix Spectator/Course residuals)
+    if (els.permanentGameInput) {
+        els.permanentGameInput.disabled = false;
+        els.permanentGameInput.placeholder = "Digita qui...";
+        els.permanentGameInput.value = "";
+    }
+    if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
+    if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
+
+    // 4. Resetta variabili di sessione
     wordIndex = 0;
     totalScore = 0;
     currentStreak = 0;
@@ -220,13 +230,12 @@ window.resetGameState = function() {
     matchDetailsArray = [];
     usedReplay = false;
 
-    // 4. Pulisce sessione corso pendente se non siamo esplicitamente in modalità corso
-    // Questo evita che i parametri del corso "inquinino" altre modalità
+    // 5. Pulisce sessione corso pendente
     if (window.courseData) {
         window.courseData.current_day_session = null;
     }
 
-    // 5. Resetta parametri audio avanzati
+    // 6. Resetta parametri audio avanzati
     window.charSpaceWpm = 0;
     window.wordSpaceMult = 1.0;
     window.isFixedSpeed = false;
@@ -1090,6 +1099,9 @@ if (els.createRoomBtn) {
         const gType = els.gameTypeInput.value, gMode = els.gameModeInput.value;
         if (gType === 'tournament') { window.showScreen('teamsScreen'); return; }
         if (gMode === 'custom' && window.customDictionary.length === 0) return showToast("Carica un file!");
+
+        // Reset preventivo PRIMA di impostare i nuovi parametri della sessione
+        window.resetGameState();
 
         window.isChallenging = false;
         window.outgoingChallengeId = null;

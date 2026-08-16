@@ -364,8 +364,6 @@ window.listenToRoomInBackground = function() {
         localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
         window.isRoomMonitorActive = false;
 
-        // Reset preventivo dello stato per evitare inquinamento da sessioni precedenti o corso
-        if (typeof window.resetGameState === 'function') window.resetGameState();
         gameRunning = true; // Importante: deve essere true prima di caricare i parametri
 
         // Sincronizzazione parametri avanzati della stanza
