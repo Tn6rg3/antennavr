@@ -219,6 +219,14 @@ window.switchCourseChatMode = function(mode) {
         if (btnGlobal) { btnGlobal.style.color = 'var(--champ-color)'; btnGlobal.style.borderBottom = '2px solid var(--champ-color)'; }
     }
 
+    // Pulizia pallino rosso del tab appena selezionato
+    const targetBtnId = mode === 'aula' ? 'btnCourseChatAula' : 'btnCourseChatGlobal';
+    const targetBtn = document.getElementById(targetBtnId);
+    if (targetBtn) {
+        const dot = targetBtn.querySelector('.tab-dot');
+        if (dot) dot.remove();
+    }
+
     window.initCourseChat();
 };
 
@@ -752,44 +760,90 @@ window.attachCourseUIListeners = function() {
 
 /**
  * NOTIFICHE CHAT TUTOR (Badge)
+ * Ascolta sia l'aula privata che il canale generale.
  */
 window.initTutorCourseChatNotification = function() {
     if (!db || !window.myId) return;
 
-    // Pulizia listener esistente per evitare duplicati
-    if (window.listeners && window.listeners.tutorChatNotifRef) {
-        window.listeners.tutorChatNotifRef.off('child_added', window.listeners.tutorChatNotifCallback);
+    // Pulizia listener esistenti
+    if (window.listeners) {
+        if (window.listeners.aulaNotifRef) window.listeners.aulaNotifRef.off('child_added', window.listeners.aulaNotifCallback);
+        if (window.listeners.globalNotifRef) window.listeners.globalNotifRef.off('child_added', window.listeners.globalNotifCallback);
+    } else {
+        window.listeners = {};
     }
 
     const isTutor = window.courseData && window.courseData.role === 'tutor';
     const tutorId = isTutor ? window.myId : (window.courseData?.tutor_id || null);
-    const path = tutorId ? `courseChats/${tutorId}` : 'courseChat';
-    const ref = db.ref(path);
 
-    console.log("Course Notification: Listening on", path);
+    // 1. Percorso Aula
+    if (tutorId) {
+        const aulaPath = `courseChats/${tutorId}`;
+        const aulaRef = db.ref(aulaPath);
+        let initAula = true;
 
-    let init = true;
-    const callback = snap => {
-        if (init) { init = false; return; }
+        const aulaCallback = snap => {
+            if (initAula) { initAula = false; return; }
+            const m = snap.val(); if (!m || m.senderId === window.myId) return;
+            window.processCourseNotification('aula');
+        };
+
+        aulaRef.limitToLast(1).on('child_added', aulaCallback);
+        window.listeners.aulaNotifRef = aulaRef;
+        window.listeners.aulaNotifCallback = aulaCallback;
+    }
+
+    // 2. Percorso Generale
+    const globalPath = 'courseChat';
+    const globalRef = db.ref(globalPath);
+    let initGlobal = true;
+
+    const globalCallback = snap => {
+        if (initGlobal) { initGlobal = false; return; }
         const m = snap.val(); if (!m || m.senderId === window.myId) return;
-
-        // Se non siamo nella tab corso, mostriamo il badge
-        const area = document.getElementById('profileCourseArea');
-        if (!(area && area.style.display === 'flex')) {
-            const b = document.getElementById('courseMessageBadge');
-            if (b) {
-                b.style.display = 'flex';
-                // Assicuriamoci che il testo sia "M" se tutor, o magari "!" se corsista (opzionale)
-                // b.textContent = isTutor ? 'M' : '!';
-            }
-        }
+        window.processCourseNotification('global');
     };
 
-    ref.limitToLast(1).on('child_added', callback);
+    globalRef.limitToLast(1).on('child_added', globalCallback);
+    window.listeners.globalNotifRef = globalRef;
+    window.listeners.globalNotifCallback = globalCallback;
+};
 
-    if (!window.listeners) window.listeners = {};
-    window.listeners.tutorChatNotifRef = ref;
-    window.listeners.tutorChatNotifCallback = callback;
+/**
+ * Gestisce la logica di visualizzazione del badge in base a dove si trova l'utente
+ */
+window.processCourseNotification = function(source) {
+    const area = document.getElementById('profileCourseArea');
+    const isCourseVisible = (area && area.style.display === 'flex');
+    const currentSubTab = window.courseChatMode; // 'aula' o 'global'
+
+    // Se la sezione corso è chiusa, mostriamo sempre il badge sul bottone principale
+    if (!isCourseVisible) {
+        const b = document.getElementById('courseMessageBadge');
+        if (b) b.style.display = 'flex';
+        return;
+    }
+
+    // Se siamo già nella tab Corso, verifichiamo se il messaggio è per il sub-tab nascosto
+    if (source !== currentSubTab) {
+        // Mostriamo il badge sul bottone del sub-tab corrispondente
+        const btnId = source === 'aula' ? 'btnCourseChatAula' : 'btnCourseChatGlobal';
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            btn.style.position = 'relative';
+            // Se non c'è già un pallino rosso, aggiungiamolo
+            if (!btn.querySelector('.tab-dot')) {
+                const dot = document.createElement('span');
+                dot.className = 'tab-dot';
+                dot.style.cssText = "position:absolute; top:-2px; right:-5px; width:8px; height:8px; background:#f44336; border-radius:50%; border:1px solid white;";
+                btn.appendChild(dot);
+            }
+        }
+
+        // Mostriamo comunque il badge sul bottone principale "Corso" in basso
+        const b = document.getElementById('courseMessageBadge');
+        if (b) b.style.display = 'flex';
+    }
 };
 
 window.hideCourseMessageBadge = function() {
