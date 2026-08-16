@@ -183,6 +183,29 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
             db.ref(`courseActiveEnrollments/${myId}`).update({ roomCode: null });
         }
 
+        if (roomWasDeletedByHost) {
+            if (!amIHost) {
+                const msg = currentLang === 'it' ? "⚠️ La stanza è stata chiusa dall'Host." : "⚠️ The room was closed by the Host.";
+                if (window.tg && window.tg.showAlert) window.tg.showAlert(msg);
+                else showToast(msg);
+            }
+            if (amIHost && !roomCode.startsWith("TRN_")) {
+                db.ref(`rooms/${roomCode}`).remove();
+                db.ref(`public_lobby_rooms/${roomCode}`).remove();
+            } else {
+                db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
+                db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
+                    // Aggiorna conteggio totale in bacheca
+                    if (currentCode && !currentCode.startsWith("TRN_")) {
+                        db.ref(`rooms/${currentCode}/players`).once('value', s => {
+                            if (s.exists()) {
+                                const totalCount = Object.keys(s.val() || {}).length;
+                                db.ref(`public_lobby_rooms/${currentCode}/pCount`).set(totalCount);
+                            }
+                        });
+                    }
+                });
+            }
             roomCode = "";
         }
         else if (isExplicitQuit) {
@@ -208,10 +231,6 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
         } else {
             // Se usciamo per navigazione classifiche (senza delete o explicit quit)
             // puliamo comunque il roomCode per evitare riavvii automatici dai listener
-            roomCode = "";
-        }
-    }
-  else {
             db.ref(`rooms/${roomCode}/players/${myId}`).once('value', s => {
                 const p = s.val();
                 if (p && !p.accepted) {
@@ -225,6 +244,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
                     db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
                 }
             });
+            roomCode = "";
         }
     } else {
         if (listeners.room) { listeners.room.off(); listeners.room = null; }
