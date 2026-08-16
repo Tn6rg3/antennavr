@@ -57,8 +57,10 @@ html, body {
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    padding-bottom: 15px;
+    padding-bottom: 20px;
     -webkit-overflow-scrolling: touch;
+    /* FIX IPHONE: Assicura che il contenuto sia scrollabile anche con tastiera */
+    min-height: 0;
 }
 
 /* Contenitore fisso per i bottoni in fondo */
