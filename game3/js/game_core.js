@@ -463,8 +463,53 @@ window.joinRoomLogic = function(isReconnect = false) {
             if (typeof window.listenToChat === 'function') window.listenToChat();
             window.isRoomMonitorActive = false;
             window.listenToRoomInBackground();
+
+            // --- AVVIO TIMER SCADENZA LOBBY (Solo se Multi e se presente expiresAt) ---
+            if (!isSinglePlayer && rData.expiresAt) {
+                window.startLobbyTimer(rData.expiresAt);
+            } else if (els.lobbyTimerText) {
+                els.lobbyTimerText.textContent = "";
+            }
         });
     });
+};
+
+/**
+ * GESTORE TIMER LOBBY (SCADENZA STANZA)
+ */
+window.startLobbyTimer = function(expiresAt) {
+    if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
+    if (!els.lobbyTimerText) return;
+
+    const updateTimer = () => {
+        const now = Date.now();
+        const diff = expiresAt - now;
+
+        if (diff <= 0) {
+            clearInterval(lobbyTimerInterval);
+            els.lobbyTimerText.textContent = "STANZA SCADUTA!";
+
+            // Se sono l'Host, elimino la stanza automaticamente
+            if (myId === roomHostId) {
+                showToast("Tempo scaduto! La stanza è stata chiusa.");
+                window.exitRoomCleanly(true);
+            } else {
+                showToast("La stanza è scaduta.");
+                window.exitRoomCleanly(false);
+            }
+            return;
+        }
+
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        const timeStr = (currentLang === 'en' ? "Expires in: " : "Scade tra: ") +
+                        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+        els.lobbyTimerText.textContent = timeStr;
+    };
+
+    updateTimer();
+    lobbyTimerInterval = setInterval(updateTimer, 1000);
 };
 
 window.renderPlayersList = function(playersData, hostId) {
