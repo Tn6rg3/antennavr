@@ -662,9 +662,42 @@ if (els.deleteDataBtn) {
             await db.ref(`leaderboard/arcade/all/${window.myId}`).remove();
             await db.ref(`leaderboard/arcade/global/${window.myId}`).remove();
 
+            // 4. Gestione Squadra (Uscita o Eliminazione totale)
+            if (window.myTeamId) {
+                const teamRef = db.ref(`teams/${window.myTeamId}`);
+                const teamSnap = await teamRef.once('value');
+                if (teamSnap.exists()) {
+                    const team = teamSnap.val();
+                    const members = team.members || {};
+                    const memberIds = Object.keys(members).filter(id => id !== window.myId);
+
+                    if (memberIds.length === 0) {
+                        // Se ero l'ultimo membro, elimina tutta la squadra
+                        console.log("Delete Data: Removing empty team", window.myTeamId);
+                        await teamRef.remove();
+                        // Rimuovi anche riferimenti dai tornei
+                        const trnSnap = await db.ref('tournaments').once('value');
+                        if (trnSnap.exists()) {
+                            trnSnap.forEach(tSnap => {
+                                db.ref(`tournaments/${tSnap.key}/teams/${window.myTeamId}`).remove();
+                                db.ref(`tournaments/${tSnap.key}/standings/${window.myTeamId}`).remove();
+                            });
+                        }
+                    } else if (team.captainId === window.myId) {
+                        // Se ero il capitano ma ci sono altri, passa il comando al prossimo
+                        const nextCaptain = memberIds[0];
+                        await teamRef.update({ captainId: nextCaptain });
+                        await teamRef.child(`members/${window.myId}`).remove();
+                    } else {
+                        // Membro semplice, rimuovi solo me
+                        await teamRef.child(`members/${window.myId}`).remove();
+                    }
+                }
+            }
+
             showToast("Profilo eliminato con successo.");
 
-            // 4. Pulizia Locale e Riavvio
+            // 5. Pulizia Locale e Riavvio
             localStorage.clear();
             setTimeout(() => {
                 location.reload();
