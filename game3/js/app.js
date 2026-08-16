@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.222";
+const APP_VERSION = "20260807.223";
 
 // URL della Web App di Google Apps Script per la validazione identità
 const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
@@ -502,6 +502,7 @@ function initGame() {
         if (!snap.exists() || !data.welcomed) {
             // Aggiorniamo welcomed e i dati base
             await userRef.update({ welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP });
+            window.isNewUserWaitingWelcome = true; // Flag per coordinare la sfida giornaliera
             if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'flex';
         }
 
@@ -622,7 +623,12 @@ function initGame() {
                 const alreadyShownToday = localStorage.getItem(STORAGE_DAILY_SHOWN) === today;
 
                 if (!alreadyPlayedToday && !alreadyShownToday && els.dailyChallengeModal) {
-                    els.dailyChallengeModal.style.display = 'flex';
+                    // Se l'utente è nuovo, aspettiamo che chiuda il benvenuto
+                    if (window.isNewUserWaitingWelcome) {
+                        window.pendingDailyChallengeShow = true;
+                    } else {
+                        els.dailyChallengeModal.style.display = 'flex';
+                    }
                 } else if (alreadyPlayedToday) {
                     // Aggiorniamo il cache locale se Firebase dice che abbiamo giocato
                     localStorage.setItem(STORAGE_DAILY_SHOWN, today);
@@ -680,6 +686,19 @@ function initGame() {
     window.checkGameTypeUI?.();
     setTimeout(() => { window.checkGameTypeUI?.(); }, 1200);
 }
+
+window.closeWelcomeAndCheckDaily = function() {
+    if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'none';
+    window.isNewUserWaitingWelcome = false;
+
+    // Se c'è una sfida giornaliera in attesa, mostrala ora
+    if (window.pendingDailyChallengeShow && els.dailyChallengeModal) {
+        setTimeout(() => {
+            els.dailyChallengeModal.style.display = 'flex';
+            window.pendingDailyChallengeShow = false;
+        }, 500);
+    }
+};
 
 // --- SISTEMA BUG E ADMIN ---
 window.setupBugSystem = function() {
@@ -948,22 +967,36 @@ if (els.btnPlayDailyNow) {
         currentWpm = baseWpm = 15;
         requestedWordCount = 20;
 
-        roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+        // USA ID UNIVOC_O ANCHE PER LA SFIDA GIORNALIERA
+        roomCode = "DAILY_" + window.myId;
         gameWords = window.getGameWords(requestedWordCount, currentMode);
 
-        db.ref('rooms/' + roomCode).set({
-            status: 'countdown',
-            type: 'single',
-            mode: currentMode,
-            wpm: currentWpm,
-            tone: currentTone,
-            wordCount: requestedWordCount,
-            words: gameWords,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            hostId: myId,
-            fixedSpeed: false, // Forziamo parametri standard per la sfida
-            easyMode: false
-        }).then(() => window.joinRoomLogic?.(false));
+        const startDaily = () => {
+            db.ref('rooms/' + roomCode).set({
+                status: 'countdown',
+                type: 'single',
+                mode: currentMode,
+                wpm: currentWpm,
+                tone: currentTone,
+                wordCount: requestedWordCount,
+                words: gameWords,
+                createdAt: firebase.database.ServerValue.TIMESTAMP,
+                hostId: myId,
+                fixedSpeed: false, // Forziamo parametri standard per la sfida
+                easyMode: false
+            }).then(() => window.joinRoomLogic?.(false))
+            .catch(err => {
+                console.error("Daily Challenge Start Error:", err);
+                showToast("Errore avvio sfida. Riprova tra un istante.");
+            });
+        };
+
+        // Per utenti nuovi, diamo un piccolo margine extra per la propagazione dei permessi Firebase
+        if (window.isNewUserWaitingWelcome === false) {
+            setTimeout(startDaily, 800);
+        } else {
+            startDaily();
+        }
     };
 }
 if (els.btnPlayDailyLater) els.btnPlayDailyLater.onclick = () => { if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none'; };
