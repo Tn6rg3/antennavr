@@ -928,6 +928,7 @@ window.finishGame = function() {
     });
 
     if (roomCode) {
+        window.lastFinishedRoomCode = roomCode; // Salviamo l'ultimo codice per la leaderboard
         const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
         myPlayerRef.update({ finished: true, score: totalScore, wpm: peakWpm, matchDetails: matchDetailsArray });
         myPlayerRef.onDisconnect().cancel();
@@ -1139,15 +1140,21 @@ window.saveMatchSummary = function(playersData) {
     const safeWordCount = requestedWordCount || 10;
 
     // Recuperiamo i dati dei giocatori
-    const players = Object.entries(playersData).map(([pid, p]) => ({
-        id: pid,
-        name: p.name || "Sconosciuto",
-        username: p.username || "",
-        score: p.score || 0,
-        wpm: p.wpm || 0,
-        finished: !!p.finished,
-        abandoned: !!p.abandoned
-    }));
+    const players = Object.entries(playersData).map(([pid, p]) => {
+        let pName = p.name || "Sconosciuto";
+        // Fallback robusto se il nome manca nel nodo player (es. ritardo sync)
+        if ((pName === "Sconosciuto" || !pName) && pid === window.myId) pName = window.myName;
+
+        return {
+            id: pid,
+            name: pName,
+            username: p.username || "",
+            score: p.score || 0,
+            wpm: p.wpm || 0,
+            finished: !!p.finished,
+            abandoned: !!p.abandoned
+        };
+    });
 
     // Se c'è solo un giocatore (e non è abbandonato), non è un match multiplayer valido da salvare
     if (players.length < 2) {

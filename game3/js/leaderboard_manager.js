@@ -60,10 +60,14 @@ window.showLeaderboardTab = function(modeValue) {
     if (modeValue === 'room') {
         if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'block';
         if (els.leaderboardContainer) els.leaderboardContainer.innerHTML = '';
-        if (roomCode) {
-            db.ref(`rooms/${roomCode}/players`).once('value', snap => window.renderRoomLeaderboard(snap.val() || {}));
+
+        // Usiamo l'ultimo codice stanza terminato se quello corrente è vuoto
+        const targetCode = roomCode || window.lastFinishedRoomCode;
+
+        if (targetCode) {
+            db.ref(`rooms/${targetCode}/players`).once('value', snap => window.renderRoomLeaderboard(snap.val() || {}));
         } else {
-            if (els.leaderboardContainer) els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Nessuna partita attiva.':'No active match.'}</p>`;
+            if (els.leaderboardContainer) els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Nessuna partita recente.':'No recent match.'}</p>`;
         }
     } else if (modeValue === 'daily_challenge') {
         window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
@@ -237,7 +241,7 @@ window.renderMatchesHistoryHTML = function(matches, container) {
         const mw = document.createElement('div'); mw.style.marginBottom = "25px"; mw.style.borderBottom = "1px dashed var(--hint-color)"; mw.style.paddingBottom = "15px";
         const infoDiv = document.createElement('div'); infoDiv.style.textAlign = 'center'; infoDiv.style.fontSize = '0.8em'; infoDiv.style.color = 'var(--hint-color)'; infoDiv.style.marginBottom = '8px';
         infoDiv.textContent = `📅 ${match.date} - ${match.wordCount} Stringhe`; mw.appendChild(infoDiv);
-        window.renderHeadToHeadView(match.players, mw); container.appendChild(mw);
+        window.renderHeadToHeadView(match.players, mw, match.ts); container.appendChild(mw);
     });
 };
 
@@ -401,7 +405,7 @@ window.renderRoomLeaderboard = function(players) {
     }
 };
 
-window.renderHeadToHeadView = function(players, container) {
+window.renderHeadToHeadView = function(players, container, matchTimestamp = null) {
     if (!players) return;
 
     // Convertiamo in array se i dati sono arrivati come oggetto (comune in Firebase)
@@ -411,13 +415,22 @@ window.renderHeadToHeadView = function(players, container) {
     const h2h = document.createElement('div'); h2h.className = 'h2h-container';
     playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
     const maxScore = playersArray[0].score;
+
+    // Un match è considerato "concluso" se è vecchio di più di 30 minuti,
+    // anche se qualcuno non ha terminato formalmente.
+    const isOldMatch = matchTimestamp && (Date.now() - matchTimestamp > 30 * 60 * 1000);
+
     playersArray.forEach((p) => {
         const card = document.createElement('div');
         card.className = 'h2h-card' + (p.score === maxScore && maxScore > 0 ? ' winner' : '');
 
         const nameDiv = document.createElement('div');
         nameDiv.className = 'h2h-name';
-        nameDiv.textContent = p.name || "Sconosciuto";
+
+        let pName = p.name || "Sconosciuto";
+        // Fallback se il nome manca per l'utente corrente
+        if ((pName === "Sconosciuto" || !pName) && p.id === window.myId) pName = window.myName;
+        nameDiv.textContent = pName;
 
         if (p.id === myId) {
             const meSmall = document.createElement('small');
@@ -442,7 +455,7 @@ window.renderHeadToHeadView = function(players, container) {
             const rowAb = document.createElement('div'); rowAb.className = 'h2h-stat-row';
             rowAb.innerHTML = `<span style="color:#d32f2f; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px;">${currentLang==='it'?'ABBANDONATO':'WITHDRAWN'}</span>`;
             statsDiv.appendChild(rowAb);
-        } else if (!p.finished) {
+        } else if (!p.finished && !isOldMatch) {
             const rowProg = document.createElement('div'); rowProg.className = 'h2h-stat-row';
             rowProg.innerHTML = `<span style="color:#ff9800; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px; animation: pulse 1s infinite;">${currentLang==='it'?'IN CORSO...':'PLAYING...'}</span>`;
             statsDiv.appendChild(rowProg);
