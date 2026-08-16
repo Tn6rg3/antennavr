@@ -158,8 +158,42 @@ window.switchProfileTab = function(tabId) {
         if (tabsHeader) tabsHeader.style.display = 'flex';
         if (statsBtn) statsBtn.classList.add('active-tab');
         if (statsArea) statsArea.style.display = 'flex';
-        document.getElementById('bigramThresholdInput')?.addEventListener('change', window.loadAdvancedStats);
-        document.getElementById('wordThresholdInput')?.addEventListener('change', window.loadAdvancedStats);
+
+        // --- FIX IPHONE/KEYBOARD: Gestione Enter e Scroll ---
+        const bTh = document.getElementById('bigramThresholdInput');
+        const wTh = document.getElementById('wordThresholdInput');
+
+        const handleEnter = (e) => {
+            if (e.key === 'Enter') {
+                e.target.blur(); // Nasconde la tastiera su iOS
+                window.loadAdvancedStats();
+            }
+        };
+
+        const handleFocus = (e) => {
+            // Assicura che l'input sia centrato e visibile quando si apre la tastiera
+            setTimeout(() => {
+                e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
+        };
+
+        if (bTh) {
+            bTh.removeEventListener('keydown', handleEnter);
+            bTh.addEventListener('keydown', handleEnter);
+            bTh.removeEventListener('focus', handleFocus);
+            bTh.addEventListener('focus', handleFocus);
+            bTh.removeEventListener('change', window.loadAdvancedStats);
+            bTh.addEventListener('change', window.loadAdvancedStats);
+        }
+        if (wTh) {
+            wTh.removeEventListener('keydown', handleEnter);
+            wTh.addEventListener('keydown', handleEnter);
+            wTh.removeEventListener('focus', handleFocus);
+            wTh.addEventListener('focus', handleFocus);
+            wTh.removeEventListener('change', window.loadAdvancedStats);
+            wTh.addEventListener('change', window.loadAdvancedStats);
+        }
+
         window.loadAdvancedStats();
     } else if (tabId === 'course') {
         // Nascondiamo l'header dei tab principali per vedere solo Dashboard e Trasmissione
