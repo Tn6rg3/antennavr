@@ -662,7 +662,18 @@ if (els.deleteDataBtn) {
             await db.ref(`leaderboard/arcade/all/${window.myId}`).remove();
             await db.ref(`leaderboard/arcade/global/${window.myId}`).remove();
 
-            // 4. Gestione Squadra (Uscita o Eliminazione totale)
+            // 4. Rimozione da Battaglia Serale (Battle Royale) se iscritto
+            try {
+                const brDate = new Date().toISOString().split('T')[0].replace(/-/g, '');
+                const brCode = "BR_" + brDate;
+                await db.ref(`rooms/${brCode}/players/${window.myId}`).remove();
+            } catch(e) { console.warn("Clean BR error:", e); }
+
+            // 5. Rimozione Inviti e Sfide pendenti
+            await db.ref(`invites/${window.myId}`).remove();
+            await db.ref(`invite_accepted/${window.myId}`).remove();
+
+            // 6. Gestione Squadra (Uscita o Eliminazione totale)
             if (window.myTeamId) {
                 const teamRef = db.ref(`teams/${window.myTeamId}`);
                 const teamSnap = await teamRef.once('value');
