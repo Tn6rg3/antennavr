@@ -314,6 +314,11 @@ window.loadCourseState = function() {
 
             if (window.courseData.active_plan === true) {
                 window.updateGlobalEnrollmentRecord(true);
+                // NOTIFICHE: Sempre attive in background se il piano è attivo
+                if (typeof window.initTutorCourseChatNotification === 'function') {
+                    window.initTutorCourseChatNotification();
+                }
+                // RENDER: Solo se la scheda è effettivamente aperta
                 if (els.courseTabActiveView && els.courseTabActiveView.offsetParent !== null) {
                     window.renderCourseTabView();
                 }
