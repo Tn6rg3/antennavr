@@ -106,8 +106,25 @@ window.listenToAllTeams = function(isAlreadyInTeam) {
 
         snap.forEach(child => {
             const t = child.val();
-            const count = Object.keys(t.members || {}).length;
-            if (t.status === 'retired' || count === 0) return;
+            const memberKeys = Object.keys(t.members || {});
+            const count = memberKeys.length;
+
+            // --- AUTO-PULIZIA AUTOMATICA SQUADRE ORFANE ---
+            if (count === 0 || t.status === 'retired') {
+                console.log("Teams Manager: Auto-removing empty or retired team:", child.key);
+                db.ref(`teams/${child.key}`).remove();
+
+                // Pulizia dai tornei in background
+                db.ref('tournaments').once('value', trnSnap => {
+                    if (trnSnap.exists()) {
+                        trnSnap.forEach(ts => {
+                            db.ref(`tournaments/${ts.key}/teams/${child.key}`).remove();
+                            db.ref(`tournaments/${ts.key}/standings/${child.key}`).remove();
+                        });
+                    }
+                });
+                return;
+            }
 
             const liAll = document.createElement('li'); liAll.style.flexDirection = 'column'; liAll.style.alignItems = 'flex-start';
             const topDiv = document.createElement('div'); topDiv.style.cssText = "width:100%; display:flex; justify-content:space-between;";
@@ -129,6 +146,22 @@ window.listenToAllTeams = function(isAlreadyInTeam) {
             });
 
             liAll.appendChild(topDiv); liAll.appendChild(memDiv);
+
+            // --- POTERE ADMIN: Eliminazione Squadre Orfane ---
+            if (window.isAdmin) {
+                const adminDelBtn = document.createElement('button');
+                adminDelBtn.className = 'action-btn-small btn-danger';
+                adminDelBtn.style.cssText = "width:auto; padding:2px 8px; margin-top:5px; font-size:0.7em;";
+                adminDelBtn.textContent = "🗑️ Elimina Squadra (Admin)";
+                adminDelBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (confirm(`ADMIN: Vuoi eliminare definitivamente la squadra "${t.name}"?`)) {
+                        db.ref(`teams/${child.key}`).remove().then(() => showToast("Squadra eliminata."));
+                    }
+                };
+                liAll.appendChild(adminDelBtn);
+            }
+
             if (els.globalAllTeamsList) els.globalAllTeamsList.appendChild(liAll);
 
             if (!isAlreadyInTeam && t.status !== 'closed' && els.openTeamsList) {
