@@ -752,6 +752,17 @@ window.showCourseSessionModal = function(session, isExtra = false) {
     }
 };
 
+window.declineCourseSession = function() {
+    const modal = document.getElementById('courseSessionModal');
+    if (modal) modal.style.display = 'none';
+
+    // Rimuoviamo la sessione temporanea dallo stato globale per evitare conflitti con altre modalità
+    if (window.courseData) {
+        window.courseData.current_day_session = null;
+        console.log("Course Manager: Session declined and cleared.");
+    }
+};
+
 window.populateCourseWarmup = function(chars) {
     const container = document.getElementById('courseModalWarmup');
     if (!container) return;

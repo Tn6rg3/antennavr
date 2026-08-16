@@ -148,6 +148,7 @@ window.customDictionary = [];
 
 let currentQuizQuestion = null, quizActiveBuzzerId = null;
 let quizQuestionIndex = 0, randomizedQuizQuestions = [], lastLoadedQuizIndex = -1;
+let nextWordTimeout = null;
 let sessionCharErrors = Object.create(null), sessionErrorsByWpm = Object.create(null);
 let userMatchHistory = [];
 
@@ -180,7 +181,7 @@ function clearAllTimers() {
         brTimerInterval, brCheckInterval,
         coopTimerInterval, coopDecayInterval,
         courseSessionTimer, coursePauseInterval,
-        arcadeNextBrickTimeout
+        arcadeNextBrickTimeout, nextWordTimeout
     ];
     timers.forEach(t => { if(t) { clearInterval(t); clearTimeout(t); } });
 
@@ -189,7 +190,48 @@ function clearAllTimers() {
     coopTimerInterval = coopDecayInterval = null;
     courseSessionTimer = coursePauseInterval = null;
     arcadeNextBrickTimeout = null;
+    nextWordTimeout = null;
 }
+
+/**
+ * RESET RIGOROSO DELLO STATO DI GIOCO
+ * Da chiamare PRIMA di iniziare qualsiasi nuova partita/modalità
+ */
+window.resetGameState = function() {
+    console.log("Game Core: Full state reset...");
+
+    // 1. Ferma tutto ciò che è in esecuzione
+    gameRunning = false;
+    inputActive = false;
+    clearAllTimers();
+    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+
+    // 2. Resetta flag di modalità
+    isCourseMode = false;
+    isCoopMode = false;
+    isArcadeMode = false;
+    window.isSinglePlayer = false;
+
+    // 3. Resetta variabili di sessione
+    wordIndex = 0;
+    totalScore = 0;
+    currentStreak = 0;
+    peakWpm = 0;
+    matchDetailsArray = [];
+    usedReplay = false;
+
+    // 4. Pulisce sessione corso pendente se non siamo esplicitamente in modalità corso
+    // Questo evita che i parametri del corso "inquinino" altre modalità
+    if (window.courseData) {
+        window.courseData.current_day_session = null;
+    }
+
+    // 5. Resetta parametri audio avanzati
+    window.charSpaceWpm = 0;
+    window.wordSpaceMult = 1.0;
+    window.isFixedSpeed = false;
+    window.isEasyMode = false;
+};
 
 window.forceAppUpdate = function() {
     showToast("Aggiornamento...");
@@ -897,13 +939,30 @@ window.approveTutor = function(reqId, uid, name) {
 if (els.btnPlayDailyNow) {
     els.btnPlayDailyNow.onclick = () => {
         if (els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none';
-        currentMode = 'daily_challenge'; isSinglePlayer = true;
-        currentWpm = baseWpm = 15; requestedWordCount = 20;
+
+        // Reset preventivo per evitare conflitti con altre modalità (es. corso)
+        window.resetGameState();
+
+        currentMode = 'daily_challenge';
+        window.isSinglePlayer = true;
+        currentWpm = baseWpm = 15;
+        requestedWordCount = 20;
+
         roomCode = Math.floor(1000 + Math.random() * 9000).toString();
         gameWords = window.getGameWords(requestedWordCount, currentMode);
+
         db.ref('rooms/' + roomCode).set({
-            status: 'countdown', type: 'single', mode: currentMode, wpm: currentWpm, tone: currentTone,
-            wordCount: requestedWordCount, words: gameWords, createdAt: firebase.database.ServerValue.TIMESTAMP, hostId: myId
+            status: 'countdown',
+            type: 'single',
+            mode: currentMode,
+            wpm: currentWpm,
+            tone: currentTone,
+            wordCount: requestedWordCount,
+            words: gameWords,
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+            hostId: myId,
+            fixedSpeed: false, // Forziamo parametri standard per la sfida
+            easyMode: false
         }).then(() => window.joinRoomLogic?.(false));
     };
 }

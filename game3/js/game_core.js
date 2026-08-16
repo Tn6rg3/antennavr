@@ -355,13 +355,17 @@ window.listenToRoomInBackground = function() {
         window.lastPlayerCount = pCount;
         window.lastAcceptedCount = acceptedCount;
 
-        // 3. GESTIONE TRANSIZIONI DI STATO (Countdown / Playing)
-        if ((rData.status === 'playing' || rData.status === 'countdown') && !gameRunning) {
-            console.log("Room Monitor: Match starting, switching to game mode.");
-            localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
-            window.isRoomMonitorActive = false;
+    // 3. GESTIONE TRANSIZIONI DI STATO (Countdown / Playing)
+    if ((rData.status === 'playing' || rData.status === 'countdown') && !gameRunning) {
+        console.log("Room Monitor: Match starting, switching to game mode.");
+        localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
+        window.isRoomMonitorActive = false;
 
-            // Sincronizzazione parametri avanzati della stanza
+        // Reset preventivo dello stato per evitare inquinamento da sessioni precedenti o corso
+        if (typeof window.resetGameState === 'function') window.resetGameState();
+        gameRunning = true; // Importante: deve essere true prima di caricare i parametri
+
+        // Sincronizzazione parametri avanzati della stanza
             currentWpm = rData.wpm;
             baseWpm = rData.wpm;
             if (rData.words) gameWords = rData.words;
@@ -1338,7 +1342,8 @@ window.handleWordSubmission = function(userWord) {
             els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
         }
 
-        setTimeout(() => {
+        if (nextWordTimeout) clearTimeout(nextWordTimeout);
+        nextWordTimeout = setTimeout(() => {
             if (gameRunning && isCourseMode) {
                 if (window.courseTimeIsUp) {
                     window.courseTimeIsUp = false;
@@ -1535,7 +1540,8 @@ window.handleWordSubmission = function(userWord) {
         });
     } else {
         wordIndex++;
-        setTimeout(window.playNextWord, 600);
+        if (nextWordTimeout) clearTimeout(nextWordTimeout);
+        nextWordTimeout = setTimeout(window.playNextWord, 600);
     }
 };
 
