@@ -371,6 +371,7 @@ window.listenToRoomInBackground = function() {
             baseWpm = rData.wpm;
             if (rData.words) gameWords = rData.words;
 
+            window.isSinglePlayer = (rData.type === 'single');
             window.isFixedSpeed = !!rData.fixedSpeed;
             window.isEasyMode = !!rData.easyMode;
             window.isAllowSpectators = !!rData.allowSpectators;
