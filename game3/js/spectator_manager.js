@@ -19,6 +19,8 @@ window.watchSpecificRoom = function(code, targetName) {
         els.permanentGameInput.value = "";
     }
 
+    if (els.tableBody) els.tableBody.innerHTML = "";
+    if (els.scoreDisplay) els.scoreDisplay.textContent = "Punti: 0";
     if (els.wpmDisplay) els.wpmDisplay.textContent = "👁️ SPETTATORE | WPM: --";
     if (els.spectatorsCountDisplay) els.spectatorsCountDisplay.style.display = 'none';
 
