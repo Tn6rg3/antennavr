@@ -1011,7 +1011,17 @@ window.shareAppToFriends = function() {
     if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
 };
 
+window.inviteFriendsToRoom = function() {
+    if (!roomCode) return showToast("Nessuna stanza attiva.");
+    const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=room_${roomCode}`)}&text=${encodeURIComponent(`📻 Unisciti alla mia stanza su Sfida Telegrafia!\nCodice Stanza: #${roomCode}`)}`;
+    if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
+};
+
 // --- LISTENER PULSANTI CHAT ---
+if (els.inviteFriendsBtn) {
+    els.inviteFriendsBtn.onclick = () => window.inviteFriendsToRoom();
+}
+
 if (els.sendChatBtn) {
     els.sendChatBtn.onclick = async () => {
         const now = Date.now();
