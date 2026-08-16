@@ -231,6 +231,7 @@ window.resetGameState = function() {
     window.wordSpaceMult = 1.0;
     window.isFixedSpeed = false;
     window.isEasyMode = false;
+    window.isAllowSpectators = false;
 };
 
 window.forceAppUpdate = function() {
@@ -1124,6 +1125,7 @@ if (els.createRoomBtn) {
             words: window.gameWords,
             fixedSpeed: !!isFixed,
             easyMode: !!isEasy,
+            allowSpectators: !!allowSpectators,
             charSpaceWpm: cSpace,
             wordSpaceMult: wSpace,
             createdAt: firebase.database.ServerValue.TIMESTAMP,

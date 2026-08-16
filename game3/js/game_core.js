@@ -166,6 +166,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     if (listeners.roomLb && roomCode) { db.ref(`rooms/${roomCode}`).off('value', listeners.roomLb); listeners.roomLb = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
     if (listeners.room) { listeners.room.off(); listeners.room = null; }
+    if (listeners.spectators && roomCode) { db.ref(`rooms/${roomCode}/spectators`).off('value', listeners.spectators); listeners.spectators = null; }
     window.isRoomMonitorActive = false;
     if (listeners.pingPong && roomCode) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (roomCode) { db.ref(`rooms/${roomCode}/coop_state`).off(); }
@@ -374,6 +375,7 @@ window.listenToRoomInBackground = function() {
 
             window.isFixedSpeed = !!rData.fixedSpeed;
             window.isEasyMode = !!rData.easyMode;
+            window.isAllowSpectators = !!rData.allowSpectators;
             window.charSpaceWpm = rData.charSpaceWpm || 0;
             window.wordSpaceMult = rData.wordSpaceMult || 1.0;
 
@@ -716,14 +718,24 @@ window.startCountdownSequence = function() {
     if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
     if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: 0`;
 
-    if (isSinglePlayer && els.allowSpectatorsCheckbox && els.allowSpectatorsCheckbox.checked) {
+    // --- GESTIONE CONTATORE SPETTATORI (REAL-TIME) ---
+    if (isSinglePlayer && window.isAllowSpectators) {
         if (els.spectatorsCountDisplay) {
             els.spectatorsCountDisplay.style.display = 'inline-block';
             els.spectatorsCountDisplay.textContent = '👁️ 0';
         }
-        db.ref(`rooms/${roomCode}/spectators`).on('value', snap => {
+
+        // Pulizia listener precedente se presente
+        if (listeners.spectators) db.ref(`rooms/${roomCode}/spectators`).off('value', listeners.spectators);
+
+        listeners.spectators = db.ref(`rooms/${roomCode}/spectators`).on('value', snap => {
             const count = snap.exists() ? Object.keys(snap.val()).length : 0;
-            if (els.spectatorsCountDisplay) els.spectatorsCountDisplay.textContent = `👁️ ${count}`;
+            if (els.spectatorsCountDisplay) {
+                els.spectatorsCountDisplay.textContent = `👁️ ${count}`;
+                // Piccolo effetto visivo quando entra qualcuno
+                els.spectatorsCountDisplay.style.transform = 'scale(1.2)';
+                setTimeout(() => { if(els.spectatorsCountDisplay) els.spectatorsCountDisplay.style.transform = 'scale(1)'; }, 200);
+            }
         });
     } else if (els.spectatorsCountDisplay) {
         els.spectatorsCountDisplay.style.display = 'none';
