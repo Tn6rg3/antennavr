@@ -190,12 +190,12 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
                 if (window.tg && window.tg.showAlert) window.tg.showAlert(msg);
                 else showToast(msg);
             }
-            if (amIHost && !roomCode.startsWith("TRN_")) {
-                db.ref(`rooms/${roomCode}`).remove();
-                db.ref(`public_lobby_rooms/${roomCode}`).remove();
+            if (amIHost && !currentCode.startsWith("TRN_")) {
+                db.ref(`rooms/${currentCode}`).remove();
+                db.ref(`public_lobby_rooms/${currentCode}`).remove();
             } else {
-                db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
-                db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
+                db.ref(`rooms/${currentCode}/players/${myId}`).onDisconnect().cancel();
+                db.ref(`rooms/${currentCode}/players/${myId}`).remove().then(() => {
                     // Aggiorna conteggio totale in bacheca
                     if (currentCode && !currentCode.startsWith("TRN_")) {
                         db.ref(`rooms/${currentCode}/players`).once('value', s => {
@@ -210,18 +210,19 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
             roomCode = "";
         }
         else if (isExplicitQuit) {
-            db.ref(`rooms/${roomCode}/players/${myId}`).onDisconnect().cancel();
+            db.ref(`rooms/${currentCode}/players/${myId}`).onDisconnect().cancel();
 
             if (gameRunning) {
-                db.ref(`rooms/${roomCode}/players/${myId}`).update({ finished: true, abandoned: true, online: false });
+                db.ref(`rooms/${currentCode}/players/${myId}`).update({ finished: true, abandoned: true, online: false });
             } else {
-                db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
+                db.ref(`rooms/${currentCode}/players/${myId}`).remove().then(() => {
                     if (currentCode && !currentCode.startsWith("TRN_")) {
                         db.ref(`rooms/${currentCode}/players`).once('value', s => {
-                            if (s.exists()) {
-                                const totalCount = Object.keys(s.val() || {}).length;
+                            const totalCount = s.exists() ? Object.keys(s.val() || {}).length : 0;
+                            if (totalCount > 0) {
                                 db.ref(`public_lobby_rooms/${currentCode}/pCount`).set(totalCount);
                             } else if (!amIHost) {
+                                // Se non c'è più nessuno e non sono l'host (caso anomalo), rimuovi la lobby
                                 db.ref(`public_lobby_rooms/${currentCode}`).remove();
                             }
                         });
@@ -230,19 +231,22 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
             }
             roomCode = "";
         } else {
-            // Se usciamo per navigazione classifiche (senza delete o explicit quit)
-            // puliamo comunque il roomCode per evitare riavvii automatici dai listener
-            db.ref(`rooms/${roomCode}/players/${myId}`).once('value', s => {
+            // Se usciamo per navigazione (senza delete o explicit quit)
+            // se non abbiamo accettato la sfida, ci rimuoviamo del tutto
+            db.ref(`rooms/${currentCode}/players/${myId}`).once('value', s => {
                 const p = s.val();
                 if (p && !p.accepted) {
-                    db.ref(`rooms/${roomCode}/players/${myId}`).remove().then(() => {
-                        db.ref(`rooms/${roomCode}/players`).once('value', snap => {
+                    db.ref(`rooms/${currentCode}/players/${myId}`).remove().then(() => {
+                        db.ref(`rooms/${currentCode}/players`).once('value', snap => {
                             const totalCount = snap.exists() ? Object.keys(snap.val() || {}).length : 0;
-                            db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(totalCount);
+                            if (totalCount > 0) {
+                                db.ref(`public_lobby_rooms/${currentCode}/pCount`).set(totalCount);
+                            }
                         });
                     });
-                } else {
-                    db.ref(`rooms/${roomCode}/players/${myId}`).update({ online: false });
+                } else if (p) {
+                    // Se abbiamo accettato ma usciamo dalla lobby, andiamo solo offline
+                    db.ref(`rooms/${currentCode}/players/${myId}`).update({ online: false });
                 }
             });
             roomCode = "";
