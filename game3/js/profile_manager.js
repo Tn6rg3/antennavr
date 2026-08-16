@@ -625,12 +625,26 @@ if (els.deleteDataBtn) {
         showToast("Eliminazione dati in corso...");
 
         try {
-            // 1. Dati Utente e Presenza
+            // 1. Dati Utente, Presenza e Iscrizione Corso
             await db.ref(`users/${window.myId}`).remove();
             await db.ref(`presence/${window.myId}`).remove();
             await db.ref(`courseActiveEnrollments/${window.myId}`).remove();
 
-            // 2. Attività (Storico classifiche partecipazione)
+            // 2. Mappatura di Sicurezza (ID Firebase -> ID Telegram)
+            const firebaseUid = firebase.auth().currentUser?.uid;
+            if (firebaseUid) {
+                await db.ref(`uid_mapping/${firebaseUid}`).remove();
+            }
+
+            // 3. Richieste Amministrative (Tutor)
+            const tutorReqSnap = await db.ref('tutorRequests').once('value');
+            if (tutorReqSnap.exists()) {
+                tutorReqSnap.forEach(child => {
+                    if (child.val().uid === window.myId) child.ref.remove();
+                });
+            }
+
+            // 4. Attività (Storico classifiche partecipazione)
             const now = new Date();
             const dKey = now.toISOString().split('T')[0];
             const wKey = window.getWeekNumber(now);
