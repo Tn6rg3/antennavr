@@ -213,7 +213,14 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
             db.ref(`rooms/${currentCode}/players/${myId}`).onDisconnect().cancel();
 
             if (gameRunning) {
-                db.ref(`rooms/${currentCode}/players/${myId}`).update({ finished: true, abandoned: true, online: false });
+                db.ref(`rooms/${currentCode}/players/${myId}`).update({ finished: true, abandoned: true, online: false }).then(() => {
+                    // Se siamo in multiplayer, aggiorniamo subito il riepilogo match per la classifica
+                    if (!isSinglePlayer && !isCourseMode) {
+                        db.ref(`rooms/${currentCode}/players`).once('value', s => {
+                            if (s.exists()) window.saveMatchSummary(s.val());
+                        });
+                    }
+                });
             } else {
                 db.ref(`rooms/${currentCode}/players/${myId}`).remove().then(() => {
                     if (currentCode && !currentCode.startsWith("TRN_")) {

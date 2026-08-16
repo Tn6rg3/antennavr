@@ -416,9 +416,9 @@ window.renderHeadToHeadView = function(players, container, matchTimestamp = null
     playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
     const maxScore = playersArray[0].score;
 
-    // Un match è considerato "concluso" se è vecchio di più di 30 minuti,
-    // anche se qualcuno non ha terminato formalmente.
-    const isOldMatch = matchTimestamp && (Date.now() - matchTimestamp > 30 * 60 * 1000);
+    // Un match è considerato "concluso" se è vecchio di più di 5 minuti,
+    // anche se qualcuno non ha terminato formalmente (timeout tecnico).
+    const isOldMatch = matchTimestamp && (Date.now() - matchTimestamp > 5 * 60 * 1000);
 
     playersArray.forEach((p) => {
         const card = document.createElement('div');
