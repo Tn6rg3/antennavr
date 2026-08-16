@@ -697,10 +697,14 @@ if (els.deleteDataBtn) {
 
             showToast("Profilo eliminato con successo.");
 
-            // 5. Pulizia Locale e Riavvio
+            // 5. Pulizia Locale e Chiusura App
             localStorage.clear();
             setTimeout(() => {
-                location.reload();
+                if (window.tg && typeof window.tg.close === 'function') {
+                    window.tg.close();
+                } else {
+                    location.reload(); // Fallback se non siamo in ambiente Telegram
+                }
             }, 1500);
 
         } catch (e) {
