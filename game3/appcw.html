@@ -401,9 +401,9 @@
             <div id="wpmErrorChartContainer" style="overflow-y:auto; font-size: 0.8em;"></div>
         </div>
 
-        <div style="display: flex; gap: 8px; width: 100%; flex-grow: 1; min-height: 0;">
+        <div style="display: flex; gap: 8px; width: 100%; flex-shrink: 0; min-height: 200px;">
             <!-- Bigrammi Sbagliati -->
-            <div class="box-panel" style="flex: 1; min-height: 0; padding: 5px;">
+            <div class="box-panel" style="flex: 1; display:flex; flex-direction:column; padding: 5px;">
                 <h3 style="font-size: 0.85em; margin-bottom:2px;">🔗 Coppie</h3>
                 <div style="display:flex; align-items:center; justify-content:center; gap:4px; margin-bottom:5px;">
                     <small style="font-size:0.65em;">Soglia:</small>
@@ -413,7 +413,7 @@
             </div>
 
             <!-- Parole Ricorrenti -->
-            <div class="box-panel" style="flex: 1; min-height: 0; padding: 5px;">
+            <div class="box-panel" style="flex: 1; display:flex; flex-direction:column; padding: 5px;">
                 <h3 style="font-size: 0.85em; margin-bottom:2px;">🔤 Parole</h3>
                 <div style="display:flex; align-items:center; justify-content:center; gap:4px; margin-bottom:5px;">
                     <small style="font-size:0.65em;">Soglia:</small>
@@ -423,9 +423,9 @@
             </div>
         </div>
 
-        <div class="box-panel" style="margin-top:8px; flex-shrink:0; flex-direction:row; gap:6px;">
-            <button id="btnCreateErrorDict" class="btn-success" style="font-size:0.85em; padding:10px; flex:2;">🛠️ Allenamento Parole Critiche</button>
-            <button id="btnResetErrorStats" class="btn-danger" style="font-size:0.85em; padding:10px; flex:1;">🗑️ Reset Dati</button>
+        <div class="box-panel" style="margin-top:8px; flex-shrink:0; display:flex; flex-direction:column; gap:6px;">
+            <button id="btnCreateErrorDict" class="btn-success" style="font-size:0.85em; padding:10px;">🛠️ Allenamento Parole Critiche</button>
+            <button id="btnResetErrorStats" class="btn-danger" style="font-size:0.85em; padding:10px;">🗑️ Reset Dati</button>
         </div>
     </div>
 
