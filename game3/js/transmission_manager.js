@@ -638,6 +638,20 @@ window.playKeyerSymbol = function() {
 };
 
 window.handleKeyerEvent = function(type, duration) {
+    const now = Date.now();
+
+    // Trigger finalizzazione carattere precedente se iniziamo un nuovo elemento ('on')
+    if (type === 'on' && window.groupTxState.running && window.groupTxState.sequence.length > 0) {
+        const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
+        const unit = 1200 / wpm;
+        const gap = now - window.transmissionState.lastEventTime;
+
+        // Se il silenzio è significativo (> 2u), chiudiamo il carattere precedente
+        if (gap > unit * 2.0) {
+            window.finalizeGroupCharacter(gap);
+        }
+    }
+
     const ev = { type: type, duration: duration };
     if (window.transmissionState.active) {
         window.transmissionState.sequence.push(ev);
@@ -645,9 +659,12 @@ window.handleKeyerEvent = function(type, duration) {
     }
     if (window.groupTxState.running) {
         window.groupTxState.sequence.push(ev);
-        // Reset timer solo al rilascio (off) per dare tempo di fare il prossimo elemento
+        // Richiamiamo processGroupInput solo su 'off' per gestire l'auto-finalizzazione pigra
         if (type === 'off') window.processGroupInput();
     }
+
+    // Aggiorniamo sempre il tempo dell'ultimo evento per l'analisi dei gap
+    window.transmissionState.lastEventTime = now;
 };
 
 /**
@@ -783,9 +800,15 @@ window.updateGroupHighlight = function() {
 };
 
 window.processGroupInput = function() {
-    // Rimosso ogni timeout automatico.
-    // La finalizzazione del carattere avviene all'inizio del segnale successivo
-    // o alla pressione del tasto STOP.
+    if (!window.groupTxState.running) return;
+    if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
+
+    // Auto-finalizzazione "pigra" dopo 3 secondi di silenzio.
+    window.groupTxState.timeout = setTimeout(() => {
+        if (window.groupTxState.running && window.groupTxState.sequence.length > 0) {
+            window.finalizeGroupCharacter(3000);
+        }
+    }, 3000);
 };
 
 window.finalizeGroupCharacter = function(actualGap = 0) {
@@ -794,12 +817,22 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
     const phase = window.groupTxState.phase;
     const targetText = phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
 
-    // Saltiamo gli spazi se l'indice è fermo su uno
+    // Saltiamo gli spazi nel testo target
     while (window.groupTxState.currentIndex < targetText.length && targetText[window.groupTxState.currentIndex] === " ") {
         window.groupTxState.currentIndex++;
     }
 
-    if (window.groupTxState.currentIndex >= targetText.length) return;
+    if (window.groupTxState.currentIndex >= targetText.length) {
+        if (phase === 'PROMPT') {
+            window.groupTxState.phase = 'GROUPS';
+            window.groupTxState.currentIndex = 0;
+            const prompt = document.getElementById('groupTxPrompt');
+            if (prompt) prompt.style.display = "none";
+        } else {
+            window.finishGroupTx();
+        }
+        return;
+    }
 
     const seq = window.groupTxState.sequence;
     const onElements = seq.filter(s => s.type === 'on');
@@ -821,13 +854,12 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
         else window.groupTxState.stats.dotAccs.push(acc);
     });
 
-    // Spazi interni (1u)
     internalOffElements.forEach(el => {
         const acc = Math.max(0, 100 - (Math.abs(el.duration - unit) / unit * 100));
         window.groupTxState.stats.charSpaceAccs.push(acc);
     });
 
-    // Valutazione dello spazio EFFETTIVO (gap precedente all'inizio di questa lettera)
+    // Analisi dello spazio tra caratteri/gruppi
     if (actualGap > 0 && window.groupTxState.currentIndex > 0) {
         const wasNewWord = (targetText[window.groupTxState.currentIndex - 1] === " ");
         const idealGap = wasNewWord ? (unit * 7) : (unit * 3);
@@ -846,7 +878,6 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
     if (phase === 'PROMPT') {
         if (isCorrect) {
             window.groupTxState.currentIndex++;
-            // Verifica immediata se il PROMPT è finito
             if (window.groupTxState.currentIndex >= targetText.length) {
                 window.groupTxState.phase = 'GROUPS';
                 window.groupTxState.currentIndex = 0;
@@ -875,6 +906,7 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
     }
 
     window.groupTxState.sequence = [];
+    if (window.groupTxState.timeout) { clearTimeout(window.groupTxState.timeout); window.groupTxState.timeout = null; }
 };
 
 window.MANIPULATION_ADVICE = [
