@@ -771,10 +771,10 @@ window.processGroupInput = function() {
 
     if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
 
-    // Aspettiamo 6 unità di silenzio prima di considerare il carattere concluso
+    // Tempo di attesa ridotto a 3 unità per rilevare la fine del carattere in modo più fluido
     window.groupTxState.timeout = setTimeout(() => {
         window.finalizeGroupCharacter();
-    }, unit * 6);
+    }, unit * 3);
 };
 
 window.finalizeGroupCharacter = function() {
@@ -919,14 +919,7 @@ window.finalizeGroupCharacter = function() {
     window.groupTxState.sequence = [];
     if (!isCorrect) {
         window.groupTxState.consecutiveErrors = (window.groupTxState.consecutiveErrors || 0) + 1;
-        // Meno permissivo: solo 3 errori concessi
-        if (window.groupTxState.consecutiveErrors >= 3) {
-            window.stopGroupTx();
-            setTimeout(() => {
-                alert("TRASMISSIONE TROPPO IRREGOLARE! 🛑\nPrecisione insufficiente. Riprova con più calma.");
-            }, 100);
-            return;
-        }
+        // Rimosso blocco automatico per permettere il completamento dell'esercizio
     } else {
         window.groupTxState.consecutiveErrors = 0;
     }
