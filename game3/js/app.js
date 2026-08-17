@@ -490,11 +490,11 @@ function initGame() {
 
         if (data.alias) {
             window.myName = data.alias;
-            // Verifica caratteri validi (Alfanumerico)
-            const alphanumericRegex = /^[a-zA-Z0-9]+$/;
-            if (!alphanumericRegex.test(data.alias)) {
+            // Verifica caratteri validi (Alfanumerico e spazi)
+            const validAliasRegex = /^[a-zA-Z0-9 ]+$/;
+            if (!validAliasRegex.test(data.alias)) {
                 setTimeout(() => {
-                    tg.showAlert("⚠️ Il tuo Alias attuale contiene caratteri non validi (simboli o icone). Per favore, modificalo nella sezione Profilo usando solo lettere e numeri.");
+                    tg.showAlert("⚠️ Il tuo Alias attuale contiene caratteri non validi (simboli o icone). Per favore, modificalo nella sezione Profilo usando solo lettere, numeri e spazi.");
                 }, 2500);
             }
         } else {
