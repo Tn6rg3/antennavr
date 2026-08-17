@@ -755,18 +755,40 @@ window.generateRandomGroups = function(numGroups = 4) {
     console.log("GROUP_TX: Generating random groups:", numGroups);
     const typeSelect = document.getElementById('groupTypeSelect');
     const type = typeSelect ? typeSelect.value : 'LETTERS';
+
     const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const numbers = "0123456789";
     let pool = letters;
-    if (type === 'NUMBERS') pool = numbers;
-    else if (type === 'ALPHANUM') pool = letters + numbers;
 
     let text = "";
-    for (let g = 0; g < numGroups; g++) {
-        for (let c = 0; c < 5; c++) {
-            text += pool[Math.floor(Math.random() * pool.length)];
+
+    if (type === 'ITALIAN') {
+        // Usa il dizionario principale (Italiano) o quello personalizzato se presente
+        let dict = (window.customDictionary && window.customDictionary.length > 0)
+                   ? window.customDictionary
+                   : (window.itDictionary || []);
+
+        if (dict.length > 0) {
+            let selectedWords = [];
+            for (let i = 0; i < numGroups; i++) {
+                let word = dict[Math.floor(Math.random() * dict.length)];
+                selectedWords.push(word.toUpperCase());
+            }
+            text = selectedWords.join(" ");
+        } else {
+            // Fallback se il dizionario non è ancora caricato
+            text = "PAROLA TEST ESERCIZIO CW";
         }
-        if (g < numGroups - 1) text += " ";
+    } else {
+        if (type === 'NUMBERS') pool = numbers;
+        else if (type === 'ALPHANUM') pool = letters + numbers;
+
+        for (let g = 0; g < numGroups; g++) {
+            for (let c = 0; c < 5; c++) {
+                text += pool[Math.floor(Math.random() * pool.length)];
+            }
+            if (g < numGroups - 1) text += " ";
+        }
     }
     window.groupTxState.fullText = text;
 };

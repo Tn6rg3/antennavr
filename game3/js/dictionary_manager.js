@@ -13,13 +13,14 @@ window.fetchDictionary = async function(url, lang) {
         const resp = await fetch(url);
         if (!resp.ok) throw new Error("Offline o file non trovato");
         const text = await resp.text();
-        const lines = text.split('\n')
-            .map(l => l.trim().toLowerCase())
-            .filter(l => l.length > 2);
+        // Supporta sia separazione per riga che per virgola
+        const words = text.split(/[\n,]+/)
+            .map(w => w.trim().toLowerCase())
+            .filter(w => w.length > 2);
 
-        if (lines.length > 10) {
-            if (lang === 'it') window.itDictionary = lines;
-            else window.enDictionary = lines;
+        if (words.length > 10) {
+            if (lang === 'it') window.itDictionary = words;
+            else window.enDictionary = words;
             return;
         }
         throw new Error("Dizionario troppo corto");
