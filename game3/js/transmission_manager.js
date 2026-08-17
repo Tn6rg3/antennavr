@@ -675,10 +675,37 @@ window.renderGroupContent = function() {
     const text = window.groupTxState.fullText;
     for (let i = 0; i < text.length; i++) {
         const span = document.createElement('span');
-        span.textContent = text[i] === " " ? "\u00A0" : text[i];
-        span.style.color = "rgba(255,255,255,0.15)";
+        const isSpace = (text[i] === " ");
+        span.textContent = isSpace ? "\u00A0" : text[i];
+        span.style.color = "#ffc107";
+        // Nessun padding laterale per i caratteri, ampio spazio per i divisori di gruppo
+        span.style.padding = isSpace ? "0 15px" : "2px 0px";
+        span.style.borderRadius = "4px";
+        span.style.transition = "all 0.2s";
         span.id = "gtx_char_" + i;
         cont.appendChild(span);
+    }
+    window.updateGroupHighlight();
+};
+
+window.updateGroupHighlight = function() {
+    const text = window.groupTxState.phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
+    const curr = window.groupTxState.currentIndex;
+
+    if (window.groupTxState.phase === 'GROUPS') {
+        const fullText = window.groupTxState.fullText;
+        for (let i = 0; i < fullText.length; i++) {
+            const el = document.getElementById("gtx_char_" + i);
+            if (el) {
+                if (i === curr) {
+                    el.style.background = "rgba(33, 150, 243, 0.4)";
+                    el.style.borderBottom = "3px solid #2196f3";
+                } else {
+                    el.style.background = "transparent";
+                    el.style.borderBottom = "none";
+                }
+            }
+        }
     }
 };
 
@@ -767,7 +794,7 @@ window.finalizeGroupCharacter = function() {
                 document.getElementById('groupTxFeedback').textContent = "BENE! ORA I GRUPPI...";
                 const prompt = document.getElementById('groupTxPrompt');
                 if (prompt) prompt.style.color = "#4caf50";
-                setTimeout(() => { if (prompt) prompt.style.display = "none"; }, 1000);
+                setTimeout(() => { if (prompt) prompt.style.display = "none"; window.updateGroupHighlight(); }, 1000);
             } else {
                  document.getElementById('groupTxFeedback').textContent = "Prossimo: " + targetText[window.groupTxState.currentIndex];
             }
@@ -779,6 +806,7 @@ window.finalizeGroupCharacter = function() {
         if (charEl) {
             charEl.style.color = isCorrect ? "#4caf50" : "#f44336";
             charEl.style.textShadow = isCorrect ? "0 0 10px #4caf50" : "0 0 10px #f44336";
+            charEl.style.transform = "scale(1)";
         }
         window.groupTxState.currentIndex++;
 
@@ -789,15 +817,13 @@ window.finalizeGroupCharacter = function() {
             const wasSpace = (targetText[nextIdx] === " ");
 
             if (wasSpace) {
-                // Se c'è uno spazio tra gruppi, registriamo la durata dell'ultimo silenzio prima del prossimo carattere
-                // La durata dello spazio tra parole (Word Space) è idealmente 7 unità.
-                // Lo spazio tra caratteri è già incluso nella pausa di trigger (unit * 4)
                 while (targetText[nextIdx] === " " && nextIdx < targetText.length) nextIdx++;
                 window.groupTxState.currentIndex = nextIdx;
             }
 
             if (nextIdx < targetText.length) {
                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + targetText[nextIdx];
+                window.updateGroupHighlight();
             } else {
                 window.finishGroupTx();
             }
