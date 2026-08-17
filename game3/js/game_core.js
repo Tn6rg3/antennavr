@@ -378,16 +378,18 @@ window.listenToRoomInBackground = function() {
         gameRunning = true; // Importante: deve essere true prima di caricare i parametri
 
         // Sincronizzazione parametri avanzati della stanza
-            currentWpm = rData.wpm;
-            baseWpm = rData.wpm;
-            if (rData.words) gameWords = rData.words;
+        currentWpm = rData.wpm;
+        baseWpm = rData.wpm;
+        currentMode = rData.mode || 'standard'; // Fix: Sincronizziamo la modalità di gioco (es. conquest/coop)
+        if (rData.words) gameWords = rData.words;
+        requestedWordCount = rData.wordCount || 10; // Sincronizziamo il conteggio parole richiesto
 
-            window.isSinglePlayer = (rData.type === 'single');
-            window.isFixedSpeed = !!rData.fixedSpeed;
-            window.isEasyMode = !!rData.easyMode;
-            window.isAllowSpectators = !!rData.allowSpectators;
-            window.charSpaceWpm = rData.charSpaceWpm || 0;
-            window.wordSpaceMult = rData.wordSpaceMult || 1.0;
+        window.isSinglePlayer = (rData.type === 'single');
+        window.isFixedSpeed = !!rData.fixedSpeed;
+        window.isEasyMode = !!rData.easyMode;
+        window.isAllowSpectators = !!rData.allowSpectators;
+        window.charSpaceWpm = rData.charSpaceWpm || 0;
+        window.wordSpaceMult = rData.wordSpaceMult || 1.0;
 
             if (rData.status === 'playing') {
                 return window.resumeGameSequence();
