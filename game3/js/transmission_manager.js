@@ -577,7 +577,7 @@ window.startGroupTx = function() {
         console.log("GROUP_TX: Starting exercise...");
         window.groupTxState.running = true;
         window.groupTxState.phase = 'PROMPT';
-        window.groupTxState.targetText = "VVV =";
+        window.groupTxState.targetText = "VVV="; // Rimosso spazio per facilitare il confronto logico
         window.groupTxState.currentIndex = 0;
         window.groupTxState.consecutiveErrors = 0;
         window.groupTxState.sequence = [];
@@ -590,18 +590,18 @@ window.startGroupTx = function() {
         const feedback = document.getElementById('groupTxFeedback');
         const analysis = document.getElementById('groupTxAnalysis');
 
-    if (bStart) bStart.style.setProperty('display', 'none', 'important');
-    if (bStop) bStop.style.setProperty('display', 'block', 'important');
-    if (display) {
-        display.style.setProperty('display', 'flex', 'important');
-        display.style.flexDirection = 'column';
-        display.style.alignItems = 'center';
-        display.style.visibility = 'visible';
-        display.style.opacity = '1';
-    }
+        if (bStart) bStart.style.setProperty('display', 'none', 'important');
+        if (bStop) bStop.style.setProperty('display', 'block', 'important');
+        if (display) {
+            display.style.setProperty('display', 'flex', 'important');
+            display.style.flexDirection = 'column';
+            display.style.alignItems = 'center';
+            display.style.visibility = 'visible';
+            display.style.opacity = '1';
+        }
 
         if (prompt) {
-            prompt.textContent = "VVV =";
+            prompt.textContent = "VVV ="; // Mantenuto spazio solo visivo
             prompt.style.color = "var(--link-color)";
             prompt.style.display = "block";
         }
@@ -614,10 +614,9 @@ window.startGroupTx = function() {
 
         window.generateRandomGroups();
         window.renderGroupContent();
-        console.log("GROUP_TX: Exercise ready. Target text:", window.groupTxState.fullText);
     } catch (err) {
         console.error("GROUP_TX Error:", err);
-        showToast("Errore avvio esercizio: " + err.message);
+        showToast("Errore avvio: " + err.message);
     }
 };
 
@@ -686,27 +685,27 @@ window.processGroupInput = function() {
 window.finalizeGroupCharacter = function() {
     if (!window.groupTxState.running) return;
 
-    const currentTargetFull = window.groupTxState.phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
+    const phase = window.groupTxState.phase;
+    const targetText = phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
 
-    // Funzione interna per trovare il prossimo carattere non-spazio
-    const findNextValidIndex = (idx) => {
-        let i = idx;
-        while (i < currentTargetFull.length && currentTargetFull[i] === " ") i++;
-        return i;
-    };
+    // Se l'indice corrente è su uno spazio, saltiamolo (non si trasmette lo spazio)
+    while (targetText[window.groupTxState.currentIndex] === " " && window.groupTxState.currentIndex < targetText.length) {
+        window.groupTxState.currentIndex++;
+    }
 
-    // Assicuriamoci che l'indice attuale punti a un carattere valido
-    window.groupTxState.currentIndex = findNextValidIndex(window.groupTxState.currentIndex);
-
-    if (window.groupTxState.currentIndex >= currentTargetFull.length) {
-        if (window.groupTxState.phase === 'PROMPT') {
+    if (window.groupTxState.currentIndex >= targetText.length) {
+        if (phase === 'PROMPT') {
             window.groupTxState.phase = 'GROUPS';
             window.groupTxState.currentIndex = 0;
-            window.finalizeGroupCharacter(); // Ricorsione per iniziare i gruppi
+            document.getElementById('groupTxFeedback').textContent = "BENE! ORA I GRUPPI...";
+            const prompt = document.getElementById('groupTxPrompt');
+            if (prompt) prompt.style.color = "#4caf50";
+            setTimeout(() => { if (prompt) prompt.style.display = "none"; }, 1000);
+            return;
         } else {
             window.finishGroupTx();
+            return;
         }
-        return;
     }
 
     const seq = window.groupTxState.sequence;
@@ -718,31 +717,32 @@ window.finalizeGroupCharacter = function() {
 
     let detectedCode = "";
     onElements.forEach(el => {
-        // Tolleranza per interfaccia Arduino (soglia a 2.3 per le linee)
-        detectedCode += (el.duration < unit * 2.3) ? "." : "-";
+        // Soglia 2.5 per essere ancora più permissivi con interfacce Arduino
+        detectedCode += (el.duration < unit * 2.5) ? "." : "-";
     });
 
-    const targetChar = currentTargetFull[window.groupTxState.currentIndex];
+    const targetChar = targetText[window.groupTxState.currentIndex];
     const targetCode = window.morseDict[targetChar] || "";
     const isCorrect = (detectedCode === targetCode);
 
     console.log(`GROUP_TX: Target "${targetChar}" (${targetCode}), Detected "${detectedCode}" -> ${isCorrect}`);
 
-    if (window.groupTxState.phase === 'PROMPT') {
+    if (phase === 'PROMPT') {
         if (isCorrect) {
             window.groupTxState.currentIndex++;
             // Cerchiamo il prossimo per il feedback
-            const nextIdx = findNextValidIndex(window.groupTxState.currentIndex);
-            if (nextIdx >= currentTargetFull.length) {
+            let nextIdx = window.groupTxState.currentIndex;
+            while (targetText[nextIdx] === " " && nextIdx < targetText.length) nextIdx++;
+
+            if (nextIdx >= targetText.length) {
                 window.groupTxState.phase = 'GROUPS';
                 window.groupTxState.currentIndex = 0;
+                document.getElementById('groupTxFeedback').textContent = "BENE! ORA I GRUPPI...";
                 const prompt = document.getElementById('groupTxPrompt');
                 if (prompt) prompt.style.color = "#4caf50";
-                document.getElementById('groupTxFeedback').textContent = "BENE! ORA I GRUPPI...";
                 setTimeout(() => { if (prompt) prompt.style.display = "none"; }, 1000);
             } else {
-                 const nextChar = currentTargetFull[nextIdx];
-                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + nextChar;
+                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + targetText[nextIdx];
             }
         } else {
             document.getElementById('groupTxFeedback').textContent = "Errore! Ripeti " + targetChar;
@@ -755,13 +755,18 @@ window.finalizeGroupCharacter = function() {
         }
         window.groupTxState.currentIndex++;
 
-        const nextIdx = findNextValidIndex(window.groupTxState.currentIndex);
-        if (nextIdx >= currentTargetFull.length) {
+        if (window.groupTxState.currentIndex >= targetText.length) {
             window.finishGroupTx();
         } else {
-            window.groupTxState.currentIndex = nextIdx; // Saltiamo lo spazio nel conteggio
-            const nextChar = currentTargetFull[nextIdx];
-            document.getElementById('groupTxFeedback').textContent = "Prossimo: " + nextChar;
+            // Se il prossimo è uno spazio, saltalo per il feedback
+            let nextIdx = window.groupTxState.currentIndex;
+            while (targetText[nextIdx] === " " && nextIdx < targetText.length) nextIdx++;
+
+            if (nextIdx < targetText.length) {
+                document.getElementById('groupTxFeedback').textContent = "Prossimo: " + targetText[nextIdx];
+            } else {
+                window.finishGroupTx();
+            }
         }
     }
 
