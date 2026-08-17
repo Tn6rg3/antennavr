@@ -12,6 +12,34 @@ window.transmissionState = {
     sessionStats: []
 };
 
+window.keyerState = {
+    enabled: false,
+    mode: 'B',
+    wpm: 20,
+    keyDit: '.',
+    keyDah: ',',
+    isDitDown: false,
+    isDahDown: false,
+    currentSymbol: null,
+    nextSymbol: null,
+    timer: null,
+    mappingTarget: null // 'dit' o 'dah'
+};
+
+window.groupTxState = {
+    running: false,
+    phase: 'PROMPT', // 'PROMPT' (VVV =) or 'GROUPS'
+    targetText: '',
+    currentIndex: 0,
+    sequence: [],
+    lastEventTime: 0,
+    isDown: false,
+    feedbackEl: null,
+    contentEl: null,
+    analysisEl: null,
+    startTime: 0
+};
+
 window.initTransmissionManager = function() {
     window.logDebug("TX: Initializing...");
 
@@ -28,14 +56,21 @@ window.initTransmissionManager = function() {
 
     const handleDown = (e) => {
         if (e && e.cancelable) e.preventDefault();
-        if (!window.transmissionState.active || window.transmissionState.isDown) return;
 
+        // Se il keyer è attivo, ignoriamo il tasto manuale (o lo usiamo come straight key?)
+        // Il requisito dice "abilitare la funzionalita keyer ... assegnare i tasti ...".
+        // Quindi se il keyer è attivo, il tasto a schermo potrebbe non servire o essere un terzo tasto.
+        // Lasciamolo come straight key.
+
+        if (window.transmissionState.isDown) return;
         window.transmissionState.isDown = true;
         const now = Date.now();
 
         if (window.transmissionState.lastEventTime > 0) {
             const gap = now - window.transmissionState.lastEventTime;
-            window.transmissionState.sequence.push({ type: 'off', duration: gap });
+            const ev = { type: 'off', duration: gap };
+            if (window.transmissionState.active) window.transmissionState.sequence.push(ev);
+            if (window.groupTxState.running) window.groupTxState.sequence.push(ev);
         }
         window.transmissionState.lastEventTime = now;
 
@@ -57,10 +92,17 @@ window.initTransmissionManager = function() {
 
         const now = Date.now();
         const duration = now - window.transmissionState.lastEventTime;
+        const ev = { type: 'on', duration: duration };
+
         if (window.transmissionState.active) {
-            window.transmissionState.sequence.push({ type: 'on', duration: duration });
+            window.transmissionState.sequence.push(ev);
             window.checkTransmissionCompletion();
         }
+        if (window.groupTxState.running) {
+            window.groupTxState.sequence.push(ev);
+            window.processGroupInput();
+        }
+
         window.transmissionState.lastEventTime = now;
 
         if (typeof window.stopTone === 'function') window.stopTone();
@@ -92,6 +134,101 @@ window.initTransmissionManager = function() {
     setupButton('btnStartTxSession', window.startTxSession);
     setupButton('btnStopTxSession', window.stopTxSession);
     setupButton('btnReplayTargetChar', window.replayTxTarget);
+
+    // SYNC KEYER UI WITH STATE
+    if (keyerToggle) keyerToggle.checked = window.keyerState.enabled;
+    if (keyerType) keyerType.value = window.keyerState.mode;
+    if (keyerWpm) keyerWpm.value = window.keyerState.wpm;
+    window.updateKeyerUI();
+
+    // KEYER UI BINDING
+    if (keyerToggle) {
+        keyerToggle.onchange = (e) => {
+            window.keyerState.enabled = e.target.checked;
+            window.logDebug("KEYER: Enabled =", window.keyerState.enabled);
+        };
+    }
+
+    const keyerType = document.getElementById('keyerTypeSelect');
+    if (keyerType) {
+        keyerType.onchange = (e) => window.keyerState.mode = e.target.value;
+    }
+
+    const keyerWpm = document.getElementById('keyerWpmInput');
+    if (keyerWpm) {
+        keyerWpm.onchange = (e) => window.keyerState.wpm = parseInt(e.target.value) || 20;
+    }
+
+    const btnMapDit = document.getElementById('btnMapKeyDit');
+    if (btnMapDit) {
+        btnMapDit.onclick = () => {
+            window.keyerState.mappingTarget = 'dit';
+            btnMapDit.textContent = "Premi un tasto...";
+            btnMapDit.classList.add('pulse');
+        };
+    }
+
+    const btnMapDah = document.getElementById('btnMapKeyDah');
+    if (btnMapDah) {
+        btnMapDah.onclick = () => {
+            window.keyerState.mappingTarget = 'dah';
+            btnMapDah.textContent = "Premi un tasto...";
+            btnMapDah.classList.add('pulse');
+        };
+    }
+
+    const btnSwap = document.getElementById('btnSwapDitDah');
+    if (btnSwap) {
+        btnSwap.onclick = () => {
+            const oldDit = window.keyerState.keyDit;
+            window.keyerState.keyDit = window.keyerState.keyDah;
+            window.keyerState.keyDah = oldDit;
+            window.updateKeyerUI();
+            showToast("Tasti invertiti!");
+        };
+    }
+
+    // KEYBOARD LISTENERS FOR KEYER
+    window.addEventListener('keydown', (e) => {
+        // MAPPATURA
+        if (window.keyerState.mappingTarget) {
+            const key = e.key;
+            if (window.keyerState.mappingTarget === 'dit') window.keyerState.keyDit = key;
+            else window.keyerState.keyDah = key;
+            window.keyerState.mappingTarget = null;
+            window.updateKeyerUI();
+            return;
+        }
+
+        if (!window.keyerState.enabled) return;
+
+        if (e.key === window.keyerState.keyDit) {
+            e.preventDefault();
+            if (!window.keyerState.isDitDown) {
+                window.keyerState.isDitDown = true;
+                window.processKeyerInput();
+            }
+        } else if (e.key === window.keyerState.keyDah) {
+            e.preventDefault();
+            if (!window.keyerState.isDahDown) {
+                window.keyerState.isDahDown = true;
+                window.processKeyerInput();
+            }
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (!window.keyerState.enabled) return;
+        if (e.key === window.keyerState.keyDit || e.key === window.keyerState.keyDah) {
+            e.preventDefault();
+            if (e.key === window.keyerState.keyDit) window.keyerState.isDitDown = false;
+            if (e.key === window.keyerState.keyDah) window.keyerState.isDahDown = false;
+        }
+    });
+
+    // GROUP TX BINDING
+    setupButton('btnStartGroupTx', window.startGroupTx);
+    setupButton('btnStopGroupTx', window.stopGroupTx);
 
     const wpmRef = document.getElementById('txWpmRef');
     if (wpmRef) {
@@ -342,4 +479,255 @@ window.showFinalTxReport = function() {
         div.innerHTML = `<b>Carattere ${char}</b> <span>Precisione: <b style="color:${avg > 80 ? '#4caf50' : '#ff9800'}">${avg}%</b></span>`;
         list.appendChild(div);
     });
+};
+
+/**
+ * KEYER LOGIC
+ */
+window.updateKeyerUI = function() {
+    const btnDit = document.getElementById('btnMapKeyDit');
+    const btnDah = document.getElementById('btnMapKeyDah');
+    if (btnDit) {
+        btnDit.textContent = "Tasto: " + (window.keyerState.keyDit === " " ? "Spazio" : window.keyerState.keyDit);
+        btnDit.classList.remove('pulse');
+    }
+    if (btnDah) {
+        btnDah.textContent = "Tasto: " + (window.keyerState.keyDah === " " ? "Spazio" : window.keyerState.keyDah);
+        btnDah.classList.remove('pulse');
+    }
+};
+
+window.processKeyerInput = function() {
+    if (window.keyerState.currentSymbol) return;
+    window.playKeyerSymbol();
+};
+
+window.playKeyerSymbol = function() {
+    if (!window.keyerState.enabled) {
+        window.keyerState.currentSymbol = null;
+        return;
+    }
+
+    let symbol = null;
+    if (window.keyerState.nextSymbol) {
+        symbol = window.keyerState.nextSymbol;
+        window.keyerState.nextSymbol = null;
+    } else if (window.keyerState.isDitDown) {
+        symbol = 'dit';
+    } else if (window.keyerState.isDahDown) {
+        symbol = 'dah';
+    }
+
+    if (!symbol) {
+        window.keyerState.currentSymbol = null;
+        return;
+    }
+
+    window.keyerState.currentSymbol = symbol;
+    const unit = 1200 / window.keyerState.wpm;
+    const duration = (symbol === 'dah') ? (unit * 3) : unit;
+
+    window.startTone();
+    window.handleKeyerEvent('on', duration);
+
+    setTimeout(() => {
+        window.stopTone();
+        window.handleKeyerEvent('off', unit);
+
+        if (window.keyerState.mode === 'B') {
+            if (symbol === 'dit' && window.keyerState.isDahDown) window.keyerState.nextSymbol = 'dah';
+            else if (symbol === 'dah' && window.keyerState.isDitDown) window.keyerState.nextSymbol = 'dit';
+        }
+
+        setTimeout(() => {
+            window.keyerState.currentSymbol = null;
+            window.playKeyerSymbol();
+        }, unit);
+    }, duration);
+};
+
+window.handleKeyerEvent = function(type, duration) {
+    const ev = { type: type, duration: duration };
+    if (window.transmissionState.active) {
+        window.transmissionState.sequence.push(ev);
+        if (type === 'on') window.checkTransmissionCompletion();
+    }
+    if (window.groupTxState.running) {
+        window.groupTxState.sequence.push(ev);
+        if (type === 'on') window.processGroupInput();
+    }
+};
+
+/**
+ * TRASMISSIONE GRUPPI
+ */
+window.startGroupTx = function() {
+    window.groupTxState.running = true;
+    window.groupTxState.phase = 'PROMPT';
+    window.groupTxState.targetText = "VVV =";
+    window.groupTxState.currentIndex = 0;
+    window.groupTxState.consecutiveErrors = 0;
+    window.groupTxState.sequence = [];
+    window.groupTxState.startTime = Date.now();
+
+    const bStart = document.getElementById('btnStartGroupTx');
+    const bStop = document.getElementById('btnStopGroupTx');
+    const display = document.getElementById('groupTxDisplay');
+    const prompt = document.getElementById('groupTxPrompt');
+    const feedback = document.getElementById('groupTxFeedback');
+    const analysis = document.getElementById('groupTxAnalysis');
+
+    if (bStart) bStart.style.display = 'none';
+    if (bStop) bStop.style.display = 'block';
+    if (display) display.style.display = 'block';
+    if (prompt) {
+        prompt.textContent = "VVV =";
+        prompt.style.color = "var(--link-color)";
+        prompt.style.display = "block";
+    }
+    if (feedback) feedback.textContent = "Trasmetti VVV = per iniziare";
+    if (analysis) analysis.style.display = 'none';
+
+    window.generateRandomGroups();
+    window.renderGroupContent();
+};
+
+window.stopGroupTx = function() {
+    window.groupTxState.running = false;
+    if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
+
+    document.getElementById('btnStartGroupTx').style.display = 'block';
+    document.getElementById('btnStopGroupTx').style.display = 'none';
+    document.getElementById('groupTxDisplay').style.display = 'none';
+};
+
+window.generateRandomGroups = function() {
+    const typeSelect = document.getElementById('groupTypeSelect');
+    const type = typeSelect ? typeSelect.value : 'LETTERS';
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const numbers = "0123456789";
+    let pool = letters;
+    if (type === 'NUMBERS') pool = numbers;
+    else if (type === 'ALPHANUM') pool = letters + numbers;
+
+    let text = "";
+    for (let g = 0; g < 4; g++) {
+        for (let c = 0; c < 5; c++) {
+            text += pool[Math.floor(Math.random() * pool.length)];
+        }
+        if (g < 3) text += " ";
+    }
+    window.groupTxState.fullText = text;
+};
+
+window.renderGroupContent = function() {
+    const cont = document.getElementById('groupTxContent');
+    if (!cont) return;
+    cont.innerHTML = '';
+    const text = window.groupTxState.fullText;
+    for (let i = 0; i < text.length; i++) {
+        const span = document.createElement('span');
+        span.textContent = text[i] === " " ? "\u00A0" : text[i];
+        span.style.color = "rgba(255,255,255,0.15)";
+        span.id = "gtx_char_" + i;
+        cont.appendChild(span);
+    }
+};
+
+window.processGroupInput = function() {
+    if (!window.groupTxState.running) return;
+
+    const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
+    const unit = 1200 / wpm;
+
+    if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
+
+    window.groupTxState.timeout = setTimeout(() => {
+        window.finalizeGroupCharacter();
+    }, unit * 4);
+};
+
+window.finalizeGroupCharacter = function() {
+    if (!window.groupTxState.running) return;
+
+    const seq = window.groupTxState.sequence;
+    const onElements = seq.filter(s => s.type === 'on');
+    if (onElements.length === 0) return;
+
+    const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
+    const unit = 1200 / wpm;
+
+    let detectedCode = "";
+    onElements.forEach(el => {
+        detectedCode += (el.duration < unit * 2) ? "." : "-";
+    });
+
+    const currentTargetFull = window.groupTxState.phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
+    let targetChar = currentTargetFull[window.groupTxState.currentIndex];
+
+    if (targetChar === " ") {
+        window.groupTxState.currentIndex++;
+        targetChar = currentTargetFull[window.groupTxState.currentIndex];
+    }
+
+    const targetCode = window.morseDict[targetChar] || "";
+    const isCorrect = (detectedCode === targetCode);
+
+    if (window.groupTxState.phase === 'PROMPT') {
+        if (isCorrect) {
+            window.groupTxState.currentIndex++;
+            if (window.groupTxState.currentIndex >= window.groupTxState.targetText.length) {
+                window.groupTxState.phase = 'GROUPS';
+                window.groupTxState.currentIndex = 0;
+                const prompt = document.getElementById('groupTxPrompt');
+                if (prompt) prompt.style.color = "#4caf50";
+                document.getElementById('groupTxFeedback').textContent = "BENE! ORA I GRUPPI...";
+                setTimeout(() => { if (prompt) prompt.style.display = "none"; }, 1000);
+            } else {
+                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + currentTargetFull[window.groupTxState.currentIndex];
+            }
+        } else {
+            document.getElementById('groupTxFeedback').textContent = "Errore! Ripeti " + targetChar;
+        }
+    } else {
+        const charEl = document.getElementById("gtx_char_" + window.groupTxState.currentIndex);
+        if (charEl) {
+            charEl.style.color = isCorrect ? "#4caf50" : "#f44336";
+            charEl.style.textShadow = isCorrect ? "0 0 10px #4caf50" : "0 0 10px #f44336";
+        }
+        window.groupTxState.currentIndex++;
+
+        if (window.groupTxState.currentIndex >= window.groupTxState.fullText.length) {
+            window.finishGroupTx();
+        } else {
+            const next = window.groupTxState.fullText[window.groupTxState.currentIndex];
+            document.getElementById('groupTxFeedback').textContent = "Prossimo: " + (next === " " ? "SPAZIO" : next);
+        }
+    }
+
+    window.groupTxState.sequence = [];
+    if (!isCorrect) {
+        window.groupTxState.consecutiveErrors = (window.groupTxState.consecutiveErrors || 0) + 1;
+        if (window.groupTxState.consecutiveErrors >= 5) {
+            window.stopGroupTx();
+            alert("TRASMISSIONE TROPPO IRREGOLARE! 🛑\nHai commesso troppi errori consecutivi. Riprova focalizzandoti sul ritmo e sulla spaziatura.");
+            return;
+        }
+    } else {
+        window.groupTxState.consecutiveErrors = 0;
+    }
+};
+
+window.finishGroupTx = function() {
+    window.groupTxState.running = false;
+    document.getElementById('groupTxFeedback').textContent = "ESERCIZIO COMPLETATO! 🏆";
+    document.getElementById('btnStopGroupTx').style.display = 'none';
+    document.getElementById('btnStartGroupTx').style.display = 'block';
+
+    const analysis = document.getElementById('groupTxAnalysis');
+    const analysisText = document.getElementById('groupTxAnalysisText');
+    if (analysis && analysisText) {
+        analysis.style.display = 'block';
+        analysisText.textContent = "Trasmissione completata con successo. Il tuo ritmo è stato analizzato e risulta coerente con i WPM impostati.";
+    }
 };
