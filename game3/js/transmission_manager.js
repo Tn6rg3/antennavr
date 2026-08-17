@@ -800,12 +800,17 @@ window.processGroupInput = function() {
     if (!window.groupTxState.running) return;
     if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
 
-    // Auto-finalizzazione "pigra" dopo 3 secondi di silenzio.
+    const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
+    const unit = 1200 / wpm;
+
+    // Riduciamo il tempo di attesa da 3000ms a unit * 6 (circa 400ms a 20 WPM).
+    // Questo rende il feedback molto più reattivo: appena smetti di battere,
+    // dopo un tempo pari a due spazi tra lettere, il carattere viene validato.
     window.groupTxState.timeout = setTimeout(() => {
         if (window.groupTxState.running && window.groupTxState.sequence.length > 0) {
-            window.finalizeGroupCharacter(3000);
+            window.finalizeGroupCharacter(unit * 6);
         }
-    }, 3000);
+    }, unit * 6);
 };
 
 window.finalizeGroupCharacter = function(actualGap = 0) {
