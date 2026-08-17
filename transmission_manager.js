@@ -1,0 +1,971 @@
+// js/transmission_manager.js
+
+window.transmissionState = {
+    sessionRunning: false,
+    active: false,
+    currentTarget: '',
+    startTime: 0,
+    sequence: [],
+    lastEventTime: 0,
+    isDown: false,
+    timeoutHandle: null,
+    sessionStats: []
+};
+
+if (!window.keyerState) {
+    window.keyerState = {
+        enabled: false,
+        mode: 'B',
+        wpm: 20,
+        tone: 600,
+        keyDit: '.',
+        keyDah: ',',
+        isDitDown: false,
+        isDahDown: false,
+        currentSymbol: null,
+        nextSymbol: null,
+        timer: null,
+        mappingTarget: null // 'dit' o 'dah'
+    };
+}
+
+if (!window.groupTxState) {
+    window.groupTxState = {
+        running: false,
+        phase: 'PROMPT', // 'PROMPT' (VVV =) or 'GROUPS'
+        targetText: '',
+        currentIndex: 0,
+        sequence: [],
+        lastEventTime: 0,
+        isDown: false,
+        feedbackEl: null,
+        contentEl: null,
+        analysisEl: null,
+        startTime: 0,
+        stats: {
+            dotAccs: [],
+            dashAccs: [],
+            charSpaceAccs: [],
+            wordSpaceAccs: []
+        }
+    };
+}
+
+window.initTransmissionManager = function() {
+    try {
+        console.log("TX_DEBUG: initTransmissionManager START");
+
+        window.loadKeyerSettings();
+
+        const keyBtn = document.getElementById('morseKeyBtn');
+        if (keyBtn) {
+            // Clonazione pulsante principale per pulire vecchi listener
+            const newBtn = keyBtn.cloneNode(true);
+            keyBtn.parentNode.replaceChild(newBtn, keyBtn);
+
+            const handleDown = (e) => {
+                if (e && e.cancelable) e.preventDefault();
+                if (window.transmissionState.isDown) return;
+                window.transmissionState.isDown = true;
+                const now = Date.now();
+
+                if (window.transmissionState.lastEventTime > 0) {
+                    const gap = now - window.transmissionState.lastEventTime;
+                    const ev = { type: 'off', duration: gap };
+                    if (window.transmissionState.active) window.transmissionState.sequence.push(ev);
+                    if (window.groupTxState.running) window.groupTxState.sequence.push(ev);
+                }
+                window.transmissionState.lastEventTime = now;
+
+                if (window.transmissionState.timeoutHandle) {
+                    clearTimeout(window.transmissionState.timeoutHandle);
+                    window.transmissionState.timeoutHandle = null;
+                }
+
+                if (typeof window.startTone === 'function') window.startTone(window.keyerState.tone);
+                newBtn.style.transform = "scale(0.92)";
+                newBtn.style.boxShadow = "0 2px 5px rgba(0,0,0,0.8), inset 0 2px 5px rgba(255,255,255,0.1)";
+                const inner = newBtn.querySelector('span');
+                if (inner) inner.style.opacity = "0.6";
+            };
+
+            const handleUp = (e) => {
+                if (!window.transmissionState.isDown) return;
+                window.transmissionState.isDown = false;
+
+                const now = Date.now();
+                const duration = now - window.transmissionState.lastEventTime;
+                const ev = { type: 'on', duration: duration };
+
+                if (window.transmissionState.active) {
+                    window.transmissionState.sequence.push(ev);
+                    window.checkTransmissionCompletion();
+                }
+                if (window.groupTxState.running) {
+                    window.groupTxState.sequence.push(ev);
+                    window.processGroupInput();
+                }
+
+                window.transmissionState.lastEventTime = now;
+
+                if (typeof window.stopTone === 'function') window.stopTone();
+                newBtn.style.transform = "scale(1)";
+                newBtn.style.boxShadow = "0 10px 20px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.1)";
+                const inner = newBtn.querySelector('span');
+                if (inner) inner.style.opacity = "0.2";
+            };
+
+            newBtn.addEventListener('mousedown', handleDown);
+            newBtn.addEventListener('touchstart', handleDown, {passive: false});
+            window.addEventListener('mouseup', handleUp);
+            window.addEventListener('touchend', handleUp, {passive: false});
+        } else {
+            console.warn("TX_DEBUG: morseKeyBtn NOT FOUND");
+        }
+
+        // Inizializzazione Pulsanti
+        const setupButtonLocal = (id, handler) => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    console.log(`TX_DEBUG: Button Clicked -> ${id}`);
+                    if (typeof handler === 'function') handler();
+                    else console.error(`TX_DEBUG: Handler for ${id} is not a function`, handler);
+                };
+            } else {
+                console.warn(`TX_DEBUG: Button ${id} NOT FOUND`);
+            }
+        };
+
+    // BINDING ESERCIZIO SINGOLO
+    setupButtonLocal('btnStartTxSession', window.startTxSession);
+    setupButtonLocal('btnStopTxSession', window.stopTxSession);
+    setupButtonLocal('btnReplayTargetChar', window.replayTxTarget);
+
+    // BINDING ESERCIZIO GRUPPI
+    setupButtonLocal('btnStartGroupTx', window.startGroupTx);
+    setupButtonLocal('btnStopGroupTx', window.stopGroupTx);
+
+    // CONFIGURAZIONE KEYER
+    const kToggle = document.getElementById('keyerEnableToggle');
+    const kType = document.getElementById('keyerTypeSelect');
+    const kWpmIn = document.getElementById('keyerWpmInput');
+    const kToneIn = document.getElementById('keyerToneInput');
+
+    if (kToggle) {
+        kToggle.checked = window.keyerState.enabled;
+        kToggle.onchange = (e) => {
+            window.keyerState.enabled = e.target.checked;
+            window.saveKeyerSettings();
+            console.log("KEYER: State ->", window.keyerState.enabled);
+        };
+    }
+    if (kType) {
+        kType.value = window.keyerState.mode;
+        kType.onchange = (e) => {
+            window.keyerState.mode = e.target.value;
+            window.saveKeyerSettings();
+        };
+    }
+    if (kWpmIn) {
+        kWpmIn.value = window.keyerState.wpm;
+        kWpmIn.onchange = (e) => {
+            window.keyerState.wpm = parseInt(e.target.value) || 20;
+            window.saveKeyerSettings();
+        };
+    }
+    if (kToneIn) {
+        kToneIn.value = window.keyerState.tone || 600;
+        kToneIn.onchange = (e) => {
+            window.keyerState.tone = parseInt(e.target.value) || 600;
+            window.currentTone = window.keyerState.tone;
+            window.saveKeyerSettings();
+        };
+    }
+
+    setupButtonLocal('btnMapKeyDit', () => {
+        window.keyerState.mappingTarget = 'dit';
+        const b = document.getElementById('btnMapKeyDit');
+        if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
+    });
+    setupButtonLocal('btnMapKeyDah', () => {
+        window.keyerState.mappingTarget = 'dah';
+        const b = document.getElementById('btnMapKeyDah');
+        if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
+    });
+    setupButtonLocal('btnSwapDitDah', () => {
+        const oldDit = window.keyerState.keyDit;
+        window.keyerState.keyDit = window.keyerState.keyDah;
+        window.keyerState.keyDah = oldDit;
+        window.updateKeyerUI();
+        window.saveKeyerSettings();
+        showToast("Tasti invertiti!");
+    });
+
+    window.updateKeyerUI();
+
+    // GLOBAL LISTENERS (Solo una volta)
+    if (!window.transmissionGlobalListenersReadyV2) {
+        console.log("TX_DEBUG: Attaching Global Listeners V2");
+        window.addEventListener('keydown', (e) => {
+            console.log("TX_DEBUG: KeyDown ->", e.key, "| Target:", e.target.tagName);
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // Resume Audio Context se necessario
+            if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
+
+            // Rilevamento Mapping
+            if (window.keyerState.mappingTarget) {
+                e.preventDefault();
+                const k = e.key;
+                console.log("TX_DEBUG: Mapped key ->", k);
+                if (window.keyerState.mappingTarget === 'dit') window.keyerState.keyDit = k;
+                else window.keyerState.keyDah = k;
+                window.keyerState.mappingTarget = null;
+                window.updateKeyerUI();
+                window.saveKeyerSettings();
+                showToast("Tasto assegnato: " + (k === " " ? "Spazio" : k));
+                return;
+            }
+
+            if (!window.keyerState.enabled) return;
+
+            if (e.key === window.keyerState.keyDit) {
+                e.preventDefault();
+                if (!window.keyerState.isDitDown) {
+                    window.keyerState.isDitDown = true;
+                    window.processKeyerInput();
+                }
+            } else if (e.key === window.keyerState.keyDah) {
+                e.preventDefault();
+                if (!window.keyerState.isDahDown) {
+                    window.keyerState.isDahDown = true;
+                    window.processKeyerInput();
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (!window.keyerState.enabled) return;
+            if (e.key === window.keyerState.keyDit) window.keyerState.isDitDown = false;
+            if (e.key === window.keyerState.keyDah) window.keyerState.isDahDown = false;
+        });
+
+        window.transmissionGlobalListenersReadyV2 = true;
+    }
+
+    const wpmRef = document.getElementById('txWpmRef');
+    if (wpmRef) wpmRef.textContent = window.courseData?.settings?.start_wpm || 20;
+
+    console.log("TX_DEBUG: initTransmissionManager COMPLETED");
+    } catch (e) {
+        console.error("TX_DEBUG: CRITICAL ERROR in initTransmissionManager:", e);
+    }
+};
+
+window.startTxSession = function() {
+    window.logDebug("TX: Executing startTxSession");
+    window.transmissionState.sessionRunning = true;
+    window.transmissionState.sessionStats = [];
+
+    // Visibility Swap con !important per evitare sovrascritture CSS
+    const bStart = document.getElementById('btnStartTxSession');
+    const bStop = document.getElementById('btnStopTxSession');
+    const bSummary = document.getElementById('txFinalSummary');
+
+    if (bStart) bStart.style.setProperty('display', 'none', 'important');
+    if (bStop) bStop.style.setProperty('display', 'block', 'important');
+    if (bSummary) bSummary.style.display = 'none';
+
+    window.pickNextTxTarget();
+};
+
+window.stopTxSession = function() {
+    window.logDebug("TX: Executing stopTxSession");
+    window.transmissionState.sessionRunning = false;
+    window.transmissionState.active = false;
+
+    if (window.transmissionState.timeoutHandle) clearTimeout(window.transmissionState.timeoutHandle);
+
+    const bStart = document.getElementById('btnStartTxSession');
+    const bStop = document.getElementById('btnStopTxSession');
+
+    if (bStart) bStart.style.setProperty('display', 'block', 'important');
+    if (bStop) bStop.style.setProperty('display', 'none', 'important');
+
+    const detailedAcc = document.getElementById('txDetailedAccuracy');
+    if (detailedAcc) detailedAcc.style.display = 'none';
+
+    window.showFinalTxReport();
+};
+
+window.pickNextTxTarget = function() {
+    window.logDebug("TX: pickNextTxTarget");
+    if (!window.transmissionState.sessionRunning) {
+        console.warn("TX: Session NOT running, aborting pick");
+        return;
+    }
+
+    window.transmissionState.active = true;
+    window.transmissionState.sequence = [];
+    window.transmissionState.lastEventTime = 0;
+
+    // Fallback dati Koch
+    let lesson = 2;
+    try {
+        if (window.courseData && window.courseData.progress && window.courseData.progress.current_lesson) {
+            lesson = parseInt(window.courseData.progress.current_lesson);
+        }
+    } catch(e) {}
+
+    const koch = window.KOCH_SEQUENCE || ["K","M","R","S"];
+    const activeChars = koch.slice(0, Math.max(2, lesson));
+    const randomChar = activeChars[Math.floor(Math.random() * activeChars.length)];
+
+    window.transmissionState.currentTarget = randomChar;
+    window.logDebug("TX: Target is", randomChar);
+
+    const targetEl = document.getElementById('txTargetChar');
+    const feedbackEl = document.getElementById('txFeedbackText');
+    if (targetEl) targetEl.textContent = randomChar;
+    if (feedbackEl) {
+        feedbackEl.textContent = "Ascolta e ripeti...";
+        feedbackEl.style.color = "var(--link-color)";
+    }
+
+    const detailedAcc = document.getElementById('txDetailedAccuracy');
+    if (detailedAcc) detailedAcc.style.display = 'none';
+
+    setTimeout(() => {
+        if (window.transmissionState.sessionRunning) window.replayTxTarget();
+    }, 300);
+};
+
+window.replayTxTarget = function() {
+    if (!window.transmissionState.currentTarget) return;
+    const wpm = parseInt(window.courseData?.settings?.start_wpm) || 20;
+    window.logDebug("TX: Playing audio for", window.transmissionState.currentTarget);
+    if (typeof window.playMorseAudio === 'function') {
+        window.playMorseAudio(window.transmissionState.currentTarget, wpm, true);
+    } else {
+        console.error("TX_DEBUG: playMorseAudio function missing!");
+    }
+};
+
+window.checkTransmissionCompletion = function() {
+    const targetCode = window.morseDict ? window.morseDict[window.transmissionState.currentTarget] : null;
+    if (!targetCode) return;
+
+    const elementsSent = window.transmissionState.sequence.filter(s => s.type === 'on').length;
+    if (elementsSent >= targetCode.length) {
+        if (window.transmissionState.timeoutHandle) clearTimeout(window.transmissionState.timeoutHandle);
+        window.transmissionState.timeoutHandle = setTimeout(() => {
+            if (!window.transmissionState.isDown && window.transmissionState.active) {
+                window.analyzeTransmission();
+            }
+        }, 1200);
+    }
+};
+
+window.analyzeTransmission = function() {
+    if (!window.transmissionState.active) return;
+
+    const target = window.transmissionState.currentTarget;
+    const targetCode = window.morseDict ? window.morseDict[target] : "";
+    if (!targetCode) return;
+
+    const wpm = parseInt(window.courseData?.settings?.start_wpm) || 20;
+    const unit = 1200 / wpm;
+
+    const seq = window.transmissionState.sequence;
+    const onElements = seq.filter(s => s.type === 'on');
+    const offElements = seq.filter(s => s.type === 'off');
+
+    let detectedCode = "";
+    onElements.forEach(el => {
+        detectedCode += (el.duration < unit * 2) ? "." : "-";
+    });
+
+    window.logDebug("TX: Detected", detectedCode, "Target", targetCode);
+
+    if (detectedCode !== targetCode) {
+        window.showTxDetailedResult(false, "Sequenza errata! Riprova.");
+        window.transmissionState.sequence = [];
+        window.transmissionState.lastEventTime = 0;
+        return;
+    }
+
+    // Analisi tecnica
+    let dotAccs = [], dashAccs = [];
+    onElements.forEach((el, i) => {
+        const ideal = (targetCode[i] === '-') ? (unit * 3) : unit;
+        const acc = Math.max(0, 100 - (Math.abs(el.duration - ideal) / ideal * 100));
+        if (targetCode[i] === '.') dotAccs.push(acc); else dashAccs.push(acc);
+    });
+
+    let spaceAccs = [];
+    offElements.forEach(el => {
+        const acc = Math.max(0, 100 - (Math.abs(el.duration - unit) / unit * 100));
+        spaceAccs.push(acc);
+    });
+
+    const avgDot = dotAccs.length > 0 ? Math.round(dotAccs.reduce((a,b)=>a+b,0)/dotAccs.length) : 100;
+    const avgDash = dashAccs.length > 0 ? Math.round(dashAccs.reduce((a,b)=>a+b,0)/dashAccs.length) : 100;
+    const avgSpace = spaceAccs.length > 0 ? Math.round(spaceAccs.reduce((a,b)=>a+b,0)/spaceAccs.length) : 100;
+    const totalAcc = Math.round((avgDot*0.35) + (avgDash*0.35) + (avgSpace*0.3));
+
+    window.transmissionState.sessionStats.push({ char: target, totalAcc: totalAcc });
+
+    // Determinazione messaggio di feedback intelligente
+    let finalMsg = "ECCELLENTE!";
+    let advice = "";
+
+    if (totalAcc < 90) {
+        if (totalAcc >= 75) finalMsg = "BUONO!";
+        else if (totalAcc >= 50) finalMsg = "DISCRETO";
+        else finalMsg = "INSURREZIONE!";
+
+        // Analisi dei punti deboli per il consiglio
+        const errors = [];
+        if (avgDot < 85) errors.push(avgDot < 60 ? "punti troppo irregolari" : "cura la durata dei punti");
+        if (avgDash < 85) errors.push(avgDash < 60 ? "linee sproporzionate" : "linee poco precise");
+        if (avgSpace < 85) errors.push(avgSpace < 60 ? "spazi casuali" : "ritmo irregolare");
+
+        if (errors.length > 0) {
+            advice = "💡 " + errors.join(" e ") + ".";
+        }
+    } else {
+        advice = "🚀 Ritmo perfetto, continua così!";
+    }
+
+    window.showTxDetailedResult(true, finalMsg + "\n" + advice, avgDot, avgDash, avgSpace);
+
+    window.transmissionState.active = false;
+    setTimeout(() => {
+        if (window.transmissionState.sessionRunning) {
+            window.pickNextTxTarget();
+        }
+    }, 2000);
+};
+
+window.showTxDetailedResult = function(isCorrect, msg, dotAcc=0, dashAcc=0, spaceAcc=0) {
+    const feedback = document.getElementById('txFeedbackText');
+    const detailArea = document.getElementById('txDetailedAccuracy');
+
+    window.logDebug(`TX: Result -> Correct: ${isCorrect}, Dot: ${dotAcc}%, Dash: ${dashAcc}%, Space: ${spaceAcc}%`);
+
+    if (feedback) {
+        // Fix Alert #124: Encoding completo e sostituzione globale dei newline
+        const safeMsg = window.escapeHtml(msg);
+        feedback.innerHTML = safeMsg.replace(/\n/g, "<br>");
+
+        feedback.style.color = isCorrect ? "#4caf50" : "#d32f2f";
+        feedback.style.whiteSpace = "normal";
+        feedback.style.lineHeight = "1.2";
+    }
+
+    if (isCorrect && detailArea) {
+        detailArea.style.setProperty('display', 'flex', 'important');
+        window.updateTxBar('Dot', dotAcc);
+        window.updateTxBar('Dash', dashAcc);
+        window.updateTxBar('Space', spaceAcc);
+    } else if (detailArea) {
+        detailArea.style.display = 'none';
+    }
+};
+
+window.updateTxBar = function(type, val) {
+    const bar = document.getElementById(`txAcc${type}Bar`);
+    const txt = document.getElementById(`txAcc${type}Val`);
+    if (bar) bar.style.width = val + "%";
+    if (txt) txt.textContent = val + "%";
+};
+
+window.showFinalTxReport = function() {
+    const summaryCont = document.getElementById('txFinalSummary');
+    const list = document.getElementById('txSummaryList');
+    if (!summaryCont || !list) return;
+
+    if (window.transmissionState.sessionStats.length === 0) return;
+
+    summaryCont.style.display = 'block';
+    list.innerHTML = '';
+
+    const report = {};
+    window.transmissionState.sessionStats.forEach(s => {
+        if (!report[s.char]) report[s.char] = { count: 0, sum: 0 };
+        report[s.char].count++;
+        report[s.char].sum += s.totalAcc;
+    });
+
+    Object.entries(report).forEach(([char, data]) => {
+        const avg = Math.round(data.sum / data.count);
+        const div = document.createElement('div');
+        div.style.cssText = "display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); background:rgba(0,0,0,0.1); border-radius:4px; margin-bottom:4px;";
+        div.innerHTML = `<b>Carattere ${char}</b> <span>Precisione: <b style="color:${avg > 80 ? '#4caf50' : '#ff9800'}">${avg}%</b></span>`;
+        list.appendChild(div);
+    });
+};
+
+/**
+ * PERSISTENZA IMPOSTAZIONI
+ */
+window.saveKeyerSettings = function() {
+    const settings = {
+        enabled: window.keyerState.enabled,
+        mode: window.keyerState.mode,
+        wpm: window.keyerState.wpm,
+        tone: window.keyerState.tone,
+        keyDit: window.keyerState.keyDit,
+        keyDah: window.keyerState.keyDah
+    };
+    localStorage.setItem('cw_keyer_settings', JSON.stringify(settings));
+    console.log("KEYER: Settings saved to local storage.");
+};
+
+window.loadKeyerSettings = function() {
+    const saved = localStorage.getItem('cw_keyer_settings');
+    if (saved) {
+        try {
+            const s = JSON.parse(saved);
+            window.keyerState.enabled = s.enabled || false;
+            window.keyerState.mode = s.mode || 'B';
+            window.keyerState.wpm = s.wpm || 20;
+            window.keyerState.tone = s.tone || 600;
+            window.keyerState.keyDit = s.keyDit || '.';
+            window.keyerState.keyDah = s.keyDah || ',';
+            console.log("KEYER: Settings loaded from local storage.");
+        } catch (e) {
+            console.error("KEYER: Error parsing saved settings.");
+        }
+    }
+};
+
+window.updateKeyerUI = function() {
+    const btnDit = document.getElementById('btnMapKeyDit');
+    const btnDah = document.getElementById('btnMapKeyDah');
+    if (btnDit) {
+        btnDit.textContent = "Tasto: " + (window.keyerState.keyDit === " " ? "Spazio" : window.keyerState.keyDit);
+        btnDit.classList.remove('pulse');
+    }
+    if (btnDah) {
+        btnDah.textContent = "Tasto: " + (window.keyerState.keyDah === " " ? "Spazio" : window.keyerState.keyDah);
+        btnDah.classList.remove('pulse');
+    }
+};
+
+window.processKeyerInput = function() {
+    if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
+    if (window.keyerState.currentSymbol) return;
+    window.playKeyerSymbol();
+};
+
+window.playKeyerSymbol = function() {
+    if (!window.keyerState.enabled) {
+        window.keyerState.currentSymbol = null;
+        return;
+    }
+
+    let symbol = null;
+    if (window.keyerState.nextSymbol) {
+        symbol = window.keyerState.nextSymbol;
+        window.keyerState.nextSymbol = null;
+    } else if (window.keyerState.isDitDown) {
+        symbol = 'dit';
+    } else if (window.keyerState.isDahDown) {
+        symbol = 'dah';
+    }
+
+    if (!symbol) {
+        window.keyerState.currentSymbol = null;
+        return;
+    }
+
+    window.keyerState.currentSymbol = symbol;
+    const unit = 1200 / window.keyerState.wpm;
+    const duration = (symbol === 'dah') ? (unit * 3) : unit;
+
+    if (typeof window.startTone === 'function') window.startTone(window.keyerState.tone);
+    window.handleKeyerEvent('on', duration);
+
+    setTimeout(() => {
+        if (typeof window.stopTone === 'function') window.stopTone();
+        window.handleKeyerEvent('off', unit);
+
+        if (window.keyerState.mode === 'B') {
+            if (symbol === 'dit' && window.keyerState.isDahDown) window.keyerState.nextSymbol = 'dah';
+            else if (symbol === 'dah' && window.keyerState.isDitDown) window.keyerState.nextSymbol = 'dit';
+        }
+
+        setTimeout(() => {
+            window.keyerState.currentSymbol = null;
+            window.playKeyerSymbol();
+        }, unit);
+    }, duration);
+};
+
+window.handleKeyerEvent = function(type, duration) {
+    const ev = { type: type, duration: duration };
+    if (window.transmissionState.active) {
+        window.transmissionState.sequence.push(ev);
+        if (type === 'on') window.checkTransmissionCompletion();
+    }
+    if (window.groupTxState.running) {
+        window.groupTxState.sequence.push(ev);
+        // Reset timer solo al rilascio (off) per dare tempo di fare il prossimo elemento
+        if (type === 'off') window.processGroupInput();
+    }
+};
+
+/**
+ * TRASMISSIONE GRUPPI
+ */
+window.startGroupTx = function() {
+    try {
+        console.log("GROUP_TX: Starting exercise...");
+        window.groupTxState.running = true;
+        window.groupTxState.phase = 'PROMPT';
+        window.groupTxState.targetText = "VVV="; // Rimosso spazio per facilitare il confronto logico
+        window.groupTxState.currentIndex = 0;
+        window.groupTxState.consecutiveErrors = 0;
+        window.groupTxState.sequence = [];
+        window.groupTxState.startTime = Date.now();
+        window.groupTxState.stats = {
+            dotAccs: [],
+            dashAccs: [],
+            charSpaceAccs: [],
+            wordSpaceAccs: []
+        };
+
+        const bStart = document.getElementById('btnStartGroupTx');
+        const bStop = document.getElementById('btnStopGroupTx');
+        const display = document.getElementById('groupTxDisplay');
+        const prompt = document.getElementById('groupTxPrompt');
+        const feedback = document.getElementById('groupTxFeedback');
+        const analysis = document.getElementById('groupTxAnalysis');
+
+        if (bStart) bStart.style.setProperty('display', 'none', 'important');
+        if (bStop) bStop.style.setProperty('display', 'block', 'important');
+        if (display) {
+            display.style.setProperty('display', 'flex', 'important');
+            display.style.flexDirection = 'column';
+            display.style.alignItems = 'center';
+            display.style.visibility = 'visible';
+            display.style.opacity = '1';
+        }
+
+        if (prompt) {
+            prompt.textContent = "VVV ="; // Mantenuto spazio solo visivo
+            prompt.style.color = "var(--link-color)";
+            prompt.style.display = "block";
+        }
+        if (feedback) {
+            feedback.textContent = "Trasmetti VVV = per iniziare";
+            feedback.style.display = "block";
+            feedback.style.color = "var(--link-color)";
+        }
+        if (analysis) analysis.style.display = 'none';
+
+        const countInput = document.getElementById('groupCountInput');
+        const numGroups = countInput ? parseInt(countInput.value) : 4;
+        window.generateRandomGroups(numGroups);
+        window.renderGroupContent();
+    } catch (err) {
+        console.error("GROUP_TX Error:", err);
+        showToast("Errore avvio: " + err.message);
+    }
+};
+
+window.stopGroupTx = function() {
+    window.groupTxState.running = false;
+    if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
+
+    // Stop immediato di ogni suono residuo
+    if (typeof window.stopTone === 'function') window.stopTone();
+    if (typeof window.stopAllMorseAudio === 'function') window.stopAllMorseAudio();
+
+    // Reset stati tasti per evitare loop infiniti (incantamento)
+    window.keyerState.isDitDown = false;
+    window.keyerState.isDahDown = false;
+    window.keyerState.currentSymbol = null;
+    window.keyerState.nextSymbol = null;
+
+    const bStart = document.getElementById('btnStartGroupTx');
+    const bStop = document.getElementById('btnStopGroupTx');
+    const display = document.getElementById('groupTxDisplay');
+
+    if (bStart) bStart.style.setProperty('display', 'block', 'important');
+    if (bStop) bStop.style.setProperty('display', 'none', 'important');
+    if (display) display.style.setProperty('display', 'none', 'important');
+};
+
+window.generateRandomGroups = function(numGroups = 4) {
+    console.log("GROUP_TX: Generating random groups:", numGroups);
+    const typeSelect = document.getElementById('groupTypeSelect');
+    const type = typeSelect ? typeSelect.value : 'LETTERS';
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const numbers = "0123456789";
+    let pool = letters;
+    if (type === 'NUMBERS') pool = numbers;
+    else if (type === 'ALPHANUM') pool = letters + numbers;
+
+    let text = "";
+    for (let g = 0; g < numGroups; g++) {
+        for (let c = 0; c < 5; c++) {
+            text += pool[Math.floor(Math.random() * pool.length)];
+        }
+        if (g < numGroups - 1) text += " ";
+    }
+    window.groupTxState.fullText = text;
+};
+
+window.renderGroupContent = function() {
+    const cont = document.getElementById('groupTxContent');
+    if (!cont) return;
+    cont.innerHTML = '';
+    const text = window.groupTxState.fullText;
+    for (let i = 0; i < text.length; i++) {
+        const span = document.createElement('span');
+        const isSpace = (text[i] === " ");
+        span.textContent = isSpace ? "\u00A0" : text[i];
+        span.style.color = "#ffc107";
+        // Font ridotto e spazio tra gruppi minimizzato
+        span.style.fontSize = "0.8em";
+        span.style.padding = isSpace ? "0 8px" : "1px 0px";
+        span.style.borderRadius = "3px";
+        span.style.transition = "all 0.2s";
+        span.id = "gtx_char_" + i;
+        cont.appendChild(span);
+    }
+    window.updateGroupHighlight();
+};
+
+window.updateGroupHighlight = function() {
+    // Rimosso effetto invasivo: l'utente vede solo il cambio colore del carattere battuto (verde/rosso)
+};
+
+window.processGroupInput = function() {
+    if (!window.groupTxState.running) return;
+
+    const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
+    const unit = 1200 / wpm;
+
+    if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
+
+    // Aspettiamo 4 unità di silenzio (poco più del Character Space standard di 3u)
+    // per dare tempo all'utente di chiudere il carattere senza correre.
+    window.groupTxState.timeout = setTimeout(() => {
+        window.finalizeGroupCharacter();
+    }, unit * 4);
+};
+
+window.finalizeGroupCharacter = function() {
+    if (!window.groupTxState.running) return;
+
+    const phase = window.groupTxState.phase;
+    const targetText = phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
+
+    // Saltiamo gli spazi se l'indice è fermo su uno (non si trasmette il vuoto)
+    while (targetText[window.groupTxState.currentIndex] === " " && window.groupTxState.currentIndex < targetText.length) {
+        window.groupTxState.currentIndex++;
+    }
+
+    if (window.groupTxState.currentIndex >= targetText.length) {
+        if (phase === 'PROMPT') {
+            window.groupTxState.phase = 'GROUPS';
+            window.groupTxState.currentIndex = 0;
+            const prompt = document.getElementById('groupTxPrompt');
+            if (prompt) prompt.style.display = "none";
+            return;
+        } else {
+            window.finishGroupTx();
+            return;
+        }
+    }
+
+    const seq = window.groupTxState.sequence;
+    let preCharGap = null, internalGaps = [], onElements = [];
+
+    // Separiamo i segnali: quello che viene prima del primo 'on' è lo spazio tra caratteri/gruppi
+    seq.forEach(s => {
+        if (s.type === 'on') onElements.push(s);
+        else {
+            if (onElements.length === 0) preCharGap = s;
+            else internalGaps.push(s);
+        }
+    });
+
+    if (onElements.length === 0) return;
+
+    const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
+    const unit = 1200 / wpm;
+
+    // --- ANALISI TECNICA RIGOROSA SECONDO STANDARD CW ---
+    let detectedCode = "";
+    let charDotAccs = [], charDashAccs = [];
+
+    onElements.forEach((el) => {
+        const isDash = el.duration > unit * 2.0;
+        detectedCode += isDash ? "-" : ".";
+        const ideal = isDash ? (unit * 3) : unit;
+        const acc = Math.max(0, 100 - (Math.abs(el.duration - ideal) / ideal * 100));
+        if (isDash) { window.groupTxState.stats.dashAccs.push(acc); charDashAccs.push(acc); }
+        else { window.groupTxState.stats.dotAccs.push(acc); charDotAccs.push(acc); }
+    });
+
+    // Spazi interni tra gli elementi (1u)
+    internalGaps.forEach(el => {
+        const acc = Math.max(0, 100 - (Math.abs(el.duration - unit) / unit * 100));
+        window.groupTxState.stats.charSpaceAccs.push(acc);
+    });
+
+    // Spazio PRECEDENTE (3u per carattere, 7u per gruppi)
+    if (preCharGap && window.groupTxState.currentIndex > 0) {
+        const isNewWord = (targetText[window.groupTxState.currentIndex - 1] === " ");
+        const idealGap = isNewWord ? (unit * 7) : (unit * 3);
+        // Nota: lo spazio misurato include il silenzio reale + parte del timeout
+        const gapAcc = Math.max(0, 100 - (Math.abs(preCharGap.duration - idealGap) / idealGap * 100));
+
+        if (isNewWord) window.groupTxState.stats.wordSpaceAccs.push(gapAcc);
+        else window.groupTxState.stats.charSpaceAccs.push(gapAcc);
+    }
+
+    const targetChar = targetText[window.groupTxState.currentIndex];
+    const targetCode = window.morseDict[targetChar] || "";
+    const isCorrect = (detectedCode === targetCode);
+
+    const feedbackEl = document.getElementById('groupTxFeedback');
+
+    if (phase === 'PROMPT') {
+        if (isCorrect) {
+            window.groupTxState.currentIndex++;
+            if (window.groupTxState.currentIndex >= targetText.length) {
+                window.groupTxState.phase = 'GROUPS';
+                window.groupTxState.currentIndex = 0;
+                if (feedbackEl) feedbackEl.textContent = "INIZIA I GRUPPI...";
+                const prompt = document.getElementById('groupTxPrompt');
+                if (prompt) prompt.style.display = "none";
+            } else {
+                if (feedbackEl) feedbackEl.textContent = "Prossimo: " + targetText[window.groupTxState.currentIndex];
+            }
+        }
+    } else {
+        const charEl = document.getElementById("gtx_char_" + window.groupTxState.currentIndex);
+        if (charEl) {
+            charEl.style.color = isCorrect ? "#4caf50" : "#f44336";
+        }
+        if (feedbackEl) {
+            feedbackEl.innerHTML = isCorrect ? `<span style="color:#4caf50">OK</span>` : `<span style="color:#f44336">ERRORE (${detectedCode})</span>`;
+        }
+        window.groupTxState.currentIndex++;
+        if (window.groupTxState.currentIndex >= targetText.length) {
+            window.finishGroupTx();
+        }
+    }
+
+    window.groupTxState.sequence = [];
+    if (!isCorrect) {
+        window.groupTxState.consecutiveErrors = (window.groupTxState.consecutiveErrors || 0) + 1;
+    } else {
+        window.groupTxState.consecutiveErrors = 0;
+    }
+};
+
+window.MANIPULATION_ADVICE = [
+    "Mantieni un ritmo costante, come un metronomo.",
+    "La linea deve durare esattamente tre volte il punto.",
+    "Non affrettare i punti, lasciali respirare.",
+    "Lo spazio tra gli elementi di una lettera deve essere pari a un punto.",
+    "Lo spazio tra le lettere deve essere pari a tre punti.",
+    "Lo spazio tra le parole deve essere pari a sette punti.",
+    "Evita di 'trascinare' le linee, sii netto nel rilascio.",
+    "Rilassa il polso, la manipolazione deve essere fluida.",
+    "Se i punti sono troppo corti, il suono risulterà nervoso.",
+    "Linee troppo lunghe appesantiscono la ricezione altrui.",
+    "La costanza è più importante della velocità pura.",
+    "Esercitati a velocità bassa prima di aumentare i WPM.",
+    "Sii preciso nel chiudere i caratteri prima di spaziare.",
+    "Un tocco leggero aiuta a mantenere il controllo sui paddle.",
+    "Ascolta sempre il tuo sidetone con orecchio critico.",
+    "Se sbagli una lettera, non fermarti, riprendi il ritmo subito.",
+    "La spaziatura irregolare è la causa principale di errori di decodifica.",
+    "Cerca di visualizzare il ritmo musicale del carattere.",
+    "Non forzare la mano, lascia che il keyer faccia il lavoro.",
+    "Assicurati che la tua interfaccia non abbia rimbalzi (bounce).",
+    "I punti devono essere tutti della stessa identica durata.",
+    "Le linee non devono variare di lunghezza durante la sessione.",
+    "Impara a 'sentire' lo spazio di tre unità tra le lettere.",
+    "Lo spazio di sette unità tra i gruppi definisce la parola.",
+    "Se le linee sono corte, verranno scambiate per punti.",
+    "Se i punti sono lunghi, il codice diventa ambiguo.",
+    "La precisione millimetrica distingue l'esperto dal principiante.",
+    "Mantieni la stessa pressione sui paddle per DIT e DAH.",
+    "Il silenzio tra i segnali è importante quanto il suono.",
+    "Sincronizza il respiro con la cadenza dei gruppi.",
+    "Non anticipare il carattere successivo, finisci quello attuale.",
+    "La manipolazione iambica richiede coordinazione, non forza.",
+    "Se ti senti stanco, riduci i WPM e cura la forma.",
+    "Immagina di scrivere nell'aria con un pennello.",
+    "Evita di accorciare lo spazio tra i gruppi per la fretta.",
+    "La chiarezza viene prima della velocità in ogni trasmissione.",
+    "Un buon operatore si riconosce dalla perfezione degli spazi.",
+    "Le linee 'pigre' rendono il morse difficile da leggere.",
+    "I punti 'staccati' troppo presto possono sparire nel rumore.",
+    "Fissa un obiettivo di accuratezza del 95% prima di salire.",
+    "Analizza i tuoi errori: sono quasi sempre legati al tempo.",
+    "Usa il corpo per assecondare il ritmo del braccio.",
+    "Non cambiare impugnatura durante una sessione intensa.",
+    "La tua mano deve essere un'estensione del circuito elettrico.",
+    "Il CW è musica: ogni carattere ha la sua melodia specifica.",
+    "Sii spietato con te stesso sulla durata del DAH.",
+    "Lo spazio tra le parole è il respiro della frase.",
+    "Se il ritmo è spezzato, la mente di chi riceve si stanca.",
+    "Cura la fine del carattere, non lasciare code sonore.",
+    "La perfezione tecnica si ottiene con la ripetizione lenta."
+];
+
+window.finishGroupTx = function() {
+    window.groupTxState.running = false;
+
+    // Stop audio residuo
+    if (typeof window.stopTone === 'function') window.stopTone();
+
+    document.getElementById('groupTxFeedback').textContent = "ESERCIZIO COMPLETATO! 🏆";
+    const bStop = document.getElementById('btnStopGroupTx');
+    const bStart = document.getElementById('btnStartGroupTx');
+    if (bStop) bStop.style.display = 'none';
+    if (bStart) bStart.style.display = 'block';
+
+    const analysis = document.getElementById('groupTxAnalysis');
+    const analysisText = document.getElementById('groupTxAnalysisText');
+    if (analysis && analysisText) {
+        analysis.style.display = 'block';
+
+        const s = window.groupTxState.stats;
+        const avgDot = s.dotAccs.length > 0 ? Math.round(s.dotAccs.reduce((a,b)=>a+b,0)/s.dotAccs.length) : 0;
+        const avgDash = s.dashAccs.length > 0 ? Math.round(s.dashAccs.reduce((a,b)=>a+b,0)/s.dashAccs.length) : 0;
+        const avgCharSpace = s.charSpaceAccs.length > 0 ? Math.round(s.charSpaceAccs.reduce((a,b)=>a+b,0)/s.charSpaceAccs.length) : 0;
+        const avgWordSpace = s.wordSpaceAccs.length > 0 ? Math.round(s.wordSpaceAccs.reduce((a,b)=>a+b,0)/s.wordSpaceAccs.length) : 0;
+
+        let report = `<b style="font-size:1.1em; color:var(--champ-color);">📊 Analisi Tecnica Finale:</b><br><br>`;
+        report += `• <b>Punti (DIT):</b> ${avgDot}%<br>`;
+        report += `• <b>Linee (DAH):</b> ${avgDash}%<br>`;
+        report += `• <b>Spazio Intratext:</b> ${avgCharSpace}%<br>`;
+        if (avgWordSpace > 0) report += `• <b>Spazio Gruppi:</b> ${avgWordSpace}%<br>`;
+
+        // Selezione di due consigli casuali dalla lista delle 50 frasi
+        const advice1 = window.MANIPULATION_ADVICE[Math.floor(Math.random() * window.MANIPULATION_ADVICE.length)];
+        let advice2 = window.MANIPULATION_ADVICE[Math.floor(Math.random() * window.MANIPULATION_ADVICE.length)];
+        while (advice1 === advice2) advice2 = window.MANIPULATION_ADVICE[Math.floor(Math.random() * window.MANIPULATION_ADVICE.length)];
+
+        let evaluation = "";
+        const totalAvg = (avgDot + avgDash + avgCharSpace) / 3;
+        if (totalAvg > 90) evaluation = "🔥 Eccellente! Sei un operatore di classe A.";
+        else if (totalAvg > 75) evaluation = "👍 Buona prova, ma serve più costanza.";
+        else evaluation = "⚠️ Devi lavorare molto sul ritmo e sulla precisione dei tempi.";
+
+        analysisText.innerHTML = `${report}<br><b style="color:var(--link-color);">${evaluation}</b><br><br><i style="font-size:0.9em; opacity:0.8;">💡 Consigli dell'istruttore:</i><br>1. ${advice1}<br>2. ${advice2}`;
+    }
+};
