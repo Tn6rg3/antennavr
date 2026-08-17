@@ -797,20 +797,30 @@ window.renderGroupContent = function() {
     const cont = document.getElementById('groupTxContent');
     if (!cont) return;
     cont.innerHTML = '';
+
+    // Assicuriamoci che l'area sia centrata se le parole sono poche,
+    // ma allineata a sinistra se sono troppe (per lo scroll)
+    cont.style.justifyContent = "center";
+
     const text = window.groupTxState.fullText;
     for (let i = 0; i < text.length; i++) {
         const span = document.createElement('span');
         const isSpace = (text[i] === " ");
         span.textContent = isSpace ? "\u00A0" : text[i];
         span.style.color = "#ffc107";
-        // Font ridotto e spazio tra gruppi minimizzato
-        span.style.fontSize = "0.8em";
-        span.style.padding = isSpace ? "0 8px" : "1px 0px";
+        // Rimosso 0.8em per usare il font size del container (più grande)
+        span.style.padding = isSpace ? "0 10px" : "1px 1px";
         span.style.borderRadius = "3px";
         span.style.transition = "all 0.2s";
         span.id = "gtx_char_" + i;
         cont.appendChild(span);
     }
+
+    // Se il contenuto è più largo del container, allinea a sinistra per permettere lo scroll naturale
+    if (cont.scrollWidth > cont.clientWidth) {
+        cont.style.justifyContent = "flex-start";
+    }
+
     window.updateGroupHighlight();
 };
 
@@ -913,6 +923,9 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
         if (charEl) {
             charEl.style.color = isCorrect ? "#4caf50" : "#f44336";
             charEl.style.textShadow = isCorrect ? "none" : "0 0 5px #f44336";
+
+            // Portiamo il carattere corrente in vista se la riga è molto lunga (scroll orizzontale)
+            charEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
         }
         if (feedbackEl) {
             feedbackEl.innerHTML = isCorrect ? `<span style="color:#4caf50">OK</span>` : `<span style="color:#f44336">ERR (${detectedCode})</span>`;
