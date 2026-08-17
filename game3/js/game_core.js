@@ -369,33 +369,42 @@ window.listenToRoomInBackground = function() {
         window.lastPlayerCount = pCount;
         window.lastAcceptedCount = acceptedCount;
 
-    // 3. GESTIONE TRANSIZIONI DI STATO (Countdown / Playing)
-    if ((rData.status === 'playing' || rData.status === 'countdown') && !gameRunning) {
-        console.log("Room Monitor: Match starting, switching to game mode.");
-        localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
-        window.isRoomMonitorActive = false;
+        // 3. GESTIONE TRANSIZIONI DI STATO (Countdown / Playing)
+        if ((rData.status === 'playing' || rData.status === 'countdown') && !gameRunning) {
+            console.log("Room Monitor: Match starting, switching to game mode.");
+            localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
+            window.isRoomMonitorActive = false;
 
-        gameRunning = true; // Importante: deve essere true prima di caricare i parametri
+            gameRunning = true; // Importante: deve essere true prima di caricare i parametri
 
-        // Sincronizzazione parametri avanzati della stanza
-        currentWpm = rData.wpm;
-        baseWpm = rData.wpm;
-        currentMode = rData.mode || 'standard'; // Fix: Sincronizziamo la modalità di gioco (es. conquest/coop)
-        if (rData.words) gameWords = rData.words;
-        requestedWordCount = rData.wordCount || 10; // Sincronizziamo il conteggio parole richiesto
+            // Sincronizzazione parametri avanzati della stanza
+            currentWpm = rData.wpm;
+            baseWpm = rData.wpm;
+            currentMode = rData.mode || 'standard';
+            requestedWordCount = rData.wordCount || 10;
 
-        window.isSinglePlayer = (rData.type === 'single');
-        window.isFixedSpeed = !!rData.fixedSpeed;
-        window.isEasyMode = !!rData.easyMode;
-        window.isAllowSpectators = !!rData.allowSpectators;
-        window.charSpaceWpm = rData.charSpaceWpm || 0;
-        window.wordSpaceMult = rData.wordSpaceMult || 1.0;
+            window.isSinglePlayer = (rData.type === 'single');
+            window.isFixedSpeed = !!rData.fixedSpeed;
+            window.isEasyMode = !!rData.easyMode;
+            window.isAllowSpectators = !!rData.allowSpectators;
+            window.charSpaceWpm = rData.charSpaceWpm || 0;
+            window.wordSpaceMult = rData.wordSpaceMult || 1.0;
 
-            if (rData.status === 'playing') {
-                return window.resumeGameSequence();
-            } else {
-                return window.startCountdownSequence();
-            }
+            // --- OTTIMIZZAZIONE DOWNLOAD: Carichiamo le parole solo una volta ---
+            db.ref(`rooms/${roomCode}/game_words`).once('value', wSnap => {
+                if (wSnap.exists()) {
+                    gameWords = wSnap.val();
+                } else if (rData.words) {
+                    // Fallback per compatibilità sessioni vecchie
+                    gameWords = rData.words;
+                }
+
+                if (rData.status === 'playing') {
+                    window.resumeGameSequence();
+                } else {
+                    window.startCountdownSequence();
+                }
+            });
         }
     });
 };

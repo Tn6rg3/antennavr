@@ -724,17 +724,21 @@ window.listenToInvites = function() {
                     const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard');
                     const isCoop = (inv.mode === 'conquest');
 
-                    db.ref(`rooms/${roomCodeNew}`).set({
+                    const roomData = {
                         status: 'countdown',
                         type: isCoop ? 'coop' : 'multi',
                         mode: inv.mode || 'standard',
                         wpm: inv.wpm || 20,
                         tone: 600,
                         wordCount: inv.wordCount || 10,
-                        words: words,
                         createdAt: firebase.database.ServerValue.TIMESTAMP,
                         hostId: inv.fromId
-                    }).then(() => {
+                    };
+
+                    db.ref(`rooms/${roomCodeNew}`).set(roomData).then(() => {
+                        // Ottimizzazione download: Parole separate
+                        db.ref(`rooms/${roomCodeNew}/game_words`).set(words);
+
                         db.ref(`invite_accepted/${inv.fromId}`).set({
                             roomCode: roomCodeNew,
                             ts: firebase.database.ServerValue.TIMESTAMP

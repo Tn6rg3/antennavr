@@ -989,19 +989,24 @@ if (els.btnPlayDailyNow) {
         gameWords = window.getGameWords(requestedWordCount, currentMode);
 
         const startDaily = () => {
-            db.ref('rooms/' + roomCode).set({
+            const dailyData = {
                 status: 'countdown',
                 type: 'single',
                 mode: currentMode,
                 wpm: currentWpm,
                 tone: currentTone,
                 wordCount: requestedWordCount,
-                words: gameWords,
                 createdAt: firebase.database.ServerValue.TIMESTAMP,
                 hostId: myId,
-                fixedSpeed: false, // Forziamo parametri standard per la sfida
+                fixedSpeed: false,
                 easyMode: false
-            }).then(() => window.joinRoomLogic?.(false))
+            };
+
+            db.ref('rooms/' + roomCode).set(dailyData).then(() => {
+                // Ottimizzazione: Parole separate
+                db.ref(`rooms/${roomCode}/game_words`).set(gameWords);
+                window.joinRoomLogic?.(false);
+            })
             .catch(err => {
                 console.error("Daily Challenge Start Error:", err);
                 showToast("Errore avvio sfida. Riprova tra un istante.");
@@ -1134,14 +1139,13 @@ if (els.createRoomBtn) {
         const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
         const roomRef = db.ref('rooms/' + window.roomCode);
-        roomRef.set({
+        const roomData = {
             status: window.isSinglePlayer ? 'countdown' : 'waiting',
             type: window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
             mode: window.currentMode,
             wpm: window.currentWpm,
             tone: window.currentTone,
             wordCount: window.requestedWordCount,
-            words: window.gameWords,
             fixedSpeed: !!isFixed,
             easyMode: !!isEasy,
             allowSpectators: !!allowSpectators,
@@ -1150,7 +1154,13 @@ if (els.createRoomBtn) {
             createdAt: firebase.database.ServerValue.TIMESTAMP,
             expiresAt: expires,
             hostId: window.myId
-        }).then(() => {
+        };
+
+        roomRef.set(roomData).then(() => {
+            // Ottimizzazione: Salviamo le parole in un nodo separato
+            // per evitare di scaricarle ad ogni aggiornamento di punteggio
+            db.ref(`rooms/${window.roomCode}/game_words`).set(window.gameWords);
+
             if (!window.isSinglePlayer) {
                 // PULIZIA AUTOMATICA: Se l'Host si disconnette completamente da Firebase, rimuovi la stanza
                 roomRef.onDisconnect().remove();
