@@ -825,8 +825,8 @@
                     <h3 style="color:var(--champ-color); margin:0 0 10px 0;">📻 Trasmissione Gruppi</h3>
                     <p style="font-size:0.8em; color:var(--hint-color); margin-bottom:12px;">Trasmetti <b style="color:var(--link-color);">VVV =</b> per iniziare, poi i 4 gruppi da 5 caratteri.</p>
 
-                    <div style="display:flex; gap:10px; margin-bottom:15px; align-items:flex-end;">
-                        <div style="flex:1;">
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:15px; align-items:flex-end;">
+                        <div style="flex:1.5; min-width:120px;">
                             <label style="font-size:0.75em; display:block; text-align:left; margin-bottom:4px;">Tipo Gruppi:</label>
                             <select id="groupTypeSelect" style="width:100%; padding:8px; font-size:0.85em; background:var(--sec-bg-color); border:1px solid rgba(255,255,255,0.1); color:white;">
                                 <option value="LETTERS">Solo Lettere</option>
@@ -834,14 +834,18 @@
                                 <option value="ALPHANUM">Alfanumerici</option>
                             </select>
                         </div>
+                        <div style="flex:0.8; min-width:80px;">
+                            <label style="font-size:0.75em; display:block; text-align:left; margin-bottom:4px;">N. Gruppi:</label>
+                            <input type="number" id="groupCountInput" value="4" min="1" max="20" style="width:100%; padding:8px; font-size:0.85em; background:var(--sec-bg-color); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
                         <button id="btnStartGroupTx" class="btn-success" style="flex:1; margin:0; padding:10px;">AVVIA 🚀</button>
                         <button id="btnStopGroupTx" class="btn-danger" style="flex:1; margin:0; padding:10px; display:none;">STOP 🛑</button>
                     </div>
 
                     <!-- AREA VISUALIZZAZIONE GRUPPI -->
-                    <div id="groupTxDisplay" style="background:var(--bg-color); padding:15px; border-radius:12px; margin-bottom:15px; border:1px solid rgba(255,255,255,0.1); min-height:100px; display:none;">
-                        <div id="groupTxPrompt" style="font-size:1.4em; font-weight:bold; color:var(--link-color); margin-bottom:15px; letter-spacing: 4px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">VVV =</div>
-                        <div id="groupTxContent" style="display:flex; flex-wrap:wrap; justify-content:center; gap:0px; font-family:'Courier New', Courier, monospace; font-size:1.8em; letter-spacing:0px; font-weight:bold;">
+                    <div id="groupTxDisplay" style="background:var(--bg-color); padding:10px; border-radius:12px; margin-bottom:15px; border:1px solid rgba(255,255,255,0.1); min-height:80px; display:none;">
+                        <div id="groupTxPrompt" style="font-size:1.2em; font-weight:bold; color:var(--link-color); margin-bottom:10px; letter-spacing: 2px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;">VVV =</div>
+                        <div id="groupTxContent" style="display:flex; flex-wrap:wrap; justify-content:center; gap:0px; font-family:'Courier New', Courier, monospace; font-size:1.4em; letter-spacing:0px; font-weight:bold;">
                             <!-- Caratteri generati qui -->
                         </div>
                     </div>
