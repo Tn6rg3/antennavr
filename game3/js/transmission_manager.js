@@ -69,6 +69,19 @@ window.initTransmissionManager = function() {
                 window.transmissionState.isDown = true;
                 const now = Date.now();
 
+                // GESTIONE TRASMISSIONE GRUPPI (Avanzamento guidato dall'utente)
+                if (window.groupTxState.running && window.groupTxState.sequence.length > 0) {
+                    const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
+                    const unit = 1200 / wpm;
+                    const gap = now - window.transmissionState.lastEventTime;
+
+                    // Se il silenzio è > 2 unità, l'utente sta iniziando un NUOVO carattere.
+                    // Finalizziamo quello precedente prima di registrare il nuovo segnale.
+                    if (gap > unit * 2.0) {
+                        window.finalizeGroupCharacter(gap);
+                    }
+                }
+
                 if (window.transmissionState.lastEventTime > 0) {
                     const gap = now - window.transmissionState.lastEventTime;
                     const ev = { type: 'off', duration: gap };
@@ -679,6 +692,11 @@ window.startGroupTx = function() {
 };
 
 window.stopGroupTx = function() {
+    // Finalizziamo l'ultimo carattere se presente in memoria
+    if (window.groupTxState.running && window.groupTxState.sequence.length > 0) {
+        window.finalizeGroupCharacter(0);
+    }
+
     window.groupTxState.running = false;
     if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
 
@@ -747,27 +765,18 @@ window.updateGroupHighlight = function() {
 };
 
 window.processGroupInput = function() {
-    if (!window.groupTxState.running) return;
-
-    const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
-    const unit = 1200 / wpm;
-
-    if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
-
-    // Aspettiamo 4 unità di silenzio (poco più del Character Space standard di 3u)
-    // per dare tempo all'utente di chiudere il carattere senza correre.
-    window.groupTxState.timeout = setTimeout(() => {
-        window.finalizeGroupCharacter();
-    }, unit * 4);
+    // Rimosso ogni timeout automatico.
+    // La finalizzazione del carattere avviene all'inizio del segnale successivo
+    // o alla pressione del tasto STOP.
 };
 
-window.finalizeGroupCharacter = function() {
+window.finalizeGroupCharacter = function(actualGap = 0) {
     if (!window.groupTxState.running) return;
 
     const phase = window.groupTxState.phase;
     const targetText = phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
 
-    // Saltiamo gli spazi se l'indice è fermo su uno (non si trasmette il vuoto)
+    // Saltiamo gli spazi se l'indice è fermo su uno
     while (targetText[window.groupTxState.currentIndex] === " " && window.groupTxState.currentIndex < targetText.length) {
         window.groupTxState.currentIndex++;
     }
@@ -776,8 +785,6 @@ window.finalizeGroupCharacter = function() {
         if (phase === 'PROMPT') {
             window.groupTxState.phase = 'GROUPS';
             window.groupTxState.currentIndex = 0;
-            const prompt = document.getElementById('groupTxPrompt');
-            if (prompt) prompt.style.display = "none";
             return;
         } else {
             window.finishGroupTx();
@@ -786,47 +793,38 @@ window.finalizeGroupCharacter = function() {
     }
 
     const seq = window.groupTxState.sequence;
-    let preCharGap = null, internalGaps = [], onElements = [];
-
-    // Separiamo i segnali: quello che viene prima del primo 'on' è lo spazio tra caratteri/gruppi
-    seq.forEach(s => {
-        if (s.type === 'on') onElements.push(s);
-        else {
-            if (onElements.length === 0) preCharGap = s;
-            else internalGaps.push(s);
-        }
-    });
+    const onElements = seq.filter(s => s.type === 'on');
+    const internalOffElements = seq.filter(s => s.type === 'off');
 
     if (onElements.length === 0) return;
 
     const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
     const unit = 1200 / wpm;
 
-    // --- ANALISI TECNICA RIGOROSA SECONDO STANDARD CW ---
+    // --- ANALISI TECNICA ---
     let detectedCode = "";
-    let charDotAccs = [], charDashAccs = [];
-
     onElements.forEach((el) => {
         const isDash = el.duration > unit * 2.0;
         detectedCode += isDash ? "-" : ".";
         const ideal = isDash ? (unit * 3) : unit;
         const acc = Math.max(0, 100 - (Math.abs(el.duration - ideal) / ideal * 100));
-        if (isDash) { window.groupTxState.stats.dashAccs.push(acc); charDashAccs.push(acc); }
-        else { window.groupTxState.stats.dotAccs.push(acc); charDotAccs.push(acc); }
+        if (isDash) window.groupTxState.stats.dashAccs.push(acc);
+        else window.groupTxState.stats.dotAccs.push(acc);
     });
 
-    // Spazi interni tra gli elementi (1u)
-    internalGaps.forEach(el => {
+    // Spazi interni (1u)
+    internalOffElements.forEach(el => {
         const acc = Math.max(0, 100 - (Math.abs(el.duration - unit) / unit * 100));
         window.groupTxState.stats.charSpaceAccs.push(acc);
     });
 
-    // Spazio PRECEDENTE (3u per carattere, 7u per gruppi)
-    if (preCharGap && window.groupTxState.currentIndex > 0) {
-        const isNewWord = (targetText[window.groupTxState.currentIndex - 1] === " ");
+    // Valutazione dello spazio EFFETTIVO preso dall'utente (actualGap)
+    // Questo è lo spazio tra il carattere appena finito e quello che sta iniziando ora.
+    if (actualGap > 0 && window.groupTxState.currentIndex > 0) {
+        const expectedGapChar = targetText[window.groupTxState.currentIndex - 1];
+        const isNewWord = (expectedGapChar === " ");
         const idealGap = isNewWord ? (unit * 7) : (unit * 3);
-        // Nota: lo spazio misurato include il silenzio reale + parte del timeout
-        const gapAcc = Math.max(0, 100 - (Math.abs(preCharGap.duration - idealGap) / idealGap * 100));
+        const gapAcc = Math.max(0, 100 - (Math.abs(actualGap - idealGap) / idealGap * 100));
 
         if (isNewWord) window.groupTxState.stats.wordSpaceAccs.push(gapAcc);
         else window.groupTxState.stats.charSpaceAccs.push(gapAcc);
@@ -844,20 +842,23 @@ window.finalizeGroupCharacter = function() {
             if (window.groupTxState.currentIndex >= targetText.length) {
                 window.groupTxState.phase = 'GROUPS';
                 window.groupTxState.currentIndex = 0;
-                if (feedbackEl) feedbackEl.textContent = "INIZIA I GRUPPI...";
                 const prompt = document.getElementById('groupTxPrompt');
                 if (prompt) prompt.style.display = "none";
+                if (feedbackEl) feedbackEl.textContent = "BENE! ORA I GRUPPI...";
             } else {
                 if (feedbackEl) feedbackEl.textContent = "Prossimo: " + targetText[window.groupTxState.currentIndex];
             }
+        } else {
+            if (feedbackEl) feedbackEl.textContent = "Riprova " + targetChar + " (hai fatto: " + detectedCode + ")";
         }
     } else {
         const charEl = document.getElementById("gtx_char_" + window.groupTxState.currentIndex);
         if (charEl) {
             charEl.style.color = isCorrect ? "#4caf50" : "#f44336";
+            charEl.style.textShadow = isCorrect ? "none" : "0 0 5px #f44336";
         }
         if (feedbackEl) {
-            feedbackEl.innerHTML = isCorrect ? `<span style="color:#4caf50">OK</span>` : `<span style="color:#f44336">ERRORE (${detectedCode})</span>`;
+            feedbackEl.innerHTML = isCorrect ? `<span style="color:#4caf50">OK</span>` : `<span style="color:#f44336">ERR (${detectedCode})</span>`;
         }
         window.groupTxState.currentIndex++;
         if (window.groupTxState.currentIndex >= targetText.length) {
@@ -866,11 +867,6 @@ window.finalizeGroupCharacter = function() {
     }
 
     window.groupTxState.sequence = [];
-    if (!isCorrect) {
-        window.groupTxState.consecutiveErrors = (window.groupTxState.consecutiveErrors || 0) + 1;
-    } else {
-        window.groupTxState.consecutiveErrors = 0;
-    }
 };
 
 window.MANIPULATION_ADVICE = [
@@ -952,8 +948,8 @@ window.finishGroupTx = function() {
         let report = `<b style="font-size:1.1em; color:var(--champ-color);">📊 Analisi Tecnica Finale:</b><br><br>`;
         report += `• <b>Punti (DIT):</b> ${avgDot}%<br>`;
         report += `• <b>Linee (DAH):</b> ${avgDash}%<br>`;
-        report += `• <b>Spazio Intratext:</b> ${avgCharSpace}%<br>`;
-        if (avgWordSpace > 0) report += `• <b>Spazio Gruppi:</b> ${avgWordSpace}%<br>`;
+        report += `• <b>Spaziatura Caratteri:</b> ${avgCharSpace}%<br>`;
+        if (avgWordSpace > 0) report += `• <b>Spaziatura Gruppi:</b> ${avgWordSpace}%<br>`;
 
         // Selezione di due consigli casuali dalla lista delle 50 frasi
         const advice1 = window.MANIPULATION_ADVICE[Math.floor(Math.random() * window.MANIPULATION_ADVICE.length)];
