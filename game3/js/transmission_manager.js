@@ -806,24 +806,32 @@ window.finalizeGroupCharacter = function() {
     const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
     const unit = 1200 / wpm;
 
-    // --- ANALISI TECNICA PER REPORT FINALE ---
+    // --- ANALISI TECNICA RIGOROSA ---
     let detectedCode = "";
     onElements.forEach((el, i) => {
-        const isDash = el.duration >= unit * 2.5; // Soglia flessibile
+        // Soglia 2.0 per essere più severi (1.2/WPM * 2)
+        const isDash = el.duration > unit * 2.0;
         detectedCode += isDash ? "-" : ".";
 
-        // Salvataggio statistiche per analisi finale
         const ideal = isDash ? (unit * 3) : unit;
         const acc = Math.max(0, 100 - (Math.abs(el.duration - ideal) / ideal * 100));
         if (isDash) window.groupTxState.stats.dashAccs.push(acc);
         else window.groupTxState.stats.dotAccs.push(acc);
     });
 
-    // Analisi Spazi tra elementi del carattere
+    // Analisi Spazi tra elementi del carattere (Idealmente 1 unità)
     offElements.forEach((el, i) => {
         const acc = Math.max(0, 100 - (Math.abs(el.duration - unit) / unit * 100));
         window.groupTxState.stats.charSpaceAccs.push(acc);
     });
+
+    // Se eravamo dopo uno spazio tra gruppi, valutiamo il Word Space (7 unità)
+    if (isWordSpaceNext && window.transmissionState.lastEventTime > 0) {
+         const gap = Date.now() - window.transmissionState.lastEventTime;
+         const idealWordSpace = unit * 7;
+         const wordAcc = Math.max(0, 100 - (Math.abs(gap - idealWordSpace) / idealWordSpace * 100));
+         window.groupTxState.stats.wordSpaceAccs.push(wordAcc);
+    }
 
     const targetChar = targetText[window.groupTxState.currentIndex];
     const targetCode = window.morseDict[targetChar] || "";
@@ -879,10 +887,11 @@ window.finalizeGroupCharacter = function() {
     window.groupTxState.sequence = [];
     if (!isCorrect) {
         window.groupTxState.consecutiveErrors = (window.groupTxState.consecutiveErrors || 0) + 1;
-        if (window.groupTxState.consecutiveErrors >= 5) {
+        // Meno permissivo: solo 3 errori concessi
+        if (window.groupTxState.consecutiveErrors >= 3) {
             window.stopGroupTx();
             setTimeout(() => {
-                alert("TRASMISSIONE TROPPO IRREGOLARE! 🛑\nIl Keyer è stato resettato. Riprova con più calma.");
+                alert("TRASMISSIONE TROPPO IRREGOLARE! 🛑\nPrecisione insufficiente. Riprova con più calma.");
             }, 100);
             return;
         }
@@ -890,6 +899,59 @@ window.finalizeGroupCharacter = function() {
         window.groupTxState.consecutiveErrors = 0;
     }
 };
+
+window.MANIPULATION_ADVICE = [
+    "Mantieni un ritmo costante, come un metronomo.",
+    "La linea deve durare esattamente tre volte il punto.",
+    "Non affrettare i punti, lasciali respirare.",
+    "Lo spazio tra gli elementi di una lettera deve essere pari a un punto.",
+    "Lo spazio tra le lettere deve essere pari a tre punti.",
+    "Lo spazio tra le parole deve essere pari a sette punti.",
+    "Evita di 'trascinare' le linee, sii netto nel rilascio.",
+    "Rilassa il polso, la manipolazione deve essere fluida.",
+    "Se i punti sono troppo corti, il suono risulterà nervoso.",
+    "Linee troppo lunghe appesantiscono la ricezione altrui.",
+    "La costanza è più importante della velocità pura.",
+    "Esercitati a velocità bassa prima di aumentare i WPM.",
+    "Sii preciso nel chiudere i caratteri prima di spaziare.",
+    "Un tocco leggero aiuta a mantenere il controllo sui paddle.",
+    "Ascolta sempre il tuo sidetone con orecchio critico.",
+    "Se sbagli una lettera, non fermarti, riprendi il ritmo subito.",
+    "La spaziatura irregolare è la causa principale di errori di decodifica.",
+    "Cerca di visualizzare il ritmo musicale del carattere.",
+    "Non forzare la mano, lascia che il keyer faccia il lavoro.",
+    "Assicurati che la tua interfaccia non abbia rimbalzi (bounce).",
+    "I punti devono essere tutti della stessa identica durata.",
+    "Le linee non devono variare di lunghezza durante la sessione.",
+    "Impara a 'sentire' lo spazio di tre unità tra le lettere.",
+    "Lo spazio di sette unità tra i gruppi definisce la parola.",
+    "Se le linee sono corte, verranno scambiate per punti.",
+    "Se i punti sono lunghi, il codice diventa ambiguo.",
+    "La precisione millimetrica distingue l'esperto dal principiante.",
+    "Mantieni la stessa pressione sui paddle per DIT e DAH.",
+    "Il silenzio tra i segnali è importante quanto il suono.",
+    "Sincronizza il respiro con la cadenza dei gruppi.",
+    "Non anticipare il carattere successivo, finisci quello attuale.",
+    "La manipolazione iambica richiede coordinazione, non forza.",
+    "Se ti senti stanco, riduci i WPM e cura la forma.",
+    "Immagina di scrivere nell'aria con un pennello.",
+    "Evita di accorciare lo spazio tra i gruppi per la fretta.",
+    "La chiarezza viene prima della velocità in ogni trasmissione.",
+    "Un buon operatore si riconosce dalla perfezione degli spazi.",
+    "Le linee 'pigre' rendono il morse difficile da leggere.",
+    "I punti 'staccati' troppo presto possono sparire nel rumore.",
+    "Fissa un obiettivo di accuratezza del 95% prima di salire.",
+    "Analizza i tuoi errori: sono quasi sempre legati al tempo.",
+    "Usa il corpo per assecondare il ritmo del braccio.",
+    "Non cambiare impugnatura durante una sessione intensa.",
+    "La tua mano deve essere un'estensione del circuito elettrico.",
+    "Il CW è musica: ogni carattere ha la sua melodia specifica.",
+    "Sii spietato con te stesso sulla durata del DAH.",
+    "Lo spazio tra le parole è il respiro della frase.",
+    "Se il ritmo è spezzato, la mente di chi riceve si stanca.",
+    "Cura la fine del carattere, non lasciare code sonore.",
+    "La perfezione tecnica si ottiene con la ripetizione lenta."
+];
 
 window.finishGroupTx = function() {
     window.groupTxState.running = false;
@@ -906,19 +968,25 @@ window.finishGroupTx = function() {
         const avgDot = s.dotAccs.length > 0 ? Math.round(s.dotAccs.reduce((a,b)=>a+b,0)/s.dotAccs.length) : 0;
         const avgDash = s.dashAccs.length > 0 ? Math.round(s.dashAccs.reduce((a,b)=>a+b,0)/s.dashAccs.length) : 0;
         const avgCharSpace = s.charSpaceAccs.length > 0 ? Math.round(s.charSpaceAccs.reduce((a,b)=>a+b,0)/s.charSpaceAccs.length) : 0;
+        const avgWordSpace = s.wordSpaceAccs.length > 0 ? Math.round(s.wordSpaceAccs.reduce((a,b)=>a+b,0)/s.wordSpaceAccs.length) : 0;
 
-        let report = `<b>Precisione Media:</b><br>`;
-        report += `• Punti (DIT): ${avgDot}%<br>`;
-        report += `• Linee (DAH): ${avgDash}%<br>`;
-        report += `• Spazio Caratteri: ${avgCharSpace}%<br>`;
+        let report = `<b style="font-size:1.1em; color:var(--champ-color);">📊 Analisi Tecnica Finale:</b><br><br>`;
+        report += `• <b>Punti (DIT):</b> ${avgDot}%<br>`;
+        report += `• <b>Linee (DAH):</b> ${avgDash}%<br>`;
+        report += `• <b>Spazio Intratext:</b> ${avgCharSpace}%<br>`;
+        if (avgWordSpace > 0) report += `• <b>Spazio Gruppi:</b> ${avgWordSpace}%<br>`;
 
-        let advice = "";
-        if (avgDot < 80) advice += "I tuoi punti sono un po' irregolari. ";
-        if (avgDash < 80) advice += "Cura di più la lunghezza delle linee (deve essere 3 volte il punto). ";
-        if (avgCharSpace < 80) advice += "Attenzione agli spazi tra le lettere. ";
+        // Selezione di due consigli casuali dalla lista delle 50 frasi
+        const advice1 = window.MANIPULATION_ADVICE[Math.floor(Math.random() * window.MANIPULATION_ADVICE.length)];
+        let advice2 = window.MANIPULATION_ADVICE[Math.floor(Math.random() * window.MANIPULATION_ADVICE.length)];
+        while (advice1 === advice2) advice2 = window.MANIPULATION_ADVICE[Math.floor(Math.random() * window.MANIPULATION_ADVICE.length)];
 
-        if (!advice) advice = "Ritmo e spaziature eccellenti! Operatore impeccabile.";
+        let evaluation = "";
+        const totalAvg = (avgDot + avgDash + avgCharSpace) / 3;
+        if (totalAvg > 90) evaluation = "🔥 Eccellente! Sei un operatore di classe A.";
+        else if (totalAvg > 75) evaluation = "👍 Buona prova, ma serve più costanza.";
+        else evaluation = "⚠️ Devi lavorare molto sul ritmo e sulla precisione dei tempi.";
 
-        analysisText.innerHTML = report + `<br><i style="color:var(--link-color);">${advice}</i>`;
+        analysisText.innerHTML = `${report}<br><b style="color:var(--link-color);">${evaluation}</b><br><br><i style="font-size:0.9em; opacity:0.8;">💡 Consigli dell'istruttore:</i><br>1. ${advice1}<br>2. ${advice2}`;
     }
 };
