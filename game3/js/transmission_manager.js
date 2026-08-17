@@ -55,6 +55,8 @@ window.initTransmissionManager = function() {
     try {
         console.log("TX_DEBUG: initTransmissionManager START");
 
+        window.loadKeyerSettings();
+
         const keyBtn = document.getElementById('morseKeyBtn');
         if (keyBtn) {
             // Clonazione pulsante principale per pulire vecchi listener
@@ -155,22 +157,30 @@ window.initTransmissionManager = function() {
         kToggle.checked = window.keyerState.enabled;
         kToggle.onchange = (e) => {
             window.keyerState.enabled = e.target.checked;
+            window.saveKeyerSettings();
             console.log("KEYER: State ->", window.keyerState.enabled);
         };
     }
     if (kType) {
         kType.value = window.keyerState.mode;
-        kType.onchange = (e) => window.keyerState.mode = e.target.value;
+        kType.onchange = (e) => {
+            window.keyerState.mode = e.target.value;
+            window.saveKeyerSettings();
+        };
     }
     if (kWpmIn) {
         kWpmIn.value = window.keyerState.wpm;
-        kWpmIn.onchange = (e) => window.keyerState.wpm = parseInt(e.target.value) || 20;
+        kWpmIn.onchange = (e) => {
+            window.keyerState.wpm = parseInt(e.target.value) || 20;
+            window.saveKeyerSettings();
+        };
     }
     if (kToneIn) {
         kToneIn.value = window.keyerState.tone || 600;
         kToneIn.onchange = (e) => {
             window.keyerState.tone = parseInt(e.target.value) || 600;
             window.currentTone = window.keyerState.tone;
+            window.saveKeyerSettings();
         };
     }
 
@@ -189,6 +199,7 @@ window.initTransmissionManager = function() {
         window.keyerState.keyDit = window.keyerState.keyDah;
         window.keyerState.keyDah = oldDit;
         window.updateKeyerUI();
+        window.saveKeyerSettings();
         showToast("Tasti invertiti!");
     });
 
@@ -213,6 +224,7 @@ window.initTransmissionManager = function() {
                 else window.keyerState.keyDah = k;
                 window.keyerState.mappingTarget = null;
                 window.updateKeyerUI();
+                window.saveKeyerSettings();
                 showToast("Tasto assegnato: " + (k === " " ? "Spazio" : k));
                 return;
             }
@@ -498,8 +510,39 @@ window.showFinalTxReport = function() {
 };
 
 /**
- * KEYER LOGIC
+ * PERSISTENZA IMPOSTAZIONI
  */
+window.saveKeyerSettings = function() {
+    const settings = {
+        enabled: window.keyerState.enabled,
+        mode: window.keyerState.mode,
+        wpm: window.keyerState.wpm,
+        tone: window.keyerState.tone,
+        keyDit: window.keyerState.keyDit,
+        keyDah: window.keyerState.keyDah
+    };
+    localStorage.setItem('cw_keyer_settings', JSON.stringify(settings));
+    console.log("KEYER: Settings saved to local storage.");
+};
+
+window.loadKeyerSettings = function() {
+    const saved = localStorage.getItem('cw_keyer_settings');
+    if (saved) {
+        try {
+            const s = JSON.parse(saved);
+            window.keyerState.enabled = s.enabled || false;
+            window.keyerState.mode = s.mode || 'B';
+            window.keyerState.wpm = s.wpm || 20;
+            window.keyerState.tone = s.tone || 600;
+            window.keyerState.keyDit = s.keyDit || '.';
+            window.keyerState.keyDah = s.keyDah || ',';
+            console.log("KEYER: Settings loaded from local storage.");
+        } catch (e) {
+            console.error("KEYER: Error parsing saved settings.");
+        }
+    }
+};
+
 window.updateKeyerUI = function() {
     const btnDit = document.getElementById('btnMapKeyDit');
     const btnDah = document.getElementById('btnMapKeyDah');
@@ -625,7 +668,9 @@ window.startGroupTx = function() {
         }
         if (analysis) analysis.style.display = 'none';
 
-        window.generateRandomGroups();
+        const countInput = document.getElementById('groupCountInput');
+        const numGroups = countInput ? parseInt(countInput.value) : 4;
+        window.generateRandomGroups(numGroups);
         window.renderGroupContent();
     } catch (err) {
         console.error("GROUP_TX Error:", err);
@@ -648,8 +693,8 @@ window.stopGroupTx = function() {
     document.getElementById('groupTxDisplay').style.display = 'none';
 };
 
-window.generateRandomGroups = function() {
-    console.log("GROUP_TX: Generating random groups...");
+window.generateRandomGroups = function(numGroups = 4) {
+    console.log("GROUP_TX: Generating random groups:", numGroups);
     const typeSelect = document.getElementById('groupTypeSelect');
     const type = typeSelect ? typeSelect.value : 'LETTERS';
     const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -659,11 +704,11 @@ window.generateRandomGroups = function() {
     else if (type === 'ALPHANUM') pool = letters + numbers;
 
     let text = "";
-    for (let g = 0; g < 4; g++) {
+    for (let g = 0; g < numGroups; g++) {
         for (let c = 0; c < 5; c++) {
             text += pool[Math.floor(Math.random() * pool.length)];
         }
-        if (g < 3) text += " ";
+        if (g < numGroups - 1) text += " ";
     }
     window.groupTxState.fullText = text;
 };
@@ -678,9 +723,10 @@ window.renderGroupContent = function() {
         const isSpace = (text[i] === " ");
         span.textContent = isSpace ? "\u00A0" : text[i];
         span.style.color = "#ffc107";
-        // Nessun padding laterale per i caratteri, ampio spazio per i divisori di gruppo
-        span.style.padding = isSpace ? "0 15px" : "2px 0px";
-        span.style.borderRadius = "4px";
+        // Font ridotto e spazio tra gruppi minimizzato
+        span.style.fontSize = "0.8em";
+        span.style.padding = isSpace ? "0 8px" : "1px 0px";
+        span.style.borderRadius = "3px";
         span.style.transition = "all 0.2s";
         span.id = "gtx_char_" + i;
         cont.appendChild(span);
