@@ -60,7 +60,7 @@ window.switchCourseSubTab = function(tabId) {
         if (txView) txView.style.display = 'flex';
 
         if (typeof window.initTransmissionManager === 'function') {
-            window.initTransmissionManager();
+            setTimeout(() => window.initTransmissionManager(), 50);
         }
     }
 };

@@ -15,14 +15,14 @@ window.morsePlayToken = 0;
 window.btKeepAliveOsc = null;
 
 window.startTone = function(freq) {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (window.audioCtx.state === 'suspended') window.audioCtx.resume();
 
     if (window.manualOscillator) return;
 
     const f = freq || window.currentTone || 600;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    const osc = window.audioCtx.createOscillator();
+    const gain = window.audioCtx.createGain();
 
     osc.type = 'sine';
     osc.frequency.value = f;
@@ -44,7 +44,7 @@ window.stopTone = function() {
     const osc = window.manualOscillator;
     const gain = window.manualGain;
 
-    const now = audioCtx.currentTime;
+    const now = window.audioCtx.currentTime;
     if (gain) {
         gain.gain.setValueAtTime(gain.gain.value, now);
         gain.gain.linearRampToValueAtTime(0, now + 0.005);

@@ -12,219 +12,202 @@ window.transmissionState = {
     sessionStats: []
 };
 
-window.keyerState = {
-    enabled: false,
-    mode: 'B',
-    wpm: 20,
-    tone: 600,
-    keyDit: '.',
-    keyDah: ',',
-    isDitDown: false,
-    isDahDown: false,
-    currentSymbol: null,
-    nextSymbol: null,
-    timer: null,
-    mappingTarget: null // 'dit' o 'dah'
-};
+if (!window.keyerState) {
+    window.keyerState = {
+        enabled: false,
+        mode: 'B',
+        wpm: 20,
+        tone: 600,
+        keyDit: '.',
+        keyDah: ',',
+        isDitDown: false,
+        isDahDown: false,
+        currentSymbol: null,
+        nextSymbol: null,
+        timer: null,
+        mappingTarget: null // 'dit' o 'dah'
+    };
+}
 
-window.groupTxState = {
-    running: false,
-    phase: 'PROMPT', // 'PROMPT' (VVV =) or 'GROUPS'
-    targetText: '',
-    currentIndex: 0,
-    sequence: [],
-    lastEventTime: 0,
-    isDown: false,
-    feedbackEl: null,
-    contentEl: null,
-    analysisEl: null,
-    startTime: 0
-};
+if (!window.groupTxState) {
+    window.groupTxState = {
+        running: false,
+        phase: 'PROMPT', // 'PROMPT' (VVV =) or 'GROUPS'
+        targetText: '',
+        currentIndex: 0,
+        sequence: [],
+        lastEventTime: 0,
+        isDown: false,
+        feedbackEl: null,
+        contentEl: null,
+        analysisEl: null,
+        startTime: 0
+    };
+}
 
 window.initTransmissionManager = function() {
-    window.logDebug("TX: Initializing...");
+    try {
+        console.log("TX_DEBUG: initTransmissionManager START");
 
-    const dom = window.domCache || els;
-    const keyBtn = document.getElementById('morseKeyBtn'); // Non nel cache globale perché clonato spesso
-    if (!keyBtn) {
-        console.error("TX: morseKeyBtn NOT FOUND");
-        return;
-    }
+        const keyBtn = document.getElementById('morseKeyBtn');
+        if (keyBtn) {
+            // Clonazione pulsante principale per pulire vecchi listener
+            const newBtn = keyBtn.cloneNode(true);
+            keyBtn.parentNode.replaceChild(newBtn, keyBtn);
 
-    // Clonazione per pulizia listener
-    const newBtn = keyBtn.cloneNode(true);
-    keyBtn.parentNode.replaceChild(newBtn, keyBtn);
+            const handleDown = (e) => {
+                if (e && e.cancelable) e.preventDefault();
+                if (window.transmissionState.isDown) return;
+                window.transmissionState.isDown = true;
+                const now = Date.now();
 
-    const handleDown = (e) => {
-        if (e && e.cancelable) e.preventDefault();
+                if (window.transmissionState.lastEventTime > 0) {
+                    const gap = now - window.transmissionState.lastEventTime;
+                    const ev = { type: 'off', duration: gap };
+                    if (window.transmissionState.active) window.transmissionState.sequence.push(ev);
+                    if (window.groupTxState.running) window.groupTxState.sequence.push(ev);
+                }
+                window.transmissionState.lastEventTime = now;
 
-        // Se il keyer è attivo, ignoriamo il tasto manuale (o lo usiamo come straight key?)
-        // Il requisito dice "abilitare la funzionalita keyer ... assegnare i tasti ...".
-        // Quindi se il keyer è attivo, il tasto a schermo potrebbe non servire o essere un terzo tasto.
-        // Lasciamolo come straight key.
+                if (window.transmissionState.timeoutHandle) {
+                    clearTimeout(window.transmissionState.timeoutHandle);
+                    window.transmissionState.timeoutHandle = null;
+                }
 
-        if (window.transmissionState.isDown) return;
-        window.transmissionState.isDown = true;
-        const now = Date.now();
-
-        if (window.transmissionState.lastEventTime > 0) {
-            const gap = now - window.transmissionState.lastEventTime;
-            const ev = { type: 'off', duration: gap };
-            if (window.transmissionState.active) window.transmissionState.sequence.push(ev);
-            if (window.groupTxState.running) window.groupTxState.sequence.push(ev);
-        }
-        window.transmissionState.lastEventTime = now;
-
-        if (window.transmissionState.timeoutHandle) {
-            clearTimeout(window.transmissionState.timeoutHandle);
-            window.transmissionState.timeoutHandle = null;
-        }
-
-        if (typeof window.startTone === 'function') window.startTone();
-        newBtn.style.transform = "scale(0.92)";
-        newBtn.style.boxShadow = "0 2px 5px rgba(0,0,0,0.8), inset 0 2px 5px rgba(255,255,255,0.1)";
-        const inner = newBtn.querySelector('span');
-        if (inner) inner.style.opacity = "0.6";
-    };
-
-    const handleUp = (e) => {
-        if (!window.transmissionState.isDown) return;
-        window.transmissionState.isDown = false;
-
-        const now = Date.now();
-        const duration = now - window.transmissionState.lastEventTime;
-        const ev = { type: 'on', duration: duration };
-
-        if (window.transmissionState.active) {
-            window.transmissionState.sequence.push(ev);
-            window.checkTransmissionCompletion();
-        }
-        if (window.groupTxState.running) {
-            window.groupTxState.sequence.push(ev);
-            window.processGroupInput();
-        }
-
-        window.transmissionState.lastEventTime = now;
-
-        if (typeof window.stopTone === 'function') window.stopTone();
-        newBtn.style.transform = "scale(1)";
-        newBtn.style.boxShadow = "0 10px 20px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.1)";
-        const inner = newBtn.querySelector('span');
-        if (inner) inner.style.opacity = "0.2";
-    };
-
-    newBtn.addEventListener('mousedown', handleDown);
-    newBtn.addEventListener('touchstart', handleDown, {passive: false});
-    window.addEventListener('mouseup', handleUp);
-    window.addEventListener('touchend', handleUp, {passive: false});
-
-    // Inizializzazione Pulsanti con listener puliti
-    const setupButton = (id, handler) => {
-        const btn = document.getElementById(id);
-        if (btn) {
-            btn.onclick = (e) => {
-                e.preventDefault();
-                console.log(`TX_DEBUG: Clicked ${id}`);
-                handler();
+                if (typeof window.startTone === 'function') window.startTone(window.keyerState.tone);
+                newBtn.style.transform = "scale(0.92)";
+                newBtn.style.boxShadow = "0 2px 5px rgba(0,0,0,0.8), inset 0 2px 5px rgba(255,255,255,0.1)";
+                const inner = newBtn.querySelector('span');
+                if (inner) inner.style.opacity = "0.6";
             };
+
+            const handleUp = (e) => {
+                if (!window.transmissionState.isDown) return;
+                window.transmissionState.isDown = false;
+
+                const now = Date.now();
+                const duration = now - window.transmissionState.lastEventTime;
+                const ev = { type: 'on', duration: duration };
+
+                if (window.transmissionState.active) {
+                    window.transmissionState.sequence.push(ev);
+                    window.checkTransmissionCompletion();
+                }
+                if (window.groupTxState.running) {
+                    window.groupTxState.sequence.push(ev);
+                    window.processGroupInput();
+                }
+
+                window.transmissionState.lastEventTime = now;
+
+                if (typeof window.stopTone === 'function') window.stopTone();
+                newBtn.style.transform = "scale(1)";
+                newBtn.style.boxShadow = "0 10px 20px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.1)";
+                const inner = newBtn.querySelector('span');
+                if (inner) inner.style.opacity = "0.2";
+            };
+
+            newBtn.addEventListener('mousedown', handleDown);
+            newBtn.addEventListener('touchstart', handleDown, {passive: false});
+            window.addEventListener('mouseup', handleUp);
+            window.addEventListener('touchend', handleUp, {passive: false});
         } else {
-            console.error(`TX_DEBUG: Button ${id} NOT FOUND in DOM`);
+            console.warn("TX_DEBUG: morseKeyBtn NOT FOUND");
         }
-    };
 
-    setupButton('btnStartTxSession', window.startTxSession);
-    setupButton('btnStopTxSession', window.stopTxSession);
-    setupButton('btnReplayTargetChar', window.replayTxTarget);
+        // Inizializzazione Pulsanti
+        const setupButtonLocal = (id, handler) => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    console.log(`TX_DEBUG: Button Clicked -> ${id}`);
+                    if (typeof handler === 'function') handler();
+                    else console.error(`TX_DEBUG: Handler for ${id} is not a function`, handler);
+                };
+            } else {
+                console.warn(`TX_DEBUG: Button ${id} NOT FOUND`);
+            }
+        };
 
-    const keyerToggle = document.getElementById('keyerEnableToggle');
-    const keyerType = document.getElementById('keyerTypeSelect');
+    // BINDING ESERCIZIO SINGOLO
+    setupButtonLocal('btnStartTxSession', window.startTxSession);
+    setupButtonLocal('btnStopTxSession', window.stopTxSession);
+    setupButtonLocal('btnReplayTargetChar', window.replayTxTarget);
 
-    // SYNC KEYER UI WITH STATE
-    if (keyerToggle) keyerToggle.checked = window.keyerState.enabled;
-    if (keyerType) keyerType.value = window.keyerState.mode;
-    const keyerWpm = document.getElementById('keyerWpmInput');
-    if (keyerWpm) keyerWpm.value = window.keyerState.wpm;
+    // BINDING ESERCIZIO GRUPPI
+    setupButtonLocal('btnStartGroupTx', window.startGroupTx);
+    setupButtonLocal('btnStopGroupTx', window.stopGroupTx);
 
-    const keyerTone = document.getElementById('keyerToneInput');
-    if (keyerTone) keyerTone.value = window.keyerState.tone || 600;
+    // CONFIGURAZIONE KEYER
+    const kToggle = document.getElementById('keyerEnableToggle');
+    const kType = document.getElementById('keyerTypeSelect');
+    const kWpmIn = document.getElementById('keyerWpmInput');
+    const kToneIn = document.getElementById('keyerToneInput');
 
-    window.updateKeyerUI();
-
-    // KEYER UI BINDING
-    if (keyerToggle) {
-        keyerToggle.onchange = (e) => {
+    if (kToggle) {
+        kToggle.checked = window.keyerState.enabled;
+        kToggle.onchange = (e) => {
             window.keyerState.enabled = e.target.checked;
-            console.log("KEYER: Enabled =", window.keyerState.enabled);
+            console.log("KEYER: State ->", window.keyerState.enabled);
         };
     }
-
-    if (keyerType) {
-        keyerType.onchange = (e) => window.keyerState.mode = e.target.value;
+    if (kType) {
+        kType.value = window.keyerState.mode;
+        kType.onchange = (e) => window.keyerState.mode = e.target.value;
     }
-
-    const keyerWpm = document.getElementById('keyerWpmInput');
-    if (keyerWpm) {
-        keyerWpm.onchange = (e) => window.keyerState.wpm = parseInt(e.target.value) || 20;
+    if (kWpmIn) {
+        kWpmIn.value = window.keyerState.wpm;
+        kWpmIn.onchange = (e) => window.keyerState.wpm = parseInt(e.target.value) || 20;
     }
-
-    const keyerTone = document.getElementById('keyerToneInput');
-    if (keyerTone) {
-        keyerTone.onchange = (e) => {
+    if (kToneIn) {
+        kToneIn.value = window.keyerState.tone || 600;
+        kToneIn.onchange = (e) => {
             window.keyerState.tone = parseInt(e.target.value) || 600;
             window.currentTone = window.keyerState.tone;
         };
     }
 
-    const btnMapDit = document.getElementById('btnMapKeyDit');
-    if (btnMapDit) {
-        btnMapDit.onclick = () => {
-            window.keyerState.mappingTarget = 'dit';
-            btnMapDit.textContent = "Premi un tasto...";
-            btnMapDit.classList.add('pulse');
-        };
-    }
+    setupButtonLocal('btnMapKeyDit', () => {
+        window.keyerState.mappingTarget = 'dit';
+        const b = document.getElementById('btnMapKeyDit');
+        if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
+    });
+    setupButtonLocal('btnMapKeyDah', () => {
+        window.keyerState.mappingTarget = 'dah';
+        const b = document.getElementById('btnMapKeyDah');
+        if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
+    });
+    setupButtonLocal('btnSwapDitDah', () => {
+        const oldDit = window.keyerState.keyDit;
+        window.keyerState.keyDit = window.keyerState.keyDah;
+        window.keyerState.keyDah = oldDit;
+        window.updateKeyerUI();
+        showToast("Tasti invertiti!");
+    });
 
-    const btnMapDah = document.getElementById('btnMapKeyDah');
-    if (btnMapDah) {
-        btnMapDah.onclick = () => {
-            window.keyerState.mappingTarget = 'dah';
-            btnMapDah.textContent = "Premi un tasto...";
-            btnMapDah.classList.add('pulse');
-        };
-    }
+    window.updateKeyerUI();
 
-    const btnSwap = document.getElementById('btnSwapDitDah');
-    if (btnSwap) {
-        btnSwap.onclick = () => {
-            const oldDit = window.keyerState.keyDit;
-            window.keyerState.keyDit = window.keyerState.keyDah;
-            window.keyerState.keyDah = oldDit;
-            window.updateKeyerUI();
-            showToast("Tasti invertiti!");
-        };
-    }
-
-    // KEYBOARD LISTENERS FOR KEYER (SOLO SE NON INIZIALIZZATI)
-    if (!window.transmissionGlobalListenersReady) {
-        // Usiamo un set per gestire i tasti attualmente premuti e supportare interfacce USB
-        const keysDown = new Set();
-
+    // GLOBAL LISTENERS (Solo una volta)
+    if (!window.transmissionGlobalListenersReadyV2) {
+        console.log("TX_DEBUG: Attaching Global Listeners V2");
         window.addEventListener('keydown', (e) => {
-            // Se stiamo scrivendo in un input (es. chat), non interferire
+            console.log("TX_DEBUG: KeyDown ->", e.key, "| Target:", e.target.tagName);
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            // Resume Audio Context se necessario
+            if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
 
-            // MAPPATURA
+            // Rilevamento Mapping
             if (window.keyerState.mappingTarget) {
                 e.preventDefault();
-                const key = e.key;
-                console.log("KEYER_DEBUG: Mapping detected key:", key);
-                if (window.keyerState.mappingTarget === 'dit') window.keyerState.keyDit = key;
-                else window.keyerState.keyDah = key;
+                const k = e.key;
+                console.log("TX_DEBUG: Mapped key ->", k);
+                if (window.keyerState.mappingTarget === 'dit') window.keyerState.keyDit = k;
+                else window.keyerState.keyDah = k;
                 window.keyerState.mappingTarget = null;
                 window.updateKeyerUI();
-                showToast("Tasto assegnato: " + (key === " " ? "Spazio" : key));
+                showToast("Tasto assegnato: " + (k === " " ? "Spazio" : k));
                 return;
             }
 
@@ -247,26 +230,21 @@ window.initTransmissionManager = function() {
 
         window.addEventListener('keyup', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
             if (!window.keyerState.enabled) return;
-            if (e.key === window.keyerState.keyDit || e.key === window.keyerState.keyDah) {
-                e.preventDefault();
-                if (e.key === window.keyerState.keyDit) window.keyerState.isDitDown = false;
-                if (e.key === window.keyerState.keyDah) window.keyerState.isDahDown = false;
-            }
+            if (e.key === window.keyerState.keyDit) window.keyerState.isDitDown = false;
+            if (e.key === window.keyerState.keyDah) window.keyerState.isDahDown = false;
         });
-        window.transmissionGlobalListenersReady = true;
-    }
 
-    // GROUP TX BINDING
-    setupButton('btnStartGroupTx', window.startGroupTx);
-    setupButton('btnStopGroupTx', window.stopGroupTx);
+        window.transmissionGlobalListenersReadyV2 = true;
+    }
 
     const wpmRef = document.getElementById('txWpmRef');
-    if (wpmRef) {
-        wpmRef.textContent = window.courseData?.settings?.start_wpm || 20;
+    if (wpmRef) wpmRef.textContent = window.courseData?.settings?.start_wpm || 20;
+
+    console.log("TX_DEBUG: initTransmissionManager COMPLETED");
+    } catch (e) {
+        console.error("TX_DEBUG: CRITICAL ERROR in initTransmissionManager:", e);
     }
-    console.log("TX_DEBUG: Init completed");
 };
 
 window.startTxSession = function() {
@@ -530,7 +508,7 @@ window.updateKeyerUI = function() {
 };
 
 window.processKeyerInput = function() {
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
     if (window.keyerState.currentSymbol) return;
     window.playKeyerSymbol();
 };
