@@ -24,8 +24,9 @@ if (!window.keyerState) {
         isDahDown: false,
         currentSymbol: null,
         nextSymbol: null,
+        lastSymbolSent: 'dah', // Per gestire l'alternanza iniziale
         timer: null,
-        mappingTarget: null // 'dit' o 'dah'
+        mappingTarget: null
     };
 }
 
@@ -582,9 +583,12 @@ window.playKeyerSymbol = function() {
     }
 
     let symbol = null;
+    // Logica Squeeze (Iambic): se entrambi premuti, alterna l'ultimo inviato
     if (window.keyerState.nextSymbol) {
         symbol = window.keyerState.nextSymbol;
         window.keyerState.nextSymbol = null;
+    } else if (window.keyerState.isDitDown && window.keyerState.isDahDown) {
+        symbol = (window.keyerState.lastSymbolSent === 'dit') ? 'dah' : 'dit';
     } else if (window.keyerState.isDitDown) {
         symbol = 'dit';
     } else if (window.keyerState.isDahDown) {
@@ -597,21 +601,35 @@ window.playKeyerSymbol = function() {
     }
 
     window.keyerState.currentSymbol = symbol;
+    window.keyerState.lastSymbolSent = symbol;
+
     const unit = 1200 / window.keyerState.wpm;
     const duration = (symbol === 'dah') ? (unit * 3) : unit;
 
     if (typeof window.startTone === 'function') window.startTone(window.keyerState.tone);
     window.handleKeyerEvent('on', duration);
 
+    // Monitoriamo se durante questo elemento l'utente tocca l'altra paletta (Squeeze durante segnale)
+    let oppositeTouched = false;
+    const monitor = setInterval(() => {
+        if (symbol === 'dit' && window.keyerState.isDahDown) oppositeTouched = true;
+        if (symbol === 'dah' && window.keyerState.isDitDown) oppositeTouched = true;
+    }, 10);
+
     setTimeout(() => {
+        clearInterval(monitor);
         if (typeof window.stopTone === 'function') window.stopTone();
         window.handleKeyerEvent('off', unit);
 
-        if (window.keyerState.mode === 'B') {
-            if (symbol === 'dit' && window.keyerState.isDahDown) window.keyerState.nextSymbol = 'dah';
-            else if (symbol === 'dah' && window.keyerState.isDitDown) window.keyerState.nextSymbol = 'dit';
+        // Logica Mode B: se l'opposto è stato toccato e ora non c'è nulla premuto,
+        // inseriamo un elemento opposto in coda (effetto memoria Iambic B).
+        if (window.keyerState.mode === 'B' && oppositeTouched) {
+            if (!window.keyerState.isDitDown && !window.keyerState.isDahDown) {
+                window.keyerState.nextSymbol = (symbol === 'dit') ? 'dah' : 'dit';
+            }
         }
 
+        // Spazio obbligatorio tra elementi (1 unità)
         setTimeout(() => {
             window.keyerState.currentSymbol = null;
             window.playKeyerSymbol();
@@ -940,14 +958,10 @@ window.finishGroupTx = function() {
         analysis.style.display = 'block';
 
         const s = window.groupTxState.stats;
-        const avgDot = s.dotAccs.length > 0 ? Math.round(s.dotAccs.reduce((a,b)=>a+b,0)/s.dotAccs.length) : 0;
-        const avgDash = s.dashAccs.length > 0 ? Math.round(s.dashAccs.reduce((a,b)=>a+b,0)/s.dashAccs.length) : 0;
         const avgCharSpace = s.charSpaceAccs.length > 0 ? Math.round(s.charSpaceAccs.reduce((a,b)=>a+b,0)/s.charSpaceAccs.length) : 0;
         const avgWordSpace = s.wordSpaceAccs.length > 0 ? Math.round(s.wordSpaceAccs.reduce((a,b)=>a+b,0)/s.wordSpaceAccs.length) : 0;
 
         let report = `<b style="font-size:1.1em; color:var(--champ-color);">📊 Analisi Tecnica Finale:</b><br><br>`;
-        report += `• <b>Punti (DIT):</b> ${avgDot}%<br>`;
-        report += `• <b>Linee (DAH):</b> ${avgDash}%<br>`;
         report += `• <b>Spaziatura Caratteri:</b> ${avgCharSpace}%<br>`;
         if (avgWordSpace > 0) report += `• <b>Spaziatura Gruppi:</b> ${avgWordSpace}%<br>`;
 
@@ -957,7 +971,7 @@ window.finishGroupTx = function() {
         while (advice1 === advice2) advice2 = window.MANIPULATION_ADVICE[Math.floor(Math.random() * window.MANIPULATION_ADVICE.length)];
 
         let evaluation = "";
-        const totalAvg = (avgDot + avgDash + avgCharSpace) / 3;
+        const totalAvg = avgWordSpace > 0 ? (avgCharSpace + avgWordSpace) / 2 : avgCharSpace;
         if (totalAvg > 90) evaluation = "🔥 Eccellente! Sei un operatore di classe A.";
         else if (totalAvg > 75) evaluation = "👍 Buona prova, ma serve più costanza.";
         else evaluation = "⚠️ Devi lavorare molto sul ritmo e sulla precisione dei tempi.";
