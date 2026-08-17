@@ -638,32 +638,29 @@ window.playKeyerSymbol = function() {
 };
 
 window.handleKeyerEvent = function(type, duration) {
+    if (!window.groupTxState.running && !window.transmissionState.active) return;
+
     const now = Date.now();
+    const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
+    const unit = 1200 / wpm;
 
-    // Trigger finalizzazione carattere precedente se iniziamo un nuovo elemento ('on')
-    if (type === 'on' && window.groupTxState.running && window.groupTxState.sequence.length > 0) {
-        const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
-        const unit = 1200 / wpm;
-        const gap = now - window.transmissionState.lastEventTime;
-
-        // Se il silenzio è significativo (> 2u), chiudiamo il carattere precedente
-        if (gap > unit * 2.0) {
-            window.finalizeGroupCharacter(gap);
-        }
-    }
-
-    const ev = { type: type, duration: duration };
-    if (window.transmissionState.active) {
-        window.transmissionState.sequence.push(ev);
-        if (type === 'on') window.checkTransmissionCompletion();
-    }
     if (window.groupTxState.running) {
-        window.groupTxState.sequence.push(ev);
-        // Richiamiamo processGroupInput solo su 'off' per gestire l'auto-finalizzazione pigra
+        // Se iniziamo un nuovo segnale dopo un silenzio lungo, finalizziamo il carattere precedente
+        if (type === 'on') {
+            const gap = window.transmissionState.lastEventTime > 0 ? (now - window.transmissionState.lastEventTime) : 0;
+            if (gap > unit * 2.0 && window.groupTxState.sequence.length > 0) {
+                window.finalizeGroupCharacter(gap);
+            }
+        }
+        window.groupTxState.sequence.push({ type: type, duration: duration });
         if (type === 'off') window.processGroupInput();
     }
 
-    // Aggiorniamo sempre il tempo dell'ultimo evento per l'analisi dei gap
+    if (window.transmissionState.active) {
+        window.transmissionState.sequence.push({ type: type, duration: duration });
+        if (type === 'on') window.checkTransmissionCompletion();
+    }
+
     window.transmissionState.lastEventTime = now;
 };
 
@@ -815,56 +812,50 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
     if (!window.groupTxState.running) return;
 
     const phase = window.groupTxState.phase;
-    const targetText = phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
+    const targetText = (phase === 'PROMPT') ? window.groupTxState.targetText : window.groupTxState.fullText;
 
-    // Saltiamo gli spazi nel testo target
+    // Saltiamo gli spazi nel testo target (avanzamento automatico dell'indice)
     while (window.groupTxState.currentIndex < targetText.length && targetText[window.groupTxState.currentIndex] === " ") {
         window.groupTxState.currentIndex++;
     }
 
+    // Se abbiamo già finito tutto il testo, resettiamo e usciamo
     if (window.groupTxState.currentIndex >= targetText.length) {
-        if (phase === 'PROMPT') {
-            window.groupTxState.phase = 'GROUPS';
-            window.groupTxState.currentIndex = 0;
-            const prompt = document.getElementById('groupTxPrompt');
-            if (prompt) prompt.style.display = "none";
-        } else {
-            window.finishGroupTx();
-        }
+        window.groupTxState.sequence = [];
         return;
     }
 
     const seq = window.groupTxState.sequence;
     const onElements = seq.filter(s => s.type === 'on');
-    const internalOffElements = seq.filter(s => s.type === 'off');
-
-    if (onElements.length === 0) return;
+    if (onElements.length === 0) {
+        // Se non ci sono segnali utili, puliamo e usciamo
+        window.groupTxState.sequence = [];
+        return;
+    }
 
     const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
     const unit = 1200 / wpm;
 
-    // --- ANALISI TECNICA ---
+    // --- DECODIFICA ---
     let detectedCode = "";
-    onElements.forEach((el) => {
-        const isDash = el.duration > unit * 2.0;
-        detectedCode += isDash ? "-" : ".";
-        const ideal = isDash ? (unit * 3) : unit;
+    onElements.forEach(el => {
+        detectedCode += (el.duration > unit * 2.0) ? "-" : ".";
+        const ideal = (el.duration > unit * 2.0) ? (unit * 3) : unit;
         const acc = Math.max(0, 100 - (Math.abs(el.duration - ideal) / ideal * 100));
-        if (isDash) window.groupTxState.stats.dashAccs.push(acc);
+        if (el.duration > unit * 2.0) window.groupTxState.stats.dashAccs.push(acc);
         else window.groupTxState.stats.dotAccs.push(acc);
     });
 
-    internalOffElements.forEach(el => {
+    const offElements = seq.filter(s => s.type === 'off');
+    offElements.forEach(el => {
         const acc = Math.max(0, 100 - (Math.abs(el.duration - unit) / unit * 100));
         window.groupTxState.stats.charSpaceAccs.push(acc);
     });
 
-    // Analisi dello spazio tra caratteri/gruppi
     if (actualGap > 0 && window.groupTxState.currentIndex > 0) {
-        const wasNewWord = (targetText[window.groupTxState.currentIndex - 1] === " ");
-        const idealGap = wasNewWord ? (unit * 7) : (unit * 3);
+        const isNewWord = (targetText[window.groupTxState.currentIndex - 1] === " ");
+        const idealGap = isNewWord ? (unit * 7) : (unit * 3);
         const gapAcc = Math.max(0, 100 - (Math.abs(actualGap - idealGap) / idealGap * 100));
-
         if (isNewWord) window.groupTxState.stats.wordSpaceAccs.push(gapAcc);
         else window.groupTxState.stats.charSpaceAccs.push(gapAcc);
     }
@@ -881,14 +872,14 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
             if (window.groupTxState.currentIndex >= targetText.length) {
                 window.groupTxState.phase = 'GROUPS';
                 window.groupTxState.currentIndex = 0;
-                const prompt = document.getElementById('groupTxPrompt');
-                if (prompt) prompt.style.display = "none";
+                const pEl = document.getElementById('groupTxPrompt');
+                if (pEl) pEl.style.display = 'none';
                 if (feedbackEl) feedbackEl.textContent = "BENE! ORA I GRUPPI...";
             } else {
                 if (feedbackEl) feedbackEl.textContent = "Prossimo: " + targetText[window.groupTxState.currentIndex];
             }
         } else {
-            if (feedbackEl) feedbackEl.textContent = "Riprova " + targetChar + " (hai fatto: " + detectedCode + ")";
+            if (feedbackEl) feedbackEl.textContent = "Ripeti " + targetChar + " (fatto: " + detectedCode + ")";
         }
     } else {
         const charEl = document.getElementById("gtx_char_" + window.groupTxState.currentIndex);
@@ -906,7 +897,10 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
     }
 
     window.groupTxState.sequence = [];
-    if (window.groupTxState.timeout) { clearTimeout(window.groupTxState.timeout); window.groupTxState.timeout = null; }
+    if (window.groupTxState.timeout) {
+        clearTimeout(window.groupTxState.timeout);
+        window.groupTxState.timeout = null;
+    }
 };
 
 window.MANIPULATION_ADVICE = [
