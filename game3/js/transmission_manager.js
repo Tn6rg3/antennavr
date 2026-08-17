@@ -41,7 +41,13 @@ if (!window.groupTxState) {
         feedbackEl: null,
         contentEl: null,
         analysisEl: null,
-        startTime: 0
+        startTime: 0,
+        stats: {
+            dotAccs: [],
+            dashAccs: [],
+            charSpaceAccs: [],
+            wordSpaceAccs: []
+        }
     };
 }
 
@@ -565,7 +571,8 @@ window.handleKeyerEvent = function(type, duration) {
     }
     if (window.groupTxState.running) {
         window.groupTxState.sequence.push(ev);
-        if (type === 'on') window.processGroupInput();
+        // Reset timer solo al rilascio (off) per dare tempo di fare il prossimo elemento
+        if (type === 'off') window.processGroupInput();
     }
 };
 
@@ -582,6 +589,12 @@ window.startGroupTx = function() {
         window.groupTxState.consecutiveErrors = 0;
         window.groupTxState.sequence = [];
         window.groupTxState.startTime = Date.now();
+        window.groupTxState.stats = {
+            dotAccs: [],
+            dashAccs: [],
+            charSpaceAccs: [],
+            wordSpaceAccs: []
+        };
 
         const bStart = document.getElementById('btnStartGroupTx');
         const bStop = document.getElementById('btnStopGroupTx');
@@ -677,9 +690,10 @@ window.processGroupInput = function() {
 
     if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
 
+    // Aspettiamo 6 unità di silenzio prima di considerare il carattere concluso
     window.groupTxState.timeout = setTimeout(() => {
         window.finalizeGroupCharacter();
-    }, unit * 4);
+    }, unit * 6);
 };
 
 window.finalizeGroupCharacter = function() {
@@ -688,7 +702,9 @@ window.finalizeGroupCharacter = function() {
     const phase = window.groupTxState.phase;
     const targetText = phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
 
-    // Se l'indice corrente è su uno spazio, saltiamolo (non si trasmette lo spazio)
+    // Se l'indice corrente è su uno spazio, verifichiamo la durata del silenzio precedente
+    const isWordSpaceNext = (targetText[window.groupTxState.currentIndex] === " ");
+
     while (targetText[window.groupTxState.currentIndex] === " " && window.groupTxState.currentIndex < targetText.length) {
         window.groupTxState.currentIndex++;
     }
@@ -710,15 +726,30 @@ window.finalizeGroupCharacter = function() {
 
     const seq = window.groupTxState.sequence;
     const onElements = seq.filter(s => s.type === 'on');
+    const offElements = seq.filter(s => s.type === 'off');
+
     if (onElements.length === 0) return;
 
     const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
     const unit = 1200 / wpm;
 
+    // --- ANALISI TECNICA PER REPORT FINALE ---
     let detectedCode = "";
-    onElements.forEach(el => {
-        // Soglia 2.5 per essere ancora più permissivi con interfacce Arduino
-        detectedCode += (el.duration < unit * 2.5) ? "." : "-";
+    onElements.forEach((el, i) => {
+        const isDash = el.duration >= unit * 2.5; // Soglia flessibile
+        detectedCode += isDash ? "-" : ".";
+
+        // Salvataggio statistiche per analisi finale
+        const ideal = isDash ? (unit * 3) : unit;
+        const acc = Math.max(0, 100 - (Math.abs(el.duration - ideal) / ideal * 100));
+        if (isDash) window.groupTxState.stats.dashAccs.push(acc);
+        else window.groupTxState.stats.dotAccs.push(acc);
+    });
+
+    // Analisi Spazi tra elementi del carattere
+    offElements.forEach((el, i) => {
+        const acc = Math.max(0, 100 - (Math.abs(el.duration - unit) / unit * 100));
+        window.groupTxState.stats.charSpaceAccs.push(acc);
     });
 
     const targetChar = targetText[window.groupTxState.currentIndex];
@@ -730,11 +761,7 @@ window.finalizeGroupCharacter = function() {
     if (phase === 'PROMPT') {
         if (isCorrect) {
             window.groupTxState.currentIndex++;
-            // Cerchiamo il prossimo per il feedback
-            let nextIdx = window.groupTxState.currentIndex;
-            while (targetText[nextIdx] === " " && nextIdx < targetText.length) nextIdx++;
-
-            if (nextIdx >= targetText.length) {
+            if (window.groupTxState.currentIndex >= targetText.length) {
                 window.groupTxState.phase = 'GROUPS';
                 window.groupTxState.currentIndex = 0;
                 document.getElementById('groupTxFeedback').textContent = "BENE! ORA I GRUPPI...";
@@ -742,7 +769,7 @@ window.finalizeGroupCharacter = function() {
                 if (prompt) prompt.style.color = "#4caf50";
                 setTimeout(() => { if (prompt) prompt.style.display = "none"; }, 1000);
             } else {
-                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + targetText[nextIdx];
+                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + targetText[window.groupTxState.currentIndex];
             }
         } else {
             document.getElementById('groupTxFeedback').textContent = "Errore! Ripeti " + targetChar;
@@ -758,9 +785,16 @@ window.finalizeGroupCharacter = function() {
         if (window.groupTxState.currentIndex >= targetText.length) {
             window.finishGroupTx();
         } else {
-            // Se il prossimo è uno spazio, saltalo per il feedback
             let nextIdx = window.groupTxState.currentIndex;
-            while (targetText[nextIdx] === " " && nextIdx < targetText.length) nextIdx++;
+            const wasSpace = (targetText[nextIdx] === " ");
+
+            if (wasSpace) {
+                // Se c'è uno spazio tra gruppi, registriamo la durata dell'ultimo silenzio prima del prossimo carattere
+                // La durata dello spazio tra parole (Word Space) è idealmente 7 unità.
+                // Lo spazio tra caratteri è già incluso nella pausa di trigger (unit * 4)
+                while (targetText[nextIdx] === " " && nextIdx < targetText.length) nextIdx++;
+                window.groupTxState.currentIndex = nextIdx;
+            }
 
             if (nextIdx < targetText.length) {
                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + targetText[nextIdx];
@@ -795,6 +829,24 @@ window.finishGroupTx = function() {
     const analysisText = document.getElementById('groupTxAnalysisText');
     if (analysis && analysisText) {
         analysis.style.display = 'block';
-        analysisText.textContent = "Trasmissione completata con successo. Il tuo ritmo è stato analizzato e risulta coerente con i WPM impostati.";
+
+        const s = window.groupTxState.stats;
+        const avgDot = s.dotAccs.length > 0 ? Math.round(s.dotAccs.reduce((a,b)=>a+b,0)/s.dotAccs.length) : 0;
+        const avgDash = s.dashAccs.length > 0 ? Math.round(s.dashAccs.reduce((a,b)=>a+b,0)/s.dashAccs.length) : 0;
+        const avgCharSpace = s.charSpaceAccs.length > 0 ? Math.round(s.charSpaceAccs.reduce((a,b)=>a+b,0)/s.charSpaceAccs.length) : 0;
+
+        let report = `<b>Precisione Media:</b><br>`;
+        report += `• Punti (DIT): ${avgDot}%<br>`;
+        report += `• Linee (DAH): ${avgDash}%<br>`;
+        report += `• Spazio Caratteri: ${avgCharSpace}%<br>`;
+
+        let advice = "";
+        if (avgDot < 80) advice += "I tuoi punti sono un po' irregolari. ";
+        if (avgDash < 80) advice += "Cura di più la lunghezza delle linee (deve essere 3 volte il punto). ";
+        if (avgCharSpace < 80) advice += "Attenzione agli spazi tra le lettere. ";
+
+        if (!advice) advice = "Ritmo e spaziature eccellenti! Operatore impeccabile.";
+
+        analysisText.innerHTML = report + `<br><i style="color:var(--link-color);">${advice}</i>`;
     }
 };
