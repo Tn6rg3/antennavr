@@ -625,6 +625,12 @@ window.stopGroupTx = function() {
     window.groupTxState.running = false;
     if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
 
+    // Reset stati tasti per evitare loop infiniti (incantamento)
+    window.keyerState.isDitDown = false;
+    window.keyerState.isDahDown = false;
+    window.keyerState.currentSymbol = null;
+    window.keyerState.nextSymbol = null;
+
     document.getElementById('btnStartGroupTx').style.display = 'block';
     document.getElementById('btnStopGroupTx').style.display = 'none';
     document.getElementById('groupTxDisplay').style.display = 'none';
@@ -689,19 +695,23 @@ window.finalizeGroupCharacter = function() {
 
     let detectedCode = "";
     onElements.forEach(el => {
-        detectedCode += (el.duration < unit * 2) ? "." : "-";
+        // Tolleranza migliorata per il riconoscimento (soglia a 2.2 unità invece di 2)
+        detectedCode += (el.duration < unit * 2.2) ? "." : "-";
     });
 
     const currentTargetFull = window.groupTxState.phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
     let targetChar = currentTargetFull[window.groupTxState.currentIndex];
 
-    if (targetChar === " ") {
+    // Salta eventuali spazi vuoti nel target
+    while (targetChar === " " && window.groupTxState.currentIndex < currentTargetFull.length) {
         window.groupTxState.currentIndex++;
         targetChar = currentTargetFull[window.groupTxState.currentIndex];
     }
 
     const targetCode = window.morseDict[targetChar] || "";
     const isCorrect = (detectedCode === targetCode);
+
+    console.log(`GROUP_TX: Detected "${detectedCode}" for char "${targetChar}" (Target: "${targetCode}") -> ${isCorrect}`);
 
     if (window.groupTxState.phase === 'PROMPT') {
         if (isCorrect) {
@@ -714,7 +724,8 @@ window.finalizeGroupCharacter = function() {
                 document.getElementById('groupTxFeedback').textContent = "BENE! ORA I GRUPPI...";
                 setTimeout(() => { if (prompt) prompt.style.display = "none"; }, 1000);
             } else {
-                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + currentTargetFull[window.groupTxState.currentIndex];
+                 const next = currentTargetFull[window.groupTxState.currentIndex];
+                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + (next === " " ? "SPAZIO" : next);
             }
         } else {
             document.getElementById('groupTxFeedback').textContent = "Errore! Ripeti " + targetChar;
@@ -740,7 +751,10 @@ window.finalizeGroupCharacter = function() {
         window.groupTxState.consecutiveErrors = (window.groupTxState.consecutiveErrors || 0) + 1;
         if (window.groupTxState.consecutiveErrors >= 5) {
             window.stopGroupTx();
-            alert("TRASMISSIONE TROPPO IRREGOLARE! 🛑\nHai commesso troppi errori consecutivi. Riprova focalizzandoti sul ritmo e sulla spaziatura.");
+            // Piccola pausa prima dell'alert per permettere alla UI di aggiornarsi
+            setTimeout(() => {
+                alert("TRASMISSIONE TROPPO IRREGOLARE! 🛑\nHai commesso troppi errori consecutivi. Riprova focalizzandoti sul ritmo.");
+            }, 100);
             return;
         }
     } else {
