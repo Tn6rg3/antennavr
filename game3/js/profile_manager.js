@@ -549,8 +549,11 @@ if (els.saveAliasBtn) {
         const privacy = els.privacyUsernameCheckbox ? els.privacyUsernameCheckbox.checked : false;
 
         if (alias) {
-            // Nuovi Vincoli: 1 parola, max 10 caratteri
-            if (alias.includes(" ")) return alert("L'Alias deve essere una singola parola (senza spazi).");
+            // Nuovi Vincoli: Solo alfanumerico, niente spazi, max 10 caratteri
+            const alphanumericRegex = /^[a-zA-Z0-9]+$/;
+            if (!alphanumericRegex.test(alias)) {
+                return alert("L'Alias può contenere solo lettere e numeri (senza spazi, simboli o icone).");
+            }
             if (alias.length > 10) return alert("L'Alias non può superare i 10 caratteri.");
         }
 

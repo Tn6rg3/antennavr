@@ -490,6 +490,13 @@ function initGame() {
 
         if (data.alias) {
             window.myName = data.alias;
+            // Verifica caratteri validi (Alfanumerico)
+            const alphanumericRegex = /^[a-zA-Z0-9]+$/;
+            if (!alphanumericRegex.test(data.alias)) {
+                setTimeout(() => {
+                    tg.showAlert("⚠️ Il tuo Alias attuale contiene caratteri non validi (simboli o icone). Per favore, modificalo nella sezione Profilo usando solo lettere e numeri.");
+                }, 2500);
+            }
         } else {
             window.myName = tgUser.first_name;
             updates.alias = window.myName;
