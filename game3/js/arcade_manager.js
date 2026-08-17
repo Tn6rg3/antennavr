@@ -45,8 +45,12 @@ window.startArcadeSequence = function() {
 window.spawnArcadeBrick = function() {
     if (!gameRunning || !isArcadeMode) return;
 
-    // Genera parola della lunghezza corrente
-    let dict = window.masterDictionary.filter(w => w.length === arcadeWordLen);
+    // Genera parola della lunghezza corrente usando il dizionario specifico arcade (parole2.txt)
+    let baseDict = (window.arcadeDictionary && window.arcadeDictionary.length > 0)
+                   ? window.arcadeDictionary
+                   : window.masterDictionary;
+
+    let dict = baseDict.filter(w => w.length === arcadeWordLen);
 
     // Integrazione numeri scritti per parole corte
     const numberWords = {

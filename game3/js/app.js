@@ -144,6 +144,7 @@ window.lastSeenGuessId = 0;
 window.masterDictionary = [];
 window.itDictionary = [];
 window.enDictionary = [];
+window.arcadeDictionary = [];
 window.customDictionary = [];
 
 let currentQuizQuestion = null, quizActiveBuzzerId = null;
@@ -874,6 +875,9 @@ window.loadAdminBugs = function() {
                         item.remove();
                         showToast('Eliminato');
                         window.updateAdminBadge();
+                    }).catch(e => {
+                        console.error("Delete Error:", e);
+                        alert("Errore permessi Firebase: " + e.message);
                     });
                 }
             };

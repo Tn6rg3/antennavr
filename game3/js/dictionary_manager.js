@@ -3,7 +3,8 @@
 window.loadDictionaries = async function() {
     await Promise.all([
         window.fetchDictionary("parole.txt", 'it'),
-        window.fetchDictionary("words.txt", 'en')
+        window.fetchDictionary("words.txt", 'en'),
+        window.fetchDictionary("parole2.txt", 'arcade')
     ]);
     window.updateDictionary();
 };
@@ -20,13 +21,15 @@ window.fetchDictionary = async function(url, lang) {
 
         if (words.length > 10) {
             if (lang === 'it') window.itDictionary = words;
-            else window.enDictionary = words;
+            else if (lang === 'en') window.enDictionary = words;
+            else if (lang === 'arcade') window.arcadeDictionary = words;
             return;
         }
         throw new Error("Dizionario troppo corto");
     } catch(e) {
         if (lang === 'it') window.itDictionary = FALLBACK_WORDS_IT.map(w => w.toLowerCase());
-        else window.enDictionary = FALLBACK_WORDS_EN.map(w => w.toLowerCase());
+        else if (lang === 'en') window.enDictionary = FALLBACK_WORDS_EN.map(w => w.toLowerCase());
+        else if (lang === 'arcade') window.arcadeDictionary = FALLBACK_WORDS_IT.map(w => w.toLowerCase());
     }
 };
 
