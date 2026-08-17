@@ -16,6 +16,7 @@ window.keyerState = {
     enabled: false,
     mode: 'B',
     wpm: 20,
+    tone: 600,
     keyDit: '.',
     keyDah: ',',
     isDitDown: false,
@@ -123,11 +124,11 @@ window.initTransmissionManager = function() {
         if (btn) {
             btn.onclick = (e) => {
                 e.preventDefault();
-                window.logDebug(`TX: Clicked ${id}`);
+                console.log(`TX_DEBUG: Clicked ${id}`);
                 handler();
             };
         } else {
-            console.warn(`TX: Button ${id} NOT FOUND`);
+            console.error(`TX_DEBUG: Button ${id} NOT FOUND in DOM`);
         }
     };
 
@@ -138,7 +139,12 @@ window.initTransmissionManager = function() {
     // SYNC KEYER UI WITH STATE
     if (keyerToggle) keyerToggle.checked = window.keyerState.enabled;
     if (keyerType) keyerType.value = window.keyerState.mode;
+    const keyerWpm = document.getElementById('keyerWpmInput');
     if (keyerWpm) keyerWpm.value = window.keyerState.wpm;
+
+    const keyerTone = document.getElementById('keyerToneInput');
+    if (keyerTone) keyerTone.value = window.keyerState.tone || 600;
+
     window.updateKeyerUI();
 
     // KEYER UI BINDING
@@ -157,6 +163,14 @@ window.initTransmissionManager = function() {
     const keyerWpm = document.getElementById('keyerWpmInput');
     if (keyerWpm) {
         keyerWpm.onchange = (e) => window.keyerState.wpm = parseInt(e.target.value) || 20;
+    }
+
+    const keyerTone = document.getElementById('keyerToneInput');
+    if (keyerTone) {
+        keyerTone.onchange = (e) => {
+            window.keyerState.tone = parseInt(e.target.value) || 600;
+            window.currentTone = window.keyerState.tone;
+        };
     }
 
     const btnMapDit = document.getElementById('btnMapKeyDit');
@@ -188,43 +202,52 @@ window.initTransmissionManager = function() {
         };
     }
 
-    // KEYBOARD LISTENERS FOR KEYER
-    window.addEventListener('keydown', (e) => {
-        // MAPPATURA
-        if (window.keyerState.mappingTarget) {
-            const key = e.key;
-            if (window.keyerState.mappingTarget === 'dit') window.keyerState.keyDit = key;
-            else window.keyerState.keyDah = key;
-            window.keyerState.mappingTarget = null;
-            window.updateKeyerUI();
-            return;
-        }
+    // KEYBOARD LISTENERS FOR KEYER (SOLO SE NON INIZIALIZZATI)
+    if (!window.transmissionGlobalListenersReady) {
+        window.addEventListener('keydown', (e) => {
+            console.log("TX_DEBUG: Global KeyDown detected:", e.key, "Targeting:", window.keyerState.mappingTarget);
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 
-        if (!window.keyerState.enabled) return;
-
-        if (e.key === window.keyerState.keyDit) {
-            e.preventDefault();
-            if (!window.keyerState.isDitDown) {
-                window.keyerState.isDitDown = true;
-                window.processKeyerInput();
+            // MAPPATURA
+            if (window.keyerState.mappingTarget) {
+                e.preventDefault();
+                const key = e.key;
+                console.log("KEYER_DEBUG: Mapping detected key:", key, "Type:", typeof key);
+                if (window.keyerState.mappingTarget === 'dit') window.keyerState.keyDit = key;
+                else window.keyerState.keyDah = key;
+                window.keyerState.mappingTarget = null;
+                window.updateKeyerUI();
+                showToast("Tasto assegnato: " + (key === " " ? "Spazio" : key));
+                return;
             }
-        } else if (e.key === window.keyerState.keyDah) {
-            e.preventDefault();
-            if (!window.keyerState.isDahDown) {
-                window.keyerState.isDahDown = true;
-                window.processKeyerInput();
-            }
-        }
-    });
 
-    window.addEventListener('keyup', (e) => {
-        if (!window.keyerState.enabled) return;
-        if (e.key === window.keyerState.keyDit || e.key === window.keyerState.keyDah) {
-            e.preventDefault();
-            if (e.key === window.keyerState.keyDit) window.keyerState.isDitDown = false;
-            if (e.key === window.keyerState.keyDah) window.keyerState.isDahDown = false;
-        }
-    });
+            if (!window.keyerState.enabled) return;
+
+            if (e.key === window.keyerState.keyDit) {
+                e.preventDefault();
+                if (!window.keyerState.isDitDown) {
+                    window.keyerState.isDitDown = true;
+                    window.processKeyerInput();
+                }
+            } else if (e.key === window.keyerState.keyDah) {
+                e.preventDefault();
+                if (!window.keyerState.isDahDown) {
+                    window.keyerState.isDahDown = true;
+                    window.processKeyerInput();
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (!window.keyerState.enabled) return;
+            if (e.key === window.keyerState.keyDit || e.key === window.keyerState.keyDah) {
+                e.preventDefault();
+                if (e.key === window.keyerState.keyDit) window.keyerState.isDitDown = false;
+                if (e.key === window.keyerState.keyDah) window.keyerState.isDahDown = false;
+            }
+        });
+        window.transmissionGlobalListenersReady = true;
+    }
 
     // GROUP TX BINDING
     setupButton('btnStartGroupTx', window.startGroupTx);
@@ -527,11 +550,11 @@ window.playKeyerSymbol = function() {
     const unit = 1200 / window.keyerState.wpm;
     const duration = (symbol === 'dah') ? (unit * 3) : unit;
 
-    window.startTone();
+    if (typeof window.startTone === 'function') window.startTone(window.keyerState.tone);
     window.handleKeyerEvent('on', duration);
 
     setTimeout(() => {
-        window.stopTone();
+        if (typeof window.stopTone === 'function') window.stopTone();
         window.handleKeyerEvent('off', unit);
 
         if (window.keyerState.mode === 'B') {
@@ -562,34 +585,50 @@ window.handleKeyerEvent = function(type, duration) {
  * TRASMISSIONE GRUPPI
  */
 window.startGroupTx = function() {
-    window.groupTxState.running = true;
-    window.groupTxState.phase = 'PROMPT';
-    window.groupTxState.targetText = "VVV =";
-    window.groupTxState.currentIndex = 0;
-    window.groupTxState.consecutiveErrors = 0;
-    window.groupTxState.sequence = [];
-    window.groupTxState.startTime = Date.now();
+    try {
+        console.log("GROUP_TX: Starting exercise...");
+        window.groupTxState.running = true;
+        window.groupTxState.phase = 'PROMPT';
+        window.groupTxState.targetText = "VVV =";
+        window.groupTxState.currentIndex = 0;
+        window.groupTxState.consecutiveErrors = 0;
+        window.groupTxState.sequence = [];
+        window.groupTxState.startTime = Date.now();
 
-    const bStart = document.getElementById('btnStartGroupTx');
-    const bStop = document.getElementById('btnStopGroupTx');
-    const display = document.getElementById('groupTxDisplay');
-    const prompt = document.getElementById('groupTxPrompt');
-    const feedback = document.getElementById('groupTxFeedback');
-    const analysis = document.getElementById('groupTxAnalysis');
+        const bStart = document.getElementById('btnStartGroupTx');
+        const bStop = document.getElementById('btnStopGroupTx');
+        const display = document.getElementById('groupTxDisplay');
+        const prompt = document.getElementById('groupTxPrompt');
+        const feedback = document.getElementById('groupTxFeedback');
+        const analysis = document.getElementById('groupTxAnalysis');
 
-    if (bStart) bStart.style.display = 'none';
-    if (bStop) bStop.style.display = 'block';
-    if (display) display.style.display = 'block';
-    if (prompt) {
-        prompt.textContent = "VVV =";
-        prompt.style.color = "var(--link-color)";
-        prompt.style.display = "block";
+        if (bStart) bStart.style.setProperty('display', 'none', 'important');
+        if (bStop) bStop.style.setProperty('display', 'block', 'important');
+        if (display) {
+            display.style.setProperty('display', 'flex', 'important');
+            display.style.flexDirection = 'column';
+            display.style.alignItems = 'center';
+        }
+
+        if (prompt) {
+            prompt.textContent = "VVV =";
+            prompt.style.color = "var(--link-color)";
+            prompt.style.display = "block";
+        }
+        if (feedback) {
+            feedback.textContent = "Trasmetti VVV = per iniziare";
+            feedback.style.display = "block";
+            feedback.style.color = "var(--link-color)";
+        }
+        if (analysis) analysis.style.display = 'none';
+
+        window.generateRandomGroups();
+        window.renderGroupContent();
+        console.log("GROUP_TX: Exercise ready. Target text:", window.groupTxState.fullText);
+    } catch (err) {
+        console.error("GROUP_TX Error:", err);
+        showToast("Errore avvio esercizio: " + err.message);
     }
-    if (feedback) feedback.textContent = "Trasmetti VVV = per iniziare";
-    if (analysis) analysis.style.display = 'none';
-
-    window.generateRandomGroups();
-    window.renderGroupContent();
 };
 
 window.stopGroupTx = function() {
@@ -602,6 +641,7 @@ window.stopGroupTx = function() {
 };
 
 window.generateRandomGroups = function() {
+    console.log("GROUP_TX: Generating random groups...");
     const typeSelect = document.getElementById('groupTypeSelect');
     const type = typeSelect ? typeSelect.value : 'LETTERS';
     const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
