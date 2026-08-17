@@ -686,6 +686,29 @@ window.processGroupInput = function() {
 window.finalizeGroupCharacter = function() {
     if (!window.groupTxState.running) return;
 
+    const currentTargetFull = window.groupTxState.phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
+
+    // Funzione interna per trovare il prossimo carattere non-spazio
+    const findNextValidIndex = (idx) => {
+        let i = idx;
+        while (i < currentTargetFull.length && currentTargetFull[i] === " ") i++;
+        return i;
+    };
+
+    // Assicuriamoci che l'indice attuale punti a un carattere valido
+    window.groupTxState.currentIndex = findNextValidIndex(window.groupTxState.currentIndex);
+
+    if (window.groupTxState.currentIndex >= currentTargetFull.length) {
+        if (window.groupTxState.phase === 'PROMPT') {
+            window.groupTxState.phase = 'GROUPS';
+            window.groupTxState.currentIndex = 0;
+            window.finalizeGroupCharacter(); // Ricorsione per iniziare i gruppi
+        } else {
+            window.finishGroupTx();
+        }
+        return;
+    }
+
     const seq = window.groupTxState.sequence;
     const onElements = seq.filter(s => s.type === 'on');
     if (onElements.length === 0) return;
@@ -695,28 +718,22 @@ window.finalizeGroupCharacter = function() {
 
     let detectedCode = "";
     onElements.forEach(el => {
-        // Tolleranza migliorata per il riconoscimento (soglia a 2.2 unità invece di 2)
-        detectedCode += (el.duration < unit * 2.2) ? "." : "-";
+        // Tolleranza per interfaccia Arduino (soglia a 2.3 per le linee)
+        detectedCode += (el.duration < unit * 2.3) ? "." : "-";
     });
 
-    const currentTargetFull = window.groupTxState.phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
-    let targetChar = currentTargetFull[window.groupTxState.currentIndex];
-
-    // Salta eventuali spazi vuoti nel target
-    while (targetChar === " " && window.groupTxState.currentIndex < currentTargetFull.length) {
-        window.groupTxState.currentIndex++;
-        targetChar = currentTargetFull[window.groupTxState.currentIndex];
-    }
-
+    const targetChar = currentTargetFull[window.groupTxState.currentIndex];
     const targetCode = window.morseDict[targetChar] || "";
     const isCorrect = (detectedCode === targetCode);
 
-    console.log(`GROUP_TX: Detected "${detectedCode}" for char "${targetChar}" (Target: "${targetCode}") -> ${isCorrect}`);
+    console.log(`GROUP_TX: Target "${targetChar}" (${targetCode}), Detected "${detectedCode}" -> ${isCorrect}`);
 
     if (window.groupTxState.phase === 'PROMPT') {
         if (isCorrect) {
             window.groupTxState.currentIndex++;
-            if (window.groupTxState.currentIndex >= window.groupTxState.targetText.length) {
+            // Cerchiamo il prossimo per il feedback
+            const nextIdx = findNextValidIndex(window.groupTxState.currentIndex);
+            if (nextIdx >= currentTargetFull.length) {
                 window.groupTxState.phase = 'GROUPS';
                 window.groupTxState.currentIndex = 0;
                 const prompt = document.getElementById('groupTxPrompt');
@@ -724,8 +741,8 @@ window.finalizeGroupCharacter = function() {
                 document.getElementById('groupTxFeedback').textContent = "BENE! ORA I GRUPPI...";
                 setTimeout(() => { if (prompt) prompt.style.display = "none"; }, 1000);
             } else {
-                 const next = currentTargetFull[window.groupTxState.currentIndex];
-                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + (next === " " ? "SPAZIO" : next);
+                 const nextChar = currentTargetFull[nextIdx];
+                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + nextChar;
             }
         } else {
             document.getElementById('groupTxFeedback').textContent = "Errore! Ripeti " + targetChar;
@@ -738,11 +755,13 @@ window.finalizeGroupCharacter = function() {
         }
         window.groupTxState.currentIndex++;
 
-        if (window.groupTxState.currentIndex >= window.groupTxState.fullText.length) {
+        const nextIdx = findNextValidIndex(window.groupTxState.currentIndex);
+        if (nextIdx >= currentTargetFull.length) {
             window.finishGroupTx();
         } else {
-            const next = window.groupTxState.fullText[window.groupTxState.currentIndex];
-            document.getElementById('groupTxFeedback').textContent = "Prossimo: " + (next === " " ? "SPAZIO" : next);
+            window.groupTxState.currentIndex = nextIdx; // Saltiamo lo spazio nel conteggio
+            const nextChar = currentTargetFull[nextIdx];
+            document.getElementById('groupTxFeedback').textContent = "Prossimo: " + nextChar;
         }
     }
 
@@ -751,9 +770,8 @@ window.finalizeGroupCharacter = function() {
         window.groupTxState.consecutiveErrors = (window.groupTxState.consecutiveErrors || 0) + 1;
         if (window.groupTxState.consecutiveErrors >= 5) {
             window.stopGroupTx();
-            // Piccola pausa prima dell'alert per permettere alla UI di aggiornarsi
             setTimeout(() => {
-                alert("TRASMISSIONE TROPPO IRREGOLARE! 🛑\nHai commesso troppi errori consecutivi. Riprova focalizzandoti sul ritmo.");
+                alert("TRASMISSIONE TROPPO IRREGOLARE! 🛑\nIl Keyer è stato resettato. Riprova con più calma.");
             }, 100);
             return;
         }
