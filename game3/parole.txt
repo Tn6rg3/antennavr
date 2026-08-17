@@ -1875,8 +1875,6 @@ zoppicare
 zucca
 zucchero
 zuppa
-Ecco il tuo elenco unico di 1000 parole autentiche e verificate della lingua italiana (tutte rigorosamente tra i 10 e i 16 caratteri e assenti dal tuo file originale), pronte per essere copiate:
-
 abbagliamento
 abbellimento
 abbondante
