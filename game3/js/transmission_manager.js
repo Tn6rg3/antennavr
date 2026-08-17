@@ -682,15 +682,23 @@ window.stopGroupTx = function() {
     window.groupTxState.running = false;
     if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
 
+    // Stop immediato di ogni suono residuo
+    if (typeof window.stopTone === 'function') window.stopTone();
+    if (typeof window.stopAllMorseAudio === 'function') window.stopAllMorseAudio();
+
     // Reset stati tasti per evitare loop infiniti (incantamento)
     window.keyerState.isDitDown = false;
     window.keyerState.isDahDown = false;
     window.keyerState.currentSymbol = null;
     window.keyerState.nextSymbol = null;
 
-    document.getElementById('btnStartGroupTx').style.display = 'block';
-    document.getElementById('btnStopGroupTx').style.display = 'none';
-    document.getElementById('groupTxDisplay').style.display = 'none';
+    const bStart = document.getElementById('btnStartGroupTx');
+    const bStop = document.getElementById('btnStopGroupTx');
+    const display = document.getElementById('groupTxDisplay');
+
+    if (bStart) bStart.style.setProperty('display', 'block', 'important');
+    if (bStop) bStop.style.setProperty('display', 'none', 'important');
+    if (display) display.style.setProperty('display', 'none', 'important');
 };
 
 window.generateRandomGroups = function(numGroups = 4) {
@@ -808,6 +816,8 @@ window.finalizeGroupCharacter = function() {
 
     // --- ANALISI TECNICA RIGOROSA ---
     let detectedCode = "";
+    let charDotAccs = [], charDashAccs = [], charOffAccs = [];
+
     onElements.forEach((el, i) => {
         // Soglia 2.0 per essere più severi (1.2/WPM * 2)
         const isDash = el.duration > unit * 2.0;
@@ -815,14 +825,20 @@ window.finalizeGroupCharacter = function() {
 
         const ideal = isDash ? (unit * 3) : unit;
         const acc = Math.max(0, 100 - (Math.abs(el.duration - ideal) / ideal * 100));
-        if (isDash) window.groupTxState.stats.dashAccs.push(acc);
-        else window.groupTxState.stats.dotAccs.push(acc);
+        if (isDash) {
+            window.groupTxState.stats.dashAccs.push(acc);
+            charDashAccs.push(acc);
+        } else {
+            window.groupTxState.stats.dotAccs.push(acc);
+            charDotAccs.push(acc);
+        }
     });
 
     // Analisi Spazi tra elementi del carattere (Idealmente 1 unità)
     offElements.forEach((el, i) => {
         const acc = Math.max(0, 100 - (Math.abs(el.duration - unit) / unit * 100));
         window.groupTxState.stats.charSpaceAccs.push(acc);
+        charOffAccs.push(acc);
     });
 
     // Se eravamo dopo uno spazio tra gruppi, valutiamo il Word Space (7 unità)
@@ -837,7 +853,14 @@ window.finalizeGroupCharacter = function() {
     const targetCode = window.morseDict[targetChar] || "";
     const isCorrect = (detectedCode === targetCode);
 
-    console.log(`GROUP_TX: Target "${targetChar}" (${targetCode}), Detected "${detectedCode}" -> ${isCorrect}`);
+    // Valutazione media carattere per feedback real-time
+    const charAvgDot = charDotAccs.length > 0 ? Math.round(charDotAccs.reduce((a,b)=>a+b,0)/charDotAccs.length) : 100;
+    const charAvgDash = charDashAccs.length > 0 ? Math.round(charDashAccs.reduce((a,b)=>a+b,0)/charDashAccs.length) : 100;
+    const charTotalAcc = Math.round((charAvgDot + charAvgDash) / 2);
+
+    console.log(`GROUP_TX: Target "${targetChar}" (${targetCode}), Detected "${detectedCode}" -> ${isCorrect} (Acc: ${charTotalAcc}%)`);
+
+    const feedbackEl = document.getElementById('groupTxFeedback');
 
     if (phase === 'PROMPT') {
         if (isCorrect) {
@@ -845,15 +868,15 @@ window.finalizeGroupCharacter = function() {
             if (window.groupTxState.currentIndex >= targetText.length) {
                 window.groupTxState.phase = 'GROUPS';
                 window.groupTxState.currentIndex = 0;
-                document.getElementById('groupTxFeedback').textContent = "BENE! ORA I GRUPPI...";
+                if (feedbackEl) feedbackEl.textContent = "BENE! ORA I GRUPPI...";
                 const prompt = document.getElementById('groupTxPrompt');
                 if (prompt) prompt.style.color = "#4caf50";
                 setTimeout(() => { if (prompt) prompt.style.display = "none"; window.updateGroupHighlight(); }, 1000);
             } else {
-                 document.getElementById('groupTxFeedback').textContent = "Prossimo: " + targetText[window.groupTxState.currentIndex];
+                 if (feedbackEl) feedbackEl.textContent = "Prossimo: " + targetText[window.groupTxState.currentIndex];
             }
         } else {
-            document.getElementById('groupTxFeedback').textContent = "Errore! Ripeti " + targetChar;
+            if (feedbackEl) feedbackEl.textContent = "Errore! Ripeti " + targetChar;
         }
     } else {
         const charEl = document.getElementById("gtx_char_" + window.groupTxState.currentIndex);
@@ -862,6 +885,15 @@ window.finalizeGroupCharacter = function() {
             charEl.style.textShadow = isCorrect ? "0 0 10px #4caf50" : "0 0 10px #f44336";
             charEl.style.transform = "scale(1)";
         }
+
+        if (feedbackEl) {
+            if (isCorrect) {
+                feedbackEl.innerHTML = `<span style="color:#4caf50">CORRETTO (${charTotalAcc}%)</span>`;
+            } else {
+                feedbackEl.innerHTML = `<span style="color:#f44336">ERRORE! (Hai fatto: ${detectedCode})</span>`;
+            }
+        }
+
         window.groupTxState.currentIndex++;
 
         if (window.groupTxState.currentIndex >= targetText.length) {
@@ -955,9 +987,15 @@ window.MANIPULATION_ADVICE = [
 
 window.finishGroupTx = function() {
     window.groupTxState.running = false;
+
+    // Stop audio residuo
+    if (typeof window.stopTone === 'function') window.stopTone();
+
     document.getElementById('groupTxFeedback').textContent = "ESERCIZIO COMPLETATO! 🏆";
-    document.getElementById('btnStopGroupTx').style.display = 'none';
-    document.getElementById('btnStartGroupTx').style.display = 'block';
+    const bStop = document.getElementById('btnStopGroupTx');
+    const bStart = document.getElementById('btnStartGroupTx');
+    if (bStop) bStop.style.display = 'none';
+    if (bStart) bStart.style.display = 'block';
 
     const analysis = document.getElementById('groupTxAnalysis');
     const analysisText = document.getElementById('groupTxAnalysisText');
