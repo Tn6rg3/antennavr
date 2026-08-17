@@ -795,20 +795,11 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
     const targetText = phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
 
     // Saltiamo gli spazi se l'indice è fermo su uno
-    while (targetText[window.groupTxState.currentIndex] === " " && window.groupTxState.currentIndex < targetText.length) {
+    while (window.groupTxState.currentIndex < targetText.length && targetText[window.groupTxState.currentIndex] === " ") {
         window.groupTxState.currentIndex++;
     }
 
-    if (window.groupTxState.currentIndex >= targetText.length) {
-        if (phase === 'PROMPT') {
-            window.groupTxState.phase = 'GROUPS';
-            window.groupTxState.currentIndex = 0;
-            return;
-        } else {
-            window.finishGroupTx();
-            return;
-        }
-    }
+    if (window.groupTxState.currentIndex >= targetText.length) return;
 
     const seq = window.groupTxState.sequence;
     const onElements = seq.filter(s => s.type === 'on');
@@ -836,12 +827,10 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
         window.groupTxState.stats.charSpaceAccs.push(acc);
     });
 
-    // Valutazione dello spazio EFFETTIVO preso dall'utente (actualGap)
-    // Questo è lo spazio tra il carattere appena finito e quello che sta iniziando ora.
+    // Valutazione dello spazio EFFETTIVO (gap precedente all'inizio di questa lettera)
     if (actualGap > 0 && window.groupTxState.currentIndex > 0) {
-        const expectedGapChar = targetText[window.groupTxState.currentIndex - 1];
-        const isNewWord = (expectedGapChar === " ");
-        const idealGap = isNewWord ? (unit * 7) : (unit * 3);
+        const wasNewWord = (targetText[window.groupTxState.currentIndex - 1] === " ");
+        const idealGap = wasNewWord ? (unit * 7) : (unit * 3);
         const gapAcc = Math.max(0, 100 - (Math.abs(actualGap - idealGap) / idealGap * 100));
 
         if (isNewWord) window.groupTxState.stats.wordSpaceAccs.push(gapAcc);
@@ -857,6 +846,7 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
     if (phase === 'PROMPT') {
         if (isCorrect) {
             window.groupTxState.currentIndex++;
+            // Verifica immediata se il PROMPT è finito
             if (window.groupTxState.currentIndex >= targetText.length) {
                 window.groupTxState.phase = 'GROUPS';
                 window.groupTxState.currentIndex = 0;
