@@ -798,30 +798,36 @@ window.renderGroupContent = function() {
     if (!cont) return;
     cont.innerHTML = '';
 
-    // Assicuriamoci che l'area sia centrata se le parole sono poche,
-    // ma allineata a sinistra se sono troppe (per lo scroll)
-    cont.style.justifyContent = "center";
-
     const text = window.groupTxState.fullText;
-    for (let i = 0; i < text.length; i++) {
-        const span = document.createElement('span');
-        const isSpace = (text[i] === " ");
-        span.textContent = isSpace ? "\u00A0" : text[i];
-        span.style.color = "#ffc107";
-        // Rimosso 0.8em per usare il font size del container (più grande)
-        span.style.padding = isSpace ? "0 10px" : "1px 1px";
-        span.style.borderRadius = "3px";
-        span.style.transition = "all 0.2s";
-        span.id = "gtx_char_" + i;
-        cont.appendChild(span);
-    }
+    const words = text.split(" ");
 
-    // Se il contenuto è più largo del container, allinea a sinistra per permettere lo scroll naturale
-    if (cont.scrollWidth > cont.clientWidth) {
-        cont.style.justifyContent = "flex-start";
-    }
+    let charIndex = 0;
+    words.forEach((word, wIdx) => {
+        // Creiamo un contenitore per la singola parola/gruppo
+        const wordSpan = document.createElement('span');
+        wordSpan.style.display = "inline-block";
+        wordSpan.style.whiteSpace = "nowrap";
+        wordSpan.style.margin = "5px"; // Spazio tra le parole
 
-    window.updateGroupHighlight();
+        for (let i = 0; i < word.length; i++) {
+            const charSpan = document.createElement('span');
+            charSpan.textContent = word[i];
+            charSpan.style.color = "#ffc107";
+            charSpan.style.padding = "0 1px";
+            charSpan.style.borderRadius = "3px";
+            charSpan.id = "gtx_char_" + charIndex;
+            wordSpan.appendChild(charSpan);
+            charIndex++;
+        }
+
+        cont.appendChild(wordSpan);
+
+        // Aggiungiamo uno spazio invisibile (o un marker) per la logica interna se necessario,
+        // ma non mostriamo uno span fisico per lo spazio per non rompere il layout
+        if (wIdx < words.length - 1) {
+            charIndex++; // Incrementiamo l'indice per saltare lo spazio nel testo originale
+        }
+    });
 };
 
 window.updateGroupHighlight = function() {
@@ -923,9 +929,6 @@ window.finalizeGroupCharacter = function(actualGap = 0) {
         if (charEl) {
             charEl.style.color = isCorrect ? "#4caf50" : "#f44336";
             charEl.style.textShadow = isCorrect ? "none" : "0 0 5px #f44336";
-
-            // Portiamo il carattere corrente in vista se la riga è molto lunga (scroll orizzontale)
-            charEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
         }
         if (feedbackEl) {
             feedbackEl.innerHTML = isCorrect ? `<span style="color:#4caf50">OK</span>` : `<span style="color:#f44336">ERR (${detectedCode})</span>`;
