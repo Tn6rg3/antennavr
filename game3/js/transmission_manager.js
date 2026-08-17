@@ -743,24 +743,7 @@ window.renderGroupContent = function() {
 };
 
 window.updateGroupHighlight = function() {
-    const text = window.groupTxState.phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
-    const curr = window.groupTxState.currentIndex;
-
-    if (window.groupTxState.phase === 'GROUPS') {
-        const fullText = window.groupTxState.fullText;
-        for (let i = 0; i < fullText.length; i++) {
-            const el = document.getElementById("gtx_char_" + i);
-            if (el) {
-                if (i === curr) {
-                    el.style.background = "rgba(33, 150, 243, 0.4)";
-                    el.style.borderBottom = "3px solid #2196f3";
-                } else {
-                    el.style.background = "transparent";
-                    el.style.borderBottom = "none";
-                }
-            }
-        }
-    }
+    // Rimosso effetto invasivo: l'utente vede solo il cambio colore del carattere battuto (verde/rosso)
 };
 
 window.processGroupInput = function() {
@@ -771,10 +754,11 @@ window.processGroupInput = function() {
 
     if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
 
-    // Tempo di attesa ridotto a 3 unità per rilevare la fine del carattere in modo più fluido
+    // Aspettiamo 4 unità di silenzio (poco più del Character Space standard di 3u)
+    // per dare tempo all'utente di chiudere il carattere senza correre.
     window.groupTxState.timeout = setTimeout(() => {
         window.finalizeGroupCharacter();
-    }, unit * 3);
+    }, unit * 4);
 };
 
 window.finalizeGroupCharacter = function() {
@@ -783,9 +767,7 @@ window.finalizeGroupCharacter = function() {
     const phase = window.groupTxState.phase;
     const targetText = phase === 'PROMPT' ? window.groupTxState.targetText : window.groupTxState.fullText;
 
-    // Se l'indice corrente è su uno spazio, verifichiamo la durata del silenzio precedente
-    const isWordSpaceNext = (targetText[window.groupTxState.currentIndex] === " ");
-
+    // Saltiamo gli spazi se l'indice è fermo su uno (non si trasmette il vuoto)
     while (targetText[window.groupTxState.currentIndex] === " " && window.groupTxState.currentIndex < targetText.length) {
         window.groupTxState.currentIndex++;
     }
@@ -794,10 +776,8 @@ window.finalizeGroupCharacter = function() {
         if (phase === 'PROMPT') {
             window.groupTxState.phase = 'GROUPS';
             window.groupTxState.currentIndex = 0;
-            document.getElementById('groupTxFeedback').textContent = "BENE! ORA I GRUPPI...";
             const prompt = document.getElementById('groupTxPrompt');
-            if (prompt) prompt.style.color = "#4caf50";
-            setTimeout(() => { if (prompt) prompt.style.display = "none"; }, 1000);
+            if (prompt) prompt.style.display = "none";
             return;
         } else {
             window.finishGroupTx();
@@ -806,59 +786,55 @@ window.finalizeGroupCharacter = function() {
     }
 
     const seq = window.groupTxState.sequence;
-    const onElements = seq.filter(s => s.type === 'on');
-    const offElements = seq.filter(s => s.type === 'off');
+    let preCharGap = null, internalGaps = [], onElements = [];
+
+    // Separiamo i segnali: quello che viene prima del primo 'on' è lo spazio tra caratteri/gruppi
+    seq.forEach(s => {
+        if (s.type === 'on') onElements.push(s);
+        else {
+            if (onElements.length === 0) preCharGap = s;
+            else internalGaps.push(s);
+        }
+    });
 
     if (onElements.length === 0) return;
 
     const wpm = window.keyerState.enabled ? window.keyerState.wpm : (parseInt(window.courseData?.settings?.start_wpm) || 20);
     const unit = 1200 / wpm;
 
-    // --- ANALISI TECNICA RIGOROSA ---
+    // --- ANALISI TECNICA RIGOROSA SECONDO STANDARD CW ---
     let detectedCode = "";
-    let charDotAccs = [], charDashAccs = [], charOffAccs = [];
+    let charDotAccs = [], charDashAccs = [];
 
-    onElements.forEach((el, i) => {
-        // Soglia 2.0 per essere più severi (1.2/WPM * 2)
+    onElements.forEach((el) => {
         const isDash = el.duration > unit * 2.0;
         detectedCode += isDash ? "-" : ".";
-
         const ideal = isDash ? (unit * 3) : unit;
         const acc = Math.max(0, 100 - (Math.abs(el.duration - ideal) / ideal * 100));
-        if (isDash) {
-            window.groupTxState.stats.dashAccs.push(acc);
-            charDashAccs.push(acc);
-        } else {
-            window.groupTxState.stats.dotAccs.push(acc);
-            charDotAccs.push(acc);
-        }
+        if (isDash) { window.groupTxState.stats.dashAccs.push(acc); charDashAccs.push(acc); }
+        else { window.groupTxState.stats.dotAccs.push(acc); charDotAccs.push(acc); }
     });
 
-    // Analisi Spazi tra elementi del carattere (Idealmente 1 unità)
-    offElements.forEach((el, i) => {
+    // Spazi interni tra gli elementi (1u)
+    internalGaps.forEach(el => {
         const acc = Math.max(0, 100 - (Math.abs(el.duration - unit) / unit * 100));
         window.groupTxState.stats.charSpaceAccs.push(acc);
-        charOffAccs.push(acc);
     });
 
-    // Se eravamo dopo uno spazio tra gruppi, valutiamo il Word Space (7 unità)
-    if (isWordSpaceNext && window.transmissionState.lastEventTime > 0) {
-         const gap = Date.now() - window.transmissionState.lastEventTime;
-         const idealWordSpace = unit * 7;
-         const wordAcc = Math.max(0, 100 - (Math.abs(gap - idealWordSpace) / idealWordSpace * 100));
-         window.groupTxState.stats.wordSpaceAccs.push(wordAcc);
+    // Spazio PRECEDENTE (3u per carattere, 7u per gruppi)
+    if (preCharGap && window.groupTxState.currentIndex > 0) {
+        const isNewWord = (targetText[window.groupTxState.currentIndex - 1] === " ");
+        const idealGap = isNewWord ? (unit * 7) : (unit * 3);
+        // Nota: lo spazio misurato include il silenzio reale + parte del timeout
+        const gapAcc = Math.max(0, 100 - (Math.abs(preCharGap.duration - idealGap) / idealGap * 100));
+
+        if (isNewWord) window.groupTxState.stats.wordSpaceAccs.push(gapAcc);
+        else window.groupTxState.stats.charSpaceAccs.push(gapAcc);
     }
 
     const targetChar = targetText[window.groupTxState.currentIndex];
     const targetCode = window.morseDict[targetChar] || "";
     const isCorrect = (detectedCode === targetCode);
-
-    // Valutazione media carattere per feedback real-time
-    const charAvgDot = charDotAccs.length > 0 ? Math.round(charDotAccs.reduce((a,b)=>a+b,0)/charDotAccs.length) : 100;
-    const charAvgDash = charDashAccs.length > 0 ? Math.round(charDashAccs.reduce((a,b)=>a+b,0)/charDashAccs.length) : 100;
-    const charTotalAcc = Math.round((charAvgDot + charAvgDash) / 2);
-
-    console.log(`GROUP_TX: Target "${targetChar}" (${targetCode}), Detected "${detectedCode}" -> ${isCorrect} (Acc: ${charTotalAcc}%)`);
 
     const feedbackEl = document.getElementById('groupTxFeedback');
 
@@ -868,58 +844,30 @@ window.finalizeGroupCharacter = function() {
             if (window.groupTxState.currentIndex >= targetText.length) {
                 window.groupTxState.phase = 'GROUPS';
                 window.groupTxState.currentIndex = 0;
-                if (feedbackEl) feedbackEl.textContent = "BENE! ORA I GRUPPI...";
+                if (feedbackEl) feedbackEl.textContent = "INIZIA I GRUPPI...";
                 const prompt = document.getElementById('groupTxPrompt');
-                if (prompt) prompt.style.color = "#4caf50";
-                setTimeout(() => { if (prompt) prompt.style.display = "none"; window.updateGroupHighlight(); }, 1000);
+                if (prompt) prompt.style.display = "none";
             } else {
-                 if (feedbackEl) feedbackEl.textContent = "Prossimo: " + targetText[window.groupTxState.currentIndex];
+                if (feedbackEl) feedbackEl.textContent = "Prossimo: " + targetText[window.groupTxState.currentIndex];
             }
-        } else {
-            if (feedbackEl) feedbackEl.textContent = "Errore! Ripeti " + targetChar;
         }
     } else {
         const charEl = document.getElementById("gtx_char_" + window.groupTxState.currentIndex);
         if (charEl) {
             charEl.style.color = isCorrect ? "#4caf50" : "#f44336";
-            charEl.style.textShadow = isCorrect ? "0 0 10px #4caf50" : "0 0 10px #f44336";
-            charEl.style.transform = "scale(1)";
         }
-
         if (feedbackEl) {
-            if (isCorrect) {
-                feedbackEl.innerHTML = `<span style="color:#4caf50">CORRETTO (${charTotalAcc}%)</span>`;
-            } else {
-                feedbackEl.innerHTML = `<span style="color:#f44336">ERRORE! (Hai fatto: ${detectedCode})</span>`;
-            }
+            feedbackEl.innerHTML = isCorrect ? `<span style="color:#4caf50">OK</span>` : `<span style="color:#f44336">ERRORE (${detectedCode})</span>`;
         }
-
         window.groupTxState.currentIndex++;
-
         if (window.groupTxState.currentIndex >= targetText.length) {
             window.finishGroupTx();
-        } else {
-            let nextIdx = window.groupTxState.currentIndex;
-            const wasSpace = (targetText[nextIdx] === " ");
-
-            if (wasSpace) {
-                while (targetText[nextIdx] === " " && nextIdx < targetText.length) nextIdx++;
-                window.groupTxState.currentIndex = nextIdx;
-            }
-
-            if (nextIdx < targetText.length) {
-                document.getElementById('groupTxFeedback').textContent = "Prossimo: " + targetText[nextIdx];
-                window.updateGroupHighlight();
-            } else {
-                window.finishGroupTx();
-            }
         }
     }
 
     window.groupTxState.sequence = [];
     if (!isCorrect) {
         window.groupTxState.consecutiveErrors = (window.groupTxState.consecutiveErrors || 0) + 1;
-        // Rimosso blocco automatico per permettere il completamento dell'esercizio
     } else {
         window.groupTxState.consecutiveErrors = 0;
     }
