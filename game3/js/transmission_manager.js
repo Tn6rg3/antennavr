@@ -136,6 +136,9 @@ window.initTransmissionManager = function() {
     setupButton('btnStopTxSession', window.stopTxSession);
     setupButton('btnReplayTargetChar', window.replayTxTarget);
 
+    const keyerToggle = document.getElementById('keyerEnableToggle');
+    const keyerType = document.getElementById('keyerTypeSelect');
+
     // SYNC KEYER UI WITH STATE
     if (keyerToggle) keyerToggle.checked = window.keyerState.enabled;
     if (keyerType) keyerType.value = window.keyerState.mode;
@@ -151,11 +154,10 @@ window.initTransmissionManager = function() {
     if (keyerToggle) {
         keyerToggle.onchange = (e) => {
             window.keyerState.enabled = e.target.checked;
-            window.logDebug("KEYER: Enabled =", window.keyerState.enabled);
+            console.log("KEYER: Enabled =", window.keyerState.enabled);
         };
     }
 
-    const keyerType = document.getElementById('keyerTypeSelect');
     if (keyerType) {
         keyerType.onchange = (e) => window.keyerState.mode = e.target.value;
     }
@@ -204,15 +206,20 @@ window.initTransmissionManager = function() {
 
     // KEYBOARD LISTENERS FOR KEYER (SOLO SE NON INIZIALIZZATI)
     if (!window.transmissionGlobalListenersReady) {
+        // Usiamo un set per gestire i tasti attualmente premuti e supportare interfacce USB
+        const keysDown = new Set();
+
         window.addEventListener('keydown', (e) => {
-            console.log("TX_DEBUG: Global KeyDown detected:", e.key, "Targeting:", window.keyerState.mappingTarget);
+            // Se stiamo scrivendo in un input (es. chat), non interferire
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
             if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 
             // MAPPATURA
             if (window.keyerState.mappingTarget) {
                 e.preventDefault();
                 const key = e.key;
-                console.log("KEYER_DEBUG: Mapping detected key:", key, "Type:", typeof key);
+                console.log("KEYER_DEBUG: Mapping detected key:", key);
                 if (window.keyerState.mappingTarget === 'dit') window.keyerState.keyDit = key;
                 else window.keyerState.keyDah = key;
                 window.keyerState.mappingTarget = null;
@@ -239,6 +246,8 @@ window.initTransmissionManager = function() {
         });
 
         window.addEventListener('keyup', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
             if (!window.keyerState.enabled) return;
             if (e.key === window.keyerState.keyDit || e.key === window.keyerState.keyDah) {
                 e.preventDefault();
@@ -521,6 +530,7 @@ window.updateKeyerUI = function() {
 };
 
 window.processKeyerInput = function() {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     if (window.keyerState.currentSymbol) return;
     window.playKeyerSymbol();
 };
@@ -602,13 +612,15 @@ window.startGroupTx = function() {
         const feedback = document.getElementById('groupTxFeedback');
         const analysis = document.getElementById('groupTxAnalysis');
 
-        if (bStart) bStart.style.setProperty('display', 'none', 'important');
-        if (bStop) bStop.style.setProperty('display', 'block', 'important');
-        if (display) {
-            display.style.setProperty('display', 'flex', 'important');
-            display.style.flexDirection = 'column';
-            display.style.alignItems = 'center';
-        }
+    if (bStart) bStart.style.setProperty('display', 'none', 'important');
+    if (bStop) bStop.style.setProperty('display', 'block', 'important');
+    if (display) {
+        display.style.setProperty('display', 'flex', 'important');
+        display.style.flexDirection = 'column';
+        display.style.alignItems = 'center';
+        display.style.visibility = 'visible';
+        display.style.opacity = '1';
+    }
 
         if (prompt) {
             prompt.textContent = "VVV =";
