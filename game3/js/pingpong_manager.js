@@ -1,5 +1,43 @@
 // js/pingpong_manager.js
 
+window.initPingPongManager = function() {
+    console.log("PingPong: Initializing controls...");
+
+    if (els.btnSendPingPong) {
+        els.btnSendPingPong.onclick = function() {
+            const input = document.getElementById('pingPongWordToSend');
+            const val = input ? input.value.trim().toUpperCase() : "";
+            if (!val) return;
+
+            // Blochiamo il pulsante per evitare invii doppi durante la transazione
+            els.btnSendPingPong.disabled = true;
+
+            db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
+                if (d && !d.word) {
+                    d.word = val;
+                    d.wordId = (d.wordId || 0) + 1;
+                    d.senderId = myId;
+                }
+                return d;
+            }, (error, committed) => {
+                els.btnSendPingPong.disabled = false;
+                if (committed && input) {
+                    input.value = "";
+                }
+                if (error) console.error("PingPong Send Error:", error);
+            });
+        };
+    }
+
+    if (els.pingPongWordToSend) {
+        els.pingPongWordToSend.onkeypress = function(e) {
+            if (e.key === 'Enter') {
+                if (els.btnSendPingPong) els.btnSendPingPong.click();
+            }
+        };
+    }
+};
+
 window.setupPingPongListener = function() {
     if (listeners.pingPong) db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong);
     listeners.pingPong = db.ref(`rooms/${roomCode}/pingpong`).on('value', snap => {
@@ -55,15 +93,21 @@ window.setupPingPongListener = function() {
                 gameWords[wordIndex] = ppData.word;
                 if (els.permanentGameInput) {
                     els.permanentGameInput.disabled = false;
-                    els.permanentGameInput.placeholder = "Decodifica e scrivi...";
+                    els.permanentGameInput.placeholder = (currentLang === 'it' ? "Decodifica e scrivi..." : "Decode and type...");
                     els.permanentGameInput.value = "";
-                    setTimeout(() => els.permanentGameInput.focus(), 100);
+                    // Suggerimento visivo per il focus
+                    els.permanentGameInput.style.backgroundColor = "rgba(76, 175, 80, 0.1)";
+                    setTimeout(() => { if(els.permanentGameInput) els.permanentGameInput.style.backgroundColor = ""; }, 1000);
                 }
                 inputActive = true;
-                setTimeout(() => { if (typeof playMorseAudio === 'function') playMorseAudio(ppData.word.toUpperCase(), currentWpm); }, 500);
+                setTimeout(() => {
+                    if (gameRunning && currentMode === 'pingpong' && !document.hidden) {
+                        if (typeof playMorseAudio === 'function') playMorseAudio(ppData.word.toUpperCase(), currentWpm);
+                    }
+                }, 800);
             } else if (!ppData.word && els.permanentGameInput) {
                 els.permanentGameInput.disabled = true;
-                els.permanentGameInput.placeholder = "In attesa dell'avversario...";
+                els.permanentGameInput.placeholder = (currentLang === 'it' ? "In attesa dell'avversario..." : "Waiting for opponent...");
                 els.permanentGameInput.value = "";
                 inputActive = false;
             }

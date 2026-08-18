@@ -775,8 +775,14 @@ window.startCountdownSequence = function() {
     if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
 
     if (currentMode === 'pingpong' && (myId === roomHostId || roomCode.startsWith("TRN_"))) {
-        db.ref(`rooms/${roomCode}/pingpong`).once('value', s => {
-            if (!s.exists()) db.ref(`rooms/${roomCode}/pingpong`).set({ senderId: myId, word: '', wordId: 0, wordsPlayed: 0, lastGuess: null });
+        // RESET E INIZIALIZZAZIONE PING PONG (Il primo sender è sempre l'Host o chi avvia il match)
+        const initialSender = roomHostId || myId;
+        db.ref(`rooms/${roomCode}/pingpong`).set({
+            senderId: initialSender,
+            word: '',
+            wordId: 0,
+            wordsPlayed: 0,
+            lastGuess: null
         });
     }
 
@@ -822,6 +828,7 @@ window.startCountdownSequence = function() {
 
                 window.showScreen('gameArea');
                 if (currentMode === 'pingpong') {
+                    if (typeof window.initPingPongManager === 'function') window.initPingPongManager();
                     if (typeof window.setupPingPongListener === 'function') window.setupPingPongListener();
                 } else {
                     setTimeout(() => { if (els.permanentGameInput) els.permanentGameInput.focus(); }, 200);
@@ -863,6 +870,7 @@ window.resumeGameSequence = function() {
     } else {
         window.showScreen('gameArea');
         if (currentMode === 'pingpong') {
+            if (typeof window.initPingPongManager === 'function') window.initPingPongManager();
             if (typeof window.setupPingPongListener === 'function') window.setupPingPongListener();
         } else {
             setTimeout(() => { if (els.permanentGameInput) els.permanentGameInput.focus(); }, 200);
@@ -1714,6 +1722,8 @@ if (els.readyBtn) {
     });
 }
 
+// Rimossa inizializzazione ridondante, gestita in initPingPongManager
+/*
 if (els.btnSendPingPong) {
     els.btnSendPingPong.onclick = function() {
         const input = document.getElementById('pingPongWordToSend');
@@ -1728,15 +1738,21 @@ if (els.btnSendPingPong) {
             }
             return d;
         });
+    };
+}
+*/
         if (input) input.value = "";
     };
 }
 
+// Rimossa inizializzazione ridondante, gestita in initPingPongManager
+/*
 if (document.getElementById('pingPongWordToSend')) {
     document.getElementById('pingPongWordToSend').onkeypress = function(e) {
         if (e.key === 'Enter') els.btnSendPingPong.click();
     };
 }
+*/
 
 window.lostFocusDuringWord = false;
 
