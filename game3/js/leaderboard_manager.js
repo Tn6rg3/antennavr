@@ -135,7 +135,14 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         let todayStr = new Date().toISOString().split('T')[0];
         db.ref(`leaderboard/daily_challenge/${todayStr}`).orderByChild('score').limitToLast(50).once('value', snapshot => {
             let players = [];
-            snapshot.forEach(child => { if (child.val()) players.push(child.val()); });
+            snapshot.forEach(child => {
+                let p = child.val();
+                if (p) {
+                    p.id = child.key;
+                    p.dbPath = `leaderboard/daily_challenge/${todayStr}/${child.key}`;
+                    players.push(p);
+                }
+            });
             // Ordinamento: Punteggio decrescente, poi WPM decrescente
             players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
             window.renderPlayersListHTML(players, els.leaderboardContainer, false);
@@ -160,6 +167,8 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
                             const val = mNode.val();
                             if (val) {
                                 // Aggiungiamo metadati per il rendering
+                                val.id = mNode.key;
+                                val.dbPath = `${dbPath}/${wcNode.key}/${mNode.key}`;
                                 val.wordCount = wcNode.key;
                                 matches.push(val);
                             }
@@ -178,7 +187,14 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     if (tabType === 'callsign') {
         db.ref('leaderboard/callsign/global').orderByChild('score').limitToLast(50).once('value', snapshot => {
             let players = [];
-            snapshot.forEach(child => { if (child.val()) players.push(child.val()); });
+            snapshot.forEach(child => {
+                let p = child.val();
+                if (p) {
+                    p.id = child.key;
+                    p.dbPath = `leaderboard/callsign/global/${child.key}`;
+                    players.push(p);
+                }
+            });
             players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
             window.renderPlayersListHTML(players, els.leaderboardContainer, false);
         });
@@ -200,7 +216,14 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     if (tabType === 'arcade') {
         db.ref('leaderboard/arcade/all').orderByChild('score').limitToLast(50).once('value', snapshot => {
             let players = [];
-            snapshot.forEach(child => { if (child.val()) players.push(child.val()); });
+            snapshot.forEach(child => {
+                let p = child.val();
+                if (p) {
+                    p.id = child.key;
+                    p.dbPath = `leaderboard/arcade/all/${child.key}`;
+                    players.push(p);
+                }
+            });
             // Ordinamento: Punteggio decrescente
             players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
             window.renderPlayersListHTML(players, els.leaderboardContainer, false, false, true);
@@ -218,10 +241,17 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     db.ref(dbPath).once('value', snapshot => {
         let players = [];
         snapshot.forEach(wordCountNode => {
-            const key = wordCountNode.key;
-            if (key.startsWith('single_')) {
-                if (filterWordCount === 'all' || key === 'single_' + filterWordCount) {
-                    wordCountNode.forEach(userNode => { if (userNode.val()) players.push(userNode.val()); });
+            const wcKey = wordCountNode.key;
+            if (wcKey.startsWith('single_')) {
+                if (filterWordCount === 'all' || wcKey === 'single_' + filterWordCount) {
+                    wordCountNode.forEach(userNode => {
+                        let p = userNode.val();
+                        if (p) {
+                            p.id = userNode.key;
+                            p.dbPath = `leaderboard/${baseMode}/${wcKey}/${userNode.key}`;
+                            players.push(p);
+                        }
+                    });
                 }
             }
         });
@@ -238,9 +268,24 @@ window.renderMatchesHistoryHTML = function(matches, container) {
         return;
     }
     matches.forEach(match => {
-        const mw = document.createElement('div'); mw.style.marginBottom = "25px"; mw.style.borderBottom = "1px dashed var(--hint-color)"; mw.style.paddingBottom = "15px";
+        const mw = document.createElement('div'); mw.style.marginBottom = "25px"; mw.style.borderBottom = "1px dashed var(--hint-color)"; mw.style.paddingBottom = "15px"; mw.style.position = "relative";
         const infoDiv = document.createElement('div'); infoDiv.style.textAlign = 'center'; infoDiv.style.fontSize = '0.8em'; infoDiv.style.color = 'var(--hint-color)'; infoDiv.style.marginBottom = '8px';
         infoDiv.textContent = `📅 ${match.date} - ${match.wordCount} Stringhe`; mw.appendChild(infoDiv);
+
+        // BOTTONE CANCELLA MATCH (Se l'utente ha partecipato)
+        const hasMe = match.players && (Array.isArray(match.players) ? match.players.some(p => p.id === window.myId) : match.players[window.myId]);
+        if (hasMe && match.dbPath) {
+            const delBtn = document.createElement('button');
+            delBtn.style.cssText = "position:absolute; top:0; right:0; background:none; border:none; color:#f44336; cursor:pointer; font-size:1.1em; padding:5px;";
+            delBtn.innerHTML = "🗑️";
+            delBtn.title = currentLang === 'it' ? "Elimina dalla cronologia" : "Delete from history";
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                window.deleteLeaderboardEntry(match.dbPath);
+            };
+            mw.appendChild(delBtn);
+        }
+
         window.renderHeadToHeadView(match.players, mw, match.ts); container.appendChild(mw);
     });
 };
@@ -330,7 +375,36 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         const ptSpan = document.createElement('span'); ptSpan.style.fontSize = '0.7em'; ptSpan.style.color = 'var(--hint-color)'; ptSpan.style.marginLeft = '2px'; ptSpan.textContent = 'pt';
         scoreDiv.appendChild(scoreB); scoreDiv.appendChild(ptSpan);
 
-        row.appendChild(scoreDiv); container.appendChild(row);
+        row.appendChild(scoreDiv);
+
+        // BOTTONE CANCELLA (Solo per i propri record)
+        if (player.id === window.myId && player.dbPath) {
+            const delBtn = document.createElement('button');
+            delBtn.style.cssText = "background:none; border:none; color:#f44336; cursor:pointer; font-size:1.2em; padding:5px; margin-left:10px; display:flex; align-items:center;";
+            delBtn.innerHTML = "🗑️";
+            delBtn.title = currentLang === 'it' ? "Cancella record" : "Delete record";
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                window.deleteLeaderboardEntry(player.dbPath);
+            };
+            row.appendChild(delBtn);
+        }
+
+        container.appendChild(row);
+    });
+};
+
+window.deleteLeaderboardEntry = function(path) {
+    if (!confirm(currentLang === 'it' ? "Vuoi davvero cancellare questo record dalla classifica?" : "Do you really want to delete this record from the leaderboard?")) return;
+
+    db.ref(path).remove().then(() => {
+        showToast(currentLang === 'it' ? "Record rimosso." : "Record removed.");
+        // Ricarica la classifica corrente
+        const select = document.getElementById('lbModeSelect');
+        if (select) window.showLeaderboardTab(select.value);
+    }).catch(err => {
+        console.error("LB: Error deleting record:", err);
+        showToast("Errore durante la rimozione.");
     });
 };
 
