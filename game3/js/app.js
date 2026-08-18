@@ -54,6 +54,8 @@ window.escapeHtml = function(str) {
 
 // --- COSTANTI DI STORAGE ---
 const STORAGE_ROOM_KEY = "cwgame_last_room";
+const STORAGE_DAILY_STATUS_KEY = "cwgame_daily_shown";
+const STORAGE_LAST_ANNOUNCEMENT_ID = "cwgame_last_announcement_id";
 const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
 const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted";
 const STORAGE_PREF_WPM = "cwgame_pref_wpm";
@@ -64,7 +66,6 @@ const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space";
 const STORAGE_PREF_FIXED = "cwgame_pref_fixed";
 const STORAGE_PREF_EASY = "cwgame_pref_easy";
 const STORAGE_PREF_SPECTATE = "cwgame_pref_spectate";
-const STORAGE_DAILY_SHOWN = "cwgame_daily_shown";
 const STORAGE_CHAT_CW_ENABLED = "cwgame_chat_cw_enabled";
 const STORAGE_CHAT_CW_WPM = "cwgame_chat_cw_wpm";
 const STORAGE_CHAT_CW_TONE = "cwgame_chat_cw_tone";
@@ -638,7 +639,7 @@ function initGame() {
                     if (m.mode === 'daily_challenge' && mDate === today) alreadyPlayedToday = true;
                 });
 
-                const alreadyShownToday = localStorage.getItem(STORAGE_DAILY_SHOWN) === today;
+                const alreadyShownToday = localStorage.getItem(STORAGE_DAILY_STATUS_KEY) === today;
 
                 if (!alreadyPlayedToday && !alreadyShownToday && els.dailyChallengeModal) {
                     // Se l'utente è nuovo, aspettiamo che chiuda il benvenuto
@@ -649,7 +650,7 @@ function initGame() {
                     }
                 } else if (alreadyPlayedToday) {
                     // Aggiorniamo il cache locale se Firebase dice che abbiamo giocato
-                    localStorage.setItem(STORAGE_DAILY_SHOWN, today);
+                    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
                 }
             });
         });
@@ -672,6 +673,7 @@ function initGame() {
         window.initProgression?.();
         window.initCourseManager?.();
         window.setupBugSystem?.();
+        window.initAdminAnnouncementListener();
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
@@ -704,6 +706,41 @@ function initGame() {
     window.checkGameTypeUI?.();
     setTimeout(() => { window.checkGameTypeUI?.(); }, 1200);
 }
+
+/**
+ * LISTENER ANNUNCI AMMINISTRATORE (Global Popup)
+ */
+window.initAdminAnnouncementListener = function() {
+    if (!db) return;
+
+    db.ref('admin_announcement').on('value', snap => {
+        const data = snap.val();
+        if (!data || !data.active || !data.text) {
+            if (els.adminAnnouncementModal) els.adminAnnouncementModal.style.display = 'none';
+            return;
+        }
+
+        const annId = data.id || "default";
+        const lastSeen = localStorage.getItem(STORAGE_LAST_ANNOUNCEMENT_ID);
+
+        // Se l'ID è diverso da quello salvato, mostriamo il popup
+        if (annId !== lastSeen) {
+            if (els.adminAnnouncementModal && els.adminAnnouncementText) {
+                if (els.adminAnnouncementTitle) els.adminAnnouncementTitle.textContent = data.title || "Comunicazione";
+                els.adminAnnouncementText.innerHTML = data.text.replace(/\n/g, '<br>');
+                els.adminAnnouncementModal.style.display = 'flex';
+
+                // Bottone di conferma
+                if (els.btnConfirmAnnouncement) {
+                    els.btnConfirmAnnouncement.onclick = () => {
+                        localStorage.setItem(STORAGE_LAST_ANNOUNCEMENT_ID, annId);
+                        els.adminAnnouncementModal.style.display = 'none';
+                    };
+                }
+            }
+        }
+    });
+};
 
 window.closeWelcomeAndCheckDaily = function() {
     if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'none';
@@ -771,6 +808,43 @@ window.setupBugSystem = function() {
         els.btnReadTutorRequests.onclick = () => window.loadAdminTutorRequests();
     }
 
+    // --- GESTIONE INVIO ANNUNCIO GLOBALE (ADMIN) ---
+    if (els.btnAdminSendAnnouncement) {
+        els.btnAdminSendAnnouncement.onclick = () => {
+            const title = els.adminAnnTitleInput?.value.trim() || "Comunicazione";
+            const text = els.adminAnnTextInput?.value.trim();
+
+            if (!text || text.length < 5) return showToast("Testo annuncio troppo breve!");
+
+            if (confirm("Inviare questo annuncio a TUTTI gli utenti?")) {
+                const newId = "ann_" + Date.now(); // ID automatico basato sul tempo
+                db.ref('admin_announcement').set({
+                    active: true,
+                    id: newId,
+                    title: title,
+                    text: text,
+                    ts: firebase.database.ServerValue.TIMESTAMP
+                }).then(() => {
+                    showToast("Annuncio pubblicato con successo! 🚀");
+                    if (els.adminAnnTextInput) els.adminAnnTextInput.value = "";
+                }).catch(err => {
+                    console.error("Admin: Error publishing announcement", err);
+                    showToast("Errore durante la pubblicazione.");
+                });
+            }
+        };
+    }
+
+    if (els.btnAdminClearAnnouncement) {
+        els.btnAdminClearAnnouncement.onclick = () => {
+            if (confirm("Rimuovere l'annuncio attivo? Non apparirà più a nessuno.")) {
+                db.ref('admin_announcement').update({ active: false }).then(() => {
+                    showToast("Annuncio rimosso.");
+                });
+            }
+        };
+    }
+
     // --- TASTO DEV: RESET SFIDA GIORNALIERA ---
     if (els.btnDevResetDaily) {
         els.btnDevResetDaily.onclick = async () => {
@@ -791,7 +865,7 @@ window.setupBugSystem = function() {
                 });
 
                 // 3. Pulisce cache locale
-                localStorage.removeItem(STORAGE_DAILY_SHOWN);
+                localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
 
                 showToast("Sfida resettata! Ricarica l'app.");
                 setTimeout(() => location.reload(), 1000);
@@ -1027,7 +1101,7 @@ if (els.btnPlayDailyNow) {
 }
 if (els.btnPlayDailyLater) els.btnPlayDailyLater.onclick = () => { if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none'; };
 if (els.btnDeclineDaily) els.btnDeclineDaily.onclick = () => {
-    localStorage.setItem(STORAGE_DAILY_SHOWN, new Date().toISOString().split('T')[0]);
+    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, new Date().toISOString().split('T')[0]);
     if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none';
 };
 
