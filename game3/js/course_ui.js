@@ -675,6 +675,7 @@ window.finishCourseSession = function() {
     if (p.consecutive_days % 2 === 0 && p.reminders_count > 0) { p.reminders_count--; showToast("Richiamo rimosso!"); }
 
     p.last_session_date = today;
+    window.courseData.current_day_session = null; // PULIZIA SESSIONE COMPLETATA PER PERMETTERE NUOVI EXTRA
     window.saveCourseState();
     db.ref(`courseActiveEnrollments/${window.myId}`).update({ roomCode: null });
 
@@ -765,7 +766,21 @@ window.attachCourseUIListeners = function() {
         };
     }
 
-    if (els.btnTabResetCourse) els.btnTabResetCourse.onclick = () => { if (confirm("Abbandonare il Corso?")) { window.updateGlobalEnrollmentRecord(false); window.courseData = window.getDefaultCourseData(); window.saveCourseState(); window.renderCourseTabView(); showToast("Abbandonato."); } };
+    if (els.btnTabResetCourse) {
+        els.btnTabResetCourse.onclick = () => {
+            const warn = currentLang === 'it'
+                ? "⚠️ ATTENZIONE: Questa azione cancellerà DEFINITIVAMENTE il tuo piano di studi, la lezione attuale e tutti i progressi del corso.\n\nVuoi davvero procedere con la CANCELLAZIONE TOTALE?"
+                : "⚠️ WARNING: This will PERMANENTLY DELETE your study plan, current lesson, and all course progress.\n\nDo you really want to proceed with TOTAL DELETION?";
+
+            if (confirm(warn)) {
+                window.updateGlobalEnrollmentRecord(false);
+                window.courseData = window.getDefaultCourseData();
+                window.saveCourseState();
+                window.renderCourseTabView();
+                showToast(currentLang === 'it' ? "Iscrizione Cancellata." : "Enrollment Deleted.");
+            }
+        };
+    }
     if (els.btnTabExitTutor) els.btnTabExitTutor.onclick = () => { if (confirm("Rinunciare al ruolo TUTOR?")) { window.updateGlobalEnrollmentRecord(false); window.courseData = window.getDefaultCourseData(); window.saveCourseState(); window.renderCourseTabView(); showToast("Ruolo rimosso."); } };
 
     // Avvio Sessione
