@@ -377,25 +377,34 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
             row.appendChild(midDiv);
         }
 
-        const scoreDiv = document.createElement('div'); scoreDiv.style.textAlign = 'right';
-        const scoreB = document.createElement('b'); scoreB.style.fontSize = '1.1em'; scoreB.style.color = 'var(--link-color)'; scoreB.textContent = player.score;
-        const ptSpan = document.createElement('span'); ptSpan.style.fontSize = '0.7em'; ptSpan.style.color = 'var(--hint-color)'; ptSpan.style.marginLeft = '2px'; ptSpan.textContent = 'pt';
-        scoreDiv.appendChild(scoreB); scoreDiv.appendChild(ptSpan);
+        // CONTENITORE AZIONI E PUNTEGGIO (Per allineamento perfetto)
+        const actionsScoreDiv = document.createElement('div');
+        actionsScoreDiv.style.cssText = "display:flex; align-items:center; gap:8px; justify-content:flex-end;";
 
-        row.appendChild(scoreDiv);
-
-        // BOTTONE CANCELLA (Solo per i propri record)
-        if (player.id === window.myId && player.dbPath) {
+        // BOTTONE CANCELLA (Solo per i propri record) - ORA A SINISTRA DEI PUNTI
+        const isMyRecord = player.id === window.myId || (isTeam && player.id === window.myTeamId);
+        if (isMyRecord && player.dbPath) {
             const delBtn = document.createElement('button');
-            delBtn.style.cssText = "background:none; border:none; color:#f44336; cursor:pointer; font-size:1.2em; padding:5px; margin-left:10px; display:flex; align-items:center;";
+            delBtn.style.cssText = "background:none; border:none; color:#f44336; cursor:pointer; font-size:1.1em; padding:4px; display:flex; align-items:center; opacity:0.6; transition: opacity 0.2s;";
             delBtn.innerHTML = "🗑️";
             delBtn.title = currentLang === 'it' ? "Cancella record" : "Delete record";
+            delBtn.onmouseover = () => delBtn.style.opacity = "1";
+            delBtn.onmouseout = () => delBtn.style.opacity = "0.6";
             delBtn.onclick = (e) => {
                 e.stopPropagation();
                 window.deleteLeaderboardEntry(player.dbPath);
             };
-            row.appendChild(delBtn);
+            actionsScoreDiv.appendChild(delBtn);
         }
+
+        const scoreDiv = document.createElement('div');
+        scoreDiv.style.cssText = "text-align:right; min-width:65px;"; // Min-width garantisce l'allineamento dei numeri
+        const scoreB = document.createElement('b'); scoreB.style.fontSize = '1.1em'; scoreB.style.color = 'var(--link-color)'; scoreB.textContent = player.score;
+        const ptSpan = document.createElement('span'); ptSpan.style.fontSize = '0.7em'; ptSpan.style.color = 'var(--hint-color)'; ptSpan.style.marginLeft = '2px'; ptSpan.textContent = 'pt';
+        scoreDiv.appendChild(scoreB); scoreDiv.appendChild(ptSpan);
+
+        actionsScoreDiv.appendChild(scoreDiv);
+        row.appendChild(actionsScoreDiv);
 
         container.appendChild(row);
     });
