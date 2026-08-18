@@ -15,13 +15,15 @@ window.transmissionState = {
 if (!window.keyerState) {
     window.keyerState = {
         enabled: false,
-        mode: 'B',
+        mode: 'B', // 'A', 'B', 'V' (Verticale)
         wpm: 20,
         tone: 600,
         keyDit: '.',
         keyDah: ',',
+        keyVert: '', // Tasto verticale
         isDitDown: false,
         isDahDown: false,
+        isVertDown: false,
         currentSymbol: null,
         nextSymbol: null,
         lastSymbolSent: 'dah', // Per gestire l'alternanza iniziale
@@ -64,8 +66,8 @@ window.initTransmissionManager = function() {
             const newBtn = keyBtn.cloneNode(true);
             keyBtn.parentNode.replaceChild(newBtn, keyBtn);
 
-            const handleDown = (e) => {
-                if (e && e.cancelable) e.preventDefault();
+            window.handleStraightKeyDown = (e) => {
+                if (e && e.cancelable && e.preventDefault) e.preventDefault();
                 if (window.transmissionState.isDown) return;
                 window.transmissionState.isDown = true;
                 const now = Date.now();
@@ -97,13 +99,16 @@ window.initTransmissionManager = function() {
                 }
 
                 if (typeof window.startTone === 'function') window.startTone(window.keyerState.tone);
-                newBtn.style.transform = "scale(0.92)";
-                newBtn.style.boxShadow = "0 2px 5px rgba(0,0,0,0.8), inset 0 2px 5px rgba(255,255,255,0.1)";
-                const inner = newBtn.querySelector('span');
-                if (inner) inner.style.opacity = "0.6";
+                const btn = document.getElementById('morseKeyBtn');
+                if (btn) {
+                    btn.style.transform = "scale(0.92)";
+                    btn.style.boxShadow = "0 2px 5px rgba(0,0,0,0.8), inset 0 2px 5px rgba(255,255,255,0.1)";
+                    const inner = btn.querySelector('span');
+                    if (inner) inner.style.opacity = "0.6";
+                }
             };
 
-            const handleUp = (e) => {
+            window.handleStraightKeyUp = (e) => {
                 if (!window.transmissionState.isDown) return;
                 window.transmissionState.isDown = false;
 
@@ -123,16 +128,19 @@ window.initTransmissionManager = function() {
                 window.transmissionState.lastEventTime = now;
 
                 if (typeof window.stopTone === 'function') window.stopTone();
-                newBtn.style.transform = "scale(1)";
-                newBtn.style.boxShadow = "0 10px 20px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.1)";
-                const inner = newBtn.querySelector('span');
-                if (inner) inner.style.opacity = "0.2";
+                const btn = document.getElementById('morseKeyBtn');
+                if (btn) {
+                    btn.style.transform = "scale(1)";
+                    btn.style.boxShadow = "0 10px 20px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.1)";
+                    const inner = btn.querySelector('span');
+                    if (inner) inner.style.opacity = "0.2";
+                }
             };
 
-            newBtn.addEventListener('mousedown', handleDown);
-            newBtn.addEventListener('touchstart', handleDown, {passive: false});
-            window.addEventListener('mouseup', handleUp);
-            window.addEventListener('touchend', handleUp, {passive: false});
+            newBtn.addEventListener('mousedown', window.handleStraightKeyDown);
+            newBtn.addEventListener('touchstart', window.handleStraightKeyDown, {passive: false});
+            window.addEventListener('mouseup', window.handleStraightKeyUp);
+            window.addEventListener('touchend', window.handleStraightKeyUp, {passive: false});
         } else {
             console.warn("TX_DEBUG: morseKeyBtn NOT FOUND");
         }
@@ -179,6 +187,7 @@ window.initTransmissionManager = function() {
         kType.value = window.keyerState.mode;
         kType.onchange = (e) => {
             window.keyerState.mode = e.target.value;
+            window.updateKeyerUI();
             window.saveKeyerSettings();
         };
     }
@@ -208,6 +217,11 @@ window.initTransmissionManager = function() {
         const b = document.getElementById('btnMapKeyDah');
         if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
     });
+    setupButtonLocal('btnMapKeyVert', () => {
+        window.keyerState.mappingTarget = 'vert';
+        const b = document.getElementById('btnMapKeyVert');
+        if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
+    });
     setupButtonLocal('btnSwapDitDah', () => {
         const oldDit = window.keyerState.keyDit;
         window.keyerState.keyDit = window.keyerState.keyDah;
@@ -235,7 +249,9 @@ window.initTransmissionManager = function() {
                 const k = e.key;
                 console.log("TX_DEBUG: Mapped key ->", k);
                 if (window.keyerState.mappingTarget === 'dit') window.keyerState.keyDit = k;
-                else window.keyerState.keyDah = k;
+                else if (window.keyerState.mappingTarget === 'dah') window.keyerState.keyDah = k;
+                else if (window.keyerState.mappingTarget === 'vert') window.keyerState.keyVert = k;
+
                 window.keyerState.mappingTarget = null;
                 window.updateKeyerUI();
                 window.saveKeyerSettings();
@@ -244,6 +260,14 @@ window.initTransmissionManager = function() {
             }
 
             if (!window.keyerState.enabled) return;
+
+            // Logica Tasto Verticale (Straight Key)
+            if (window.keyerState.mode === 'V') {
+                if (e.key === window.keyerState.keyVert) {
+                    if (typeof window.handleStraightKeyDown === 'function') window.handleStraightKeyDown(e);
+                }
+                return;
+            }
 
             if (e.key === window.keyerState.keyDit) {
                 e.preventDefault();
@@ -263,6 +287,14 @@ window.initTransmissionManager = function() {
         window.addEventListener('keyup', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             if (!window.keyerState.enabled) return;
+
+            if (window.keyerState.mode === 'V') {
+                if (e.key === window.keyerState.keyVert) {
+                    if (typeof window.handleStraightKeyUp === 'function') window.handleStraightKeyUp(e);
+                }
+                return;
+            }
+
             if (e.key === window.keyerState.keyDit) window.keyerState.isDitDown = false;
             if (e.key === window.keyerState.keyDah) window.keyerState.isDahDown = false;
         });
@@ -533,7 +565,8 @@ window.saveKeyerSettings = function() {
         wpm: window.keyerState.wpm,
         tone: window.keyerState.tone,
         keyDit: window.keyerState.keyDit,
-        keyDah: window.keyerState.keyDah
+        keyDah: window.keyerState.keyDah,
+        keyVert: window.keyerState.keyVert
     };
     localStorage.setItem('cw_keyer_settings', JSON.stringify(settings));
     console.log("KEYER: Settings saved to local storage.");
@@ -550,6 +583,7 @@ window.loadKeyerSettings = function() {
             window.keyerState.tone = s.tone || 600;
             window.keyerState.keyDit = s.keyDit || '.';
             window.keyerState.keyDah = s.keyDah || ',';
+            window.keyerState.keyVert = s.keyVert || '';
             console.log("KEYER: Settings loaded from local storage.");
         } catch (e) {
             console.error("KEYER: Error parsing saved settings.");
@@ -560,13 +594,31 @@ window.loadKeyerSettings = function() {
 window.updateKeyerUI = function() {
     const btnDit = document.getElementById('btnMapKeyDit');
     const btnDah = document.getElementById('btnMapKeyDah');
+    const btnVert = document.getElementById('btnMapKeyVert');
+
     if (btnDit) {
-        btnDit.textContent = "Tasto: " + (window.keyerState.keyDit === " " ? "Spazio" : window.keyerState.keyDit);
+        btnDit.textContent = "Tasto: " + (window.keyerState.keyDit === " " ? "Spazio" : (window.keyerState.keyDit || "Nessuno"));
         btnDit.classList.remove('pulse');
     }
     if (btnDah) {
-        btnDah.textContent = "Tasto: " + (window.keyerState.keyDah === " " ? "Spazio" : window.keyerState.keyDah);
+        btnDah.textContent = "Tasto: " + (window.keyerState.keyDah === " " ? "Spazio" : (window.keyerState.keyDah || "Nessuno"));
         btnDah.classList.remove('pulse');
+    }
+    if (btnVert) {
+        btnVert.textContent = "Tasto: " + (window.keyerState.keyVert === " " ? "Spazio" : (window.keyerState.keyVert || "Nessuno"));
+        btnVert.classList.remove('pulse');
+    }
+
+    // Mostra/Nascondi aree in base al modo
+    const paddleArea = document.getElementById('btnSwapDitDah')?.parentElement;
+    const verticalArea = document.getElementById('verticalKeyMappingArea');
+
+    if (window.keyerState.mode === 'V') {
+        if (paddleArea) paddleArea.style.opacity = "0.4";
+        if (verticalArea) verticalArea.style.opacity = "1";
+    } else {
+        if (paddleArea) paddleArea.style.opacity = "1";
+        if (verticalArea) verticalArea.style.opacity = "0.4";
     }
 };
 
