@@ -151,16 +151,17 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         const dbPath = `leaderboard/recent_matches/${baseMode}${tabType !== 'pingpong' ? '_multi' : ''}`;
         console.log("LB: Fetching Multi from:", dbPath, "Filter:", filterWordCount);
 
-        db.ref(dbPath).once('value', snapshot => {
+        // OTTIMIZZAZIONE: Usiamo limitToLast(50) per evitare di scaricare migliaia di match passati
+        db.ref(dbPath).limitToLast(50).once('value', snapshot => {
             let matches = [];
             if (snapshot.exists()) {
                 snapshot.forEach(wcNode => {
-                    // wcNode.key è '10', '20', 'all', ecc.
+                    // Se il nodo è una categoria di wordCount (es. '10', '20')
                     if (filterWordCount === 'all' || wcNode.key === filterWordCount) {
+                        // Se è un nodo wordCount, i match sono figli
                         wcNode.forEach(mNode => {
                             const val = mNode.val();
-                            if (val) {
-                                // Aggiungiamo metadati per il rendering
+                            if (val && typeof val === 'object') {
                                 val.id = mNode.key;
                                 val.dbPath = `${dbPath}/${wcNode.key}/${mNode.key}`;
                                 val.wordCount = wcNode.key;
@@ -239,27 +240,50 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     const dbPath = `leaderboard/${baseMode}`;
     console.log("LB: Fetching Solo from:", dbPath);
 
-    db.ref(dbPath).once('value', snapshot => {
+    const fetchSoloNode = (nodeKey) => {
+        return db.ref(`${dbPath}/${nodeKey}`).orderByChild('score').limitToLast(50).once('value');
+    };
+
+    const processSnap = (snapshot, wcKey) => {
         let players = [];
-        snapshot.forEach(wordCountNode => {
-            const wcKey = wordCountNode.key;
-            if (wcKey.startsWith('single_')) {
-                if (filterWordCount === 'all' || wcKey === 'single_' + filterWordCount) {
+        snapshot.forEach(userNode => {
+            let p = userNode.val();
+            if (p) {
+                p.id = userNode.key;
+                p.dbPath = `${dbPath}/${wcKey}/${userNode.key}`;
+                players.push(p);
+            }
+        });
+        return players;
+    };
+
+    if (filterWordCount !== 'all') {
+        fetchSoloNode('single_' + filterWordCount).then(snap => {
+            let players = processSnap(snap, 'single_' + filterWordCount);
+            players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
+            window.renderPlayersListHTML(players, els.leaderboardContainer, true);
+        });
+    } else {
+        // Se 'all', dobbiamo comunque limitare per non scaricare tutto
+        db.ref(dbPath).once('value', snapshot => {
+            let players = [];
+            snapshot.forEach(wordCountNode => {
+                const wcKey = wordCountNode.key;
+                if (wcKey.startsWith('single_')) {
                     wordCountNode.forEach(userNode => {
                         let p = userNode.val();
-                        if (p) {
+                        if (players.length < 200) { // Limite di sicurezza
                             p.id = userNode.key;
-                            p.dbPath = `leaderboard/${baseMode}/${wcKey}/${userNode.key}`;
+                            p.dbPath = `${dbPath}/${wcKey}/${userNode.key}`;
                             players.push(p);
                         }
                     });
                 }
-            }
+            });
+            players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
+            window.renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, true);
         });
-        // Ordinamento: Punteggio decrescente, poi WPM decrescente
-        players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
-        window.renderPlayersListHTML(players.slice(0, 50), els.leaderboardContainer, true);
-    });
+    }
 };
 
 window.renderMatchesHistoryHTML = function(matches, container) {

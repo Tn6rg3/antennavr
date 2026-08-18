@@ -33,33 +33,16 @@ window.watchSpecificRoom = function(code, targetName) {
     mySpectatorRef.onDisconnect().remove();
 
     const roomRef = db.ref(`rooms/${roomCode}`);
-    const onRoomChange = roomRef.on('value', snap => {
-        if (!snap.exists()) {
-            showToast("⚠️ Il giocatore ha terminato o abbandonato la partita.");
-            window.stopWatchingCleanly();
-            return;
-        }
 
-        const roomData = snap.val();
-        const players = roomData.players || {};
-        // Cerchiamo l'Host/Corsista usando l'hostId salvato nella stanza
-        const hostData = players[roomData.hostId] || Object.values(players)[0];
+    // OTTIMIZZAZIONE SPETTATORE: Invece di ascoltare l'intera stanza (pesante),
+    // ascoltiamo solo i matchDetails e lo stato di finitura del giocatore host.
+    const onDetailsChange = roomRef.child(`players/${code.replace('COURSE_', '').replace('SOLO_', '').replace('DAILY_', '')}/matchDetails`).on('value', snap => {
+        if (!snap.exists()) return;
+        const matchDetails = snap.val();
 
-        if (roomData.tone) currentTone = roomData.tone; // Sincronizziamo il tono audio
-
-        if (!hostData || hostData.finished) {
-            showToast("🏁 La partita che stavi osservando è terminata!");
-            window.stopWatchingCleanly();
-            return;
-        }
-
-        const currentSpeed = hostData.wpm || roomData.wpm || 20;
-        if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${currentSpeed}`;
-        if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${hostData.score || 0}`;
-
-        if (els.tableBody && hostData.matchDetails) {
+        if (els.tableBody) {
             els.tableBody.innerHTML = "";
-            hostData.matchDetails.forEach(row => {
+            matchDetails.forEach(row => {
                 const tr = document.createElement('tr');
                 const tdTyped = document.createElement('td');
                 tdTyped.textContent = row.typed || "-";
@@ -85,8 +68,30 @@ window.watchSpecificRoom = function(code, targetName) {
                 if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
             }, 50);
         }
-    }, (error) => {
-        console.error("Spectator Room Observer Error:", error);
+    });
+
+    const onStatusChange = roomRef.on('value', snap => {
+        if (!snap.exists()) {
+            showToast("⚠️ Il giocatore ha terminato o abbandonato la partita.");
+            window.stopWatchingCleanly();
+            return;
+        }
+
+        const roomData = snap.val();
+        // Cerchiamo l'Host/Corsista usando l'hostId salvato nella stanza
+        const hostData = roomData.players ? (roomData.players[roomData.hostId] || Object.values(roomData.players)[0]) : null;
+
+        if (roomData.tone) currentTone = roomData.tone;
+
+        if (!hostData || hostData.finished) {
+            showToast("🏁 La partita che stavi osservando è terminata!");
+            window.stopWatchingCleanly();
+            return;
+        }
+
+        const currentSpeed = hostData.wpm || roomData.wpm || 20;
+        if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${currentSpeed}`;
+        if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${hostData.score || 0}`;
     });
 
     const onAudioChange = db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
@@ -111,7 +116,8 @@ window.watchSpecificRoom = function(code, targetName) {
     });
 
     window.currentSpectatorCleanup = function() {
-        roomRef.off('value', onRoomChange);
+        roomRef.child('players').off(); // Spegne i listener sui dettagli
+        roomRef.off('value'); // Spegne listener di stato
         db.ref(`rooms/${roomCode}/liveAudio`).off('value', onAudioChange);
         mySpectatorRef.remove();
     };

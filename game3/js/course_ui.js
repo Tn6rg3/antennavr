@@ -405,10 +405,11 @@ window.renderTutorSelectionList = function(containerId = null) {
     const select = document.getElementById('courseTabTutorSelect');
     if (!container && !select) return;
 
-    db.ref('users').once('value', snap => {
+    // OTTIMIZZAZIONE: Usiamo courseActiveEnrollments (più piccolo) invece dell'intero nodo users
+    db.ref('courseActiveEnrollments').once('value', snap => {
         const tutors = Object.entries(snap.val() || {})
-            .filter(([u, d]) => d.course && d.course.role === 'tutor')
-            .map(([u, d]) => ({ id: u, name: d.alias || d.name || "Tutor" }));
+            .filter(([u, d]) => d.role === 'tutor')
+            .map(([u, d]) => ({ id: u, name: d.name || "Tutor" }));
 
         if (container) {
             container.innerHTML = tutors.length === 0 ? '<p style="font-size:0.8em; text-align:center; opacity:0.5;">Nessun Tutor disponibile.</p>' : '';
