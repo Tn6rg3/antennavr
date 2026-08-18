@@ -4,7 +4,7 @@ window.domCache = {};
 window.initDOMCache = function() {
     const ids = [
         'wpmDisplay', 'scoreDisplay', 'tableBody', 'tableWrapper',
-        'permanentGameInput', 'replayWordBtn', 'quitGameBtn',
+        'permanentGameInput', 'replayWordBtn', 'quitGameBtn', 'quitQuizBtn',
         'pingPongSendArea', 'gameInputArea', 'pingPongWordToSend',
         'spectatorsCountDisplay', 'coopArea', 'coopTimeDisplay', 'coopProgressText', 'coopProgressBar'
     ];
@@ -1044,15 +1044,17 @@ window.finishGame = function() {
     window.showPostMatchReplayButtons();
 
     // --- MODIFICA: RESTA NELLA SCHERMATA GIOCO PER REVISIONE ---
-    if (els.quitGameBtn) {
+    const qBtn = (currentMode === 'quiz') ? els.quitQuizBtn : els.quitGameBtn;
+
+    if (qBtn) {
         if (currentMode === 'course') {
-            els.quitGameBtn.textContent = currentLang === 'it' ? "Torna al Corso" : "Back to Course";
+            qBtn.textContent = currentLang === 'it' ? "Torna al Corso" : "Back to Course";
         } else {
-            els.quitGameBtn.textContent = currentLang === 'it' ? "Vai alla Classifica" : "Go to Leaderboard";
+            qBtn.textContent = currentLang === 'it' ? "Vai alla Classifica" : "Go to Leaderboard";
         }
 
-        els.quitGameBtn.classList.remove('btn-danger');
-        els.quitGameBtn.classList.add('btn-success');
+        qBtn.classList.remove('btn-danger');
+        qBtn.classList.add('btn-success');
 
         // Salviamo lo stato del gioco corrente per la navigazione classifiche
         const savedMode = currentMode;
@@ -1060,7 +1062,7 @@ window.finishGame = function() {
         const savedSinglePlayer = isSinglePlayer;
         const savedRoomCode = roomCode;
 
-        els.quitGameBtn.onclick = function() {
+        qBtn.onclick = function() {
             const modeToRoute = savedMode;
             const wcToRoute = savedWordCount;
             const singleToRoute = savedSinglePlayer;
@@ -1070,15 +1072,21 @@ window.finishGame = function() {
             window.lbManualRouting = (modeToRoute !== 'course');
 
             // Pulizia UI e ripristino bottone originale
-            els.quitGameBtn.textContent = currentLang === 'it' ? "Abbandona" : "Quit";
-            els.quitGameBtn.classList.add('btn-danger');
-            els.quitGameBtn.classList.remove('btn-success');
-            els.quitGameBtn.onclick = function() {
-                if (confirm("Vuoi abbandonare la partita?")) {
-                    gameRunning = false;
-                    window.exitRoomCleanly(false, true);
-                }
-            };
+            qBtn.textContent = currentLang === 'it' ? "Abbandona" : "Quit";
+            qBtn.classList.add('btn-danger');
+            qBtn.classList.remove('btn-success');
+
+            // Ripristino onclick originale in base alla modalità
+            if (modeToRoute === 'quiz') {
+                if (typeof window.initQuizManager === 'function') window.initQuizManager();
+            } else {
+                qBtn.onclick = function() {
+                    if (confirm("Vuoi abbandonare la partita?")) {
+                        gameRunning = false;
+                        window.exitRoomCleanly(false, true);
+                    }
+                };
+            }
 
             if (modeToRoute === 'course') {
                 window.exitRoomCleanly(false, false);
@@ -1251,16 +1259,17 @@ function finishGameNavigation(mode, wordCount, isSingle, code) {
     // Determiniamo la categoria principale (tab)
     let mainGroup = 'multi';
     if (mode === 'daily_challenge') mainGroup = 'daily';
-    else if (code && code.startsWith("TRN_")) mainGroup = 'special';
+    else if (mode === 'callsign' || mode === 'arcade') mainGroup = 'special';
     else if (isSingle) mainGroup = 'single';
 
-    // Determiniamo il sotto-modo (select)
-    let subMode = 'standard';
-    if (mode === 'callsign') subMode = 'callsign';
-    else if (mode === 'quiz') subMode = 'quiz';
-    else if (mode === 'chars') subMode = 'chars';
+    // Determiniamo il sotto-modo (select) per la navigazione
+    let subMode = isSingle ? 'std_single' : 'std_multi';
+    if (mode === 'callsign') subMode = 'cwfreak';
+    else if (mode === 'quiz') subMode = isSingle ? 'quiz_single' : 'quiz_multi';
+    else if (mode === 'chars') subMode = isSingle ? 'chars_single' : 'chars_multi';
     else if (mode === 'pingpong') subMode = 'pingpong';
-    else if (code && code.startsWith("TRN_")) subMode = 'tournaments';
+    else if (code && code.startsWith("TRN_")) subMode = 'trn_global';
+    else if (mode === 'daily_challenge') subMode = 'daily_challenge';
 
     if (typeof window.switchLBGroup === 'function') {
         window.switchLBGroup(mainGroup);
