@@ -12,6 +12,14 @@ window.initBattleRoyaleScheduler = function() {
     window.checkBattleTime();
     if (brCheckInterval) clearInterval(brCheckInterval);
     brCheckInterval = setInterval(window.checkBattleTime, 100000);
+
+    if (els.btnCloseBRBanner) {
+        els.btnCloseBRBanner.onclick = () => {
+            if (els.brBanner) els.brBanner.style.display = 'none';
+            brBannerDismissedToday = true;
+            if (brBannerTimeout) clearTimeout(brBannerTimeout);
+        };
+    }
 };
 
 window.toggleBattleRoyaleJoin = function() {

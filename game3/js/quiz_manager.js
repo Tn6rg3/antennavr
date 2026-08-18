@@ -181,11 +181,32 @@ window.submitQuizAnswer = function(index) {
     inputActive = false;
     window.disableQuizButtons(true);
 
-    if (index === currentQuizQuestion.correct) {
+    const isCorrect = (index === currentQuizQuestion.correct);
+    const feedbackBox = els.quizQuestionBox;
+
+    if (isCorrect) {
         totalScore += 100;
-        showToast(`CORRETTO (${["A", "B", "C", "D"][index]})! +100`);
+        if (feedbackBox) {
+            feedbackBox.innerHTML = `<span style="color:#4caf50; font-size:1.5em;">✅ CORRETTO!</span><br>+100 punti`;
+        }
+        if (typeof playBeep === 'function') playBeep(880, 0.2);
+        // Colora di verde il pulsante premuto
+        const btn = els['btnQuiz' + ["A", "B", "C", "D"][index]];
+        if (btn) btn.style.backgroundColor = "#4caf50";
     } else {
-        showToast(`SBAGLIATO! Era la ${["A", "B", "C", "D"][currentQuizQuestion.correct]}`);
+        const correctLetter = ["A", "B", "C", "D"][currentQuizQuestion.correct];
+        if (feedbackBox) {
+            feedbackBox.innerHTML = `<span style="color:#f44336; font-size:1.5em;">❌ SBAGLIATO</span><br>Era la risposta ${correctLetter}`;
+        }
+        if (typeof playBeep === 'function') playBeep(300, 0.4);
+
+        // Colora di rosso lo sbagliato e di verde il corretto
+        if (index >= 0) {
+            const btnWrong = els['btnQuiz' + ["A", "B", "C", "D"][index]];
+            if (btnWrong) btnWrong.style.backgroundColor = "#f44336";
+        }
+        const btnCorrect = els['btnQuiz' + correctLetter];
+        if (btnCorrect) btnCorrect.style.backgroundColor = "#4caf50";
     }
 
     if (els.quizScoreDisplay) els.quizScoreDisplay.textContent = `Punti: ${totalScore}`;
@@ -193,6 +214,12 @@ window.submitQuizAnswer = function(index) {
 
     setTimeout(() => {
         if (!gameRunning) return;
+
+        // Reset colori pulsanti
+        ['A', 'B', 'C', 'D'].forEach(l => {
+            if (els['btnQuiz'+l]) els['btnQuiz'+l].style.backgroundColor = "";
+        });
+
         if (roomCode && !isSinglePlayer) {
             db.ref(`rooms/${roomCode}/quiz_state`).transaction(state => {
                 if (state && state.activeBuzzerId === myId) {

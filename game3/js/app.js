@@ -1120,6 +1120,14 @@ if (els.btnPlayDailyNow) {
         }
     };
 }
+if (els.btnShareDaily) {
+    els.btnShareDaily.onclick = () => {
+        const text = `🏆 Ho completato la Sfida Giornaliera Morse!\n🎯 Punteggio: ${totalScore} pt\n🚀 Velocità di picco: ${peakWpm} WPM\n\nProva anche tu su Sfida Telegrafia! 📻`;
+        const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`)}&text=${encodeURIComponent(text)}`;
+        if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
+    };
+}
+
 if (els.btnPlayDailyLater) els.btnPlayDailyLater.onclick = () => { if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none'; };
 if (els.btnDeclineDaily) els.btnDeclineDaily.onclick = () => {
     localStorage.setItem(STORAGE_DAILY_STATUS_KEY, new Date().toISOString().split('T')[0]);

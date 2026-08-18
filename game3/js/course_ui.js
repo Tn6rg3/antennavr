@@ -122,15 +122,25 @@ window.renderTutorPanel = function() {
             const accuracy = p.last_z2_accuracy ? Math.round(p.last_z2_accuracy * 100) : 0;
 
             const row = document.createElement('div');
-            row.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px; cursor:pointer;";
-            row.onclick = () => window.showStudentDetailedStats(uid, enroll.name || 'Corsista');
+            row.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px;";
+
+            // Cliccando sulla riga si aprono le statistiche (comportamento standard)
+            row.onclick = (e) => {
+                // Se abbiamo cliccato sul badge LIVE, non apriamo le statistiche
+                if (e.target.closest('.live-badge')) return;
+                window.showStudentDetailedStats(uid, enroll.name || 'Corsista');
+            };
+
+            const liveBadgeHtml = enroll.roomCode
+                ? `<span class="live-badge" style="background:#f44336; color:white; padding:1px 6px; border-radius:4px; font-size:0.7em; cursor:pointer; animation:pulse 1s infinite; display:flex; align-items:center; gap:3px;" onclick="window.watchSpecificRoom('${enroll.roomCode}', '${enroll.name || 'Corsista'}')">LIVE 🔴</span>`
+                : '';
 
             row.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <b style="color:#b39ddb;">👤 ${enroll.name || 'Anonimo'}</b>
                     <div style="display:flex; gap:5px; align-items:center;">
                         <span style="color:${p.reminders_count > 0 ? '#f44336' : '#4caf50'}">⚠️ ${p.reminders_count || 0}</span>
-                        ${enroll.roomCode ? '<span style="background:#f44336; color:white; padding:1px 4px; border-radius:4px; font-size:0.7em; animation:pulse 1s infinite;">LIVE 🔴</span>' : ''}
+                        ${liveBadgeHtml}
                     </div>
                 </div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; font-size:0.9em; color:var(--hint-color);">
@@ -607,6 +617,20 @@ window.renderAdvancedCourseStats = function(selectedChar) {
         `;
         container.appendChild(row);
     });
+};
+
+window.toggleCoursePresentation = function() {
+    const content = document.getElementById('courseTabPresentationContent');
+    const btn = document.getElementById('btnTogglePresentation');
+    if (!content || !btn) return;
+
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        btn.textContent = 'Nascondi ▲';
+    } else {
+        content.style.display = 'none';
+        btn.textContent = 'Mostra ▼';
+    }
 };
 
 /**

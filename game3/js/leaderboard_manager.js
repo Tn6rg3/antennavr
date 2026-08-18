@@ -54,22 +54,16 @@ window.showLeaderboardTab = function(modeValue) {
     if (els.lbFilterArea) els.lbFilterArea.style.display = 'none';
     if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'none';
     if (els.waitingOthersText) els.waitingOthersText.style.display = 'none';
+    if (els.btnShareDaily) els.btnShareDaily.style.display = 'none';
 
     const filterVal = els.lbWordFilter ? els.lbWordFilter.value : 'all';
 
     if (modeValue === 'room') {
-        if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'block';
-        if (els.leaderboardContainer) els.leaderboardContainer.innerHTML = '';
-
-        // Usiamo l'ultimo codice stanza terminato se quello corrente è vuoto
-        const targetCode = roomCode || window.lastFinishedRoomCode;
-
-        if (targetCode) {
-            db.ref(`rooms/${targetCode}/players`).once('value', snap => window.renderRoomLeaderboard(snap.val() || {}));
-        } else {
-            if (els.leaderboardContainer) els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Nessuna partita recente.':'No recent match.'}</p>`;
-        }
+        // ...
     } else if (modeValue === 'daily_challenge') {
+        if (els.btnShareDaily && totalScore > 0 && currentMode === 'daily_challenge') {
+            els.btnShareDaily.style.display = 'block';
+        }
         window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
     } else if (modeValue === 'trn_global') {
         if (els.trnSubTabs) els.trnSubTabs.style.display = 'flex';
@@ -605,3 +599,40 @@ if (els.lbWordFilter) {
         if (mode) window.showLeaderboardTab(mode);
     });
 }
+
+// LISTENER SOTTO-TAB TORNEI
+if (els.btnTrnGlobalLB) {
+    els.btnTrnGlobalLB.onclick = () => {
+        els.btnTrnGlobalLB.classList.add('active-tab');
+        els.btnTrnActiveLB.classList.remove('active-tab');
+        window.fetchAndRenderGlobalLeaderboard('tournaments', null);
+    };
+}
+if (els.btnTrnActiveLB) {
+    els.btnTrnActiveLB.onclick = () => {
+        els.btnTrnActiveLB.classList.add('active-tab');
+        els.btnTrnGlobalLB.classList.remove('active-tab');
+        window.fetchAndRenderActiveTournamentLeaderboard();
+    };
+}
+
+window.fetchAndRenderActiveTournamentLeaderboard = function() {
+    if (!els.leaderboardContainer) return;
+    els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">Ricerca torneo in corso...</p>`;
+
+    db.ref('rooms').orderByChild('type').equalTo('tournament').limitToLast(5).once('value', snap => {
+        let activeTrn = null;
+        snap.forEach(child => {
+            const data = child.val();
+            if (data && data.status !== 'finished') activeTrn = { id: child.key, ...data };
+        });
+
+        if (activeTrn) {
+            db.ref(`rooms/${activeTrn.id}/players`).once('value', pSnap => {
+                window.renderRoomLeaderboard(pSnap.val() || {});
+            });
+        } else {
+            els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">Nessun torneo attivo al momento.</p>`;
+        }
+    });
+};
