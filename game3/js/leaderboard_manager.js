@@ -205,7 +205,14 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     if (tabType === 'tournaments') {
         db.ref('leaderboard/tournaments').orderByChild('score').limitToLast(50).once('value', snapshot => {
             let teams = [];
-            snapshot.forEach(child => { if (child.val()) teams.push(child.val()); });
+            snapshot.forEach(child => {
+                let t = child.val();
+                if (t) {
+                    t.id = child.key; // ID del Team
+                    t.dbPath = `leaderboard/tournaments/${child.key}`;
+                    teams.push(t);
+                }
+            });
             teams.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
             window.renderPlayersListHTML(teams, els.leaderboardContainer, false, true);
         });
