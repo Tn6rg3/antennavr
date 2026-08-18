@@ -8,6 +8,9 @@ window.startCoopSequence = function() {
     if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
     if (els.tableWrapper) els.tableWrapper.style.display = 'none';
 
+    gameRunning = true; // Assicuriamoci che il gioco sia considerato in esecuzione
+    inputActive = false;
+
     if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}`;
     if (els.scoreDisplay) els.scoreDisplay.textContent = "Obiettivo: 100%";
 
@@ -24,14 +27,23 @@ window.startCoopSequence = function() {
 
     if (myId === roomHostId) {
         const initialWords = window.generateCoopTripleWords();
-        db.ref(`rooms/${roomCode}/coop_state`).set({
-            progress: 10,
-            timeRemaining: 300,
-            status: 'playing',
-            activeWords: initialWords,
-            freqOwners: { 1: null, 2: null, 3: null }
+        const coopRef = db.ref(`rooms/${roomCode}/coop_state`);
+
+        // Inizializzazione protetta: evitiamo di sovrascrivere se già presente (es. reconnect)
+        coopRef.once('value', snap => {
+            if (!snap.exists()) {
+                coopRef.set({
+                    progress: 10,
+                    timeRemaining: 300,
+                    status: 'playing',
+                    activeWords: initialWords,
+                    freqOwners: { 1: null, 2: null, 3: null }
+                });
+                window.startCoopHostTimers();
+            } else if (snap.val().status !== 'playing') {
+                coopRef.update({ status: 'playing' });
+            }
         });
-        window.startCoopHostTimers();
     }
 
     window.listenToCoopState();
@@ -138,9 +150,12 @@ window.setupCoopFreqButtons = function() {
     const labels = ["🟢 FREQ 1 (3-4 car.)", "🟡 FREQ 2 (5-6 car.)", "🔴 FREQ 3 (7+ car.)"];
 
     [1, 2, 3].forEach(num => {
-        const btn = els[`btnCoopFreq${num}`];
+        const btn = document.getElementById(`btnCoopFreq${num}`); // Accesso diretto per sicurezza
         if (!btn) return;
-        btn.onclick = () => {
+        btn.onclick = (e) => {
+            if (e) e.preventDefault();
+            console.log("Co-op: Selecting frequency", num);
+
             db.ref(`rooms/${roomCode}/coop_state/freqOwners`).transaction(owners => {
                 if (!owners) owners = { 1: null, 2: null, 3: null };
                 if (owners[num] && owners[num] !== myId) return undefined;
@@ -148,8 +163,11 @@ window.setupCoopFreqButtons = function() {
                 owners[num] = myId;
                 return owners;
             }, (error, committed, snapshot) => {
+                if (error) {
+                    console.error("Co-op Transaction Error:", error);
+                    return;
+                }
                 if (committed) {
-                    const latestOwners = snapshot.val() || {};
                     coopActiveFreqIndex = num;
                     if (els.coopActiveFreqLabel) els.coopActiveFreqLabel.textContent = `Canale: ${labels[num - 1]}`;
                     if (els.btnCoopReleaseFreq) els.btnCoopReleaseFreq.style.display = 'inline-block';
@@ -161,13 +179,21 @@ window.setupCoopFreqButtons = function() {
                     }
                     inputActive = true;
 
+                    // Forza il controllo immediato della parola per evitare attese dal listener
                     db.ref(`rooms/${roomCode}/coop_state/activeWords`).once('value', s => {
                         const words = s.val();
-                        if (words && words[num - 1] && latestOwners[num] === myId) {
-                            gameWords[0] = words[num - 1];
+                        if (words && words[num - 1]) {
+                            const newWord = words[num - 1];
+                            gameWords[0] = newWord;
                             stopAllMorseAudio();
-                            playMorseAudio(words[num - 1], currentWpm);
+                            setTimeout(() => {
+                                if (gameRunning && isCoopMode && coopActiveFreqIndex === num) {
+                                    playMorseAudio(newWord, currentWpm);
+                                }
+                            }, 300);
                             if (els.permanentGameInput) els.permanentGameInput.focus();
+                        } else {
+                            console.warn("Co-op: activeWords not yet available for selection");
                         }
                     });
                 } else {

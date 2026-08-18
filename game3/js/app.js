@@ -214,6 +214,7 @@ window.resetGameState = function() {
     isArcadeMode = false;
     window.isSinglePlayer = false;
     currentMode = 'standard';
+    coopActiveFreqIndex = 0; // RESET INDICE FREQUENZA CO-OP
 
     // 3. Ripristina UI Input (Fix Spectator/Course residuals)
     if (els.permanentGameInput) {
@@ -825,7 +826,10 @@ window.setupBugSystem = function() {
                     text: text,
                     ts: firebase.database.ServerValue.TIMESTAMP
                 }).then(() => {
+                    // Segnamo l'annuncio come già letto per l'admin stesso, così non gli appare il pop-up
+                    localStorage.setItem(STORAGE_LAST_ANNOUNCEMENT_ID, newId);
                     showToast("Annuncio pubblicato con successo! 🚀");
+                    if (els.adminAnnTitleInput) els.adminAnnTitleInput.value = "";
                     if (els.adminAnnTextInput) els.adminAnnTextInput.value = "";
                 }).catch(err => {
                     console.error("Admin: Error publishing announcement", err);

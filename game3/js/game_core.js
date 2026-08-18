@@ -807,8 +807,8 @@ window.startCountdownSequence = function() {
                 if (!gameRunning) return;
 
                 isCoopMode = (currentMode === 'conquest');
-                if (els.coopArea) els.coopArea.style.display = 'none';
-                if (els.tableWrapper) els.tableWrapper.style.display = 'block';
+                if (els.coopArea) els.coopArea.style.display = isCoopMode ? 'flex' : 'none';
+                if (els.tableWrapper) els.tableWrapper.style.display = isCoopMode ? 'none' : 'block';
 
                 if (currentMode === 'conquest') {
                     if (typeof window.startCoopSequence === 'function') return window.startCoopSequence();
@@ -838,8 +838,8 @@ window.resumeGameSequence = function() {
     isRejoining = false;
 
     isCoopMode = (currentMode === 'conquest');
-    if (els.coopArea) els.coopArea.style.display = 'none';
-    if (els.tableWrapper) els.tableWrapper.style.display = 'block';
+    if (els.coopArea) els.coopArea.style.display = isCoopMode ? 'flex' : 'none';
+    if (els.tableWrapper) els.tableWrapper.style.display = isCoopMode ? 'none' : 'block';
 
     if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
     if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: ${totalScore}`;
