@@ -8,7 +8,11 @@ window.watchSpecificRoom = function(code, targetName) {
     isCourseMode = false;
     wordIndex = 0;
     gameWords = [];
+    window.lastSpectatorAudioTs = 0; // RESET TIMESTAMP PER NUOVA SESSIONE
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+
+    // Ripristino Audio Context (Necessario per iOS/iPhone Tutor)
+    if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
 
     roomCode = code;
     window.showScreen('gameArea');
@@ -38,7 +42,10 @@ window.watchSpecificRoom = function(code, targetName) {
 
         const roomData = snap.val();
         const players = roomData.players || {};
-        const hostData = Object.values(players)[0];
+        // Cerchiamo l'Host/Corsista usando l'hostId salvato nella stanza
+        const hostData = players[roomData.hostId] || Object.values(players)[0];
+
+        if (roomData.tone) currentTone = roomData.tone; // Sincronizziamo il tono audio
 
         if (!hostData || hostData.finished) {
             showToast("🏁 La partita che stavi osservando è terminata!");
@@ -85,6 +92,11 @@ window.watchSpecificRoom = function(code, targetName) {
     const onAudioChange = db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
         const audioData = snap.val();
         if (audioData && audioData.word) {
+            // Se non c'è ancora un'attività recente in tabella, mostriamo che siamo in attesa
+            if (els.tableBody && els.tableBody.innerHTML === "") {
+                els.tableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--link-color); padding:20px;">🎧 In attesa di ricezione segnali...</td></tr>`;
+            }
+
             // Evitiamo di riprodurre la stessa parola più volte (controllo ts o wordId)
             const msgTs = audioData.ts || 0;
             if (msgTs > (window.lastSpectatorAudioTs || 0)) {
