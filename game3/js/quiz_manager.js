@@ -222,9 +222,62 @@ window.renderQuizUI = function(state) {
             window.disableQuizButtons(true);
         }
     } else {
-        els.buzzerWinner.textContent = "";
-        els.quizBuzzer.style.display = inputActive ? 'block' : 'none';
         els.quizOptionsContainer.style.opacity = '0.5';
         window.disableQuizButtons(true);
+    }
+};
+
+window.initQuizManager = function() {
+    console.log("Quiz: Initializing listeners...");
+
+    // Pulsanti Risposta
+    ['A', 'B', 'C', 'D'].forEach((l, idx) => {
+        if (els['btnQuiz' + l]) {
+            els['btnQuiz' + l].onclick = () => window.submitQuizAnswer(idx);
+        }
+        if (els['replay' + l]) {
+            els['replay' + l].onclick = () => {
+                if (currentQuizQuestion) {
+                    stopAllMorseAudio();
+                    playMorseAudio(`${l} ${currentQuizQuestion.a[idx]}`, currentWpm, true);
+                }
+            };
+        }
+    });
+
+    // Riascolta Domanda
+    if (els.quizReplayQ) {
+        els.quizReplayQ.onclick = () => {
+            if (currentQuizQuestion) {
+                stopAllMorseAudio();
+                playMorseAudio(currentQuizQuestion.q, currentWpm, true);
+            }
+        };
+    }
+
+    // Buzzer (Multiplayer)
+    if (els.quizBuzzer) {
+        els.quizBuzzer.onclick = () => {
+            if (!roomCode || isSinglePlayer || quizActiveBuzzerId) return;
+
+            db.ref(`rooms/${roomCode}/quiz_state/activeBuzzerId`).transaction(current => {
+                if (current === null) return myId;
+                return undefined; // Già prenotato
+            });
+        };
+    }
+
+    // Abbandona
+    if (els.quitQuizBtn) {
+        els.quitQuizBtn.onclick = () => {
+            if (confirm(currentLang === 'it' ? "Vuoi davvero abbandonare il quiz?" : "Do you really want to quit the quiz?")) {
+                gameRunning = false;
+                if (typeof window.exitRoomCleanly === 'function') {
+                    window.exitRoomCleanly(false, true);
+                } else {
+                    goBackToMenu();
+                }
+            }
+        };
     }
 };

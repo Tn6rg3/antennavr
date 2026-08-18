@@ -689,6 +689,7 @@ function initGame() {
         window.loadRegolamento();
         window.initProgression?.();
         window.initCourseManager?.();
+        window.initQuizManager?.();
         window.setupBugSystem?.();
         window.initAdminAnnouncementListener();
 
