@@ -27,9 +27,18 @@
     🚀 Nuova Versione Disponibile!
     <button id="updateBannerBtn" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em; border:none; cursor:pointer;">Aggiorna ora</button>
 </div>
-
 <!-- CONTENITORE NOTIFICHE TOAST -->
 <div id="toastContainer"></div>
+
+<!-- POPUP ANNUNCIO AMMINISTRATORE -->
+<div id="adminAnnouncementModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 6000; border: 2px solid var(--link-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+    <span style="font-size: 3em; margin-bottom: 10px;">📢</span>
+    <h2 id="adminAnnouncementTitle" style="color: var(--link-color); margin: 0 0 10px 0;">Comunicazione</h2>
+    <div id="adminAnnouncementText" style="font-size: 0.95em; margin-bottom: 20px; text-align: left; line-height: 1.4; max-height: 300px; overflow-y: auto; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;">
+        <!-- Messaggio caricato da Firebase -->
+    </div>
+    <button id="btnConfirmAnnouncement" class="btn-success" style="width: 100%;">HO CAPITO, GRAZIE ✅</button>
+</div>
 
 <!-- POPUP SFIDA GIORNALIERA -->
 <div id="dailyChallengeModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
@@ -1053,6 +1062,16 @@
             <div id="adminBugList" style="max-height: 200px; overflow-y: auto; font-size: 0.85em; text-align: left; background: var(--bg-color); border-radius: 8px; padding: 5px;">
                 <p style="text-align:center; color:var(--hint-color);">Seleziona una categoria sopra.</p>
             </div>
+
+            <!-- NUOVA AREA: INVIO ANNUNCIO GLOBALE -->
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; margin-top:10px;">
+                <h4 style="margin: 0 0 8px 0; color: var(--link-color); font-size: 0.9em;">📢 Invia Annuncio Globale</h4>
+                <input type="text" id="adminAnnTitleInput" placeholder="Titolo (es. Manutenzione)" style="width:100%; padding:6px; margin-bottom:5px; font-size:0.85em; background:rgba(0,0,0,0.2); border:1px solid var(--hint-color); color:white; border-radius:4px;">
+                <textarea id="adminAnnTextInput" placeholder="Scrivi qui il messaggio per tutti gli utenti..." style="width:100%; height:60px; padding:6px; font-size:0.85em; resize:none; background:rgba(0,0,0,0.2); border:1px solid var(--hint-color); color:white; border-radius:4px;"></textarea>
+                <button id="btnAdminSendAnnouncement" class="btn-success" style="width:100%; margin-top:5px; padding:8px; font-weight:bold;">PUBBLICA ANNUNCIO 🚀</button>
+                <button id="btnAdminClearAnnouncement" class="btn-danger" style="width:100%; margin-top:5px; padding:4px; font-size:0.8em;">Rimuovi Annuncio Attivo 🗑️</button>
+            </div>
+        </div>
         </div>
     </div>
     <div class="fixed-bottom-btns">
