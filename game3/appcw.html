@@ -738,6 +738,7 @@
                                 <select id="keyerTypeSelect" style="width:100%; padding:5px; font-size:0.85em;">
                                     <option value="A">Iambic A</option>
                                     <option value="B" selected>Iambic B</option>
+                                    <option value="V">Verticale (Straight Key)</option>
                                 </select>
                             </div>
                             <div style="flex:1;">
@@ -761,7 +762,13 @@
                                 <button id="btnMapKeyDah" class="action-btn-small btn-secondary" style="width:100%; margin-top:4px; font-weight:bold;">Tasto: ,</button>
                             </div>
                         </div>
-                        <small style="font-size:0.65em; color:var(--hint-color); font-style:italic;">Clicca sui tasti sopra per mappare i paddle della tua interfaccia o tastiera.</small>
+
+                        <div id="verticalKeyMappingArea" style="text-align:center; background:rgba(0,0,0,0.1); padding:8px; border-radius:8px;">
+                            <label style="font-size:0.7em; color:var(--hint-color);">TASTO VERTICALE (Straight Key)</label>
+                            <button id="btnMapKeyVert" class="action-btn-small btn-secondary" style="width:100%; margin-top:4px; font-weight:bold;">Tasto: Nessuno</button>
+                        </div>
+
+                        <small style="font-size:0.65em; color:var(--hint-color); font-style:italic;">Clicca sui tasti sopra per mappare i paddle o il tasto verticale della tua interfaccia/tastiera.</small>
                     </div>
                 </div>
 
