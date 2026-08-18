@@ -762,6 +762,7 @@ window.attachCourseUIListeners = function() {
                 minutes_long: Math.round(z * 1.66)
             };
             window.generateWeeklySchedule();
+            window.saveCourseState(); // Forza salvataggio immediato
             window.renderCourseTabView();
             showToast("Impostazioni salvate! 💾");
         };
@@ -791,7 +792,7 @@ window.attachCourseUIListeners = function() {
              let sess = dayData ? dayData.sessions.find(s => !s.completed) : null, extra = false;
              if (!sess || (dayData && dayData.sessions[0].type === 'REST')) { sess = { type: 'Z2', completed: false }; extra = true; }
              if (!extra && dayData.sessions.filter(s => !s.completed).length > 1) if (!confirm(`Iniziare sessione ${sess.elite ? "ELITE" : "STANDARD"}?`)) return;
-             const dur = extra ? 10 : (sess.type==='Z2' ? window.courseData.settings.minutes_z2 : sess.type==='WORK' ? window.courseData.settings.minutes_work : window.courseData.settings.minutes_long);
+             const dur = (sess.type==='Z2' ? window.courseData.settings.minutes_z2 : sess.type==='WORK' ? window.courseData.settings.minutes_work : window.courseData.settings.minutes_long);
              window.courseData.current_day_session = { type: sess.type, total_seconds: dur*60, remaining_seconds: dur*60, completed: false, date: new Date().toISOString().split('T')[0], isExtra: extra };
              window.saveCourseState(); if (extra) els.btnTabStartCourseSession.textContent = "INIZIA EXTRA";
              if (typeof window.showCourseSessionModal === 'function') window.showCourseSessionModal(window.courseData.current_day_session, extra); else window.actualStartCourseGame();
