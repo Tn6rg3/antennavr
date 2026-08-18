@@ -928,9 +928,14 @@ window.finishGame = function() {
     if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
 
-    // Se è una partita singola, segnamo la stanza come finita sul server
+    // Se è una partita singola, segnamo la stanza come finita sul server e poi la puliamo
     if (roomCode && isSinglePlayer) {
         db.ref(`rooms/${roomCode}/status`).set('finished');
+        // PULIZIA: Rimuoviamo la stanza singola dopo 5 secondi (tempo per caricare la leaderboard)
+        const cleanupCode = roomCode;
+        setTimeout(() => {
+            if (cleanupCode) db.ref(`rooms/${cleanupCode}`).remove();
+        }, 5000);
     }
 
     localStorage.removeItem(STORAGE_ROOM_KEY);
@@ -1653,11 +1658,21 @@ if (els.deleteRoomBtn) {
             const currentCode = roomCode;
             window.exitRoomCleanly(true, false);
             if (currentCode) {
-                db.ref(`public_lobby_rooms/${currentCode}`).remove();
-                db.ref(`rooms/${currentCode}`).remove().finally(() => {
+                // PULIZIA INTELLIGENTE:
+                // Se è un torneo (TRN_), non eliminiamo la stanza per non bloccare gli altri, andiamo solo offline
+                if (currentCode.startsWith("TRN_")) {
+                    db.ref(`rooms/${currentCode}/players/${myId}`).update({ online: false });
                     window.isDeletingRoom = false;
                     if (els.deleteRoomBtn) els.deleteRoomBtn.disabled = false;
-                });
+                } else {
+                    // Se siamo Host di una stanza standard, eliminiamo tutto (Stanza + Lobby pubblica)
+                    db.ref(`public_lobby_rooms/${currentCode}`).remove();
+                    db.ref(`rooms/${currentCode}`).remove().finally(() => {
+                        window.isDeletingRoom = false;
+                        if (els.deleteRoomBtn) els.deleteRoomBtn.disabled = false;
+                        localStorage.removeItem(STORAGE_ROOM_KEY);
+                    });
+                }
             } else {
                 window.isDeletingRoom = false;
                 if (els.deleteRoomBtn) els.deleteRoomBtn.disabled = false;

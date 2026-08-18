@@ -689,6 +689,8 @@ window.actualStartCourseGame = function() {
         status: 'countdown', type: 'single', mode: 'course', wpm: currentWpm, tone: 600,
         createdAt: firebase.database.ServerValue.TIMESTAMP, hostId: window.myId
     }).then(() => {
+        // PULIZIA AUTOMATICA: Se l'utente chiude l'app, la stanza temporanea del corso viene rimossa
+        db.ref('rooms/' + roomCode).onDisconnect().remove();
         if (typeof window.joinRoomLogic === 'function') window.joinRoomLogic(false);
     });
 };
