@@ -66,7 +66,6 @@ const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space";
 const STORAGE_PREF_FIXED = "cwgame_pref_fixed";
 const STORAGE_PREF_EASY = "cwgame_pref_easy";
 const STORAGE_PREF_SPECTATE = "cwgame_pref_spectate";
-const STORAGE_DAILY_SHOWN = "cwgame_daily_shown";
 const STORAGE_CHAT_CW_ENABLED = "cwgame_chat_cw_enabled";
 const STORAGE_CHAT_CW_WPM = "cwgame_chat_cw_wpm";
 const STORAGE_CHAT_CW_TONE = "cwgame_chat_cw_tone";
