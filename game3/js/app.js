@@ -38,6 +38,22 @@ tg.onEvent('viewportChanged', updateViewportHeight);
 window.addEventListener('resize', updateViewportHeight);
 window.addEventListener('focus', updateViewportHeight);
 
+// --- UNLOCK AUDIO (SPECIFICO PER iOS/IPHONE) ---
+// Su iPhone l'audio deve essere attivato da un gesto esplicito dell'utente.
+// Questo listener si attiva al primo tocco o click e "sblocca" l'AudioContext.
+const unlockAudio = () => {
+    if (typeof window.resumeAudioContext === 'function') {
+        window.resumeAudioContext();
+    }
+    // Rimuoviamo i listener una volta sbloccato l'audio per non appesantire il sistema
+    window.removeEventListener('mousedown', unlockAudio);
+    window.removeEventListener('touchstart', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+};
+window.addEventListener('mousedown', unlockAudio);
+window.addEventListener('touchstart', unlockAudio);
+window.addEventListener('keydown', unlockAudio);
+
 // --- MAPPA DOM DINAMICA (Proxy) ---
 window.els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
 const els = window.els;

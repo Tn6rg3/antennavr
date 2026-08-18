@@ -14,9 +14,26 @@ window.manualGain = null;
 window.morsePlayToken = 0;
 window.btKeepAliveOsc = null;
 
+/**
+ * FUNZIONE DI RIPRISTINO AUDIO (SPECIFICA PER iOS/iPhone)
+ * Tenta di riattivare il contesto audio se sospeso o bloccato.
+ */
+window.resumeAudioContext = function() {
+    if (!window.audioCtx) {
+        window.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    }
+    if (window.audioCtx.state === 'suspended' || window.audioCtx.state === 'interrupted') {
+        window.audioCtx.resume().then(() => {
+            console.log("AudioEngine: Context resumed successfully. State:", window.audioCtx.state);
+        }).catch(err => {
+            console.error("AudioEngine: Resume failed:", err);
+        });
+    }
+};
+
 window.startTone = function(freq) {
-    if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (window.audioCtx.state === 'suspended') window.audioCtx.resume();
+    window.resumeAudioContext();
+
 
     if (window.manualOscillator) return;
 
@@ -27,11 +44,11 @@ window.startTone = function(freq) {
     osc.type = 'sine';
     osc.frequency.value = f;
 
-    gain.gain.setValueAtTime(0, audioCtx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.005);
+    gain.gain.setValueAtTime(0, window.audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.5, window.audioCtx.currentTime + 0.005);
 
     osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(window.audioCtx.destination);
 
     osc.start();
     window.manualOscillator = osc;
@@ -77,19 +94,18 @@ window.stopAllMorseAudio = function() {
 };
 
 window.startBluetoothKeepAlive = function() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    window.resumeAudioContext();
     if (window.btKeepAliveOsc) return;
 
     try {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
+        const osc = window.audioCtx.createOscillator();
+        const gain = window.audioCtx.createGain();
         osc.type = 'sine';
         osc.frequency.value = 30; // Frequenza infrasuono (non udibile)
         gain.gain.value = 0.0005; // Volume impercettibile ma sufficiente per il chip BT
 
         osc.connect(gain);
-        gain.connect(audioCtx.destination);
+        gain.connect(window.audioCtx.destination);
         osc.start();
 
         window.btKeepAliveOsc = osc;
@@ -97,17 +113,16 @@ window.startBluetoothKeepAlive = function() {
 };
 
 window.playBeep = function(freq, duration) {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    window.resumeAudioContext();
     window.startBluetoothKeepAlive();
 
     try {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
+        const osc = window.audioCtx.createOscillator();
+        const gain = window.audioCtx.createGain();
         osc.frequency.value = freq;
         osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        const time = audioCtx.currentTime;
+        gain.connect(window.audioCtx.destination);
+        const time = window.audioCtx.currentTime;
         gain.gain.setValueAtTime(0, time);
         gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
         gain.gain.setValueAtTime(0.5, time + duration - 0.005);
@@ -121,16 +136,14 @@ window.playNotificationSound = function() {
     // DISATTIVIAMO LE NOTIFICHE SONORE DURANTE IL GIOCO
     if (gameRunning || isCourseMode) return;
 
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    window.resumeAudioContext();
     window.playBeep(880, 0.08);
     setTimeout(() => window.playBeep(1100, 0.1), 120);
 };
 
 window.playMorseAudio = function(text, wpm, forcePlay = false) {
     return new Promise(resolve => {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        window.resumeAudioContext();
         window.startBluetoothKeepAlive();
 
         const isBrActive = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
@@ -144,7 +157,7 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
         let spaceUnit = 1.2 / effSpaceWpm;
         let wordMult = window.wordSpaceMult || 1.0;
 
-        let time = audioCtx.currentTime + 0.05;
+        let time = window.audioCtx.currentTime + 0.05;
 
         for (let char of text) {
             if (currentToken !== window.morsePlayToken || (!forcePlay && !gameRunning && !isBrActive)) break;
@@ -154,11 +167,11 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
                     if (currentToken !== window.morsePlayToken || (!forcePlay && !gameRunning && !isBrActive)) break;
                     let symbol = window.morseDict[char][i];
 
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
+                    const osc = window.audioCtx.createOscillator();
+                    const gain = window.audioCtx.createGain();
                     osc.frequency.value = currentTone;
                     osc.connect(gain);
-                    gain.connect(audioCtx.destination);
+                    gain.connect(window.audioCtx.destination);
 
                     const duration = (symbol === '-') ? (3 * charUnit) : charUnit;
 
@@ -183,6 +196,6 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
         }
         setTimeout(() => {
             if (currentToken === window.morsePlayToken) resolve();
-        }, Math.max(0, (time - audioCtx.currentTime) * 1000));
+        }, Math.max(0, (time - window.audioCtx.currentTime) * 1000));
     });
 };
