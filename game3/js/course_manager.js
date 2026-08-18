@@ -307,6 +307,13 @@ window.loadCourseState = function() {
             if (data) {
                 if (data.active_plan === "true") data.active_plan = true;
                 if (data.active_plan === "false") data.active_plan = false;
+
+                // FIX: Se c'è una sessione in corso gestita localmente dal timer, preserviamo i secondi rimanenti
+                // per evitare che sincronizzazioni esterne di Firebase facciano "saltare" il tempo.
+                if (courseSessionTimer && window.courseData && window.courseData.current_day_session && data.current_day_session) {
+                    data.current_day_session.remaining_seconds = window.courseData.current_day_session.remaining_seconds;
+                }
+
                 window.courseData = data;
             } else {
                 window.courseData = window.getDefaultCourseData();
@@ -540,13 +547,20 @@ window.startCourseSessionSequence = function() {
     courseSessionTimer = setInterval(() => {
         if (!gameRunning || !window.courseData.current_day_session) return;
         if (window.courseIsPaused || document.hidden) return;
-        window.courseData.current_day_session.remaining_seconds--;
-        window.updateCourseTimerUI();
+
+        // Garantiamo che il timer scenda solo se maggiore di zero
+        if (window.courseData.current_day_session.remaining_seconds > 0) {
+            window.courseData.current_day_session.remaining_seconds--;
+            window.updateCourseTimerUI();
+        }
+
         if (window.courseSessionPauseDuration > 0 && Date.now() >= window.courseSessionNextPauseTs) {
             window.coursePausePending = true;
         }
+
         if (window.courseData.current_day_session.remaining_seconds <= 0) {
             clearInterval(courseSessionTimer);
+            courseSessionTimer = null;
             window.courseTimeIsUp = true;
             showToast(currentLang === 'it' ? "Tempo scaduto! Finisci l'ultima parola." : "Time's up! Finish the last word.");
         }
@@ -598,7 +612,7 @@ window.triggerCoursePause = function() {
 
 window.updateCourseTimerUI = function() {
     if (!window.courseData.current_day_session || !els.wpmDisplay) return;
-    const s = window.courseData.current_day_session.remaining_seconds;
+    const s = Math.max(0, window.courseData.current_day_session.remaining_seconds);
     const min = Math.floor(s / 60);
     const sec = s % 60;
     let displayWpm = window.calculateDynamicCourseWpm();
@@ -630,6 +644,13 @@ window.calculateDynamicCourseWpm = function() {
 
 window.playNextCourseGroup = function() {
     if (!gameRunning || !isCourseMode) return;
+
+    // Se il tempo è scaduto, non iniziamo nuovi gruppi (es. dopo una pausa o fine parola)
+    if (window.courseTimeIsUp) {
+        console.log("Course: Time is up, ignoring next group request.");
+        return;
+    }
+
     if (window.coursePausePending) {
         window.coursePausePending = false;
         window.triggerCoursePause();
@@ -710,6 +731,12 @@ window.checkCourseStartupNotification = function() {
     const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
     let session = dayData ? dayData.sessions.find(s => !s.completed && s.type !== 'REST') : null;
     if (session) {
+        // Se c'è già una sessione attiva (magari extra o già avviata), non sovrascriviamo lo stato
+        if (window.courseData.current_day_session && (window.courseData.current_day_session.isExtra || courseSessionTimer)) {
+            window.showCourseSessionModal(session, !!window.courseData.current_day_session.isExtra);
+            return;
+        }
+
         if (!window.courseData.current_day_session || window.courseData.current_day_session.type !== session.type) {
             let duration = 15;
             if (session.type === 'Z2') duration = window.courseData.settings.minutes_z2;
