@@ -1741,9 +1741,6 @@ if (els.btnSendPingPong) {
     };
 }
 */
-        if (input) input.value = "";
-    };
-}
 
 // Rimossa inizializzazione ridondante, gestita in initPingPongManager
 /*
