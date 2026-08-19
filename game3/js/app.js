@@ -38,6 +38,37 @@ tg.onEvent('viewportChanged', updateViewportHeight);
 window.addEventListener('resize', updateViewportHeight);
 window.addEventListener('focus', updateViewportHeight);
 
+// --- GESTIONE RIPRISTINO APP (PREVIENE APP BLOCCATA) ---
+// Quando si torna su Telegram dopo aver usato altre app, forziamo la riconnessione
+let appBackgroundedTs = 0;
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        appBackgroundedTs = Date.now();
+    } else {
+        console.log("App: Ripristino visibilità...");
+        // 1. Forza Firebase a ricollegarsi subito
+        if (window.db) window.db.goOnline();
+
+        // 2. Ripristina l'audio (fondamentale per iPhone)
+        if (typeof window.resumeAudioContext === 'function') {
+            window.resumeAudioContext();
+        }
+
+        // 3. Rinfresca la lista utenti online
+        if (typeof window.listenToOnlineUsers === 'function') {
+            window.listenToOnlineUsers();
+        }
+
+        // 4. Se l'app è stata in background per molto tempo (>30 min),
+        // lo stato potrebbe essere "sporco", forziamo un check dei messaggi
+        const elapsed = Date.now() - appBackgroundedTs;
+        if (elapsed > 30 * 60 * 1000) {
+            console.log("App: Background prolungato, rinfresco in corso...");
+            if (typeof window.listenToChat === 'function') window.listenToChat();
+        }
+    }
+});
+
 // --- UNLOCK AUDIO (SPECIFICO PER iOS/IPHONE) ---
 // Su iPhone l'audio deve essere attivato da un gesto esplicito dell'utente.
 // Questo listener si attiva al primo tocco o click e "sblocca" l'AudioContext.
