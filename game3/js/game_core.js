@@ -105,10 +105,10 @@ window.showScreen = function(screenId) {
             delete listeners.activeChat['chatMessages'];
         }
         if (screenId === 'lobbyScreen' || screenId === 'gameArea') {
-            activeChatContext = 'room';
+            window.activeChatContext = 'room';
             if (typeof window.listenToChat === 'function') window.listenToChat();
         } else {
-            activeChatContext = null;
+            window.activeChatContext = null;
         }
     } else if (screenId === 'leaderboardScreen') {
         if (!window.lbManualRouting) {
@@ -116,12 +116,12 @@ window.showScreen = function(screenId) {
         }
         window.lbManualRouting = false;
     } else if (screenId === 'teamsScreen') {
-        activeChatContext = 'team';
+        window.activeChatContext = 'team';
         if (typeof window.checkMyTeamStatus === 'function') window.checkMyTeamStatus();
     } else {
         if (screenId === 'participationScreen') { if (typeof window.switchActTab === 'function') window.switchActTab('daily'); }
-        if (activeChatContext !== 'global') {
-            activeChatContext = 'global';
+        if (window.activeChatContext !== 'global') {
+            window.activeChatContext = 'global';
             if (typeof window.listenToChat === 'function') window.listenToChat();
         }
     }

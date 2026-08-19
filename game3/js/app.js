@@ -97,7 +97,8 @@ window.myTeamId = null;
 window.myTeamName = "";
 window.isTeamCaptain = false;
 let db = null, auth = null, currentLang = 'it';
-let activeChatContext = null, activeTab = "room", isChatDrawerOpen = false;
+window.activeChatContext = null; // RESO GLOBALE
+let activeTab = "room", isChatDrawerOpen = false;
 let isGlobalChatMuted = false;
 let isChatCwEnabled = false, chatCwWpm = 20, chatCwTone = 600;
 let chatCwAudioQueue = [], isChatCwPlaying = false;
@@ -1163,7 +1164,8 @@ if (els.sendChatBtn) {
 
         window.lastChatSentTs = now;
         const rc = window.roomCode;
-        let ref = (activeChatContext === 'room' && rc) ? db.ref(`rooms/${rc}/chat`).push() : db.ref('globalChat').push();
+        const ctx = window.activeChatContext;
+        let ref = (ctx === 'room' && rc) ? db.ref(`rooms/${rc}/chat`).push() : db.ref('globalChat').push();
         ref.set({
             name: myName,
             username: myPrivacy ? "" : tgUsername,
