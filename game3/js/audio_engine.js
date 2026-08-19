@@ -19,16 +19,19 @@ window.btKeepAliveOsc = null;
  * Tenta di riattivare il contesto audio se sospeso o bloccato.
  */
 window.resumeAudioContext = function() {
-    if (!window.audioCtx) {
-        window.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
-    }
-    if (window.audioCtx.state === 'suspended' || window.audioCtx.state === 'interrupted') {
-        window.audioCtx.resume().then(() => {
-            console.log("AudioEngine: Context resumed successfully. State:", window.audioCtx.state);
-        }).catch(err => {
-            console.error("AudioEngine: Resume failed:", err);
-        });
-    }
+    try {
+        if (!window.audioCtx) {
+            window.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+        }
+        if (window.audioCtx.state === 'suspended' || window.audioCtx.state === 'interrupted') {
+            window.audioCtx.resume().then(() => {
+                console.log("AudioEngine: Pacemaker riattivato. Stato:", window.audioCtx.state);
+            }).catch(err => {
+                // Silenziamo l'errore se è causato da mancanza di interazione (normale in background)
+                if (err.name !== 'NotAllowedError') console.warn("AudioEngine: Resume posticipato (attesa tocco).");
+            });
+        }
+    } catch(e) { console.error("AudioEngine: Errore critico ripristino:", e); }
 };
 
 window.startTone = function(freq) {
