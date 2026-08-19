@@ -732,13 +732,11 @@ window.listenToInvites = function() {
                         tone: 600,
                         wordCount: inv.wordCount || 10,
                         createdAt: firebase.database.ServerValue.TIMESTAMP,
-                        hostId: inv.fromId
+                        hostId: inv.fromId,
+                        game_words: words // Inseriamo le parole atomicamente per evitare race conditions
                     };
 
                     db.ref(`rooms/${roomCodeNew}`).set(roomData).then(() => {
-                        // Ottimizzazione download: Parole separate
-                        db.ref(`rooms/${roomCodeNew}/game_words`).set(words);
-
                         db.ref(`invite_accepted/${inv.fromId}`).set({
                             roomCode: roomCodeNew,
                             ts: firebase.database.ServerValue.TIMESTAMP

@@ -1169,12 +1169,11 @@ if (els.btnPlayDailyNow) {
                 createdAt: firebase.database.ServerValue.TIMESTAMP,
                 hostId: myId,
                 fixedSpeed: false,
-                easyMode: false
+                easyMode: false,
+                game_words: gameWords // Inseriamo le parole atomicamente
             };
 
             db.ref('rooms/' + roomCode).set(dailyData).then(() => {
-                // Ottimizzazione: Parole separate
-                db.ref(`rooms/${roomCode}/game_words`).set(gameWords);
                 window.joinRoomLogic?.(false);
             })
             .catch(err => {
@@ -1347,14 +1346,11 @@ if (els.createRoomBtn) {
             wordSpaceMult: wSpace,
             createdAt: firebase.database.ServerValue.TIMESTAMP,
             expiresAt: expires,
-            hostId: window.myId
+            hostId: window.myId,
+            game_words: window.gameWords // Inseriamo le parole atomicamente
         };
 
         roomRef.set(roomData).then(() => {
-            // Ottimizzazione: Salviamo le parole in un nodo separato
-            // per evitare di scaricarle ad ogni aggiornamento di punteggio
-            db.ref(`rooms/${window.roomCode}/game_words`).set(window.gameWords);
-
             if (!window.isSinglePlayer) {
                 // PULIZIA AUTOMATICA: Se l'Host si disconnette completamente da Firebase, rimuovi la stanza
                 roomRef.onDisconnect().remove();

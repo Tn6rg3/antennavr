@@ -886,6 +886,26 @@ window.playNextWord = function() {
     if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
     inputActive = true;
     usedReplay = false;
+
+    // VERIFICA DI SICUREZZA: gameWords deve essere popolata
+    if (!gameWords || !gameWords[wordIndex]) {
+        console.error("GameCore: Word at index " + wordIndex + " is undefined!", gameWords);
+        showToast(currentLang === 'it' ? "Errore caricamento parole. Riprovo..." : "Error loading words. Retrying...");
+
+        // Tentiamo di recuperarle da Firebase se mancano
+        if (roomCode) {
+            db.ref(`rooms/${roomCode}/game_words`).once('value', s => {
+                if (s.exists()) {
+                    gameWords = s.val();
+                    setTimeout(window.playNextWord, 500);
+                } else {
+                    window.exitRoomCleanly(true);
+                }
+            });
+        }
+        return;
+    }
+
     const currentWord = gameWords[wordIndex].toUpperCase();
 
     // LOGICA MODALITÀ SEMPLICE (EASY MODE) - Mostra caratteri mescolati
