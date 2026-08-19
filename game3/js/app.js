@@ -550,6 +550,11 @@ function initGame() {
                 };
                 if (window.userProgression?.level) presenceData.level = window.userProgression.level;
                 pRef.set(presenceData);
+
+                // 3. Forza il ricontrollo dei permessi Admin al ripristino della connessione
+                if (typeof window.setupBugSystem === 'function') {
+                    window.setupBugSystem();
+                }
             }
         });
 
@@ -838,10 +843,11 @@ window.closeWelcomeAndCheckDaily = function() {
 // --- SISTEMA BUG E ADMIN ---
 window.setupBugSystem = function() {
     const badge = document.getElementById('bugsBadge');
+    if (!db) return;
 
-    // Rilevamento Admin basato su Permessi Firebase (Nessun ID in chiaro nel codice)
+    // Rilevamento Admin basato su Permessi Firebase
     // Tentiamo di leggere bugReports: se Firebase lo permette, siamo admin.
-    db.ref('bugReports').limitToLast(1).on('value', snap => {
+    db.ref('bugReports').limitToLast(1).once('value').then(snap => {
         window.isAdmin = true;
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
         window.updateAdminBadge();
@@ -851,11 +857,14 @@ window.setupBugSystem = function() {
         db.ref('tutorRequests').on('value', () => {
             window.updateAdminBadge();
         });
-    }, (error) => {
-        // Se Firebase nega l'accesso (standard user), nascondiamo pannello e badge
-        window.isAdmin = false;
-        if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
-        if (badge) badge.style.display = 'none';
+    }).catch((error) => {
+        // Nascondiamo il pannello SOLO se l'errore è esplicitamente di permessi mancanti
+        // e se siamo effettivamente collegati (per evitare falsi positivi durante il freeze)
+        if (error.code === 'PERMISSION_DENIED') {
+            window.isAdmin = false;
+            if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
+            if (badge) badge.style.display = 'none';
+        }
     });
 
     // 3. Invio Bug (Per tutti)
