@@ -39,40 +39,47 @@ window.addEventListener('resize', updateViewportHeight);
 window.addEventListener('focus', updateViewportHeight);
 
 // --- GESTIONE RIPRISTINO APP (PREVIENE APP BLOCCATA) ---
-const handleAppResume = () => {
-    console.log("App: Esecuzione manovra di rianimazione...");
+const handleAppResume = (forceReconnect = false) => {
+    console.log("App: Ripristino visibilità (force=" + forceReconnect + ")...");
 
-    // 1. Forza Firebase a ricollegarsi
-    if (window.db) {
-        window.db.goOffline(); // Spegniamo e riaccendiamo per forzare un nuovo handshake
-        setTimeout(() => window.db.goOnline(), 100);
+    // 1. Forza Firebase a ricollegarsi solo se richiesto (freeze reale)
+    if (window.db && forceReconnect) {
+        window.db.goOffline();
+        setTimeout(() => { if (window.db) window.db.goOnline(); }, 100);
+    } else if (window.db) {
+        window.db.goOnline(); // Riattiva semplicemente se era in sleep
     }
 
-    // 2. Ripristina l'audio (fondamentale per iPhone)
+    // 2. Ripristina l'audio se possibile
     if (typeof window.resumeAudioContext === 'function') {
         window.resumeAudioContext();
     }
 
-    // 3. Forza ricalcolo layout (sblocca eventuali freeze grafici)
-    updateViewportHeight();
-    if (window.tg) window.tg.expand();
-
-    // 4. Ricarica dati vitali se necessario
-    if (window.myId && window.db) {
-        // Rinfresca i listener se siamo fuori da una partita
-        if (!gameRunning) {
-             if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();
-             if (typeof window.listenToRooms === 'function') window.listenToRooms();
-        }
+    // 3. Ricarica dati vitali resettando i listener se siamo fuori da una partita
+    if (window.myId && window.db && !gameRunning) {
+         if (typeof window.listeners !== 'undefined') {
+             if (window.listeners.presence) { window.listeners.presence.ref.off(); window.listeners.presence = null; }
+             if (window.listeners.roomsList) { window.listeners.roomsList.ref.off(); window.listeners.roomsList = null; }
+         }
+         if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();
+         if (typeof window.listenToRooms === 'function') window.listenToRooms();
     }
 };
 
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) handleAppResume();
-});
+// WATCHDOG: Rileva sospensioni profonde (es. schermo spento a lungo)
+let lastWatchdogTick = Date.now();
+setInterval(() => {
+    const now = Date.now();
+    if (now - lastWatchdogTick > 10000) { // Salto di 10 secondi
+        console.warn("App: Watchdog rileva risveglio profondo, forzo riconnessione...");
+        handleAppResume(true);
+    }
+    lastWatchdogTick = now;
+}, 2000);
 
-window.addEventListener('pageshow', handleAppResume);
-window.addEventListener('focus', handleAppResume);
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) handleAppResume(false);
+});
 
 // --- UNLOCK AUDIO (SPECIFICO PER iOS/IPHONE) ---
 // Su iPhone l'audio deve essere attivato da un gesto esplicito dell'utente.
@@ -518,15 +525,33 @@ function initGame() {
         window.myId = tgUser.id.toString();
         console.log("CW Game: Auth success, Telegram ID:", window.myId);
 
-        // --- SICUREZZA: Registriamo il mapping UID subito per le regole Firebase ---
-        // Questo deve avvenire PRIMA di qualsiasi altra operazione di scrittura o lettura protetta
-        try {
-            const mappingRef = db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`);
-            await mappingRef.set(window.myId);
-            mappingRef.onDisconnect().remove();
-        } catch (e) {
-            console.error("CW Game: Security Mapping failed", e);
-        }
+        // --- SISTEMA DI MAPPING E PRESENZA ---
+        db.ref('.info/connected').on('value', async (s) => {
+            if (s.val() === true && window.myId) {
+                console.log("App: Connessione stabilita, ripristino mapping e presenza...");
+
+                // 1. Ripristina il mapping di sicurezza (Fondamentale per le regole Firebase)
+                try {
+                    const mappingRef = db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`);
+                    await mappingRef.set(window.myId);
+                    mappingRef.onDisconnect().remove();
+                } catch (e) { console.error("Mapping Error:", e); }
+
+                // 2. Ripristina la presenza online
+                const pRef = db.ref(`presence/${window.myId}`);
+                pRef.onDisconnect().remove();
+                const presenceData = {
+                    name: window.myName || tgUser.first_name,
+                    username: window.myPrivacy ? "" : tgUsername,
+                    status: 'online',
+                    uid: firebase.auth().currentUser.uid,
+                    ts: firebase.database.ServerValue.TIMESTAMP,
+                    lastActive: firebase.database.ServerValue.TIMESTAMP
+                };
+                if (window.userProgression?.level) presenceData.level = window.userProgression.level;
+                pRef.set(presenceData);
+            }
+        });
 
         const userRef = db.ref(`users/${window.myId}`);
         const snap = await userRef.once('value');
