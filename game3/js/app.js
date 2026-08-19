@@ -1162,7 +1162,8 @@ if (els.sendChatBtn) {
         if (txt.length > 200) return showToast(currentLang === 'it' ? "⚠️ Messaggio troppo lungo (max 200 car.)" : "⚠️ Message too long (max 200 chars)");
 
         window.lastChatSentTs = now;
-        let ref = (activeChatContext === 'room' && roomCode) ? db.ref(`rooms/${roomCode}/chat`).push() : db.ref('globalChat').push();
+        const rc = window.roomCode;
+        let ref = (activeChatContext === 'room' && rc) ? db.ref(`rooms/${rc}/chat`).push() : db.ref('globalChat').push();
         ref.set({
             name: myName,
             username: myPrivacy ? "" : tgUsername,
@@ -1173,6 +1174,12 @@ if (els.sendChatBtn) {
         if (els.chatInput) els.chatInput.value = '';
     };
 }
+
+if (els.chatInput) {
+    els.chatInput.onkeypress = (e) => {
+        if (e.key === 'Enter') els.sendChatBtn?.click();
+}
+
 if (els.sendLobbyChatBtn) {
     els.sendLobbyChatBtn.onclick = async () => {
         const now = Date.now();
@@ -1180,11 +1187,12 @@ if (els.sendLobbyChatBtn) {
 
         if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
         const txt = els.lobbyChatInput?.value.trim();
-        if (!txt || !roomCode) return;
+        const rc = window.roomCode;
+        if (!txt || !rc) return;
         if (txt.length > 200) return showToast(currentLang === 'it' ? "⚠️ Messaggio troppo lungo (max 200 car.)" : "⚠️ Message too long (max 200 chars)");
 
         window.lastChatSentTs = now;
-        db.ref(`rooms/${roomCode}/chat`).push().set({
+        db.ref(`rooms/${rc}/chat`).push().set({
             name: myName,
             username: myPrivacy ? "" : tgUsername,
             text: txt,
@@ -1193,6 +1201,13 @@ if (els.sendLobbyChatBtn) {
         });
         if (els.lobbyChatInput) els.lobbyChatInput.value = '';
     };
+}
+
+if (els.lobbyChatInput) {
+    els.lobbyChatInput.onkeypress = (e) => {
+        if (e.key === 'Enter') els.sendLobbyChatBtn?.click();
+    };
+}
 }
 if (els.clearChatBtn) {
     els.clearChatBtn.onclick = () => {
