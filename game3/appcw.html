@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    
+
     <!-- Disattiva il caching del file HTML -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
@@ -31,7 +31,7 @@
 <div id="toastContainer"></div>
 
 <!-- POPUP ANNUNCIO AMMINISTRATORE -->
-<div id="adminAnnouncementModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 6000; border: 2px solid var(--link-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+<div id="adminAnnouncementModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 6000; border: 2px solid var(--link-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 3em; margin-bottom: 10px;">📢</span>
     <h2 id="adminAnnouncementTitle" style="color: var(--link-color); margin: 0 0 10px 0;">Comunicazione</h2>
     <div id="adminAnnouncementText" style="font-size: 0.95em; margin-bottom: 20px; text-align: left; line-height: 1.4; max-height: 300px; overflow-y: auto; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;">
@@ -41,11 +41,11 @@
 </div>
 
 <!-- POPUP SFIDA GIORNALIERA -->
-<div id="dailyChallengeModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+<div id="dailyChallengeModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 3em; margin-bottom: 10px;">📅</span>
     <h2 style="color: var(--champ-color); margin: 0 0 10px 0;">Sfida Giornaliera!</h2>
     <p style="font-size: 0.9em; margin-bottom: 15px;">20 Parole a 15 WPM (con velocità crescente se indovini). Tutti i giocatori affrontano le stesse parole oggi. Entra in classifica e vinci una medaglia se arrivi a podio!</p>
-    
+
     <div style="display: flex; flex-direction: column; gap: 10px;">
         <button id="btnPlayDailyNow" class="btn-success">ACCETTA LA SFIDA 🚀</button>
         <button id="btnPlayDailyLater" class="btn-secondary">Più Tardi</button>
@@ -54,7 +54,7 @@
 </div>
 
 <!-- POPUP SESSIONE CORSO CW -->
-<div id="courseSessionModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 5500; border: 2px solid var(--link-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+<div id="courseSessionModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5500; border: 2px solid var(--link-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 3em; margin-bottom: 10px;">📻</span>
     <h2 style="color: var(--link-color); margin: 0 0 10px 0;">Allenamento Corso CW</h2>
     <p id="courseModalText" style="font-size: 0.9em; margin-bottom: 15px;">Oggi il tuo piano prevede una sessione...</p>
@@ -74,7 +74,7 @@
 </div>
 
 <!-- MODAL: RICHIAMO CORSO -->
-<div id="courseReminderModal" style="display: none; position: fixed; top: 20%; left: 10%; width: 80%; background: #000; z-index: 6000; border: 2px solid #d32f2f; border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 0 30px rgba(211, 47, 47, 0.5); text-align: center;">
+<div id="courseReminderModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: #000; z-index: 6000; border: 2px solid #d32f2f; border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 0 30px rgba(211, 47, 47, 0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 4em; margin-bottom: 10px;">⚠️</span>
     <h2 style="color: #d32f2f; margin: 0 0 10px 0;">RICHIAMO FORMALE</h2>
     <div id="courseReminderCount" style="font-weight: bold; color: #fff; margin-bottom: 10px;">Richiamo 1 di 3</div>
@@ -82,7 +82,7 @@
     <button onclick="document.getElementById('courseReminderModal').style.display='none'" class="btn-danger">Ho capito, torno al lavoro</button>
 </div>
 <!-- POPUP BENVENUTO NUOVO UTENTE (SOLO PRIMO ACCESSO) -->
-<div id="welcomeNewUserModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; background: var(--bg-color); z-index: 6000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+<div id="welcomeNewUserModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 6000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 3.5em; margin-bottom: 10px;">📻</span>
     <h2 style="color: var(--champ-color); margin: 0 0 10px 0;">Benvenuto in Sfida Telegrafia!</h2>
     <p style="font-size: 0.9em; margin-bottom: 15px; line-height: 1.4;">
@@ -126,7 +126,7 @@
     </div>
 
     <div id="chatMessages" style="flex-grow:1; overflow-y:auto; text-align:left; font-size:0.9em; margin-bottom:5px; padding:8px; background:var(--bg-color); border-radius:8px;"></div>
-    
+
     <!-- BARRA INVIO CHAT PROTETTA -->
     <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; flex-shrink:0; align-items:center; margin-top:4px;">
         <input type="text" id="chatInput" placeholder="Scrivi un messaggio..." style="flex: 1 1 auto; min-width: 0; padding:10px; font-size:0.95em; margin:0;">
@@ -310,7 +310,7 @@
                 </div>
             </div>
         </div>
-       <!-- BOTTONE CONDIVISIONE APP (COMPATTO E DISCRETO IN BASSO) -->
+        <!-- BOTTONE CONDIVISIONE APP (COMPATTO E DISCRETO IN BASSO) -->
         <div style="width: 100%; text-align: center; margin-top: 8px; margin-bottom: 4px; flex-shrink: 0;">
             <button id="shareAppBtn" onclick="shareAppToFriends()" class="btn-secondary" style="width: auto; padding: 6px 16px; font-size: 0.85em; border-radius: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin: 0;">
                 📢 Condividi il gioco con un Amico
@@ -721,7 +721,7 @@
 
                     <div style="display:flex; gap:10px;">
                         <button id="btnTabStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
-            <button id="btnTabResetCourse" class="btn-danger" style="flex:1.2; font-size:0.75em; font-weight:bold;">⚠️ CANCELLA ISCRIZIONE</button>
+                        <button id="btnTabResetCourse" class="btn-danger" style="flex:1.2; font-size:0.75em; font-weight:bold;">⚠️ CANCELLA ISCRIZIONE</button>
                     </div>
 
                 </div> <!-- courseTrainingControls end -->
@@ -895,11 +895,11 @@
         </div> <!-- courseTabActiveView end -->
 
         <div id="courseTabInitialPrompt" class="box-panel" style="display:none; text-align:center; padding: 30px 10px;">
-             <span style="font-size: 4em;">📻</span>
-             <h2 style="color:var(--link-color);">Vuoi iniziare il Corso CW?</h2>
-             <p style="font-size:0.9em; margin-bottom:20px;">Un percorso di allenamento strutturato per dominare il Codice Morse seguendo il metodo Koch e un piano atletico settimanale.</p>
-             <button class="btn-success" onclick="window.startCourseWizard()" style="padding:15px 30px; font-size:1.1em;">SÌ, INIZIA ORA! 🚀</button>
-             <button class="btn-secondary" onclick="goBackToMenu()" style="margin-top:10px; font-size:0.9em;">Non ora</button>
+            <span style="font-size: 4em;">📻</span>
+            <h2 style="color:var(--link-color);">Vuoi iniziare il Corso CW?</h2>
+            <p style="font-size:0.9em; margin-bottom:20px;">Un percorso di allenamento strutturato per dominare il Codice Morse seguendo il metodo Koch e un piano atletico settimanale.</p>
+            <button class="btn-success" onclick="window.startCourseWizard()" style="padding:15px 30px; font-size:1.1em;">SÌ, INIZIA ORA! 🚀</button>
+            <button class="btn-secondary" onclick="goBackToMenu()" style="margin-top:10px; font-size:0.9em;">Non ora</button>
         </div>
     </div>
 
@@ -1222,7 +1222,7 @@
                 <div id="coopProgressBar" style="width: 0%; height: 100%; background: #4caf50; transition: width 0.3s ease;"></div>
             </div>
         </div>
-        
+
         <!-- I 3 Pulsanti Frequenza con Etichette Lunghezza e Penalità -->
         <div style="display: flex; gap: 5px; width: 100%;">
             <div style="flex: 1; display: flex; flex-direction: column;">
@@ -1244,7 +1244,7 @@
                 <div id="coopOwner3" style="font-size: 0.65em; text-align: center; color: var(--hint-color); margin-top: 2px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">LIBERA</div>
             </div>
         </div>
-        
+
         <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-color); padding: 4px 8px; border-radius: 6px; border: 1px dashed var(--hint-color);">
             <span id="coopActiveFreqLabel" style="font-size: 0.78em; color: var(--hint-color); font-weight: bold;">Canale: Nessuno selezionato</span>
             <button id="btnCoopReleaseFreq" class="action-btn-small btn-secondary" style="display: none; padding: 2px 6px; font-size: 0.75em; margin: 0;">SGANCIA 🔓</button>
@@ -1362,7 +1362,7 @@
 </div>
 
 <!-- MODAL: DETTAGLI PARTITA -->
-<div id="matchDetailsModal" style="display: none; position: fixed; top: 10%; left: 5%; width: 90%; height: 80%; background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color); border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+<div id="matchDetailsModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; height: 80%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 4000; border: 2px solid var(--hint-color); border-radius: 10px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 95vh;">
     <h3 style="margin-top:0; text-align: center; color: var(--link-color);">Dettagli Partita</h3>
     <p style="text-align: center; font-size: 0.85em; color: var(--hint-color); margin-top: -10px;">I caratteri saltati o errati sono in <span style="color: #d32f2f; font-weight: bold;">rosso</span>.</p>
     <div class="table-wrapper" style="flex-grow:1; overflow-y:auto; margin-bottom: 10px;">
@@ -1385,7 +1385,7 @@
 </div>
 
 <!-- MODAL: INVITO -->
-<div id="inviteModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; max-height: 80%; background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
+<div id="inviteModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); max-height: 90%; background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
     <h3 id="inviteModalTitle">Invia Invito</h3>
     <p id="inviteModalText" style="text-align: center; font-size: 0.9em;"></p>
 
@@ -1440,7 +1440,7 @@
 </div>
 
 <!-- MODAL: QUALCUNO È ENTRATO NELLA STANZA -->
-<div id="roomEventModal" style="display: none; position: fixed; top: 25%; left: 10%; width: 80%; background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+<div id="roomEventModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 85%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span class="event-modal-icon" style="font-size: 3em; margin-bottom: 10px;">👤</span>
     <h3 id="roomEventTitle" style="color: var(--champ-color); margin: 0 0 10px 0;">Qualcuno è entrato!</h3>
     <p id="roomEventText" style="margin-bottom: 20px;">Un giocatore sta aspettando nella tua stanza.</p>
@@ -1449,7 +1449,7 @@
 </div>
 
 <!-- MODAL: BENVENUTO TORNEI -->
-<div id="tournamentWelcomeModal" style="display: none; position: fixed; top: 20%; left: 5%; width: 90%; background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+<div id="tournamentWelcomeModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span class="event-modal-icon" style="font-size: 3em; margin-bottom: 10px;">🏆</span>
     <h3 style="color:var(--champ-color); margin-bottom:10px;">Partecipa ai Tornei!</h3>
     <p style="font-size:0.95em; margin-bottom:15px;">Fonda una squadra o unisciti a una esistente per scalare la classifica mondiale e vincere medaglie!</p>
@@ -1462,10 +1462,10 @@
 </div>
 
 <!-- MODAL: DIZIONARIO PERSONALE -->
-<div id="customDictModal" style="display: none; position: fixed; top: 15%; left: 5%; width: 90%; max-height: 70%; background: var(--bg-color); z-index: 4000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+<div id="customDictModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); max-height: 85%; background: var(--bg-color); z-index: 4000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
     <h3 style="margin-top:0; text-align: center; color: var(--champ-color);" id="txt_custom_dict_title">Dizionario Personale 📖</h3>
     <p style="text-align: center; font-size: 0.85em; color: var(--hint-color);" id="txt_custom_dict_desc">Carica un file di testo (.txt) con le tue parole personalizzate.</p>
-    
+
     <div style="background: var(--sec-bg-color); padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 15px;">
         <input type="file" id="customDictFileInput" accept=".txt" style="display: none;">
         <button onclick="document.getElementById('customDictFileInput').click()" class="btn-success" style="width: auto; padding: 10px 20px;" id="txt_select_file_btn">Scegli File .txt</button>
@@ -1473,7 +1473,7 @@
             Nessun file caricato.
         </div>
     </div>
-    
+
     <div style="font-size: 0.8em; color: var(--hint-color); margin-bottom: 15px;">
         <ul style="padding-left: 20px; margin: 5px 0;">
             <li id="txt_custom_hint1">Le parole possono essere separate da spazio, virgola o a capo.</li>
@@ -1481,14 +1481,14 @@
             <li id="txt_custom_hint3">Il dizionario rimarrà salvato in locale.</li>
         </ul>
     </div>
-    
+
     <div style="display: flex; gap: 10px; margin-top: auto;">
         <button onclick="document.getElementById('customDictModal').style.display='none'" class="btn-secondary" style="flex: 1;" id="txt_close_custom_btn">Chiudi</button>
     </div>
 </div>
 
 <!-- MODAL: GESTIONE CORSO CW -->
-<div id="courseModal" style="display: none; position: fixed; top: 5%; left: 5%; width: 90%; height: 90%; background: var(--bg-color); z-index: 7000; border: 2px solid var(--link-color); border-radius: 12px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
+<div id="courseModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; height: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 7000; border: 2px solid var(--link-color); border-radius: 12px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
     <h3 style="margin-top:0; text-align: center; color: var(--link-color);">📖 Programma Allenamento CW</h3>
 
     <div id="courseSetupView" style="display:none; flex-direction:column; gap:10px;">
@@ -1552,7 +1552,7 @@
 </div>
 
 <!-- MODAL: RISULTATI CORSO (DEBRIEFING) -->
-<div id="courseResultsModal" style="display: none; position: fixed; top: 10%; left: 5%; width: 90%; background: var(--bg-color); z-index: 8000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
+<div id="courseResultsModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 8000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 3.5em; margin-bottom: 10px;">📊</span>
     <h2 style="color: var(--champ-color); margin: 0 0 10px 0;">Sessione Completata!</h2>
 
@@ -1566,7 +1566,7 @@
 </div>
 
 <!-- MODAL: STATISTICHE CORSISTA (PER TUTOR) -->
-<div id="tutorStudentStatsModal" style="display: none; position: fixed; top: 5%; left: 5%; width: 90%; height: 90%; background: var(--bg-color); z-index: 9000; border: 2px solid #673ab7; border-radius: 12px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+<div id="tutorStudentStatsModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; height: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9000; border: 2px solid #673ab7; border-radius: 12px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
     <h3 id="tutorStudentStatsTitle" style="margin-top:0; text-align: center; color: #9575cd;">Dati Corsista</h3>
 
     <div id="tutorStudentStatsContent" style="flex-grow:1; overflow-y:auto; display:flex; flex-direction:column; gap:15px; padding-bottom:10px;">
@@ -1596,7 +1596,7 @@
     (function() {
         // Forza il caricamento di una nuova versione ad ogni apertura per evitare SyntaxError da script vecchi
         const BUILD_VERSION = "fix_" + Date.now();
-        
+
         const scripts = [
             "js/app.js",
             "js/quiz_data.js",
