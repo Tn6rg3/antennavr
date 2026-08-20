@@ -330,14 +330,22 @@ window.initTransmissionManager = function() {
                 if (!shield) {
                     shield = document.createElement('div');
                     shield.id = 'txMouseShield';
-                    shield.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; cursor:none; background:transparent;";
+                    shield.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; z-index:10000; cursor:none; background:transparent;";
                     document.body.appendChild(shield);
                 }
 
-                // 3. Tentativo di blocco fisico (Pointer Lock) per chi lo supporta
-                if (document.pointerLockElement !== document.body) {
-                    try { document.body.requestPointerLock?.(); } catch(e) {}
-                }
+                // Portiamo i tasti STOP sopra lo scudo per renderli cliccabili
+                const btnStop1 = document.getElementById('btnStopTxSession');
+                const btnStop2 = document.getElementById('btnStopGroupTx');
+                if (btnStop1) btnStop1.style.setProperty('z-index', '10001', 'important');
+                if (btnStop2) btnStop2.style.setProperty('z-index', '10001', 'important');
+            }
+
+            // Sblocco di emergenza con tasto centrale (rotellina)
+            if (e.button === 1) {
+                window.stopTxSession();
+                window.stopGroupTx();
+                return;
             }
 
             // Resume audio
@@ -439,11 +447,15 @@ window.stopTxSession = function() {
     window.transmissionState.sessionRunning = false;
     window.transmissionState.active = false;
 
-    // Sblocco immediato e rimozione scudo
+    // Ripristino cursori e rimozione scudo
     document.body.style.cursor = 'default';
     if (document.exitPointerLock) try { document.exitPointerLock(); } catch(e) {}
     const shield = document.getElementById('txMouseShield');
     if (shield) shield.remove();
+
+    // Reset z-index tasti
+    const btnStop1 = document.getElementById('btnStopTxSession');
+    if (btnStop1) btnStop1.style.zIndex = "";
 
     if (window.transmissionState.timeoutHandle) clearTimeout(window.transmissionState.timeoutHandle);
 
