@@ -152,8 +152,12 @@ window.initTransmissionManager = function() {
             keyBtn.addEventListener('touchstart', window.handleStraightKeyDown, {passive: false});
             window.addEventListener('mouseup', window.handleStraightKeyUp);
             window.addEventListener('touchend', window.handleStraightKeyUp, {passive: false});
-        } else {
-            console.warn("TX_DEBUG: morseKeyBtn NOT FOUND");
+        }
+
+        const keyBtnGroups = document.getElementById('morseKeyBtnGroups');
+        if (keyBtnGroups) {
+            keyBtnGroups.addEventListener('mousedown', window.handleStraightKeyDown);
+            keyBtnGroups.addEventListener('touchstart', window.handleStraightKeyDown, {passive: false});
         }
 
         // Inizializzazione Pulsanti
@@ -237,17 +241,24 @@ window.initTransmissionManager = function() {
         };
     }
 
-    setupButtonLocal('btnMapKeyDit', () => {
+    // MAPPA TASTI MENU PRINCIPALE
+    setupButtonLocal('btnMainMapDit', () => {
         window.keyerState.mappingTarget = 'dit';
-        const b = document.getElementById('btnMapKeyDit');
-        if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
+        const b = document.getElementById('btnMainMapDit');
+        if (b) { b.textContent = "Premi..."; b.classList.add('pulse'); }
     });
-    setupButtonLocal('btnMapKeyDah', () => {
+    setupButtonLocal('btnMainMapDah', () => {
         window.keyerState.mappingTarget = 'dah';
-        const b = document.getElementById('btnMapKeyDah');
-        if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
+        const b = document.getElementById('btnMainMapDah');
+        if (b) { b.textContent = "Premi..."; b.classList.add('pulse'); }
     });
-    setupButtonLocal('btnMapKeyVert', () => {
+    setupButtonLocal('btnMainMapVert', () => {
+        window.keyerState.mappingTarget = 'vert';
+        const b = document.getElementById('btnMainMapVert');
+        if (b) { b.textContent = "Premi..."; b.classList.add('pulse'); }
+    });
+
+    setupButtonLocal('btnMapKeyDit', () => {
         window.keyerState.mappingTarget = 'vert';
         const b = document.getElementById('btnMapKeyVert');
         if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
@@ -775,16 +786,27 @@ window.updateKeyerUI = function() {
         btnVert.classList.remove('pulse');
     }
 
+    // UI MENU PRINCIPALE
+    const mDit = document.getElementById('btnMainMapDit');
+    const mDah = document.getElementById('btnMainMapDah');
+    const mVert = document.getElementById('btnMainMapVert');
+    if (mDit) { mDit.textContent = "Tasto: " + (window.keyerState.keyDit === " " ? "Spazio" : (window.keyerState.keyDit || ".")); mDit.classList.remove('pulse'); }
+    if (mDah) { mDah.textContent = "Tasto: " + (window.keyerState.keyDah === " " ? "Spazio" : (window.keyerState.keyDah || ",")); mDah.classList.remove('pulse'); }
+    if (mVert) { mVert.textContent = "Tasto: " + (window.keyerState.keyVert === " " ? "Spazio" : (window.keyerState.keyVert || "Nessuno")); mVert.classList.remove('pulse'); }
+
     // Mostra/Nascondi aree in base al modo
     const paddleArea = document.getElementById('btnSwapDitDah')?.parentElement;
     const verticalArea = document.getElementById('verticalKeyMappingArea');
+    const groupVertArea = document.getElementById('groupTxVerticalArea');
 
     if (window.keyerState.mode === 'V') {
         if (paddleArea) paddleArea.style.opacity = "0.4";
         if (verticalArea) verticalArea.style.opacity = "1";
+        if (groupVertArea) groupVertArea.style.display = "flex";
     } else {
         if (paddleArea) paddleArea.style.opacity = "1";
         if (verticalArea) verticalArea.style.opacity = "0.4";
+        if (groupVertArea) groupVertArea.style.display = "none";
     }
 };
 
