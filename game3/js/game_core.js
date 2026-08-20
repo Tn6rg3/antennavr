@@ -901,12 +901,22 @@ window.playNextWord = function() {
         // Decidiamo se pescare un recupero
         const canRetry = queueLen > 0;
         const mustRetry = wordIndex >= requestedWordCount; // Abbiamo finito le nuove, dobbiamo svuotare la coda
-        // Proponiamo un recupero ogni 2 parole nuove, o sempre se abbiamo finito le nuove
-        const shouldRetry = canRetry && (window.perfectionWordsDone > 0 && window.perfectionWordsDone % 2 === 0 || mustRetry);
+
+        // Filtriamo la coda: peschiamo solo parole che hanno un "cooldown" di almeno 3 parole nuove
+        const availableRetries = window.perfectionQueue.filter(r => (window.perfectionWordsDone - r.addedAt) >= 3);
+
+        // Proponiamo un recupero ogni 4 parole nuove, o se siamo obbligati (fine mazzo)
+        const shouldRetry = (availableRetries.length > 0) && (window.perfectionWordsDone % 4 === 0 || mustRetry);
 
         if (shouldRetry && !window.isPerfectionRetry) {
-            const rndIdx = Math.floor(Math.random() * window.perfectionQueue.length);
-            const retryObj = window.perfectionQueue.splice(rndIdx, 1)[0];
+            // Peschiamo una parola a caso tra quelle disponibili (non troppo recenti)
+            const rndIdx = Math.floor(Math.random() * availableRetries.length);
+            const retryObjOrig = availableRetries[rndIdx];
+
+            // Troviamo l'indice reale nella coda originale e la rimuoviamo
+            const realIdx = window.perfectionQueue.indexOf(retryObjOrig);
+            const retryObj = window.perfectionQueue.splice(realIdx, 1)[0];
+
             window.currentPerfectionWord = retryObj.word;
             window.currentPerfectionWpm = retryObj.wpm;
             window.isPerfectionRetry = true;
@@ -1558,7 +1568,14 @@ window.handleWordSubmission = function(userWord) {
 
     // Gestione Errori e Coda Perfezione
     if (levDist > 0 || usedReplay) {
-        if (currentMode === 'perfection') window.perfectionQueue.push({ word: currentWord, wpm: activeWpmForThisWord });
+        if (currentMode === 'perfection') {
+            // Aggiungiamo alla coda memorizzando QUANDO è stata aggiunta per il cooldown
+            window.perfectionQueue.push({
+                word: currentWord,
+                wpm: activeWpmForThisWord,
+                addedAt: window.perfectionWordsDone
+            });
+        }
         let wrongChars = [];
         for (let i = 0; i < Math.max(currentWord.length, userWord.length); i++) {
             if (userWord[i] !== currentWord[i] && currentWord[i]) {
@@ -1596,7 +1613,14 @@ window.handleWordSubmission = function(userWord) {
         if (window.isPerfectionRetry) tr.style.background = "rgba(76, 175, 80, 0.05)";
         const tdTyped = document.createElement('td'); tdTyped.textContent = userWord || "-";
         const tdReal = document.createElement('td');
-        window.renderDiffSecure(tdReal, currentWord, userWord);
+
+        // MODIFICA PERFEZIONE: Se è un errore, non mostriamo la parola reale (Nascosta 🔒)
+        if (currentMode === 'perfection' && (levDist > 0 || usedReplay)) {
+            tdReal.innerHTML = `<span style="opacity:0.5; font-size:0.9em; font-style:italic;">[Nascosto 🔒]</span>`;
+        } else {
+            window.renderDiffSecure(tdReal, currentWord, userWord);
+        }
+
         const tdPoints = document.createElement('td');
         tdPoints.style.textAlign = 'center';
         tdPoints.style.color = scoreColor;
