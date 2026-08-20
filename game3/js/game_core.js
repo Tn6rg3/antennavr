@@ -132,6 +132,40 @@ window.goBackToMenu = function() {
     if (els.matchDetailsModal) els.matchDetailsModal.style.display = 'none';
     if (els.inviteModal) els.inviteModal.style.display = 'none';
 
+    // Se stiamo uscendo dalla Stazione Radio, riportiamo i moduli al loro posto originale
+    const st = document.getElementById('standaloneTxContainer');
+    if (st && st.innerHTML !== "") {
+        if (typeof window.stopTxSession === 'function') window.stopTxSession();
+        if (typeof window.stopGroupTx === 'function') window.stopGroupTx();
+
+        const tx = document.getElementById('courseTransmissionView');
+        const groups = document.getElementById('groupTxContainer');
+        const courseView = document.getElementById('courseTabActiveView');
+
+        // Ordine di ripristino: prima i gruppi dentro la vista tx, poi la vista tx dentro il corso
+        if (groups && tx) tx.appendChild(groups);
+        if (tx && courseView) courseView.appendChild(tx);
+
+        st.innerHTML = "";
+    }
+
+    // Forza rimozione scudo mouse se presente
+    const shield = document.getElementById('txMouseShield');
+    if (shield) shield.remove();
+    document.body.style.cursor = 'default';
+    if (document.exitPointerLock) document.exitPointerLock();
+
+    window.showScreen('setupScreen');
+};;
+    if (st && st.innerHTML !== "") {
+        if (typeof window.stopTxSession === 'function') window.stopTxSession();
+        if (typeof window.stopGroupTx === 'function') window.stopGroupTx();
+        st.innerHTML = "";
+    }
+
+    // Rilascia il puntatore del mouse se bloccato
+    if (document.exitPointerLock) document.exitPointerLock();
+
     window.showScreen('setupScreen');
 };
 
@@ -1858,43 +1892,52 @@ window.startTransmissionFree = function(mode) {
     const tone = parseInt(document.getElementById('toneInput')?.value) || 600;
     const lesson = parseInt(document.getElementById('setupKochLevelInput')?.value) || 2;
 
-    // Sincronizziamo il Keyer
+    // Sincronizziamo lo stato per il TransmissionManager
     if (window.keyerState) {
         window.keyerState.wpm = wpm;
         window.keyerState.tone = tone;
         window.currentTone = tone;
     }
 
+    // Forza la lezione Koch scelta per la sessione libera
+    if (!window.courseData) window.courseData = { progress: {}, settings: {} };
+    if (!window.courseData.progress) window.courseData.progress = {};
+    window.courseData.progress.current_lesson = lesson;
+    if (!window.courseData.settings) window.courseData.settings = {};
+    window.courseData.settings.start_wpm = wpm;
+
+    // SPOSTAMENTO ELEMENTI (Invece di clonazione per preservare listener)
     if (mode === 'standard') {
-        // Esercizio Singolo: Cloniamo la vista dal corso
         const source = document.getElementById('courseTransmissionView');
         if (source) {
-            const clone = source.cloneNode(true);
-            clone.id = "standalone_tx_view";
-            clone.style.display = "flex";
-            // Nascondiamo il pannello configurazione duplicato se presente nel clone
-            const cfg = clone.querySelector('.box-panel');
-            if (cfg) cfg.style.display = "none";
-            container.appendChild(clone);
+            container.appendChild(source); // Sposta fisicamente l'elemento originale
+            source.style.display = "flex";
 
-            // Re-inizializziamo i listener sul nuovo DOM
+            // Nascondiamo il pannello configurazione interno (ne abbiamo uno nel menu principale)
+            const cfg = source.querySelector('.box-panel');
+            if (cfg) cfg.style.display = "none";
+
+            // RESET STATO UI DEL MODULO (Punto di domanda, ecc)
+            const targetEl = document.getElementById('txTargetChar');
+            const feedbackEl = document.getElementById('txFeedbackText');
+            if (targetEl) targetEl.textContent = "?";
+            if (feedbackEl) feedbackEl.textContent = "Premi AVVIA per allenarti";
+
+            // Re-inizializziamo i listener (necessario se il DOM è stato spostato)
             setTimeout(() => {
                 if (typeof window.initTransmissionManager === 'function') window.initTransmissionManager();
-                if (typeof window.startTxSession === 'function') window.startTxSession();
             }, 100);
         }
-    } else {
-        // Esercizio Gruppi: Cloniamo il container dei gruppi
+    } else if (mode === 'groups_tx') {
         const source = document.getElementById('groupTxContainer');
         if (source) {
-            const clone = source.cloneNode(true);
-            clone.id = "standalone_group_view";
-            clone.style.display = "block";
-            container.appendChild(clone);
+            container.appendChild(source);
+            source.style.display = "block";
+            const feedback = document.getElementById('groupTxFeedback');
+            if (feedback) feedback.textContent = "Premi AVVIA per iniziare i gruppi";
 
             setTimeout(() => {
                 if (typeof window.initTransmissionManager === 'function') window.initTransmissionManager();
-                if (typeof window.startGroupTx === 'function') window.startGroupTx();
             }, 100);
         }
     }

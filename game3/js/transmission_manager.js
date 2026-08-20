@@ -59,13 +59,23 @@ window.initTransmissionManager = function() {
     try {
         console.log("TX_DEBUG: initTransmissionManager START");
 
+        // Sincronizziamo WPM e Tono con quelli globali del menu se siamo in standalone
+        if (!window.transmissionState.sessionRunning && !window.groupTxState.running) {
+             const startWpm = parseInt(document.getElementById('startWpmInput')?.value);
+             if (startWpm) window.keyerState.wpm = startWpm;
+             const startTone = parseInt(document.getElementById('toneInput')?.value);
+             if (startTone) window.keyerState.tone = startTone;
+        }
+
         window.loadKeyerSettings();
 
         const keyBtn = document.getElementById('morseKeyBtn');
         if (keyBtn) {
-            // Clonazione pulsante principale per pulire vecchi listener
-            const newBtn = keyBtn.cloneNode(true);
-            keyBtn.parentNode.replaceChild(newBtn, keyBtn);
+            // Rimuoviamo eventuali vecchi listener se presenti (versione pulita senza clonazione distruttiva)
+            keyBtn.removeEventListener('mousedown', window.handleStraightKeyDown);
+            keyBtn.removeEventListener('touchstart', window.handleStraightKeyDown);
+            window.removeEventListener('mouseup', window.handleStraightKeyUp);
+            window.removeEventListener('touchend', window.handleStraightKeyUp);
 
             window.handleStraightKeyDown = (e) => {
                 if (e && e.cancelable && e.preventDefault) e.preventDefault();
@@ -138,8 +148,8 @@ window.initTransmissionManager = function() {
                 }
             };
 
-            newBtn.addEventListener('mousedown', window.handleStraightKeyDown);
-            newBtn.addEventListener('touchstart', window.handleStraightKeyDown, {passive: false});
+            keyBtn.addEventListener('mousedown', window.handleStraightKeyDown);
+            keyBtn.addEventListener('touchstart', window.handleStraightKeyDown, {passive: false});
             window.addEventListener('mouseup', window.handleStraightKeyUp);
             window.addEventListener('touchend', window.handleStraightKeyUp, {passive: false});
         } else {
@@ -211,6 +221,7 @@ window.initTransmissionManager = function() {
     // BINDING KEYER MENU PRINCIPALE
     const mKType = document.getElementById('mainKeyerTypeSelect');
     if (mKType) {
+        mKType.value = window.keyerState.mode; // Sincronizziamo UI menu principale
         mKType.onchange = (e) => {
             window.keyerState.mode = e.target.value;
             window.updateKeyerUI();

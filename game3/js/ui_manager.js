@@ -38,7 +38,8 @@ window.populateGameModesUI = function() {
         // Rinominazione etichette per modalità Trasmissione
         if (isTx) {
             if (mode.id === 'standard') opt.textContent = lang === 'it' ? "Esercizio Singolo (Koch)" : "Single Exercise (Koch)";
-            else opt.textContent = lang === 'it' ? "Trasmissione Gruppi" : "Groups Transmission";
+            else if (mode.id === 'groups_tx') opt.textContent = lang === 'it' ? "Trasmissione Gruppi" : "Groups Transmission";
+            else return;
         } else {
             opt.textContent = lang === 'it' ? mode.titleIt : mode.titleEn;
         }
@@ -48,6 +49,16 @@ window.populateGameModesUI = function() {
 
     // Ripristiniamo il valore se ancora valido, altrimenti standard
     if (window.GAME_MODES && window.GAME_MODES[currentVal]) {
+        if (isSingle && currentVal === 'pingpong') select.value = 'standard';
+        else if (isTx && currentVal !== 'standard' && currentVal !== 'groups_tx') select.value = 'standard';
+        else select.value = currentVal;
+    } else {
+        select.value = 'standard';
+    }
+};
+        select.value = 'standard';
+    }
+};
         // Se avevamo Ping Pong e passiamo a Solo, resettiamo a standard
         if (isSingle && currentVal === 'pingpong') select.value = 'standard';
         else select.value = currentVal;
@@ -218,7 +229,7 @@ window.setLanguage = function(lang) {
         txt_hello: t.hello, txt_free_challenge_title: t.free_challenge, txt_play_solo_title: t.play_solo,
         txt_game_type_label: t.game_type, txt_mode_label: t.mode,
         txt_opt_multi: t.opt_multi, txt_opt_single: t.opt_single,
-        txt_opt_coop: t.opt_coop, txt_opt_trn: t.opt_trn, txt_opt_arcade: t.opt_arcade,
+        txt_opt_coop: t.opt_coop, txt_opt_trn: t.opt_trn, txt_opt_arcade: t.opt_arcade, txt_opt_tx: t.opt_tx,
         txt_opt_std: t.opt_std, txt_opt_call: t.opt_call, txt_opt_pp: t.opt_pp, txt_wpm_label: t.wpm,
         txt_words_label: t.words, txt_tone_label: t.tone, txt_fixed_speed: t.fixed, txt_easy_mode: t.easy,
         txt_room_timeout: t.timeout, txt_challenge_board_title: t.challenge_board, txt_no_challenges: t.no_challenges,

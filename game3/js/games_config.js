@@ -171,6 +171,19 @@ window.GAME_MODES = {
         generateWords: function(num, dicts) {
             return []; // Gestito internamente da arcade_manager
         }
+    },
+    "groups_tx": {
+        id: "groups_tx",
+        titleIt: "Trasmissione Gruppi",
+        titleEn: "Groups Transmission",
+        icon: "📻",
+        defaultWpm: 20,
+        defaultWordCount: 4,
+        wpmConfigurable: true,
+        wordCountConfigurable: true,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: false,
+        generateWords: function(num, dicts) { return []; }
     }
 };
 
