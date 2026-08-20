@@ -903,17 +903,18 @@ window.playNextWord = function() {
         const mustRetry = wordIndex >= requestedWordCount; // Abbiamo finito le nuove, dobbiamo svuotare la coda
 
         // Filtriamo la coda: peschiamo solo parole che hanno un "cooldown" di almeno 3 parole nuove
-        const availableRetries = window.perfectionQueue.filter(r => (window.perfectionWordsDone - r.addedAt) >= 3);
+        // Se però abbiamo finito le parole nuove (mustRetry), ignoriamo il cooldown per non bloccare il gioco
+        const availableRetries = mustRetry ? window.perfectionQueue : window.perfectionQueue.filter(r => (window.perfectionWordsDone - r.addedAt) >= 3);
 
         // Proponiamo un recupero ogni 4 parole nuove, o se siamo obbligati (fine mazzo)
         const shouldRetry = (availableRetries.length > 0) && (window.perfectionWordsDone % 4 === 0 || mustRetry);
 
         if (shouldRetry && !window.isPerfectionRetry) {
-            // Peschiamo una parola a caso tra quelle disponibili (non troppo recenti)
+            // Peschiamo una parola a caso tra quelle disponibili
             const rndIdx = Math.floor(Math.random() * availableRetries.length);
             const retryObjOrig = availableRetries[rndIdx];
 
-            // Troviamo l'indice reale nella coda originale e la rimuoviamo
+            // Troviamo l'indice reale nella coda originale (importante per splice corretto)
             const realIdx = window.perfectionQueue.indexOf(retryObjOrig);
             const retryObj = window.perfectionQueue.splice(realIdx, 1)[0];
 
