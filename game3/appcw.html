@@ -227,6 +227,7 @@
                         <option value="multi" id="txt_opt_multi">Multi-Giocatore</option>
                         <option value="coop" id="txt_opt_coop">Collaborativo (Co-op) ⚔️</option>
                         <option value="single" id="txt_opt_single">Solo</option>
+                        <option value="transmission" id="txt_opt_tx">Trasmissione 🎙️</option>
                         <option value="tournament" id="txt_opt_trn">Torneo</option>
                         <option value="arcade" id="txt_opt_arcade">Arcade 🕹️</option>
                     </select>
@@ -247,6 +248,10 @@
                 <div><label id="txt_wpm_label">WPM</label> <input type="number" id="startWpmInput" value="20" min="5" max="50"></div>
                 <div><label id="txt_words_label">Test</label> <input type="number" id="wordCountInput" value="10" min="3" max="100"></div>
                 <div><label id="txt_tone_label">Tono</label> <input type="number" id="toneInput" value="600" min="400" max="1000" step="50"></div>
+                <div id="setupKochLevelContainer" style="display:none;">
+                    <label>Lezione:</label>
+                    <select id="setupKochLevelInput" style="width:100%; padding:5px;"></select>
+                </div>
                 <div id="timeoutDiv" style="display: none;"><label id="txt_room_timeout">Scad.</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
             </div>
 
@@ -284,6 +289,25 @@
             <!-- DIZIONARIO PERSONALE -->
             <div id="customDictControl" style="display:none; justify-content:center; margin-top:5px;">
                 <button onclick="document.getElementById('customDictModal').style.display='flex'" class="btn-link" style="font-size:0.85em; margin:0; padding:2px;" id="txt_manage_custom_btn">⚙️ Gestisci Dizionario Personale</button>
+            </div>
+
+            <!-- AREA KEYER COMPATTA (Visibile solo per Trasmissione) -->
+            <div id="mainMenuKeyerConfig" class="box-panel" style="display:none; border-color:var(--link-color); padding:10px; margin-top:5px; background:rgba(0,0,0,0.1);">
+                <h4 style="margin:0 0 10px 0; color:var(--link-color); font-size:0.9em;">⚙️ Configurazione Manipolatore</h4>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <div style="flex:1;">
+                        <label style="font-size:0.75em; display:block;">Tipo Keyer:</label>
+                        <select id="mainKeyerTypeSelect" style="width:100%; padding:5px; font-size:0.85em;">
+                            <option value="A">Iambic A</option>
+                            <option value="B">Iambic B</option>
+                            <option value="V">Verticale</option>
+                        </select>
+                    </div>
+                    <div style="flex:1; text-align:center;">
+                        <label style="font-size:0.65em; display:block; line-height:1.1;">Paddles:</label>
+                        <button id="btnMainSwapPaddles" class="action-btn-small btn-secondary" style="width:100%; padding:6px; margin-top:4px;">Inverti 🔄</button>
+                    </div>
+                </div>
             </div>
 
             <button id="createRoomBtn" disabled class="btn-success">Inizia Partita Libera</button>
@@ -1358,6 +1382,22 @@
     <div style="display:flex; gap:5px; width:100%; margin-top: 10px;">
         <button onclick="toggleChat()" class="btn-secondary" style="margin-top: 0; flex:1;">💬 Chat</button>
         <button id="quitQuizBtn" class="btn-danger" style="margin-top: 0; flex:1;">Abbandona</button>
+    </div>
+</div>
+
+</div>
+
+<!-- SCHERMATA TRASMISSIONE LIBERA (STANDALONE) -->
+<div id="transmissionScreen" class="screen">
+    <div class="screen-content" style="padding-bottom:80px;">
+        <h2 style="color: var(--link-color); margin-bottom: 10px;">🎙️ Stazione Radio</h2>
+
+        <!-- Qui inietteremo dinamicamente il contenuto della trasmissione -->
+        <div id="standaloneTxContainer" style="width:100%;"></div>
+    </div>
+
+    <div class="fixed-bottom-btns">
+        <button onclick="goBackToMenu()" class="btn-secondary">Torna al Menu Principale</button>
     </div>
 </div>
 
