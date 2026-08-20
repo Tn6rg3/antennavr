@@ -142,6 +142,12 @@ window.goBackToMenu = function() {
         const groups = document.getElementById('groupTxContainer');
         const courseView = document.getElementById('courseTabActiveView');
 
+        // Ripristiniamo la visibilità del pannello configurazione interno
+        if (tx) {
+            const cfg = tx.querySelector('.box-panel');
+            if (cfg) cfg.style.display = "block";
+        }
+
         // Ordine di ripristino: prima i gruppi dentro la vista tx, poi la vista tx dentro il corso
         if (groups && tx) tx.appendChild(groups);
         if (tx && courseView) courseView.appendChild(tx);
