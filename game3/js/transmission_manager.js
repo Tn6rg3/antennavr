@@ -306,27 +306,28 @@ window.initTransmissionManager = function() {
 
         // --- AGGIUNTA: SUPPORTO MOUSE PER TRASMISSIONE ---
         window.addEventListener('mousedown', (e) => {
-            // Evitiamo di triggerare se stiamo scrivendo in un input
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-            // Se la sessione è in corso, sequestriamo il clic per evitare navigazione accidentale
-            // a meno che non si stia cliccando sul pulsante STOP
             const isAnySessionRunning = window.transmissionState.sessionRunning || window.groupTxState.running;
-            if (isAnySessionRunning && !e.target.closest('#btnStopTxSession') && !e.target.closest('#btnStopGroupTx')) {
+
+            // 1. GESTIONE PULSANTI STOP (Sempre attivi e prioritari)
+            if (e.target.closest('#btnStopTxSession') || e.target.closest('#btnStopGroupTx')) {
+                return;
+            }
+
+            // 2. SE LA SESSIONE È IN CORSO: Blocchiamo ogni altro clic (inclusi input/tastiera)
+            if (isAnySessionRunning) {
                 e.preventDefault();
                 e.stopPropagation();
-            } else if (e.target.closest('button')) {
-                return; // Fuori sessione, i bottoni funzionano normalmente
+            } else {
+                // Fuori sessione, lasciamo che input e textarea funzionino normalmente
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                if (e.target.closest('button')) return;
             }
 
             if (!window.keyerState.enabled) return;
 
-            // --- GESTIONE BLOCCO MOUSE SOFTWARE (Compatibile con Telegram) ---
+            // --- GESTIONE BLOCCO MOUSE SOFTWARE ---
             if (isAnySessionRunning) {
-                // 1. Rendiamo il cursore invisibile
                 document.body.style.cursor = 'none';
-
-                // 2. Creiamo uno scudo invisibile per catturare i movimenti se non esiste
                 let shield = document.getElementById('txMouseShield');
                 if (!shield) {
                     shield = document.createElement('div');
@@ -334,12 +335,10 @@ window.initTransmissionManager = function() {
                     shield.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; z-index:10000; cursor:none; background:transparent;";
                     document.body.appendChild(shield);
                 }
-
-                // Portiamo i tasti STOP sopra lo scudo per renderli cliccabili
-                const btnStop1 = document.getElementById('btnStopTxSession');
-                const btnStop2 = document.getElementById('btnStopGroupTx');
-                if (btnStop1) btnStop1.style.setProperty('z-index', '10001', 'important');
-                if (btnStop2) btnStop2.style.setProperty('z-index', '10001', 'important');
+                // Assicuriamoci che i tasti STOP rimangano cliccabili sopra lo scudo
+                const s1 = document.getElementById('btnStopTxSession'), s2 = document.getElementById('btnStopGroupTx');
+                if (s1) s1.style.setProperty('z-index', '10001', 'important');
+                if (s2) s2.style.setProperty('z-index', '10001', 'important');
             }
 
             // Sblocco di emergenza con tasto centrale (rotellina)
