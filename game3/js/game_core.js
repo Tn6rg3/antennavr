@@ -702,6 +702,12 @@ window.startCountdownSequence = function() {
                         // Chiudiamo a tavolino solo se la partita era iniziata o se l'abbandono è esplicito
                         if (currentStatus === 'playing' || hasAbandoned) {
                             if (currentPCount === 1 && players[myId]) {
+                                // --- FIX CO-OP: Se siamo in collaborazione, la partita NON termina se resta solo 1 giocatore ---
+                                if (currentMode === 'conquest' || isCoopMode) {
+                                    showToast(currentLang === 'it' ? "Il tuo compagno ha abbandonato. Continua la missione da solo! ⚔️" : "Your teammate left. Continue the mission alone! ⚔️");
+                                    return;
+                                }
+
                                 gameRunning = false;
                                 const msg = currentLang === 'it' ? "L'avversario si è ritirato. Hai vinto a tavolino! 🏆" : "Opponent withdrew. You win by default! 🏆";
                                 if (window.tg && window.tg.showAlert) window.tg.showAlert(msg); else alert(msg);
