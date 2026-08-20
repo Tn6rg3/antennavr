@@ -964,8 +964,7 @@ window.playNextWord = function() {
         els.permanentGameInput.focus();
     }
 };
-};
-};
+
 
 window.finishGame = function() {
     // Se vinciamo a tavolino con 0 punti, diamo un punto simbolico per attivare il salvataggio
