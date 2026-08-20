@@ -310,10 +310,16 @@ window.initTransmissionManager = function() {
 
             // 1. GESTIONE PULSANTI STOP (Sempre attivi e prioritari)
             if (e.target.closest('#btnStopTxSession') || e.target.closest('#btnStopGroupTx')) {
+                // Se clicchiamo STOP, forziamo il rilascio di tutti i tasti Morse per sicurezza
+                window.keyerState.isDitDown = false;
+                window.keyerState.isDahDown = false;
+                window.keyerState.isVertDown = false;
+                window.transmissionState.isDown = false;
                 return;
             }
 
             // 2. SE LA SESSIONE È IN CORSO: Blocchiamo ogni altro clic (inclusi input/tastiera)
+            // Impedisce anche il tasto "Indietro" del mouse su Android (tasto destro)
             if (isAnySessionRunning) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -332,7 +338,8 @@ window.initTransmissionManager = function() {
                 if (!shield) {
                     shield = document.createElement('div');
                     shield.id = 'txMouseShield';
-                    shield.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; z-index:10000; cursor:none; background:transparent;";
+                    // User-select e touch-action impediscono drag-drop o zoom accidentali durante la trasmissione
+                    shield.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; z-index:10000; cursor:none; background:transparent; user-select:none; -webkit-user-select:none; touch-action:none;";
                     document.body.appendChild(shield);
                 }
                 // Assicuriamoci che i tasti STOP rimangano cliccabili sopra lo scudo
@@ -352,9 +359,8 @@ window.initTransmissionManager = function() {
             if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
 
             if (window.keyerState.mode === 'V') {
-                if (e.button === 0) { // Click sinistro per Verticale
-                    if (typeof window.handleStraightKeyDown === 'function') window.handleStraightKeyDown(e);
-                }
+                // In modalità Verticale, accetta qualsiasi tasto del mouse come manipolatore
+                if (typeof window.handleStraightKeyDown === 'function') window.handleStraightKeyDown(e);
             } else {
                 const isSwapped = window.keyerState.paddlesSwapped;
                 const btnDit = isSwapped ? 2 : 0;
@@ -366,7 +372,6 @@ window.initTransmissionManager = function() {
                         window.processKeyerInput();
                     }
                 } else if (e.button === btnDah) { // Linea
-                    e.preventDefault();
                     if (!window.keyerState.isDahDown) {
                         window.keyerState.isDahDown = true;
                         window.processKeyerInput();
@@ -378,9 +383,7 @@ window.initTransmissionManager = function() {
         window.addEventListener('mouseup', (e) => {
             if (!window.keyerState.enabled) return;
             if (window.keyerState.mode === 'V') {
-                if (e.button === 0) {
-                    if (typeof window.handleStraightKeyUp === 'function') window.handleStraightKeyUp(e);
-                }
+                if (typeof window.handleStraightKeyUp === 'function') window.handleStraightKeyUp(e);
             } else {
                 const isSwapped = window.keyerState.paddlesSwapped;
                 if (e.button === (isSwapped ? 2 : 0)) window.keyerState.isDitDown = false;
@@ -388,8 +391,15 @@ window.initTransmissionManager = function() {
             }
         });
 
-        // Impedisce il menu contestuale se il tasto destro è usato per Morse
+        // Impedisce RIGOROSAMENTE il menu contestuale durante la sessione
         window.addEventListener('contextmenu', (e) => {
+            const isAnySessionRunning = window.transmissionState.sessionRunning || window.groupTxState.running;
+            if (isAnySessionRunning) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            // Fuori sessione, blocca solo se non siamo su input/bottoni
             if (window.keyerState.enabled && window.keyerState.mode !== 'V') {
                 if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.closest('button')) {
                     e.preventDefault();
