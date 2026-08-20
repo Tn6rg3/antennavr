@@ -886,7 +886,6 @@ window.resumeGameSequence = function() {
 };
 
 window.playNextWord = function() {
-    window.playNextWord = function() {
     if (!gameRunning || currentMode === 'pingpong') return;
     if (isCourseMode) return window.playNextCourseGroup?.();
 
