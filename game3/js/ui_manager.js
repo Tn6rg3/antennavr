@@ -56,16 +56,6 @@ window.populateGameModesUI = function() {
         select.value = 'standard';
     }
 };
-        select.value = 'standard';
-    }
-};
-        // Se avevamo Ping Pong e passiamo a Solo, resettiamo a standard
-        if (isSingle && currentVal === 'pingpong') select.value = 'standard';
-        else select.value = currentVal;
-    } else {
-        select.value = 'standard';
-    }
-};
 
 window.checkGameTypeUI = function() {
     console.log("UI: Checking Game Type UI...");

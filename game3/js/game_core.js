@@ -156,17 +156,6 @@ window.goBackToMenu = function() {
     if (document.exitPointerLock) document.exitPointerLock();
 
     window.showScreen('setupScreen');
-};;
-    if (st && st.innerHTML !== "") {
-        if (typeof window.stopTxSession === 'function') window.stopTxSession();
-        if (typeof window.stopGroupTx === 'function') window.stopGroupTx();
-        st.innerHTML = "";
-    }
-
-    // Rilascia il puntatore del mouse se bloccato
-    if (document.exitPointerLock) document.exitPointerLock();
-
-    window.showScreen('setupScreen');
 };
 
 window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit = false) {
