@@ -22,7 +22,6 @@ if (!window.keyerState) {
         keyDah: ',',
         keyVert: '', // Tasto verticale
         paddlesSwapped: false, // Flag per inversione mouse/tasti
-        lockMouse: false, // Blocca il cursore durante la sessione
         isDitDown: false,
         isDahDown: false,
         isVertDown: false,
@@ -193,14 +192,6 @@ window.initTransmissionManager = function() {
             window.saveKeyerSettings();
         };
     }
-    const kLockM = document.getElementById('keyerLockMouseToggle');
-    if (kLockM) {
-        kLockM.checked = window.keyerState.lockMouse || false;
-        kLockM.onchange = (e) => {
-            window.keyerState.lockMouse = e.target.checked;
-            window.saveKeyerSettings();
-        };
-    }
     if (kWpmIn) {
         kWpmIn.value = window.keyerState.wpm;
         kWpmIn.onchange = (e) => {
@@ -329,11 +320,12 @@ window.initTransmissionManager = function() {
 
             if (!window.keyerState.enabled) return;
 
-            // Logica Blocca Mouse (Pointer Lock)
-            if (window.keyerState.lockMouse && window.transmissionState.sessionRunning) {
-                if (document.pointerLockElement !== document.body) {
+            // BLOCCO MOUSE AUTONOMO
+            // Se la sessione è partita e clicchiamo, proviamo a bloccare il cursore.
+            if (window.transmissionState.sessionRunning && document.pointerLockElement !== document.body) {
+                try {
                     document.body.requestPointerLock?.();
-                }
+                } catch(e) {}
             }
 
             // Resume audio
@@ -414,11 +406,24 @@ window.startTxSession = function() {
     window.pickNextTxTarget();
 };
 
+// --- AUTO-SBLOCCO MOUSE AL CAMBIO SCHERMATA ---
+// Monitoriamo ogni 1s se la vista trasmissione è stata chiusa da altri script
+setInterval(() => {
+    if (document.pointerLockElement === document.body) {
+        const txView = document.getElementById('courseTransmissionView');
+        // Se la vista è nascosta o non siamo più nella sessione, liberiamo il mouse
+        if (!txView || txView.style.display === 'none' || !window.transmissionState.sessionRunning) {
+            if (document.exitPointerLock) document.exitPointerLock();
+        }
+    }
+}, 1000);
+
 window.stopTxSession = function() {
     window.logDebug("TX: Executing stopTxSession");
     window.transmissionState.sessionRunning = false;
     window.transmissionState.active = false;
 
+    // Sblocca il mouse immediatamente alla pressione di STOP
     if (document.exitPointerLock) document.exitPointerLock();
 
     if (window.transmissionState.timeoutHandle) clearTimeout(window.transmissionState.timeoutHandle);
@@ -655,8 +660,7 @@ window.saveKeyerSettings = function() {
         keyDit: window.keyerState.keyDit,
         keyDah: window.keyerState.keyDah,
         keyVert: window.keyerState.keyVert,
-        paddlesSwapped: window.keyerState.paddlesSwapped,
-        lockMouse: window.keyerState.lockMouse
+        paddlesSwapped: window.keyerState.paddlesSwapped
     };
     localStorage.setItem('cw_keyer_settings', JSON.stringify(settings));
     console.log("KEYER: Settings saved to local storage.");
@@ -675,7 +679,6 @@ window.loadKeyerSettings = function() {
             window.keyerState.keyDah = s.keyDah || ',';
             window.keyerState.keyVert = s.keyVert || '';
             window.keyerState.paddlesSwapped = s.paddlesSwapped || false;
-            window.keyerState.lockMouse = s.lockMouse || false;
             console.log("KEYER: Settings loaded from local storage.");
         } catch (e) {
             console.error("KEYER: Error parsing saved settings.");
