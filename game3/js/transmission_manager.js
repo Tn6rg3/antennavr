@@ -311,7 +311,8 @@ window.initTransmissionManager = function() {
 
             // Se la sessione è in corso, sequestriamo il clic per evitare navigazione accidentale
             // a meno che non si stia cliccando sul pulsante STOP
-            if (window.transmissionState.sessionRunning && !e.target.closest('#btnStopTxSession')) {
+            const isAnySessionRunning = window.transmissionState.sessionRunning || window.groupTxState.running;
+            if (isAnySessionRunning && !e.target.closest('#btnStopTxSession') && !e.target.closest('#btnStopGroupTx')) {
                 e.preventDefault();
                 e.stopPropagation();
             } else if (e.target.closest('button')) {
@@ -321,7 +322,7 @@ window.initTransmissionManager = function() {
             if (!window.keyerState.enabled) return;
 
             // --- GESTIONE BLOCCO MOUSE SOFTWARE (Compatibile con Telegram) ---
-            if (window.transmissionState.sessionRunning) {
+            if (isAnySessionRunning) {
                 // 1. Rendiamo il cursore invisibile
                 document.body.style.cursor = 'none';
 
@@ -430,9 +431,10 @@ window.startTxSession = function() {
 setInterval(() => {
     const txView = document.getElementById('courseTransmissionView');
     const isVisible = txView && txView.style.display !== 'none';
+    const isAnySessionRunning = window.transmissionState.sessionRunning || window.groupTxState.running;
 
     // Se siamo usciti dalla scheda o la sessione è ferma, puliamo tutto
-    if (!isVisible || !window.transmissionState.sessionRunning) {
+    if (!isVisible || !isAnySessionRunning) {
         if (document.body.style.cursor === 'none') {
             document.body.style.cursor = 'default';
             if (document.exitPointerLock) try { document.exitPointerLock(); } catch(e) {}
@@ -909,6 +911,12 @@ window.stopGroupTx = function() {
 
     window.groupTxState.running = false;
     if (window.groupTxState.timeout) clearTimeout(window.groupTxState.timeout);
+
+    // Ripristino cursori e rimozione scudo
+    document.body.style.cursor = 'default';
+    if (document.exitPointerLock) try { document.exitPointerLock(); } catch(e) {}
+    const shield = document.getElementById('txMouseShield');
+    if (shield) shield.remove();
 
     // Stop immediato di ogni suono residuo
     if (typeof window.stopTone === 'function') window.stopTone();
