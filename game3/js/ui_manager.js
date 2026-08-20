@@ -8,25 +8,29 @@ window.populateGameModesUI = function() {
 
     const isSingle = typeInput.value === 'single';
     const isMulti = typeInput.value === 'multi';
+    const isCoop = typeInput.value === 'coop';
+    const lang = (typeof currentLang !== 'undefined') ? currentLang : 'it';
     const currentVal = select.value || 'standard';
 
     select.innerHTML = '';
 
     Object.values(window.GAME_MODES || {}).forEach(mode => {
-        // FILTRO 1: In Solo non mostriamo Ping Pong
-        if (isSingle && mode.id === 'pingpong') return;
-
-        // FILTRO 2: Conquest e Perfection sono solo per specifici tipi
-        if (mode.id === 'conquest') return;
-        if (mode.id === 'perfection' && !isSingle) return; // Solo in Single Player
-
-        // FILTRO 3: Arcade è solo per tipo ARCADE
-        if (mode.id === 'arcade') return;
+        // --- LOGICA FILTRI ---
+        if (isSingle) {
+            if (mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade') return;
+        } else if (isMulti) {
+            if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade') return;
+        } else if (isCoop) {
+            if (mode.id !== 'conquest') return;
+        } else {
+            if (typeInput.value === 'arcade' && mode.id !== 'arcade') return;
+            if (typeInput.value === 'tournament') return; // Gestito da optgroup
+        }
 
         const opt = document.createElement('option');
         opt.value = mode.id;
         opt.id = 'txt_opt_' + mode.id;
-        opt.textContent = currentLang === 'it' ? mode.titleIt : mode.titleEn;
+        opt.textContent = lang === 'it' ? mode.titleIt : mode.titleEn;
         select.appendChild(opt);
     });
 
