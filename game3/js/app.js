@@ -1329,6 +1329,11 @@ if (els.createRoomBtn) {
         window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         window.currentTone = parseInt(els.toneInput?.value) || 600;
 
+        if (gType === 'transmission') {
+            window.startTransmissionFree(gMode);
+            return;
+        }
+
         // --- LETTURA OPZIONI AVANZATE ---
         const isFixed = window.isSinglePlayer && els.fixedSpeedCheckbox?.checked;
         const isEasy = window.isSinglePlayer && els.easyModeCheckbox?.checked;

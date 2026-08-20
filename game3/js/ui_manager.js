@@ -9,6 +9,7 @@ window.populateGameModesUI = function() {
     const isSingle = typeInput.value === 'single';
     const isMulti = typeInput.value === 'multi';
     const isCoop = typeInput.value === 'coop';
+    const isTx = typeInput.value === 'transmission';
     const lang = (typeof currentLang !== 'undefined') ? currentLang : 'it';
     const currentVal = select.value || 'standard';
 
@@ -22,6 +23,9 @@ window.populateGameModesUI = function() {
             if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade') return;
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
+        } else if (isTx) {
+            // Mostriamo solo Standard e Gruppi (re-interpretati come Singolo e Gruppi Tx)
+            if (mode.id !== 'standard' && mode.id !== 'groups_tx') return;
         } else {
             if (typeInput.value === 'arcade' && mode.id !== 'arcade') return;
             if (typeInput.value === 'tournament') return; // Gestito da optgroup
@@ -30,7 +34,15 @@ window.populateGameModesUI = function() {
         const opt = document.createElement('option');
         opt.value = mode.id;
         opt.id = 'txt_opt_' + mode.id;
-        opt.textContent = lang === 'it' ? mode.titleIt : mode.titleEn;
+
+        // Rinominazione etichette per modalità Trasmissione
+        if (isTx) {
+            if (mode.id === 'standard') opt.textContent = lang === 'it' ? "Esercizio Singolo (Koch)" : "Single Exercise (Koch)";
+            else opt.textContent = lang === 'it' ? "Trasmissione Gruppi" : "Groups Transmission";
+        } else {
+            opt.textContent = lang === 'it' ? mode.titleIt : mode.titleEn;
+        }
+
         select.appendChild(opt);
     });
 
@@ -81,6 +93,8 @@ window.checkGameTypeUI = function() {
     const modeCfg = window.GAME_MODES ? window.GAME_MODES[selectedMode] : null;
 
     // --- LOGICA VISIBILITÀ OPZIONI ---
+    const isTx = typeInput.value === 'transmission';
+
     const containers = {
         timeout: document.getElementById('timeoutDiv'),
         fixed: document.getElementById('fixedSpeedContainer'),
@@ -91,10 +105,30 @@ window.checkGameTypeUI = function() {
         arcadeBtn: document.getElementById('startArcadeBtn'),
         btn: document.getElementById('createRoomBtn'),
         startWpm: document.getElementById('startWpmInput'),
-        wordCount: document.getElementById('wordCountInput')
+        wordCount: document.getElementById('wordCountInput'),
+        koch: document.getElementById('setupKochLevelContainer'),
+        keyer: document.getElementById('mainMenuKeyerConfig')
     };
 
-    if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcadeType) ? 'none' : 'block';
+    if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcadeType || isTx) ? 'none' : 'block';
+
+    // --- LOGICA TRASMISSIONE ---
+    if (containers.koch) containers.koch.style.display = isTx ? 'block' : 'none';
+    if (containers.keyer) containers.keyer.style.display = isTx ? 'block' : 'none';
+
+    if (isTx && containers.koch) {
+        const kInput = document.getElementById('setupKochLevelInput');
+        if (kInput && kInput.options.length === 0) {
+            const koch = ["K","M","R","S","U","A","P","T","L","O","W","I",".","N","J","E","F","0","Y",",","V","G","5","/","Q","9","2","H","3","8","B","?","4","7","C","1","D","6","X","="];
+            koch.forEach((char, idx) => {
+                const opt = document.createElement('option');
+                opt.value = idx + 2;
+                opt.textContent = `Lezione ${idx + 2} (${char})`;
+                kInput.appendChild(opt);
+            });
+            if (window.courseData?.progress?.current_lesson) kInput.value = window.courseData.progress.current_lesson;
+        }
+    }
 
     if (isArcadeType) {
         if (containers.startWpm) {
@@ -146,6 +180,7 @@ window.checkGameTypeUI = function() {
             containers.btn.style.display = 'block';
             if (isCoop) containers.btn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
             else if (isTrn) containers.btn.textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
+            else if (isTx) containers.btn.textContent = currentLang === 'it' ? "ENTRA IN STAZIONE 📻" : "ENTER STATION 📻";
             else containers.btn.textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
         }
     }

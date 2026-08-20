@@ -1844,6 +1844,62 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
+window.startTransmissionFree = function(mode) {
+    const screen = document.getElementById('transmissionScreen');
+    const container = document.getElementById('standaloneTxContainer');
+    if (!screen || !container) return;
+
+    // Reset UI
+    window.showScreen('transmissionScreen');
+    container.innerHTML = "";
+
+    // Recuperiamo i parametri impostati nel menu principale
+    const wpm = parseInt(document.getElementById('startWpmInput')?.value) || 20;
+    const tone = parseInt(document.getElementById('toneInput')?.value) || 600;
+    const lesson = parseInt(document.getElementById('setupKochLevelInput')?.value) || 2;
+
+    // Sincronizziamo il Keyer
+    if (window.keyerState) {
+        window.keyerState.wpm = wpm;
+        window.keyerState.tone = tone;
+        window.currentTone = tone;
+    }
+
+    if (mode === 'standard') {
+        // Esercizio Singolo: Cloniamo la vista dal corso
+        const source = document.getElementById('courseTransmissionView');
+        if (source) {
+            const clone = source.cloneNode(true);
+            clone.id = "standalone_tx_view";
+            clone.style.display = "flex";
+            // Nascondiamo il pannello configurazione duplicato se presente nel clone
+            const cfg = clone.querySelector('.box-panel');
+            if (cfg) cfg.style.display = "none";
+            container.appendChild(clone);
+
+            // Re-inizializziamo i listener sul nuovo DOM
+            setTimeout(() => {
+                if (typeof window.initTransmissionManager === 'function') window.initTransmissionManager();
+                if (typeof window.startTxSession === 'function') window.startTxSession();
+            }, 100);
+        }
+    } else {
+        // Esercizio Gruppi: Cloniamo il container dei gruppi
+        const source = document.getElementById('groupTxContainer');
+        if (source) {
+            const clone = source.cloneNode(true);
+            clone.id = "standalone_group_view";
+            clone.style.display = "block";
+            container.appendChild(clone);
+
+            setTimeout(() => {
+                if (typeof window.initTransmissionManager === 'function') window.initTransmissionManager();
+                if (typeof window.startGroupTx === 'function') window.startGroupTx();
+            }, 100);
+        }
+    }
+};
+
 function mulberry32(a) {
     return function() {
         var t = a += 0x6D2B79F5;

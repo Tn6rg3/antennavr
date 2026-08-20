@@ -208,6 +208,24 @@ window.initTransmissionManager = function() {
         };
     }
 
+    // BINDING KEYER MENU PRINCIPALE
+    const mKType = document.getElementById('mainKeyerTypeSelect');
+    if (mKType) {
+        mKType.onchange = (e) => {
+            window.keyerState.mode = e.target.value;
+            window.updateKeyerUI();
+            window.saveKeyerSettings();
+        };
+    }
+    const btnMSwap = document.getElementById('btnMainSwapPaddles');
+    if (btnMSwap) {
+        btnMSwap.onclick = () => {
+            window.keyerState.paddlesSwapped = !window.keyerState.paddlesSwapped;
+            window.saveKeyerSettings();
+            showToast(window.keyerState.paddlesSwapped ? "Comandi Invertiti!" : "Comandi Standard");
+        };
+    }
+
     setupButtonLocal('btnMapKeyDit', () => {
         window.keyerState.mappingTarget = 'dit';
         const b = document.getElementById('btnMapKeyDit');
