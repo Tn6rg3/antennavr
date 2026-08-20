@@ -21,6 +21,8 @@ if (!window.keyerState) {
         keyDit: '.',
         keyDah: ',',
         keyVert: '', // Tasto verticale
+        paddlesSwapped: false, // Flag per inversione mouse/tasti
+        lockMouse: false, // Blocca il cursore durante la sessione
         isDitDown: false,
         isDahDown: false,
         isVertDown: false,
@@ -191,6 +193,14 @@ window.initTransmissionManager = function() {
             window.saveKeyerSettings();
         };
     }
+    const kLockM = document.getElementById('keyerLockMouseToggle');
+    if (kLockM) {
+        kLockM.checked = window.keyerState.lockMouse || false;
+        kLockM.onchange = (e) => {
+            window.keyerState.lockMouse = e.target.checked;
+            window.saveKeyerSettings();
+        };
+    }
     if (kWpmIn) {
         kWpmIn.value = window.keyerState.wpm;
         kWpmIn.onchange = (e) => {
@@ -226,9 +236,13 @@ window.initTransmissionManager = function() {
         const oldDit = window.keyerState.keyDit;
         window.keyerState.keyDit = window.keyerState.keyDah;
         window.keyerState.keyDah = oldDit;
+
+        // Inverte anche la logica del mouse
+        window.keyerState.paddlesSwapped = !window.keyerState.paddlesSwapped;
+
         window.updateKeyerUI();
         window.saveKeyerSettings();
-        showToast("Tasti invertiti!");
+        showToast(window.keyerState.paddlesSwapped ? "Comandi Invertiti!" : "Comandi Standard");
     });
 
     window.updateKeyerUI();
@@ -299,6 +313,78 @@ window.initTransmissionManager = function() {
             if (e.key === window.keyerState.keyDah) window.keyerState.isDahDown = false;
         });
 
+        // --- AGGIUNTA: SUPPORTO MOUSE PER TRASMISSIONE ---
+        window.addEventListener('mousedown', (e) => {
+            // Evitiamo di triggerare se stiamo scrivendo in un input
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // Se la sessione è in corso, sequestriamo il clic per evitare navigazione accidentale
+            // a meno che non si stia cliccando sul pulsante STOP
+            if (window.transmissionState.sessionRunning && !e.target.closest('#btnStopTxSession')) {
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (e.target.closest('button')) {
+                return; // Fuori sessione, i bottoni funzionano normalmente
+            }
+
+            if (!window.keyerState.enabled) return;
+
+            // Logica Blocca Mouse (Pointer Lock)
+            if (window.keyerState.lockMouse && window.transmissionState.sessionRunning) {
+                if (document.pointerLockElement !== document.body) {
+                    document.body.requestPointerLock?.();
+                }
+            }
+
+            // Resume audio
+            if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
+
+            if (window.keyerState.mode === 'V') {
+                if (e.button === 0) { // Click sinistro per Verticale
+                    if (typeof window.handleStraightKeyDown === 'function') window.handleStraightKeyDown(e);
+                }
+            } else {
+                const isSwapped = window.keyerState.paddlesSwapped;
+                const btnDit = isSwapped ? 2 : 0;
+                const btnDah = isSwapped ? 0 : 2;
+
+                if (e.button === btnDit) { // Punto
+                    if (!window.keyerState.isDitDown) {
+                        window.keyerState.isDitDown = true;
+                        window.processKeyerInput();
+                    }
+                } else if (e.button === btnDah) { // Linea
+                    e.preventDefault();
+                    if (!window.keyerState.isDahDown) {
+                        window.keyerState.isDahDown = true;
+                        window.processKeyerInput();
+                    }
+                }
+            }
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (!window.keyerState.enabled) return;
+            if (window.keyerState.mode === 'V') {
+                if (e.button === 0) {
+                    if (typeof window.handleStraightKeyUp === 'function') window.handleStraightKeyUp(e);
+                }
+            } else {
+                const isSwapped = window.keyerState.paddlesSwapped;
+                if (e.button === (isSwapped ? 2 : 0)) window.keyerState.isDitDown = false;
+                else if (e.button === (isSwapped ? 0 : 2)) window.keyerState.isDahDown = false;
+            }
+        });
+
+        // Impedisce il menu contestuale se il tasto destro è usato per Morse
+        window.addEventListener('contextmenu', (e) => {
+            if (window.keyerState.enabled && window.keyerState.mode !== 'V') {
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.closest('button')) {
+                    e.preventDefault();
+                }
+            }
+        });
+
         window.transmissionGlobalListenersReadyV2 = true;
     }
 
@@ -332,6 +418,8 @@ window.stopTxSession = function() {
     window.logDebug("TX: Executing stopTxSession");
     window.transmissionState.sessionRunning = false;
     window.transmissionState.active = false;
+
+    if (document.exitPointerLock) document.exitPointerLock();
 
     if (window.transmissionState.timeoutHandle) clearTimeout(window.transmissionState.timeoutHandle);
 
@@ -566,7 +654,9 @@ window.saveKeyerSettings = function() {
         tone: window.keyerState.tone,
         keyDit: window.keyerState.keyDit,
         keyDah: window.keyerState.keyDah,
-        keyVert: window.keyerState.keyVert
+        keyVert: window.keyerState.keyVert,
+        paddlesSwapped: window.keyerState.paddlesSwapped,
+        lockMouse: window.keyerState.lockMouse
     };
     localStorage.setItem('cw_keyer_settings', JSON.stringify(settings));
     console.log("KEYER: Settings saved to local storage.");
@@ -584,6 +674,8 @@ window.loadKeyerSettings = function() {
             window.keyerState.keyDit = s.keyDit || '.';
             window.keyerState.keyDah = s.keyDah || ',';
             window.keyerState.keyVert = s.keyVert || '';
+            window.keyerState.paddlesSwapped = s.paddlesSwapped || false;
+            window.keyerState.lockMouse = s.lockMouse || false;
             console.log("KEYER: Settings loaded from local storage.");
         } catch (e) {
             console.error("KEYER: Error parsing saved settings.");
