@@ -965,7 +965,6 @@ window.playNextWord = function() {
     }
 };
 
-
 window.finishGame = function() {
     // Se vinciamo a tavolino con 0 punti, diamo un punto simbolico per attivare il salvataggio
     if (totalScore === 0 && !isSinglePlayer && !isCourseMode) {
@@ -1428,43 +1427,28 @@ if (els.permanentGameInput) {
 window.handleWordSubmission = function(userWord) {
     if (!userWord) return;
 
-    // NASCONDI SUGGERIMENTO MODALITÀ SEMPLICE ALLA SOTTOMISSIONE
     const easyHint = document.getElementById('easyModeHint');
     if (easyHint) easyHint.style.display = 'none';
 
     userWord = userWord.substring(0, 50).trim().toUpperCase();
 
+    // 1. MODALITÀ CORSO
     if (isCourseMode) {
         inputActive = false;
         const currentWord = gameWords[wordIndex] || "";
         const isCorrect = (userWord === currentWord);
-
-        // Puliamo l'input immediatamente dopo l'invio nel corso per evitare residui
         if (els.permanentGameInput) els.permanentGameInput.value = "";
 
         if (window.courseData) {
             if (!window.courseData.progress.char_stats) window.courseData.progress.char_stats = {};
-            if (!window.courseData.progress.char_stats_by_type) window.courseData.progress.char_stats_by_type = { Z2: {}, WORK: {}, LONG: {} };
-
             const sessionType = window.courseData.current_day_session?.type || 'LONG';
-
             for (let i=0; i<currentWord.length; i++) {
                 let c = currentWord[i];
-                if (!c || ['__proto__','constructor','prototype'].includes(c)) continue;
-
-                // Sanitizzazione chiave per Firebase
+                if (!c) continue;
                 let dbChar = (typeof firebaseEscape === 'function') ? firebaseEscape(c) : c.replace(/\./g, '_dot_');
-
-                // 1. Statistiche Globali
                 if (!window.courseData.progress.char_stats[dbChar]) window.courseData.progress.char_stats[dbChar] = { attempts: 0, errors: 0 };
                 window.courseData.progress.char_stats[dbChar].attempts++;
                 if (userWord[i] !== currentWord[i]) window.courseData.progress.char_stats[dbChar].errors++;
-
-                // 2. Statistiche per TIPO di sessione
-                if (!window.courseData.progress.char_stats_by_type[sessionType]) window.courseData.progress.char_stats_by_type[sessionType] = {};
-                if (!window.courseData.progress.char_stats_by_type[sessionType][dbChar]) window.courseData.progress.char_stats_by_type[sessionType][dbChar] = { attempts: 0, errors: 0 };
-                window.courseData.progress.char_stats_by_type[sessionType][dbChar].attempts++;
-                if (userWord[i] !== currentWord[i]) window.courseData.progress.char_stats_by_type[sessionType][dbChar].errors++;
             }
             window.saveCourseState();
         }
@@ -1472,34 +1456,18 @@ window.handleWordSubmission = function(userWord) {
         const tr = document.createElement('tr');
         const tdTyped = document.createElement('td'); tdTyped.textContent = userWord;
         const tdReal = document.createElement('td');
-        for (let i=0; i<currentWord.length; i++) {
-            const span = document.createElement('span');
-            span.textContent = currentWord[i];
-            if (userWord[i] !== currentWord[i]) {
-                span.style.color = "#d32f2f";
-                span.style.fontWeight = "bold";
-            }
-            tdReal.appendChild(span);
-        }
-
+        window.renderDiffSecure(tdReal, currentWord, userWord);
         const tdPoints = document.createElement('td');
         tdPoints.style.textAlign = 'center';
         tdPoints.textContent = isCorrect ? "OK" : "ERR";
         tdPoints.style.color = isCorrect ? "#4caf50" : "#d32f2f";
         tdPoints.style.fontWeight = "bold";
 
-        // --- SINCRONIZZAZIONE PER TUTOR (SPETTATORI) ---
         matchDetailsArray.push({ real: currentWord, typed: userWord, points: isCorrect ? 1 : 0, wpm: currentWpm });
-        if (roomCode) {
-            db.ref(`rooms/${roomCode}/players/${myId}`).update({
-                wordIndex: wordIndex + 1,
-                matchDetails: matchDetailsArray
-            });
-        }
+        if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ wordIndex: wordIndex + 1, matchDetails: matchDetailsArray });
 
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
         if (els.tableBody) {
-            els.bodyTable = els.tableBody; // Backup per domCache
             els.tableBody.appendChild(tr);
             els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
         }
@@ -1519,63 +1487,45 @@ window.handleWordSubmission = function(userWord) {
         return;
     }
 
+    // 2. MODALITÀ CONQUISTA (CO-OP)
     if (currentMode === 'conquest') {
-        if (coopActiveFreqIndex === 0) {
-            return showToast("⚠️ Seleziona prima una Frequenza!");
-        }
-
+        if (coopActiveFreqIndex === 0) return showToast("⚠️ Seleziona prima una Frequenza!");
         const currentWord = gameWords[0];
         const isCorrect = userWord === currentWord;
         const gain = coopActiveFreqIndex === 1 ? 4 : (coopActiveFreqIndex === 2 ? 7 : 12);
         const penalty = coopActiveFreqIndex === 1 ? 2 : (coopActiveFreqIndex === 2 ? 3 : 5);
 
         inputActive = false;
-
         if (isCorrect) {
             currentWpm += 2;
-            if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
-            showToast(`✅ CORRETTO! +${gain}% (Velocità -> ${currentWpm} WPM)`);
+            showToast(`✅ CORRETTO! +${gain}%`);
             if (typeof playBeep === 'function') playBeep(880, 0.1);
-
             db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
                 if (!state || state.status !== 'playing') return state;
                 state.progress = Math.min(100, (state.progress || 0) + gain);
-
-                if (!Array.isArray(state.activeWords) || state.activeWords.length !== 3) {
-                    if (typeof window.generateCoopTripleWords === 'function') state.activeWords = window.generateCoopTripleWords();
-                    return state;
-                }
-
                 const idx = coopActiveFreqIndex - 1;
-                if (idx >= 0 && idx < 3) {
-                    if (typeof window.generateCoopTripleWords === 'function') {
-                        const nextWords = window.generateCoopTripleWords();
-                        state.activeWords[idx] = nextWords[idx];
-                    }
+                if (typeof window.generateCoopTripleWords === 'function') {
+                    const nextWords = window.generateCoopTripleWords();
+                    state.activeWords[idx] = nextWords[idx];
                 }
                 return state;
             });
         } else {
             currentWpm = Math.max(10, currentWpm - 2);
-            if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
-            showToast(`❌ ERRORE! -${penalty}% (Velocità -> ${currentWpm} WPM)`);
+            showToast(`❌ ERRORE! -${penalty}%`);
             if (typeof playBeep === 'function') playBeep(300, 0.25);
-
             db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
                 if (!state || state.status !== 'playing') return state;
                 state.progress = Math.max(0, (state.progress || 0) - penalty);
                 return state;
             });
         }
+        if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
 
         setTimeout(() => {
             if (!gameRunning) return;
-            if (els.permanentGameInput) {
-                els.permanentGameInput.value = "";
-                els.permanentGameInput.focus();
-            }
+            if (els.permanentGameInput) els.permanentGameInput.value = "";
             inputActive = true;
-
             if (!isCorrect && gameWords[0]) {
                 if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
                 if (typeof playMorseAudio === 'function') playMorseAudio(gameWords[0], currentWpm);
@@ -1584,9 +1534,8 @@ window.handleWordSubmission = function(userWord) {
         return;
     }
 
-        inputActive = false;
-
-    // Determiniamo la parola target e la velocità attiva
+    // 3. ALTRE MODALITÀ (Standard, Perfection, Chars, Callsign, PingPong)
+    inputActive = false;
     let currentWord;
     let activeWpmForThisWord = currentWpm;
 
@@ -1594,56 +1543,26 @@ window.handleWordSubmission = function(userWord) {
         currentWord = window.currentPerfectionWord.toUpperCase();
         activeWpmForThisWord = window.currentPerfectionWpm;
     } else {
-        currentWord = gameWords[wordIndex].toUpperCase();
+        currentWord = gameWords[wordIndex] ? gameWords[wordIndex].toUpperCase() : "";
     }
+    if (!currentWord) return;
 
     let points = 0, scoreColor = "";
     const reactionMs = Date.now() - lastWordStartTime;
     const levDist = window.getLevenshteinDistance(currentWord, userWord);
 
+    // Calcolo Punti
     if (typeof window.calculateGamePoints === 'function') {
         const res = window.calculateGamePoints(currentMode, currentWord, userWord, activeWpmForThisWord, reactionMs, levDist, usedReplay);
-        points = res.points;
-        scoreColor = res.scoreColor;
-    } else {
-        if (currentMode === 'chars') {
-            if (userWord === currentWord) {
-                points = Math.max(100, Math.floor(1000 - (reactionMs / 2)));
-                scoreColor = "#4caf50";
-            } else {
-                points = 0;
-                scoreColor = "#d32f2f";
-            }
-        } else {
-            const basePoints = (Math.pow(activeWpmForThisWord, 2) * currentWord.length) / (10 * Math.pow(levDist + 1, 2));
-            const estimatedAudioMs = (currentWord.length * 60 / activeWpmForThisWord) * 1000;
-            let timeMultiplier = 1.0;
-            if (reactionMs > (estimatedAudioMs + 2000)) timeMultiplier = Math.max(0.5, 1.0 - ((reactionMs - (estimatedAudioMs + 2000)) / 20000));
-            else if (reactionMs < estimatedAudioMs && levDist === 0) timeMultiplier = 1.1;
-            points = Math.round(basePoints * timeMultiplier);
-            if (levDist === 0) scoreColor = usedReplay ? "#999999" : "#4caf50";
-            else if (levDist === 1) scoreColor = "#ff9800";
-            else scoreColor = "#d32f2f";
-            if (usedReplay) points = 0;
-        }
+        points = res.points; scoreColor = res.scoreColor;
     }
 
     // Gestione Errori e Coda Perfezione
     if (levDist > 0 || usedReplay) {
-        if (currentMode === 'perfection') {
-            // Aggiungiamo alla coda se non è già un recupero (o se è un recupero fallito di nuovo)
-            window.perfectionQueue.push({ word: currentWord, wpm: activeWpmForThisWord });
-            console.log("Perfection: Parola aggiunta alla coda di recupero:", currentWord);
-        }
-
-        // --- TRACCIAMENTO ERRORI AVANZATO ---
-        if (typeof window.trackAdvancedErrors === 'function') {
-            window.trackAdvancedErrors(currentWord, userWord, activeWpmForThisWord);
-        }
-
+        if (currentMode === 'perfection') window.perfectionQueue.push({ word: currentWord, wpm: activeWpmForThisWord });
         let wrongChars = [];
         for (let i = 0; i < Math.max(currentWord.length, userWord.length); i++) {
-            if (userWord[i] !== currentWord[i] && currentWord[i] && !['__proto__','constructor','prototype'].includes(currentWord[i])) {
+            if (userWord[i] !== currentWord[i] && currentWord[i]) {
                 if (!wrongChars.includes(currentWord[i])) wrongChars.push(currentWord[i]);
             }
         }
@@ -1654,94 +1573,67 @@ window.handleWordSubmission = function(userWord) {
         });
     }
 
-    // Avanzamento WPM (Solo per parole nuove, i recuperi non aumentano la velocità globale)
+    // Avanzamento WPM
     if (!isFixedSpeed && currentMode !== 'chars') {
         if (levDist === 0 && !usedReplay) {
-            // Se era un recupero, non aumentiamo i WPM globali, ma diamo comunque feedback
             if (!window.isPerfectionRetry) {
                 currentWpm += 2;
                 if (currentWpm > peakWpm) peakWpm = currentWpm;
             }
-            window.addXP?.(10, "Correct Word");
-            window.updateMissionProgress?.('count', 1);
-            window.updateMissionProgress?.('wpm_min', currentWpm);
-            currentStreak++;
-            window.updateMissionProgress?.('streak', currentStreak);
+        } else if (usedReplay || levDist > 1) {
+            currentWpm = Math.max(10, currentWpm - 2);
+        } else if (levDist === 1) {
+            currentWpm = Math.max(10, currentWpm - 1);
         }
-        else if (usedReplay) {
-            currentWpm -= 2;
-            currentStreak = 0;
-        }
-        else if (levDist === 1) {
-            currentWpm -= 1;
-            currentStreak = 0;
-        }
-        else if (levDist > 1) {
-            currentWpm -= 2;
-            currentStreak = 0;
-        }
-        currentWpm = Math.max(10, currentWpm);
         if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
     }
+
     totalScore += points;
     matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: activeWpmForThisWord, ms: reactionMs, isRetry: window.isPerfectionRetry });
 
+    // UI Tabella
     if (currentMode !== 'pingpong') {
         const tr = document.createElement('tr');
         if (window.isPerfectionRetry) tr.style.background = "rgba(76, 175, 80, 0.05)";
-
         const tdTyped = document.createElement('td'); tdTyped.textContent = userWord || "-";
-
         const tdReal = document.createElement('td');
         window.renderDiffSecure(tdReal, currentWord, userWord);
-
         const tdPoints = document.createElement('td');
         tdPoints.style.textAlign = 'center';
         tdPoints.style.color = scoreColor;
         tdPoints.style.fontWeight = 'bold';
         tdPoints.innerHTML = (currentMode === 'chars' ? points : (usedReplay ? '0' : (points > 0 ? "+"+points : points))) + (window.isPerfectionRetry ? " 🔄" : "");
-
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
-        if (els.tableBody) {
-            els.tableBody.appendChild(tr);
-            els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
-        }
+        if (els.tableBody) { els.tableBody.appendChild(tr); els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight; }
     }
 
-    if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
     if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
 
-    // Avanzamento indice parole (Solo se non era un recupero)
-    if (!window.isPerfectionRetry) {
-        wordIndex++;
-        window.perfectionWordsDone++;
-    }
-
-    if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm, wordIndex: wordIndex, matchDetails: matchDetailsArray });
-    usedReplay = false;
-
-    setTimeout(() => {
-        if (gameRunning) {
-            if (els.permanentGameInput) els.permanentGameInput.value = "";
-            window.playNextWord();
-        }
-    }, 1200);
-
+    // FINE PAROLA: Avanzamento e Sincronizzazione
     if (currentMode === 'pingpong') {
         wordIndex++;
         db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
             if (d) {
-                d.senderId = myId;
-                d.word = '';
-                d.wordsPlayed = (d.wordsPlayed || 0) + 1;
+                d.senderId = myId; d.word = ''; d.wordsPlayed = (d.wordsPlayed || 0) + 1;
                 d.lastGuess = { id: Date.now(), real: currentWord, typed: userWord, points: points };
             }
             return d;
         });
     } else {
-        wordIndex++;
+        if (!window.isPerfectionRetry) {
+            wordIndex++;
+            window.perfectionWordsDone++;
+        }
+        if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm, wordIndex: wordIndex, matchDetails: matchDetailsArray });
+
+        usedReplay = false;
         if (nextWordTimeout) clearTimeout(nextWordTimeout);
-        nextWordTimeout = setTimeout(window.playNextWord, 600);
+        nextWordTimeout = setTimeout(() => {
+            if (gameRunning) {
+                if (els.permanentGameInput) els.permanentGameInput.value = "";
+                window.playNextWord();
+            }
+        }, 1000);
     }
 };
 
