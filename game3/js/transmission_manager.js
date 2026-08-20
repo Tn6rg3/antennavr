@@ -320,12 +320,24 @@ window.initTransmissionManager = function() {
 
             if (!window.keyerState.enabled) return;
 
-            // BLOCCO MOUSE AUTONOMO
-            // Se la sessione è partita e clicchiamo, proviamo a bloccare il cursore.
-            if (window.transmissionState.sessionRunning && document.pointerLockElement !== document.body) {
-                try {
-                    document.body.requestPointerLock?.();
-                } catch(e) {}
+            // --- GESTIONE BLOCCO MOUSE SOFTWARE (Compatibile con Telegram) ---
+            if (window.transmissionState.sessionRunning) {
+                // 1. Rendiamo il cursore invisibile
+                document.body.style.cursor = 'none';
+
+                // 2. Creiamo uno scudo invisibile per catturare i movimenti se non esiste
+                let shield = document.getElementById('txMouseShield');
+                if (!shield) {
+                    shield = document.createElement('div');
+                    shield.id = 'txMouseShield';
+                    shield.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; cursor:none; background:transparent;";
+                    document.body.appendChild(shield);
+                }
+
+                // 3. Tentativo di blocco fisico (Pointer Lock) per chi lo supporta
+                if (document.pointerLockElement !== document.body) {
+                    try { document.body.requestPointerLock?.(); } catch(e) {}
+                }
             }
 
             // Resume audio
@@ -407,24 +419,31 @@ window.startTxSession = function() {
 };
 
 // --- AUTO-SBLOCCO MOUSE AL CAMBIO SCHERMATA ---
-// Monitoriamo ogni 1s se la vista trasmissione è stata chiusa da altri script
 setInterval(() => {
-    if (document.pointerLockElement === document.body) {
-        const txView = document.getElementById('courseTransmissionView');
-        // Se la vista è nascosta o non siamo più nella sessione, liberiamo il mouse
-        if (!txView || txView.style.display === 'none' || !window.transmissionState.sessionRunning) {
-            if (document.exitPointerLock) document.exitPointerLock();
+    const txView = document.getElementById('courseTransmissionView');
+    const isVisible = txView && txView.style.display !== 'none';
+
+    // Se siamo usciti dalla scheda o la sessione è ferma, puliamo tutto
+    if (!isVisible || !window.transmissionState.sessionRunning) {
+        if (document.body.style.cursor === 'none') {
+            document.body.style.cursor = 'default';
+            if (document.exitPointerLock) try { document.exitPointerLock(); } catch(e) {}
+            const shield = document.getElementById('txMouseShield');
+            if (shield) shield.remove();
         }
     }
-}, 1000);
+}, 500);
 
 window.stopTxSession = function() {
     window.logDebug("TX: Executing stopTxSession");
     window.transmissionState.sessionRunning = false;
     window.transmissionState.active = false;
 
-    // Sblocca il mouse immediatamente alla pressione di STOP
-    if (document.exitPointerLock) document.exitPointerLock();
+    // Sblocco immediato e rimozione scudo
+    document.body.style.cursor = 'default';
+    if (document.exitPointerLock) try { document.exitPointerLock(); } catch(e) {}
+    const shield = document.getElementById('txMouseShield');
+    if (shield) shield.remove();
 
     if (window.transmissionState.timeoutHandle) clearTimeout(window.transmissionState.timeoutHandle);
 
