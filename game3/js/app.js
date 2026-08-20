@@ -184,6 +184,11 @@ window.courseData = null;
 // STATO CO-OP
 let isCoopMode = false, coopActiveFreqIndex = 0;
 let coopTimerInterval = null, coopDecayInterval = null;
+window.perfectionQueue = []; // Coda per la modalità Perfezione
+window.isPerfectionRetry = false; // Flag per sapere se la parola attuale è un recupero
+window.perfectionWordsDone = 0; // Contatore parole nuove completate (corrette o sbagliate)
+window.currentPerfectionWord = null;
+window.currentPerfectionWpm = null;
 
 // STATO ARCADE
 let isArcadeMode = false, arcadeLives = 3, arcadeScore = 0, arcadeLevel = 1;
@@ -275,6 +280,13 @@ window.resetGameState = function() {
     window.isSinglePlayer = false;
     currentMode = 'standard';
     coopActiveFreqIndex = 0; // RESET INDICE FREQUENZA CO-OP
+
+    // 2b. Reset specifico Perfezione
+    window.perfectionQueue = [];
+    window.isPerfectionRetry = false;
+    window.perfectionWordsDone = 0;
+    window.currentPerfectionWord = null;
+    window.currentPerfectionWpm = null;
 
     // 3. Ripristina UI Input (Fix Spectator/Course residuals)
     if (els.permanentGameInput) {

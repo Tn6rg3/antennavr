@@ -10,6 +10,7 @@ const OPERATOR_TITLES = [
     { level: 5, it: "Apprendista Segnalatore", en: "Signal Apprentice" },
     { level: 10, it: "Operatore Radio Junior", en: "Junior Radio Operator" },
     { level: 20, it: "Telegrafista Navale", en: "Naval Telegraphist" },
+    { level: 30, it: "Telegrafista Militare", en: "military telegrapher" },
     { level: 35, it: "Esperto d'Intercettazione", en: "Interception Expert" },
     { level: 50, it: "Maestro del Tasto", en: "Key Master" },
     { level: 75, it: "Leggenda dell'Etere", en: "Legend of the Ether" },

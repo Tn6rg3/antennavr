@@ -886,33 +886,65 @@ window.resumeGameSequence = function() {
 };
 
 window.playNextWord = function() {
+    window.playNextWord = function() {
     if (!gameRunning || currentMode === 'pingpong') return;
     if (isCourseMode) return window.playNextCourseGroup?.();
-    if (wordIndex >= requestedWordCount) return window.finishGame();
+
+    // LOGICA PERFEZIONE: Gestione fine partita o switch recupero
+    if (currentMode === 'perfection') {
+        // Se abbiamo finito le parole nuove E la coda è vuota, terminiamo
+        if (wordIndex >= requestedWordCount && window.perfectionQueue.length === 0) {
+            return window.finishGame();
+        }
+
+        // Decidiamo se pescare dalla coda dei recuperi
+        const canRetry = window.perfectionQueue.length > 0;
+        const mustRetry = wordIndex >= requestedWordCount;
+        const shouldRetry = canRetry && (window.perfectionWordsDone % 3 === 0 || mustRetry);
+
+        if (shouldRetry && !window.isPerfectionRetry) {
+            // Peschiamo una parola a caso dalla coda (come richiesto)
+            const rndIdx = Math.floor(Math.random() * window.perfectionQueue.length);
+            const retryObj = window.perfectionQueue.splice(rndIdx, 1)[0];
+            window.currentPerfectionWord = retryObj.word;
+            window.currentPerfectionWpm = retryObj.wpm;
+            window.isPerfectionRetry = true;
+            console.log("Perfection: Inserimento recupero ->", window.currentPerfectionWord, "@", window.currentPerfectionWpm, "WPM");
+        } else {
+            window.isPerfectionRetry = false;
+        }
+    } else {
+        if (wordIndex >= requestedWordCount) return window.finishGame();
+    }
+
     if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
     inputActive = true;
     usedReplay = false;
 
-    // VERIFICA DI SICUREZZA: gameWords deve essere popolata
-    if (!gameWords || !gameWords[wordIndex]) {
-        console.error("GameCore: Word at index " + wordIndex + " is undefined!", gameWords);
-        showToast(currentLang === 'it' ? "Errore caricamento parole. Riprovo..." : "Error loading words. Retrying...");
+    // Selezione della parola e velocità
+    let currentWord;
+    let activeWpm = currentWpm;
 
-        // Tentiamo di recuperarle da Firebase se mancano
-        if (roomCode) {
-            db.ref(`rooms/${roomCode}/game_words`).once('value', s => {
-                if (s.exists()) {
-                    gameWords = s.val();
-                    setTimeout(window.playNextWord, 500);
-                } else {
-                    window.exitRoomCleanly(true);
-                }
-            });
+    if (currentMode === 'perfection' && window.isPerfectionRetry) {
+        currentWord = window.currentPerfectionWord.toUpperCase();
+        activeWpm = window.currentPerfectionWpm;
+        showToast(currentLang === 'it' ? "🔄 RECUPERO ERRORE" : "🔄 ERROR RETRY", 1500);
+    } else {
+        // VERIFICA DI SICUREZZA: gameWords deve essere popolata
+        if (!gameWords || !gameWords[wordIndex]) {
+            console.error("GameCore: Word at index " + wordIndex + " is undefined!", gameWords);
+            showToast(currentLang === 'it' ? "Errore caricamento parole. Riprovo..." : "Error loading words. Retrying...");
+            if (roomCode) {
+                db.ref(`rooms/${roomCode}/game_words`).once('value', s => {
+                    if (s.exists()) { gameWords = s.val(); setTimeout(window.playNextWord, 500); }
+                    else { window.exitRoomCleanly(true); }
+                });
+            }
+            return;
         }
-        return;
+        currentWord = gameWords[wordIndex].toUpperCase();
+        activeWpm = currentWpm;
     }
-
-    const currentWord = gameWords[wordIndex].toUpperCase();
 
     // LOGICA MODALITÀ SEMPLICE (EASY MODE) - Mostra caratteri mescolati
     const easyHint = document.getElementById('easyModeHint');
@@ -924,20 +956,21 @@ window.playNextWord = function() {
         easyHint.style.display = 'none';
     }
 
-    if (typeof playMorseAudio === 'function') playMorseAudio(currentWord, currentWpm);
+    if (typeof playMorseAudio === 'function') playMorseAudio(currentWord, activeWpm);
     lastWordStartTime = Date.now();
 
     // Aggiornamento liveAudio per gli spettatori ad ogni nuova parola
     if (roomCode) {
         db.ref(`rooms/${roomCode}/liveAudio`).set({
             word: currentWord,
-            wpm: currentWpm,
+            wpm: activeWpm,
             ts: Date.now(),
             wordId: wordIndex // Aggiungiamo un ID parola incrementale
         });
     }
 
     if (domCache.permanentGameInput) domCache.permanentGameInput.focus();
+};
 };
 
 window.finishGame = function() {
@@ -1558,14 +1591,25 @@ window.handleWordSubmission = function(userWord) {
         return;
     }
 
-    inputActive = false;
-    const currentWord = gameWords[wordIndex].toUpperCase();
+        inputActive = false;
+
+    // Determiniamo la parola target e la velocità attiva
+    let currentWord;
+    let activeWpmForThisWord = currentWpm;
+
+    if (currentMode === 'perfection' && window.isPerfectionRetry) {
+        currentWord = window.currentPerfectionWord.toUpperCase();
+        activeWpmForThisWord = window.currentPerfectionWpm;
+    } else {
+        currentWord = gameWords[wordIndex].toUpperCase();
+    }
+
     let points = 0, scoreColor = "";
     const reactionMs = Date.now() - lastWordStartTime;
     const levDist = window.getLevenshteinDistance(currentWord, userWord);
 
     if (typeof window.calculateGamePoints === 'function') {
-        const res = window.calculateGamePoints(currentMode, currentWord, userWord, currentWpm, reactionMs, levDist, usedReplay);
+        const res = window.calculateGamePoints(currentMode, currentWord, userWord, activeWpmForThisWord, reactionMs, levDist, usedReplay);
         points = res.points;
         scoreColor = res.scoreColor;
     } else {
@@ -1578,8 +1622,8 @@ window.handleWordSubmission = function(userWord) {
                 scoreColor = "#d32f2f";
             }
         } else {
-            const basePoints = (Math.pow(currentWpm, 2) * currentWord.length) / (10 * Math.pow(levDist + 1, 2));
-            const estimatedAudioMs = (currentWord.length * 60 / currentWpm) * 1000;
+            const basePoints = (Math.pow(activeWpmForThisWord, 2) * currentWord.length) / (10 * Math.pow(levDist + 1, 2));
+            const estimatedAudioMs = (currentWord.length * 60 / activeWpmForThisWord) * 1000;
             let timeMultiplier = 1.0;
             if (reactionMs > (estimatedAudioMs + 2000)) timeMultiplier = Math.max(0.5, 1.0 - ((reactionMs - (estimatedAudioMs + 2000)) / 20000));
             else if (reactionMs < estimatedAudioMs && levDist === 0) timeMultiplier = 1.1;
@@ -1591,10 +1635,17 @@ window.handleWordSubmission = function(userWord) {
         }
     }
 
-    if (levDist > 0) {
-        // --- NUOVO: TRACCIAMENTO ERRORI AVANZATO ---
+    // Gestione Errori e Coda Perfezione
+    if (levDist > 0 || usedReplay) {
+        if (currentMode === 'perfection') {
+            // Aggiungiamo alla coda se non è già un recupero (o se è un recupero fallito di nuovo)
+            window.perfectionQueue.push({ word: currentWord, wpm: activeWpmForThisWord });
+            console.log("Perfection: Parola aggiunta alla coda di recupero:", currentWord);
+        }
+
+        // --- TRACCIAMENTO ERRORI AVANZATO ---
         if (typeof window.trackAdvancedErrors === 'function') {
-            window.trackAdvancedErrors(currentWord, userWord, currentWpm);
+            window.trackAdvancedErrors(currentWord, userWord, activeWpmForThisWord);
         }
 
         let wrongChars = [];
@@ -1603,17 +1654,21 @@ window.handleWordSubmission = function(userWord) {
                 if (!wrongChars.includes(currentWord[i])) wrongChars.push(currentWord[i]);
             }
         }
-        if (!sessionErrorsByWpm[currentWpm]) sessionErrorsByWpm[currentWpm] = Object.create(null);
+        if (!sessionErrorsByWpm[activeWpmForThisWord]) sessionErrorsByWpm[activeWpmForThisWord] = Object.create(null);
         wrongChars.forEach(c => {
             sessionCharErrors[c] = (sessionCharErrors[c] || 0) + 1;
-            sessionErrorsByWpm[currentWpm][c] = (sessionErrorsByWpm[currentWpm][c] || 0) + 1;
+            sessionErrorsByWpm[activeWpmForThisWord][c] = (sessionErrorsByWpm[activeWpmForThisWord][c] || 0) + 1;
         });
     }
 
+    // Avanzamento WPM (Solo per parole nuove, i recuperi non aumentano la velocità globale)
     if (!isFixedSpeed && currentMode !== 'chars') {
         if (levDist === 0 && !usedReplay) {
-            currentWpm += 2;
-            if (currentWpm > peakWpm) peakWpm = currentWpm;
+            // Se era un recupero, non aumentiamo i WPM globali, ma diamo comunque feedback
+            if (!window.isPerfectionRetry) {
+                currentWpm += 2;
+                if (currentWpm > peakWpm) peakWpm = currentWpm;
+            }
             window.addXP?.(10, "Correct Word");
             window.updateMissionProgress?.('count', 1);
             window.updateMissionProgress?.('wpm_min', currentWpm);
@@ -1636,10 +1691,12 @@ window.handleWordSubmission = function(userWord) {
         if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
     }
     totalScore += points;
-    matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: currentWpm, ms: reactionMs });
+    matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: activeWpmForThisWord, ms: reactionMs, isRetry: window.isPerfectionRetry });
 
     if (currentMode !== 'pingpong') {
         const tr = document.createElement('tr');
+        if (window.isPerfectionRetry) tr.style.background = "rgba(76, 175, 80, 0.05)";
+
         const tdTyped = document.createElement('td'); tdTyped.textContent = userWord || "-";
 
         const tdReal = document.createElement('td');
@@ -1649,7 +1706,7 @@ window.handleWordSubmission = function(userWord) {
         tdPoints.style.textAlign = 'center';
         tdPoints.style.color = scoreColor;
         tdPoints.style.fontWeight = 'bold';
-        tdPoints.textContent = currentMode === 'chars' ? points : (usedReplay ? '0' : (points > 0 ? "+"+points : points));
+        tdPoints.innerHTML = (currentMode === 'chars' ? points : (usedReplay ? '0' : (points > 0 ? "+"+points : points))) + (window.isPerfectionRetry ? " 🔄" : "");
 
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
         if (els.tableBody) {
@@ -1660,8 +1717,22 @@ window.handleWordSubmission = function(userWord) {
 
     if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
     if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
-    if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm, wordIndex: wordIndex + 1, matchDetails: matchDetailsArray });
+
+    // Avanzamento indice parole (Solo se non era un recupero)
+    if (!window.isPerfectionRetry) {
+        wordIndex++;
+        window.perfectionWordsDone++;
+    }
+
+    if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ score: totalScore, wpm: currentWpm, wordIndex: wordIndex, matchDetails: matchDetailsArray });
     usedReplay = false;
+
+    setTimeout(() => {
+        if (gameRunning) {
+            if (els.permanentGameInput) els.permanentGameInput.value = "";
+            window.playNextWord();
+        }
+    }, 1200);
 
     if (currentMode === 'pingpong') {
         wordIndex++;

@@ -24,6 +24,42 @@ window.GAME_MODES = {
         fixedSpeedAllowed: true,
         spacingConfigurable: true,
         generateWords: function(num, dicts) {
+            const master = (dicts && Array.isArray(dicts.master) && dicts.master.length > 0)
+                ? dicts.master
+                : ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
+            return fisherYatesShuffle(master).slice(0, num).map(w => String(w).toUpperCase());
+        }
+    },
+    "perfection": {
+        id: "perfection",
+        titleIt: "Perfezione (Zero Errori)",
+        titleEn: "Perfection (Zero Errors)",
+        icon: "🎯",
+        defaultWpm: 15,
+        defaultWordCount: 20,
+        wpmConfigurable: true,
+        wordCountConfigurable: true,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: true,
+        generateWords: function(num, dicts) {
+            const master = (dicts && Array.isArray(dicts.master) && dicts.master.length > 0)
+                ? dicts.master
+                : ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
+            return fisherYatesShuffle(master).slice(0, num).map(w => String(w).toUpperCase());
+        }
+    },
+    "perfection": {
+        id: "perfection",
+        titleIt: "Perfezione (Zero Errori)",
+        titleEn: "Perfection (Zero Errors)",
+        icon: "🎯",
+        defaultWpm: 20,
+        defaultWordCount: 20,
+        wpmConfigurable: true,
+        wordCountConfigurable: true,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: true,
+        generateWords: function(num, dicts) {
             const master = (dicts && Array.isArray(dicts.master) && dicts.master.length > 0) 
                 ? dicts.master 
                 : ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
