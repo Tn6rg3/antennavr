@@ -59,19 +59,25 @@ window.showLeaderboardTab = function(modeValue) {
     const filterVal = els.lbWordFilter ? els.lbWordFilter.value : 'all';
 
     if (modeValue === 'room') {
-        // ...
+        // Mostra i risultati recenti degli utenti / ultime sfide
+        window.fetchAndRenderGlobalLeaderboard('room', null);
+        return;
     } else if (modeValue === 'daily_challenge') {
         if (els.btnShareDaily && totalScore > 0 && currentMode === 'daily_challenge') {
             els.btnShareDaily.style.display = 'block';
         }
         window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
+        return;
     } else if (modeValue === 'trn_global') {
         if (els.trnSubTabs) els.trnSubTabs.style.display = 'flex';
         window.fetchAndRenderGlobalLeaderboard('tournaments', null);
+        return;
     } else if (modeValue === 'cwfreak') {
         window.fetchAndRenderGlobalLeaderboard('callsign', null);
+        return;
     } else if (modeValue === 'arcade') {
         window.fetchAndRenderGlobalLeaderboard('arcade', null);
+        return;
     } else {
         // Gestione dinamica Multi/Single per Parole, Caratteri, Quiz, Ping Pong
         if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
