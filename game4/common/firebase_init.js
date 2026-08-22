@@ -2,13 +2,12 @@
 
 const firebaseConfig = {
     apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
-    authDomain: "cwapp-da3a4.firebaseapp.com",
-    databaseURL: "https://cwapp-da3a4-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "cwapp-da3a4",
-    storageBucket: "cwapp-da3a4.appspot.com",
-    messagingSenderId: "338276189578",
-    appId: "1:338276189578:web:753046757f58ec0d97036d",
-    measurementId: "G-GZ0L6G6Z70"
+    authDomain: "telegrafiabot.firebaseapp.com",
+    databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "telegrafiabot",
+    storageBucket: "telegrafiabot.firebasestorage.app",
+    messagingSenderId: "575790683327",
+    appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
 };
 
 // Inizializza Firebase se non è già stato fatto
