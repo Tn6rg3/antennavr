@@ -1169,6 +1169,7 @@ if (els.btnPlayDailyNow) {
         // USA ID UNIVOC_O ANCHE PER LA SFIDA GIORNALIERA
         roomCode = "DAILY_" + window.myId;
         gameWords = window.getGameWords(requestedWordCount, currentMode);
+        currentTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || 600;
 
         const startDaily = () => {
             const dailyData = {
