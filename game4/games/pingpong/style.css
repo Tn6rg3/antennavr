@@ -1,4 +1,0 @@
-/* game4/games/pingpong/style.css */
-h3 { margin: 10px 0; text-align: center; }
-input[type="text"] { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--hint-color); font-size: 1.1em; outline: none; box-sizing: border-box; }
-#statusText { text-align: center; }
