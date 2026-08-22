@@ -725,15 +725,21 @@ function initGame() {
 
             if (startParam) return;
 
-            // Verifichiamo se l'utente ha già giocato o rifiutato la sfida OGGI
-            db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value', histSnap => {
-                let alreadyPlayedToday = false;
-                histSnap.forEach(matchSnap => {
-                    const m = matchSnap.val();
-                    if (!m.date) return;
-                    const mDate = new Date(m.date).toISOString().split('T')[0];
-                    if (m.mode === 'daily_challenge' && mDate === today) alreadyPlayedToday = true;
-                });
+            // Verifichiamo se l'utente ha già giocato o iniziato la sfida OGGI
+            db.ref(`users/${myId}`).once('value', userSnap => {
+                const userData = userSnap.val() || {};
+                const history = userData.history || {};
+                const lastAttemptDate = userData.daily_attempt || "";
+
+                let alreadyPlayedToday = (lastAttemptDate === today);
+
+                if (!alreadyPlayedToday) {
+                    Object.values(history).forEach(m => {
+                        if (!m.date) return;
+                        const mDate = new Date(m.date).toISOString().split('T')[0];
+                        if (m.mode === 'daily_challenge' && mDate === today) alreadyPlayedToday = true;
+                    });
+                }
 
                 const alreadyShownToday = localStorage.getItem(STORAGE_DAILY_STATUS_KEY) === today;
 
@@ -1172,6 +1178,11 @@ if (els.btnPlayDailyNow) {
         currentTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || 600;
 
         const startDaily = () => {
+            // SEGNIAMO IL TENTATIVO IMMEDIATAMENTE PER EVITARE REPLAY IN CASO DI ABBANDONO/RELOAD
+            let today = new Date().toISOString().split('T')[0];
+            db.ref(`users/${myId}/daily_attempt`).set(today);
+            localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
+
             const dailyData = {
                 status: 'countdown',
                 type: 'single',
@@ -1213,7 +1224,9 @@ if (els.btnShareDaily) {
 
 if (els.btnPlayDailyLater) els.btnPlayDailyLater.onclick = () => { if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none'; };
 if (els.btnDeclineDaily) els.btnDeclineDaily.onclick = () => {
-    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, new Date().toISOString().split('T')[0]);
+    const today = new Date().toISOString().split('T')[0];
+    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
+    db.ref(`users/${myId}/daily_attempt`).set(today); // Sincronizziamo il rifiuto
     if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none';
 };
 

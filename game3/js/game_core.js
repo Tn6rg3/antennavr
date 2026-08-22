@@ -242,6 +242,19 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
             db.ref(`rooms/${currentCode}/players/${myId}`).onDisconnect().cancel();
 
             if (gameRunning) {
+                // Se abbandoniamo la sfida giornaliera, registriamo l'evento nel passato per bloccare nuovi tentativi
+                if (currentMode === 'daily_challenge') {
+                    db.ref(`users/${myId}/history`).push().set({
+                        date: firebase.database.ServerValue.TIMESTAMP,
+                        mode: 'daily_challenge',
+                        score: totalScore,
+                        wpm: peakWpm,
+                        abandoned: true,
+                        wordCount: requestedWordCount
+                    });
+                    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, new Date().toISOString().split('T')[0]);
+                }
+
                 db.ref(`rooms/${currentCode}/players/${myId}`).update({ finished: true, abandoned: true, online: false }).then(() => {
                     // Se siamo in multiplayer, aggiorniamo subito il riepilogo match per la classifica
                     if (!isSinglePlayer && !isCourseMode) {
