@@ -69,16 +69,16 @@ window.initTransmissionManager = function() {
             const isTxActive = txScreen && txScreen.classList.contains('active-screen');
             const isProfileActive = profileScreen && profileScreen.classList.contains('active-screen');
 
-            // 2. Se siamo nel Menu Principale, il keyer è ammesso SOLO se il tipo è 'transmission'
+            // Nel menu setup, disabilitiamo il keyer globale (mouse/paddles) per evitare
+            // interferenze con la UI, a meno che non ci sia una sessione attiva (molto raro qui).
             if (isSetupActive) {
-                const typeInput = document.getElementById('gameTypeInput');
-                return typeInput && typeInput.value === 'transmission';
+                return (window.transmissionState.sessionRunning || window.groupTxState.running);
             }
 
-            // 3. Se siamo nella Stazione Radio standalone
+            // Nella Stazione Radio standalone, il keyer è sempre ammesso
             if (isTxActive) return true;
 
-            // 4. Se siamo nel Profilo (Corso), ammesso solo se la vista Trasmissione è visibile
+            // Nel Profilo (Corso), ammesso solo se la vista Trasmissione è visibile
             if (isProfileActive) {
                 const txView = document.getElementById('courseTransmissionView');
                 return txView && txView.style.display !== 'none';
@@ -106,7 +106,15 @@ window.initTransmissionManager = function() {
             window.removeEventListener('touchend', window.handleStraightKeyUp);
 
             window.handleStraightKeyDown = (e) => {
-                if (e && e.cancelable && e.preventDefault) e.preventDefault();
+                if (e && e.cancelable && e.preventDefault) {
+                    const isAnySessionRunning = window.transmissionState.sessionRunning || window.groupTxState.running;
+                    const isKeyBtn = e.target && (e.target.id === 'morseKeyBtn' || e.target.closest('#morseKeyBtn') || e.target.id === 'morseKeyBtnGroups' || e.target.closest('#morseKeyBtnGroups'));
+
+                    // Impediamo il comportamento di default SOLO se siamo sul bottone specifico o in sessione (blocco totale)
+                    if (isAnySessionRunning || isKeyBtn) {
+                        e.preventDefault();
+                    }
+                }
                 if (window.transmissionState.isDown) return;
                 window.transmissionState.isDown = true;
                 const now = Date.now();
@@ -377,6 +385,13 @@ window.initTransmissionManager = function() {
         window.addEventListener('mousedown', (e) => {
             const isAnySessionRunning = window.transmissionState.sessionRunning || window.groupTxState.running;
 
+            // 0. ESCLUSIONE RIGOROSA ELEMENTI INTERATTIVI
+            const interactiveTags = ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT', 'LABEL', 'OPTION', 'A', 'SPAN'];
+            if (interactiveTags.includes(e.target.tagName) || e.target.closest('button') || e.target.closest('.box-panel')) {
+                // Se stiamo cliccando su un elemento UI, permettiamo l'interazione normale e usciamo dal keyer
+                return;
+            }
+
             // PROTEZIONE CONTESTO: Il mouse risponde al keyer solo se permesso
             const keyerAllowed = window.isKeyerAllowed && window.isKeyerAllowed();
 
@@ -396,15 +411,11 @@ window.initTransmissionManager = function() {
                 e.preventDefault();
                 e.stopPropagation();
             } else {
-                // Fuori sessione, lasciamo che input e textarea funzionino normalmente
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-                if (e.target.closest('button')) return;
-
-                // SE NON SIAMO IN SESSIONE E NON È PERMESSO IL KEYER, USCIAMO
+                // SE NON SIAMO IN SESSIONE E NON È PERMESSO IL KEYER (o è disattivato), USCIAMO
+                // Nota: Il modo Verticale (V) è manuale e lo facciamo funzionare sempre se il contesto lo permette
                 if (!keyerAllowed) return;
+                if (window.keyerState.mode !== 'V' && !window.keyerState.enabled) return;
             }
-
-            if (!window.keyerState.enabled) return;
 
             // --- GESTIONE BLOCCO MOUSE SOFTWARE ---
             if (isAnySessionRunning) {
