@@ -121,10 +121,7 @@ window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
                 }
             }
         });
-
-        counts.sort((a, b) => parseInt(a) - parseInt(b))
-            .forEach(c => options.push(`<option value="${c}">${c} ${currentLang === 'it' ? 'Stringhe' : 'Strings'}</option>`));
-
+        counts.sort((a, b) => parseInt(a) - parseInt(b)).forEach(c => options.push(`<option value="${c}">${c} ${currentLang === 'it' ? 'Stringhe' : 'Strings'}</option>`));
         els.lbWordFilter.innerHTML = options.join('');
         if (counts.includes(currentValue) || currentValue === 'all') els.lbWordFilter.value = currentValue;
     });
@@ -136,7 +133,6 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
 
     console.log("LB: Fetching -> Type:", tabType, "Filter:", filterWordCount);
 
-    // 1. SFIDA GIORNALIERA
     if (tabType === 'daily_challenge') {
         let todayStr = new Date().toISOString().split('T')[0];
         db.ref(`leaderboard/daily_challenge/${todayStr}`).orderByChild('score').limitToLast(50).once('value', snapshot => {
@@ -155,44 +151,70 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
-    // 2. RISULTATI ULTIMA PARTITA / MATCH RECENTI
+    // TAB ROOM: mostra lo storico personale/recente delle partite finite degli utenti
     if (tabType === 'room') {
-        db.ref('leaderboard/recent_matches').once('value', snapshot => {
-            let matches = [];
+        const paths = [];
 
-            snapshot.forEach(categoryNode => {
-                const categoryKey = categoryNode.key;
+        db.ref('users').once('value', usersSnap => {
+            if (!usersSnap.exists()) {
+                window.renderMatchesHistoryHTML([], els.leaderboardContainer);
+                return;
+            }
 
-                categoryNode.forEach(wordCountNode => {
-                    const wordCountKey = wordCountNode.key;
+            const userPromises = [];
 
-                    wordCountNode.forEach(matchNode => {
-                        const val = matchNode.val();
-                        if (val && typeof val === 'object') {
-                            val.id = matchNode.key;
-                            val.dbPath = `leaderboard/recent_matches/${categoryKey}/${wordCountKey}/${matchNode.key}`;
-                            val.wordCount = wordCountKey;
-                            matches.push(val);
-                        }
-                    });
-                });
+            usersSnap.forEach(userNode => {
+                const uid = userNode.key;
+                const histRef = db.ref(`users/${uid}/history`).orderByChild('date').limitToLast(20);
+                userPromises.push(
+                    histRef.once('value').then(histSnap => {
+                        histSnap.forEach(matchNode => {
+                            const m = matchNode.val();
+                            if (!m) return;
+
+                            // Filtra solo partite finite / match reali
+                            if (!m.date) return;
+
+                            const mode = m.mode || '';
+                            const isRecentFinishedMatch =
+                                mode !== 'daily_challenge' &&
+                                mode !== 'course' &&
+                                mode !== 'training';
+
+                            if (!isRecentFinishedMatch) return;
+
+                            const ts = new Date(m.date).getTime() || 0;
+
+                            paths.push({
+                                id: matchNode.key,
+                                dbPath: `users/${uid}/history/${matchNode.key}`,
+                                date: m.date,
+                                ts,
+                                wordCount: m.wordCount || m.wordCount === 0 ? m.wordCount : (m.wordCount || '—'),
+                                mode: m.mode || '',
+                                score: m.score || 0,
+                                wpm: m.wpm || 0,
+                                players: m.players || null,
+                                matchDetails: m.details || [],
+                                name: userNode.val()?.name || "Sconosciuto",
+                                username: userNode.val()?.username || ""
+                            });
+                        });
+                    })
+                );
             });
 
-            matches.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-            console.log("LB: Recent matches found:", matches.length);
-            window.renderMatchesHistoryHTML(matches.slice(0, 20), els.leaderboardContainer);
+            Promise.all(userPromises).then(() => {
+                paths.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+                window.renderMatchesHistoryHTML(paths.slice(0, 20), els.leaderboardContainer);
+            });
         });
+
         return;
     }
 
-    // 3. SFIDE MULTIPLAYER (Cronologia Match)
     if (tabType.endsWith('_multi') || tabType === 'pingpong') {
-        let baseMode = tabType.includes('std')
-            ? 'standard'
-            : (tabType.includes('chars')
-                ? 'chars'
-                : (tabType.includes('quiz') ? 'quiz' : 'pingpong'));
-
+        let baseMode = tabType.includes('std') ? 'standard' : (tabType.includes('chars') ? 'chars' : (tabType.includes('quiz') ? 'quiz' : 'pingpong'));
         const dbPath = `leaderboard/recent_matches/${baseMode}${tabType !== 'pingpong' ? '_multi' : ''}`;
         console.log("LB: Fetching Multi from:", dbPath, "Filter:", filterWordCount);
 
@@ -220,7 +242,6 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
-    // 4. NOMINATIVI (CW FREAK)
     if (tabType === 'callsign') {
         db.ref('leaderboard/callsign/global').orderByChild('score').limitToLast(50).once('value', snapshot => {
             let players = [];
@@ -238,7 +259,6 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
-    // 5. TORNEI
     if (tabType === 'tournaments') {
         db.ref('leaderboard/tournaments').orderByChild('score').limitToLast(50).once('value', snapshot => {
             let teams = [];
@@ -256,7 +276,6 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
-    // 6. ARCADE
     if (tabType === 'arcade') {
         db.ref('leaderboard/arcade/all').orderByChild('score').limitToLast(50).once('value', snapshot => {
             let players = [];
@@ -274,7 +293,6 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
-    // 7. SOLO PRACTICE
     let baseMode = tabType.replace('_single', '');
     if (baseMode === 'std') baseMode = 'standard';
 
@@ -376,7 +394,6 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
     players.forEach((player, index) => {
         const row = document.createElement('div');
         row.className = 'leaderboard-row';
-
         const mainDiv = document.createElement('div');
         mainDiv.style.display = 'flex';
         mainDiv.style.alignItems = 'center';
