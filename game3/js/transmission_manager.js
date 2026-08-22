@@ -59,6 +59,34 @@ window.initTransmissionManager = function() {
     try {
         console.log("TX_DEBUG: initTransmissionManager START");
 
+        window.isKeyerAllowed = function() {
+            // 1. Controllo Schermate Attive
+            const setupScreen = document.getElementById('setupScreen');
+            const txScreen = document.getElementById('transmissionScreen');
+            const profileScreen = document.getElementById('profileScreen');
+
+            const isSetupActive = setupScreen && setupScreen.classList.contains('active-screen');
+            const isTxActive = txScreen && txScreen.classList.contains('active-screen');
+            const isProfileActive = profileScreen && profileScreen.classList.contains('active-screen');
+
+            // 2. Se siamo nel Menu Principale, il keyer è ammesso SOLO se il tipo è 'transmission'
+            if (isSetupActive) {
+                const typeInput = document.getElementById('gameTypeInput');
+                return typeInput && typeInput.value === 'transmission';
+            }
+
+            // 3. Se siamo nella Stazione Radio standalone
+            if (isTxActive) return true;
+
+            // 4. Se siamo nel Profilo (Corso), ammesso solo se la vista Trasmissione è visibile
+            if (isProfileActive) {
+                const txView = document.getElementById('courseTransmissionView');
+                return txView && txView.style.display !== 'none';
+            }
+
+            return false;
+        };
+
         // Sincronizziamo WPM e Tono con quelli globali del menu se siamo in standalone
         if (!window.transmissionState.sessionRunning && !window.groupTxState.running) {
              const startWpm = parseInt(document.getElementById('startWpmInput')?.value);
@@ -278,15 +306,16 @@ window.initTransmissionManager = function() {
 
     window.updateKeyerUI();
 
-    // GLOBAL LISTENERS (Solo una volta)
-    if (!window.transmissionGlobalListenersReadyV2) {
-        console.log("TX_DEBUG: Attaching Global Listeners V2");
-        window.addEventListener('keydown', (e) => {
-            console.log("TX_DEBUG: KeyDown ->", e.key, "| Target:", e.target.tagName);
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if (!window.transmissionGlobalListenersReadyV2) {
+            console.log("TX_DEBUG: Attaching Global Listeners V2");
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-            // Resume Audio Context se necessario
-            if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
+                // PROTEZIONE CONTESTO: Se non siamo in una zona di trasmissione, ignoriamo i tasti del keyer
+                if (!window.isKeyerAllowed || !window.isKeyerAllowed()) return;
+
+                // Resume Audio Context se necessario
+                if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
 
             // Rilevamento Mapping
             if (window.keyerState.mappingTarget) {
@@ -348,6 +377,9 @@ window.initTransmissionManager = function() {
         window.addEventListener('mousedown', (e) => {
             const isAnySessionRunning = window.transmissionState.sessionRunning || window.groupTxState.running;
 
+            // PROTEZIONE CONTESTO: Il mouse risponde al keyer solo se permesso
+            const keyerAllowed = window.isKeyerAllowed && window.isKeyerAllowed();
+
             // 1. GESTIONE PULSANTI STOP (Sempre attivi e prioritari)
             if (e.target.closest('#btnStopTxSession') || e.target.closest('#btnStopGroupTx')) {
                 // Se clicchiamo STOP, forziamo il rilascio di tutti i tasti Morse per sicurezza
@@ -367,6 +399,9 @@ window.initTransmissionManager = function() {
                 // Fuori sessione, lasciamo che input e textarea funzionino normalmente
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
                 if (e.target.closest('button')) return;
+
+                // SE NON SIAMO IN SESSIONE E NON È PERMESSO IL KEYER, USCIAMO
+                if (!keyerAllowed) return;
             }
 
             if (!window.keyerState.enabled) return;

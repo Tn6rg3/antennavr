@@ -18,9 +18,9 @@ window.populateGameModesUI = function() {
     Object.values(window.GAME_MODES || {}).forEach(mode => {
         // --- LOGICA FILTRI ---
         if (isSingle) {
-            if (mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade') return;
+            if (mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'groups_tx') return;
         } else if (isMulti) {
-            if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade') return;
+            if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'groups_tx') return;
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
         } else if (isTx) {
@@ -112,6 +112,12 @@ window.checkGameTypeUI = function() {
     };
 
     if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcadeType || isTx) ? 'none' : 'block';
+
+    if (containers.fixed) containers.fixed.style.display = (isSingle && !isTx) ? 'flex' : 'none';
+    if (containers.easy) containers.easy.style.display = (isSingle && !isTx) ? 'flex' : 'none';
+    if (containers.spacing) containers.spacing.style.display = (isSingle && !isTx) ? 'flex' : 'none';
+    if (containers.custom) containers.custom.style.display = (isSingle && !isTx) ? 'flex' : 'none';
+    if (containers.spectator) containers.spectator.style.display = (isSingle && !isTx) ? 'flex' : 'none';
 
     // --- LOGICA TRASMISSIONE ---
     if (containers.koch) containers.koch.style.display = isTx ? 'block' : 'none';
