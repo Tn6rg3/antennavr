@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+    <!-- Disattiva il caching -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <title>Sfida Telegrafia - Portal</title>
+
+    <!-- Script essenziali -->
+    <script src="https://telegram.org/js/telegram-web-app.js" crossorigin="anonymous"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" crossorigin="anonymous"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js" crossorigin="anonymous"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js" crossorigin="anonymous"></script>
+
+    <!-- Fogli di stile -->
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        #gameIframe {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: none;
+            z-index: 10000;
+            background: var(--bg-color);
+        }
+    </style>
+</head>
+<body>
+
+<div id="toastContainer"></div>
+<iframe id="gameIframe"></iframe>
+
+<!-- SCHERMATA CARICAMENTO -->
+<div id="loadingScreen" class="screen active-screen">
+    <h2 style="margin-top: 40px;">Caricamento... 📻</h2>
+    <p id="initStatusText">Verifica credenziali in corso...</p>
+</div>
+
+<!-- MENU PRINCIPALE (Pixel Perfect to Game3) -->
+<div id="setupScreen" class="screen">
+    <div class="screen-content">
+        <div style="display: flex; justify-content: center; align-items: center; width: 100%; margin-bottom: 8px; gap: 4px; flex-wrap: nowrap;">
+            <div style="display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; width: 100%;">
+                <button id="langBtn" class="action-btn-small btn-secondary" style="width:36px; padding:6px 0;">IT</button>
+                <button class="action-btn-small btn-secondary" onclick="openModule('info')" id="txt_info_btn" style="flex:1; position: relative; overflow: visible !important;">
+                    <span id="txt_info_btn_label">Info</span>
+                    <span id="bugsBadge" class="badge-counter" style="display: none;">0</span>
+                </button>
+                <button class="action-btn-small" onclick="openModule('participation')" id="txt_act_btn" style="flex:1;">
+                    <span id="txt_act_btn_label">🏅 Attività</span>
+                </button>
+                <button class="action-btn-small" onclick="openModule('profile')" id="txt_profile_btn" style="flex:1.2; position: relative; overflow: visible !important;">
+                    <span id="txt_profile_btn_label">👤 Profilo</span>
+                    <span id="missionsBadge" class="badge-counter" style="display: none;">0</span>
+                </button>
+                <button class="action-btn-small" onclick="openModule('course')" id="txt_course_tab_btn" style="flex:1.2; position: relative; overflow: visible !important;">
+                    <span id="txt_course_btn_label">📻 Corso</span>
+                    <span id="courseMessageBadge" class="badge-counter" style="display: none; background: #4caf50; color: white; left: -5px; right: auto;">M</span>
+                </button>
+                <button class="action-btn-small" onclick="openModule('leaderboard')" id="txt_lb_btn" style="flex:1.2;">
+                    <span id="txt_lb_btn_label">🏆 Classifica</span>
+                </button>
+            </div>
+        </div>
+
+        <p id="loadingText" style="margin-bottom: 5px;">Connessione sicura in corso...</p>
+
+        <!-- SEZIONE TORNEI -->
+        <div style="width: 100%; text-align: center; margin-bottom: 0;">
+            <button id="goToTeamsBtn" class="btn-champ" onclick="openModule('teams')" style="margin-top: 0;">🏆 TORNEI A SQUADRE</button>
+        </div>
+
+        <hr class="divider">
+
+        <!-- SEZIONE GIOCO LIBERO -->
+        <h3 id="txt_free_challenge_title" style="margin: 0 0 5px 0; color: var(--link-color); font-size: 1.1em; text-align: center;">⚡ Sfida Libera</h3>
+
+        <div class="box-panel">
+            <h3 id="txt_play_solo_title">Gioca da Solo o Sfida un Amico</h3>
+
+            <div class="settings-row">
+                <div>
+                    <label id="txt_game_type_label">Tipo:</label>
+                    <select id="gameTypeInput">
+                        <option value="multi" id="txt_opt_multi">Multi-Giocatore</option>
+                        <option value="coop" id="txt_opt_coop">Collaborativo (Co-op) ⚔️</option>
+                        <option value="single" id="txt_opt_single">Solo</option>
+                        <option value="transmission" id="txt_opt_tx">Trasmissione 🎙️</option>
+                        <option value="tournament" id="txt_opt_trn">Torneo</option>
+                        <option value="arcade" id="txt_opt_arcade">Arcade 🕹️</option>
+                    </select>
+                </div>
+                <div>
+                    <label id="txt_mode_label">Modo:</label>
+                    <select id="gameModeInput">
+                        <!-- Popolato via JS -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-row">
+                <div><label id="txt_wpm_label">WPM</label> <input type="number" id="startWpmInput" value="20" min="5" max="50"></div>
+                <div><label id="txt_words_label">Test</label> <input type="number" id="wordCountInput" value="10" min="3" max="100"></div>
+                <div><label id="txt_tone_label">Tono</label> <input type="number" id="toneInput" value="600" min="400" max="1000" step="50"></div>
+            </div>
+
+            <button id="createRoomBtn" class="btn-success">Inizia Partita Libera</button>
+        </div>
+
+        <div style="display: flex; gap: 8px; flex-grow: 1; min-height: 0; margin-bottom: 0;">
+            <div class="box-panel" style="flex: 1; min-height: 0;">
+                <h3 id="txt_challenge_board_title">Bacheca Sfide ⏳</h3>
+                <ul id="waitingRoomsList" class="data-list">
+                    <li id="txt_no_challenges" style="justify-content: center; color: var(--hint-color); background: none; border: none;">Nessuna sfida.</li>
+                </ul>
+            </div>
+            <div class="box-panel" style="flex: 1; min-height: 0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <h3 id="txt_online_users_title" style="margin:0;">Utenti Online 🟢</h3>
+                </div>
+                <ul id="onlineUsersList" class="data-list">
+                    <li id="txt_you_are_alone" style="justify-content: center; color: var(--hint-color); background: none; border: none;">Sei solo.</li>
+                </ul>
+                <div style="text-align: center; font-size: 0.6em; color: var(--hint-color); margin-top: auto; padding-top: 5px;">
+                    Versione: <span id="appVersionFooter">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- POPUP SFIDA GIORNALIERA -->
+<div id="dailyChallengeModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
+    <span style="font-size: 3em; margin-bottom: 10px;">📅</span>
+    <h2 style="color: var(--champ-color); margin: 0 0 10px 0;">Sfida Giornaliera!</h2>
+    <p style="font-size: 0.9em; margin-bottom: 15px;">20 Parole a 15 WPM (con velocità crescente se indovini). Tutti i giocatori affrontano le stesse parole oggi. Entra in classifica e vinci una medaglia se arrivi a podio!</p>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button id="btnPlayDailyNow" class="btn-success">ACCETTA LA SFIDA 🚀</button>
+        <button id="btnPlayDailyLater" class="btn-secondary">Più Tardi</button>
+        <button id="btnDeclineDaily" class="btn-danger">Rifiuta per oggi</button>
+    </div>
+</div>
+
+<script src="common/init.js"></script>
+<script src="common/i18n.js"></script>
+<script src="common/logic.js"></script>
+<script src="common/audio.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

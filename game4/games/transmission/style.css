@@ -1,0 +1,4 @@
+/* game4/games/transmission/style.css */
+.header-stats { width: 100%; text-align: center; font-weight: bold; margin-bottom: 10px; }
+#morseKeyBtn { box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+#morseKeyBtn:active { box-shadow: 0 2px 5px rgba(0,0,0,0.5); }

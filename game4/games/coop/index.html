@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>CW Coop Mode</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="gameArea" class="screen active-screen">
+    <div class="header-stats">
+        <div id="progressText">Conquista: 0%</div>
+        <div id="timeDisplay">⏱️ 00:00</div>
+    </div>
+
+    <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.1); border-radius: 10px; overflow: hidden; margin-bottom: 20px;">
+        <div id="progressBar" style="width: 0%; height: 100%; background: var(--link-color); transition: width 0.3s;"></div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; margin-bottom: 20px;">
+        <button id="btnFreq1" class="btn-secondary">FREQ 1</button>
+        <button id="btnFreq2" class="btn-secondary">FREQ 2</button>
+        <button id="btnFreq3" class="btn-secondary">FREQ 3</button>
+    </div>
+
+    <div id="gameInputArea" style="display: flex; width: 100%; margin-bottom: 20px;">
+        <input type="text" id="permanentGameInput" placeholder="Seleziona una frequenza..." disabled autocomplete="off">
+    </div>
+
+    <button id="quitGameBtn" class="btn-danger">Abbandona</button>
+</div>
+
+<script src="../../common/init.js"></script>
+<script src="../../common/i18n.js"></script>
+<script src="../../common/logic.js"></script>
+<script src="../../common/audio.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>CW Perfection Mode</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="gameArea" class="screen active-screen">
+    <div class="header-stats">
+        <div id="wpmDisplay">WPM: 30</div>
+        <div id="scoreDisplay">Punti: 0</div>
+    </div>
+    <div style="color: #d32f2f; font-weight: bold; font-size: 0.8em; margin-bottom: 5px;">ATTENZIONE: Un solo errore e la partita termina!</div>
+    <div class="table-wrapper" id="tableWrapper">
+        <table id="gameTable">
+            <thead><tr><th>Scritto</th><th>Reale</th><th>Esito</th></tr></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+    <div id="gameInputArea" style="display: flex; flex-direction:column; width: 100%; margin-bottom: 5px; gap: 5px; flex-shrink: 0;">
+        <div style="display:flex; gap:6px; width:100%; box-sizing:border-box; align-items:center;">
+            <input type="text" id="permanentGameInput" placeholder="Nessun errore ammesso..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+            <button id="replayWordBtn" class="btn-secondary" style="width: auto; margin: 0; padding: 10px 14px; font-size: 0.9em; flex-shrink:0;">🔁</button>
+        </div>
+    </div>
+    <div style="display:flex; gap:5px; width:100%;">
+        <button id="startGameBtn" class="btn-success">Avvia Sfida</button>
+        <button id="quitGameBtn" class="btn-danger">Esci</button>
+    </div>
+</div>
+<script src="../../common/init.js"></script>
+<script src="../../common/i18n.js"></script>
+<script src="../../common/logic.js"></script>
+<script src="../../common/audio.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

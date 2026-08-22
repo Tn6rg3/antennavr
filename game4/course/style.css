@@ -1,0 +1,52 @@
+/* game4/course/style.css */
+
+.heatmap-box {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75em;
+    font-weight: bold;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff;
+}
+
+.tab-btn {
+    padding: 10px;
+    background: var(--sec-bg-color);
+    border: 1px solid var(--hint-color);
+    color: var(--text-color);
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+}
+
+.tab-btn.active-tab {
+    background: var(--link-color);
+    color: white;
+    border-color: var(--link-color);
+}
+
+.screen {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: var(--bg-color);
+    color: var(--text-color);
+}
+
+#courseContent {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.box-panel {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 10px;
+}

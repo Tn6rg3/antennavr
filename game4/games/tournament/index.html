@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>CW Tournament Mode</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="mainArea" class="screen active-screen">
+    <h3>Tornei e Squadre</h3>
+
+    <div id="noTeamArea" style="display:none; flex-direction:column; width:100%; gap:10px;">
+        <p>Non fai parte di nessuna squadra.</p>
+        <input type="text" id="teamNameInput" placeholder="Nome nuova squadra...">
+        <button id="createTeamBtn" class="btn-success">Crea Squadra</button>
+    </div>
+
+    <div id="myTeamArea" style="display:none; flex-direction:column; width:100%; gap:10px;">
+        <p>Tua Squadra: <b id="myTeamName">...</b></p>
+    </div>
+
+    <hr style="width:100%; margin: 20px 0;">
+
+    <h4>Tornei Disponibili</h4>
+    <ul id="trnList" style="width:100%; list-style:none; padding:0;"></ul>
+
+    <button id="quitBtn" class="btn-danger" style="margin-top:auto;">Esci</button>
+</div>
+
+<script src="../../common/init.js"></script>
+<script src="../../common/i18n.js"></script>
+<script src="../../common/logic.js"></script>
+<script src="../../common/audio.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

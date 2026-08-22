@@ -1,0 +1,4 @@
+/* game4/games/quiz/style.css */
+.header-stats { display: flex; justify-content: space-between; width: 100%; font-weight: bold; }
+.btn-option { height: 80px; font-size: 0.9em; display: flex; align-items: center; justify-content: center; text-align: center; padding: 5px; }
+.btn-option:disabled { opacity: 0.7; cursor: default; }

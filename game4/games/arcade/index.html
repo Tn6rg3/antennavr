@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Morse Arcade - Modular</title>
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body style="background: #000;">
+
+<div id="toastContainer"></div>
+
+<!-- AREA ARCADE (PIOGGIA) -->
+<div id="arcadeArea" class="screen active-screen" style="background: #000; color: #0f0; font-family: 'Courier New', Courier, monospace; overflow: hidden; position: relative;">
+    <div class="header-stats" style="background: rgba(0,255,0,0.1); border-bottom: 1px solid #0f0; padding: 10px;">
+        <div id="arcadeWpmDisplay" style="color: #0f0; font-weight: bold;">WPM: 15</div>
+        <div id="arcadeLivesDisplay" style="color: #f44336; font-size: 1.2em;">❤️❤️❤️</div>
+        <div id="arcadeScoreDisplay" style="color: #0f0; font-weight: bold;">Punti: 0</div>
+    </div>
+
+    <!-- Radar Container -->
+    <div id="arcadeBrickContainer" style="flex-grow: 1; width: 100%; position: relative; background: radial-gradient(circle, #001100 0%, #000000 100%);">
+        <!-- Overlay Level Up -->
+        <div id="arcadeLevelOverlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+            <h1 id="arcadeLevelNumber" style="color:#0f0; font-size:8em; margin:0; text-shadow: 0 0 20px #0f0;">1</h1>
+            <h2 id="arcadeLevelTitle" style="color:#0f0; font-size:2em; margin-bottom:10px; text-shadow: 0 0 10px #0f0;">LIVELLO COMPLETATO!</h2>
+            <p id="arcadeLevelNextText" style="color:#0f0; font-size:1.2em;">Preparati per parole più lunghe...</p>
+        </div>
+    </div>
+
+    <!-- Input Area Arcade -->
+    <div style="width: 100%; padding: 10px; background: #111; border-top: 2px solid #0f0; box-sizing: border-box;">
+        <div id="arcadeLevelDisplay" style="text-align: center; font-size: 0.8em; color: #0f0; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 2px;">LIVELLO 1</div>
+        <input type="text" id="arcadeInput" placeholder="INTERCETTA..." autocomplete="off" autocapitalize="none" style="width:100%; background:#000; color:#0f0; border:1px solid #0f0; padding:15px; font-size:1.4em; text-align:center; box-sizing:border-box; outline:none; text-transform: uppercase;">
+        <button id="quitArcadeBtn" class="btn-danger" style="margin-top: 10px; background: transparent; border: 1px solid #f44336; color: #f44336; font-size: 0.8em; padding: 5px;">ABBANDONA MISSIONE</button>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="../../common/init.js"></script>
+<script src="../../common/i18n.js"></script>
+<script src="../../common/logic.js"></script>
+<script src="../../common/audio.js"></script>
+<script src="game.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Classifiche - Sfida Telegrafia</title>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+    <script src="../common/init.js"></script>
+    <script src="../common/i18n.js"></script>
+    <script src="../common/logic.js"></script>
+    <script src="../common/audio.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --text-color: #ffffff;
+            --hint-color: #999999;
+            --link-color: #3390ec;
+            --btn-color: #3390ec;
+            --btn-text-color: #ffffff;
+            --sec-bg-color: #2c2c2c;
+            --champ-color: #9c27b0;
+        }
+
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+            background-color: var(--bg-color); color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .container {
+            display: flex; flex-direction: column; width: 100%; height: 100%;
+            max-width: 500px; margin: 0 auto; padding: 15px; box-sizing: border-box;
+        }
+
+        header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
+        }
+
+        h2 { margin: 0; font-size: 1.3em; color: var(--link-color); }
+
+        .btn-close {
+            width: auto; background: var(--sec-bg-color); color: var(--text-color);
+            border-radius: 50%; width: 32px; height: 32px; display: flex;
+            align-items: center; justify-content: center; font-weight: bold; border: none; cursor: pointer;
+        }
+
+        .tab-bar {
+            display: flex; gap: 4px; margin-bottom: 10px; flex-shrink: 0;
+        }
+
+        .tab-btn {
+            background-color: var(--hint-color); color: var(--bg-color);
+            padding: 10px 2px; font-size: 0.8em; border-radius: 8px; flex: 1;
+            text-align: center; border: none; cursor: pointer; font-weight: bold;
+        }
+
+        .tab-btn.active-tab {
+            background-color: var(--btn-color); color: var(--btn-text-color);
+        }
+
+        .selector-area { margin-bottom: 10px; }
+
+        select {
+            width: 100%; padding: 12px; border-radius: 10px; border: 2px solid var(--link-color);
+            background: var(--sec-bg-color); color: var(--text-color); font-size: 1em; outline: none;
+        }
+
+        .filter-area {
+            background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px;
+            margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 10px;
+            font-size: 0.9em;
+        }
+
+        .filter-area select {
+            width: auto; padding: 4px 8px; border: 1px solid var(--hint-color); font-size: 0.85em;
+        }
+
+        .list-container {
+            flex-grow: 1; overflow-y: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;
+        }
+
+        .leaderboard-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px; background: var(--sec-bg-color); margin-bottom: 6px;
+            border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .rank { font-size: 1.2em; min-width: 30px; text-align: center; }
+        .user-info { flex-grow: 1; display: flex; flex-direction: column; gap: 2px; margin-left: 10px; }
+        .user-name { font-weight: bold; }
+        .user-meta { font-size: 0.75em; color: var(--hint-color); }
+        .score { text-align: right; min-width: 70px; }
+        .score b { color: var(--link-color); font-size: 1.1em; }
+        .score span { font-size: 0.7em; color: var(--hint-color); margin-left: 2px; }
+
+        .loading { text-align: center; color: var(--hint-color); padding: 20px; font-style: italic; }
+        .empty { text-align: center; color: var(--hint-color); padding: 20px; }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--hint-color); border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h2 id="txt_lb_title">🏆 Classifiche Globali</h2>
+        <button class="btn-close" onclick="closeModule()">✕</button>
+    </header>
+
+    <div class="tab-bar" id="lbCategoryTabs">
+        <button id="tabDailyLB" class="tab-btn active-tab" onclick="switchLBGroup('daily')">📅 Daily</button>
+        <button id="tabMultiLB" class="tab-btn" onclick="switchLBGroup('multi')">⚔️ Multi</button>
+        <button id="tabSoloLB" class="tab-btn" onclick="switchLBGroup('solo')">👤 Solo</button>
+        <button id="tabSpecialLB" class="tab-btn" onclick="switchLBGroup('special')">🎙️ Special</button>
+    </div>
+
+    <div class="selector-area">
+        <select id="lbModeSelect"></select>
+    </div>
+
+    <div class="filter-area" id="lbFilterArea" style="display: none;">
+        <label id="txt_filter_label">Test da:</label>
+        <select id="lbWordFilter">
+            <option value="all">Tutte</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
+        </select>
+    </div>
+
+    <div class="list-container" id="leaderboardContainer"></div>
+</div>
+
+<script src="game.js"></script>
+
+<script>
+    function closeModule() {
+        window.parent.postMessage('closeModule', '*');
+    }
+
+    // Traduzioni veloci se non caricate da i18n.js
+    document.addEventListener('DOMContentLoaded', () => {
+        if (window.i18n && window.currentLang) {
+            const t = window.i18n[window.currentLang];
+            if (t.lb) document.getElementById('txt_lb_title').textContent = `🏆 ${t.lb}`;
+            // Aggiungi altre traduzioni se necessario
+        }
+    });
+</script>
+
+</body>
+</html>
