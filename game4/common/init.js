@@ -27,19 +27,19 @@ window.isAdmin = false;
 // Determine ROOT_PATH for resources
 (function() {
     const path = window.location.pathname;
-    // Se siamo in una sottocartella di games, servono due livelli su
-    if (path.includes('/games/')) {
+    if (path.includes('/games/') || path.includes('/course/') || path.includes('/profile/') || path.includes('/leaderboard/') || path.includes('/participation/') || path.includes('/privacy/') || path.includes('/teams/')) {
         window.ROOT_PATH = "../../";
+    } else {
+        window.ROOT_PATH = "../"; // For top-level modules if they were moved
     }
-    // Se siamo in un modulo di primo livello (profile, course, ecc.), serve un livello su
-    else if (path.includes('/course/') || path.includes('/profile/') || path.includes('/leaderboard/') || path.includes('/participation/') || path.includes('/privacy/') || path.includes('/teams/')) {
-        window.ROOT_PATH = "../";
-    }
-    // Altrimenti siamo nella root
-    else {
+    // Correct for portal root
+    if (path.endsWith('index.html') && !path.includes('/')) {
         window.ROOT_PATH = "";
     }
-    console.log("Init: ROOT_PATH set to", window.ROOT_PATH);
+    // Final check for the specific structure of game4
+    if (path.includes('/game4/index.html') || path.endsWith('/game4/')) {
+        window.ROOT_PATH = "";
+    }
 })();
 
 // Function to check admin status via Firebase permissions
@@ -64,7 +64,15 @@ if (window.Telegram && window.Telegram.WebApp) {
     window.tg = window.Telegram.WebApp;
     window.tg.ready();
     window.tg.expand();
-    const user = window.tg.initDataUnsafe?.user;
+
+    let user = window.tg.initDataUnsafe?.user;
+
+    // If we are in an iframe and tg user is not available, try parent
+    if (!user && window.parent && window.parent.tg) {
+        user = window.parent.tg.initDataUnsafe?.user;
+        window.tg = window.parent.tg;
+    }
+
     if (user) {
         window.myId = user.id.toString();
         window.myName = user.first_name;
@@ -75,10 +83,47 @@ if (window.Telegram && window.Telegram.WebApp) {
 // Initialize Firebase
 if (typeof firebase !== 'undefined') {
     if (!firebase.apps.length) {
+        console.log("Init: Initializing Firebase with URL", firebaseConfig.databaseURL);
         firebase.initializeApp(firebaseConfig);
     }
     window.db = firebase.database();
     window.auth = firebase.auth();
+
+    // --- AUTHENTICATION & MAPPING (Required by Firebase Rules) ---
+    window.auth.signInAnonymously().then(async (userCredential) => {
+        const uid = userCredential.user.uid;
+        console.log("Init: Auth Success, Firebase UID:", uid);
+
+        // System mapping when connected
+        window.db.ref('.info/connected').on('value', async (snap) => {
+            if (snap.val() === true && window.myId) {
+                try {
+                    // 1. Create UID -> TelegramID mapping (Crucial for Rules)
+                    const mappingRef = window.db.ref(`uid_mapping/${uid}`);
+                    await mappingRef.set(window.myId);
+                    mappingRef.onDisconnect().remove();
+
+                    // 2. Set Presence
+                    const pRef = window.db.ref(`presence/${window.myId}`);
+                    pRef.onDisconnect().remove();
+                    pRef.update({
+                        name: window.myName,
+                        username: window.tgUsername || "",
+                        status: 'online',
+                        uid: uid,
+                        ts: firebase.database.ServerValue.TIMESTAMP
+                    });
+
+                    // 3. Detect Admin status via permissions (No hardcoded ID)
+                    window.checkAdminStatus();
+                } catch (e) {
+                    console.error("Init: Mapping/Presence Error:", e);
+                }
+            }
+        });
+    }).catch(err => {
+        console.error("Init: Auth Error:", err);
+    });
 }
 
 window.showToast = function(message) {
