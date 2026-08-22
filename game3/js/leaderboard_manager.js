@@ -59,43 +59,34 @@ window.showLeaderboardTab = function(modeValue) {
     const filterVal = els.lbWordFilter ? els.lbWordFilter.value : 'all';
 
     if (modeValue === 'room') {
-        window.fetchAndRenderGlobalLeaderboard('room', null);
-        return;
+        // ...
     } else if (modeValue === 'daily_challenge') {
         if (els.btnShareDaily && totalScore > 0 && currentMode === 'daily_challenge') {
             els.btnShareDaily.style.display = 'block';
         }
         window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
-        return;
     } else if (modeValue === 'trn_global') {
         if (els.trnSubTabs) els.trnSubTabs.style.display = 'flex';
         window.fetchAndRenderGlobalLeaderboard('tournaments', null);
-        return;
     } else if (modeValue === 'cwfreak') {
         window.fetchAndRenderGlobalLeaderboard('callsign', null);
-        return;
     } else if (modeValue === 'arcade') {
         window.fetchAndRenderGlobalLeaderboard('arcade', null);
-        return;
     } else {
+        // Gestione dinamica Multi/Single per Parole, Caratteri, Quiz, Ping Pong
         if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
 
-        let baseMode = modeValue.includes('std')
-            ? 'standard'
-            : (modeValue.includes('chars')
-                ? 'chars'
-                : (modeValue.includes('quiz')
-                    ? 'quiz'
-                    : (modeValue.includes('callsign') ? 'callsign' : 'pingpong')));
-
+        let baseMode = modeValue.includes('std') ? 'standard' : (modeValue.includes('chars') ? 'chars' : (modeValue.includes('quiz') ? 'quiz' : (modeValue.includes('callsign') ? 'callsign' : 'pingpong')));
         let isMulti = modeValue.endsWith('_multi') || modeValue === 'pingpong';
 
         console.log("LB: BaseMode determined:", baseMode, "isMulti:", isMulti);
 
         if (isMulti) {
+            // Le "Sfide" Multi mostrano la cronologia dei match (recent_matches)
             window.populateDynamicFilters(`recent_matches/${baseMode}${isMulti && baseMode !== 'pingpong' ? '_multi' : ''}`, '');
             window.fetchAndRenderGlobalLeaderboard(modeValue, filterVal);
         } else {
+            // Le classifiche "Solo" mostrano i record individuali (leaderboard/MODE/single_COUNT)
             window.populateDynamicFilters(baseMode, 'single');
             window.fetchAndRenderGlobalLeaderboard(modeValue, filterVal);
         }
@@ -108,7 +99,7 @@ window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
     const currentValue = els.lbWordFilter.value;
 
     db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
-        let options = [`<option value="all">${currentLang === 'it' ? 'Tutte le categorie' : 'All categories'}</option>`];
+        let options = [`<option value="all">${currentLang==='it'?'Tutte le categorie':'All categories'}</option>`];
         let counts = [];
         snapshot.forEach(node => {
             const key = node.key;
@@ -121,7 +112,7 @@ window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
                 }
             }
         });
-        counts.sort((a, b) => parseInt(a) - parseInt(b)).forEach(c => options.push(`<option value="${c}">${c} ${currentLang === 'it' ? 'Stringhe' : 'Strings'}</option>`));
+        counts.sort((a,b) => parseInt(a) - parseInt(b)).forEach(c => options.push(`<option value="${c}">${c} ${currentLang==='it'?'Stringhe':'Strings'}</option>`));
         els.lbWordFilter.innerHTML = options.join('');
         if (counts.includes(currentValue) || currentValue === 'all') els.lbWordFilter.value = currentValue;
     });
@@ -129,10 +120,11 @@ window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
 
 window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     if (!els.leaderboardContainer) return;
-    els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang === 'it' ? 'Caricamento classifica...' : 'Loading standings...'}</p>`;
+    els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento classifica...':'Loading standings...'}</p>`;
 
     console.log("LB: Fetching -> Type:", tabType, "Filter:", filterWordCount);
 
+    // 1. SFIDA GIORNALIERA
     if (tabType === 'daily_challenge') {
         let todayStr = new Date().toISOString().split('T')[0];
         db.ref(`leaderboard/daily_challenge/${todayStr}`).orderByChild('score').limitToLast(50).once('value', snapshot => {
@@ -145,84 +137,28 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
                     players.push(p);
                 }
             });
+            // Ordinamento: Punteggio decrescente, poi WPM decrescente
             players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
             window.renderPlayersListHTML(players, els.leaderboardContainer, false);
         });
         return;
     }
 
-    // TAB ROOM: mostra lo storico personale/recente delle partite finite degli utenti
-    if (tabType === 'room') {
-        const paths = [];
-
-        db.ref('users').once('value', usersSnap => {
-            if (!usersSnap.exists()) {
-                window.renderMatchesHistoryHTML([], els.leaderboardContainer);
-                return;
-            }
-
-            const userPromises = [];
-
-            usersSnap.forEach(userNode => {
-                const uid = userNode.key;
-                const histRef = db.ref(`users/${uid}/history`).orderByChild('date').limitToLast(20);
-                userPromises.push(
-                    histRef.once('value').then(histSnap => {
-                        histSnap.forEach(matchNode => {
-                            const m = matchNode.val();
-                            if (!m) return;
-
-                            // Filtra solo partite finite / match reali
-                            if (!m.date) return;
-
-                            const mode = m.mode || '';
-                            const isRecentFinishedMatch =
-                                mode !== 'daily_challenge' &&
-                                mode !== 'course' &&
-                                mode !== 'training';
-
-                            if (!isRecentFinishedMatch) return;
-
-                            const ts = new Date(m.date).getTime() || 0;
-
-                            paths.push({
-                                id: matchNode.key,
-                                dbPath: `users/${uid}/history/${matchNode.key}`,
-                                date: m.date,
-                                ts,
-                                wordCount: m.wordCount || m.wordCount === 0 ? m.wordCount : (m.wordCount || '—'),
-                                mode: m.mode || '',
-                                score: m.score || 0,
-                                wpm: m.wpm || 0,
-                                players: m.players || null,
-                                matchDetails: m.details || [],
-                                name: userNode.val()?.name || "Sconosciuto",
-                                username: userNode.val()?.username || ""
-                            });
-                        });
-                    })
-                );
-            });
-
-            Promise.all(userPromises).then(() => {
-                paths.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-                window.renderMatchesHistoryHTML(paths.slice(0, 20), els.leaderboardContainer);
-            });
-        });
-
-        return;
-    }
-
+    // 2. SFIDE MULTIPLAYER (Cronologia Match)
     if (tabType.endsWith('_multi') || tabType === 'pingpong') {
+        // Correzione Radice: i dati sono in leaderboard/recent_matches/MODE/WORDCOUNT/MATCHID
         let baseMode = tabType.includes('std') ? 'standard' : (tabType.includes('chars') ? 'chars' : (tabType.includes('quiz') ? 'quiz' : 'pingpong'));
         const dbPath = `leaderboard/recent_matches/${baseMode}${tabType !== 'pingpong' ? '_multi' : ''}`;
         console.log("LB: Fetching Multi from:", dbPath, "Filter:", filterWordCount);
 
+        // OTTIMIZZAZIONE: Usiamo limitToLast(50) per evitare di scaricare migliaia di match passati
         db.ref(dbPath).limitToLast(50).once('value', snapshot => {
             let matches = [];
             if (snapshot.exists()) {
                 snapshot.forEach(wcNode => {
+                    // Se il nodo è una categoria di wordCount (es. '10', '20')
                     if (filterWordCount === 'all' || wcNode.key === filterWordCount) {
+                        // Se è un nodo wordCount, i match sono figli
                         wcNode.forEach(mNode => {
                             const val = mNode.val();
                             if (val && typeof val === 'object') {
@@ -235,13 +171,14 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
                     }
                 });
             }
-            matches.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+            matches.sort((a,b) => (b.ts || 0) - (a.ts || 0));
             console.log("LB: Matches found:", matches.length);
             window.renderMatchesHistoryHTML(matches.slice(0, 20), els.leaderboardContainer);
         });
         return;
     }
 
+    // 3. NOMINATIVI (CW FREAK)
     if (tabType === 'callsign') {
         db.ref('leaderboard/callsign/global').orderByChild('score').limitToLast(50).once('value', snapshot => {
             let players = [];
@@ -259,13 +196,14 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
+    // 4. TORNEI
     if (tabType === 'tournaments') {
         db.ref('leaderboard/tournaments').orderByChild('score').limitToLast(50).once('value', snapshot => {
             let teams = [];
             snapshot.forEach(child => {
                 let t = child.val();
                 if (t) {
-                    t.id = child.key;
+                    t.id = child.key; // ID del Team
                     t.dbPath = `leaderboard/tournaments/${child.key}`;
                     teams.push(t);
                 }
@@ -276,6 +214,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
+    // 4b. ARCADE
     if (tabType === 'arcade') {
         db.ref('leaderboard/arcade/all').orderByChild('score').limitToLast(50).once('value', snapshot => {
             let players = [];
@@ -287,12 +226,14 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
                     players.push(p);
                 }
             });
+            // Ordinamento: Punteggio decrescente
             players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
             window.renderPlayersListHTML(players, els.leaderboardContainer, false, false, true);
         });
         return;
     }
 
+    // 5. SOLO PRACTICE (Record Individuali)
     let baseMode = tabType.replace('_single', '');
     if (baseMode === 'std') baseMode = 'standard';
 
@@ -323,6 +264,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
             window.renderPlayersListHTML(players, els.leaderboardContainer, true);
         });
     } else {
+        // Se 'all', dobbiamo comunque limitare per non scaricare tutto
         db.ref(dbPath).once('value', snapshot => {
             let players = [];
             snapshot.forEach(wordCountNode => {
@@ -330,7 +272,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
                 if (wcKey.startsWith('single_')) {
                     wordCountNode.forEach(userNode => {
                         let p = userNode.val();
-                        if (players.length < 200) {
+                        if (players.length < 200) { // Limite di sicurezza
                             p.id = userNode.key;
                             p.dbPath = `${dbPath}/${wcKey}/${userNode.key}`;
                             players.push(p);
@@ -350,22 +292,12 @@ window.renderMatchesHistoryHTML = function(matches, container) {
         container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">${currentLang === 'it' ? 'Nessuna sfida recente trovata.' : 'No recent challenges found.'}</p>`;
         return;
     }
-
     matches.forEach(match => {
-        const mw = document.createElement('div');
-        mw.style.marginBottom = "25px";
-        mw.style.borderBottom = "1px dashed var(--hint-color)";
-        mw.style.paddingBottom = "15px";
-        mw.style.position = "relative";
+        const mw = document.createElement('div'); mw.style.marginBottom = "25px"; mw.style.borderBottom = "1px dashed var(--hint-color)"; mw.style.paddingBottom = "15px"; mw.style.position = "relative";
+        const infoDiv = document.createElement('div'); infoDiv.style.textAlign = 'center'; infoDiv.style.fontSize = '0.8em'; infoDiv.style.color = 'var(--hint-color)'; infoDiv.style.marginBottom = '8px';
+        infoDiv.textContent = `📅 ${match.date} - ${match.wordCount} Stringhe`; mw.appendChild(infoDiv);
 
-        const infoDiv = document.createElement('div');
-        infoDiv.style.textAlign = 'center';
-        infoDiv.style.fontSize = '0.8em';
-        infoDiv.style.color = 'var(--hint-color)';
-        infoDiv.style.marginBottom = '8px';
-        infoDiv.textContent = `📅 ${match.date} - ${match.wordCount} Stringhe`;
-        mw.appendChild(infoDiv);
-
+        // BOTTONE CANCELLA MATCH (Se l'utente ha partecipato)
         const hasMe = match.players && (Array.isArray(match.players) ? match.players.some(p => p.id === window.myId) : match.players[window.myId]);
         if (hasMe && match.dbPath) {
             const delBtn = document.createElement('button');
@@ -379,8 +311,7 @@ window.renderMatchesHistoryHTML = function(matches, container) {
             mw.appendChild(delBtn);
         }
 
-        window.renderHeadToHeadView(match.players, mw, match.ts);
-        container.appendChild(mw);
+        window.renderHeadToHeadView(match.players, mw, match.ts); container.appendChild(mw);
     });
 };
 
@@ -392,42 +323,23 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
     }
 
     players.forEach((player, index) => {
-        const row = document.createElement('div');
-        row.className = 'leaderboard-row';
-        const mainDiv = document.createElement('div');
-        mainDiv.style.display = 'flex';
-        mainDiv.style.alignItems = 'center';
-        mainDiv.style.gap = '8px';
-        mainDiv.style.flexGrow = '1';
+        const row = document.createElement('div'); row.className = 'leaderboard-row';
+        const mainDiv = document.createElement('div'); mainDiv.style.display = 'flex'; mainDiv.style.alignItems = 'center'; mainDiv.style.gap = '8px'; mainDiv.style.flexGrow = '1';
 
-        const medalDiv = document.createElement('div');
-        medalDiv.style.fontSize = '1.2em';
-        medalDiv.style.minWidth = '1.5em';
-        medalDiv.style.textAlign = 'center';
-        if (index === 0) medalDiv.textContent = "🥇";
-        else if (index === 1) medalDiv.textContent = "🥈";
-        else if (index === 2) medalDiv.textContent = "🥉";
-        else {
-            const span = document.createElement('span');
-            span.style.color = 'var(--hint-color)';
-            span.style.fontSize = '0.8em';
-            span.textContent = (index + 1) + ".";
-            medalDiv.appendChild(span);
-        }
+        const medalDiv = document.createElement('div'); medalDiv.style.fontSize = '1.2em'; medalDiv.style.minWidth = '1.5em'; medalDiv.style.textAlign = 'center';
+        if (index === 0) medalDiv.textContent = "🥇"; else if (index === 1) medalDiv.textContent = "🥈"; else if (index === 2) medalDiv.textContent = "🥉";
+        else { const span = document.createElement('span'); span.style.color = 'var(--hint-color)'; span.style.fontSize = '0.8em'; span.textContent = (index + 1) + "."; medalDiv.appendChild(span); }
 
-        const infoDiv = document.createElement('div');
-        infoDiv.style.display = 'flex';
-        infoDiv.style.flexDirection = 'column';
+        const infoDiv = document.createElement('div'); infoDiv.style.display = 'flex'; infoDiv.style.flexDirection = 'column';
+        const nameDiv = document.createElement('div'); nameDiv.style.display = 'flex'; nameDiv.style.alignItems = 'center';
 
-        const nameDiv = document.createElement('div');
-        nameDiv.style.display = 'flex';
-        nameDiv.style.alignItems = 'center';
-
+        // PRIVACY: I nomi nelle classifiche non sono più cliccabili
         const nameSpan = document.createElement('span');
         nameSpan.style.fontWeight = 'bold';
         nameSpan.textContent = player.name || "Anonimo";
         nameDiv.appendChild(nameSpan);
 
+        // AGGIUNTA LIVELLO ACCANTO AL NOME
         if (player.level) {
             const lvSpan = document.createElement('span');
             lvSpan.style.fontSize = '0.7em';
@@ -464,13 +376,12 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
             dateDiv.appendChild(wpmSpan);
         }
 
-        infoDiv.appendChild(nameDiv);
-        infoDiv.appendChild(dateDiv);
-        mainDiv.appendChild(medalDiv);
-        mainDiv.appendChild(infoDiv);
+        infoDiv.appendChild(nameDiv); infoDiv.appendChild(dateDiv);
+        mainDiv.appendChild(medalDiv); mainDiv.appendChild(infoDiv);
 
         row.appendChild(mainDiv);
 
+        // LIVELLO ARCADE
         if (isArcade) {
             const midDiv = document.createElement('div');
             midDiv.style.cssText = "flex: 0 0 70px; text-align: center; font-weight: bold; color: var(--link-color); border-left: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); margin: 0 5px;";
@@ -484,9 +395,11 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
             row.appendChild(midDiv);
         }
 
+        // CONTENITORE AZIONI E PUNTEGGIO (Per allineamento perfetto)
         const actionsScoreDiv = document.createElement('div');
         actionsScoreDiv.style.cssText = "display:flex; align-items:center; gap:8px; justify-content:flex-end;";
 
+        // BOTTONE CANCELLA (Solo per i propri record) - ORA A SINISTRA DEI PUNTI
         const isMyRecord = player.id === window.myId || (isTeam && player.id === window.myTeamId);
         if (isMyRecord && player.dbPath) {
             const delBtn = document.createElement('button');
@@ -503,18 +416,10 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         }
 
         const scoreDiv = document.createElement('div');
-        scoreDiv.style.cssText = "text-align:right; min-width:65px;";
-        const scoreB = document.createElement('b');
-        scoreB.style.fontSize = '1.1em';
-        scoreB.style.color = 'var(--link-color)';
-        scoreB.textContent = player.score;
-        const ptSpan = document.createElement('span');
-        ptSpan.style.fontSize = '0.7em';
-        ptSpan.style.color = 'var(--hint-color)';
-        ptSpan.style.marginLeft = '2px';
-        ptSpan.textContent = 'pt';
-        scoreDiv.appendChild(scoreB);
-        scoreDiv.appendChild(ptSpan);
+        scoreDiv.style.cssText = "text-align:right; min-width:65px;"; // Min-width garantisce l'allineamento dei numeri
+        const scoreB = document.createElement('b'); scoreB.style.fontSize = '1.1em'; scoreB.style.color = 'var(--link-color)'; scoreB.textContent = player.score;
+        const ptSpan = document.createElement('span'); ptSpan.style.fontSize = '0.7em'; ptSpan.style.color = 'var(--hint-color)'; ptSpan.style.marginLeft = '2px'; ptSpan.textContent = 'pt';
+        scoreDiv.appendChild(scoreB); scoreDiv.appendChild(ptSpan);
 
         actionsScoreDiv.appendChild(scoreDiv);
         row.appendChild(actionsScoreDiv);
@@ -528,6 +433,7 @@ window.deleteLeaderboardEntry = function(path) {
 
     db.ref(path).remove().then(() => {
         showToast(currentLang === 'it' ? "Record rimosso." : "Record removed.");
+        // Ricarica la classifica corrente
         const select = document.getElementById('lbModeSelect');
         if (select) window.showLeaderboardTab(select.value);
     }).catch(err => {
@@ -541,6 +447,7 @@ window.renderRoomLeaderboard = function(players) {
     els.leaderboardContainer.innerHTML = '';
     let allFinished = true;
 
+    // Filtriamo solo chi ha accettato la sfida
     const playersArray = Object.entries(players)
         .filter(([id, data]) => data.accepted)
         .map(([id, data]) => ({
@@ -558,15 +465,16 @@ window.renderRoomLeaderboard = function(players) {
     playersArray.forEach(p => { if (!p.finished) allFinished = false; });
     if (els.waitingOthersText) els.waitingOthersText.style.display = allFinished ? 'none' : 'block';
 
+    // --- FIX: Mostriamo la vista affiancata (H2H) se ci sono più giocatori, anche se non tutti hanno finito ---
     const isMultiOrSpecial = (roomCode && (roomCode.startsWith("TRN_") || currentMode === 'pingpong' || playersArray.length > 1));
 
     if (isMultiOrSpecial) {
         window.renderHeadToHeadView(playersArray, els.leaderboardContainer);
     } else {
         playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm)).forEach((player, index) => {
-            const row = document.createElement('div');
-            row.className = 'leaderboard-row';
+            const row = document.createElement('div'); row.className = 'leaderboard-row';
             let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+            // ... (rest of individual rendering) ...
 
             const leftSpan = document.createElement('span');
             leftSpan.appendChild(document.createTextNode(medal + " "));
@@ -600,25 +508,24 @@ window.renderRoomLeaderboard = function(players) {
             els.leaderboardContainer.appendChild(row);
         });
     }
-
     if (allFinished && playersArray.length > 0 && els.roomWinnerBanner) {
-        els.roomWinnerBanner.textContent = roomCode.startsWith("TRN_")
-            ? `🏆 Vince il match: ${playersArray[0].name}`
-            : `🏆 Vincitore: ${playersArray[0].name}`;
+        els.roomWinnerBanner.textContent = roomCode.startsWith("TRN_") ? `🏆 Vince il match: ${playersArray[0].name}` : `🏆 Vincitore: ${playersArray[0].name}`;
     }
 };
 
 window.renderHeadToHeadView = function(players, container, matchTimestamp = null) {
     if (!players) return;
 
+    // Convertiamo in array se i dati sono arrivati come oggetto (comune in Firebase)
     let playersArray = Array.isArray(players) ? [...players] : Object.values(players);
     if (playersArray.length === 0) return;
 
-    const h2h = document.createElement('div');
-    h2h.className = 'h2h-container';
+    const h2h = document.createElement('div'); h2h.className = 'h2h-container';
     playersArray.sort((a, b) => (b.score - a.score) || (b.wpm - a.wpm));
     const maxScore = playersArray[0].score;
 
+    // Un match è considerato "concluso" se è vecchio di più di 5 minuti,
+    // anche se qualcuno non ha terminato formalmente (timeout tecnico).
     const isOldMatch = matchTimestamp && (Date.now() - matchTimestamp > 5 * 60 * 1000);
 
     playersArray.forEach((p) => {
@@ -629,6 +536,7 @@ window.renderHeadToHeadView = function(players, container, matchTimestamp = null
         nameDiv.className = 'h2h-name';
 
         let pName = p.name || "Sconosciuto";
+        // Fallback se il nome manca per l'utente corrente
         if ((pName === "Sconosciuto" || !pName) && p.id === window.myId) pName = window.myName;
         nameDiv.textContent = pName;
 
@@ -639,52 +547,32 @@ window.renderHeadToHeadView = function(players, container, matchTimestamp = null
         }
         card.appendChild(nameDiv);
 
-        const statsDiv = document.createElement('div');
-        statsDiv.className = 'h2h-stats';
+        const statsDiv = document.createElement('div'); statsDiv.className = 'h2h-stats';
 
-        const rowPt = document.createElement('div');
-        rowPt.className = 'h2h-stat-row';
-        const sPtLbl = document.createElement('span');
-        sPtLbl.textContent = currentLang === 'it' ? 'Punti:' : 'Points:';
-        const sPtVal = document.createElement('span');
-        sPtVal.className = 'h2h-val';
-        sPtVal.style.color = '#4caf50';
-        sPtVal.textContent = p.score;
-        rowPt.appendChild(sPtLbl);
-        rowPt.appendChild(sPtVal);
-        statsDiv.appendChild(rowPt);
+        const rowPt = document.createElement('div'); rowPt.className = 'h2h-stat-row';
+        const sPtLbl = document.createElement('span'); sPtLbl.textContent = currentLang === 'it' ? 'Punti:' : 'Points:';
+        const sPtVal = document.createElement('span'); sPtVal.className = 'h2h-val'; sPtVal.style.color = '#4caf50'; sPtVal.textContent = p.score;
+        rowPt.appendChild(sPtLbl); rowPt.appendChild(sPtVal); statsDiv.appendChild(rowPt);
 
-        const rowSp = document.createElement('div');
-        rowSp.className = 'h2h-stat-row';
-        const sSpLbl = document.createElement('span');
-        sSpLbl.textContent = currentLang === 'it' ? 'Velocità:' : 'Speed:';
-        const sSpVal = document.createElement('span');
-        sSpVal.className = 'h2h-val';
-        sSpVal.style.color = 'var(--link-color)';
-        sSpVal.textContent = `${p.wpm} WPM`;
-        rowSp.appendChild(sSpLbl);
-        rowSp.appendChild(sSpVal);
-        statsDiv.appendChild(rowSp);
+        const rowSp = document.createElement('div'); rowSp.className = 'h2h-stat-row';
+        const sSpLbl = document.createElement('span'); sSpLbl.textContent = currentLang === 'it' ? 'Velocità:' : 'Speed:';
+        const sSpVal = document.createElement('span'); sSpVal.className = 'h2h-val'; sSpVal.style.color = 'var(--link-color)'; sSpVal.textContent = `${p.wpm} WPM`;
+        rowSp.appendChild(sSpLbl); rowSp.appendChild(sSpVal); statsDiv.appendChild(rowSp);
 
         if (p.abandoned) {
-            const rowAb = document.createElement('div');
-            rowAb.className = 'h2h-stat-row';
-            rowAb.innerHTML = `<span style="color:#d32f2f; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px;">${currentLang === 'it' ? 'ABBANDONATO' : 'WITHDRAWN'}</span>`;
+            const rowAb = document.createElement('div'); rowAb.className = 'h2h-stat-row';
+            rowAb.innerHTML = `<span style="color:#d32f2f; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px;">${currentLang==='it'?'ABBANDONATO':'WITHDRAWN'}</span>`;
             statsDiv.appendChild(rowAb);
         } else if (!p.finished && !isOldMatch) {
-            const rowProg = document.createElement('div');
-            rowProg.className = 'h2h-stat-row';
-            rowProg.innerHTML = `<span style="color:#ff9800; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px; animation: pulse 1s infinite;">${currentLang === 'it' ? 'IN CORSO...' : 'PLAYING...'}</span>`;
+            const rowProg = document.createElement('div'); rowProg.className = 'h2h-stat-row';
+            rowProg.innerHTML = `<span style="color:#ff9800; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px; animation: pulse 1s infinite;">${currentLang==='it'?'IN CORSO...':'PLAYING...'}</span>`;
             statsDiv.appendChild(rowProg);
         }
 
         card.appendChild(statsDiv);
 
-        const hintDiv = document.createElement('div');
-        hintDiv.className = 'h2h-hint';
-        hintDiv.textContent = p.id === myId
-            ? (currentLang === 'it' ? 'Clicca per dettagli' : 'Click for details')
-            : (currentLang === 'it' ? 'Dettagli privati' : 'Details are private');
+        const hintDiv = document.createElement('div'); hintDiv.className = 'h2h-hint';
+        hintDiv.textContent = p.id === myId ? (currentLang === 'it' ? 'Clicca per dettagli' : 'Click for details') : (currentLang === 'it' ? 'Dettagli privati' : 'Details are private');
         card.appendChild(hintDiv);
 
         if (p.id !== myId) hintDiv.style.opacity = "0.5";
@@ -696,7 +584,6 @@ window.renderHeadToHeadView = function(players, container, matchTimestamp = null
         };
         h2h.appendChild(card);
     });
-
     container.appendChild(h2h);
 };
 
@@ -705,31 +592,14 @@ window.showPlayerDetailsModal = function(name, details) {
     els.matchDetailsBody.innerHTML = '';
     const h3 = els.matchDetailsModal.querySelector('h3');
     if (h3) h3.textContent = `${currentLang === 'it' ? 'Dettagli Partita di' : 'Match Details for'} ${name}`;
-
     details.forEach(row => {
         const tr = document.createElement('tr');
         let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
-
-        const tdTyped = document.createElement('td');
-        tdTyped.textContent = row.typed || '-';
-
-        const tdReal = document.createElement('td');
-        const bReal = document.createElement('b');
-        if (typeof renderDiffSecure === 'function') renderDiffSecure(bReal, row.real, row.typed || '');
-        else bReal.textContent = row.real;
-        tdReal.appendChild(bReal);
-
-        const tdPoints = document.createElement('td');
-        tdPoints.style.color = color;
-        tdPoints.style.fontWeight = 'bold';
-        tdPoints.textContent = row.points;
-
-        tr.appendChild(tdTyped);
-        tr.appendChild(tdReal);
-        tr.appendChild(tdPoints);
-        els.matchDetailsBody.appendChild(tr);
+        const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || '-';
+        const tdReal = document.createElement('td'); const bReal = document.createElement('b'); if (typeof renderDiffSecure === 'function') renderDiffSecure(bReal, row.real, row.typed || ''); else bReal.textContent = row.real; tdReal.appendChild(bReal);
+        const tdPoints = document.createElement('td'); tdPoints.style.color = color; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = row.points;
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); els.matchDetailsBody.appendChild(tr);
     });
-
     els.matchDetailsModal.style.display = 'flex';
 };
 
