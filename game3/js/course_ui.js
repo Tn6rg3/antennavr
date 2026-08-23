@@ -171,43 +171,151 @@ window.showStudentDetailedStats = function(uid, name) {
     document.getElementById('tutorStudentStatsTitle').textContent = `Statistiche: ${name}`;
     modal.style.display = 'flex';
 
+    // Reset dettagli precedenti per pulizia UI
+    const charArea = document.getElementById('tutorCharDetailArea');
+    const sessArea = document.getElementById('tutorSessionDetailArea');
+    if (charArea) charArea.style.display = 'none';
+    if (sessArea) sessArea.style.display = 'none';
+
     db.ref(`users/${uid}`).once('value', snap => {
         const u = snap.val() || {};
         const p = (u.course && u.course.progress) || {};
 
-        // Heatmap
+        // 1. HEATMAP INTERATTIVA
         const hm = document.getElementById('tutorStudentHeatmap');
         if (hm) {
             hm.innerHTML = '';
             const stats = p.char_stats || {};
             window.KOCH_SEQUENCE.forEach((char, idx) => {
                 const box = document.createElement('div');
-                box.style.cssText = "width:20px; height:20px; display:flex; align-items:center; justify-content:center; font-size:0.65em; font-weight:bold; border-radius:3px;";
+                box.style.cssText = "width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-size:0.7em; font-weight:bold; border-radius:3px; cursor:pointer; transition: transform 0.1s; position:relative;";
                 box.textContent = char;
                 const dbChar = window.firebaseEscape(char);
                 const s = stats[dbChar] || { attempts: 0, errors: 0 };
                 const acc = s.attempts > 0 ? (s.attempts - s.errors) / s.attempts : 0;
-                if (idx >= (p.current_lesson || 2)) { box.style.backgroundColor = 'rgba(255,255,255,0.05)'; box.style.opacity = '0.3'; }
-                else { box.style.backgroundColor = s.attempts === 0 ? '#444' : (acc >= 0.9 ? '#4caf50' : acc >= 0.7 ? '#ff9800' : '#d32f2f'); box.style.color = '#fff'; }
+
+                if (idx >= (p.current_lesson || 2)) {
+                    box.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                    box.style.opacity = '0.3';
+                } else {
+                    box.style.backgroundColor = s.attempts === 0 ? '#444' : (acc >= 0.9 ? '#4caf50' : acc >= 0.7 ? '#ff9800' : '#d32f2f');
+                    box.style.color = '#fff';
+                }
+
+                // Click sul carattere per i dettagli tecnici
+                box.onclick = () => {
+                    const detailArea = document.getElementById('tutorCharDetailArea');
+                    const detailTitle = document.getElementById('tutorCharDetailTitle');
+                    const detailContent = document.getElementById('tutorCharDetailContent');
+                    if (!detailArea || !detailTitle || !detailContent) return;
+
+                    detailArea.style.display = 'block';
+                    detailTitle.textContent = `Dettaglio Carattere: ${char}`;
+
+                    const accuracy = s.attempts > 0 ? Math.round(acc * 100) : 0;
+                    detailContent.innerHTML = `
+                        <div class="stat-box" style="background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">Tentativi: <b>${s.attempts}</b></div>
+                        <div class="stat-box" style="background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">Errori: <b style="color:#f44336;">${s.errors}</b></div>
+                        <div class="stat-box" style="background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">Precisione: <b style="color:${accuracy > 80 ? '#4caf50' : '#ff9800'}">${accuracy}%</b></div>
+                        <div class="stat-box" style="background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">Morse: <b style="letter-spacing:2px; color:var(--link-color);">${window.morseDict[char] || '--'}</b></div>
+                    `;
+                    detailArea.scrollIntoView({ behavior: 'smooth' });
+                };
+
                 hm.appendChild(box);
             });
         }
 
-        // Storia sessioni
+        // 2. STORIA SESSIONI CON DRILL-DOWN
         const hs = document.getElementById('tutorStudentHistory');
         if (hs) {
             hs.innerHTML = '';
-            const history = Object.values(u.history || {}).filter(h => h.mode === 'course').slice(-10).reverse();
-            if (history.length === 0) hs.innerHTML = '<p style="text-align:center; opacity:0.5;">Nessuna sessione registrata.</p>';
-            else history.forEach(h => {
-                const div = document.createElement('div'); div.style.cssText = "padding:5px; background:rgba(0,0,0,0.1); border-radius:4px; margin-bottom:2px; display:flex; justify-content:space-between;";
-                div.innerHTML = `<span>${new Date(h.date).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit'})} - <b>${h.score} XP</b></span> <small>${h.wpm} WPM</small>`;
-                hs.appendChild(div);
-            });
-        }
+            const history = Object.values(u.history || {}).filter(h => h.mode === 'course').slice(-15).reverse();
+            if (history.length === 0) {
+                hs.innerHTML = '<p style="text-align:center; opacity:0.5;">Nessuna sessione registrata.</p>';
+            } else {
+                let totalAcc = 0, totalWpm = 0, count = 0;
 
-        const tr = document.getElementById('tutorStudentTrend');
-        if (tr) tr.textContent = `Costanza: ${p.consecutive_days || 0} giorni consecutivi. Richiami: ${p.reminders_count || 0}/3.`;
+                history.forEach(h => {
+                    const details = h.details || [];
+                    let sessAcc = 0;
+                    if (details.length > 0) {
+                        const correct = details.filter(d => d.points > 0).length;
+                        sessAcc = Math.round((correct / details.length) * 100);
+                        totalAcc += sessAcc;
+                        totalWpm += (h.wpm || 20);
+                        count++;
+                    }
+
+                    const div = document.createElement('div');
+                    div.style.cssText = "padding:8px; background:rgba(255,255,255,0.05); border-radius:6px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; border:1px solid rgba(255,255,255,0.05);";
+
+                    div.innerHTML = `
+                        <div style="display:flex; flex-direction:column;">
+                            <span style="font-weight:bold; font-size:0.9em;">${new Date(h.date).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})}</span>
+                            <small style="color:var(--hint-color);">${h.score} XP | ${h.wpm} WPM</small>
+                        </div>
+                        <div style="text-align:right; display:flex; align-items:center; gap:8px;">
+                            <b style="color:${sessAcc >= 90 ? '#4caf50' : sessAcc >= 70 ? '#ff9800' : '#d32f2f'}">${sessAcc}%</b>
+                            <span style="opacity:0.6;">🔍</span>
+                        </div>
+                    `;
+
+                    // Click sulla sessione per vedere le parole specifiche
+                    div.onclick = () => {
+                        const detailArea = document.getElementById('tutorSessionDetailArea');
+                        const detailContent = document.getElementById('tutorSessionDetailContent');
+                        if (!detailArea || !detailContent) return;
+
+                        detailArea.style.display = 'block';
+                        document.getElementById('tutorSessionDetailTitle').textContent = `Sessione del ${new Date(h.date).toLocaleDateString()}`;
+
+                        if (details.length === 0) {
+                            detailContent.innerHTML = '<p style="text-align:center; opacity:0.5; padding:20px;">Dati di dettaglio non disponibili per questa sessione (vecchia build).</p>';
+                        } else {
+                            let html = '<table style="width:100%; border-collapse:collapse; font-size:0.9em;">';
+                            html += '<thead style="border-bottom:1px solid rgba(255,255,255,0.1); color:var(--hint-color);"><tr><th style="text-align:left; padding:4px;">Target</th><th style="text-align:left; padding:4px;">Input</th><th style="padding:4px;">Esito</th></tr></thead><tbody>';
+                            details.forEach(d => {
+                                const isCorrect = d.points > 0;
+                                html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding:6px 4px; font-weight:bold; color:var(--link-color);">${d.real}</td>
+                                    <td style="padding:6px 4px;">${d.typed || '-'}</td>
+                                    <td style="text-align:center; padding:6px 4px; color:${isCorrect ? '#4caf50' : '#f44336'}; font-weight:bold;">${isCorrect ? 'OK' : 'ERR'}</td>
+                                </tr>`;
+                            });
+                            html += '</tbody></table>';
+                            detailContent.innerHTML = html;
+                        }
+                        detailArea.scrollIntoView({ behavior: 'smooth' });
+                    };
+
+                    hs.appendChild(div);
+                });
+
+                // 3. TREND E ANALISI (ULtime 15 sessioni)
+                const tr = document.getElementById('tutorStudentTrend');
+                if (tr && count > 0) {
+                    const avgA = Math.round(totalAcc / count);
+                    const avgW = Math.round(totalWpm / count);
+                    tr.innerHTML = `
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:10px;">
+                            <div class="box-panel" style="margin:0; padding:10px; text-align:center; border-color:${avgA >= 85 ? '#4caf50' : '#ff9800'};">
+                                <small style="display:block; color:var(--hint-color); text-transform:uppercase; font-size:0.7em;">Accuratezza Media</small>
+                                <b style="font-size:1.3em; color:${avgA >= 85 ? '#4caf50' : '#ff9800'}">${avgA}%</b>
+                            </div>
+                            <div class="box-panel" style="margin:0; padding:10px; text-align:center; border-color:var(--link-color);">
+                                <small style="display:block; color:var(--hint-color); text-transform:uppercase; font-size:0.7em;">Velocità Media</small>
+                                <b style="font-size:1.3em; color:var(--link-color);">${avgW} WPM</b>
+                            </div>
+                        </div>
+                        <div style="font-size:0.8em; color:var(--hint-color); text-align:center; font-style:italic;">
+                            Analisi basata sulle ultime <b>${count}</b> sessioni del corso.<br>
+                            ${avgA >= 90 ? '🚀 Il corsista è pronto per salire di WPM.' : avgA < 75 ? '⚠️ Il corsista ha difficoltà, suggerire più Z2.' : '👍 Progresso regolare.'}
+                        </div>
+                    `;
+                }
+            }
+        }
     });
 };
 
