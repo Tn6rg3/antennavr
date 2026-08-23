@@ -1100,13 +1100,13 @@ window.loadAdminBugs = function() {
 
             // Tasto Rispondi
             const replyBtn = document.createElement('button');
-            replyBtn.style.cssText = "font-size:0.7em; background:var(--link-color); color:white; border:none; border-radius:4px; padding:4px 8px; cursor:pointer;";
+            replyBtn.style.cssText = "flex:1; font-size:0.7em; background:var(--link-color); color:white; border:none; border-radius:4px; padding:6px; cursor:pointer;";
             replyBtn.textContent = "Rispondi";
             replyBtn.onclick = () => window.openBugReply(child.key, bug.fromId, bug.msg);
 
             // Tasto Elimina
             const delBtn = document.createElement('button');
-            delBtn.style.cssText = "font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:4px 8px; cursor:pointer;";
+            delBtn.style.cssText = "flex:1; font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:6px; cursor:pointer;";
             delBtn.textContent = "Elimina";
             delBtn.onclick = () => {
                 if (confirm('Eliminare definitivamente questa segnalazione?')) {
@@ -1154,19 +1154,24 @@ window.checkBugFeedback = function() {
 
         snap.forEach(child => {
             const feedback = child.val();
-            const msg = `📢 FEEDBACK SVILUPPATORE\n\nSulla tua segnalazione: "${feedback.originalMsg}"\n\nRisposta: ${feedback.reply}`;
+            const modal = document.getElementById('bugFeedbackModal');
+            const origMsg = document.getElementById('feedbackOriginalMsg');
+            const replyText = document.getElementById('feedbackReplyText');
+            const closeBtn = document.getElementById('btnCloseFeedbackModal');
 
-            setTimeout(() => {
-                if (window.tg && window.tg.showAlert) {
-                    window.tg.showAlert(msg, () => {
-                        // Eliminiamo il feedback una volta letto
-                        db.ref(`users/${myId}/bugFeedback/${child.key}`).remove();
-                    });
-                } else {
-                    alert(msg);
+            if (modal && origMsg && replyText && closeBtn) {
+                origMsg.textContent = `"${feedback.originalMsg}"`;
+                replyText.textContent = feedback.reply;
+
+                setTimeout(() => {
+                    modal.style.display = 'flex';
+                }, 2000);
+
+                closeBtn.onclick = () => {
+                    modal.style.display = 'none';
                     db.ref(`users/${myId}/bugFeedback/${child.key}`).remove();
-                }
-            }, 2000);
+                };
+            }
         });
     });
 };
