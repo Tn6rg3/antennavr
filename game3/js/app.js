@@ -231,6 +231,16 @@ const listeners = {
 };
 
 // --- UTILS ---
+window.countInvalidChars = function(str) {
+    if (!str) return 0;
+    // Rimuoviamo tutto ciò che è "sicuro": Lettere (incluse accentate italiane), Numeri, Spazi
+    // Il resto (emoji, simboli speciali, icone) viene considerato "speciale" e contato
+    const safeRegex = /[a-zA-Z0-9 ÀÈÉÌÒÙàèéìòù]/gu;
+    const clean = str.replace(safeRegex, '');
+    // Usiamo lo spread operator per contare correttamente i caratteri Unicode (emoji multi-byte)
+    return [...clean].length;
+};
+
 function fisherYatesShuffle(array) {
     if (!Array.isArray(array)) return [];
     const arr = [...array];
@@ -586,19 +596,42 @@ function initGame() {
         let needsUpdate = false;
         const updates = {};
 
-        if (data.alias) {
-            window.myName = data.alias;
-            // Verifica caratteri validi (Alfanumerico e spazi)
-            const validAliasRegex = /^[a-zA-Z0-9 ]+$/;
-            if (!validAliasRegex.test(data.alias)) {
-                setTimeout(() => {
-                    tg.showAlert("⚠️ Il tuo Alias attuale contiene caratteri non validi (simboli o icone). Per favore, modificalo nella sezione Profilo usando solo lettere, numeri e spazi.");
-                }, 2500);
+        // VALIDAZIONE RIGOROSA NOMINATIVO (Max 1 icona/simbolo)
+        let rawName = data.alias || tgUser.first_name || "Operatore";
+        const invalidCount = window.countInvalidChars(rawName);
+
+        if (invalidCount >= 2) {
+            // Se l'utente ha già un nome assegnato dal sistema in passato, lo riusiamo
+            if (data.assignedDefaultName) {
+                window.myName = data.assignedDefaultName;
+                if (data.alias !== window.myName) {
+                    updates.alias = window.myName;
+                    needsUpdate = true;
+                }
+            } else {
+                // Generiamo un nuovo nome GiocatoreX
+                try {
+                    const result = await db.ref('appConfig/userCounter').transaction(curr => (curr || 0) + 1);
+                    const newCount = result.snapshot.val();
+                    window.myName = "Giocatore" + newCount;
+                    updates.assignedDefaultName = window.myName;
+                    updates.alias = window.myName;
+                    needsUpdate = true;
+
+                    setTimeout(() => {
+                        tg.showAlert("⚠️ Il tuo nome contiene troppe icone o simboli (ammesso max 1). Ti è stato assegnato il nome: " + window.myName + ". Puoi cambiarlo nel Profilo usando meno icone.");
+                    }, 3000);
+                } catch(e) {
+                    console.error("Counter Error:", e);
+                    window.myName = "Giocatore";
+                }
             }
         } else {
-            window.myName = tgUser.first_name;
-            updates.alias = window.myName;
-            needsUpdate = true;
+            window.myName = rawName;
+            if (!data.alias) {
+                updates.alias = window.myName;
+                needsUpdate = true;
+            }
         }
 
         if (data.privacyUsername === undefined) {

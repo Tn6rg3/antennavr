@@ -549,12 +549,12 @@ if (els.saveAliasBtn) {
         const privacy = els.privacyUsernameCheckbox ? els.privacyUsernameCheckbox.checked : false;
 
         if (alias) {
-            // Nuovi Vincoli: Solo alfanumerico e spazi, max 20 caratteri
-            const validAliasRegex = /^[a-zA-Z0-9 ]+$/;
-            if (!validAliasRegex.test(alias)) {
-                return alert("L'Alias può contenere solo lettere, numeri e spazi (niente simboli o icone).");
+            // Nuova Validazione: Permessi accenti, numeri, spazi e MAX 1 ICONA
+            const invalidCount = (typeof window.countInvalidChars === 'function') ? window.countInvalidChars(alias) : 0;
+            if (invalidCount >= 2) {
+                return alert("L'Alias può contenere al massimo 1 icona o simbolo speciale (es: Nome 📻).");
             }
-            if (alias.length > 12) return alert("L'Alias non può superare i 12 caratteri.");
+            if (alias.length > 15) return alert("L'Alias non può superare i 15 caratteri.");
         }
 
         if (privacy && !alias) return alert("L'Alias è obbligatorio se nascondi lo username Telegram!");
