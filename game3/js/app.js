@@ -819,6 +819,7 @@ function initGame() {
         window.initQuizManager?.();
         window.setupBugSystem?.();
         window.initAdminAnnouncementListener();
+        window.checkBugFeedback();
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
@@ -1091,9 +1092,21 @@ window.loadAdminBugs = function() {
             msgDiv.style.whiteSpace = "pre-wrap";
             msgDiv.textContent = bug.msg || "";
 
+            // Area Bottoni
+            const btnArea = document.createElement('div');
+            btnArea.style.display = "flex";
+            btnArea.style.gap = "8px";
+            btnArea.style.marginTop = "5px";
+
+            // Tasto Rispondi
+            const replyBtn = document.createElement('button');
+            replyBtn.style.cssText = "font-size:0.7em; background:var(--link-color); color:white; border:none; border-radius:4px; padding:4px 8px; cursor:pointer;";
+            replyBtn.textContent = "Rispondi";
+            replyBtn.onclick = () => window.openBugReply(child.key, bug.fromId, bug.msg);
+
             // Tasto Elimina
             const delBtn = document.createElement('button');
-            delBtn.style.cssText = "font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:2px 6px; margin-top:5px; cursor:pointer;";
+            delBtn.style.cssText = "font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:4px 8px; cursor:pointer;";
             delBtn.textContent = "Elimina";
             delBtn.onclick = () => {
                 if (confirm('Eliminare definitivamente questa segnalazione?')) {
@@ -1111,8 +1124,49 @@ window.loadAdminBugs = function() {
             item.appendChild(header);
             item.appendChild(dateDiv);
             item.appendChild(msgDiv);
-            item.appendChild(delBtn);
+            btnArea.appendChild(replyBtn);
+            btnArea.appendChild(delBtn);
+            item.appendChild(btnArea);
             list.prepend(item);
+        });
+    });
+};
+
+window.openBugReply = function(bugKey, userId, originalMsg) {
+    if (!userId) return alert("Impossibile rispondere: ID utente mancante.");
+    const replyText = prompt(`Invia feedback per: "${originalMsg.substring(0, 30)}..."\n\nScrivi la tua risposta (es: Risolto, Grazie, ecc.):`);
+    if (!replyText || replyText.trim() === "") return;
+
+    db.ref(`users/${userId}/bugFeedback`).push({
+        reply: replyText.trim(),
+        originalMsg: originalMsg,
+        ts: firebase.database.ServerValue.TIMESTAMP,
+        date: new Date().toLocaleString('it-IT')
+    }).then(() => {
+        showToast("Risposta inviata!");
+    }).catch(e => alert("Errore invio: " + e.message));
+};
+
+window.checkBugFeedback = function() {
+    if (!myId) return;
+    db.ref(`users/${myId}/bugFeedback`).once('value', snap => {
+        if (!snap.exists()) return;
+
+        snap.forEach(child => {
+            const feedback = child.val();
+            const msg = `📢 FEEDBACK SVILUPPATORE\n\nSulla tua segnalazione: "${feedback.originalMsg}"\n\nRisposta: ${feedback.reply}`;
+
+            setTimeout(() => {
+                if (window.tg && window.tg.showAlert) {
+                    window.tg.showAlert(msg, () => {
+                        // Eliminiamo il feedback una volta letto
+                        db.ref(`users/${myId}/bugFeedback/${child.key}`).remove();
+                    });
+                } else {
+                    alert(msg);
+                    db.ref(`users/${myId}/bugFeedback/${child.key}`).remove();
+                }
+            }, 2000);
         });
     });
 };
