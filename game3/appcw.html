@@ -1640,10 +1640,25 @@
             <div id="tutorStudentHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center;"></div>
         </div>
 
+        <!-- Dettaglio Carattere Selezionato (NEW) -->
+        <div id="tutorCharDetailArea" class="box-panel" style="display:none; padding:10px; border-color:var(--link-color); background:rgba(33,150,243,0.05);">
+            <h4 id="tutorCharDetailTitle" style="margin:0 0 5px 0; font-size:0.85em; color:var(--link-color);">Dettaglio Carattere</h4>
+            <div id="tutorCharDetailContent" style="font-size:0.8em; display:grid; grid-template-columns: 1fr 1fr; gap:5px;"></div>
+        </div>
+
         <!-- Statistiche Sessioni Recenti -->
         <div class="box-panel" style="padding:10px;">
             <h4 style="margin:0 0 10px 0; font-size:0.85em;">Ultime Sessioni</h4>
             <div id="tutorStudentHistory" style="font-size:0.8em; display:flex; flex-direction:column; gap:5px;"></div>
+        </div>
+
+        <!-- Dettaglio Sessione Selezionata (NEW) -->
+        <div id="tutorSessionDetailArea" class="box-panel" style="display:none; padding:10px; border-color:var(--champ-color); background:rgba(156, 39, 176, 0.05);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h4 id="tutorSessionDetailTitle" style="margin:0; font-size:0.85em; color:var(--champ-color);">Dettaglio Sessione</h4>
+                <button onclick="document.getElementById('tutorSessionDetailArea').style.display='none'" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Chiudi ✕</button>
+            </div>
+            <div id="tutorSessionDetailContent" style="max-height:200px; overflow-y:auto; font-size:0.75em;"></div>
         </div>
 
         <!-- Grafico Errori (Testuale) -->
