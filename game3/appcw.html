@@ -40,6 +40,19 @@
     <button id="btnConfirmAnnouncement" class="btn-success" style="width: 100%;">HO CAPITO, GRAZIE ✅</button>
 </div>
 
+<!-- POPUP FEEDBACK SVILUPPATORE (PER BUG) -->
+<div id="bugFeedbackModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 6000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
+    <span style="font-size: 3em; margin-bottom: 10px;">📩</span>
+    <h2 style="color: var(--champ-color); margin: 0 0 10px 0;">Feedback Sviluppatore</h2>
+    <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; margin-bottom: 15px; text-align: left; font-size: 0.85em;">
+        <div style="color: var(--hint-color); margin-bottom: 5px;">Sulla tua segnalazione:</div>
+        <i id="feedbackOriginalMsg" style="display: block; margin-bottom: 10px; border-left: 2px solid var(--hint-color); padding-left: 8px; opacity: 0.8;"></i>
+        <div style="color: var(--link-color); font-weight: bold; margin-bottom: 5px;">Risposta:</div>
+        <div id="feedbackReplyText" style="line-height: 1.4;"></div>
+    </div>
+    <button id="btnCloseFeedbackModal" class="btn-success" style="width: 100%;">GRAZIE, CHIUDI ✅</button>
+</div>
+
 <!-- POPUP SFIDA GIORNALIERA -->
 <div id="dailyChallengeModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 3em; margin-bottom: 10px;">📅</span>
@@ -1170,8 +1183,8 @@
         <!-- NUOVA STRUTTURA CATEGORIE CLASSIFICA -->
         <div id="lbCategoryTabs">
             <button id="tabDailyLB" class="tab-btn active-tab" onclick="switchLBGroup('daily')">📅 ATTIVITÀ</button>
-            <button id="tabSingleLB" class="tab-btn" onclick="switchLBGroup('single')">👤 SOLO</button>
-            <button id="tabMultiLB" class="tab-btn" onclick="switchLBGroup('multi')">⚔️ MULTI</button>
+            <button id="tabSingleLB" class="tab-btn" onclick="switchLBGroup('single')">👤 RECORDS SOLO</button>
+            <button id="tabMultiLB" class="tab-btn" onclick="switchLBGroup('multi')">⚔️ ARENA MULTI</button>
             <button id="tabSpecialLB" class="tab-btn" onclick="switchLBGroup('special')">🎙️ SPECIALI</button>
         </div>
 
