@@ -233,12 +233,21 @@ const listeners = {
 // --- UTILS ---
 window.countInvalidChars = function(str) {
     if (!str) return 0;
-    // Rimuoviamo tutto ciò che è "sicuro": Lettere (incluse accentate italiane), Numeri, Spazi
-    // Il resto (emoji, simboli speciali, icone) viene considerato "speciale" e contato
     const safeRegex = /[a-zA-Z0-9 ÀÈÉÌÒÙàèéìòù]/gu;
     const clean = str.replace(safeRegex, '');
-    // Usiamo lo spread operator per contare correttamente i caratteri Unicode (emoji multi-byte)
     return [...clean].length;
+};
+
+window.isNameValid = function(str) {
+    if (!str) return false;
+    const invalidCount = window.countInvalidChars(str);
+    // Contiamo quanti caratteri alfanumerici reali ci sono
+    const validCount = str.replace(/[^a-zA-Z0-9ÀÈÉÌÒÙàèéìòù]/gu, '').length;
+
+    // Regola: Massimo 1 icona/simbolo E almeno 2 caratteri di testo/numeri
+    if (invalidCount >= 2) return false;
+    if (validCount < 2) return false;
+    return true;
 };
 
 function fisherYatesShuffle(array) {
@@ -596,11 +605,11 @@ function initGame() {
         let needsUpdate = false;
         const updates = {};
 
-        // VALIDAZIONE RIGOROSA NOMINATIVO (Max 1 icona/simbolo)
+        // VALIDAZIONE RIGOROSA NOMINATIVO (Max 1 icona, min 2 testo)
         let rawName = data.alias || tgUser.first_name || "Operatore";
-        const invalidCount = window.countInvalidChars(rawName);
+        const isValid = window.isNameValid(rawName);
 
-        if (invalidCount >= 2) {
+        if (!isValid) {
             // Se l'utente ha già un nome assegnato dal sistema in passato, lo riusiamo
             if (data.assignedDefaultName) {
                 window.myName = data.assignedDefaultName;
@@ -619,7 +628,7 @@ function initGame() {
                     needsUpdate = true;
 
                     setTimeout(() => {
-                        tg.showAlert("⚠️ Il tuo nome contiene troppe icone o simboli (ammesso max 1). Ti è stato assegnato il nome: " + window.myName + ". Puoi cambiarlo nel Profilo usando meno icone.");
+                        tg.showAlert("⚠️ Il tuo nome non è valido (richiesto testo e max 1 icona). Ti è stato assegnato il nome: " + window.myName + ". Puoi cambiarlo nel Profilo.");
                     }, 3000);
                 } catch(e) {
                     console.error("Counter Error:", e);

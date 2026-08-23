@@ -549,10 +549,10 @@ if (els.saveAliasBtn) {
         const privacy = els.privacyUsernameCheckbox ? els.privacyUsernameCheckbox.checked : false;
 
         if (alias) {
-            // Nuova Validazione: Permessi accenti, numeri, spazi e MAX 1 ICONA
-            const invalidCount = (typeof window.countInvalidChars === 'function') ? window.countInvalidChars(alias) : 0;
-            if (invalidCount >= 2) {
-                return alert("L'Alias può contenere al massimo 1 icona o simbolo speciale (es: Nome 📻).");
+            // Nuova Validazione: Permessi accenti, numeri, spazi e MAX 1 ICONA, MIN 2 TESTO
+            const isValid = (typeof window.isNameValid === 'function') ? window.isNameValid(alias) : true;
+            if (!isValid) {
+                return alert("L'Alias non è valido. Deve contenere almeno 2 caratteri di testo e massimo 1 icona.");
             }
             if (alias.length > 15) return alert("L'Alias non può superare i 15 caratteri.");
         }
