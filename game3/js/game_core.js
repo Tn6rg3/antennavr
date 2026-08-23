@@ -1632,21 +1632,34 @@ window.handleWordSubmission = function(userWord) {
         });
     }
 
-    // Avanzamento WPM
-    if (!isFixedSpeed && currentMode !== 'chars') {
-        if (levDist === 0 && !usedReplay) {
-            if (!window.isPerfectionRetry) {
+    // Avanzamento WPM e Missioni
+    if (levDist === 0 && !usedReplay) {
+        if (!window.isPerfectionRetry) {
+            if (!isFixedSpeed && currentMode !== 'chars') {
                 currentWpm += 2;
                 if (currentWpm > peakWpm) peakWpm = currentWpm;
             }
-        } else if (usedReplay || levDist > 1) {
-            currentWpm = Math.max(10, currentWpm - 2);
-        } else if (levDist === 1) {
-            currentWpm = Math.max(10, currentWpm - 1);
+            // AGGIORNAMENTO STREAK E MISSIONI
+            window.currentStreak++;
+            if (typeof window.updateMissionProgress === 'function') {
+                window.updateMissionProgress('count', 1);
+                window.updateMissionProgress('wpm_min', activeWpmForThisWord);
+                window.updateMissionProgress('streak', window.currentStreak);
+            }
         }
-        if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
+    } else {
+        // RESET STREAK IN CASO DI ERRORE O REPLAY
+        window.currentStreak = 0;
+        if (!isFixedSpeed && currentMode !== 'chars') {
+            if (usedReplay || levDist > 1) {
+                currentWpm = Math.max(10, currentWpm - 2);
+            } else if (levDist === 1) {
+                currentWpm = Math.max(10, currentWpm - 1);
+            }
+        }
     }
 
+    if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
     totalScore += points;
     matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: activeWpmForThisWord, ms: reactionMs, isRetry: window.isPerfectionRetry });
 

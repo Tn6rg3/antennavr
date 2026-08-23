@@ -189,11 +189,22 @@ window.submitQuizAnswer = function(index) {
         if (feedbackBox) {
             feedbackBox.innerHTML = `<span style="color:#4caf50; font-size:1.5em;">✅ CORRETTO!</span><br>+100 punti`;
         }
+
+        // AGGIORNAMENTO MISSIONI
+        window.currentStreak++;
+        if (typeof window.updateMissionProgress === 'function') {
+            window.updateMissionProgress('count', 1);
+            window.updateMissionProgress('streak', window.currentStreak);
+        }
+
         if (typeof playBeep === 'function') playBeep(880, 0.2);
         // Colora di verde il pulsante premuto
         const btn = els['btnQuiz' + ["A", "B", "C", "D"][index]];
         if (btn) btn.style.backgroundColor = "#4caf50";
     } else {
+        // RESET STREAK IN CASO DI ERRORE
+        window.currentStreak = 0;
+
         const correctLetter = ["A", "B", "C", "D"][currentQuizQuestion.correct];
         if (feedbackBox) {
             feedbackBox.innerHTML = `<span style="color:#f44336; font-size:1.5em;">❌ SBAGLIATO</span><br>Era la risposta ${correctLetter}`;

@@ -131,6 +131,9 @@ window.handleArcadeMiss = function() {
     arcadeLives--;
     window.updateArcadeStatsUI();
 
+    // RESET STREAK IN CASO DI ERRORE
+    window.currentStreak = 0;
+
     // Pulisce l'input se è rimasto del testo sbagliato
     if (els.arcadeInput) els.arcadeInput.value = '';
 
@@ -173,6 +176,14 @@ window.handleArcadeInput = function() {
         arcadeScore += points;
         arcadeWordsSolved++;
         arcadeWordsAtCurrentLen++;
+
+        // AGGIORNAMENTO MISSIONI
+        window.currentStreak++;
+        if (typeof window.updateMissionProgress === 'function') {
+            window.updateMissionProgress('count', 1);
+            window.updateMissionProgress('wpm_min', arcadeWpm);
+            window.updateMissionProgress('streak', window.currentStreak);
+        }
 
         // Effetto esplosione
         const el = arcadeActiveBrick.el;
