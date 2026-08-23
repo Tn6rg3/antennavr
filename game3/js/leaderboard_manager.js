@@ -3,24 +3,25 @@
 window.lbGroups = {
     daily: [
         { val: 'daily_challenge', it: '📅 Sfida Giornaliera', en: '📅 Daily Challenge' },
-        { val: 'room', it: '🏁 Risultati Ultima Partita', en: '🏁 Last Match Results' }
-    ],
-    multi: [
-        { val: 'std_multi', it: '⚔️ Sfide Parole (Multi)', en: '⚔️ Words Challenges' },
-        { val: 'chars_multi', it: '⚔️ Sfide Caratteri (Multi)', en: '⚔️ Chars Challenges' },
-        { val: 'quiz_multi', it: '⚔️ Sfide Quiz (Multi)', en: '⚔️ Quiz Challenges' },
-        { val: 'callsign_multi', it: '🎙️ Sfide Nominativi (Multi)', en: '🎙️ Callsign Challenges' },
-        { val: 'pingpong', it: '🏓 Sfide Ping Pong', en: '🏓 Ping Pong Challenges' },
-        { val: 'trn_global', it: '🏆 Classifica Tornei (Team)', en: '🏆 Tournament Standings' }
+        { val: 'my_history', it: '📜 I Miei Match Recenti', en: '📜 My Recent Matches' },
+        { val: 'room', it: '🏁 Ultima Partita (Sessione)', en: '🏁 Last Match (Session)' }
     ],
     single: [
-        { val: 'std_single', it: '👤 Allenamento Parole', en: '👤 Words Practice' },
-        { val: 'chars_single', it: '👤 Allenamento Caratteri', en: '👤 Chars Practice' },
-        { val: 'quiz_single', it: '👤 Allenamento Quiz', en: '👤 Quiz Practice' }
+        { val: 'std_single', it: '👤 Record Parole', en: '👤 Words Records' },
+        { val: 'chars_single', it: '👤 Record Caratteri', en: '👤 Chars Records' },
+        { val: 'quiz_single', it: '👤 Record Quiz', en: '👤 Quiz Records' },
+        { val: 'custom_single', it: '👤 Record Personale', en: '👤 Personal Records' }
+    ],
+    multi: [
+        { val: 'std_multi', it: '⚔️ Match Parole (Multi)', en: '⚔️ Words Matches' },
+        { val: 'chars_multi', it: '⚔️ Match Caratteri (Multi)', en: '⚔️ Chars Matches' },
+        { val: 'quiz_multi', it: '⚔️ Match Quiz (Multi)', en: '⚔️ Quiz Matches' },
+        { val: 'pingpong', it: '🏓 Match Ping Pong', en: '🏓 Ping Pong Matches' },
+        { val: 'trn_global', it: '🏆 Classifica Team', en: '🏆 Team Standings' }
     ],
     special: [
-        { val: 'cwfreak', it: '🎙️ Nominativi (CW Freak)', en: '🎙️ Callsigns (CW Freak)' },
-        { val: 'arcade', it: '🕹️ Intercettazione Arcade', en: '🕹️ Arcade Interception' }
+        { val: 'arcade', it: '🕹️ Arcade Interception', en: '🕹️ Arcade Interception' },
+        { val: 'cwfreak', it: '🎙️ Nominativi (CW Freak)', en: '🎙️ Callsigns (CW Freak)' }
     ]
 };
 
@@ -59,7 +60,27 @@ window.showLeaderboardTab = function(modeValue) {
     const filterVal = els.lbWordFilter ? els.lbWordFilter.value : 'all';
 
     if (modeValue === 'room') {
-        // ...
+        els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento sessione...':'Loading session...'}</p>`;
+
+        const renderLastMatchOrHistory = (snap) => {
+            const playersData = snap.val();
+            if (playersData) {
+                window.renderRoomLeaderboard(playersData);
+            } else {
+                // FALLBACK: Se la stanza è stata eliminata o non esiste, usiamo l'ultimo match dallo storico personale
+                window.fetchAndRenderLastMatchFromHistory();
+            }
+        };
+
+        if (roomCode) {
+            db.ref(`rooms/${roomCode}/players`).once('value', renderLastMatchOrHistory);
+        } else if (window.lastFinishedRoomCode) {
+            db.ref(`rooms/${window.lastFinishedRoomCode}/players`).once('value', renderLastMatchOrHistory);
+        } else {
+            window.fetchAndRenderLastMatchFromHistory();
+        }
+    } else if (modeValue === 'my_history') {
+        window.fetchAndRenderMyHistory();
     } else if (modeValue === 'daily_challenge') {
         if (els.btnShareDaily && totalScore > 0 && currentMode === 'daily_challenge') {
             els.btnShareDaily.style.display = 'block';
@@ -76,7 +97,13 @@ window.showLeaderboardTab = function(modeValue) {
         // Gestione dinamica Multi/Single per Parole, Caratteri, Quiz, Ping Pong
         if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
 
-        let baseMode = modeValue.includes('std') ? 'standard' : (modeValue.includes('chars') ? 'chars' : (modeValue.includes('quiz') ? 'quiz' : (modeValue.includes('callsign') ? 'callsign' : 'pingpong')));
+        let baseMode = 'standard';
+        if (modeValue.includes('chars')) baseMode = 'chars';
+        else if (modeValue.includes('quiz')) baseMode = 'quiz';
+        else if (modeValue.includes('callsign')) baseMode = 'callsign';
+        else if (modeValue.includes('custom')) baseMode = 'custom';
+        else if (modeValue.includes('pingpong')) baseMode = 'pingpong';
+
         let isMulti = modeValue.endsWith('_multi') || modeValue === 'pingpong';
 
         console.log("LB: BaseMode determined:", baseMode, "isMulti:", isMulti);
@@ -91,6 +118,105 @@ window.showLeaderboardTab = function(modeValue) {
             window.fetchAndRenderGlobalLeaderboard(modeValue, filterVal);
         }
     }
+};
+
+window.fetchAndRenderLastMatchFromHistory = function() {
+    if (!els.leaderboardContainer) return;
+
+    db.ref(`users/${myId}/history`).limitToLast(1).once('value', snap => {
+        if (!snap.exists()) {
+            els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Nessun match recente trovato.':'No recent match found.'}</p>`;
+            return;
+        }
+
+        let lastMatch = null;
+        snap.forEach(c => lastMatch = c.val());
+
+        if (!lastMatch) return;
+
+        els.leaderboardContainer.innerHTML = '';
+
+        // Creiamo una visualizzazione simile alla classifica di stanza per l'utente singolo
+        const playersArray = [{
+            id: myId,
+            name: myName,
+            username: tgUsername,
+            score: lastMatch.score || 0,
+            wpm: lastMatch.wpm || 0,
+            finished: true,
+            matchDetails: lastMatch.details || []
+        }];
+
+        // Titolo informativo del fallback
+        const info = document.createElement('p');
+        info.style.cssText = "text-align:center; font-size:0.75em; color:var(--hint-color); margin-bottom:10px; font-style:italic;";
+        const modeName = window.GAME_MODES[lastMatch.mode]?.titleIt || lastMatch.mode;
+        info.textContent = `${currentLang==='it'?'Ultima partita salvata:':'Last saved match:'} ${modeName}`;
+        els.leaderboardContainer.appendChild(info);
+
+        if (lastMatch.type === 'multi') {
+            // Se era un match multiplayer, cerchiamo di recuperare i dati completi se ancora presenti
+            window.renderHeadToHeadView(playersArray, els.leaderboardContainer);
+        } else {
+            window.renderRoomLeaderboard({ [myId]: playersArray[0] });
+        }
+    });
+};
+
+window.fetchAndRenderMyHistory = function() {
+    if (!els.leaderboardContainer) return;
+    els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento storico...':'Loading history...'}</p>`;
+
+    db.ref(`users/${myId}/history`).limitToLast(20).once('value', snap => {
+        let matches = [];
+        snap.forEach(child => {
+            const m = child.val();
+            if (m) {
+                m.id = child.key;
+                // Adattiamo il formato per renderHeadToHeadView se necessario,
+                // oppure usiamo una visualizzazione specifica per il single player history.
+                matches.push(m);
+            }
+        });
+        matches.reverse(); // Più recenti in alto
+
+        if (matches.length === 0) {
+            els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Non hai ancora giocato nessuna partita.':'You haven\'t played any matches yet.'}</p>`;
+            return;
+        }
+
+        els.leaderboardContainer.innerHTML = '';
+        matches.forEach(m => {
+            const row = document.createElement('div');
+            row.className = 'leaderboard-row';
+            row.style.cssText = "margin-bottom:8px; padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; border-left:4px solid var(--link-color); cursor:pointer;";
+
+            const dateStr = new Date(m.date).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+            const modeName = window.GAME_MODES[m.mode]?.titleIt || m.mode;
+
+            row.innerHTML = `
+                <div style="flex-grow:1;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <b>${modeName}</b>
+                        <small style="color:var(--hint-color);">${dateStr}</small>
+                    </div>
+                    <div style="font-size:0.85em; margin-top:4px; display:flex; gap:10px; color:var(--hint-color);">
+                        <span>Punti: <b style="color:#4caf50;">${m.score}</b></span>
+                        <span>Velocità: <b style="color:var(--link-color);">${m.wpm} WPM</b></span>
+                        <span>${m.wordCount || 0} str.</span>
+                    </div>
+                </div>
+                <div style="margin-left:10px; opacity:0.6;">🔍</div>
+            `;
+
+            row.onclick = () => {
+                if (m.details) window.showPlayerDetailsModal(myName, m.details);
+                else showToast(currentLang === 'it' ? "Dettagli non disponibili per questa build." : "Details not available for this build.");
+            };
+
+            els.leaderboardContainer.appendChild(row);
+        });
+    });
 };
 
 window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
