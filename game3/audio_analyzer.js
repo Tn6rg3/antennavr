@@ -55,10 +55,20 @@ window.initAudioAnalyzer = function() {
             document.getElementById('realTxSquelchMarker').style.left = val + "%";
         };
     }
-    if (els.wpmIn) els.wpmIn.onchange = (e) => {
-        window.audioAnalyzerState.wpm = parseInt(e.target.value) || 20;
-        window.audioAnalyzerState.unitBits = Math.round(1200 / window.audioAnalyzerState.wpm / 10);
-    };
+    if (els.wpmIn) {
+        els.wpmIn.onchange = (e) => {
+            window.audioAnalyzerState.wpm = parseInt(e.target.value) || 20;
+        };
+    }
+
+    if (els.autoWpm) {
+        // Inizializziamo lo stato dalla checkbox UI
+        window.audioAnalyzerState.autoWpm = els.autoWpm.checked;
+        els.autoWpm.onchange = (e) => {
+            window.audioAnalyzerState.autoWpm = e.target.checked;
+            console.log("AudioAnalyzer: Auto-WPM is now", window.audioAnalyzerState.autoWpm);
+        };
+    }
     if (els.resetBtn) {
         els.resetBtn.onclick = () => {
             window.audioAnalyzerState.decodedText = "";
@@ -166,9 +176,14 @@ window.startBitstreamAnalysis = function() {
 
 window.processBit = function(bit) {
     const state = window.audioAnalyzerState;
+    const currentUnitBits = Math.round(1200 / state.wpm / 5);
 
-    // In questa modalità 1 bit = ~5ms
     if (bit === 1) {
+        // INIZIO SUONO: Se veniamo da un silenzio lungo, decodifichiamo il carattere precedente prima di resettare
+        if (state.spacesCount > currentUnitBits * 2.0 && state.currentCode.length > 0) {
+            window.decodeCurrentCode();
+        }
+
         state.marksCount++;
         if (state.spacesCount > 0) {
             window.handleTransition('SPACE', state.spacesCount);
@@ -181,15 +196,12 @@ window.processBit = function(bit) {
             state.marksCount = 0;
         }
 
-        // UnitBits a 20 WPM con campionamento 5ms è circa 12 (60ms / 5ms)
-        const currentUnitBits = Math.round(1200 / state.wpm / 5);
-
-        // Chiusura carattere se silenzio > 3 unità
-        if (state.spacesCount > currentUnitBits * 3 && state.currentCode.length > 0) {
+        // AUTO-DECODE: Se siamo in silenzio da più di 2 unità, chiudiamo il carattere
+        if (state.spacesCount > currentUnitBits * 2.2 && state.currentCode.length > 0) {
             window.decodeCurrentCode();
         }
-        // Spazio parola se silenzio > 6 unità
-        if (state.spacesCount === Math.round(currentUnitBits * 6.5)) {
+        // SPAZIO PAROLA: Se il silenzio supera le 5 unità, aggiungiamo lo spazio nel testo
+        if (state.spacesCount === Math.round(currentUnitBits * 5.0)) {
             if (state.decodedText.length > 0 && !state.decodedText.endsWith(" ")) {
                 state.decodedText += " ";
                 window.updateDecodedDisplay();
@@ -197,7 +209,7 @@ window.processBit = function(bit) {
         }
     }
 
-    // LED reattivo al singolo bit
+    // Feedback visivo LED
     const led = document.getElementById('realTxStatusLed');
     if (led) led.style.background = (bit === 1) ? "var(--link-color)" : "#333";
     if (led) led.style.boxShadow = (bit === 1) ? "0 0 10px var(--link-color)" : "none";
@@ -222,9 +234,14 @@ window.handleTransition = function(type, count) {
         // Adaptive WPM Tracking (basato sui punti)
         if (state.autoWpm && !isDash && count < currentUnitBits * 1.5) {
             const newUnitBits = (currentUnitBits * 0.8) + (count * 0.2);
-            state.wpm = Math.round(1200 / (newUnitBits * 5));
-            const wpmIn = document.getElementById('realTxWpmInput');
-            if (wpmIn) wpmIn.value = state.wpm;
+            const calculatedWpm = Math.round(1200 / (newUnitBits * 5));
+
+            // Applichiamo il cambio solo se c'è una variazione significativa (>1 WPM)
+            if (Math.abs(calculatedWpm - state.wpm) >= 1) {
+                state.wpm = calculatedWpm;
+                const wpmIn = document.getElementById('realTxWpmInput');
+                if (wpmIn) wpmIn.value = state.wpm;
+            }
         }
     }
 
