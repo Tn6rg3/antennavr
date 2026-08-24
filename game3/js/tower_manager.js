@@ -11,6 +11,7 @@ window.towerState = {
     wpm: 12,
     attemptCount: 0,
     tempNoiseBoost: 0,
+    isAdvancingFloor: false, // Protezione bug avanzamento
 
     // Missione TX (Tasto)
     txMode: false,
@@ -304,6 +305,9 @@ window.checkTowerWord = function(typed) {
 };
 
 window.advanceTowerFloor = function() {
+    if (window.towerState.isAdvancingFloor) return;
+    window.towerState.isAdvancingFloor = true;
+
     window.towerState.floor++;
     if (window.db && window.myId) {
         window.db.ref(`leaderboard/la_torre/all/${window.myId}`).set({
@@ -319,6 +323,7 @@ window.advanceTowerFloor = function() {
 
     const nextStep = () => {
         if (overlay) overlay.style.display = 'none';
+        window.towerState.isAdvancingFloor = false; // Sblocca protezione
         window.generateTowerFloor();
         window.fetchNearbyPlayers();
     };
@@ -442,11 +447,25 @@ window.handleTowerKey = function(isDown) {
 
 window.finalizeTowerTxChar = function() {
     if (window.towerState.txSequence.length === 0) return;
+
+    // Cancella timeout decodifica per evitare doppie chiamate/errori
+    if (window.towerState.txTimeout) {
+        clearTimeout(window.towerState.txTimeout);
+        window.towerState.txTimeout = null;
+    }
+
     const code = window.towerState.txSequence.join("");
     window.towerState.txSequence = [];
     let found = "";
     for (let c in window.morseDict) { if (window.morseDict[c] === code) { found = c; break; } }
-    if (found && window.towerState.txTarget.startsWith(window.towerState.txCurrent + found)) {
+
+    // Se la sequenza non è valida, non dare errore subito, svuota e aspetta
+    if (!found) {
+        document.getElementById('towerTxCurrent').textContent = window.towerState.txCurrent;
+        return;
+    }
+
+    if (window.towerState.txTarget.startsWith(window.towerState.txCurrent + found)) {
         window.towerState.txCurrent += found;
         const currEl = document.getElementById('towerTxCurrent');
         if (currEl) currEl.textContent = window.towerState.txCurrent;
