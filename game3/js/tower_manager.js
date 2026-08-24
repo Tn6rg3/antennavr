@@ -9,8 +9,8 @@ window.towerState = {
     currentWords: [],
     wordIndex: 0,
     wpm: 12,
-    attemptCount: 0, // Tentativi per la parola/missione corrente
-    tempNoiseBoost: 0, // Boost di disturbo temporaneo per errori
+    attemptCount: 0,
+    tempNoiseBoost: 0,
 
     // Missione TX (Tasto)
     txMode: false,
@@ -22,7 +22,6 @@ window.towerState = {
 
     // Audio DSP
     qrnLevel: 0,
-    qsbDepth: 0,
     isDspActive: false,
     isAmpActive: false,
 
@@ -64,16 +63,10 @@ window.initTowerManager = function() {
     if (window.towerState.resizeHandler) window.removeEventListener('resize', window.towerState.resizeHandler);
 
     const resizeCanvases = () => {
-        if (window.towerState.oscCanvas) {
-            window.towerState.oscCanvas.width = window.towerState.oscCanvas.clientWidth;
-            window.towerState.oscCanvas.height = window.towerState.oscCanvas.clientHeight;
-            window.towerState.oscCtx = window.towerState.oscCanvas.getContext('2d');
-        }
-        if (window.towerState.climbCanvas) {
-            window.towerState.climbCanvas.width = window.towerState.climbCanvas.clientWidth;
-            window.towerState.climbCanvas.height = window.towerState.climbCanvas.clientHeight;
-            window.towerState.climbCtx = window.towerState.climbCanvas.getContext('2d');
-        }
+        const osc = window.towerState.oscCanvas;
+        const clm = window.towerState.climbCanvas;
+        if (osc) { osc.width = osc.clientWidth; osc.height = osc.clientHeight; window.towerState.oscCtx = osc.getContext('2d'); }
+        if (clm) { clm.width = clm.clientWidth; clm.height = clm.clientHeight; window.towerState.climbCtx = clm.getContext('2d'); }
     };
 
     resizeCanvases();
@@ -108,11 +101,19 @@ window.initTowerManager = function() {
         input.onkeypress = (e) => { if (e.key === 'Enter') { window.checkTowerWord(input.value.trim().toUpperCase()); input.value = ""; } };
     }
 
-    document.getElementById('btnTowerGadget1')?.addEventListener('click', () => window.useTowerGadget(1));
-    document.getElementById('btnTowerGadget2')?.addEventListener('click', () => window.useTowerGadget(2));
-    document.getElementById('btnTowerSOS')?.addEventListener('click', () => window.useTowerSOS());
-    document.getElementById('btnTowerReplay')?.addEventListener('click', () => window.playNextTowerWord());
-    document.getElementById('quitTowerBtn')?.addEventListener('click', () => window.quitTowerClimb());
+    const elsTower = {
+        g1: document.getElementById('btnTowerGadget1'),
+        g2: document.getElementById('btnTowerGadget2'),
+        sos: document.getElementById('btnTowerSOS'),
+        rep: document.getElementById('btnTowerReplay'),
+        quit: document.getElementById('quitTowerBtn')
+    };
+
+    if (elsTower.g1) elsTower.g1.onclick = () => window.useTowerGadget(1);
+    if (elsTower.g2) elsTower.g2.onclick = () => window.useTowerGadget(2);
+    if (elsTower.sos) elsTower.sos.onclick = () => window.useTowerSOS();
+    if (elsTower.rep) elsTower.rep.onclick = () => window.playNextTowerWord();
+    if (elsTower.quit) elsTower.quit.onclick = () => window.quitTowerClimb();
 
     const vKey = document.getElementById('towerVirtualKey');
     if (vKey) {
@@ -123,45 +124,54 @@ window.initTowerManager = function() {
     }
 };
 
-window.startTowerSequence = async function() {
-    window.resetGameState();
-    window.towerState.active = true;
-    gameRunning = true;
-    currentMode = 'la_torre';
+window.startTowerSequence = function() {
+    console.log("Tower: Starting climb sequence...");
+    if (typeof window.resetGameState === 'function') window.resetGameState();
 
+    window.towerState.active = true;
+    window.gameRunning = true;
+    window.currentMode = 'la_torre';
+
+    // Recupero progressi (non-async per sicurezza boot)
     let startFloor = 1;
-    if (db && myId) {
-        try {
-            const snap = await db.ref(`users/${myId}/towerProgress`).once('value');
+    const loadProgress = () => {
+        window.towerState.floor = startFloor;
+        window.towerState.stability = 100;
+        window.towerState.wpm = 12 + Math.floor(startFloor / 5);
+        window.towerState.attemptCount = 0;
+        window.towerState.tempNoiseBoost = 0;
+
+        if (typeof window.showScreen === 'function') window.showScreen('towerArea');
+        window.initTowerManager();
+        window.renderTowerUI();
+        window.initTowerAudio();
+
+        if (window.towerState.animationId) cancelAnimationFrame(window.towerState.animationId);
+        window.towerState.animationId = requestAnimationFrame(window.towerRenderLoop);
+
+        setTimeout(window.generateTowerFloor, 1000);
+        window.fetchNearbyPlayers();
+    };
+
+    if (window.db && window.myId) {
+        window.db.ref(`users/${window.myId}/towerProgress`).once('value').then(snap => {
             if (snap.exists()) {
                 startFloor = snap.val().checkpoint || 1;
                 window.towerState.valvole = snap.val().valvole || 0;
                 showToast(`🚀 Riprendo dal piano ${startFloor}`);
             }
-        } catch(e) {}
+            loadProgress();
+        }).catch(() => loadProgress());
+    } else {
+        loadProgress();
     }
-
-    window.towerState.floor = startFloor;
-    window.towerState.stability = 100;
-    window.towerState.wpm = 12 + Math.floor(startFloor / 5);
-    window.towerState.attemptCount = 0;
-    window.towerState.tempNoiseBoost = 0;
-
-    showScreen('towerArea');
-    window.initTowerManager();
-    window.renderTowerUI();
-    window.initTowerAudio();
-
-    if (window.towerState.animationId) cancelAnimationFrame(window.towerState.animationId);
-    window.towerState.animationId = requestAnimationFrame(window.towerRenderLoop);
-
-    setTimeout(window.generateTowerFloor, 1000);
-    window.fetchNearbyPlayers();
 };
 
 window.initTowerAudio = function() {
-    if (!window.audioCtx) window.resumeAudioContext();
+    if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
     const ctx = window.audioCtx;
+    if (!ctx) return;
+
     const bufferSize = 2 * ctx.sampleRate;
     const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
@@ -190,12 +200,19 @@ window.generateTowerFloor = function() {
         window.startTowerBossFight();
     } else {
         window.towerState.txMode = false;
-        document.getElementById('towerInputArea').style.display = 'flex';
-        document.getElementById('towerBossControls').style.display = 'none';
-        window.towerState.currentWords = window.getGameWords(3, 'standard');
+        const areaRX = document.getElementById('towerInputArea');
+        const areaTX = document.getElementById('towerBossControls');
+        if (areaRX) areaRX.style.display = 'flex';
+        if (areaTX) areaTX.style.display = 'none';
+
+        if (typeof window.getGameWords === 'function') {
+            window.towerState.currentWords = window.getGameWords(3, 'standard');
+        } else {
+            window.towerState.currentWords = ["RADIO", "TORRE", "ETERE"];
+        }
         window.towerState.wordIndex = 0;
-        const lore = window.TOWER_LORE[((floor-1) % 10)] || "Segnale perso nell'etere...";
-        document.getElementById('towerLoreText').textContent = lore;
+        const loreEl = document.getElementById('towerLoreText');
+        if (loreEl) loreEl.textContent = window.TOWER_LORE[((floor-1) % 10)] || "Segnale perso...";
         window.playNextTowerWord();
     }
     window.updateTowerDifficulty();
@@ -206,7 +223,7 @@ window.playNextTowerWord = function() {
     const word = window.towerState.currentWords[window.towerState.wordIndex];
     if (word) {
         const input = document.getElementById('towerInput');
-        if (input) { input.value = ""; input.focus(); }
+        if (input && !window.towerState.txMode) { input.value = ""; input.focus(); }
         window.playMorseWithDisturbance(word);
     }
 };
@@ -214,7 +231,8 @@ window.playNextTowerWord = function() {
 window.playMorseWithDisturbance = function(text) {
     if (!window.towerState.active) return;
     if (typeof playMorseAudio === 'function') {
-        stopAllMorseAudio();
+        if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+        window.updateTowerDifficulty();
         setTimeout(() => { if (window.towerState.active) playMorseAudio(text, window.towerState.wpm, true); }, 50);
     }
     const tape = document.getElementById('towerTapeContent');
@@ -249,10 +267,9 @@ window.checkTowerWord = function(typed) {
         window.towerState.attemptCount++;
         window.damageTowerStability(10);
         window.triggerTowerGlitch();
-
         if (window.towerState.attemptCount < 3) {
-            showToast(`⚠️ ERRORE RICEZIONE (Tentativo ${window.towerState.attemptCount}/3)`);
-            window.towerState.tempNoiseBoost += 0.04; // Aumenta il disturbo
+            showToast(`⚠️ ERRORE RICEZIONE (${window.towerState.attemptCount}/3)`);
+            window.towerState.tempNoiseBoost += 0.05;
             window.updateTowerDifficulty();
             setTimeout(window.playNextTowerWord, 800);
         } else {
@@ -269,14 +286,14 @@ window.checkTowerWord = function(typed) {
 
 window.advanceTowerFloor = function() {
     window.towerState.floor++;
-    if (db && myId) {
-        db.ref(`leaderboard/la_torre/all/${myId}`).set({
-            name: myName, score: window.towerState.floor, wpm: window.towerState.wpm,
+    if (window.db && window.myId) {
+        window.db.ref(`leaderboard/la_torre/all/${window.myId}`).set({
+            name: window.myName, score: window.towerState.floor, wpm: window.towerState.wpm,
             date: new Date().toLocaleDateString('it-IT'), ts: firebase.database.ServerValue.TIMESTAMP
         });
         const updateData = { valvole: (window.towerState.valvole || 0) + 5 };
         if (window.towerState.floor % 10 === 1) { updateData.checkpoint = window.towerState.floor; showToast("🚩 CHECKPOINT!"); }
-        db.ref(`users/${myId}/towerProgress`).update(updateData);
+        window.db.ref(`users/${window.myId}/towerProgress`).update(updateData);
     }
     const overlay = document.getElementById('towerLevelOverlay');
     const num = document.getElementById('towerLevelNumber');
@@ -299,8 +316,8 @@ window.useTowerGadget = function(id) {
     const state = window.towerState;
     if (id === 1 && state.gadget1 > 0 && !state.isDspActive) {
         state.gadget1--; state.isDspActive = true; showToast("🛡️ FILTRO DSP (20s)");
-        const oldQrn = state.qrnLevel; state.qrnLevel = 0; window.updateTowerDifficulty();
-        setTimeout(() => { state.isDspActive = false; state.qrnLevel = oldQrn; window.updateTowerDifficulty(); }, 20000);
+        const oldQrn = state.qrnLevel; state.qrnLevel = 0; state.tempNoiseBoost = 0; window.updateTowerDifficulty();
+        setTimeout(() => { state.isDspActive = false; window.updateTowerDifficulty(); }, 20000);
     } else if (id === 2 && state.gadget2 > 0 && !state.isAmpActive) {
         state.gadget2--; state.isAmpActive = true; showToast("🚀 AMPLIFICATORE (20s)");
         setTimeout(() => { state.isAmpActive = false; }, 20000);
@@ -311,7 +328,7 @@ window.useTowerGadget = function(id) {
 window.useTowerSOS = function() {
     if (confirm("Dimezzare velocità per questo piano?")) {
         window.towerState.wpm = Math.max(8, Math.round(window.towerState.wpm / 1.5));
-        window.renderTowerUI(); stopAllMorseAudio(); window.playNextTowerWord();
+        window.renderTowerUI(); if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio(); window.playNextTowerWord();
     }
 };
 
@@ -320,12 +337,18 @@ window.startTowerBossFight = function() {
     window.towerState.txTarget = "SOS";
     window.towerState.txCurrent = "";
     window.towerState.txSequence = [];
+    window.towerState.txLastTime = 0;
     window.towerState.attemptCount = 0;
-    document.getElementById('towerInputArea').style.display = 'none';
-    document.getElementById('towerBossControls').style.display = 'flex';
-    document.getElementById('towerTxPrompt').textContent = "RIPRISTINA SEGNALE - TRASMETTI:";
-    document.getElementById('towerTxTarget').textContent = "[SOS]";
-    document.getElementById('towerTxCurrent').textContent = "";
+    const areaRX = document.getElementById('towerInputArea');
+    const areaTX = document.getElementById('towerBossControls');
+    if (areaRX) areaRX.style.display = 'none';
+    if (areaTX) areaTX.style.display = 'flex';
+    const prompt = document.getElementById('towerTxPrompt');
+    if (prompt) prompt.textContent = "RIPRISTINA SEGNALE - TRASMETTI:";
+    const target = document.getElementById('towerTxTarget');
+    if (target) target.textContent = "[SOS]";
+    const curr = document.getElementById('towerTxCurrent');
+    if (curr) curr.textContent = "";
 };
 
 window.startTowerSintonia = function() {
@@ -334,33 +357,43 @@ window.startTowerSintonia = function() {
     const floor = window.towerState.floor;
     const len = 2 + Math.floor(floor / 15);
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let target = "";
-    for(let i=0; i<len; i++) target += chars[Math.floor(Math.random() * chars.length)];
-    window.towerState.txTarget = target;
+    let targetStr = "";
+    for(let i=0; i<len; i++) targetStr += chars[Math.floor(Math.random() * chars.length)];
+    window.towerState.txTarget = targetStr;
     window.towerState.txCurrent = "";
     window.towerState.txSequence = [];
-    document.getElementById('towerInputArea').style.display = 'none';
-    document.getElementById('towerBossControls').style.display = 'flex';
-    document.getElementById('towerTxPrompt').textContent = "PERDITA FREQUENZA! SINTONIZZA:";
-    document.getElementById('towerTxTarget').textContent = "[" + target + "]";
-    document.getElementById('towerTxCurrent').textContent = "";
+    window.towerState.txLastTime = 0;
+    const areaRX = document.getElementById('towerInputArea');
+    const areaTX = document.getElementById('towerBossControls');
+    if (areaRX) areaRX.style.display = 'none';
+    if (areaTX) areaTX.style.display = 'flex';
+    const prompt = document.getElementById('towerTxPrompt');
+    if (prompt) prompt.textContent = "PERDITA FREQUENZA! SINTONIZZA:";
+    const targetEl = document.getElementById('towerTxTarget');
+    if (targetEl) targetEl.textContent = "[" + targetStr + "]";
+    const currEl = document.getElementById('towerTxCurrent');
+    if (currEl) currEl.textContent = "";
     window.triggerTowerGlitch();
+    window.updateTowerDifficulty();
 };
 
 window.handleTowerKey = function(isDown) {
     if (!window.towerState.active || !window.towerState.txMode) return;
+    if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
+
     const now = Date.now();
     const unit = 1200 / window.towerState.wpm;
     if (isDown) {
         if (typeof startTone === 'function') startTone(600);
-        if (window.towerState.txLastTime > 0 && (now - window.towerState.txLastTime) > unit * 2) window.finalizeTowerTxChar();
+        if (window.towerState.txLastTime > 0 && (now - window.towerState.txLastTime) > unit * 2.5) window.finalizeTowerTxChar();
         window.towerState.txLastTime = now;
     } else {
         if (typeof stopTone === 'function') stopTone();
         const dur = now - window.towerState.txLastTime;
         window.towerState.txSequence.push(dur > unit * 1.8 ? "-" : ".");
         window.towerState.txLastTime = now;
-        document.getElementById('towerTxCurrent').textContent = window.towerState.txCurrent + " " + window.towerState.txSequence.join("");
+        const currEl = document.getElementById('towerTxCurrent');
+        if (currEl) currEl.textContent = window.towerState.txCurrent + " " + window.towerState.txSequence.join("");
         if (window.towerState.txTimeout) clearTimeout(window.towerState.txTimeout);
         window.towerState.txTimeout = setTimeout(() => { if (window.towerState.txMode) window.finalizeTowerTxChar(); }, unit * 3.5);
     }
@@ -375,13 +408,17 @@ window.finalizeTowerTxChar = function() {
 
     if (found && window.towerState.txTarget.startsWith(window.towerState.txCurrent + found)) {
         window.towerState.txCurrent += found;
-        document.getElementById('towerTxCurrent').textContent = window.towerState.txCurrent;
+        const currEl = document.getElementById('towerTxCurrent');
+        if (currEl) currEl.textContent = window.towerState.txCurrent;
         if (window.towerState.txCurrent === window.towerState.txTarget) {
             showToast("✅ SINTONIZZATO!");
             setTimeout(() => {
                 window.towerState.txMode = false;
-                document.getElementById('towerInputArea').style.display = 'flex';
-                document.getElementById('towerBossControls').style.display = 'none';
+                const areaRX = document.getElementById('towerInputArea');
+                const areaTX = document.getElementById('towerBossControls');
+                if (areaRX) areaRX.style.display = 'flex';
+                if (areaTX) areaTX.style.display = 'none';
+                window.towerState.tempNoiseBoost = 0;
                 window.updateTowerDifficulty();
                 if (window.towerState.floor % 10 === 0) window.advanceTowerFloor();
                 else window.playNextTowerWord();
@@ -392,17 +429,21 @@ window.finalizeTowerTxChar = function() {
         window.damageTowerStability(10);
         window.triggerTowerGlitch();
         if (window.towerState.attemptCount < 3) {
-            showToast(`❌ ERRORE TX (${window.towerState.attemptCount}/3) - RIPROVA`);
-            window.towerState.tempNoiseBoost += 0.05;
+            showToast(`❌ ERRORE TX (${window.towerState.attemptCount}/3)`);
+            window.towerState.tempNoiseBoost += 0.08;
             window.updateTowerDifficulty();
             window.towerState.txCurrent = "";
-            document.getElementById('towerTxCurrent').textContent = "";
+            const currEl = document.getElementById('towerTxCurrent');
+            if (currEl) currEl.textContent = "";
         } else {
             showToast("📡 SINTONIA DI FORTUNA...");
             setTimeout(() => {
                 window.towerState.txMode = false;
-                document.getElementById('towerInputArea').style.display = 'flex';
-                document.getElementById('towerBossControls').style.display = 'none';
+                const areaRX = document.getElementById('towerInputArea');
+                const areaTX = document.getElementById('towerBossControls');
+                if (areaRX) areaRX.style.display = 'flex';
+                if (areaTX) areaTX.style.display = 'none';
+                window.towerState.tempNoiseBoost = 0;
                 window.updateTowerDifficulty();
                 if (window.towerState.floor % 10 === 0) window.advanceTowerFloor();
                 else window.playNextTowerWord();
@@ -412,18 +453,24 @@ window.finalizeTowerTxChar = function() {
 };
 
 window.renderTowerUI = function() {
-    document.getElementById('towerFloorDisplay').textContent = "PIANO: " + window.towerState.floor;
-    document.getElementById('towerStabilityDisplay').textContent = "STABILITÀ: " + window.towerState.stability + "%";
-    document.getElementById('towerStabilityDisplay').style.color = window.towerState.stability < 30 ? "#ff3d00" : "#00ff41";
-    document.getElementById('btnTowerGadget1').textContent = `FILTRO DSP (${window.towerState.gadget1})`;
-    document.getElementById('btnTowerGadget2').textContent = `AMPLIFICA (${window.towerState.gadget2})`;
+    const fEl = document.getElementById('towerFloorDisplay');
+    const sEl = document.getElementById('towerStabilityDisplay');
+    if (fEl) fEl.textContent = "PIANO: " + window.towerState.floor;
+    if (sEl) {
+        sEl.textContent = "STABILITÀ: " + window.towerState.stability + "%";
+        sEl.style.color = window.towerState.stability < 30 ? "#ff3d00" : "#00ff41";
+    }
+    const b1 = document.getElementById('btnTowerGadget1');
+    const b2 = document.getElementById('btnTowerGadget2');
+    if (b1) b1.textContent = `FILTRO DSP (${window.towerState.gadget1})`;
+    if (b2) b2.textContent = `AMPLIFICA (${window.towerState.gadget2})`;
 };
 
 window.fetchNearbyPlayers = function() {
-    if (!db) return;
-    db.ref('leaderboard/la_torre/all').limitToLast(20).once('value', snap => {
+    if (!window.db) return;
+    window.db.ref('leaderboard/la_torre/all').limitToLast(20).once('value').then(snap => {
         const players = [];
-        snap.forEach(c => { if(c.key !== myId) players.push({ alias: c.val().name, floor: c.val().score }); });
+        snap.forEach(c => { if(c.key !== window.myId) players.push({ alias: c.val().name, floor: c.val().score }); });
         window.towerState.nearbyPlayers = players;
     });
 };
@@ -479,11 +526,11 @@ window.renderTowerOscilloscope = function() {
 window.updateTowerDifficulty = function() {
     const floor = window.towerState.floor;
     if (!window.towerState.isDspActive) {
-        window.towerState.qrnLevel = floor > 10 ? Math.min(0.08, (floor - 10) * 0.005) : 0;
+        window.towerState.qrnLevel = floor > 10 ? Math.min(0.12, (floor - 10) * 0.006) : 0;
     }
     const totalQrn = window.towerState.qrnLevel + window.towerState.tempNoiseBoost;
-    if (window.towerState.noiseGain) {
-        window.towerState.noiseGain.gain.setTargetAtTime(Math.min(0.3, totalQrn), window.audioCtx.currentTime, 0.5);
+    if (window.towerState.noiseGain && window.audioCtx) {
+        window.towerState.noiseGain.gain.setTargetAtTime(Math.min(0.4, totalQrn), window.audioCtx.currentTime, 0.3);
     }
 };
 
@@ -503,6 +550,7 @@ window.gameOverTower = function() {
 
 window.stopTowerClimb = function() {
     window.towerState.active = false;
+    window.gameRunning = false;
     if (window.towerState.noiseNode) {
         try { window.towerState.noiseNode.stop(); window.towerState.noiseNode.disconnect(); } catch(e) {}
         window.towerState.noiseNode = null;
@@ -513,5 +561,5 @@ window.stopTowerClimb = function() {
 
 window.quitTowerClimb = function() {
     window.stopTowerClimb();
-    goBackToMenu();
+    if (typeof window.goBackToMenu === 'function') window.goBackToMenu();
 };
