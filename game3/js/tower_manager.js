@@ -31,6 +31,7 @@ window.towerState = {
     climbCanvas: null,
     climbCtx: null,
     animationId: null,
+    resizeHandler: null,
 
     // Social
     nearbyPlayers: [], // { uid, alias, floor }
@@ -62,18 +63,30 @@ window.initTowerManager = function() {
     console.log("Tower: Initializing components...");
 
     window.towerState.oscCanvas = document.getElementById('towerOscilloscope');
-    if (window.towerState.oscCanvas) {
-        window.towerState.oscCanvas.width = window.towerState.oscCanvas.clientWidth;
-        window.towerState.oscCanvas.height = window.towerState.oscCanvas.clientHeight;
-        window.towerState.oscCtx = window.towerState.oscCanvas.getContext('2d');
+    window.towerState.climbCanvas = document.getElementById('towerClimbCanvas');
+
+    // Rimuoviamo eventuale listener precedente per evitare duplicati
+    if (window.towerState.resizeHandler) {
+        window.removeEventListener('resize', window.towerState.resizeHandler);
     }
 
-    window.towerState.climbCanvas = document.getElementById('towerClimbCanvas');
-    if (window.towerState.climbCanvas) {
-        window.towerState.climbCanvas.width = window.towerState.climbCanvas.clientWidth;
-        window.towerState.climbCanvas.height = window.towerState.climbCanvas.clientHeight;
-        window.towerState.climbCtx = window.towerState.climbCanvas.getContext('2d');
-    }
+    // Funzione interna per il resize dinamico
+    const resizeCanvases = () => {
+        if (window.towerState.oscCanvas) {
+            window.towerState.oscCanvas.width = window.towerState.oscCanvas.clientWidth;
+            window.towerState.oscCanvas.height = window.towerState.oscCanvas.clientHeight;
+            window.towerState.oscCtx = window.towerState.oscCanvas.getContext('2d');
+        }
+        if (window.towerState.climbCanvas) {
+            window.towerState.climbCanvas.width = window.towerState.climbCanvas.clientWidth;
+            window.towerState.climbCanvas.height = window.towerState.climbCanvas.clientHeight;
+            window.towerState.climbCtx = window.towerState.climbCanvas.getContext('2d');
+        }
+    };
+
+    resizeCanvases();
+    window.towerState.resizeHandler = resizeCanvases;
+    window.addEventListener('resize', window.towerState.resizeHandler);
 
     // Input Listener con Live Reveal
     const input = document.getElementById('towerInput');
@@ -117,6 +130,7 @@ window.initTowerManager = function() {
     document.getElementById('btnTowerGadget1')?.addEventListener('click', () => window.useTowerGadget(1));
     document.getElementById('btnTowerGadget2')?.addEventListener('click', () => window.useTowerGadget(2));
     document.getElementById('btnTowerSOS')?.addEventListener('click', () => window.useTowerSOS());
+    document.getElementById('btnTowerReplay')?.addEventListener('click', () => window.playNextTowerWord());
     document.getElementById('quitTowerBtn')?.addEventListener('click', () => window.quitTowerClimb());
 
     // Tasto Virtuale (Boss)
@@ -129,7 +143,7 @@ window.initTowerManager = function() {
     }
 };
 
-window.startTowerSequence = function() {
+window.startTowerSequence = async function() {
     console.log("Tower: Starting climb...");
     window.resetGameState();
 
@@ -137,10 +151,24 @@ window.startTowerSequence = function() {
     gameRunning = true;
     currentMode = 'la_torre';
 
+    // Recupero Checkpoint da Firebase
+    let startFloor = 1;
+    if (db && myId) {
+        try {
+            const snap = await db.ref(`users/${myId}/towerProgress`).once('value');
+            if (snap.exists()) {
+                startFloor = snap.val().checkpoint || 1;
+                window.towerState.valvole = snap.val().valvole || 0;
+                if (startFloor > 1) showToast(`🚀 Riprendo dal piano ${startFloor}`);
+            }
+        } catch(e) { console.error("Tower: error fetching progress", e); }
+    }
+
     // Reset stato sessione
-    window.towerState.floor = 1;
+    window.towerState.floor = startFloor;
     window.towerState.stability = 100;
-    window.towerState.wpm = 12;
+    // Calcolo WPM dinamico basato sul piano di partenza
+    window.towerState.wpm = 12 + Math.floor(startFloor / 5);
     window.towerState.gadget1 = 3;
     window.towerState.gadget2 = 2;
 
@@ -214,10 +242,19 @@ window.playNextTowerWord = function() {
 window.playMorseWithDisturbance = function(text) {
     if (!window.towerState.active) return;
 
-    // In modalità Torre, forziamo il volume a fluttuare se QSB è attivo
-    // (Nota: implementazione semplificata, usiamo playMorseAudio standard)
+    // Verifichiamo se il testo è valido
+    if (!text) {
+        console.warn("Tower: text is empty, generating fallback.");
+        text = "RADIO";
+    }
+
+    const wpm = window.towerState.wpm;
     if (typeof playMorseAudio === 'function') {
-        playMorseAudio(text, window.towerState.wpm, true);
+        stopAllMorseAudio();
+        // Diamo un piccolo ritardo per assicurarci che l'AudioContext sia pronto
+        setTimeout(() => {
+            if (window.towerState.active) playMorseAudio(text, wpm, true);
+        }, 50);
     }
 
     const tape = document.getElementById('towerTapeContent');
@@ -264,12 +301,25 @@ window.checkTowerWord = function(typed) {
 window.advanceTowerFloor = function() {
     window.towerState.floor++;
 
+    // Checkpoint ogni 10 piani (Settore superato)
+    const isNewCheckpoint = (window.towerState.floor % 10 === 1);
+
     if (db && myId) {
         const rpgLevel = window.userProgression?.level || 1;
+
+        // 1. Aggiornamento Classifica
         db.ref(`leaderboard/la_torre/all/${myId}`).set({
             name: myName, score: window.towerState.floor, wpm: window.towerState.wpm,
             level: rpgLevel, date: new Date().toLocaleDateString('it-IT'), ts: firebase.database.ServerValue.TIMESTAMP
         });
+
+        // 2. Aggiornamento Progresso Permanente (Checkpoint)
+        const updateData = { valvole: (window.towerState.valvole || 0) + 5 };
+        if (isNewCheckpoint) {
+            updateData.checkpoint = window.towerState.floor;
+            showToast("🚩 CHECKPOINT RAGGIUNTO!");
+        }
+        db.ref(`users/${myId}/towerProgress`).update(updateData);
     }
 
     const overlay = document.getElementById('towerLevelOverlay');
@@ -477,7 +527,15 @@ window.gameOverTower = function() {
 };
 
 window.stopTowerClimb = function() {
+    console.log("Tower: Cleaning up resources...");
     window.towerState.active = false;
+    gameRunning = false;
+
+    if (window.towerState.resizeHandler) {
+        window.removeEventListener('resize', window.towerState.resizeHandler);
+        window.towerState.resizeHandler = null;
+    }
+
     if (window.towerState.noiseNode) {
         try { window.towerState.noiseNode.stop(); window.towerState.noiseNode.disconnect(); } catch(e) {}
         window.towerState.noiseNode = null;
