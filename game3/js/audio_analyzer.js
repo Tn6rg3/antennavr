@@ -34,13 +34,24 @@ window.audioAnalyzerState = {
     unitBits: 12,
     autoWpm: true,
 
+    // LIVELLI DI TOLLERANZA (Professional Calibration)
+    difficulty: 'amateur',
+    tolerances: {
+        // Principiante: Tollerante sui tempi ma pronto a separare i caratteri per evitare merging
+        beginner: { dashRatio: 1.8, charTimeout: 2.2, spaceForce: 1.6, wordSpace: 5.0 },
+        // Amatore: Il bilanciamento standard che avevamo testato (Equilibrato)
+        amateur:  { dashRatio: 2.0, charTimeout: 2.5, spaceForce: 1.8, wordSpace: 6.0 },
+        // Elite: Richiede precisione da manuale, non perdona imprecisioni ritmiche
+        elite:    { dashRatio: 2.2, charTimeout: 3.0, spaceForce: 2.8, wordSpace: 7.0 }
+    },
+
     // SESSIONE D'ESAME
     sessionActive: false,
     sessionTimer: null,
     timeLeft: 0,
     sessionData: {
         pulses: [], // { type: 'MARK'|'SPACE', duration: bits }
-        characters: [], // { char: 'A', acc: 95, wpm: 20 }
+        characters: [], // { char: 'A', code: '.-', acc: 95, wpm: 20 }
         startTime: 0
     },
 
@@ -55,9 +66,9 @@ window.initAudioAnalyzer = function() {
         freqIn: document.getElementById('realTxFreqInput'),
         squelchIn: document.getElementById('realTxSquelchInput'),
         wpmIn: document.getElementById('realTxWpmInput'),
+        difficulty: document.getElementById('realTxDifficultySelect'),
         autoWpm: document.getElementById('realTxAutoWpmToggle'),
         resetBtn: document.getElementById('btnResetRealTx'),
-        // Nuovi elementi sessione
         btnStartSession: document.getElementById('btnStartRealTxSession'),
         btnStopSession: document.getElementById('btnStopRealTxSession'),
         timerSelect: document.getElementById('realTxTimerSelect')
@@ -80,6 +91,13 @@ window.initAudioAnalyzer = function() {
             window.audioAnalyzerState.unitBits = Math.round(1200 / val / 5);
         };
     }
+    if (els.difficulty) {
+        window.audioAnalyzerState.difficulty = els.difficulty.value;
+        els.difficulty.onchange = (e) => {
+            window.audioAnalyzerState.difficulty = e.target.value;
+            showToast(`Difficoltà: ${e.target.options[e.target.selectedIndex].text}`);
+        };
+    }
     if (els.autoWpm) {
         window.audioAnalyzerState.autoWpm = els.autoWpm.checked;
         els.autoWpm.onchange = (e) => { window.audioAnalyzerState.autoWpm = e.target.checked; };
@@ -88,12 +106,12 @@ window.initAudioAnalyzer = function() {
         els.resetBtn.onclick = () => {
             window.audioAnalyzerState.decodedText = "";
             window.audioAnalyzerState.currentCode = "";
-            document.getElementById('realTxDecodedText').textContent = "...";
+            const textEl = document.getElementById('realTxDecodedText');
+            if (textEl) textEl.textContent = "...";
             window.updateAnalyzerStats(true);
         };
     }
 
-    // BINDING SESSIONE
     if (els.btnStartSession) els.btnStartSession.onclick = () => window.startRealTxSession();
     if (els.btnStopSession) els.btnStopSession.onclick = () => window.stopRealTxSession(true);
 };
@@ -152,7 +170,6 @@ window.startStabilizedAnalysis = function() {
         const samples = e.inputBuffer.getChannelData(0);
         const mag = getMagnitude(samples, state.targetFreq, state.sampleRate);
 
-        // 1. Adaptive Squelch
         if (mag < state.noiseFloor * 2) state.noiseFloor = (state.noiseFloor * 0.98) + (mag * 0.02);
         state.signalPeak = Math.max(state.signalPeak * 0.995, mag);
         const range = state.signalPeak - state.noiseFloor;
@@ -165,21 +182,22 @@ window.startStabilizedAnalysis = function() {
         const confirmedMark = (state.bitHistory >= 1);
         window.processStabilizedBit(confirmedMark);
 
-        // UI Peak Meter
         const peakBar = document.getElementById('realTxPeakBar');
         if (peakBar) peakBar.style.width = Math.min(100, (mag / (state.signalPeak || 0.01)) * 100) + "%";
     };
 
-    showToast("🎤 Analizzatore Stabilizzato Attivo");
+    showToast("🎤 Analizzatore Ricezione Attivo");
 };
 
 window.processStabilizedBit = function(isMark) {
     const state = window.audioAnalyzerState;
+    const tol = state.tolerances[state.difficulty];
     const currentUnitBits = Math.max(4, Math.round(1200 / state.wpm / 5));
 
     if (isMark) {
         state.marksCount++;
-        if (state.spacesCount > currentUnitBits * 2.0 && state.currentCode.length > 0) {
+        // CHIUSURA ANTICIPATA: Soglia basata sulla difficoltà
+        if (state.spacesCount > currentUnitBits * tol.spaceForce && state.currentCode.length > 0) {
             window.decodeCurrentCode();
         }
         if (state.spacesCount > 0 && state.sessionActive) {
@@ -196,10 +214,12 @@ window.processStabilizedBit = function(isMark) {
             state.marksCount = 0;
         }
 
-        if (state.spacesCount > currentUnitBits * 3.0 && state.currentCode.length > 0) {
+        // CHIUSURA PER TIMEOUT: Soglia basata sulla difficoltà
+        if (state.spacesCount > currentUnitBits * tol.charTimeout && state.currentCode.length > 0) {
             window.decodeCurrentCode();
         }
-        if (state.spacesCount === Math.round(currentUnitBits * 7)) {
+        // SPAZIO PAROLA: Soglia basata sulla difficoltà
+        if (state.spacesCount === Math.round(currentUnitBits * tol.wordSpace)) {
             if (state.decodedText.length > 0 && !state.decodedText.endsWith(" ")) {
                 state.decodedText += " ";
                 window.updateDecodedDisplay();
@@ -213,11 +233,12 @@ window.processStabilizedBit = function(isMark) {
 
 window.handleTransition = function(markCount) {
     const state = window.audioAnalyzerState;
+    const tol = state.tolerances[state.difficulty];
     const currentUnitBits = Math.max(4, Math.round(1200 / state.wpm / 5));
 
     if (markCount < 2) return;
 
-    const isDash = (markCount > currentUnitBits * 1.8);
+    const isDash = (markCount > currentUnitBits * tol.dashRatio);
     state.currentCode += isDash ? "-" : ".";
 
     const ideal = isDash ? (currentUnitBits * 3) : currentUnitBits;
@@ -277,13 +298,10 @@ window.updateAnalyzerStats = function(reset = false) {
     if (dashEl) dashEl.textContent = calcAvg(state.dashAccs) + (state.dashAccs.length ? "%" : "");
 };
 
-// --- LOGICA SESSIONE D'ESAME ---
-
 window.startRealTxSession = function() {
     const state = window.audioAnalyzerState;
     const duration = parseInt(document.getElementById('realTxTimerSelect').value) || 30;
 
-    // Reset Dati
     state.sessionActive = true;
     state.timeLeft = duration;
     state.sessionData = { pulses: [], characters: [], startTime: Date.now() };
@@ -292,7 +310,6 @@ window.startRealTxSession = function() {
     window.updateDecodedDisplay();
     window.updateAnalyzerStats(true);
 
-    // UI Toggle
     document.getElementById('btnStartRealTxSession').style.display = 'none';
     document.getElementById('btnStopRealTxSession').style.display = 'block';
     const timerDisp = document.getElementById('realTxSessionTimerDisplay');
@@ -326,6 +343,7 @@ window.stopRealTxSession = function(manual = false) {
 window.generateDetailedReport = function() {
     const state = window.audioAnalyzerState;
     const data = state.sessionData;
+    const tol = state.tolerances[state.difficulty];
     const reportCont = document.getElementById('realTxReportContent');
     const modal = document.getElementById('realTxReportModal');
 
@@ -334,25 +352,21 @@ window.generateDetailedReport = function() {
         return;
     }
 
-    // --- ANALISI TECNICA ---
-    const unitBits = Math.round(1200 / state.wpm / 5);
+    const unitBits = Math.max(4, Math.round(1200 / state.wpm / 5));
     const marks = data.pulses.filter(p => p.type === 'MARK');
     const spaces = data.pulses.filter(p => p.type === 'SPACE');
 
-    // 1. Ratio Punto/Linea
-    const dots = marks.filter(m => m.duration < unitBits * 1.8);
-    const dashes = marks.filter(m => m.duration >= unitBits * 1.8);
+    const dots = marks.filter(m => m.duration < unitBits * tol.dashRatio);
+    const dashes = marks.filter(m => m.duration >= unitBits * tol.dashRatio);
     const avgDot = dots.length ? dots.reduce((a,b)=>a+b.duration,0)/dots.length : 0;
     const avgDash = dashes.length ? dashes.reduce((a,b)=>a+b.duration,0)/dashes.length : 0;
     const actualRatio = avgDot ? (avgDash / avgDot).toFixed(1) : "0";
 
-    // 2. Analisi Spazi
-    const charSpaces = spaces.filter(s => s.duration < unitBits * 5);
-    const wordSpaces = spaces.filter(s => s.duration >= unitBits * 5);
+    const charSpaces = spaces.filter(s => s.duration < unitBits * tol.wordSpace);
+    const wordSpaces = spaces.filter(s => s.duration >= unitBits * tol.wordSpace);
     const avgCharSpace = charSpaces.length ? charSpaces.reduce((a,b)=>a+b.duration,0)/charSpaces.length : 0;
     const charSpaceUnits = (avgCharSpace / (avgDot || unitBits)).toFixed(1);
 
-    // 3. Classifica Caratteri Sbagliati/Imprecisi
     const charStats = {};
     data.characters.forEach(c => {
         if (!charStats[c.char]) charStats[c.char] = { count: 0, sumAcc: 0, errors: 0 };
@@ -361,27 +375,29 @@ window.generateDetailedReport = function() {
         if (c.char === "?") charStats[c.char].errors++;
     });
 
-    const worstChars = Object.entries(charStats)
+    const sortedChars = Object.entries(charStats)
         .map(([char, s]) => ({ char, avg: s.sumAcc / s.count }))
-        .sort((a,b) => a.avg - b.avg)
-        .slice(0, 3);
+        .sort((a,b) => a.avg - b.avg);
+    const worstChars = sortedChars.slice(0, 3);
 
-    // --- COSTRUZIONE REPORT STRUTTURATO ---
     let html = `<div style="border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:12px; color: #aaa;">`;
     html += `📅 <b style="color:white;">Data:</b> ${new Date().toLocaleString('it-IT')}<br>`;
+    html += `📊 <b style="color:white;">Livello:</b> <span style="color:var(--champ-color); font-weight:bold;">${state.difficulty.toUpperCase()}</span><br>`;
     html += `⏱️ <b style="color:white;">Sessione:</b> ${data.characters.length} caratteri @ <b style="color:var(--champ-color);">${state.wpm} WPM</b></div>`;
 
-    html += `<div style="color:var(--link-color); font-weight:bold; margin-bottom:8px; font-size:1.1em; border-left:3px solid var(--link-color); padding-left:8px;">📐 PARAMETRI TECNICI</div>`;
+    html += `<div style="color:var(--link-color); font-weight:bold; margin-bottom:8px; font-size:1.1em; border-left:3px solid var(--link-color); padding-left:8px;">📐 ANALISI RITMICA</div>`;
 
-    const ratioColor = Math.abs(actualRatio-3)<0.4 ? '#4caf50' : '#ffeb3b';
+    const ratioDiff = Math.abs(actualRatio - 3.0);
+    const ratioColor = ratioDiff < 0.3 ? '#4caf50' : (ratioDiff < 0.6 ? '#ffeb3b' : '#f44336');
     html += `• <b>Ratio Punto/Linea:</b> <span style="color:${ratioColor}; font-size:1.2em;">1:${actualRatio}</span><br>`;
-    html += `<small style="display:block; margin-bottom:8px; opacity:0.7;">(Ideale 1:3.0 - ${Math.abs(actualRatio-3)<0.4?'Perfetto':(actualRatio<3?'Linee corte':'Linee pesanti')})</small>`;
+    html += `<small style="display:block; margin-bottom:8px; opacity:0.7;">(Target 1:3.0 - ${ratioDiff < 0.3 ? 'Manipolazione perfetta' : (actualRatio < 3 ? 'Linee troppo "leggere"' : 'Linee troppo "pesanti"')})</small>`;
 
-    const spaceColor = (parseFloat(charSpaceUnits) >= 2.5 && parseFloat(charSpaceUnits) <= 3.5) ? '#4caf50' : '#ffeb3b';
+    const spaceDiff = Math.abs(parseFloat(charSpaceUnits) - 3.0);
+    const spaceColor = spaceDiff < 0.4 ? '#4caf50' : (spaceDiff < 0.8 ? '#ffeb3b' : '#f44336');
     html += `• <b>Spazio Lettere:</b> <span style="color:${spaceColor}; font-size:1.2em;">${charSpaceUnits}</span> unità<br>`;
-    html += `<small style="display:block; margin-bottom:8px; opacity:0.7;">(Ideale 3.0 unità)</small>`;
+    html += `<small style="display:block; margin-bottom:8px; opacity:0.7;">(Target 3.0 unità - ${spaceDiff < 0.4 ? 'Spaziatura precisa' : (parseFloat(charSpaceUnits) < 3 ? 'Lettere troppo vicine' : 'Lettere troppo distanti')})</small>`;
 
-    html += `• <b>Spazi Parola:</b> <b style="color:white;">${wordSpaces.length}</b><br><br>`;
+    html += `• <b>Spazi Parola:</b> <b style="color:white;">${wordSpaces.length}</b> <small style="opacity:0.6;">(Soglia ${tol.wordSpace} unità)</small><br><br>`;
 
     html += `<div style="color:var(--champ-color); font-weight:bold; margin-bottom:8px; font-size:1.1em; border-left:3px solid var(--champ-color); padding-left:8px;">🎯 PRECISIONE CARATTERI</div>`;
     worstChars.forEach(wc => {
@@ -392,23 +408,19 @@ window.generateDetailedReport = function() {
         </div>`;
     });
 
-    html += `<br><div style="background:rgba(255,235,59,0.1); padding:10px; border-radius:8px; border:1px solid #ffeb3b; color:#ffeb3b;">`;
-    html += `<b style="display:block; margin-bottom:4px;">💡 CONSIGLIO:</b>`;
-    if (Math.abs(actualRatio-3) > 0.5) {
-        html += `Il tuo rapporto punto/linea è sbilanciato. Cura la chiusura della linea, deve durare esattamente come tre punti.`;
-    } else if (parseFloat(charSpaceUnits) < 2.5) {
-        html += `Le tue lettere sono troppo vicine. Lascia "respirare" il codice aumentando leggermente la pausa tra i caratteri.`;
+    html += `<br><div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border:1px solid #444;">`;
+    html += `<b style="display:block; margin-bottom:6px; color:#ffeb3b;">💡 VALUTAZIONE ISTRUTTORE:</b>`;
+
+    if (state.difficulty === 'elite') {
+        if (ratioDiff < 0.2 && spaceDiff < 0.3) html += "Eccellente precisione Elite. La tua manipolazione è di livello professionale, degna di un operatore d'alto bordo.";
+        else html += "In modalità Elite la precisione è fondamentale. Lavora sulla costanza millimetrica del rilascio linea.";
+    } else if (state.difficulty === 'amateur') {
+        if (ratioDiff < 0.4 && spaceDiff < 0.5) html += "Buona padronanza tecnica. Stai mantenendo un ritmo solido. Prova la modalità Elite per perfezionare i dettagli.";
+        else html += "La base è corretta ma il ritmo oscilla. Concentrati sul sentire il 'battito' del metronomo interno.";
     } else {
-        html += `Ottima manipolazione! Il ritmo è costante. Prova ad alzare i WPM di riferimento per la prossima sessione.`;
+        html += "Ottimo inizio! Il sistema ti sta aiutando a decodificare. Cerca di allungare le linee fino a sentire il triplo della durata del punto.";
     }
     html += `</div>`;
-    if (Math.abs(actualRatio-3) > 0.5) {
-        html += `Il tuo rapporto punto/linea è sbilanciato. Cura la chiusura della linea, deve durare esattamente come tre punti.`;
-    } else if (parseFloat(charSpaceUnits) < 2.5) {
-        html += `Le tue lettere sono troppo vicine. Lascia "respirare" il codice aumentando leggermente la pausa tra i caratteri.`;
-    } else {
-        html += `Ottima manipolazione! Il ritmo è costante. Prova ad alzare i WPM di riferimento per la prossima sessione.`;
-    }
 
     reportCont.innerHTML = html;
     modal.style.display = 'flex';
