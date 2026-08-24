@@ -332,13 +332,21 @@ window.advanceTowerFloor = function() {
     }
 
     if (window.towerState.floor % 5 === 0) window.towerState.wpm += 1;
-    window.towerState.stability = Math.min(100, window.towerState.stability + 10);
+    // Recupero parziale stabilità ogni piano (Limitato a 5 per non annullare 1 errore intero)
+    window.towerState.stability = Math.min(100, window.towerState.stability + 5);
+    window.renderTowerUI();
 };
 
 window.damageTowerStability = function(amount) {
     if (window.towerState.isAmpActive) amount = Math.floor(amount / 2);
     window.towerState.stability -= amount;
-    if (window.towerState.stability <= 0) { window.towerState.stability = 0; window.gameOverTower(); }
+    if (window.towerState.stability <= 0) {
+        window.towerState.stability = 0;
+        window.renderTowerUI(); // Ultimo aggiornamento prima del game over
+        window.gameOverTower();
+    } else {
+        window.renderTowerUI();
+    }
 };
 
 window.useTowerGadget = function(id) {
