@@ -400,6 +400,8 @@ window.startTowerBossFight = function() {
     window.towerState.txMode = true;
     window.towerState.txTarget = "SOS";
     window.towerState.txCurrent = "";
+    window.towerState.txSequence = [];
+    window.towerState.txLastTime = 0;
     document.getElementById('towerInputArea').style.display = 'none';
     document.getElementById('towerBossControls').style.display = 'flex';
     document.getElementById('towerTxPrompt').textContent = "RIPRISTINA SEGNALE - TRASMETTI:";
@@ -410,9 +412,12 @@ window.startTowerBossFight = function() {
 
 window.startTowerSintonia = function() {
     window.towerState.txMode = true;
+    // Generiamo un codice alfanumerico casuale di 2 caratteri (Es. K4, R9, S2)
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     window.towerState.txTarget = chars[Math.floor(Math.random()*26)] + chars[Math.floor(26 + Math.random()*10)];
     window.towerState.txCurrent = "";
+    window.towerState.txSequence = [];
+    window.towerState.txLastTime = 0;
 
     document.getElementById('towerInputArea').style.display = 'none';
     document.getElementById('towerBossControls').style.display = 'flex';
@@ -423,6 +428,47 @@ window.startTowerSintonia = function() {
     window.triggerTowerGlitch();
     if (window.towerState.noiseGain) {
         window.towerState.noiseGain.gain.setTargetAtTime(0.15, window.audioCtx.currentTime, 0.1);
+    }
+};
+
+window.handleTowerKey = function(isDown) {
+    if (!window.towerState.active || !window.towerState.txMode) return;
+    const now = Date.now();
+    const unit = 1200 / window.towerState.wpm;
+
+    if (isDown) {
+        if (typeof startTone === 'function') startTone(600);
+
+        // Se c'è una pausa lunga tra due tocchi, chiudiamo il carattere precedente
+        if (window.towerState.txLastTime > 0) {
+            const gap = now - window.towerState.txLastTime;
+            if (gap > unit * 2) {
+                window.finalizeTowerTxChar();
+            }
+        }
+        window.towerState.txLastTime = now;
+    } else {
+        if (typeof stopTone === 'function') stopTone();
+
+        const duration = now - window.towerState.txLastTime;
+        // Aggiungiamo punto o linea alla sequenza
+        const symbol = (duration > unit * 1.8) ? "-" : ".";
+        window.towerState.txSequence.push(symbol);
+        window.towerState.txLastTime = now;
+
+        // Feedback visivo dei simboli che stai scrivendo
+        const currentFeedback = document.getElementById('towerTxCurrent');
+        if (currentFeedback) {
+            currentFeedback.textContent = window.towerState.txCurrent + " " + window.towerState.txSequence.join("");
+        }
+
+        // Timeout per decodifica automatica della lettera
+        if (window.towerState.txTimeout) clearTimeout(window.towerState.txTimeout);
+        window.towerState.txTimeout = setTimeout(() => {
+            if (window.towerState.active && window.towerState.txMode) {
+                window.finalizeTowerTxChar();
+            }
+        }, unit * 3.5);
     }
 };
 
