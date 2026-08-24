@@ -488,3 +488,52 @@ hr.divider { border: 0; border-top: 2px dashed var(--hint-color); margin: 8px 0;
     50% { color: #ff5252; text-shadow: 0 0 10px #f44336; }
     100% { color: #f44336; text-shadow: 0 0 0px #f44336; }
 }
+
+/* ==========================================================================
+   TOWER MODE STYLES
+   ========================================================================== */
+
+#towerArea .box-panel {
+    border-radius: 4px;
+}
+
+#towerArea input[type="text"] {
+    border-radius: 4px;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.tower-character {
+    display: inline-block;
+    min-width: 30px;
+    text-align: center;
+    color: #00ff41;
+    text-shadow: 0 0 5px #00ff41;
+}
+
+.tower-character.active {
+    background: #00ff41;
+    color: #000;
+}
+
+.tower-character.error {
+    color: #ff3d00;
+    text-shadow: 0 0 5px #ff3d00;
+}
+
+#towerVirtualKey:active {
+    background: #ff3d00 !important;
+    transform: scale(0.95);
+}
+
+.glitch-shake {
+    animation: tower-glitch 0.2s infinite;
+}
+
+@keyframes tower-glitch {
+    0% { transform: translate(0); }
+    20% { transform: translate(-2px, 2px); }
+    40% { transform: translate(-2px, -2px); }
+    60% { transform: translate(2px, 2px); }
+    80% { transform: translate(2px, -2px); }
+    100% { transform: translate(0); }
+}
