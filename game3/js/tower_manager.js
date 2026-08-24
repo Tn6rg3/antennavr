@@ -112,7 +112,7 @@ window.initTowerManager = function() {
     if (elsTower.g1) elsTower.g1.onclick = () => window.useTowerGadget(1);
     if (elsTower.g2) elsTower.g2.onclick = () => window.useTowerGadget(2);
     if (elsTower.sos) elsTower.sos.onclick = () => window.useTowerSOS();
-    if (elsTower.rep) elsTower.rep.onclick = () => window.playNextTowerWord();
+    if (elsTower.rep) elsTower.rep.onclick = () => window.requestTowerReplay();
     if (elsTower.quit) elsTower.quit.onclick = () => window.quitTowerClimb();
 
     const vKey = document.getElementById('towerVirtualKey');
@@ -132,7 +132,6 @@ window.startTowerSequence = function() {
     window.gameRunning = true;
     window.currentMode = 'la_torre';
 
-    // Recupero progressi (non-async per sicurezza boot)
     let startFloor = 1;
     const loadProgress = () => {
         window.towerState.floor = startFloor;
@@ -218,6 +217,27 @@ window.generateTowerFloor = function() {
     window.updateTowerDifficulty();
 };
 
+window.requestTowerReplay = function() {
+    if (!window.towerState.active || window.towerState.txMode) return;
+    window.towerState.attemptCount++;
+    if (window.towerState.attemptCount < 3) {
+        showToast(`⚠️ RIPETIZIONE (${window.towerState.attemptCount}/3)`);
+        window.towerState.tempNoiseBoost += 0.05;
+        window.updateTowerDifficulty();
+        window.playNextTowerWord();
+    } else {
+        showToast("📡 SEGNALE TROPPO DISTURBATO... PROSEGUO");
+        window.damageTowerStability(10);
+        window.triggerTowerGlitch();
+        window.towerState.attemptCount = 0;
+        window.towerState.tempNoiseBoost = 0;
+        window.towerState.wordIndex++;
+        if (window.towerState.wordIndex >= window.towerState.currentWords.length) window.advanceTowerFloor();
+        else { window.updateTowerDifficulty(); setTimeout(window.playNextTowerWord, 800); }
+    }
+    window.renderTowerUI();
+};
+
 window.playNextTowerWord = function() {
     if (!window.towerState.active) return;
     const word = window.towerState.currentWords[window.towerState.wordIndex];
@@ -251,7 +271,6 @@ window.playMorseWithDisturbance = function(text) {
 window.checkTowerWord = function(typed) {
     if (!window.towerState.active) return;
     const target = window.towerState.currentWords[window.towerState.wordIndex];
-
     if (typed === target) {
         window.towerState.wordsSolved++;
         window.towerState.wordIndex++;
@@ -333,12 +352,15 @@ window.useTowerSOS = function() {
 };
 
 window.startTowerBossFight = function() {
+    if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
     window.towerState.txMode = true;
     window.towerState.txTarget = "SOS";
     window.towerState.txCurrent = "";
     window.towerState.txSequence = [];
     window.towerState.txLastTime = 0;
     window.towerState.attemptCount = 0;
+    window.towerState.tempNoiseBoost = 0.08;
+    window.updateTowerDifficulty();
     const areaRX = document.getElementById('towerInputArea');
     const areaTX = document.getElementById('towerBossControls');
     if (areaRX) areaRX.style.display = 'none';
@@ -352,6 +374,7 @@ window.startTowerBossFight = function() {
 };
 
 window.startTowerSintonia = function() {
+    if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
     window.towerState.txMode = true;
     window.towerState.attemptCount = 0;
     const floor = window.towerState.floor;
@@ -363,6 +386,8 @@ window.startTowerSintonia = function() {
     window.towerState.txCurrent = "";
     window.towerState.txSequence = [];
     window.towerState.txLastTime = 0;
+    window.towerState.tempNoiseBoost = 0.12;
+    window.updateTowerDifficulty();
     const areaRX = document.getElementById('towerInputArea');
     const areaTX = document.getElementById('towerBossControls');
     if (areaRX) areaRX.style.display = 'none';
@@ -374,13 +399,11 @@ window.startTowerSintonia = function() {
     const currEl = document.getElementById('towerTxCurrent');
     if (currEl) currEl.textContent = "";
     window.triggerTowerGlitch();
-    window.updateTowerDifficulty();
 };
 
 window.handleTowerKey = function(isDown) {
     if (!window.towerState.active || !window.towerState.txMode) return;
     if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
-
     const now = Date.now();
     const unit = 1200 / window.towerState.wpm;
     if (isDown) {
@@ -405,7 +428,6 @@ window.finalizeTowerTxChar = function() {
     window.towerState.txSequence = [];
     let found = "";
     for (let c in window.morseDict) { if (window.morseDict[c] === code) { found = c; break; } }
-
     if (found && window.towerState.txTarget.startsWith(window.towerState.txCurrent + found)) {
         window.towerState.txCurrent += found;
         const currEl = document.getElementById('towerTxCurrent');
@@ -430,7 +452,7 @@ window.finalizeTowerTxChar = function() {
         window.triggerTowerGlitch();
         if (window.towerState.attemptCount < 3) {
             showToast(`❌ ERRORE TX (${window.towerState.attemptCount}/3)`);
-            window.towerState.tempNoiseBoost += 0.08;
+            window.towerState.tempNoiseBoost += 0.12;
             window.updateTowerDifficulty();
             window.towerState.txCurrent = "";
             const currEl = document.getElementById('towerTxCurrent');
