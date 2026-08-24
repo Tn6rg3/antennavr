@@ -305,36 +305,42 @@
             </div>
 
             <!-- AREA KEYER COMPATTA (Visibile solo per Trasmissione) -->
-            <div id="mainMenuKeyerConfig" class="box-panel" style="display:none; border-color:var(--link-color); padding:10px; margin-top:5px; background:rgba(0,0,0,0.1);">
-                <h4 style="margin:0 0 10px 0; color:var(--link-color); font-size:0.9em;">⚙️ Configurazione Manipolatore</h4>
-                <div style="display:flex; gap:10px; align-items:center;">
-                    <div style="flex:1;">
-                        <label style="font-size:0.75em; display:block;">Tipo Keyer:</label>
-                        <select id="mainKeyerTypeSelect" style="width:100%; padding:5px; font-size:0.85em;">
-                            <option value="A">Iambic A</option>
-                            <option value="B">Iambic B</option>
-                            <option value="V">Verticale</option>
-                        </select>
-                    </div>
-                    <div style="flex:1; text-align:center;">
-                        <label style="font-size:0.65em; display:block; line-height:1.1;">Paddles:</label>
-                        <button id="btnMainSwapPaddles" class="action-btn-small btn-secondary" style="width:100%; padding:6px; margin-top:4px;">Inverti 🔄</button>
-                    </div>
+            <div id="mainMenuKeyerConfig" class="box-panel" style="display:none; border-color:var(--link-color); padding:10px; margin-top:5px; background:rgba(0,0,0,0.2);">
+                <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; margin-bottom:5px;" onclick="window.toggleVisibility('mainKeyerConfigContent', 'btnToggleKeyer')">
+                    <h4 style="margin:0; color:var(--link-color); font-size:0.9em;">⚙️ Configurazione Manipolatore</h4>
+                    <button id="btnToggleKeyer" class="btn-link" style="width:auto; margin:0; padding:2px 8px; font-size:0.75em; text-decoration:none;">Nascondi 🔼</button>
                 </div>
 
-                <!-- ASSEGNAZIONE TASTI (MAIN MENU) -->
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:10px;">
-                    <div style="text-align:center; background:rgba(0,0,0,0.1); padding:5px; border-radius:6px;">
-                        <label style="font-size:0.65em; color:var(--hint-color); display:block;">TASTO DIT</label>
-                        <button id="btnMainMapDit" class="action-btn-small btn-secondary" style="width:100%; font-weight:bold; padding:4px;">Tasto: .</button>
+                <div id="mainKeyerConfigContent">
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <div style="flex:1;">
+                            <label style="font-size:0.75em; display:block;">Tipo Keyer:</label>
+                            <select id="mainKeyerTypeSelect" style="width:100%; padding:5px; font-size:0.85em;">
+                                <option value="A">Iambic A</option>
+                                <option value="B">Iambic B</option>
+                                <option value="V">Verticale</option>
+                            </select>
+                        </div>
+                        <div style="flex:1; text-align:center;">
+                            <label style="font-size:0.65em; display:block; line-height:1.1;">Paddles:</label>
+                            <button id="btnMainSwapPaddles" class="action-btn-small btn-secondary" style="width:100%; padding:6px; margin-top:4px;">Inverti 🔄</button>
+                        </div>
                     </div>
-                    <div style="text-align:center; background:rgba(0,0,0,0.1); padding:5px; border-radius:6px;">
-                        <label style="font-size:0.65em; color:var(--hint-color); display:block;">TASTO DAH</label>
-                        <button id="btnMainMapDah" class="action-btn-small btn-secondary" style="width:100%; font-weight:bold; padding:4px;">Tasto: ,</button>
-                    </div>
-                    <div style="text-align:center; background:rgba(0,0,0,0.1); padding:5px; border-radius:6px; grid-column: span 2;">
-                        <label style="font-size:0.65em; color:var(--hint-color); display:block;">TASTO VERTICALE</label>
-                        <button id="btnMainMapVert" class="action-btn-small btn-secondary" style="width:100%; font-weight:bold; padding:4px;">Tasto: Nessuno</button>
+
+                    <!-- ASSEGNAZIONE TASTI (MAIN MENU) -->
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:10px;">
+                        <div style="text-align:center; background:rgba(0,0,0,0.1); padding:5px; border-radius:6px;">
+                            <label style="font-size:0.65em; color:var(--hint-color); display:block;">TASTO DIT</label>
+                            <button id="btnMainMapDit" class="action-btn-small btn-secondary" style="width:100%; font-weight:bold; padding:4px;">Tasto: .</button>
+                        </div>
+                        <div style="text-align:center; background:rgba(0,0,0,0.1); padding:5px; border-radius:6px;">
+                            <label style="font-size:0.65em; color:var(--hint-color); display:block;">TASTO DAH</label>
+                            <button id="btnMainMapDah" class="action-btn-small btn-secondary" style="width:100%; font-weight:bold; padding:4px;">Tasto: ,</button>
+                        </div>
+                        <div style="text-align:center; background:rgba(0,0,0,0.1); padding:5px; border-radius:6px; grid-column: span 2;">
+                            <label style="font-size:0.65em; color:var(--hint-color); display:block;">TASTO VERTICALE</label>
+                            <button id="btnMainMapVert" class="action-btn-small btn-secondary" style="width:100%; font-weight:bold; padding:4px;">Tasto: Nessuno</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1431,10 +1437,10 @@
         <h2 style="color: var(--link-color); margin-bottom: 10px;">🎤 Analizzatore Audio Real-Time</h2>
 
         <!-- PANNELLO CONFIGURAZIONE RICEVITORE -->
-        <div class="box-panel" style="border-color: var(--link-color); padding: 12px;">
+        <div class="box-panel" style="border-color: var(--link-color); padding: 12px; background: rgba(0,0,0,0.5);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h3 style="color:var(--link-color); margin:0; font-size:1em;">⚙️ Ricevitore</h3>
-                <label style="display:flex; align-items:center; gap:6px; font-size:0.8em; font-weight:bold; cursor:pointer;">
+                <h3 style="color:var(--link-color); margin:0; font-size:1em; text-shadow: 0 0 5px rgba(0,0,0,0.5);">⚙️ Ricevitore</h3>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.8em; font-weight:bold; cursor:pointer; color: white;">
                     <input type="checkbox" id="realTxMicToggle" style="width:18px; height:18px;"> ATTIVA MIC
                 </label>
             </div>
@@ -1470,33 +1476,33 @@
         </div>
 
         <!-- PANNELLO ANALISI WPM -->
-        <div class="box-panel" style="padding:10px; margin-top:10px;">
+        <div class="box-panel" style="padding:10px; margin-top:10px; background: rgba(0,0,0,0.5);">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <div style="flex:1; min-width:120px;">
-                    <label style="font-size:0.75em; display:block;">WPM Riferimento:</label>
-                    <input type="number" id="realTxWpmInput" value="20" min="5" max="50" style="width:70px; padding:5px;">
+                    <label style="font-size:0.75em; display:block; color: #ccc;">WPM Riferimento:</label>
+                    <input type="number" id="realTxWpmInput" value="20" min="5" max="50" style="width:70px; padding:5px; background: #222; color: white; border: 1px solid #444;">
                 </div>
                 <div style="flex:1.5; min-width:140px;">
-                    <label style="font-size:0.75em; display:block;">Livello Difficoltà:</label>
-                    <select id="realTxDifficultySelect" style="width:100%; padding:5px; background:var(--sec-bg-color); color:white; border:1px solid rgba(255,255,255,0.1); border-radius:4px;">
+                    <label style="font-size:0.75em; display:block; color: #ccc;">Livello Difficoltà:</label>
+                    <select id="realTxDifficultySelect" style="width:100%; padding:5px; background:#222; color:white; border:1px solid #444; border-radius:4px;">
                         <option value="beginner" selected>Principiante (Tollerante)</option>
                         <option value="amateur">Amatore (Standard)</option>
                         <option value="elite">Elite (Rigoroso)</option>
                     </select>
                 </div>
-                <label style="display:flex; align-items:center; gap:6px; font-size:0.8em; font-weight:bold; cursor:pointer;">
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.8em; font-weight:bold; cursor:pointer; color: white;">
                     <input type="checkbox" id="realTxAutoWpmToggle" checked style="width:16px; height:16px;"> AUTO-TRACKING
                 </label>
             </div>
         </div>
 
         <!-- PANNELLO SESSIONE D'ESAME (NEW) -->
-        <div class="box-panel" style="border-color: var(--champ-color); padding: 12px; margin-top: 10px;">
-            <h3 style="color:var(--champ-color); margin:0 0 10px 0; font-size:1em;">⏱️ Sessione d'Esame</h3>
+        <div class="box-panel" style="border-color: var(--champ-color); padding: 12px; margin-top: 10px; background: rgba(0,0,0,0.5);">
+            <h3 style="color:var(--champ-color); margin:0 0 10px 0; font-size:1em; text-shadow: 0 0 5px rgba(0,0,0,0.5);">⏱️ Sessione d'Esame</h3>
             <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:10px;">
                 <div style="flex:1;">
-                    <label style="font-size:0.75em; display:block;">Durata:</label>
-                    <select id="realTxTimerSelect" style="width:100%; padding:8px; background:var(--sec-bg-color); color:white; border:1px solid rgba(255,255,255,0.1); border-radius:4px;">
+                    <label style="font-size:0.75em; display:block; color: #ccc;">Durata:</label>
+                    <select id="realTxTimerSelect" style="width:100%; padding:8px; background:#222; color:white; border:1px solid #444; border-radius:4px;">
                         <option value="30">30 Secondi</option>
                         <option value="60">1 Minuto</option>
                         <option value="120">2 Minuti</option>
@@ -1506,8 +1512,8 @@
                 <button id="btnStartRealTxSession" class="btn-success action-btn-small" style="margin:0; padding:10px; flex:1.5;">AVVIA TEST 🚀</button>
                 <button id="btnStopRealTxSession" class="btn-danger action-btn-small" style="display:none; margin:0; padding:10px; flex:1.5;">STOP 🛑</button>
             </div>
-            <div id="realTxSessionTimerDisplay" style="display:none; text-align:center; font-weight:bold; color:var(--champ-color); font-size:1.2em; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;">
-                Tempo Rimasto: <span id="realTxTimeLeft">30</span>s
+            <div id="realTxSessionTimerDisplay" style="display:none; text-align:center; font-weight:bold; color:var(--champ-color); font-size:1.2em; background:rgba(0,0,0,0.4); padding:10px; border-radius:8px;">
+                Tempo Rimasto: <span id="realTxTimeLeft" style="color: white;">30</span>s
             </div>
         </div>
 
