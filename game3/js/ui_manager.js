@@ -58,6 +58,20 @@ window.populateGameModesUI = function() {
     }
 };
 
+window.toggleVisibility = function(contentId, btnId) {
+    const content = document.getElementById(contentId);
+    const btn = document.getElementById(btnId);
+    if (!content || !btn) return;
+
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        btn.textContent = btnId === 'btnToggleKeyer' ? "Nascondi 🔼" : "Nascondi";
+    } else {
+        content.style.display = 'none';
+        btn.textContent = btnId === 'btnToggleKeyer' ? "Mostra 🔽" : "Mostra";
+    }
+};
+
 window.checkGameTypeUI = function() {
     console.log("UI: Checking Game Type UI...");
     const typeInput = document.getElementById('gameTypeInput');
