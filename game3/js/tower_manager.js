@@ -316,11 +316,21 @@ window.advanceTowerFloor = function() {
     }
     const overlay = document.getElementById('towerLevelOverlay');
     const num = document.getElementById('towerLevelNumber');
+
+    const nextStep = () => {
+        if (overlay) overlay.style.display = 'none';
+        window.generateTowerFloor();
+        window.fetchNearbyPlayers();
+    };
+
     if (overlay && num) {
         num.textContent = window.towerState.floor;
         overlay.style.display = 'flex';
-        setTimeout(() => { overlay.style.display = 'none'; window.generateTowerFloor(); window.fetchNearbyPlayers(); }, 1500);
+        setTimeout(nextStep, 1500);
+    } else {
+        nextStep();
     }
+
     if (window.towerState.floor % 5 === 0) window.towerState.wpm += 1;
     window.towerState.stability = Math.min(100, window.towerState.stability + 10);
 };
