@@ -100,12 +100,23 @@ window.initAudioAnalyzer = function() {
 window.toggleRealTxMic = async function(enabled) {
     if (enabled) {
         try {
-            console.log("AudioAnalyzer: Requesting microphone access...");
-            window.audioAnalyzerState.stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            console.log("AudioAnalyzer: Requesting RAW microphone access...");
+            // DISABILITIAMO TUTTI I FILTRI VOCALI CHE DISTORCONO IL CW
+            const constraints = {
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false,
+                    highpassFilter: false,
+                    channelCount: 1
+                },
+                video: false
+            };
+            window.audioAnalyzerState.stream = await navigator.mediaDevices.getUserMedia(constraints);
             window.startAudioAnalysis();
         } catch (err) {
             console.error("AudioAnalyzer: Mic access denied", err);
-            showToast("Errore: Accesso al microfono negato.");
+            showToast("Errore: Accesso al microfono negato o constraints non supportati.");
             document.getElementById('realTxMicToggle').checked = false;
         }
     } else {
@@ -121,78 +132,93 @@ window.startAudioAnalysis = function() {
 
     window.audioAnalyzerState.source = ctx.createMediaStreamSource(window.audioAnalyzerState.stream);
 
-    // FILTRO PASSA BANDA
+    // FILTRO PASSA BANDA PIÙ AGGRESSIVO (CASCADE)
+    // Usiamo due filtri in serie per una pendenza maggiore (scampanatura più stretta)
     window.audioAnalyzerState.filter = ctx.createBiquadFilter();
     window.audioAnalyzerState.filter.type = "bandpass";
     window.audioAnalyzerState.filter.frequency.value = window.audioAnalyzerState.targetFreq;
-    window.audioAnalyzerState.filter.Q.value = window.audioAnalyzerState.qFactor;
+    window.audioAnalyzerState.filter.Q.value = window.audioAnalyzerState.qFactor * 2;
+
+    const filter2 = ctx.createBiquadFilter();
+    filter2.type = "bandpass";
+    filter2.frequency.value = window.audioAnalyzerState.targetFreq;
+    filter2.Q.value = window.audioAnalyzerState.qFactor * 2;
 
     // ANALIZZATORE
     window.audioAnalyzerState.analyser = ctx.createAnalyser();
-    window.audioAnalyzerState.analyser.fftSize = 1024; // Precisione frequenza
+    window.audioAnalyzerState.analyser.fftSize = 2048; // Maggiore risoluzione in frequenza
+    window.audioAnalyzerState.analyser.smoothingTimeConstant = 0.2; // Più reattivo
     const bufferLength = window.audioAnalyzerState.analyser.frequencyBinCount;
-    window.audioAnalyzerState.dataArray = new Uint8Array(bufferLength);
+    // Passiamo ai Float per l'analisi in dB (più precisa)
+    window.audioAnalyzerState.dataArray = new Float32Array(bufferLength);
 
-    // CATENA: Stream -> Filter -> Analyser
+    // CATENA: Stream -> Filter 1 -> Filter 2 -> Analyser
     window.audioAnalyzerState.source.connect(window.audioAnalyzerState.filter);
-    window.audioAnalyzerState.filter.connect(window.audioAnalyzerState.analyser);
+    window.audioAnalyzerState.filter.connect(filter2);
+    filter2.connect(window.audioAnalyzerState.analyser);
 
     window.audioAnalyzerState.active = true;
     window.audioAnalyzerState.lastEventTime = Date.now();
     window.audioAnalyzerState.animationId = requestAnimationFrame(window.audioAnalysisLoop);
 
-    showToast("🎤 Ricevitore Audio Attivo");
+    showToast("🎤 Ricevitore Raw Attivo");
 };
 
 window.audioAnalysisLoop = function() {
     if (!window.audioAnalyzerState.active) return;
 
     const state = window.audioAnalyzerState;
-    state.analyser.getByteFrequencyData(state.dataArray);
+    // getFloatFrequencyData restituisce valori in dB (da -100 a 0)
+    state.analyser.getFloatFrequencyData(state.dataArray);
 
-    // Troviamo la magnitudo alla frequenza desiderata
     const nyquist = state.audioCtx.sampleRate / 2;
     const index = Math.round((state.targetFreq / nyquist) * state.dataArray.length);
 
-    // Analizziamo un piccolo range attorno alla frequenza target per robustezza
-    let magnitude = 0;
+    // Troviamo il picco in dB nell'intorno della frequenza target
+    let maxDb = -100;
     const range = 2;
     for(let i = index - range; i <= index + range; i++) {
-        if (state.dataArray[i]) magnitude = Math.max(magnitude, state.dataArray[i]);
+        if (state.dataArray[i] > maxDb) maxDb = state.dataArray[i];
     }
 
-    const normMag = magnitude / 255;
+    // Normalizzazione per la barra (mappiamo -80dB..-10dB a 0..100%)
+    const minVisDb = -80;
+    const maxVisDb = -10;
+    let normMag = (maxDb - minVisDb) / (maxVisDb - minVisDb);
+    normMag = Math.max(0, Math.min(1, normMag));
+
     const peakBar = document.getElementById('realTxPeakBar');
     if (peakBar) peakBar.style.width = (normMag * 100) + "%";
 
-    // LOGICA DI RILEVAMENTO IMPULSO
-    const now = Date.now();
-    const isCurrentlyOn = (normMag >= state.squelch);
+    // LOGICA DI RILEVAMENTO IMPULSO BASATA SUI dB
+    // Lo squelch utente (0..1) mappa da -70dB a -20dB
+    const thresholdDb = -70 + (state.squelch * 50);
+    const isCurrentlyOn = (maxDb >= thresholdDb);
 
+    const now = Date.now();
     if (isCurrentlyOn !== state.isSignalOn) {
         const duration = now - state.lastEventTime;
 
-        // DE-BOUNCE: Ignoriamo variazioni troppo rapide (sotto i 20ms) per pulire il rumore
-        if (duration > 20) {
+        // DE-BOUNCE: 25ms per evitare spike elettrici o click
+        if (duration > 25) {
             const eventType = state.isSignalOn ? 'ON' : 'OFF';
             window.handleMorseAudioPulse(eventType, duration);
 
             state.isSignalOn = isCurrentlyOn;
             state.lastEventTime = now;
 
-            // Feedback Visivo LED
             const led = document.getElementById('realTxStatusLed');
-            if (led) led.style.background = isCurrentlyOn ? "var(--link-color)" : "#333";
-            if (led) led.style.boxShadow = isCurrentlyOn ? "0 0 15px var(--link-color)" : "none";
+            if (led) led.style.background = isCurrentlyOn ? "#4caf50" : "#333";
+            if (led) led.style.boxShadow = isCurrentlyOn ? "0 0 15px #4caf50" : "none";
         }
     }
 
-    // AUTO-CHIUSURA CARATTERE (Se segnale OFF da troppo tempo)
+    // AUTO-CHIUSURA CARATTERE E PAROLA
     if (!state.isSignalOn && state.pulses.length > 0) {
         const quietDuration = now - state.lastEventTime;
         const unit = 1200 / state.wpm;
 
-        if (quietDuration > unit * 3.5) {
+        if (quietDuration > unit * 3.2) {
             window.finalizeMorseAudioCharacter();
         }
     }
