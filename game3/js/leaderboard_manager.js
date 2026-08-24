@@ -689,10 +689,22 @@ window.renderHeadToHeadView = function(players, container, matchTimestamp = null
             const rowAb = document.createElement('div'); rowAb.className = 'h2h-stat-row';
             rowAb.innerHTML = `<span style="color:#d32f2f; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px;">${currentLang==='it'?'ABBANDONATO':'WITHDRAWN'}</span>`;
             statsDiv.appendChild(rowAb);
-        } else if (!p.finished && !isOldMatch) {
-            const rowProg = document.createElement('div'); rowProg.className = 'h2h-stat-row';
-            rowProg.innerHTML = `<span style="color:#ff9800; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px; animation: pulse 1s infinite;">${currentLang==='it'?'IN CORSO...':'PLAYING...'}</span>`;
-            statsDiv.appendChild(rowProg);
+        } else if (!p.finished) {
+            // --- FIX: LOGICA STATO INTELLIGENTE ---
+            // Se stiamo guardando lo STORICO (matchTimestamp presente), non mostriamo mai "IN CORSO"
+            // Se siamo in una stanza LIVE, mostriamo "IN CORSO" solo se non è passato troppo tempo
+            const isHistoryView = (matchTimestamp !== null);
+
+            if (!isHistoryView && !isOldMatch) {
+                const rowProg = document.createElement('div'); rowProg.className = 'h2h-stat-row';
+                rowProg.innerHTML = `<span style="color:#ff9800; font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px; animation: pulse 1s infinite;">${currentLang==='it'?'IN CORSO...':'PLAYING...'}</span>`;
+                statsDiv.appendChild(rowProg);
+            } else {
+                // Se è storico o match scaduto/fantasma, mostriamo che non ha finito
+                const rowMissing = document.createElement('div'); rowMissing.className = 'h2h-stat-row';
+                rowMissing.innerHTML = `<span style="color:var(--hint-color); font-weight:bold; font-size:0.7em; width:100%; text-align:center; margin-top:5px;">${currentLang==='it'?'NON TERMINATO':'INCOMPLETE'}</span>`;
+                statsDiv.appendChild(rowMissing);
+            }
         }
 
         card.appendChild(statsDiv);
