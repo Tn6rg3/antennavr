@@ -18,9 +18,9 @@ window.populateGameModesUI = function() {
     Object.values(window.GAME_MODES || {}).forEach(mode => {
         // --- LOGICA FILTRI ---
         if (isSingle) {
-            if (mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'groups_tx') return;
+            if (mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'groups_tx' || mode.id === 'real_tx') return;
         } else if (isMulti) {
-            if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'groups_tx') return;
+            if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'groups_tx' || mode.id === 'real_tx') return;
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
         } else if (isTx) {
