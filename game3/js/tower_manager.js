@@ -9,6 +9,8 @@ window.towerState = {
     currentWords: [],
     wordIndex: 0,
     wpm: 12,
+    attemptCount: 0, // Tentativi per la parola/missione corrente
+    tempNoiseBoost: 0, // Boost di disturbo temporaneo per errori
 
     // Missione TX (Tasto)
     txMode: false,
@@ -19,11 +21,10 @@ window.towerState = {
     txTimeout: null,
 
     // Audio DSP
-    qrnLevel: 0, // Rumore bianco
-    qsbDepth: 0, // Fading (LFO)
-    qrmActive: false,
-    isDspActive: false, // Gadget 1
-    isAmpActive: false, // Gadget 2
+    qrnLevel: 0,
+    qsbDepth: 0,
+    isDspActive: false,
+    isAmpActive: false,
 
     // UI & Rendering
     oscCanvas: null,
@@ -32,16 +33,13 @@ window.towerState = {
     climbCtx: null,
     animationId: null,
     resizeHandler: null,
+    nearbyPlayers: [],
 
-    // Social
-    nearbyPlayers: [], // { uid, alias, floor }
-
-    // Inventory (Valori iniziali)
-    gadget1: 3, // Filtri DSP
-    gadget2: 2, // Amplificatori
+    // Inventory
+    gadget1: 3,
+    gadget2: 2,
     valvole: 0,
 
-    // Audio Nodes
     noiseNode: null,
     noiseGain: null
 };
@@ -60,17 +58,11 @@ window.TOWER_LORE = [
 ];
 
 window.initTowerManager = function() {
-    console.log("Tower: Initializing components...");
-
     window.towerState.oscCanvas = document.getElementById('towerOscilloscope');
     window.towerState.climbCanvas = document.getElementById('towerClimbCanvas');
 
-    // Rimuoviamo eventuale listener precedente per evitare duplicati
-    if (window.towerState.resizeHandler) {
-        window.removeEventListener('resize', window.towerState.resizeHandler);
-    }
+    if (window.towerState.resizeHandler) window.removeEventListener('resize', window.towerState.resizeHandler);
 
-    // Funzione interna per il resize dinamico
     const resizeCanvases = () => {
         if (window.towerState.oscCanvas) {
             window.towerState.oscCanvas.width = window.towerState.oscCanvas.clientWidth;
@@ -88,7 +80,6 @@ window.initTowerManager = function() {
     window.towerState.resizeHandler = resizeCanvases;
     window.addEventListener('resize', window.towerState.resizeHandler);
 
-    // Input Listener con Live Reveal
     const input = document.getElementById('towerInput');
     if (input) {
         input.oninput = () => {
@@ -111,29 +102,18 @@ window.initTowerManager = function() {
                         }
                     }
                 }
-                if (typed === target) {
-                    window.checkTowerWord(typed);
-                    input.value = "";
-                }
+                if (typed === target) { window.checkTowerWord(typed); input.value = ""; }
             }
         };
-        // Gestione INVIO per forzare sottomissione (in caso di errore)
-        input.onkeypress = (e) => {
-            if (e.key === 'Enter') {
-                window.checkTowerWord(input.value.trim().toUpperCase());
-                input.value = "";
-            }
-        };
+        input.onkeypress = (e) => { if (e.key === 'Enter') { window.checkTowerWord(input.value.trim().toUpperCase()); input.value = ""; } };
     }
 
-    // Bottoni Gadget
     document.getElementById('btnTowerGadget1')?.addEventListener('click', () => window.useTowerGadget(1));
     document.getElementById('btnTowerGadget2')?.addEventListener('click', () => window.useTowerGadget(2));
     document.getElementById('btnTowerSOS')?.addEventListener('click', () => window.useTowerSOS());
     document.getElementById('btnTowerReplay')?.addEventListener('click', () => window.playNextTowerWord());
     document.getElementById('quitTowerBtn')?.addEventListener('click', () => window.quitTowerClimb());
 
-    // Tasto Virtuale (Boss)
     const vKey = document.getElementById('towerVirtualKey');
     if (vKey) {
         vKey.onmousedown = () => window.handleTowerKey(true);
@@ -144,14 +124,11 @@ window.initTowerManager = function() {
 };
 
 window.startTowerSequence = async function() {
-    console.log("Tower: Starting climb...");
     window.resetGameState();
-
     window.towerState.active = true;
     gameRunning = true;
     currentMode = 'la_torre';
 
-    // Recupero Checkpoint da Firebase
     let startFloor = 1;
     if (db && myId) {
         try {
@@ -159,18 +136,16 @@ window.startTowerSequence = async function() {
             if (snap.exists()) {
                 startFloor = snap.val().checkpoint || 1;
                 window.towerState.valvole = snap.val().valvole || 0;
-                if (startFloor > 1) showToast(`🚀 Riprendo dal piano ${startFloor}`);
+                showToast(`🚀 Riprendo dal piano ${startFloor}`);
             }
-        } catch(e) { console.error("Tower: error fetching progress", e); }
+        } catch(e) {}
     }
 
-    // Reset stato sessione
     window.towerState.floor = startFloor;
     window.towerState.stability = 100;
-    // Calcolo WPM dinamico basato sul piano di partenza
     window.towerState.wpm = 12 + Math.floor(startFloor / 5);
-    window.towerState.gadget1 = 3;
-    window.towerState.gadget2 = 2;
+    window.towerState.attemptCount = 0;
+    window.towerState.tempNoiseBoost = 0;
 
     showScreen('towerArea');
     window.initTowerManager();
@@ -187,8 +162,6 @@ window.startTowerSequence = async function() {
 window.initTowerAudio = function() {
     if (!window.audioCtx) window.resumeAudioContext();
     const ctx = window.audioCtx;
-    if (!ctx) return;
-
     const bufferSize = 2 * ctx.sampleRate;
     const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
@@ -210,6 +183,8 @@ window.generateTowerFloor = function() {
     const floor = window.towerState.floor;
     const isBoss = (floor % 10 === 0);
     window.towerState.wordsSolved = 0;
+    window.towerState.attemptCount = 0;
+    window.towerState.tempNoiseBoost = 0;
 
     if (isBoss) {
         window.startTowerBossFight();
@@ -217,13 +192,10 @@ window.generateTowerFloor = function() {
         window.towerState.txMode = false;
         document.getElementById('towerInputArea').style.display = 'flex';
         document.getElementById('towerBossControls').style.display = 'none';
-
         window.towerState.currentWords = window.getGameWords(3, 'standard');
         window.towerState.wordIndex = 0;
-
         const lore = window.TOWER_LORE[((floor-1) % 10)] || "Segnale perso nell'etere...";
         document.getElementById('towerLoreText').textContent = lore;
-
         window.playNextTowerWord();
     }
     window.updateTowerDifficulty();
@@ -241,22 +213,10 @@ window.playNextTowerWord = function() {
 
 window.playMorseWithDisturbance = function(text) {
     if (!window.towerState.active) return;
-
-    // Verifichiamo se il testo è valido
-    if (!text) {
-        console.warn("Tower: text is empty, generating fallback.");
-        text = "RADIO";
-    }
-
-    const wpm = window.towerState.wpm;
     if (typeof playMorseAudio === 'function') {
         stopAllMorseAudio();
-        // Diamo un piccolo ritardo per assicurarci che l'AudioContext sia pronto
-        setTimeout(() => {
-            if (window.towerState.active) playMorseAudio(text, wpm, true);
-        }, 50);
+        setTimeout(() => { if (window.towerState.active) playMorseAudio(text, window.towerState.wpm, true); }, 50);
     }
-
     const tape = document.getElementById('towerTapeContent');
     if (tape) {
         tape.innerHTML = '';
@@ -277,30 +237,31 @@ window.checkTowerWord = function(typed) {
     if (typed === target) {
         window.towerState.wordsSolved++;
         window.towerState.wordIndex++;
+        window.towerState.attemptCount = 0;
+        window.towerState.tempNoiseBoost = 0;
         if (typeof playBeep === 'function') playBeep(880, 0.1);
-        if (window.towerState.wordsSolved >= 3) {
-            window.advanceTowerFloor();
-        } else {
-            // SINTONIZZAZIONE: 25% di probabilità di dover sintonizzare tra le parole
-            if (Math.random() < 0.25) {
-                window.startTowerSintonia();
-            } else {
-                setTimeout(window.playNextTowerWord, 600);
-            }
+        if (window.towerState.wordsSolved >= 3) window.advanceTowerFloor();
+        else {
+            if (Math.random() < 0.25) window.startTowerSintonia();
+            else setTimeout(window.playNextTowerWord, 600);
         }
     } else {
-        // ERRORE: Sottragga vita e rigenera parola per evitare blocchi
-        window.damageTowerStability(12);
-        if (typeof playBeep === 'function') playBeep(200, 0.3);
+        window.towerState.attemptCount++;
+        window.damageTowerStability(10);
         window.triggerTowerGlitch();
 
-        // Saltiamo la parola per non bloccare il giocatore
-        window.towerState.wordIndex++;
-        if (window.towerState.wordIndex >= window.towerState.currentWords.length) {
-            if (window.towerState.wordsSolved > 0) window.advanceTowerFloor();
-            else window.generateTowerFloor();
-        } else {
+        if (window.towerState.attemptCount < 3) {
+            showToast(`⚠️ ERRORE RICEZIONE (Tentativo ${window.towerState.attemptCount}/3)`);
+            window.towerState.tempNoiseBoost += 0.04; // Aumenta il disturbo
+            window.updateTowerDifficulty();
             setTimeout(window.playNextTowerWord, 800);
+        } else {
+            showToast("📡 SEGNALE PERSO... PROSEGUO");
+            window.towerState.attemptCount = 0;
+            window.towerState.tempNoiseBoost = 0;
+            window.towerState.wordIndex++;
+            if (window.towerState.wordIndex >= window.towerState.currentWords.length) window.advanceTowerFloor();
+            else setTimeout(window.playNextTowerWord, 800);
         }
     }
     window.renderTowerUI();
@@ -308,91 +269,49 @@ window.checkTowerWord = function(typed) {
 
 window.advanceTowerFloor = function() {
     window.towerState.floor++;
-
-    // Checkpoint ogni 10 piani (Settore superato)
-    const isNewCheckpoint = (window.towerState.floor % 10 === 1);
-
     if (db && myId) {
-        const rpgLevel = window.userProgression?.level || 1;
-
-        // 1. Aggiornamento Classifica
         db.ref(`leaderboard/la_torre/all/${myId}`).set({
             name: myName, score: window.towerState.floor, wpm: window.towerState.wpm,
-            level: rpgLevel, date: new Date().toLocaleDateString('it-IT'), ts: firebase.database.ServerValue.TIMESTAMP
+            date: new Date().toLocaleDateString('it-IT'), ts: firebase.database.ServerValue.TIMESTAMP
         });
-
-        // 2. Aggiornamento Progresso Permanente (Checkpoint)
         const updateData = { valvole: (window.towerState.valvole || 0) + 5 };
-        if (isNewCheckpoint) {
-            updateData.checkpoint = window.towerState.floor;
-            showToast("🚩 CHECKPOINT RAGGIUNTO!");
-        }
+        if (window.towerState.floor % 10 === 1) { updateData.checkpoint = window.towerState.floor; showToast("🚩 CHECKPOINT!"); }
         db.ref(`users/${myId}/towerProgress`).update(updateData);
     }
-
     const overlay = document.getElementById('towerLevelOverlay');
     const num = document.getElementById('towerLevelNumber');
     if (overlay && num) {
         num.textContent = window.towerState.floor;
         overlay.style.display = 'flex';
-        setTimeout(() => {
-            overlay.style.display = 'none';
-            window.generateTowerFloor();
-            window.fetchNearbyPlayers();
-        }, 1500);
+        setTimeout(() => { overlay.style.display = 'none'; window.generateTowerFloor(); window.fetchNearbyPlayers(); }, 1500);
     }
-
     if (window.towerState.floor % 5 === 0) window.towerState.wpm += 1;
-    window.towerState.valvole += 5;
-    // Recupero parziale stabilità ogni piano
     window.towerState.stability = Math.min(100, window.towerState.stability + 10);
 };
 
 window.damageTowerStability = function(amount) {
-    // Se l'amplificatore è attivo, i danni sono dimezzati
     if (window.towerState.isAmpActive) amount = Math.floor(amount / 2);
     window.towerState.stability -= amount;
-    if (window.towerState.stability <= 0) {
-        window.towerState.stability = 0;
-        window.gameOverTower();
-    }
+    if (window.towerState.stability <= 0) { window.towerState.stability = 0; window.gameOverTower(); }
 };
 
 window.useTowerGadget = function(id) {
     const state = window.towerState;
     if (id === 1 && state.gadget1 > 0 && !state.isDspActive) {
-        state.gadget1--;
-        state.isDspActive = true;
-        showToast("🛡️ FILTRO DSP ATTIVATO (20s)");
-        const oldQrn = state.qrnLevel;
-        state.qrnLevel = 0;
-        window.updateTowerDifficulty();
-        setTimeout(() => {
-            state.isDspActive = false;
-            state.qrnLevel = oldQrn;
-            window.updateTowerDifficulty();
-            showToast("⚠️ Filtro DSP Esaurito");
-        }, 20000);
+        state.gadget1--; state.isDspActive = true; showToast("🛡️ FILTRO DSP (20s)");
+        const oldQrn = state.qrnLevel; state.qrnLevel = 0; window.updateTowerDifficulty();
+        setTimeout(() => { state.isDspActive = false; state.qrnLevel = oldQrn; window.updateTowerDifficulty(); }, 20000);
     } else if (id === 2 && state.gadget2 > 0 && !state.isAmpActive) {
-        state.gadget2--;
-        state.isAmpActive = true;
-        showToast("🚀 AMPLIFICATORE ATTIVO (20s)");
-        setTimeout(() => {
-            state.isAmpActive = false;
-            showToast("⚠️ Amplificatore Esaurito");
-        }, 20000);
-    } else if (state[`gadget${id}`] <= 0) {
-        showToast("❌ Gadget esauriti!");
+        state.gadget2--; state.isAmpActive = true; showToast("🚀 AMPLIFICATORE (20s)");
+        setTimeout(() => { state.isAmpActive = false; }, 20000);
     }
     window.renderTowerUI();
 };
 
 window.useTowerSOS = function() {
-    if (confirm("Usare SOS per dimezzare velocità in questo piano?")) {
+    if (confirm("Dimezzare velocità per questo piano?")) {
         window.towerState.wpm = Math.max(8, Math.round(window.towerState.wpm / 1.5));
-        window.renderTowerUI();
-        stopAllMorseAudio();
-        window.playNextTowerWord();
+        window.renderTowerUI(); stopAllMorseAudio(); window.playNextTowerWord();
     }
 };
 
@@ -401,74 +320,49 @@ window.startTowerBossFight = function() {
     window.towerState.txTarget = "SOS";
     window.towerState.txCurrent = "";
     window.towerState.txSequence = [];
-    window.towerState.txLastTime = 0;
+    window.towerState.attemptCount = 0;
     document.getElementById('towerInputArea').style.display = 'none';
     document.getElementById('towerBossControls').style.display = 'flex';
     document.getElementById('towerTxPrompt').textContent = "RIPRISTINA SEGNALE - TRASMETTI:";
-    document.getElementById('towerTxTarget').textContent = "[" + window.towerState.txTarget + "]";
+    document.getElementById('towerTxTarget').textContent = "[SOS]";
     document.getElementById('towerTxCurrent').textContent = "";
-    document.getElementById('towerLoreText').textContent = "--- EMERGENZA --- SETTORE INSTABILE ---";
 };
 
 window.startTowerSintonia = function() {
     window.towerState.txMode = true;
-    // Generiamo un codice alfanumerico casuale di 2 caratteri (Es. K4, R9, S2)
+    window.towerState.attemptCount = 0;
+    const floor = window.towerState.floor;
+    const len = 2 + Math.floor(floor / 15);
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    window.towerState.txTarget = chars[Math.floor(Math.random()*26)] + chars[Math.floor(26 + Math.random()*10)];
+    let target = "";
+    for(let i=0; i<len; i++) target += chars[Math.floor(Math.random() * chars.length)];
+    window.towerState.txTarget = target;
     window.towerState.txCurrent = "";
     window.towerState.txSequence = [];
-    window.towerState.txLastTime = 0;
-
     document.getElementById('towerInputArea').style.display = 'none';
     document.getElementById('towerBossControls').style.display = 'flex';
     document.getElementById('towerTxPrompt').textContent = "PERDITA FREQUENZA! SINTONIZZA:";
-    document.getElementById('towerTxTarget').textContent = "[" + window.towerState.txTarget + "]";
+    document.getElementById('towerTxTarget').textContent = "[" + target + "]";
     document.getElementById('towerTxCurrent').textContent = "";
-
     window.triggerTowerGlitch();
-    if (window.towerState.noiseGain) {
-        window.towerState.noiseGain.gain.setTargetAtTime(0.15, window.audioCtx.currentTime, 0.1);
-    }
 };
 
 window.handleTowerKey = function(isDown) {
     if (!window.towerState.active || !window.towerState.txMode) return;
     const now = Date.now();
     const unit = 1200 / window.towerState.wpm;
-
     if (isDown) {
         if (typeof startTone === 'function') startTone(600);
-
-        // Se c'è una pausa lunga tra due tocchi, chiudiamo il carattere precedente
-        if (window.towerState.txLastTime > 0) {
-            const gap = now - window.towerState.txLastTime;
-            if (gap > unit * 2) {
-                window.finalizeTowerTxChar();
-            }
-        }
+        if (window.towerState.txLastTime > 0 && (now - window.towerState.txLastTime) > unit * 2) window.finalizeTowerTxChar();
         window.towerState.txLastTime = now;
     } else {
         if (typeof stopTone === 'function') stopTone();
-
-        const duration = now - window.towerState.txLastTime;
-        // Aggiungiamo punto o linea alla sequenza
-        const symbol = (duration > unit * 1.8) ? "-" : ".";
-        window.towerState.txSequence.push(symbol);
+        const dur = now - window.towerState.txLastTime;
+        window.towerState.txSequence.push(dur > unit * 1.8 ? "-" : ".");
         window.towerState.txLastTime = now;
-
-        // Feedback visivo dei simboli che stai scrivendo
-        const currentFeedback = document.getElementById('towerTxCurrent');
-        if (currentFeedback) {
-            currentFeedback.textContent = window.towerState.txCurrent + " " + window.towerState.txSequence.join("");
-        }
-
-        // Timeout per decodifica automatica della lettera
+        document.getElementById('towerTxCurrent').textContent = window.towerState.txCurrent + " " + window.towerState.txSequence.join("");
         if (window.towerState.txTimeout) clearTimeout(window.towerState.txTimeout);
-        window.towerState.txTimeout = setTimeout(() => {
-            if (window.towerState.active && window.towerState.txMode) {
-                window.finalizeTowerTxChar();
-            }
-        }, unit * 3.5);
+        window.towerState.txTimeout = setTimeout(() => { if (window.towerState.txMode) window.finalizeTowerTxChar(); }, unit * 3.5);
     }
 };
 
@@ -476,30 +370,44 @@ window.finalizeTowerTxChar = function() {
     if (window.towerState.txSequence.length === 0) return;
     const code = window.towerState.txSequence.join("");
     window.towerState.txSequence = [];
-    let found = "?";
+    let found = "";
     for (let c in window.morseDict) { if (window.morseDict[c] === code) { found = c; break; } }
-    window.towerState.txCurrent += found;
-    document.getElementById('towerTxCurrent').textContent = window.towerState.txCurrent;
 
-    if (window.towerState.txCurrent === window.towerState.txTarget) {
-        showToast("✅ SINTONIZZATO!");
-        if (typeof playBeep === 'function') playBeep(1200, 0.2);
-
-        setTimeout(() => {
-            window.towerState.txMode = false;
-            document.getElementById('towerInputArea').style.display = 'flex';
-            document.getElementById('towerBossControls').style.display = 'none';
+    if (found && window.towerState.txTarget.startsWith(window.towerState.txCurrent + found)) {
+        window.towerState.txCurrent += found;
+        document.getElementById('towerTxCurrent').textContent = window.towerState.txCurrent;
+        if (window.towerState.txCurrent === window.towerState.txTarget) {
+            showToast("✅ SINTONIZZATO!");
+            setTimeout(() => {
+                window.towerState.txMode = false;
+                document.getElementById('towerInputArea').style.display = 'flex';
+                document.getElementById('towerBossControls').style.display = 'none';
+                window.updateTowerDifficulty();
+                if (window.towerState.floor % 10 === 0) window.advanceTowerFloor();
+                else window.playNextTowerWord();
+            }, 1000);
+        }
+    } else {
+        window.towerState.attemptCount++;
+        window.damageTowerStability(10);
+        window.triggerTowerGlitch();
+        if (window.towerState.attemptCount < 3) {
+            showToast(`❌ ERRORE TX (${window.towerState.attemptCount}/3) - RIPROVA`);
+            window.towerState.tempNoiseBoost += 0.05;
             window.updateTowerDifficulty();
-
-            if (window.towerState.floor % 10 === 0) {
-                window.advanceTowerFloor();
-            } else {
-                window.playNextTowerWord();
-            }
-        }, 1000);
-    } else if (!window.towerState.txTarget.startsWith(window.towerState.txCurrent)) {
-        window.damageTowerStability(10); window.triggerTowerGlitch();
-        window.towerState.txCurrent = "";
+            window.towerState.txCurrent = "";
+            document.getElementById('towerTxCurrent').textContent = "";
+        } else {
+            showToast("📡 SINTONIA DI FORTUNA...");
+            setTimeout(() => {
+                window.towerState.txMode = false;
+                document.getElementById('towerInputArea').style.display = 'flex';
+                document.getElementById('towerBossControls').style.display = 'none';
+                window.updateTowerDifficulty();
+                if (window.towerState.floor % 10 === 0) window.advanceTowerFloor();
+                else window.playNextTowerWord();
+            }, 1000);
+        }
     }
 };
 
@@ -560,7 +468,8 @@ window.renderTowerOscilloscope = function() {
     const time = performance.now() * 0.005;
     for (let x = 0; x < canvas.width; x += 2) {
         const sf = window.towerState.stability / 100;
-        const noise = (Math.random() - 0.5) * (1 - sf) * 30;
+        const totalNoise = (window.towerState.qrnLevel || 0) + (window.towerState.tempNoiseBoost || 0);
+        const noise = (Math.random() - 0.5) * totalNoise * 500;
         const y = midY + (Math.sin(x * 0.05 + time) * 15 * sf) + noise;
         if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
@@ -572,8 +481,9 @@ window.updateTowerDifficulty = function() {
     if (!window.towerState.isDspActive) {
         window.towerState.qrnLevel = floor > 10 ? Math.min(0.08, (floor - 10) * 0.005) : 0;
     }
+    const totalQrn = window.towerState.qrnLevel + window.towerState.tempNoiseBoost;
     if (window.towerState.noiseGain) {
-        window.towerState.noiseGain.gain.setTargetAtTime(window.towerState.qrnLevel, window.audioCtx.currentTime, 0.5);
+        window.towerState.noiseGain.gain.setTargetAtTime(Math.min(0.3, totalQrn), window.audioCtx.currentTime, 0.5);
     }
 };
 
@@ -592,15 +502,7 @@ window.gameOverTower = function() {
 };
 
 window.stopTowerClimb = function() {
-    console.log("Tower: Cleaning up resources...");
     window.towerState.active = false;
-    gameRunning = false;
-
-    if (window.towerState.resizeHandler) {
-        window.removeEventListener('resize', window.towerState.resizeHandler);
-        window.towerState.resizeHandler = null;
-    }
-
     if (window.towerState.noiseNode) {
         try { window.towerState.noiseNode.stop(); window.towerState.noiseNode.disconnect(); } catch(e) {}
         window.towerState.noiseNode = null;
