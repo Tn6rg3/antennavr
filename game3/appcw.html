@@ -1425,6 +1425,94 @@
 </div>
 
 <!-- SCHERMATA TRASMISSIONE LIBERA (STANDALONE) -->
+<!-- SCHERMATA RICEZIONE AUDIO REALE -->
+<div id="realTxScreen" class="screen">
+    <div class="screen-content" style="padding-bottom:80px;">
+        <h2 style="color: var(--link-color); margin-bottom: 10px;">🎤 Analizzatore Audio Real-Time</h2>
+
+        <!-- PANNELLO CONFIGURAZIONE RICEVITORE -->
+        <div class="box-panel" style="border-color: var(--link-color); padding: 12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="color:var(--link-color); margin:0; font-size:1em;">⚙️ Ricevitore</h3>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.8em; font-weight:bold; cursor:pointer;">
+                    <input type="checkbox" id="realTxMicToggle" style="width:18px; height:18px;"> ATTIVA MIC
+                </label>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+                <div>
+                    <label style="font-size:0.75em; display:block;">Tono (Hz):</label>
+                    <input type="number" id="realTxFreqInput" value="600" min="300" max="1200" step="50" style="width:100%; padding:6px;">
+                </div>
+                <div>
+                    <label style="font-size:0.75em; display:block;">Larghezza Filtro:</label>
+                    <select id="realTxBandwidthSelect" style="width:100%; padding:6px;">
+                        <option value="10">Stretto (Pro)</option>
+                        <option value="5" selected>Standard</option>
+                        <option value="2">Largo (Permissivo)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom:10px;">
+                <label style="font-size:0.75em; display:flex; justify-content:space-between;">
+                    <span>Soglia Squelch (Sensibilità):</span>
+                    <span id="realTxSquelchVal">20%</span>
+                </label>
+                <input type="range" id="realTxSquelchInput" min="1" max="100" value="20" style="width:100%; margin-top:5px;">
+            </div>
+
+            <!-- PEAK METER -->
+            <div style="height:20px; background:rgba(0,0,0,0.3); border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); position:relative;">
+                <div id="realTxPeakBar" style="height:100%; width:0%; background:linear-gradient(90deg, #4caf50 70%, #ffeb3b 85%, #f44336 100%); transition: width 0.1s linear;"></div>
+                <div id="realTxSquelchMarker" style="position:absolute; top:0; bottom:0; left:20%; width:2px; background:#fff; box-shadow:0 0 5px #000; z-index:5;"></div>
+            </div>
+        </div>
+
+        <!-- PANNELLO ANALISI WPM -->
+        <div class="box-panel" style="padding:10px; margin-top:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="flex:1;">
+                    <label style="font-size:0.75em; display:block;">WPM Riferimento:</label>
+                    <input type="number" id="realTxWpmInput" value="20" min="5" max="50" style="width:70px; padding:5px;">
+                </div>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.8em; font-weight:bold; cursor:pointer;">
+                    <input type="checkbox" id="realTxAutoWpmToggle" checked style="width:16px; height:16px;"> AUTO-TRACKING
+                </label>
+            </div>
+        </div>
+
+        <!-- AREA DECODIFICA -->
+        <div class="box-panel" style="flex-grow:1; min-height:120px; background:#000; border-color:var(--champ-color); padding:15px; position:relative; overflow:hidden;">
+            <div id="realTxDecodedText" style="width:100%; height:100%; font-family:'Courier New', Courier, monospace; font-size:1.4em; color:var(--champ-color); font-weight:bold; white-space:pre-wrap; overflow-y:auto; word-break:break-all;">...</div>
+            <div id="realTxStatusLed" style="position:absolute; top:10px; right:15px; width:15px; height:15px; border-radius:50%; background:#333; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>
+        </div>
+
+        <!-- CRUSCOTTO PRECISIONE -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-top:10px;">
+            <div class="box-panel" style="margin:0; padding:8px; text-align:center;">
+                <small style="font-size:0.6em; color:var(--hint-color); display:block; text-transform:uppercase;">Punti</small>
+                <b id="realTxDotAcc" style="font-size:1.1em; color:#4caf50;">--%</b>
+            </div>
+            <div class="box-panel" style="margin:0; padding:8px; text-align:center;">
+                <small style="font-size:0.6em; color:var(--hint-color); display:block; text-transform:uppercase;">Linee</small>
+                <b id="realTxDashAcc" style="font-size:1.1em; color:#2196f3;">--%</b>
+            </div>
+            <div class="box-panel" style="margin:0; padding:8px; text-align:center;">
+                <small style="font-size:0.6em; color:var(--hint-color); display:block; text-transform:uppercase;">Spazi</small>
+                <b id="realTxSpaceAcc" style="font-size:1.1em; color:#ff9800;">--%</b>
+            </div>
+        </div>
+
+        <button id="btnResetRealTx" class="btn-secondary" style="margin-top:15px; width:100%; padding:10px;">CANCELLA TESTO</button>
+
+    </div>
+
+    <div class="fixed-bottom-btns">
+        <button onclick="goBackToMenu()" class="btn-secondary">Torna al Menu Principale</button>
+    </div>
+</div>
+
 <div id="transmissionScreen" class="screen">
     <div class="screen-content" style="padding-bottom:80px;">
         <h2 style="color: var(--link-color); margin-bottom: 10px;">🎙️ Stazione Radio</h2>
@@ -1709,6 +1797,7 @@
             "js/course_manager.js",
             "js/course_ui.js",
             "js/transmission_manager.js",
+            "js/audio_analyzer.js",
             "js/pingpong_manager.js",
             "js/spectator_manager.js",
             "js/game_core.js"
