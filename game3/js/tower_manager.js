@@ -278,8 +278,16 @@ window.checkTowerWord = function(typed) {
         window.towerState.wordsSolved++;
         window.towerState.wordIndex++;
         if (typeof playBeep === 'function') playBeep(880, 0.1);
-        if (window.towerState.wordsSolved >= 3) window.advanceTowerFloor();
-        else setTimeout(window.playNextTowerWord, 600);
+        if (window.towerState.wordsSolved >= 3) {
+            window.advanceTowerFloor();
+        } else {
+            // SINTONIZZAZIONE: 25% di probabilità di dover sintonizzare tra le parole
+            if (Math.random() < 0.25) {
+                window.startTowerSintonia();
+            } else {
+                setTimeout(window.playNextTowerWord, 600);
+            }
+        }
     } else {
         // ERRORE: Sottragga vita e rigenera parola per evitare blocchi
         window.damageTowerStability(12);
@@ -400,24 +408,21 @@ window.startTowerBossFight = function() {
     document.getElementById('towerLoreText').textContent = "--- EMERGENZA --- SETTORE INSTABILE ---";
 };
 
-window.handleTowerKey = function(isDown) {
-    if (!window.towerState.active || !window.towerState.txMode) return;
-    const now = Date.now();
-    if (isDown) {
-        if (typeof startTone === 'function') startTone(600);
-        if (window.towerState.txLastTime > 0 && (now - window.towerState.txLastTime) > (1200/window.towerState.wpm)*2) {
-            window.finalizeTowerTxChar();
-        }
-        window.towerState.txLastTime = now;
-    } else {
-        if (typeof stopTone === 'function') stopTone();
-        const dur = now - window.towerState.txLastTime;
-        const unit = 1200 / window.towerState.wpm;
-        window.towerState.txSequence.push(dur > unit * 1.8 ? "-" : ".");
-        window.towerState.txLastTime = now;
-        document.getElementById('towerTxCurrent').textContent = window.towerState.txCurrent + " " + window.towerState.txSequence.join("");
-        if (window.towerState.txTimeout) clearTimeout(window.towerState.txTimeout);
-        window.towerState.txTimeout = setTimeout(() => { if (window.towerState.txMode) window.finalizeTowerTxChar(); }, unit * 3);
+window.startTowerSintonia = function() {
+    window.towerState.txMode = true;
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    window.towerState.txTarget = chars[Math.floor(Math.random()*26)] + chars[Math.floor(26 + Math.random()*10)];
+    window.towerState.txCurrent = "";
+
+    document.getElementById('towerInputArea').style.display = 'none';
+    document.getElementById('towerBossControls').style.display = 'flex';
+    document.getElementById('towerTxPrompt').textContent = "PERDITA FREQUENZA! SINTONIZZA:";
+    document.getElementById('towerTxTarget').textContent = "[" + window.towerState.txTarget + "]";
+    document.getElementById('towerTxCurrent').textContent = "";
+
+    window.triggerTowerGlitch();
+    if (window.towerState.noiseGain) {
+        window.towerState.noiseGain.gain.setTargetAtTime(0.15, window.audioCtx.currentTime, 0.1);
     }
 };
 
@@ -429,9 +434,23 @@ window.finalizeTowerTxChar = function() {
     for (let c in window.morseDict) { if (window.morseDict[c] === code) { found = c; break; } }
     window.towerState.txCurrent += found;
     document.getElementById('towerTxCurrent').textContent = window.towerState.txCurrent;
+
     if (window.towerState.txCurrent === window.towerState.txTarget) {
-        showToast("✅ TRASMISSIONE OK!");
-        setTimeout(() => window.advanceTowerFloor(), 1000);
+        showToast("✅ SINTONIZZATO!");
+        if (typeof playBeep === 'function') playBeep(1200, 0.2);
+
+        setTimeout(() => {
+            window.towerState.txMode = false;
+            document.getElementById('towerInputArea').style.display = 'flex';
+            document.getElementById('towerBossControls').style.display = 'none';
+            window.updateTowerDifficulty();
+
+            if (window.towerState.floor % 10 === 0) {
+                window.advanceTowerFloor();
+            } else {
+                window.playNextTowerWord();
+            }
+        }, 1000);
     } else if (!window.towerState.txTarget.startsWith(window.towerState.txCurrent)) {
         window.damageTowerStability(10); window.triggerTowerGlitch();
         window.towerState.txCurrent = "";
