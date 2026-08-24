@@ -27,7 +27,7 @@ window.populateGameModesUI = function() {
             // Mostriamo solo Standard, Gruppi e TX Reale (re-interpretati come Singolo, Gruppi Tx e Ricezione Audio)
             if (mode.id !== 'standard' && mode.id !== 'groups_tx' && mode.id !== 'real_tx') return;
         } else {
-            if (typeInput.value === 'arcade' && mode.id !== 'arcade') return;
+            if (typeInput.value === 'arcade' && mode.id !== 'arcade' && mode.id !== 'la_torre') return;
             if (typeInput.value === 'tournament') return; // Gestito da optgroup
         }
 
