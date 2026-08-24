@@ -1,44 +1,41 @@
-// js/audio_analyzer.js - Motore DSP professionale ispirato a ggmorse
+// js/audio_analyzer.js - Porting della logica a bit-stream di ggmorse
 
 window.audioAnalyzerState = {
     active: false,
     audioCtx: null,
     stream: null,
-    analyser: null,
+    processor: null,
 
-    // Parametri Ricevitore
+    // Parametri DSP
     targetFreq: 600,
     sampleRate: 48000,
+    bitRate: 100, // Frequenza di campionamento logico (100 Hz = 10ms per bit)
 
-    // Inseguitore di Inviluppo (Envelope)
-    envelope: 0,
-    envSmooth: 0.15, // Smoothing per estrarre l'onda quadra
-
-    // Soglia Adattiva (Moving Average)
-    maxEnv: 0.01,
-    minEnv: 0,
+    // Inseguitore di inviluppo e soglia
+    magnitude: 0,
+    noiseFloor: 0.001,
+    signalPeak: 0.01,
     threshold: 0.005,
 
-    // Stato Bitstream
+    // Stato decodificatore
     isMark: false,
-    lastTransitionTime: performance.now(),
-    bitBuffer: [],
+    bitBuffer: [], // Flusso di 0 e 1
+    marksCount: 0,
+    spacesCount: 0,
 
-    // Decodifica
-    pulses: [],
-    decodedText: "",
-    unitMs: 60, // 20 WPM di partenza
+    // Tracking WPM
     wpm: 20,
+    unitBits: 6, // Un punto a 20 WPM dura circa 60ms (6 bit a 100Hz)
     autoWpm: true,
 
-    // Statistiche
+    // Testo e Statistiche
+    currentCode: "",
+    decodedText: "",
     dotAccs: [],
     dashAccs: []
 };
 
 window.initAudioAnalyzer = function() {
-    console.log("ggMorse-Engine: Initializing...");
-
     const els = {
         micToggle: document.getElementById('realTxMicToggle'),
         freqIn: document.getElementById('realTxFreqInput'),
@@ -50,8 +47,6 @@ window.initAudioAnalyzer = function() {
 
     if (els.micToggle) els.micToggle.onchange = (e) => window.toggleRealTxMic(e.target.checked);
     if (els.freqIn) els.freqIn.onchange = (e) => { window.audioAnalyzerState.targetFreq = parseInt(e.target.value) || 600; };
-
-    // Lo squelch in questa versione agisce come "Hysteresis" (margine di sicurezza sulla soglia)
     if (els.squelchIn) {
         els.squelchIn.oninput = (e) => {
             const val = parseInt(e.target.value);
@@ -60,7 +55,10 @@ window.initAudioAnalyzer = function() {
             document.getElementById('realTxSquelchMarker').style.left = val + "%";
         };
     }
-
+    if (els.wpmIn) els.wpmIn.onchange = (e) => {
+        window.audioAnalyzerState.wpm = parseInt(e.target.value) || 20;
+        window.audioAnalyzerState.unitBits = Math.round(1200 / window.audioAnalyzerState.wpm / 10);
+    };
     if (els.resetBtn) {
         els.resetBtn.onclick = () => {
             window.audioAnalyzerState.decodedText = "";
@@ -70,21 +68,33 @@ window.initAudioAnalyzer = function() {
     }
 };
 
+/**
+ * Funzione Goertzel ottimizzata (porting logico)
+ */
+function getMagnitude(samples, targetFreq, sampleRate) {
+    const k = Math.floor(0.5 + (samples.length * targetFreq) / sampleRate);
+    const omega = (2.0 * Math.PI * k) / samples.length;
+    const cosine = Math.cos(omega);
+    const coeff = 2.0 * cosine;
+    let q0 = 0, q1 = 0, q2 = 0;
+    for (let i = 0; i < samples.length; i++) {
+        q0 = coeff * q1 - q2 + samples[i];
+        q2 = q1;
+        q1 = q0;
+    }
+    return Math.sqrt(q1 * q1 + q2 * q2 - q1 * q2 * coeff) / (samples.length / 2);
+}
+
 window.toggleRealTxMic = async function(enabled) {
     if (enabled) {
         try {
-            const constraints = {
-                audio: {
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false,
-                    sampleRate: 48000
-                }
-            };
-            window.audioAnalyzerState.stream = await navigator.mediaDevices.getUserMedia(constraints);
-            window.startProfessionalAnalysis();
+            window.audioAnalyzerState.stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+                video: false
+            });
+            window.startBitstreamAnalysis();
         } catch (err) {
-            showToast("Microfono non disponibile.");
+            showToast("Errore microfono.");
             document.getElementById('realTxMicToggle').checked = false;
         }
     } else {
@@ -92,11 +102,7 @@ window.toggleRealTxMic = async function(enabled) {
     }
 };
 
-/**
- * MOTORE DI ANALISI PROFESSIONALE
- * Utilizza una catena di filtraggio per estrarre l'inviluppo del segnale.
- */
-window.startProfessionalAnalysis = function() {
+window.startBitstreamAnalysis = function() {
     if (!window.audioAnalyzerState.stream) return;
 
     window.audioAnalyzerState.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -106,168 +112,151 @@ window.startProfessionalAnalysis = function() {
 
     const source = ctx.createMediaStreamSource(state.stream);
 
-    // 1. FILTRO PASSA-BANDA STRETTISSIMO (Q=20)
-    const bandpass = ctx.createBiquadFilter();
-    bandpass.type = "bandpass";
-    bandpass.frequency.value = state.targetFreq;
-    bandpass.Q.value = 20;
+    // Campioniamo ogni 10ms per generare il bitstream
+    const bufferSize = Math.pow(2, Math.floor(Math.log2(state.sampleRate * 0.02))); // ~20ms buffer
+    state.processor = ctx.createScriptProcessor(1024, 1, 1);
 
-    // 2. ANALIZZATORE PER ACCESSO AI DATI TEMPORALI
-    state.analyser = ctx.createAnalyser();
-    state.analyser.fftSize = 512; // Piccole finestre per massima reattività temporale
-
-    source.connect(bandpass);
-    bandpass.connect(state.analyser);
+    source.connect(state.processor);
+    state.processor.connect(ctx.destination);
 
     state.active = true;
-    state.lastTransitionTime = performance.now();
-    state.maxEnv = 0.01;
-    state.minEnv = 0;
+    state.lastEventTime = performance.now();
+    state.noiseFloor = 0.001;
+    state.signalPeak = 0.01;
 
-    requestAnimationFrame(window.dspLoop);
-    showToast("🎤 Motore ggMorse Attivato");
+    state.processor.onaudioprocess = (e) => {
+        if (!state.active) return;
+        const samples = e.inputBuffer.getChannelData(0);
+
+        // 1. Calcolo magnitudo Goertzel
+        const mag = getMagnitude(samples, state.targetFreq, state.sampleRate);
+        state.magnitude = mag;
+
+        // 2. Adaptive Thresholding (Logica ggmorse)
+        if (mag < state.noiseFloor * 2) {
+            state.noiseFloor = (state.noiseFloor * 0.99) + (mag * 0.01);
+        }
+        state.signalPeak = Math.max(state.signalPeak * 0.995, mag);
+
+        const range = state.signalPeak - state.noiseFloor;
+        // La soglia dinamica tiene conto dello squelch utente come offset
+        state.threshold = state.noiseFloor + (range * (0.3 + (state.squelch || 0.2) * 0.4));
+
+        // UI Peak Meter
+        const peakBar = document.getElementById('realTxPeakBar');
+        if (peakBar) {
+            const norm = Math.min(100, (mag / (state.signalPeak || 0.01)) * 100);
+            peakBar.style.width = norm + "%";
+        }
+
+        // 3. Generazione Bitstream (1 = Segnale, 0 = Silenzio)
+        const bit = (mag > state.threshold) ? 1 : 0;
+        window.processBit(bit);
+    };
+
+    showToast("🎤 Motore ggMorse Bitstream Attivo");
 };
 
-window.dspLoop = function() {
+window.processBit = function(bit) {
     const state = window.audioAnalyzerState;
-    if (!state.active) return;
 
-    const buffer = new Float32Array(state.analyser.fftSize);
-    state.analyser.getFloatTimeDomainData(buffer);
-
-    // 1. ESTRAZIONE INVILUPPO (Rectification + Smoothing)
-    // Calcoliamo la magnitudo istantanea del segnale filtrato
-    let instantMag = 0;
-    for(let i=0; i<buffer.length; i++) {
-        instantMag = Math.max(instantMag, Math.abs(buffer[i]));
-    }
-
-    // Leaky Integrator per pulire la forma d'onda (inviluppo)
-    state.envelope = (state.envelope * (1 - state.envSmooth)) + (instantMag * state.envSmooth);
-
-    // 2. ADAPTIVE THRESHOLDING (Logica ggmorse)
-    // Tracciamo il picco massimo e minimo del segnale per adattarci al volume
-    state.maxEnv = Math.max(state.maxEnv * 0.999, state.envelope);
-    state.minEnv = (state.minEnv * 0.99) + (state.envelope * 0.01);
-
-    // La soglia è il punto medio tra segnale e silenzio
-    const range = state.maxEnv - state.minEnv;
-    const targetThreshold = state.minEnv + (range * 0.5);
-    state.threshold = (state.threshold * 0.95) + (targetThreshold * 0.05);
-
-    // Peak Meter UI
-    const peakBar = document.getElementById('realTxPeakBar');
-    if (peakBar) {
-        const norm = (state.envelope / (state.maxEnv || 0.01)) * 100;
-        peakBar.style.width = norm + "%";
-    }
-
-    // 3. RILEVAMENTO TRANSIZIONI (Hysteresis)
-    // Usiamo un piccolo margine (squelch) per evitare scatti continui
-    const margin = range * (state.squelch || 0.1);
-    const isNowOn = (state.envelope > (state.threshold + margin));
-
-    if (isNowOn !== state.isMark) {
-        const now = performance.now();
-        const duration = now - state.lastTransitionTime;
-
-        // Validazione impulso: ggmorse ignora impulsi < 15ms come rumore
-        if (duration > 15) {
-            window.processMorseTransition(state.isMark ? 'MARK' : 'SPACE', duration);
-            state.isMark = isNowOn;
-            state.lastTransitionTime = now;
-
-            const led = document.getElementById('realTxStatusLed');
-            if (led) led.style.background = isNowOn ? "var(--link-color)" : "#333";
-        }
-    }
-
-    // 4. AUTO-CHIUSURA CARATTERE
-    if (!state.isMark && state.pulses.length > 0) {
-        const quiet = performance.now() - state.lastTransitionTime;
-        if (quiet > state.unitMs * 3.5) {
-            window.finalizeMorseCharacter();
-        }
-    }
-
-    requestAnimationFrame(window.dspLoop);
-};
-
-window.processMorseTransition = function(type, duration) {
-    const state = window.audioAnalyzerState;
-    if (type === 'MARK') {
-        // Abbiamo finito una nota (ON)
-        state.pulses.push({ duration: duration });
-
-        // AUTO-WPM TRACKING (ggmorse style)
-        if (state.autoWpm && duration < 500) {
-            // Se è un punto (segno più breve registrato)
-            const isPoint = (duration < state.unitMs * 1.8);
-            if (isPoint) {
-                state.unitMs = (state.unitMs * 0.8) + (duration * 0.2);
-                state.wpm = Math.round(1200 / state.unitMs);
-                const wpmIn = document.getElementById('realTxWpmInput');
-                if (wpmIn) wpmIn.value = state.wpm;
-            }
+    if (bit === 1) {
+        state.marksCount++;
+        if (state.spacesCount > 0) {
+            window.handleTransition('SPACE', state.spacesCount);
+            state.spacesCount = 0;
         }
     } else {
-        // Abbiamo finito un silenzio (OFF)
-        // Se lo spazio è lungo, inseriamo lo spazio tra parole
-        if (duration > state.unitMs * 5.0) {
+        state.spacesCount++;
+        if (state.marksCount > 0) {
+            window.handleTransition('MARK', state.marksCount);
+            state.marksCount = 0;
+        }
+
+        // Se siamo in silenzio da troppo tempo, chiudiamo il carattere
+        if (state.spacesCount > state.unitBits * 4 && state.currentCode.length > 0) {
+            window.decodeCurrentCode();
+        }
+        // Se siamo in silenzio da moltissimo, aggiungiamo spazio parola
+        if (state.spacesCount === Math.round(state.unitBits * 7)) {
             if (state.decodedText.length > 0 && !state.decodedText.endsWith(" ")) {
                 state.decodedText += " ";
                 window.updateDecodedDisplay();
             }
         }
     }
+
+    // Feedback visivo LED
+    const led = document.getElementById('realTxStatusLed');
+    if (led) led.style.background = (bit === 1) ? "var(--link-color)" : "#333";
 };
 
-window.finalizeMorseCharacter = function() {
+window.handleTransition = function(type, count) {
     const state = window.audioAnalyzerState;
-    if (state.pulses.length === 0) return;
 
-    let code = "";
-    state.pulses.forEach(p => {
-        const isDash = (p.duration > state.unitMs * 2.0);
-        code += isDash ? "-" : ".";
+    // Filtro Glitch (ggmorse ignora impulsi troppo brevi rispetto ai WPM attuali)
+    if (count < 2) return;
 
-        // Precisione
-        const ideal = isDash ? (state.unitMs * 3) : state.unitMs;
-        const acc = Math.max(0, 100 - (Math.abs(p.duration - ideal) / ideal * 100));
+    if (type === 'MARK') {
+        // È finita una nota. Determiniamo se è Punto o Linea.
+        const isDash = (count > state.unitBits * 1.8);
+        state.currentCode += isDash ? "-" : ".";
+
+        // Calcolo precisione tecnica
+        const ideal = isDash ? (state.unitBits * 3) : state.unitBits;
+        const acc = Math.max(0, 100 - (Math.abs(count - ideal) / ideal * 100));
         if (isDash) state.dashAccs.push(acc); else state.dotAccs.push(acc);
-    });
 
-    let foundChar = "?";
-    for (let char in window.morseDict) {
-        if (window.morseDict[char] === code) { foundChar = char; break; }
+        // Adaptive WPM Tracking
+        if (state.autoWpm && !isDash) {
+            state.unitBits = (state.unitBits * 0.8) + (count * 0.2);
+            state.wpm = Math.round(1200 / (state.unitBits * 10));
+            const wpmIn = document.getElementById('realTxWpmInput');
+            if (wpmIn) wpmIn.value = state.wpm;
+        }
     }
 
-    state.decodedText += foundChar;
-    state.pulses = [];
-    window.updateDecodedDisplay();
     window.updateAnalyzerStats();
+};
+
+window.decodeCurrentCode = function() {
+    const state = window.audioAnalyzerState;
+    let foundChar = "";
+    for (let char in window.morseDict) {
+        if (window.morseDict[char] === state.currentCode) {
+            foundChar = char;
+            break;
+        }
+    }
+    if (foundChar) {
+        state.decodedText += foundChar;
+        window.updateDecodedDisplay();
+    }
+    state.currentCode = "";
 };
 
 window.updateDecodedDisplay = function() {
     const el = document.getElementById('realTxDecodedText');
     if (el) {
-        el.textContent = window.audioAnalyzerState.decodedText;
+        el.textContent = window.audioAnalyzerState.decodedText || "...";
         el.scrollTop = el.scrollHeight;
     }
 };
 
 window.updateAnalyzerStats = function(reset = false) {
+    const state = window.audioAnalyzerState;
     if (reset) {
-        window.audioAnalyzerState.dotAccs = [];
-        window.audioAnalyzerState.dashAccs = [];
+        state.dotAccs = [];
+        state.dashAccs = [];
     }
     const calcAvg = (arr) => arr.length > 0 ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : "--";
-    document.getElementById('realTxDotAcc').textContent = calcAvg(window.audioAnalyzerState.dotAccs) + "%";
-    document.getElementById('realTxDashAcc').textContent = calcAvg(window.audioAnalyzerState.dashAccs) + "%";
+    document.getElementById('realTxDotAcc').textContent = calcAvg(state.dotAccs) + "%";
+    document.getElementById('realTxDashAcc').textContent = calcAvg(state.dashAccs) + "%";
 };
 
 window.stopAudioAnalyzer = function() {
     window.audioAnalyzerState.active = false;
+    if (window.audioAnalyzerState.processor) window.audioAnalyzerState.processor.disconnect();
     if (window.audioAnalyzerState.stream) {
         window.audioAnalyzerState.stream.getTracks().forEach(t => t.stop());
         window.audioAnalyzerState.stream = null;
