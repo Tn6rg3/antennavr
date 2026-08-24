@@ -1952,6 +1952,17 @@ window.startTransmissionFree = function(mode) {
             // Gestione visibilità sezioni specifiche
             const groupCont = document.getElementById('groupTxContainer');
             if (groupCont) groupCont.style.display = (mode === 'groups_tx') ? 'block' : 'none';
+
+            // RESET STATO UI DEL MODULO (Punto di domanda, ecc)
+            const targetEl = document.getElementById('txTargetChar');
+            const feedbackEl = document.getElementById('txFeedbackText');
+            if (targetEl) targetEl.textContent = "?";
+            if (feedbackEl) feedbackEl.textContent = (mode === 'groups_tx') ? "Premi AVVIA per iniziare i gruppi" : "Premi AVVIA per allenarti";
+
+            // Re-inizializziamo i listener (necessario se il DOM è stato spostato)
+            setTimeout(() => {
+                if (typeof window.initTransmissionManager === 'function') window.initTransmissionManager();
+            }, 100);
         }
     } else if (mode === 'real_tx') {
         // Avvio Modalità Ricezione Audio Reale
@@ -1962,31 +1973,6 @@ window.startTransmissionFree = function(mode) {
     }
 };
 
-            // RESET STATO UI DEL MODULO (Punto di domanda, ecc)
-            const targetEl = document.getElementById('txTargetChar');
-            const feedbackEl = document.getElementById('txFeedbackText');
-            if (targetEl) targetEl.textContent = "?";
-            if (feedbackEl) feedbackEl.textContent = "Premi AVVIA per allenarti";
-
-            // Re-inizializziamo i listener (necessario se il DOM è stato spostato)
-            setTimeout(() => {
-                if (typeof window.initTransmissionManager === 'function') window.initTransmissionManager();
-            }, 100);
-        }
-    } else if (mode === 'groups_tx') {
-        const source = document.getElementById('groupTxContainer');
-        if (source) {
-            container.appendChild(source);
-            source.style.display = "block";
-            const feedback = document.getElementById('groupTxFeedback');
-            if (feedback) feedback.textContent = "Premi AVVIA per iniziare i gruppi";
-
-            setTimeout(() => {
-                if (typeof window.initTransmissionManager === 'function') window.initTransmissionManager();
-            }, 100);
-        }
-    }
-};
 
 function mulberry32(a) {
     return function() {
