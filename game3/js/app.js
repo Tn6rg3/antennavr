@@ -296,6 +296,7 @@ window.resetGameState = function() {
     isCourseMode = false;
     isCoopMode = false;
     isArcadeMode = false;
+    if (typeof window.stopTowerClimb === 'function') window.stopTowerClimb();
     window.isSinglePlayer = false;
     currentMode = 'standard';
     coopActiveFreqIndex = 0; // RESET INDICE FREQUENZA CO-OP

@@ -20,6 +20,7 @@ window.lbGroups = {
         { val: 'trn_global', it: '🏆 Classifica Team', en: '🏆 Team Standings' }
     ],
     special: [
+        { val: 'la_torre', it: '🗼 La Torre (Scalata)', en: '🗼 The Tower (Climb)' },
         { val: 'arcade', it: '🕹️ Arcade Interception', en: '🕹️ Arcade Interception' },
         { val: 'cwfreak', it: '🎙️ Nominativi (CW Freak)', en: '🎙️ Callsigns (CW Freak)' }
     ]
@@ -93,6 +94,8 @@ window.showLeaderboardTab = function(modeValue) {
         window.fetchAndRenderGlobalLeaderboard('callsign', null);
     } else if (modeValue === 'arcade') {
         window.fetchAndRenderGlobalLeaderboard('arcade', null);
+    } else if (modeValue === 'la_torre') {
+        window.fetchAndRenderGlobalLeaderboard('la_torre', null);
     } else {
         // Gestione dinamica Multi/Single per Parole, Caratteri, Quiz, Ping Pong
         if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
@@ -359,6 +362,25 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
+    // 4c. LA TORRE
+    if (tabType === 'la_torre') {
+        db.ref('leaderboard/la_torre/all').orderByChild('score').limitToLast(50).once('value', snapshot => {
+            let players = [];
+            snapshot.forEach(child => {
+                let p = child.val();
+                if (p) {
+                    p.id = child.key;
+                    p.dbPath = `leaderboard/la_torre/all/${child.key}`;
+                    players.push(p);
+                }
+            });
+            // Ordinamento: Piano (score) decrescente
+            players.sort((a, b) => (Number(b.score) - Number(a.score)));
+            window.renderPlayersListHTML(players, els.leaderboardContainer, false, false, false, true);
+        });
+        return;
+    }
+
     // 5. SOLO PRACTICE (Record Individuali)
     let baseMode = tabType.replace('_single', '');
     if (baseMode === 'std') baseMode = 'standard';
@@ -441,7 +463,7 @@ window.renderMatchesHistoryHTML = function(matches, container) {
     });
 };
 
-window.renderPlayersListHTML = function(players, container, showWordCount, isTeam = false, isArcade = false) {
+window.renderPlayersListHTML = function(players, container, showWordCount, isTeam = false, isArcade = false, isTower = false) {
     container.innerHTML = '';
     if (players.length === 0) {
         container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">${currentLang === 'it' ? 'Nessun record trovato.' : 'No records found.'}</p>`;
@@ -494,7 +516,7 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         dateDiv.textContent = (player.date || "") + " ";
 
         if (!isTeam && player.wpm) {
-            const wpmLabel = isArcade ? "Peak " : "";
+            const wpmLabel = (isArcade || isTower) ? "Peak " : "";
             const wpmSpan = document.createElement('span');
             wpmSpan.style.color = 'var(--champ-color)';
             wpmSpan.style.fontWeight = 'bold';
@@ -507,17 +529,17 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
 
         row.appendChild(mainDiv);
 
-        // LIVELLO ARCADE
-        if (isArcade) {
+        // LIVELLO ARCADE / PIANO TORRE
+        if (isArcade || isTower) {
             const midDiv = document.createElement('div');
             midDiv.style.cssText = "flex: 0 0 70px; text-align: center; font-weight: bold; color: var(--link-color); border-left: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); margin: 0 5px;";
 
             const levelLabel = document.createElement('div');
             levelLabel.style.cssText = "font-size:0.65em; color:var(--hint-color); font-weight:normal; text-transform:uppercase;";
-            levelLabel.textContent = "Livello";
+            levelLabel.textContent = isTower ? "Piano" : "Livello";
 
             midDiv.appendChild(levelLabel);
-            midDiv.appendChild(document.createTextNode(player.wave || 1));
+            midDiv.appendChild(document.createTextNode(isTower ? player.score : (player.wave || 1)));
             row.appendChild(midDiv);
         }
 

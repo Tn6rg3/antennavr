@@ -366,5 +366,12 @@ if (els.quitArcadeBtn) {
 }
 
 if (els.startArcadeBtn) {
-    els.startArcadeBtn.onclick = () => window.startArcadeSequence();
+    els.startArcadeBtn.onclick = () => {
+        const mode = document.getElementById('gameModeInput')?.value;
+        if (mode === 'la_torre') {
+            if (typeof window.startTowerSequence === 'function') window.startTowerSequence();
+        } else {
+            window.startArcadeSequence();
+        }
+    };
 }

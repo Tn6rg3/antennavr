@@ -90,8 +90,12 @@ window.checkGameTypeUI = function() {
         modeInput.innerHTML = `<option value="conquest">${currentLang === 'it' ? "Conquista (Co-op) ⚔️" : "Conquest (Co-op) ⚔️"}</option>`;
         modeInput.value = "conquest";
     } else if (isArcadeType) {
-        modeInput.innerHTML = `<option value="arcade">${currentLang === 'it' ? "Pioggia (Arcade) 🕹️" : "Rain (Arcade) 🕹️"}</option>`;
-        modeInput.value = "arcade";
+        modeInput.innerHTML = `
+            <option value="arcade">${currentLang === 'it' ? "Pioggia (Arcade) 🕹️" : "Rain (Arcade) 🕹️"}</option>
+            <option value="la_torre">${currentLang === 'it' ? "La Torre (Scalata) 🗼" : "The Tower (Climb) 🗼"}</option>
+        `;
+        if (currentVal === 'la_torre') modeInput.value = "la_torre";
+        else modeInput.value = "arcade";
     } else if (isTrn) {
         const trnOptions = [
             { val: "trn_create_team", it: "Fonda Squadra", en: "Create Team" },
@@ -193,6 +197,13 @@ window.checkGameTypeUI = function() {
 
     if (containers.arcadeBtn) {
         containers.arcadeBtn.style.display = isArcadeType ? 'block' : 'none';
+        if (isArcadeType) {
+            if (selectedMode === 'la_torre') {
+                containers.arcadeBtn.textContent = currentLang === 'it' ? "SCALA LA TORRE 🗼" : "CLIMB THE TOWER 🗼";
+            } else {
+                containers.arcadeBtn.textContent = currentLang === 'it' ? "GIOCA SUBITO ARCADE 🕹️" : "PLAY ARCADE NOW 🕹️";
+            }
+        }
     }
 
     if (containers.btn) {

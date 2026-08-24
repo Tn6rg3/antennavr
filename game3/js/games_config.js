@@ -172,6 +172,19 @@ window.GAME_MODES = {
             return []; // Gestito internamente da arcade_manager
         }
     },
+    "la_torre": {
+        id: "la_torre",
+        titleIt: "La Torre (Scalata) 🗼",
+        titleEn: "The Tower (Climb) 🗼",
+        icon: "🗼",
+        defaultWpm: 12,
+        defaultWordCount: 0,
+        wpmConfigurable: false,
+        wordCountConfigurable: false,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: false,
+        generateWords: function(num, dicts) { return []; }
+    },
     "groups_tx": {
         id: "groups_tx",
         titleIt: "Trasmissione Gruppi",
