@@ -1,4 +1,10 @@
-// js/audio_analyzer.js - Laboratorio di Analisi Morse con Sessioni d'Esame
+/**
+ * js/audio_analyzer.js - Laboratorio di Analisi Morse con Sessioni d'Esame
+ *
+ * Motore di analisi basato sulla logica a bit-stream e DSP del progetto 'ggmorse'
+ * Autore originale: Georgi Gerganov (https://github.com/ggerganov/ggmorse)
+ * Porting JavaScript e adattamento per Sfida Telegrafia.
+ */
 
 window.audioAnalyzerState = {
     active: false,
@@ -361,21 +367,41 @@ window.generateDetailedReport = function() {
         .slice(0, 3);
 
     // --- COSTRUZIONE REPORT STRUTTURATO ---
-    let html = `<div style="border-bottom:1px solid #444; padding-bottom:10px; margin-bottom:10px;">`;
-    html += `📅 <b>Data:</b> ${new Date().toLocaleString('it-IT')}<br>`;
-    html += `⏱️ <b>Durata:</b> ${data.characters.length} caratteri a media <b>${state.wpm} WPM</b></div>`;
+    let html = `<div style="border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:12px; color: #aaa;">`;
+    html += `📅 <b style="color:white;">Data:</b> ${new Date().toLocaleString('it-IT')}<br>`;
+    html += `⏱️ <b style="color:white;">Sessione:</b> ${data.characters.length} caratteri @ <b style="color:var(--champ-color);">${state.wpm} WPM</b></div>`;
 
-    html += `<div style="color:var(--link-color); font-weight:bold; margin-bottom:5px;">📐 PARAMETRI TECNICI</div>`;
-    html += `• <b>Ratio Punto/Linea:</b> 1:${actualRatio} <span style="color:${Math.abs(actualRatio-3)<0.4?'#4caf50':'#ff9800'}">${Math.abs(actualRatio-3)<0.4?'(Ottimo)':'(Tendi a '+ (actualRatio<3?'accorciare':'allungare') +' le linee)'}</span><br>`;
-    html += `• <b>Spazio tra Lettere:</b> ${charSpaceUnits} unità <small style="opacity:0.6;">(Ideale: 3.0)</small><br>`;
-    html += `• <b>Spazi Parola rilevati:</b> ${wordSpaces.length}<br><br>`;
+    html += `<div style="color:var(--link-color); font-weight:bold; margin-bottom:8px; font-size:1.1em; border-left:3px solid var(--link-color); padding-left:8px;">📐 PARAMETRI TECNICI</div>`;
 
-    html += `<div style="color:var(--champ-color); font-weight:bold; margin-bottom:5px;">🎯 PRECISIONE CARATTERI</div>`;
+    const ratioColor = Math.abs(actualRatio-3)<0.4 ? '#4caf50' : '#ffeb3b';
+    html += `• <b>Ratio Punto/Linea:</b> <span style="color:${ratioColor}; font-size:1.2em;">1:${actualRatio}</span><br>`;
+    html += `<small style="display:block; margin-bottom:8px; opacity:0.7;">(Ideale 1:3.0 - ${Math.abs(actualRatio-3)<0.4?'Perfetto':(actualRatio<3?'Linee corte':'Linee pesanti')})</small>`;
+
+    const spaceColor = (parseFloat(charSpaceUnits) >= 2.5 && parseFloat(charSpaceUnits) <= 3.5) ? '#4caf50' : '#ffeb3b';
+    html += `• <b>Spazio Lettere:</b> <span style="color:${spaceColor}; font-size:1.2em;">${charSpaceUnits}</span> unità<br>`;
+    html += `<small style="display:block; margin-bottom:8px; opacity:0.7;">(Ideale 3.0 unità)</small>`;
+
+    html += `• <b>Spazi Parola:</b> <b style="color:white;">${wordSpaces.length}</b><br><br>`;
+
+    html += `<div style="color:var(--champ-color); font-weight:bold; margin-bottom:8px; font-size:1.1em; border-left:3px solid var(--champ-color); padding-left:8px;">🎯 PRECISIONE CARATTERI</div>`;
     worstChars.forEach(wc => {
-        html += `• <b>Lettera '${wc.char}':</b> ${Math.round(wc.avg)}% precisione<br>`;
+        const accColor = wc.avg > 85 ? '#4caf50' : wc.avg > 70 ? '#ffeb3b' : '#f44336';
+        html += `<div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span>Lettera <b style="color:white; font-size:1.1em;">'${wc.char}'</b>:</span>
+            <b style="color:${accColor};">${Math.round(wc.avg)}%</b>
+        </div>`;
     });
 
-    html += `<br><div style="color:#ffeb3b; font-weight:bold; margin-bottom:5px;">💡 CONSIGLIO DELL'ISTRUTTORE</div>`;
+    html += `<br><div style="background:rgba(255,235,59,0.1); padding:10px; border-radius:8px; border:1px solid #ffeb3b; color:#ffeb3b;">`;
+    html += `<b style="display:block; margin-bottom:4px;">💡 CONSIGLIO:</b>`;
+    if (Math.abs(actualRatio-3) > 0.5) {
+        html += `Il tuo rapporto punto/linea è sbilanciato. Cura la chiusura della linea, deve durare esattamente come tre punti.`;
+    } else if (parseFloat(charSpaceUnits) < 2.5) {
+        html += `Le tue lettere sono troppo vicine. Lascia "respirare" il codice aumentando leggermente la pausa tra i caratteri.`;
+    } else {
+        html += `Ottima manipolazione! Il ritmo è costante. Prova ad alzare i WPM di riferimento per la prossima sessione.`;
+    }
+    html += `</div>`;
     if (Math.abs(actualRatio-3) > 0.5) {
         html += `Il tuo rapporto punto/linea è sbilanciato. Cura la chiusura della linea, deve durare esattamente come tre punti.`;
     } else if (parseFloat(charSpaceUnits) < 2.5) {
