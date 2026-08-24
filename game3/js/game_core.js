@@ -15,6 +15,12 @@ window.initDOMCache = function() {
 
 window.showScreen = function(screenId) {
     clearAllTimers();
+
+    // Sicurezza: se usciamo dalla schermata audio reale, chiudiamo il microfono
+    if (screenId !== 'realTxScreen' && typeof window.stopAudioAnalyzer === 'function') {
+        window.stopAudioAnalyzer();
+    }
+
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
     }
@@ -131,6 +137,11 @@ window.goBackToMenu = function() {
     if (activeChatContext !== 'team') if (typeof window.hideChat === 'function') window.hideChat();
     if (els.matchDetailsModal) els.matchDetailsModal.style.display = 'none';
     if (els.inviteModal) els.inviteModal.style.display = 'none';
+
+    // CHIUSURA SICURA MICROFONO (Nuova Modalità Real TX)
+    if (typeof window.stopAudioAnalyzer === 'function') {
+        window.stopAudioAnalyzer();
+    }
 
     // Se stiamo uscendo dalla Stazione Radio, riportiamo i moduli al loro posto originale
     const st = document.getElementById('standaloneTxContainer');
@@ -1928,7 +1939,7 @@ window.startTransmissionFree = function(mode) {
     window.courseData.settings.start_wpm = wpm;
 
     // SPOSTAMENTO ELEMENTI (Invece di clonazione per preservare listener)
-    if (mode === 'standard') {
+    if (mode === 'standard' || mode === 'groups_tx') {
         const source = document.getElementById('courseTransmissionView');
         if (source) {
             container.appendChild(source); // Sposta fisicamente l'elemento originale
@@ -1937,6 +1948,19 @@ window.startTransmissionFree = function(mode) {
             // Nascondiamo il pannello configurazione interno (ne abbiamo uno nel menu principale)
             const cfg = source.querySelector('.box-panel');
             if (cfg) cfg.style.display = "none";
+
+            // Gestione visibilità sezioni specifiche
+            const groupCont = document.getElementById('groupTxContainer');
+            if (groupCont) groupCont.style.display = (mode === 'groups_tx') ? 'block' : 'none';
+        }
+    } else if (mode === 'real_tx') {
+        // Avvio Modalità Ricezione Audio Reale
+        window.showScreen('realTxScreen');
+        if (typeof window.initAudioAnalyzer === 'function') {
+            window.initAudioAnalyzer();
+        }
+    }
+};
 
             // RESET STATO UI DEL MODULO (Punto di domanda, ecc)
             const targetEl = document.getElementById('txTargetChar');

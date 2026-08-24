@@ -184,6 +184,19 @@ window.GAME_MODES = {
         fixedSpeedAllowed: false,
         spacingConfigurable: false,
         generateWords: function(num, dicts) { return []; }
+    },
+    "real_tx": {
+        id: "real_tx",
+        titleIt: "Ricezione Audio (Tasto Reale)",
+        titleEn: "Audio Reception (Real Key)",
+        icon: "🎤",
+        defaultWpm: 20,
+        defaultWordCount: 0,
+        wpmConfigurable: true,
+        wordCountConfigurable: false,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: false,
+        generateWords: function(num, dicts) { return []; }
     }
 };
 
