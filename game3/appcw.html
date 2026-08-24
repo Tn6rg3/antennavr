@@ -1381,6 +1381,71 @@
     </div>
 </div>
 
+<!-- AREA LA TORRE (SCALATA NARRATIVA) -->
+<div id="towerArea" class="screen" style="background: #0a0a0a; color: #00ff41; font-family: 'Courier New', Courier, monospace; overflow: hidden; position: relative; padding: 0;">
+    <!-- SIDEBAR SOCIALE (SCALATA) -->
+    <div id="towerSideClimb" style="position: absolute; left: 0; top: 0; width: 50px; height: 100%; background: rgba(0,0,0,0.5); border-right: 1px solid #00ff41; z-index: 20; display: flex; flex-direction: column; align-items: center; padding: 10px 0;">
+        <canvas id="towerClimbCanvas" style="width: 100%; height: 100%;"></canvas>
+    </div>
+
+    <div class="screen-content" style="margin-left: 50px; padding: 15px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box;">
+        <!-- HEADER STATS -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: rgba(0,255,65,0.1); padding: 10px; border-radius: 8px; border: 1px solid #00ff41;">
+            <div id="towerFloorDisplay" style="font-weight: bold; font-size: 1.1em;">PIANO: 1</div>
+            <div id="towerStabilityDisplay" style="color: #ff3d00; font-weight: bold;">STABILITÀ: 100%</div>
+        </div>
+
+        <!-- OSCILLOSCOPIO (CANVAS) -->
+        <div class="box-panel" style="background: #000; border-color: #00ff41; padding: 0; height: 100px; position: relative; overflow: hidden; margin-bottom: 10px;">
+            <canvas id="towerOscilloscope" style="width: 100%; height: 100%;"></canvas>
+            <div id="towerGlitchOverlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,0,0,0.2); pointer-events:none;"></div>
+        </div>
+
+        <!-- NASTRO TELEGRAFICO (RICEZIONE) -->
+        <div id="towerTapeContainer" style="background: #111; border: 1px solid #00ff41; border-radius: 8px; height: 60px; display: flex; align-items: center; overflow: hidden; margin-bottom: 15px; position: relative;">
+            <div id="towerTapeContent" style="display: flex; gap: 20px; padding: 0 20px; font-size: 1.8em; white-space: nowrap; transform: translateX(0);">
+                <!-- Caratteri scorrevoli -->
+            </div>
+            <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #00ff41; box-shadow: 0 0 10px #00ff41; z-index: 5;"></div>
+        </div>
+
+        <!-- AREA INPUT / LORE -->
+        <div class="box-panel" style="flex-grow: 1; background: rgba(0,20,0,0.6); border-color: #00ff41; padding: 15px; display: flex; flex-direction: column;">
+            <div id="towerLoreText" style="font-size: 0.9em; line-height: 1.4; font-style: italic; color: #00ff41; margin-bottom: 15px; min-height: 4.2em; border-bottom: 1px solid rgba(0,255,65,0.2); padding-bottom: 10px;">
+                Sintonizzazione frequenza in corso...
+            </div>
+
+            <div id="towerInputArea" style="display: flex; flex-direction: column; gap: 10px; margin-top: auto;">
+                <input type="text" id="towerInput" placeholder="DECODIFICA QUI..." autocomplete="off" autocapitalize="none" style="width:100%; background:#000; color:#00ff41; border:1px solid #00ff41; padding:15px; font-size:1.4em; text-align:center; box-sizing:border-box; outline:none; text-transform: uppercase;">
+
+                <!-- GADGETS -->
+                <div style="display: flex; gap: 8px; justify-content: space-between;">
+                    <button id="btnTowerGadget1" class="action-btn-small btn-secondary" style="flex:1; font-size: 0.65em; padding: 8px 2px;">FILTRO DSP (0)</button>
+                    <button id="btnTowerGadget2" class="action-btn-small btn-secondary" style="flex:1; font-size: 0.65em; padding: 8px 2px;">AMPLIFICA (0)</button>
+                    <button id="btnTowerSOS" class="action-btn-small btn-danger" style="flex:1; font-size: 0.65em; padding: 8px 2px;">SOS EMERGENCY</button>
+                </div>
+            </div>
+
+            <!-- TASTO VIRTUALE (BOSS FIGHT E SINTONIA) -->
+            <div id="towerBossControls" style="display: none; flex-direction: column; align-items: center; gap: 10px; margin-top: auto;">
+                <div id="towerTxPrompt" style="font-weight: bold; color: #ff3d00; animation: pulse 1s infinite; text-align:center;">TRASMETTI ORA</div>
+                <div id="towerTxTarget" style="font-size: 2em; color: #fff; text-shadow: 0 0 10px #ff3d00;">[SOS]</div>
+                <div id="towerTxCurrent" style="font-size: 1.2em; color: #00ff41; min-height: 1.5em; letter-spacing: 3px;"></div>
+                <button id="towerVirtualKey" style="width: 100px; height: 100px; border-radius: 50%; background: #222; border: 4px solid #ff3d00; box-shadow: 0 0 15px #ff3d00; cursor: pointer; -webkit-tap-highlight-color: transparent;"></button>
+            </div>
+        </div>
+
+        <button id="quitTowerBtn" class="btn-danger" style="margin-top: 15px; background: transparent; border: 1px solid #ff3d00; color: #ff3d00; font-size: 0.8em; padding: 5px;">ABBANDONA SCALATA</button>
+    </div>
+
+    <!-- OVERLAY LEVEL UP -->
+    <div id="towerLevelOverlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:100; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+        <h1 style="color:#00ff41; font-size:1.5em; margin:0;">PIANO COMPLETATO</h1>
+        <h2 id="towerLevelNumber" style="color:#00ff41; font-size:5em; margin:10px 0;">2</h2>
+        <p style="color:#00ff41; font-size:1em;">SALITA IN CORSO...</p>
+    </div>
+</div>
+
 <!-- AREA QUIZ -->
 <div id="quizArea" class="screen">
     <div class="header-stats">
@@ -1851,6 +1916,7 @@
             "js/course_ui.js",
             "js/transmission_manager.js",
             "js/audio_analyzer.js",
+            "js/tower_manager.js",
             "js/pingpong_manager.js",
             "js/spectator_manager.js",
             "js/game_core.js"
