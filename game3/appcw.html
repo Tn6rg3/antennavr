@@ -444,9 +444,24 @@
                 <input type="text" id="userAliasInput" placeholder="Scegli un alias..." maxlength="20" style="flex: 1 1 auto; min-width: 0; margin:0; padding:8px;">
                 <button id="saveAliasBtn" class="action-btn-small btn-success" style="width:auto; margin:0; flex-shrink:0;">Salva</button>
             </div>
-            <div style="display:flex; align-items:center; gap:10px; margin-top:10px; background:rgba(0,0,0,0.05); padding:8px; border-radius:8px;">
-                <input type="checkbox" id="privacyUsernameCheckbox" style="width:20px; height:20px; cursor:pointer;">
-                <label for="privacyUsernameCheckbox" id="txt_privacy_label" style="font-size:0.85em; cursor:pointer; font-weight:bold;">Nascondi mio username Telegram</label>
+            <!-- PRIVACY E SETTAGGI AVANZATI -->
+            <div class="box-panel" style="margin-top:15px; text-align:left; background: rgba(0,0,0,0.2); border-color: var(--link-color);">
+                <h4 style="margin:0 0 10px 0; color:var(--link-color); font-size:0.9em; text-transform:uppercase;">🔒 Privacy & Social</h4>
+
+                <label style="display:flex; align-items:center; gap:10px; margin-bottom:12px; cursor:pointer;">
+                    <input type="checkbox" id="privacyUsernameCheckbox" style="width:20px; height:20px;">
+                    <span style="font-size:0.85em;">Nascondi Username Telegram <br><small style="opacity:0.6;">(Gli altri non vedranno il tuo link @)</small></span>
+                </label>
+
+                <label style="display:flex; align-items:center; gap:10px; margin-bottom:12px; cursor:pointer;">
+                    <input type="checkbox" id="privacyOnlineCheckbox" style="width:20px; height:20px;">
+                    <span style="font-size:0.85em;">Modalità Incognito <br><small style="opacity:0.6;">(Non apparirai nella lista Utenti Online)</small></span>
+                </label>
+
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                    <input type="checkbox" id="privacyLeaderboardCheckbox" style="width:20px; height:20px;">
+                    <span style="font-size:0.85em;">Escludi da Classifiche Globali <br><small style="opacity:0.6;">(I tuoi record non saranno visibili pubblicamente)</small></span>
+                </label>
             </div>
         </div>
 
