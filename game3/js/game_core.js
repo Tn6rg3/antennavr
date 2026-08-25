@@ -60,8 +60,10 @@ window.showScreen = function(screenId) {
         try {
             const presenceData = {
                 name: myName,
-                username: myPrivacy ? "" : tgUsername,
-                status: isPlayingScreen ? 'playing' : 'online'
+                username: window.myPrivacy ? "" : window.tgUsername,
+                status: isPlayingScreen ? 'playing' : 'online',
+                privacyOnline: !!window.myPrivacyOnline,
+                privacyLeaderboard: !!window.myPrivacyLeaderboard
             };
             // Includiamo sempre il livello se disponibile
             if (window.userProgression?.level) {

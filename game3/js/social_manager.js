@@ -294,6 +294,13 @@ window.refreshOnlineUsersList = function() {
 window.renderOrUpdateUserListItem = function(userId, u) {
     if (!els.onlineUsersList || userId === myId) return;
 
+    // Se l'utente ha attivato la privacy online, lo rimuoviamo se esiste e non lo renderizziamo
+    if (u.privacyOnline) {
+        window.removeUserListItem(userId);
+        delete window.onlineUsersCache[userId];
+        return;
+    }
+
     // Aggiorniamo la cache locale per rinfreschi futuri
     window.onlineUsersCache[userId] = u;
 

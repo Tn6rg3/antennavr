@@ -344,7 +344,11 @@ window.showProfileScreen = function() {
 
     // Popoliamo gli input con i valori attuali dell'utente
     if (els.userAliasInput) els.userAliasInput.value = myName || "";
-    if (els.privacyUsernameCheckbox) els.privacyUsernameCheckbox.checked = myPrivacy || false;
+
+    // Toggle Privacy
+    if (els.privacyUsernameCheckbox) els.privacyUsernameCheckbox.checked = window.myPrivacy ?? true;
+    if (els.privacyOnlineCheckbox) els.privacyOnlineCheckbox.checked = window.myPrivacyOnline ?? false;
+    if (els.privacyLeaderboardCheckbox) els.privacyLeaderboardCheckbox.checked = window.myPrivacyLeaderboard ?? false;
 };
 
 window.openMatchDetails = function(matchKey) {
@@ -546,26 +550,50 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
 if (els.saveAliasBtn) {
     els.saveAliasBtn.addEventListener('click', async () => {
         const alias = els.userAliasInput ? els.userAliasInput.value.trim() : "";
-        const privacy = els.privacyUsernameCheckbox ? els.privacyUsernameCheckbox.checked : false;
+        const privacy = els.privacyUsernameCheckbox ? els.privacyUsernameCheckbox.checked : true;
+        const privacyOnline = els.privacyOnlineCheckbox ? els.privacyOnlineCheckbox.checked : false;
+        const privacyLeaderboard = els.privacyLeaderboardCheckbox ? els.privacyLeaderboardCheckbox.checked : false;
 
         if (alias) {
-            // Nuova Validazione: Permessi accenti, numeri, spazi e MAX 1 ICONA, MIN 2 TESTO
             const isValid = (typeof window.isNameValid === 'function') ? window.isNameValid(alias) : true;
-            if (!isValid) {
-                return alert("L'Alias non è valido. Deve contenere almeno 2 caratteri di testo e massimo 1 icona.");
-            }
+            if (!isValid) return alert("L'Alias non è valido. Deve contenere almeno 2 caratteri di testo e massimo 1 icona.");
             if (alias.length > 15) return alert("L'Alias non può superare i 15 caratteri.");
         }
 
         if (privacy && !alias) return alert("L'Alias è obbligatorio se nascondi lo username Telegram!");
-        const newName = alias || tgUser.first_name;
-        const currentUsername = privacy ? "" : tgUsername;
+
+        const newName = alias || (window.tgUser ? window.tgUser.first_name : "Operatore");
+        const currentUsername = privacy ? "" : window.tgUsername;
+
         try {
-            await db.ref(`users/${window.myId}`).update({ alias: alias || null, privacyUsername: privacy });
+            const updates = {
+                alias: alias || null,
+                privacyUsername: privacy,
+                privacyOnline: privacyOnline,
+                privacyLeaderboard: privacyLeaderboard
+            };
+
+            await db.ref(`users/${window.myId}`).update(updates);
+
+            // Aggiornamento stato locale
             window.myName = newName;
             window.myPrivacy = privacy;
+            window.myPrivacyOnline = privacyOnline;
+            window.myPrivacyLeaderboard = privacyLeaderboard;
+
             if (els.playerName) els.playerName.textContent = window.myName;
             showToast("Profilo aggiornato!");
+
+            // Sincronizziamo nome e privacy nel nodo presence
+            if (db && myId) {
+                await db.ref(`presence/${myId}`).update({
+                    name: newName,
+                    username: currentUsername,
+                    privacyOnline: privacyOnline,
+                    privacyLeaderboard: privacyLeaderboard
+                });
+            }
+
             await window.syncUserNameEverywhere(window.myId, newName, currentUsername);
         } catch(e) {
             alert("Errore durante il salvataggio: " + e.message);

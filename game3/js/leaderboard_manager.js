@@ -471,6 +471,9 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
     }
 
     players.forEach((player, index) => {
+        // --- FILTRO PRIVACY LEADERBOARD ---
+        if (player.privacyLeaderboard === true && player.id !== window.myId) return;
+
         const row = document.createElement('div'); row.className = 'leaderboard-row';
         const mainDiv = document.createElement('div'); mainDiv.style.display = 'flex'; mainDiv.style.alignItems = 'center'; mainDiv.style.gap = '8px'; mainDiv.style.flexGrow = '1';
 
@@ -481,10 +484,18 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         const infoDiv = document.createElement('div'); infoDiv.style.display = 'flex'; infoDiv.style.flexDirection = 'column';
         const nameDiv = document.createElement('div'); nameDiv.style.display = 'flex'; nameDiv.style.alignItems = 'center';
 
-        // PRIVACY: I nomi nelle classifiche non sono più cliccabili
+        // PRIVACY: Nome cliccabile solo se privacy disattivata
         const nameSpan = document.createElement('span');
         nameSpan.style.fontWeight = 'bold';
         nameSpan.textContent = player.name || "Anonimo";
+
+        if (player.username && String(player.username).trim() !== "") {
+            nameSpan.style.color = 'var(--link-color)';
+            nameSpan.style.textDecoration = 'underline';
+            nameSpan.style.cursor = 'pointer';
+            nameSpan.onclick = () => window.openTelegramProfile(player.username);
+        }
+
         nameDiv.appendChild(nameSpan);
 
         // AGGIUNTA LIVELLO ACCANTO AL NOME

@@ -135,7 +135,9 @@ window.logDebug = (...args) => { if (DEBUG_MODE) console.log(...args); };
 // --- STATO GLOBALE ---
 window.myName = "";
 window.myId = "";
-window.myPrivacy = false;
+window.myPrivacy = true;
+window.myPrivacyOnline = false;
+window.myPrivacyLeaderboard = false;
 window.myTeamId = null;
 window.myTeamName = "";
 window.isTeamCaptain = false;
@@ -651,6 +653,9 @@ function initGame() {
         } else {
             window.myPrivacy = data.privacyUsername;
         }
+
+        window.myPrivacyOnline = !!data.privacyOnline;
+        window.myPrivacyLeaderboard = !!data.privacyLeaderboard;
 
         if (needsUpdate) {
             await userRef.update(updates);
