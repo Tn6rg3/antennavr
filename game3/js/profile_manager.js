@@ -302,12 +302,12 @@ window.loadAdvancedStats = function() {
             wpmContainer.innerHTML = '';
             const wpmErrs = stats.errorsByWpm || {};
             const sortedWpm = Object.keys(wpmErrs).sort((a,b) => parseInt(b) - parseInt(a));
-            if (sortedWpm.length === 0) wpmContainer.innerHTML = '<p style="text-align:center; opacity:0.6;">Nessun dato.</p>';
+            if (sortedWpm.length === 0) wpmContainer.innerHTML = '<p style="text-align:center; color: #aaa;">Nessun dato.</p>';
             sortedWpm.forEach(wpm => {
                 const total = Object.values(wpmErrs[wpm]).reduce((a,b) => a+b, 0);
                 const div = document.createElement('div');
-                div.style.cssText = "display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:4px 0;";
-                div.innerHTML = `<b>${wpm} WPM</b> <span style="color:#d32f2f">${total} err.</span>`;
+                div.style.cssText = "display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:4px 0; color: white;";
+                div.innerHTML = `<b style="color:var(--link-color);">${wpm} WPM</b> <span style="color:#ff5252; font-weight: bold;">${total} err.</span>`;
                 wpmContainer.appendChild(div);
             });
         }
@@ -321,19 +321,18 @@ window.loadAdvancedStats = function() {
                 return count >= bigramTh;
             }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 20);
 
-            if (filteredBigrams.length === 0) bigramContainer.innerHTML = '<p style="text-align:center; opacity:0.6; font-size:0.8em;">Sotto soglia.</p>';
+            if (filteredBigrams.length === 0) bigramContainer.innerHTML = '<p style="text-align:center; color: #aaa; font-size:0.8em;">Sotto soglia.</p>';
             filteredBigrams.forEach(([pair, data]) => {
                 const count = data.count || data;
                 const avgWpm = data.avgWpm || 20;
                 const div = document.createElement('div');
                 div.className = 'leaderboard-row';
-                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start;";
+                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(255,255,255,0.05); color: white;";
                 div.innerHTML = `
                     <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                        <span><b>${pair}</b> (${count})</span>
+                        <span><b style="color: #ffeb3b;">${pair}</b> <small style="color: #aaa;">(${count})</small></span>
                         <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${pair}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
                     </div>
-                    <div style="font-size:0.7em; color:var(--hint-color);">Velocità: ${avgWpm} WPM</div>
                 `;
                 bigramContainer.appendChild(div);
             });
@@ -348,19 +347,19 @@ window.loadAdvancedStats = function() {
                 return count >= wordTh;
             }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1]));
 
-            if (criticalWords.length === 0) wordContainer.innerHTML = '<p style="text-align:center; opacity:0.6; font-size:0.8em;">Sotto soglia.</p>';
+            if (criticalWords.length === 0) wordContainer.innerHTML = '<p style="text-align:center; color: #aaa; font-size:0.8em;">Sotto soglia.</p>';
             criticalWords.forEach(([word, data]) => {
                 const count = data.count || data;
                 const avgWpm = data.avgWpm || 20;
                 const div = document.createElement('div');
                 div.className = 'leaderboard-row';
-                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start;";
+                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(255,255,255,0.05); color: white;";
                 div.innerHTML = `
                     <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                        <span style="overflow:hidden; text-overflow:ellipsis;"><b>${word}</b> (${count})</span>
+                        <span style="overflow:hidden; text-overflow:ellipsis;"><b style="color: #00ff41;">${word}</b> <small style="color: #aaa;">(${count})</small></span>
                         <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${word}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
                     </div>
-                    <div style="font-size:0.7em; color:var(--hint-color);">Velocità: ${avgWpm} WPM</div>
+                    <div style="font-size:0.7em; color: #aaa;">Velocità media errore: ${avgWpm} WPM</div>
                 `;
                 wordContainer.appendChild(div);
             });
