@@ -481,32 +481,32 @@
     <div id="profileStatsArea" class="screen-content" style="display: none; padding-bottom: 30px;">
 
         <!-- DASHBOARD ANALITICA -->
-        <div class="box-panel" style="margin-bottom:12px; background: rgba(0,0,0,0.3); border-color: var(--champ-color);">
-            <h3 style="color:var(--champ-color); font-size:1em; margin-bottom:10px;">🧠 Diagnostica Operatore</h3>
+        <div class="box-panel" style="margin-bottom:12px; background: #1a1a1a; border-color: var(--champ-color); color: white;">
+            <h3 style="color:var(--champ-color); font-size:1em; margin-bottom:10px; text-align: left;">🧠 Diagnostica Operatore</h3>
 
             <!-- Accuratezza per Lunghezza -->
             <div style="margin-bottom:15px;">
-                <label style="font-size:0.75em; color:var(--hint-color); text-transform:uppercase;">Accuratezza per Lunghezza Parola</label>
-                <div id="lengthStatsContainer" style="margin-top:5px; display:flex; flex-direction:column; gap:6px;">
+                <label style="font-size:0.75em; color: #aaa; text-transform:uppercase; font-weight: bold;">Accuratezza per Lunghezza Parola</label>
+                <div id="lengthStatsContainer" style="margin-top:5px; display:flex; flex-direction:column; gap:6px; color: white;">
                     <!-- Caricato via JS: [4 Lett] [#######---] 70% -->
                 </div>
             </div>
 
             <!-- Analisi Posizionale -->
-            <div style="padding-top:10px; border-top:1px solid rgba(255,255,255,0.1);">
-                <label style="font-size:0.75em; color:var(--hint-color); text-transform:uppercase;">Punto Critico della Parola</label>
+            <div style="padding-top:10px; border-top:1px solid #333;">
+                <label style="font-size:0.75em; color: #aaa; text-transform:uppercase; font-weight: bold;">Punto Critico della Parola</label>
                 <div style="display:flex; justify-content:space-around; margin-top:8px; text-align:center;">
                     <div id="posStartStat" style="flex:1;">
-                        <div style="font-size:0.7em;">INIZIO</div>
-                        <b style="color:#4caf50;">--</b>
+                        <div style="font-size:0.7em; color: #ccc;">INIZIO</div>
+                        <b style="color:#4caf50; font-size: 1.1em;">--</b>
                     </div>
                     <div id="posMidStat" style="flex:1; border-left:1px solid #333; border-right:1px solid #333;">
-                        <div style="font-size:0.7em;">CENTRO</div>
-                        <b style="color:#ffeb3b;">--</b>
+                        <div style="font-size:0.7em; color: #ccc;">CENTRO</div>
+                        <b style="color:#ffeb3b; font-size: 1.1em;">--</b>
                     </div>
                     <div id="posEndStat" style="flex:1;">
-                        <div style="font-size:0.7em;">FINE</div>
-                        <b style="color:#f44336;">--</b>
+                        <div style="font-size:0.7em; color: #ccc;">FINE</div>
+                        <b style="color:#f44336; font-size: 1.1em;">--</b>
                     </div>
                 </div>
             </div>
