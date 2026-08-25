@@ -517,6 +517,21 @@
             <div id="wpmErrorChartContainer" style="overflow-y:auto; font-size: 0.8em;"></div>
         </div>
 
+        <!-- NUOVA AREA: MATRICE E BLOCCHI -->
+        <div style="display: flex; gap: 8px; width: 100%; flex-shrink: 0; min-height: 200px; margin-bottom: 8px;">
+            <!-- Matrice di Confusione -->
+            <div class="box-panel" style="flex: 1; display:flex; flex-direction:column; padding: 5px;">
+                <h3 style="font-size: 0.85em; margin-bottom:2px;">🔄 Matrice Confusione</h3>
+                <div id="confusionMatrixContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.85em;"></div>
+            </div>
+
+            <!-- Blocchi Cognitivi -->
+            <div class="box-panel" style="flex: 1; display:flex; flex-direction:column; padding: 5px;">
+                <h3 style="font-size: 0.85em; margin-bottom:2px;">🧱 Blocchi Cognitivi</h3>
+                <div id="cognitiveBlocksContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.85em; display:flex; flex-direction:column; gap:6px;"></div>
+            </div>
+        </div>
+
         <div style="display: flex; gap: 8px; width: 100%; flex-shrink: 0; min-height: 200px;">
             <!-- Bigrammi Sbagliati -->
             <div class="box-panel" style="flex: 1; display:flex; flex-direction:column; padding: 5px;">
@@ -541,7 +556,7 @@
 
         <div class="box-panel" style="margin-top:8px; flex-shrink:0; display:flex; flex-direction:column; gap:6px;">
             <button id="btnCreateErrorDict" class="btn-success" style="font-size:0.85em; padding:10px;">🛠️ Allenamento Parole Critiche</button>
-            <button id="btnResetErrorStats" class="btn-danger" style="font-size:0.85em; padding:10px;">🗑️ Reset Dati</button>
+            <button id="btnResetErrorStats" class="btn-danger" style="font-size:0.85em; padding:10px;">🗑️ Reset Dati Analitici</button>
         </div>
     </div>
 
@@ -1544,9 +1559,6 @@
     </div>
 </div>
 
-</div>
-
-<!-- SCHERMATA TRASMISSIONE LIBERA (STANDALONE) -->
 <!-- SCHERMATA RICEZIONE AUDIO REALE -->
 <div id="realTxScreen" class="screen">
     <div class="screen-content" style="padding-bottom:80px;">
@@ -1656,7 +1668,6 @@
         </div>
 
         <button id="btnResetRealTx" class="btn-secondary" style="margin-top:15px; width:100%; padding:10px;">CANCELLA TESTO</button>
-
     </div>
 
     <div class="fixed-bottom-btns">
@@ -1664,23 +1675,11 @@
     </div>
 </div>
 
-<!-- MODAL: REPORT ANALISI TX REALE (NEW) -->
-<div id="realTxReportModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; transform: translate(-50%, -50%); background: #1a1a1a; z-index: 9500; border: 3px solid var(--champ-color); border-radius: 16px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 15px 50px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto; color: white;">
-    <h2 style="color: var(--champ-color); margin: 0 0 15px 0; text-align: center; text-transform: uppercase; letter-spacing: 1px;">📊 Report Manipolazione</h2>
-    <div id="realTxReportContent" style="font-size: 0.95em; line-height: 1.5; text-align: left; background: #000; padding: 15px; border-radius: 12px; margin-bottom: 20px; font-family: 'Courier New', Courier, monospace; border: 1px solid #333;">
-        <!-- Generato via JS -->
-    </div>
-    <button onclick="document.getElementById('realTxReportModal').style.display='none'" class="btn-champ" style="width: 100%; padding: 15px; font-weight: bold; font-size: 1.1em; border-radius: 10px;">TORNA AL RICEVITORE ✅</button>
-</div>
-
 <div id="transmissionScreen" class="screen">
     <div class="screen-content" style="padding-bottom:80px;">
         <h2 style="color: var(--link-color); margin-bottom: 10px;">🎙️ Stazione Radio</h2>
-
-        <!-- Qui inietteremo dinamicamente il contenuto della trasmissione -->
         <div id="standaloneTxContainer" style="width:100%;"></div>
     </div>
-
     <div class="fixed-bottom-btns">
         <button onclick="goBackToMenu()" class="btn-secondary">Torna al Menu Principale</button>
     </div>
@@ -1749,11 +1748,7 @@
             <button id="recruitJoinBtn" class="btn-success action-btn-small" style="display:none;">INVITA NELLA MIA SQUADRA 🏆</button>
             <button id="recruitCreateBtn" class="btn-champ action-btn-small">SUGGERISCI CREAZIONE SQUADRA 💡</button>
             <button id="recruitMsgBtn" class="btn-secondary action-btn-small">INVIA MESSAGGIO TELEGRAM 💬</button>
-
-            <!-- Bottone Admin Override (Visibile solo all'admin) -->
-            <button id="btnAdminEnableChat" class="btn-danger action-btn-small" style="display:none; font-weight:bold; border: 2px solid #fff;">ABILITA CHAT (Override) 🔓</button>
         </div>
-
         <button onclick="closeInviteModal()" class="btn-link" style="margin-top:10px;">ANNULLA</button>
     </div>
 
@@ -1822,69 +1817,6 @@
 </div>
 
 <!-- MODAL: GESTIONE CORSO CW -->
-<div id="courseModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; height: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 7000; border: 2px solid var(--link-color); border-radius: 12px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
-    <h3 style="margin-top:0; text-align: center; color: var(--link-color);">📖 Programma Allenamento CW</h3>
-
-    <div id="courseSetupView" style="display:none; flex-direction:column; gap:10px;">
-        <p style="font-size:0.9em; text-align:center;">Configura il tuo piano di allenamento settimanale ispirato ai runner.</p>
-
-        <div class="box-panel">
-            <label style="font-size:0.85em; font-weight:bold;">Giorni di allenamento a settimana:</label>
-            <select id="courseDaysInput" style="width:100%; padding:8px; margin-top:5px;">
-                <option value="1">1 Giorno</option>
-                <option value="2">2 Giorni</option>
-                <option value="3" selected>3 Giorni</option>
-                <option value="4">4 Giorni</option>
-                <option value="5">5 Giorni</option>
-                <option value="6">6 Giorni</option>
-                <option value="7">7 Giorni</option>
-            </select>
-        </div>
-
-        <div class="settings-row">
-            <div><label>WPM Caratt.</label> <input type="number" id="courseWpmInput" value="20" min="15" max="50"></div>
-            <div><label>WPM Spazio</label> <input type="number" id="courseFarnsworthInput" value="12" min="5" max="50"></div>
-        </div>
-
-        <div class="box-panel">
-            <h4 style="margin:0 0 8px 0; font-size:0.9em;">Durata Sessioni (Minuti)</h4>
-            <div class="settings-row">
-                <div><label>Base (Z2)</label> <input type="number" id="courseMinZ2" value="10" min="5" max="60"></div>
-                <div><label>Lavoro</label> <input type="number" id="courseMinWork" value="15" min="5" max="60"></div>
-                <div><label>Lungo</label> <input type="number" id="courseMinLong" value="30" min="10" max="120"></div>
-            </div>
-        </div>
-
-        <button id="btnCreatePlan" class="btn-success">CREA IL MIO PIANO 🚀</button>
-    </div>
-
-    <div id="courseDashboardView" style="display:none; flex-direction:column; gap:10px;">
-        <!-- Heatmap Caratteri -->
-        <div class="box-panel">
-            <h4 style="margin:0 0 5px 0; font-size:0.85em;">Padronanza Caratteri (Metodo Koch)</h4>
-            <div id="courseHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center; padding:5px;">
-                <!-- Popolato da JS -->
-            </div>
-            <p id="courseLessonInfo" style="font-size:0.75em; text-align:center; color:var(--hint-color); margin-top:5px;"></p>
-        </div>
-
-        <!-- Piano Settimanale -->
-        <div class="box-panel">
-            <h4 style="margin:0 0 5px 0; font-size:0.85em;">Il tuo Piano per questa Settimana</h4>
-            <div id="courseWeeklyPlan" style="display:flex; flex-direction:column; gap:4px;">
-                <!-- Popolato da JS -->
-            </div>
-        </div>
-
-        <div style="display:flex; gap:10px;">
-            <button id="btnStartCourseSession" class="btn-success" style="flex:2;">AVVIA SESSIONE ODIERNA</button>
-            <button id="btnResetCourse" class="btn-danger" style="flex:1; font-size:0.75em;">RESET</button>
-        </div>
-    </div>
-
-    <button onclick="document.getElementById('courseModal').style.display='none'" class="btn-secondary" style="margin-top:15px;">Chiudi</button>
-</div>
-
 <!-- MODAL: RISULTATI CORSO (DEBRIEFING) -->
 <div id="courseResultsModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 8000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 3.5em; margin-bottom: 10px;">📊</span>
@@ -1910,7 +1842,7 @@
             <div id="tutorStudentHeatmap" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center;"></div>
         </div>
 
-        <!-- Dettaglio Carattere Selezionato (NEW) -->
+        <!-- Dettaglio Carattere Selezionato -->
         <div id="tutorCharDetailArea" class="box-panel" style="display:none; padding:10px; border-color:var(--link-color); background:rgba(33,150,243,0.05);">
             <h4 id="tutorCharDetailTitle" style="margin:0 0 5px 0; font-size:0.85em; color:var(--link-color);">Dettaglio Carattere</h4>
             <div id="tutorCharDetailContent" style="font-size:0.8em; display:grid; grid-template-columns: 1fr 1fr; gap:5px;"></div>
@@ -1920,15 +1852,6 @@
         <div class="box-panel" style="padding:10px;">
             <h4 style="margin:0 0 10px 0; font-size:0.85em;">Ultime Sessioni</h4>
             <div id="tutorStudentHistory" style="font-size:0.8em; display:flex; flex-direction:column; gap:5px;"></div>
-        </div>
-
-        <!-- Dettaglio Sessione Selezionata (NEW) -->
-        <div id="tutorSessionDetailArea" class="box-panel" style="display:none; padding:10px; border-color:var(--champ-color); background:rgba(156, 39, 176, 0.05);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h4 id="tutorSessionDetailTitle" style="margin:0; font-size:0.85em; color:var(--champ-color);">Dettaglio Sessione</h4>
-                <button onclick="document.getElementById('tutorSessionDetailArea').style.display='none'" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Chiudi ✕</button>
-            </div>
-            <div id="tutorSessionDetailContent" style="max-height:200px; overflow-y:auto; font-size:0.75em;"></div>
         </div>
 
         <!-- Grafico Errori (Testuale) -->
@@ -1943,9 +1866,7 @@
 
 <script>
     (function() {
-        // Forza il caricamento di una nuova versione ad ogni apertura per evitare SyntaxError da script vecchi
         const BUILD_VERSION = "fix_" + Date.now();
-
         const scripts = [
             "js/app.js",
             "js/quiz_data.js",
@@ -1972,7 +1893,6 @@
             "js/spectator_manager.js",
             "js/game_core.js"
         ];
-
         scripts.forEach(function(src) {
             const script = document.createElement("script");
             script.src = src + "?v=" + BUILD_VERSION;
