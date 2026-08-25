@@ -472,9 +472,16 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
 
     players.forEach((player, index) => {
         // --- FILTRO PRIVACY LEADERBOARD ---
-        if (player.privacyLeaderboard === true && player.id !== window.myId) return;
+        // Se l'utente ha attivato la privacy, non compare nella classifica globale per gli altri.
+        // Permettiamo all'utente stesso di vedersi (con etichetta) per permettergli di gestire il record.
+        const isMe = (player.id === window.myId);
+        if (player.privacyLeaderboard === true && !isMe) return;
 
         const row = document.createElement('div'); row.className = 'leaderboard-row';
+        if (player.privacyLeaderboard === true && isMe) {
+            row.style.background = "rgba(255,152,0,0.05)";
+            row.style.borderLeft = "4px solid #ff9800";
+        }
         const mainDiv = document.createElement('div'); mainDiv.style.display = 'flex'; mainDiv.style.alignItems = 'center'; mainDiv.style.gap = '8px'; mainDiv.style.flexGrow = '1';
 
         const medalDiv = document.createElement('div'); medalDiv.style.fontSize = '1.2em'; medalDiv.style.minWidth = '1.5em'; medalDiv.style.textAlign = 'center';
@@ -487,7 +494,7 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         // PRIVACY: Nome cliccabile solo se privacy disattivata
         const nameSpan = document.createElement('span');
         nameSpan.style.fontWeight = 'bold';
-        nameSpan.textContent = player.name || "Anonimo";
+        nameSpan.textContent = (player.name || "Anonimo") + (player.privacyLeaderboard && isMe ? " (🔒 NASCOSTO)" : "");
 
         if (player.username && String(player.username).trim() !== "") {
             nameSpan.style.color = 'var(--link-color)';

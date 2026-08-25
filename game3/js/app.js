@@ -654,8 +654,21 @@ function initGame() {
             window.myPrivacy = data.privacyUsername;
         }
 
-        window.myPrivacyOnline = !!data.privacyOnline;
-        window.myPrivacyLeaderboard = !!data.privacyLeaderboard;
+        if (data.privacyOnline === undefined) {
+            window.myPrivacyOnline = false; // Default: visibile online
+            updates.privacyOnline = false;
+            needsUpdate = true;
+        } else {
+            window.myPrivacyOnline = data.privacyOnline;
+        }
+
+        if (data.privacyLeaderboard === undefined) {
+            window.myPrivacyLeaderboard = false; // Default: visibile in classifica
+            updates.privacyLeaderboard = false;
+            needsUpdate = true;
+        } else {
+            window.myPrivacyLeaderboard = data.privacyLeaderboard;
+        }
 
         if (needsUpdate) {
             await userRef.update(updates);

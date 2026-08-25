@@ -312,9 +312,10 @@ window.finishArcadeGame = function() {
             score: finalScore,
             wpm: finalWpm,
             level: rpgLevel,
-            wave: arcadeLevel, // Salviamo separatamente il livello arcade raggiunto
+            wave: arcadeLevel,
             date: new Date().toLocaleDateString('it-IT'),
-            ts: firebase.database.ServerValue.TIMESTAMP
+            ts: firebase.database.ServerValue.TIMESTAMP,
+            privacyLeaderboard: !!window.myPrivacyLeaderboard
         };
         db.ref(`leaderboard/arcade/all/${myId}`).transaction(current => {
             if (!current || finalScore > (current.score || 0)) return recordData;

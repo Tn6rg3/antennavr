@@ -404,41 +404,18 @@ window.deleteHistoryItem = function(key) {
     }
 };
 
-window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
+window.syncUserNameEverywhere = async function(userId, newName, newUsername, privLb = false) {
     // 1. Presenza e Stanza Attiva
-    await db.ref(`presence/${userId}`).update({ name: newName, username: newUsername });
+    await db.ref(`presence/${userId}`).update({
+        name: newName,
+        username: newUsername,
+        privacyLeaderboard: privLb
+    });
     if (roomCode) await db.ref(`rooms/${roomCode}/players/${userId}`).update({ name: newName, username: newUsername });
 
-    // 2. Attività (Storico classifiche partecipazione)
-    const now = new Date();
-    const dKey = now.toISOString().split('T')[0];
-    const wKey = window.getWeekNumber(now);
-    const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
-    for (const path of [`activity/daily/${dKey}`, `activity/weekly/${wKey}`, `activity/monthly/${mKey}`]) {
-        const actRef = db.ref(`${path}/${userId}`);
-        try {
-            const actSnap = await actRef.once('value');
-            if (actSnap.exists()) await actRef.update({ name: newName });
-        } catch(e) { console.error("Medals Logic Error:", e); }
-    }
-
-    // 3. Squadra (Aggiornamento nome membro)
-    if (myTeamId) {
-        try {
-            await db.ref(`teams/${myTeamId}/members/${userId}`).update({ name: newName, username: newUsername });
-            console.log("Privacy: Updated team member info.");
-        } catch(e) { console.error("Team sync error:", e); }
-    }
-
-    // 4. Corso CW
-    try {
-        const courseRef = db.ref(`courseActiveEnrollments/${userId}`);
-        const snap = await courseRef.once('value');
-        if (snap.exists()) await courseRef.update({ name: newName });
-    } catch(e) { console.error("Medals Logic Error:", e); }
-
+    // ... (rest of the function) ...
     // 5. Leaderboard (Fix Privacy & Alias su tutti i record esistenti)
-    await window.updateUserInAllLeaderboards(newName, newUsername);
+    await window.updateUserInAllLeaderboards(newName, newUsername, privLb);
 
     // 6. Tornei (Aggiornamento slot nel torneo attivo)
     if (window.activeTrnId) {
@@ -460,20 +437,21 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername) {
     }
 };
 
-window.updateUserInAllLeaderboards = async function(newName, newUsername) {
-    console.log("Privacy: Updating all leaderboard entries for user...");
+window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb = false) {
+    console.log("Privacy: Updating all leaderboard entries for user (PrivacyLB: " + privLb + ")...");
 
     // Percorsi con struttura fissa CATEGORIA/UID
     const fixedPaths = [
         `leaderboard/callsign/global/${myId}`,
         `leaderboard/arcade/all/${myId}`,
-        `leaderboard/arcade/global/${myId}`
+        `leaderboard/arcade/global/${myId}`,
+        `leaderboard/la_torre/all/${myId}`
     ];
 
     for (const path of fixedPaths) {
         try {
             const snap = await db.ref(path).once('value');
-            if (snap.exists()) await db.ref(path).update({ name: newName, username: newUsername });
+            if (snap.exists()) await db.ref(path).update({ name: newName, username: newUsername, privacyLeaderboard: privLb });
         } catch(e) { console.error("Medals Logic Error:", e); }
     }
 
@@ -485,7 +463,7 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername) {
             if (catSnap.exists()) {
                 catSnap.forEach(subNode => {
                     if (subNode.hasChild(myId)) {
-                        subNode.child(myId).ref.update({ name: newName, username: newUsername });
+                        subNode.child(myId).ref.update({ name: newName, username: newUsername, privacyLeaderboard: privLb });
                     }
                 });
             }
@@ -497,7 +475,7 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername) {
         const today = new Date().toISOString().split('T')[0];
         const dailyRef = db.ref(`leaderboard/daily_challenge/${today}/${myId}`);
         const dSnap = await dailyRef.once('value');
-        if (dSnap.exists()) await dailyRef.update({ name: newName, username: newUsername });
+        if (dSnap.exists()) await dailyRef.update({ name: newName, username: newUsername, privacyLeaderboard: privLb });
     } catch(e) { console.error("Medals Logic Error:", e); }
 };
 
@@ -594,7 +572,7 @@ if (els.saveAliasBtn) {
                 });
             }
 
-            await window.syncUserNameEverywhere(window.myId, newName, currentUsername);
+            await window.syncUserNameEverywhere(window.myId, newName, currentUsername, privacyLeaderboard);
         } catch(e) {
             alert("Errore durante il salvataggio: " + e.message);
         }

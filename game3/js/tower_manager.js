@@ -312,7 +312,8 @@ window.advanceTowerFloor = function() {
     if (window.db && window.myId) {
         window.db.ref(`leaderboard/la_torre/all/${window.myId}`).set({
             name: window.myName, score: window.towerState.floor, wpm: window.towerState.wpm,
-            date: new Date().toLocaleDateString('it-IT'), ts: firebase.database.ServerValue.TIMESTAMP
+            date: new Date().toLocaleDateString('it-IT'), ts: firebase.database.ServerValue.TIMESTAMP,
+            privacyLeaderboard: !!window.myPrivacyLeaderboard
         });
         const updateData = { valvole: (window.towerState.valvole || 0) + 5 };
         if (window.towerState.floor % 10 === 1) { updateData.checkpoint = window.towerState.floor; showToast("🚩 CHECKPOINT!"); }

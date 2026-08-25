@@ -1116,7 +1116,8 @@ window.finishGame = function() {
                         wpm: window.peakWpm,
                         level: myLevel,
                         wordCount: window.requestedWordCount,
-                        date: new Date().toLocaleDateString('it-IT')
+                        date: new Date().toLocaleDateString('it-IT'),
+                        privacyLeaderboard: !!window.myPrivacyLeaderboard
                     });
                     window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
                 } else {
