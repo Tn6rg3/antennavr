@@ -273,16 +273,16 @@ window.loadAdvancedStats = function() {
             lengthCont.innerHTML = '';
             const lData = stats.lengthStats || {};
             const sortedLens = Object.keys(lData).sort((a,b) => parseInt(a)-parseInt(b));
-            if (sortedLens.length === 0) lengthCont.innerHTML = '<p style="font-size:0.7em; color:var(--hint-color);">Dati insufficienti.</p>';
+            if (sortedLens.length === 0) lengthCont.innerHTML = '<p style="font-size:0.7em; color:#666;">Dati insufficienti.</p>';
             sortedLens.forEach(len => {
                 const d = lData[len];
                 const acc = Math.round(((d.total - d.errors) / d.total) * 100);
-                const color = acc > 85 ? '#4caf50' : acc > 70 ? '#ffeb3b' : '#f44336';
+                const color = acc > 85 ? '#2e7d32' : acc > 70 ? '#f57f17' : '#d32f2f';
                 const row = document.createElement('div');
-                row.style.cssText = "display:flex; align-items:center; gap:8px; font-size:0.75em; color: white;";
-                row.innerHTML = `<span style="width:55px; color: #ccc;">${len} Car.</span>
-                    <div style="flex-grow:1; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
-                        <div style="width:${acc}%; height:100%; background:${color}; box-shadow: 0 0 5px ${color}; transition: width 0.5s ease-out;"></div>
+                row.style.cssText = "display:flex; align-items:center; gap:8px; font-size:0.75em; color: #000;";
+                row.innerHTML = `<span style="width:55px; color: #333; font-weight: bold;">${len} Car.</span>
+                    <div style="flex-grow:1; height:8px; background:rgba(0,0,0,0.1); border-radius:4px; overflow:hidden;">
+                        <div style="width:${acc}%; height:100%; background:${color}; transition: width 0.5s ease-out;"></div>
                     </div>
                     <span style="width:35px; text-align:right; font-weight:bold; color:${color}">${acc}%</span>`;
                 lengthCont.appendChild(row);
@@ -302,12 +302,12 @@ window.loadAdvancedStats = function() {
             wpmContainer.innerHTML = '';
             const wpmErrs = stats.errorsByWpm || {};
             const sortedWpm = Object.keys(wpmErrs).sort((a,b) => parseInt(b) - parseInt(a));
-            if (sortedWpm.length === 0) wpmContainer.innerHTML = '<p style="text-align:center; color: #aaa;">Nessun dato.</p>';
+            if (sortedWpm.length === 0) wpmContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color);">Nessun dato.</p>';
             sortedWpm.forEach(wpm => {
                 const total = Object.values(wpmErrs[wpm]).reduce((a,b) => a+b, 0);
                 const div = document.createElement('div');
-                div.style.cssText = "display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:4px 0; color: white;";
-                div.innerHTML = `<b style="color:var(--link-color);">${wpm} WPM</b> <span style="color:#ff5252; font-weight: bold;">${total} err.</span>`;
+                div.style.cssText = "display:flex; justify-content:space-between; border-bottom:1px solid rgba(0,0,0,0.05); padding:4px 0; color: var(--text-color);";
+                div.innerHTML = `<b>${wpm} WPM</b> <span style="color:#d32f2f; font-weight: bold;">${total} err.</span>`;
                 wpmContainer.appendChild(div);
             });
         }
@@ -321,16 +321,16 @@ window.loadAdvancedStats = function() {
                 return count >= bigramTh;
             }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 20);
 
-            if (filteredBigrams.length === 0) bigramContainer.innerHTML = '<p style="text-align:center; color: #aaa; font-size:0.8em;">Sotto soglia.</p>';
+            if (filteredBigrams.length === 0) bigramContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.8em;">Sotto soglia.</p>';
             filteredBigrams.forEach(([pair, data]) => {
                 const count = data.count || data;
                 const avgWpm = data.avgWpm || 20;
                 const div = document.createElement('div');
                 div.className = 'leaderboard-row';
-                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(255,255,255,0.05); color: white;";
+                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color);";
                 div.innerHTML = `
                     <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                        <span><b style="color: #ffeb3b;">${pair}</b> <small style="color: #aaa;">(${count})</small></span>
+                        <span><b style="color: #d32f2f;">${pair}</b> <small style="color: var(--hint-color);">(${count})</small></span>
                         <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${pair}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
                     </div>
                 `;
@@ -347,19 +347,19 @@ window.loadAdvancedStats = function() {
                 return count >= wordTh;
             }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1]));
 
-            if (criticalWords.length === 0) wordContainer.innerHTML = '<p style="text-align:center; color: #aaa; font-size:0.8em;">Sotto soglia.</p>';
+            if (criticalWords.length === 0) wordContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.8em;">Sotto soglia.</p>';
             criticalWords.forEach(([word, data]) => {
                 const count = data.count || data;
                 const avgWpm = data.avgWpm || 20;
                 const div = document.createElement('div');
                 div.className = 'leaderboard-row';
-                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(255,255,255,0.05); color: white;";
+                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color);";
                 div.innerHTML = `
                     <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                        <span style="overflow:hidden; text-overflow:ellipsis;"><b style="color: #00ff41;">${word}</b> <small style="color: #aaa;">(${count})</small></span>
+                        <span style="overflow:hidden; text-overflow:ellipsis;"><b style="color: #d32f2f;">${word}</b> <small style="color: var(--hint-color);">(${count})</small></span>
                         <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${word}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
                     </div>
-                    <div style="font-size:0.7em; color: #aaa;">Velocità media errore: ${avgWpm} WPM</div>
+                    <div style="font-size:0.7em; color: var(--hint-color);">Velocità media errore: ${avgWpm} WPM</div>
                 `;
                 wordContainer.appendChild(div);
             });
