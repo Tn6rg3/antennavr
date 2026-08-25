@@ -279,10 +279,10 @@ window.loadAdvancedStats = function() {
                 const acc = Math.round(((d.total - d.errors) / d.total) * 100);
                 const color = acc > 85 ? '#4caf50' : acc > 70 ? '#ffeb3b' : '#f44336';
                 const row = document.createElement('div');
-                row.style.cssText = "display:flex; align-items:center; gap:8px; font-size:0.75em;";
-                row.innerHTML = `<span style="width:50px;">${len} Car.</span>
+                row.style.cssText = "display:flex; align-items:center; gap:8px; font-size:0.75em; color: white;";
+                row.innerHTML = `<span style="width:55px; color: #ccc;">${len} Car.</span>
                     <div style="flex-grow:1; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
-                        <div style="width:${acc}%; height:100%; background:${color};"></div>
+                        <div style="width:${acc}%; height:100%; background:${color}; box-shadow: 0 0 5px ${color}; transition: width 0.5s ease-out;"></div>
                     </div>
                     <span style="width:35px; text-align:right; font-weight:bold; color:${color}">${acc}%</span>`;
                 lengthCont.appendChild(row);
