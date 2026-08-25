@@ -194,7 +194,7 @@ window.renderActivityRankings = function(period, key) {
     });
 };
 
-// --- NUOVA GESTIONE PROFILO E STATISTICHE ANALITICHE ---
+// --- GESTIONE PROFILO E STATISTICHE ANALITICHE ---
 
 // Funzioni handler isolate per non creare duplicati in memoria ad ogni switch di tab
 const handleStatsInputEnter = (e) => {
@@ -315,6 +315,8 @@ window.loadAdvancedStats = function() {
     const wpmContainer = document.getElementById('wpmErrorChartContainer');
     const bigramContainer = document.getElementById('bigramErrorsContainer');
     const wordContainer = document.getElementById('wordErrorsContainer');
+    const confusionContainer = document.getElementById('confusionMatrixContainer');
+    const blocksContainer = document.getElementById('cognitiveBlocksContainer');
 
     const bigramTh = parseInt(document.getElementById('bigramThresholdInput')?.value) || 3;
     const wordTh = parseInt(document.getElementById('wordThresholdInput')?.value) || 3;
@@ -322,6 +324,8 @@ window.loadAdvancedStats = function() {
     if (wpmContainer) wpmContainer.innerHTML = 'Caricamento...';
     if (bigramContainer) bigramContainer.innerHTML = 'Caricamento...';
     if (wordContainer) wordContainer.innerHTML = 'Caricamento...';
+    if (confusionContainer) confusionContainer.innerHTML = 'Caricamento...';
+    if (blocksContainer) blocksContainer.innerHTML = 'Caricamento...';
 
     db.ref(`users/${myId}/stats`).once('value').then(snap => {
         const stats = snap.val() || {};
@@ -379,6 +383,81 @@ window.loadAdvancedStats = function() {
                 });
                 wpmContainer.appendChild(frag);
             }
+        }
+
+        // --- MATRICE DI CONFUSIONE ---
+        if (confusionContainer) {
+            confusionContainer.innerHTML = '';
+            const confusions = stats.charConfusions || {};
+            
+            let flatConfusions = [];
+            for (const realChar in confusions) {
+                for (const typedChar in confusions[realChar]) {
+                    const data = confusions[realChar][typedChar];
+                    flatConfusions.push({
+                        real: realChar,
+                        typed: typedChar,
+                        count: data.count,
+                        avgWpm: data.avgWpm
+                    });
+                }
+            }
+            
+            flatConfusions.sort((a,b) => b.count - a.count);
+            const topConfusions = flatConfusions.slice(0, 15); 
+
+            if (topConfusions.length === 0) {
+                confusionContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color);">Nessun dato.</p>';
+            } else {
+                const frag = document.createDocumentFragment();
+                topConfusions.forEach(c => {
+                    const div = document.createElement('div');
+                    div.style.cssText = "display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(0,0,0,0.05); padding:6px 0; font-size:0.9em;";
+                    
+                    let errorDesc = c.typed === '-' 
+                        ? `<span style="color:#f57f17; font-weight:bold;">Omissione (Bucata)</span>` 
+                        : `Scritta come <b style="color:#d32f2f;">${c.typed}</b>`;
+
+                    div.innerHTML = `
+                        <div>
+                            <span style="font-size:1.2em; font-weight:bold; margin-right:10px;">${c.real}</span>
+                            <span style="font-size:0.85em; color:var(--hint-color);">➔ ${errorDesc}</span>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="display:block; font-weight:bold;">${c.count} err.</span>
+                            <small style="color:var(--hint-color);">${c.avgWpm} WPM</small>
+                        </div>
+                    `;
+                    frag.appendChild(div);
+                });
+                confusionContainer.appendChild(frag);
+            }
+        }
+
+        // --- BLOCCHI COGNITIVI (Buffer Overflow) ---
+        if (blocksContainer) {
+            blocksContainer.innerHTML = '';
+            const blocks = stats.cognitiveBlocks || {};
+            const frag = document.createDocumentFragment();
+            let found = false;
+
+            for (let i = 2; i <= 6; i++) {
+                const count = blocks[`${i}_chars`] || 0;
+                if (count > 0) {
+                    found = true;
+                    const div = document.createElement('div');
+                    div.style.cssText = "display:flex; justify-content:space-between; padding:4px 0;";
+                    div.innerHTML = `<span><b>${i}</b> caratteri persi di fila</span> <b style="color:#d32f2f;">${count} volte</b>`;
+                    frag.appendChild(div);
+                }
+            }
+            if (!found) {
+                const p = document.createElement('p');
+                p.style.cssText = "text-align:center; color: var(--hint-color);";
+                p.textContent = "Nessun blocco cognitivo rilevato. Ottimo flow!";
+                frag.appendChild(p);
+            }
+            blocksContainer.appendChild(frag);
         }
 
         // 2. Bigrammi (Coppie) Sbagliate
@@ -586,59 +665,78 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb
     }
 };
 
-// --- LOGICA SALVATAGGIO ERRORI AVANZATI OTTIMIZZATA ---
+// --- LOGICA SALVATAGGIO ERRORI AVANZATI CLINICA (MATRICE CONFUSIONE & OVERFLOW) ---
 
 window.trackAdvancedErrors = function(realWord, userWord, wpm) {
     if (!myId) return;
     
     const real = realWord.toUpperCase();
-    const typed = userWord.toUpperCase();
+    const typed = (userWord || "").toUpperCase();
     const isError = (real !== typed);
     const len = real.length;
 
-    // Aggiornamento atomico delle lunghezze (indipendente dagli errori)
     const statsBase = db.ref(`users/${myId}/stats`);
-    statsBase.child(`lengthStats/${len}/total`).set(firebase.database.ServerValue.increment(1));
+    const inc = firebase.database.ServerValue.increment(1);
+
+    // 1. Aggiornamento atomico delle lunghezze (giocate totali)
+    statsBase.child(`lengthStats/${len}/total`).set(inc);
     
     if (isError) {
-        statsBase.child(`lengthStats/${len}/errors`).set(firebase.database.ServerValue.increment(1));
-        statsBase.child(`positionalErrors/totalErrors`).set(firebase.database.ServerValue.increment(1));
+        statsBase.child(`lengthStats/${len}/errors`).set(inc);
+        statsBase.child(`positionalErrors/totalErrors`).set(inc);
         
-        // Tracciamento Posizionale (solo il primo errore trovato nella stringa)
+        let consecutiveErrors = 0;
+        let maxConsecutive = 0;
+
+        // 2. Analisi Carattere per Carattere (Matrice Confusione & Blocchi)
         for (let i = 0; i < real.length; i++) {
-            if (real[i] !== typed[i]) {
-                const pos = i / (real.length - 1 || 1); // Evita divisione per zero
-                if (pos <= 0.2) statsBase.child(`positionalErrors/start`).set(firebase.database.ServerValue.increment(1));
-                else if (pos >= 0.8) statsBase.child(`positionalErrors/end`).set(firebase.database.ServerValue.increment(1));
-                else statsBase.child(`positionalErrors/mid`).set(firebase.database.ServerValue.increment(1));
-                break; 
+            const rChar = real[i];
+            const tChar = typed[i] || '-'; // Se manca, è un'omissione ('-')
+
+            if (rChar !== tChar) {
+                consecutiveErrors++;
+                if (consecutiveErrors > maxConsecutive) maxConsecutive = consecutiveErrors;
+
+                // Tracciamento Posizionale
+                const pos = i / (real.length - 1 || 1);
+                if (pos <= 0.25) statsBase.child(`positionalErrors/start`).set(inc);
+                else if (pos >= 0.75) statsBase.child(`positionalErrors/end`).set(inc);
+                else statsBase.child(`positionalErrors/mid`).set(inc);
+
+                // TRACCIAMENTO CONFUSIONE CARATTERI: "Cosa ho premuto invece di cosa"
+                statsBase.child(`charConfusions/${rChar}/${tChar}`).transaction(data => {
+                    if (!data) return { count: 1, avgWpm: wpm };
+                    const oldCount = data.count || 0;
+                    const oldWpm = data.avgWpm || wpm;
+                    return { count: oldCount + 1, avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1)) };
+                });
+            } else {
+                consecutiveErrors = 0; // Reset streak se il carattere è giusto
             }
         }
 
-        // Tracciamento Parola via Transaction (per calcolare in sicurezza avgWpm)
+        // 3. Tracciamento "Buffer Overflow" (Errori a catena)
+        if (maxConsecutive >= 2) {
+            statsBase.child(`cognitiveBlocks/${maxConsecutive}_chars`).set(inc);
+        }
+
+        // 4. Tracciamento Parola (Intera)
         statsBase.child(`wordErrors/${real}`).transaction(data => {
             if (!data) return { count: 1, avgWpm: wpm };
-            const oldCount = data.count || (typeof data === 'number' ? data : 0);
+            const oldCount = data.count || 0;
             const oldWpm = data.avgWpm || wpm;
-            const newCount = oldCount + 1;
-            return {
-                count: newCount,
-                avgWpm: Math.round(((oldWpm * oldCount) + wpm) / newCount)
-            };
+            return { count: oldCount + 1, avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1)) };
         });
 
-        // Tracciamento Bigrammi via Transaction
+        // 5. Tracciamento Bigrammi
         for (let i = 0; i < real.length - 1; i++) {
             if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
                 const pair = real.substring(i, i + 2);
                 statsBase.child(`bigramErrors/${pair}`).transaction(data => {
                     if (!data) return { count: 1, avgWpm: wpm };
-                    const oldCount = data.count || (typeof data === 'number' ? data : 0);
+                    const oldCount = data.count || 0;
                     const oldWpm = data.avgWpm || wpm;
-                    return {
-                        count: oldCount + 1,
-                        avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1))
-                    };
+                    return { count: oldCount + 1, avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1)) };
                 });
             }
         }
@@ -703,11 +801,12 @@ if (document.getElementById('resetStatsBtn')) {
 const btnResetErrorStats = document.getElementById('btnResetErrorStats');
 if (btnResetErrorStats) {
     btnResetErrorStats.addEventListener('click', () => {
-        if (confirm("Vuoi azzerare solo i dati analitici degli errori? Lo storico rimarrà intatto.")) {
+        if (confirm("Vuoi azzerare solo i dati analitici degli errori (Matrice, Blocchi, Bigrammi, Parole)? Lo storico rimarrà intatto.")) {
             Promise.all([
                 db.ref(`users/${myId}/stats/bigramErrors`).remove(),
                 db.ref(`users/${myId}/stats/wordErrors`).remove(),
-                db.ref(`users/${myId}/stats/charErrors`).remove()
+                db.ref(`users/${myId}/stats/charConfusions`).remove(),
+                db.ref(`users/${myId}/stats/cognitiveBlocks`).remove()
             ]).then(() => {
                 showToast("Dati errori azzerati!");
                 window.loadAdvancedStats();
