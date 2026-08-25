@@ -11,15 +11,20 @@ window.updateActivity = function(won = false) {
     const dKey = now.toISOString().split('T')[0];
     const wKey = window.getWeekNumber(now);
     const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+    
+    const increment = firebase.database.ServerValue.increment(1);
+    
     ['daily/'+dKey, 'weekly/'+wKey, 'monthly/'+mKey].forEach(path => {
-        db.ref(`activity/${path}/${myId}`).transaction(data => {
-            if (!data) return { name: myName, games: 1, wins: won ? 1 : 0, lastPlayed: firebase.database.ServerValue.TIMESTAMP };
-            data.games = (data.games || 0) + 1;
-            if (won) data.wins = (data.wins || 0) + 1;
-            data.name = myName;
-            data.lastPlayed = firebase.database.ServerValue.TIMESTAMP;
-            return data;
-        }).then(() => { if (path.startsWith('daily')) window.checkActivityAndAwardMedals(); });
+        const updates = {
+            games: increment,
+            name: myName,
+            lastPlayed: firebase.database.ServerValue.TIMESTAMP
+        };
+        if (won) updates.wins = increment;
+
+        db.ref(`activity/${path}/${myId}`).update(updates).then(() => {
+            if (path.startsWith('daily')) window.checkActivityAndAwardMedals();
+        }).catch(err => console.error("Error updating activity:", err));
     });
 };
 
@@ -28,8 +33,15 @@ window.checkActivityAndAwardMedals = async function() {
     const dKey = now.toISOString().split('T')[0];
     const wKey = window.getWeekNumber(now);
     const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+    
     try {
-        const [dSnap, wSnap, mSnap, uMedals] = await Promise.all([ db.ref(`activity/daily/${dKey}/${myId}`).once('value'), db.ref(`activity/weekly/${wKey}/${myId}`).once('value'), db.ref(`activity/monthly/${mKey}/${myId}`).once('value'), db.ref(`users/${myId}/medals`).once('value') ]);
+        const [dSnap, wSnap, mSnap, uMedals] = await Promise.all([ 
+            db.ref(`activity/daily/${dKey}/${myId}`).once('value'), 
+            db.ref(`activity/weekly/${wKey}/${myId}`).once('value'), 
+            db.ref(`activity/monthly/${mKey}/${myId}`).once('value'), 
+            db.ref(`users/${myId}/medals`).once('value') 
+        ]);
+        
         const dData = dSnap.val() || { games: 0 }, wData = wSnap.val() || { games: 0 }, mData = mSnap.val() || { games: 0 };
         let myMedals = uMedals.val() || {};
 
@@ -66,37 +78,60 @@ window.awardMedal = function(id, title, desc, icon, periodKey) {
     if (els.overlayMedalTitle) els.overlayMedalTitle.textContent = title;
     if (els.overlayMedalDesc) els.overlayMedalDesc.textContent = desc;
     if (els.medalOverlay) els.medalOverlay.style.display = 'flex';
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.type = 'triangle'; const now = audioCtx.currentTime; osc.frequency.setValueAtTime(523.25, now); osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.5); gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8); osc.start(now); osc.stop(now + 0.8);
+    if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    try {
+        const osc = audioCtx.createOscillator(); 
+        const gain = audioCtx.createGain(); 
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.type = 'triangle'; 
+        const now = audioCtx.currentTime; 
+        osc.frequency.setValueAtTime(523.25, now); 
+        osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.5); 
+        gain.gain.setValueAtTime(0.3, now); 
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8); 
+        osc.start(now); 
+        osc.stop(now + 0.8);
+    } catch(e) { console.warn("Audio Context error:", e); }
+    
     window.updateMedalGallery();
 };
 
 window.updateMedalGallery = function() {
     if (!els.myMedalsContainer) return;
     db.ref(`users/${myId}/medals`).once('value', snap => {
-        if (!snap.exists()) return els.myMedalsContainer.innerHTML = '<span style="font-size:0.6em; color:var(--hint-color);">Nessuna medaglia.</span>';
+        if (!snap.exists()) {
+            els.myMedalsContainer.innerHTML = '<span style="font-size:0.6em; color:var(--hint-color);">Nessuna medaglia.</span>';
+            return;
+        }
         els.myMedalsContainer.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        
         Object.values(snap.val()).forEach(m => {
             const span = document.createElement('span');
             span.textContent = (m.count && m.count > 1) ? `${m.count}x ${m.icon}` : m.icon;
             span.title = `${m.title} (${m.date})`;
             span.onclick = () => showToast(`${m.title} - ${m.date}`);
             span.style.cursor = "pointer";
-            els.myMedalsContainer.appendChild(span);
+            frag.appendChild(span);
         });
+        els.myMedalsContainer.appendChild(frag);
     });
 };
 
 window.switchActTab = function(period) {
     document.querySelectorAll('#participationScreen .tab-btn').forEach(b => b.classList.remove('active-tab'));
-    if (els[`tab${period.charAt(0).toUpperCase() + period.slice(1)}Act`]) {
-        els[`tab${period.charAt(0).toUpperCase() + period.slice(1)}Act`].classList.add('active-tab');
-    }
+    const targetTab = els[`tab${period.charAt(0).toUpperCase() + period.slice(1)}Act`];
+    if (targetTab) targetTab.classList.add('active-tab');
+    
     const now = new Date();
-    let key = period === 'daily' ? now.toISOString().split('T')[0] : period === 'weekly' ? window.getWeekNumber(now) : now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+    let key = period === 'daily' ? now.toISOString().split('T')[0] : 
+              period === 'weekly' ? window.getWeekNumber(now) : 
+              now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+              
     if (els.actListTitle) {
-        els.actListTitle.textContent = period === 'daily' ? "I più attivi di Oggi" : period === 'weekly' ? "I più attivi della Settimana" : "I più attivi del Mese";
+        els.actListTitle.textContent = period === 'daily' ? "I più attivi di Oggi" : 
+                                       period === 'weekly' ? "I più attivi della Settimana" : "I più attivi del Mese";
     }
     window.renderActivityRankings(period, key);
     window.updateMedalGallery();
@@ -104,35 +139,74 @@ window.switchActTab = function(period) {
 
 window.renderActivityRankings = function(period, key) {
     if (!els.activityRankList) return;
-    els.activityRankList.innerHTML = '';
-    const loadLi = document.createElement('li'); loadLi.style.cssText = "justify-content:center; color:var(--hint-color);"; loadLi.textContent = "Caricamento..."; els.activityRankList.appendChild(loadLi);
+    els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Caricamento...</li>';
 
     db.ref(`activity/${period}/${key}`).once('value').then(snap => {
         els.activityRankList.innerHTML = '';
         let users = [];
-        if (snap.exists()) snap.forEach(child => { const u = child.val(); if (u && typeof u === 'object') users.push({ id: child.key, ...u }); });
-        users.sort((a, b) => (b.games || 0) - (a.games || 0)); users = users.slice(0, 50);
-        if (users.length === 0) {
-            const empLi = document.createElement('li'); empLi.style.cssText = "justify-content:center; color:var(--hint-color);"; empLi.textContent = "Nessuna attività registrata."; els.activityRankList.appendChild(empLi); return;
+        if (snap.exists()) {
+            snap.forEach(child => { 
+                const u = child.val(); 
+                if (u && typeof u === 'object') users.push({ id: child.key, ...u }); 
+            });
         }
+        
+        users.sort((a, b) => (b.games || 0) - (a.games || 0)); 
+        users = users.slice(0, 50);
+        
+        if (users.length === 0) {
+            els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna attività registrata.</li>'; 
+            return;
+        }
+        
+        const frag = document.createDocumentFragment();
         users.forEach((u, idx) => {
             let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
             const li = document.createElement('li');
-            const nameSpan = document.createElement('span'); nameSpan.appendChild(document.createTextNode(medal + " ")); const nameB = document.createElement('b'); nameB.textContent = u.name || "Anonimo"; nameSpan.appendChild(nameB);
-            const statsSpan = document.createElement('span'); const gamesB = document.createElement('b'); gamesB.textContent = u.games || 0; statsSpan.appendChild(gamesB); statsSpan.appendChild(document.createTextNode(" part. "));
-            const winsSmall = document.createElement('small'); winsSmall.style.color = '#4caf50'; winsSmall.textContent = `(${u.wins || 0} v.)`; statsSpan.appendChild(winsSmall);
-            li.appendChild(nameSpan); li.appendChild(statsSpan); els.activityRankList.appendChild(li);
+            const nameSpan = document.createElement('span'); 
+            nameSpan.appendChild(document.createTextNode(medal + " ")); 
+            const nameB = document.createElement('b'); 
+            nameB.textContent = u.name || "Anonimo"; 
+            nameSpan.appendChild(nameB);
+            
+            const statsSpan = document.createElement('span'); 
+            const gamesB = document.createElement('b'); 
+            gamesB.textContent = u.games || 0; 
+            statsSpan.appendChild(gamesB); 
+            statsSpan.appendChild(document.createTextNode(" part. "));
+            
+            const winsSmall = document.createElement('small'); 
+            winsSmall.style.color = '#4caf50'; 
+            winsSmall.textContent = `(${u.wins || 0} v.)`; 
+            statsSpan.appendChild(winsSmall);
+            
+            li.appendChild(nameSpan); 
+            li.appendChild(statsSpan); 
+            frag.appendChild(li);
         });
+        els.activityRankList.appendChild(frag);
     }).catch(err => {
-        els.activityRankList.innerHTML = '';
-        const errLi = document.createElement('li'); errLi.style.cssText = "justify-content:center; color:var(--hint-color); flex-direction:column; text-align:center;";
-        const eSpan = document.createElement('span'); eSpan.textContent = "Errore nel caricamento."; errLi.appendChild(eSpan);
-        const eSmall = document.createElement('small'); eSmall.style.cssText = "font-size:0.7em; opacity:0.7;"; eSmall.textContent = err.message; errLi.appendChild(eSmall);
-        els.activityRankList.appendChild(errLi);
+        els.activityRankList.innerHTML = `
+            <li style="justify-content:center; color:var(--hint-color); flex-direction:column; text-align:center;">
+                <span>Errore nel caricamento.</span>
+                <small style="font-size:0.7em; opacity:0.7;">${err.message}</small>
+            </li>`;
     });
 };
 
 // --- NUOVA GESTIONE PROFILO E STATISTICHE ANALITICHE ---
+
+// Funzioni handler isolate per non creare duplicati in memoria ad ogni switch di tab
+const handleStatsInputEnter = (e) => {
+    if (e.key === 'Enter') {
+        e.target.blur(); 
+        window.loadAdvancedStats();
+    }
+};
+
+const handleStatsInputFocus = (e) => {
+    setTimeout(() => { e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
+};
 
 window.switchProfileTab = function(tabId) {
     const infoBtn = document.getElementById('btnTabProfile');
@@ -159,44 +233,28 @@ window.switchProfileTab = function(tabId) {
         if (statsBtn) statsBtn.classList.add('active-tab');
         if (statsArea) statsArea.style.display = 'flex';
 
-        // --- FIX IPHONE/KEYBOARD: Gestione Enter e Scroll ---
         const bTh = document.getElementById('bigramThresholdInput');
         const wTh = document.getElementById('wordThresholdInput');
 
-        const handleEnter = (e) => {
-            if (e.key === 'Enter') {
-                e.target.blur(); // Nasconde la tastiera su iOS
-                window.loadAdvancedStats();
-            }
-        };
-
-        const handleFocus = (e) => {
-            // Assicura che l'input sia centrato e visibile quando si apre la tastiera
-            setTimeout(() => {
-                e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 300);
-        };
-
         if (bTh) {
-            bTh.removeEventListener('keydown', handleEnter);
-            bTh.addEventListener('keydown', handleEnter);
-            bTh.removeEventListener('focus', handleFocus);
-            bTh.addEventListener('focus', handleFocus);
+            bTh.removeEventListener('keydown', handleStatsInputEnter);
+            bTh.addEventListener('keydown', handleStatsInputEnter);
+            bTh.removeEventListener('focus', handleStatsInputFocus);
+            bTh.addEventListener('focus', handleStatsInputFocus);
             bTh.removeEventListener('change', window.loadAdvancedStats);
             bTh.addEventListener('change', window.loadAdvancedStats);
         }
         if (wTh) {
-            wTh.removeEventListener('keydown', handleEnter);
-            wTh.addEventListener('keydown', handleEnter);
-            wTh.removeEventListener('focus', handleFocus);
-            wTh.addEventListener('focus', handleFocus);
+            wTh.removeEventListener('keydown', handleStatsInputEnter);
+            wTh.addEventListener('keydown', handleStatsInputEnter);
+            wTh.removeEventListener('focus', handleStatsInputFocus);
+            wTh.addEventListener('focus', handleStatsInputFocus);
             wTh.removeEventListener('change', window.loadAdvancedStats);
             wTh.addEventListener('change', window.loadAdvancedStats);
         }
 
         window.loadAdvancedStats();
     } else if (tabId === 'course') {
-        // Nascondiamo l'header dei tab principali per vedere solo Dashboard e Trasmissione
         if (tabsHeader) tabsHeader.style.display = 'none';
         if (courseArea) courseArea.style.display = 'flex';
         if (typeof window.hideCourseMessageBadge === 'function') window.hideCourseMessageBadge();
@@ -205,25 +263,26 @@ window.switchProfileTab = function(tabId) {
 };
 
 window.loadProfileInfo = function() {
-    const list = document.getElementById('matchHistoryList');
-    if (list) list.innerHTML = '<li style="justify-content:center;">Caricamento...</li>';
+    const listContainer = document.getElementById('matchHistoryList');
+    if (!listContainer) return;
+    listContainer.innerHTML = '<li style="justify-content:center;">Caricamento...</li>';
 
     if (!myId) return;
 
     db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value').then(snap => {
-        const listContainer = document.getElementById('matchHistoryList');
-        if (!listContainer) return;
         listContainer.innerHTML = '';
-        userMatchHistory = [];
-        snap.forEach(child => { userMatchHistory.push({ key: child.key, ...child.val() }); });
-        userMatchHistory.reverse();
+        window.userMatchHistory = [];
+        
+        snap.forEach(child => { window.userMatchHistory.push({ key: child.key, ...child.val() }); });
+        window.userMatchHistory.reverse();
 
-        if (userMatchHistory.length === 0) {
+        if (window.userMatchHistory.length === 0) {
             listContainer.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna partita.</li>';
             return;
         }
 
-        userMatchHistory.forEach(match => {
+        const frag = document.createDocumentFragment();
+        window.userMatchHistory.forEach(match => {
             const d = new Date(match.date || Date.now());
             const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
             let modeIcon = match.mode === 'callsign' ? '🎙️' : match.mode === 'pingpong' ? '🏓' : match.mode === 'chars' ? '⌨️' : (match.mode === 'daily_challenge' ? '📅' : '🔤');
@@ -243,12 +302,12 @@ window.loadProfileInfo = function() {
                     </div>
                 </div>
             `;
-            listContainer.appendChild(li);
+            frag.appendChild(li);
         });
+        listContainer.appendChild(frag);
     }).catch(err => {
         console.error("Profile: Error loading history:", err);
-        const listContainer = document.getElementById('matchHistoryList');
-        if (listContainer) listContainer.innerHTML = '<li style="justify-content:center; color:red;">Errore caricamento.</li>';
+        listContainer.innerHTML = '<li style="justify-content:center; color:red;">Errore caricamento.</li>';
     });
 };
 
@@ -273,20 +332,25 @@ window.loadAdvancedStats = function() {
             lengthCont.innerHTML = '';
             const lData = stats.lengthStats || {};
             const sortedLens = Object.keys(lData).sort((a,b) => parseInt(a)-parseInt(b));
-            if (sortedLens.length === 0) lengthCont.innerHTML = '<p style="font-size:0.7em; color:#666;">Dati insufficienti.</p>';
-            sortedLens.forEach(len => {
-                const d = lData[len];
-                const acc = Math.round(((d.total - d.errors) / d.total) * 100);
-                const color = acc > 85 ? '#2e7d32' : acc > 70 ? '#f57f17' : '#d32f2f';
-                const row = document.createElement('div');
-                row.style.cssText = "display:flex; align-items:center; gap:8px; font-size:0.75em; color: #000;";
-                row.innerHTML = `<span style="width:55px; color: #333; font-weight: bold;">${len} Car.</span>
-                    <div style="flex-grow:1; height:8px; background:rgba(0,0,0,0.1); border-radius:4px; overflow:hidden;">
-                        <div style="width:${acc}%; height:100%; background:${color}; transition: width 0.5s ease-out;"></div>
-                    </div>
-                    <span style="width:35px; text-align:right; font-weight:bold; color:${color}">${acc}%</span>`;
-                lengthCont.appendChild(row);
-            });
+            if (sortedLens.length === 0) {
+                lengthCont.innerHTML = '<p style="font-size:0.7em; color:#666;">Dati insufficienti.</p>';
+            } else {
+                const frag = document.createDocumentFragment();
+                sortedLens.forEach(len => {
+                    const d = lData[len];
+                    const acc = Math.round(((d.total - d.errors) / d.total) * 100);
+                    const color = acc > 85 ? '#2e7d32' : acc > 70 ? '#f57f17' : '#d32f2f';
+                    const row = document.createElement('div');
+                    row.style.cssText = "display:flex; align-items:center; gap:8px; font-size:0.75em; color: #000;";
+                    row.innerHTML = `<span style="width:55px; color: #333; font-weight: bold;">${len} Car.</span>
+                        <div style="flex-grow:1; height:8px; background:rgba(0,0,0,0.1); border-radius:4px; overflow:hidden;">
+                            <div style="width:${acc}%; height:100%; background:${color}; transition: width 0.5s ease-out;"></div>
+                        </div>
+                        <span style="width:35px; text-align:right; font-weight:bold; color:${color}">${acc}%</span>`;
+                    frag.appendChild(row);
+                });
+                lengthCont.appendChild(frag);
+            }
         }
 
         // B. DIAGNOSTICA POSIZIONALE
@@ -302,14 +366,19 @@ window.loadAdvancedStats = function() {
             wpmContainer.innerHTML = '';
             const wpmErrs = stats.errorsByWpm || {};
             const sortedWpm = Object.keys(wpmErrs).sort((a,b) => parseInt(b) - parseInt(a));
-            if (sortedWpm.length === 0) wpmContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color);">Nessun dato.</p>';
-            sortedWpm.forEach(wpm => {
-                const total = Object.values(wpmErrs[wpm]).reduce((a,b) => a+b, 0);
-                const div = document.createElement('div');
-                div.style.cssText = "display:flex; justify-content:space-between; border-bottom:1px solid rgba(0,0,0,0.05); padding:4px 0; color: var(--text-color);";
-                div.innerHTML = `<b>${wpm} WPM</b> <span style="color:#d32f2f; font-weight: bold;">${total} err.</span>`;
-                wpmContainer.appendChild(div);
-            });
+            if (sortedWpm.length === 0) {
+                wpmContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color);">Nessun dato.</p>';
+            } else {
+                const frag = document.createDocumentFragment();
+                sortedWpm.forEach(wpm => {
+                    const total = Object.values(wpmErrs[wpm]).reduce((a,b) => a+b, 0);
+                    const div = document.createElement('div');
+                    div.style.cssText = "display:flex; justify-content:space-between; border-bottom:1px solid rgba(0,0,0,0.05); padding:4px 0; color: var(--text-color);";
+                    div.innerHTML = `<b>${wpm} WPM</b> <span style="color:#d32f2f; font-weight: bold;">${total} err.</span>`;
+                    frag.appendChild(div);
+                });
+                wpmContainer.appendChild(frag);
+            }
         }
 
         // 2. Bigrammi (Coppie) Sbagliate
@@ -321,21 +390,26 @@ window.loadAdvancedStats = function() {
                 return count >= bigramTh;
             }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 20);
 
-            if (filteredBigrams.length === 0) bigramContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.8em;">Sotto soglia.</p>';
-            filteredBigrams.forEach(([pair, data]) => {
-                const count = data.count || data;
-                const avgWpm = data.avgWpm || 20;
-                const div = document.createElement('div');
-                div.className = 'leaderboard-row';
-                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color);";
-                div.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                        <span><b style="color: #d32f2f;">${pair}</b> <small style="color: var(--hint-color);">(${count})</small></span>
-                        <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${pair}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
-                    </div>
-                `;
-                bigramContainer.appendChild(div);
-            });
+            if (filteredBigrams.length === 0) {
+                bigramContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.8em;">Sotto soglia.</p>';
+            } else {
+                const frag = document.createDocumentFragment();
+                filteredBigrams.forEach(([pair, data]) => {
+                    const count = data.count || data;
+                    const avgWpm = data.avgWpm || 20;
+                    const div = document.createElement('div');
+                    div.className = 'leaderboard-row';
+                    div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color);";
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                            <span><b style="color: #d32f2f;">${pair}</b> <small style="color: var(--hint-color);">(${count})</small></span>
+                            <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${pair}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
+                        </div>
+                    `;
+                    frag.appendChild(div);
+                });
+                bigramContainer.appendChild(frag);
+            }
         }
 
         // 3. Parole Critiche
@@ -347,22 +421,27 @@ window.loadAdvancedStats = function() {
                 return count >= wordTh;
             }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1]));
 
-            if (criticalWords.length === 0) wordContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.8em;">Sotto soglia.</p>';
-            criticalWords.forEach(([word, data]) => {
-                const count = data.count || data;
-                const avgWpm = data.avgWpm || 20;
-                const div = document.createElement('div');
-                div.className = 'leaderboard-row';
-                div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color);";
-                div.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                        <span style="overflow:hidden; text-overflow:ellipsis;"><b style="color: #d32f2f;">${word}</b> <small style="color: var(--hint-color);">(${count})</small></span>
-                        <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${word}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
-                    </div>
-                    <div style="font-size:0.7em; color: var(--hint-color);">Velocità media errore: ${avgWpm} WPM</div>
-                `;
-                wordContainer.appendChild(div);
-            });
+            if (criticalWords.length === 0) {
+                wordContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.8em;">Sotto soglia.</p>';
+            } else {
+                const frag = document.createDocumentFragment();
+                criticalWords.forEach(([word, data]) => {
+                    const count = data.count || data;
+                    const avgWpm = data.avgWpm || 20;
+                    const div = document.createElement('div');
+                    div.className = 'leaderboard-row';
+                    div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color);";
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                            <span style="overflow:hidden; text-overflow:ellipsis;"><b style="color: #d32f2f;">${word}</b> <small style="color: var(--hint-color);">(${count})</small></span>
+                            <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${word}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
+                        </div>
+                        <div style="font-size:0.7em; color: var(--hint-color);">Velocità media errore: ${avgWpm} WPM</div>
+                    `;
+                    frag.appendChild(div);
+                });
+                wordContainer.appendChild(frag);
+            }
         }
     });
 };
@@ -371,21 +450,23 @@ window.showProfileScreen = function() {
     window.showScreen('profileScreen');
     window.switchProfileTab('info');
 
-    // Popoliamo gli input con i valori attuali dell'utente
-    if (els.userAliasInput) els.userAliasInput.value = myName || "";
+    if (els.userAliasInput) els.userAliasInput.value = window.myName || "";
 
-    // Toggle Privacy
     if (els.privacyUsernameCheckbox) els.privacyUsernameCheckbox.checked = window.myPrivacy ?? true;
     if (els.privacyOnlineCheckbox) els.privacyOnlineCheckbox.checked = window.myPrivacyOnline ?? false;
     if (els.privacyLeaderboardCheckbox) els.privacyLeaderboardCheckbox.checked = window.myPrivacyLeaderboard ?? false;
 };
 
 window.openMatchDetails = function(matchKey) {
-    const match = userMatchHistory.find(m => m.key === matchKey);
+    if (!window.userMatchHistory) return;
+    const match = window.userMatchHistory.find(m => m.key === matchKey);
     if (!match || !els.matchDetailsBody || !els.matchDetailsModal) return;
+    
     els.matchDetailsBody.innerHTML = '';
     const h3 = els.matchDetailsModal.querySelector('h3');
     if (h3) h3.textContent = `Dettagli Match - ${match.mode.toUpperCase()}`;
+    
+    const frag = document.createDocumentFragment();
     (match.details || []).forEach(row => {
         const tr = document.createElement('tr');
         const isCorrect = (row.real === row.typed);
@@ -393,6 +474,7 @@ window.openMatchDetails = function(matchKey) {
 
         const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || '-';
         const tdReal = document.createElement('td');
+        
         if (typeof window.renderDiffSecure === 'function') {
             window.renderDiffSecure(tdReal, row.real, row.typed || '');
         } else {
@@ -422,8 +504,10 @@ window.openMatchDetails = function(matchKey) {
         }
 
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdActions);
-        els.matchDetailsBody.appendChild(tr);
+        frag.appendChild(tr);
     });
+    
+    els.matchDetailsBody.appendChild(frag);
     els.matchDetailsModal.style.display = 'flex';
 };
 
@@ -434,32 +518,34 @@ window.deleteHistoryItem = function(key) {
 };
 
 window.syncUserNameEverywhere = async function(userId, newName, newUsername, privLb = false) {
-    // 1. Presenza e Stanza Attiva
+    // 1. Presenza
     await db.ref(`presence/${userId}`).update({
         name: newName,
         username: newUsername,
         privacyLeaderboard: privLb
     });
-    if (roomCode) await db.ref(`rooms/${roomCode}/players/${userId}`).update({ name: newName, username: newUsername });
+    
+    if (window.roomCode) {
+        await db.ref(`rooms/${window.roomCode}/players/${userId}`).update({ name: newName, username: newUsername });
+    }
 
-    // ... (rest of the function) ...
-    // 5. Leaderboard (Fix Privacy & Alias su tutti i record esistenti)
+    // 5. Leaderboard
     await window.updateUserInAllLeaderboards(newName, newUsername, privLb);
 
-    // 6. Tornei (Aggiornamento slot nel torneo attivo)
+    // 6. Tornei
     if (window.activeTrnId) {
         try {
-            const trnSnap = await db.ref(`tournaments/${window.activeTrnId}`).once('value');
-            if (trnSnap.exists() && trnSnap.val().matches) {
-                const matches = trnSnap.val().matches;
+            const trnSnap = await db.ref(`tournaments/${window.activeTrnId}/matches`).once('value');
+            if (trnSnap.exists()) {
+                const matches = trnSnap.val();
+                const updates = {};
                 for (const mId in matches) {
                     const match = matches[mId];
-                    if (match.playerA && match.playerA.id === userId) {
-                        await db.ref(`tournaments/${window.activeTrnId}/matches/${mId}/playerA`).update({ name: newName });
-                    }
-                    if (match.playerB && match.playerB.id === userId) {
-                        await db.ref(`tournaments/${window.activeTrnId}/matches/${mId}/playerB`).update({ name: newName });
-                    }
+                    if (match.playerA && match.playerA.id === userId) updates[`${mId}/playerA/name`] = newName;
+                    if (match.playerB && match.playerB.id === userId) updates[`${mId}/playerB/name`] = newName;
+                }
+                if (Object.keys(updates).length > 0) {
+                    await db.ref(`tournaments/${window.activeTrnId}/matches`).update(updates);
                 }
             }
         } catch(e) { console.error("Trn Sync Error:", e); }
@@ -467,9 +553,9 @@ window.syncUserNameEverywhere = async function(userId, newName, newUsername, pri
 };
 
 window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb = false) {
-    console.log("Privacy: Updating all leaderboard entries for user (PrivacyLB: " + privLb + ")...");
+    console.log("Privacy: Updating all leaderboard entries for user...");
+    const updates = { name: newName, username: newUsername, privacyLeaderboard: privLb };
 
-    // Percorsi con struttura fissa CATEGORIA/UID
     const fixedPaths = [
         `leaderboard/callsign/global/${myId}`,
         `leaderboard/arcade/all/${myId}`,
@@ -477,98 +563,86 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb
         `leaderboard/la_torre/all/${myId}`
     ];
 
+    const today = new Date().toISOString().split('T')[0];
+    fixedPaths.push(`leaderboard/daily_challenge/${today}/${myId}`);
+
     for (const path of fixedPaths) {
-        try {
-            const snap = await db.ref(path).once('value');
-            if (snap.exists()) await db.ref(path).update({ name: newName, username: newUsername, privacyLeaderboard: privLb });
-        } catch(e) { console.error("Medals Logic Error:", e); }
+        db.ref(path).once('value').then(snap => {
+            if (snap.exists()) db.ref(path).update(updates);
+        }).catch(()=> {});
     }
 
-    // Percorsi con struttura dinamica CATEGORIA/SOTTO_MODO/UID (standard, chars, quiz, pingpong)
     const categories = ['standard', 'chars', 'quiz', 'pingpong'];
     for (const cat of categories) {
-        try {
-            const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
+        db.ref(`leaderboard/${cat}`).once('value').then(catSnap => {
             if (catSnap.exists()) {
                 catSnap.forEach(subNode => {
                     if (subNode.hasChild(myId)) {
-                        subNode.child(myId).ref.update({ name: newName, username: newUsername, privacyLeaderboard: privLb });
+                        subNode.child(myId).ref.update(updates);
                     }
                 });
             }
-        } catch(e) { console.error("Medals Logic Error:", e); }
+        }).catch(e => console.warn(`Clean LB ${cat} error:`, e));
     }
-
-    // Sfida Giornaliera (Oggi)
-    try {
-        const today = new Date().toISOString().split('T')[0];
-        const dailyRef = db.ref(`leaderboard/daily_challenge/${today}/${myId}`);
-        const dSnap = await dailyRef.once('value');
-        if (dSnap.exists()) await dailyRef.update({ name: newName, username: newUsername, privacyLeaderboard: privLb });
-    } catch(e) { console.error("Medals Logic Error:", e); }
 };
 
-// --- LOGICA SALVATAGGIO ERRORI AVANZATI ---
+// --- LOGICA SALVATAGGIO ERRORI AVANZATI OTTIMIZZATA ---
 
 window.trackAdvancedErrors = function(realWord, userWord, wpm) {
     if (!myId) return;
-    const statsRef = db.ref(`users/${myId}/stats`);
+    
+    const real = realWord.toUpperCase();
+    const typed = userWord.toUpperCase();
+    const isError = (real !== typed);
+    const len = real.length;
 
-    statsRef.once('value', snap => {
-        let stats = snap.val() || {};
-        if (!stats.bigramErrors) stats.bigramErrors = {};
-        if (!stats.wordErrors) stats.wordErrors = {};
-        if (!stats.lengthAnalysis) stats.lengthStats = {}; // { "5": { total: 0, errors: 0 } }
-        if (!stats.positionalErrors) stats.positionalErrors = { start: 0, mid: 0, end: 0, totalErrors: 0 };
-
-        const real = realWord.toUpperCase();
-        const typed = userWord.toUpperCase();
-        const isError = (real !== typed);
-
-        // 1. Analisi Lunghezza (Sempre, anche se corretta)
-        const len = real.length;
-        if (!stats.lengthStats) stats.lengthStats = {};
-        if (!stats.lengthStats[len]) stats.lengthStats[len] = { total: 0, errors: 0 };
-        stats.lengthStats[len].total++;
-        if (isError) stats.lengthStats[len].errors++;
-
-        if (isError) {
-            // 2. Tracciamento Posizionale dell'Errore
-            stats.positionalErrors.totalErrors++;
-            for (let i = 0; i < real.length; i++) {
-                if (real[i] !== typed[i]) {
-                    const pos = i / (real.length - 1);
-                    if (pos <= 0.2) stats.positionalErrors.start++;
-                    else if (pos >= 0.8) stats.positionalErrors.end++;
-                    else stats.positionalErrors.mid++;
-                    break; // Contiamo solo il primo errore per parola per l'analisi posizionale
-                }
+    // Aggiornamento atomico delle lunghezze (indipendente dagli errori)
+    const statsBase = db.ref(`users/${myId}/stats`);
+    statsBase.child(`lengthStats/${len}/total`).set(firebase.database.ServerValue.increment(1));
+    
+    if (isError) {
+        statsBase.child(`lengthStats/${len}/errors`).set(firebase.database.ServerValue.increment(1));
+        statsBase.child(`positionalErrors/totalErrors`).set(firebase.database.ServerValue.increment(1));
+        
+        // Tracciamento Posizionale (solo il primo errore trovato nella stringa)
+        for (let i = 0; i < real.length; i++) {
+            if (real[i] !== typed[i]) {
+                const pos = i / (real.length - 1 || 1); // Evita divisione per zero
+                if (pos <= 0.2) statsBase.child(`positionalErrors/start`).set(firebase.database.ServerValue.increment(1));
+                else if (pos >= 0.8) statsBase.child(`positionalErrors/end`).set(firebase.database.ServerValue.increment(1));
+                else statsBase.child(`positionalErrors/mid`).set(firebase.database.ServerValue.increment(1));
+                break; 
             }
-
-            // 3. Tracciamento Bigrammi
-            for (let i = 0; i < real.length - 1; i++) {
-                const pair = real.substring(i, i + 2);
-                if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
-                    const oldData = stats.bigramErrors[pair] || { count: 0, avgWpm: 0 };
-                    const oldCount = oldData.count || (typeof oldData === 'number' ? oldData : 0);
-                    const oldWpm = oldData.avgWpm || wpm;
-                    const newCount = oldCount + 1;
-                    const newWpm = Math.round(((oldWpm * oldCount) + wpm) / newCount);
-                    stats.bigramErrors[pair] = { count: newCount, avgWpm: newWpm };
-                }
-            }
-
-            // 4. Tracciamento Parola
-            const oldData = stats.wordErrors[real] || { count: 0, avgWpm: 0 };
-            const oldCount = oldData.count || (typeof oldData === 'number' ? oldData : 0);
-            const oldWpm = oldData.avgWpm || wpm;
-            const newCount = oldCount + 1;
-            const newWpm = Math.round(((oldWpm * oldCount) + wpm) / newCount);
-            stats.wordErrors[real] = { count: newCount, avgWpm: newWpm };
         }
 
-        statsRef.update(stats);
-    });
+        // Tracciamento Parola via Transaction (per calcolare in sicurezza avgWpm)
+        statsBase.child(`wordErrors/${real}`).transaction(data => {
+            if (!data) return { count: 1, avgWpm: wpm };
+            const oldCount = data.count || (typeof data === 'number' ? data : 0);
+            const oldWpm = data.avgWpm || wpm;
+            const newCount = oldCount + 1;
+            return {
+                count: newCount,
+                avgWpm: Math.round(((oldWpm * oldCount) + wpm) / newCount)
+            };
+        });
+
+        // Tracciamento Bigrammi via Transaction
+        for (let i = 0; i < real.length - 1; i++) {
+            if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
+                const pair = real.substring(i, i + 2);
+                statsBase.child(`bigramErrors/${pair}`).transaction(data => {
+                    if (!data) return { count: 1, avgWpm: wpm };
+                    const oldCount = data.count || (typeof data === 'number' ? data : 0);
+                    const oldWpm = data.avgWpm || wpm;
+                    return {
+                        count: oldCount + 1,
+                        avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1))
+                    };
+                });
+            }
+        }
+    }
 };
 
 // --- AZIONI PULSANTI ---
@@ -592,16 +666,13 @@ if (els.saveAliasBtn) {
         const currentUsername = privacy ? "" : window.tgUsername;
 
         try {
-            const updates = {
+            await db.ref(`users/${window.myId}`).update({
                 alias: alias || null,
                 privacyUsername: privacy,
                 privacyOnline: privacyOnline,
                 privacyLeaderboard: privacyLeaderboard
-            };
+            });
 
-            await db.ref(`users/${window.myId}`).update(updates);
-
-            // Aggiornamento stato locale
             window.myName = newName;
             window.myPrivacy = privacy;
             window.myPrivacyOnline = privacyOnline;
@@ -609,16 +680,6 @@ if (els.saveAliasBtn) {
 
             if (els.playerName) els.playerName.textContent = window.myName;
             showToast("Profilo aggiornato!");
-
-            // Sincronizziamo nome e privacy nel nodo presence
-            if (db && myId) {
-                await db.ref(`presence/${myId}`).update({
-                    name: newName,
-                    username: currentUsername,
-                    privacyOnline: privacyOnline,
-                    privacyLeaderboard: privacyLeaderboard
-                });
-            }
 
             await window.syncUserNameEverywhere(window.myId, newName, currentUsername, privacyLeaderboard);
         } catch(e) {
@@ -639,112 +700,101 @@ if (document.getElementById('resetStatsBtn')) {
     });
 }
 
-document.getElementById('btnResetErrorStats')?.addEventListener('click', () => {
-    if (confirm("Vuoi azzerare solo i dati analitici degli errori (Bigrammi e Parole)? Lo storico rimarrà intatto.")) {
-        db.ref(`users/${myId}/stats/bigramErrors`).remove();
-        db.ref(`users/${myId}/stats/wordErrors`).remove();
-        db.ref(`users/${myId}/stats/charErrors`).remove();
-        showToast("Dati errori azzerati!");
-        window.loadAdvancedStats();
-    }
-});
-
-document.getElementById('btnCreateErrorDict')?.addEventListener('click', () => {
-    db.ref(`users/${myId}/stats/wordErrors`).once('value', snap => {
-        const words = snap.val() || {};
-        const wordTh = parseInt(document.getElementById('wordThresholdInput')?.value) || 3;
-        const critical = Object.entries(words)
-            .filter(e => {
-                const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
-                return count >= wordTh;
-            })
-            .map(e => e[0]);
-
-        if (critical.length === 0) return showToast(`Non hai ancora abbastanza parole critiche (min. ${wordTh} errori).`);
-
-        window.customDictionary = critical;
-        localStorage.setItem(STORAGE_CUSTOM_DICT_KEY, JSON.stringify(critical));
-        showToast(`✅ Creato dizionario con ${critical.length} parole difficili!`);
-        showScreen('setupScreen');
-        if (els.gameTypeInput) els.gameTypeInput.value = 'single';
-        if (els.gameModeInput) {
-            els.gameModeInput.value = 'custom';
-            window.checkGameTypeUI();
+const btnResetErrorStats = document.getElementById('btnResetErrorStats');
+if (btnResetErrorStats) {
+    btnResetErrorStats.addEventListener('click', () => {
+        if (confirm("Vuoi azzerare solo i dati analitici degli errori? Lo storico rimarrà intatto.")) {
+            Promise.all([
+                db.ref(`users/${myId}/stats/bigramErrors`).remove(),
+                db.ref(`users/${myId}/stats/wordErrors`).remove(),
+                db.ref(`users/${myId}/stats/charErrors`).remove()
+            ]).then(() => {
+                showToast("Dati errori azzerati!");
+                window.loadAdvancedStats();
+            });
         }
     });
-});
+}
+
+const btnCreateErrorDict = document.getElementById('btnCreateErrorDict');
+if (btnCreateErrorDict) {
+    btnCreateErrorDict.addEventListener('click', () => {
+        db.ref(`users/${myId}/stats/wordErrors`).once('value', snap => {
+            const words = snap.val() || {};
+            const wordTh = parseInt(document.getElementById('wordThresholdInput')?.value) || 3;
+            const critical = Object.entries(words)
+                .filter(e => {
+                    const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
+                    return count >= wordTh;
+                })
+                .map(e => e[0]);
+
+            if (critical.length === 0) return showToast(`Non hai ancora abbastanza parole critiche (min. ${wordTh} errori).`);
+
+            window.customDictionary = critical;
+            localStorage.setItem(window.STORAGE_CUSTOM_DICT_KEY || 'customDict', JSON.stringify(critical));
+            showToast(`✅ Creato dizionario con ${critical.length} parole difficili!`);
+            window.showScreen('setupScreen');
+            if (els.gameTypeInput) els.gameTypeInput.value = 'single';
+            if (els.gameModeInput) {
+                els.gameModeInput.value = 'custom';
+                if (typeof window.checkGameTypeUI === 'function') window.checkGameTypeUI();
+            }
+        });
+    });
+}
 
 if (els.deleteDataBtn) {
     els.deleteDataBtn.onclick = async () => {
-        if (!confirm("ATTENZIONE: Questa azione eliminerà DEFINITIVAMENTE tutto il tuo profilo, i progressi del corso, le statistiche e lo storico. Non potrai tornare indietro.\n\nVuoi procedere?")) return;
+        if (!confirm("ATTENZIONE: Questa azione eliminerà DEFINITIVAMENTE tutto il tuo profilo.\nVuoi procedere?")) return;
         if (!confirm("CONFERMA FINALE: Sei assolutamente sicuro? Tutti i record in classifica verranno rimossi.")) return;
 
         showToast("Eliminazione dati in corso...");
 
         try {
-            // 1. Dati Utente, Presenza e Iscrizione Corso
-            await db.ref(`users/${window.myId}`).remove();
-            await db.ref(`presence/${window.myId}`).remove();
-            await db.ref(`courseActiveEnrollments/${window.myId}`).remove();
-
-            // 2. Mappatura di Sicurezza (ID Firebase -> ID Telegram)
-            const firebaseUid = firebase.auth().currentUser?.uid;
-            if (firebaseUid) {
-                await db.ref(`uid_mapping/${firebaseUid}`).remove();
-            }
-
-            // 3. Richieste Amministrative (Tutor)
-            const tutorReqSnap = await db.ref('tutorRequests').once('value');
-            if (tutorReqSnap.exists()) {
-                tutorReqSnap.forEach(child => {
-                    if (child.val().uid === window.myId) child.ref.remove();
-                });
-            }
-
-            // 4. Attività (Storico classifiche partecipazione)
             const now = new Date();
             const dKey = now.toISOString().split('T')[0];
             const wKey = window.getWeekNumber(now);
             const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+            const firebaseUid = firebase.auth().currentUser?.uid;
 
-            await Promise.all([
+            // Raggruppamento delle rimozioni dirette per velocizzare
+            const deletePromises = [
+                db.ref(`users/${window.myId}`).remove(),
+                db.ref(`presence/${window.myId}`).remove(),
+                db.ref(`courseActiveEnrollments/${window.myId}`).remove(),
                 db.ref(`activity/daily/${dKey}/${window.myId}`).remove(),
                 db.ref(`activity/weekly/${wKey}/${window.myId}`).remove(),
-                db.ref(`activity/monthly/${mKey}/${window.myId}`).remove()
-            ]);
+                db.ref(`activity/monthly/${mKey}/${window.myId}`).remove(),
+                db.ref(`invites/${window.myId}`).remove(),
+                db.ref(`invite_accepted/${window.myId}`).remove(),
+                db.ref(`leaderboard/callsign/global/${window.myId}`).remove(),
+                db.ref(`leaderboard/arcade/all/${window.myId}`).remove(),
+                db.ref(`leaderboard/arcade/global/${window.myId}`).remove()
+            ];
 
-            // 3. Rimozione da tutte le Leaderboard (Standard, Chars, etc)
+            if (firebaseUid) deletePromises.push(db.ref(`uid_mapping/${firebaseUid}`).remove());
+
+            // Aggiunta pulizia dalle leaderboard dinamiche
             const categories = ['standard', 'chars', 'quiz', 'pingpong'];
             for (const cat of categories) {
-                try {
-                    const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
-                    if (catSnap.exists()) {
-                        catSnap.forEach(subNode => {
-                            if (subNode.hasChild(window.myId)) {
-                                subNode.child(window.myId).ref.remove();
-                            }
-                        });
-                    }
-                } catch(e) { console.warn(`Clean LB ${cat} error:`, e); }
+                const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
+                if (catSnap.exists()) {
+                    catSnap.forEach(subNode => {
+                        if (subNode.hasChild(window.myId)) deletePromises.push(subNode.child(window.myId).ref.remove());
+                    });
+                }
             }
 
-            // Leaderboard con percorsi fissi
-            await db.ref(`leaderboard/callsign/global/${window.myId}`).remove();
-            await db.ref(`leaderboard/arcade/all/${window.myId}`).remove();
-            await db.ref(`leaderboard/arcade/global/${window.myId}`).remove();
+            // Pulizia richieste Tutor
+            const tutorReqSnap = await db.ref('tutorRequests').once('value');
+            if (tutorReqSnap.exists()) {
+                tutorReqSnap.forEach(child => {
+                    if (child.val().uid === window.myId) deletePromises.push(child.ref.remove());
+                });
+            }
 
-            // 4. Rimozione da Battaglia Serale (Battle Royale) se iscritto
-            try {
-                const brDate = new Date().toISOString().split('T')[0].replace(/-/g, '');
-                const brCode = "BR_" + brDate;
-                await db.ref(`rooms/${brCode}/players/${window.myId}`).remove();
-            } catch(e) { console.warn("Clean BR error:", e); }
-
-            // 5. Rimozione Inviti e Sfide pendenti
-            await db.ref(`invites/${window.myId}`).remove();
-            await db.ref(`invite_accepted/${window.myId}`).remove();
-
-            // 6. Gestione Squadra (Uscita o Eliminazione totale)
+            // Gestione Squadra
             if (window.myTeamId) {
                 const teamRef = db.ref(`teams/${window.myTeamId}`);
                 const teamSnap = await teamRef.once('value');
@@ -754,39 +804,31 @@ if (els.deleteDataBtn) {
                     const memberIds = Object.keys(members).filter(id => id !== window.myId);
 
                     if (memberIds.length === 0) {
-                        // Se ero l'ultimo membro, elimina tutta la squadra
-                        console.log("Delete Data: Removing empty team", window.myTeamId);
-                        await teamRef.remove();
-                        // Rimuovi anche riferimenti dai tornei
+                        deletePromises.push(teamRef.remove());
                         const trnSnap = await db.ref('tournaments').once('value');
                         if (trnSnap.exists()) {
                             trnSnap.forEach(tSnap => {
-                                db.ref(`tournaments/${tSnap.key}/teams/${window.myTeamId}`).remove();
-                                db.ref(`tournaments/${tSnap.key}/standings/${window.myTeamId}`).remove();
+                                deletePromises.push(db.ref(`tournaments/${tSnap.key}/teams/${window.myTeamId}`).remove());
+                                deletePromises.push(db.ref(`tournaments/${tSnap.key}/standings/${window.myTeamId}`).remove());
                             });
                         }
                     } else if (team.captainId === window.myId) {
-                        // Se ero il capitano ma ci sono altri, passa il comando al prossimo
-                        const nextCaptain = memberIds[0];
-                        await teamRef.update({ captainId: nextCaptain });
-                        await teamRef.child(`members/${window.myId}`).remove();
+                        deletePromises.push(teamRef.update({ captainId: memberIds[0] }));
+                        deletePromises.push(teamRef.child(`members/${window.myId}`).remove());
                     } else {
-                        // Membro semplice, rimuovi solo me
-                        await teamRef.child(`members/${window.myId}`).remove();
+                        deletePromises.push(teamRef.child(`members/${window.myId}`).remove());
                     }
                 }
             }
 
+            // Attesa di tutte le rimozioni parallele
+            await Promise.all(deletePromises);
             showToast("Profilo eliminato con successo.");
 
-            // 5. Pulizia Locale e Chiusura App
             localStorage.clear();
             setTimeout(() => {
-                if (window.tg && typeof window.tg.close === 'function') {
-                    window.tg.close();
-                } else {
-                    location.reload(); // Fallback se non siamo in ambiente Telegram
-                }
+                if (window.tg && typeof window.tg.close === 'function') window.tg.close();
+                else location.reload();
             }, 1500);
 
         } catch (e) {
