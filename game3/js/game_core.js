@@ -1623,6 +1623,11 @@ window.handleWordSubmission = function(userWord) {
         points = res.points; scoreColor = res.scoreColor;
     }
 
+    // --- NUOVO TRACCIAMENTO STATISTICO AVANZATO ---
+    if (typeof window.trackAdvancedErrors === 'function') {
+        window.trackAdvancedErrors(currentWord, userWord, activeWpmForThisWord);
+    }
+
     // Gestione Errori e Coda Perfezione
     if (levDist > 0 || usedReplay) {
         if (currentMode === 'perfection') {

@@ -264,8 +264,38 @@ window.loadAdvancedStats = function() {
     if (bigramContainer) bigramContainer.innerHTML = 'Caricamento...';
     if (wordContainer) wordContainer.innerHTML = 'Caricamento...';
 
-    db.ref(`users/${myId}/stats`).once('value', snap => {
+    db.ref(`users/${myId}/stats`).once('value').then(snap => {
         const stats = snap.val() || {};
+
+        // A. DIAGNOSTICA LUNGHEZZA
+        const lengthCont = document.getElementById('lengthStatsContainer');
+        if (lengthCont) {
+            lengthCont.innerHTML = '';
+            const lData = stats.lengthStats || {};
+            const sortedLens = Object.keys(lData).sort((a,b) => parseInt(a)-parseInt(b));
+            if (sortedLens.length === 0) lengthCont.innerHTML = '<p style="font-size:0.7em; color:var(--hint-color);">Dati insufficienti.</p>';
+            sortedLens.forEach(len => {
+                const d = lData[len];
+                const acc = Math.round(((d.total - d.errors) / d.total) * 100);
+                const color = acc > 85 ? '#4caf50' : acc > 70 ? '#ffeb3b' : '#f44336';
+                const row = document.createElement('div');
+                row.style.cssText = "display:flex; align-items:center; gap:8px; font-size:0.75em;";
+                row.innerHTML = `<span style="width:50px;">${len} Car.</span>
+                    <div style="flex-grow:1; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                        <div style="width:${acc}%; height:100%; background:${color};"></div>
+                    </div>
+                    <span style="width:35px; text-align:right; font-weight:bold; color:${color}">${acc}%</span>`;
+                lengthCont.appendChild(row);
+            });
+        }
+
+        // B. DIAGNOSTICA POSIZIONALE
+        const pData = stats.positionalErrors || { start:0, mid:0, end:0, totalErrors:0 };
+        const totalP = pData.totalErrors || 1;
+        const calcP = (val) => Math.round((val / totalP) * 100) + "%";
+        if (document.getElementById('posStartStat')) document.getElementById('posStartStat').querySelector('b').textContent = calcP(pData.start);
+        if (document.getElementById('posMidStat')) document.getElementById('posMidStat').querySelector('b').textContent = calcP(pData.mid);
+        if (document.getElementById('posEndStat')) document.getElementById('posEndStat').querySelector('b').textContent = calcP(pData.end);
 
         // 1. Errori per WPM
         if (wpmContainer) {
@@ -489,31 +519,50 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
         let stats = snap.val() || {};
         if (!stats.bigramErrors) stats.bigramErrors = {};
         if (!stats.wordErrors) stats.wordErrors = {};
+        if (!stats.lengthAnalysis) stats.lengthStats = {}; // { "5": { total: 0, errors: 0 } }
+        if (!stats.positionalErrors) stats.positionalErrors = { start: 0, mid: 0, end: 0, totalErrors: 0 };
 
         const real = realWord.toUpperCase();
         const typed = userWord.toUpperCase();
+        const isError = (real !== typed);
 
-        // 1. Tracciamento Bigrammi
-        for (let i = 0; i < real.length - 1; i++) {
-            const pair = real.substring(i, i + 2);
-            if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
-                const oldData = stats.bigramErrors[pair] || { count: 0, avgWpm: 0 };
-                const oldCount = oldData.count || (typeof oldData === 'number' ? oldData : 0);
-                const oldWpm = oldData.avgWpm || wpm;
+        // 1. Analisi Lunghezza (Sempre, anche se corretta)
+        const len = real.length;
+        if (!stats.lengthStats) stats.lengthStats = {};
+        if (!stats.lengthStats[len]) stats.lengthStats[len] = { total: 0, errors: 0 };
+        stats.lengthStats[len].total++;
+        if (isError) stats.lengthStats[len].errors++;
 
-                const newCount = oldCount + 1;
-                // Media mobile WPM
-                const newWpm = Math.round(((oldWpm * oldCount) + wpm) / newCount);
-                stats.bigramErrors[pair] = { count: newCount, avgWpm: newWpm };
+        if (isError) {
+            // 2. Tracciamento Posizionale dell'Errore
+            stats.positionalErrors.totalErrors++;
+            for (let i = 0; i < real.length; i++) {
+                if (real[i] !== typed[i]) {
+                    const pos = i / (real.length - 1);
+                    if (pos <= 0.2) stats.positionalErrors.start++;
+                    else if (pos >= 0.8) stats.positionalErrors.end++;
+                    else stats.positionalErrors.mid++;
+                    break; // Contiamo solo il primo errore per parola per l'analisi posizionale
+                }
             }
-        }
 
-        // 2. Tracciamento Parola
-        if (real !== typed) {
+            // 3. Tracciamento Bigrammi
+            for (let i = 0; i < real.length - 1; i++) {
+                const pair = real.substring(i, i + 2);
+                if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
+                    const oldData = stats.bigramErrors[pair] || { count: 0, avgWpm: 0 };
+                    const oldCount = oldData.count || (typeof oldData === 'number' ? oldData : 0);
+                    const oldWpm = oldData.avgWpm || wpm;
+                    const newCount = oldCount + 1;
+                    const newWpm = Math.round(((oldWpm * oldCount) + wpm) / newCount);
+                    stats.bigramErrors[pair] = { count: newCount, avgWpm: newWpm };
+                }
+            }
+
+            // 4. Tracciamento Parola
             const oldData = stats.wordErrors[real] || { count: 0, avgWpm: 0 };
             const oldCount = oldData.count || (typeof oldData === 'number' ? oldData : 0);
             const oldWpm = oldData.avgWpm || wpm;
-
             const newCount = oldCount + 1;
             const newWpm = Math.round(((oldWpm * oldCount) + wpm) / newCount);
             stats.wordErrors[real] = { count: newCount, avgWpm: newWpm };
