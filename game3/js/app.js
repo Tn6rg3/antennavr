@@ -42,6 +42,9 @@ window.addEventListener('focus', updateViewportHeight);
 const handleAppResume = (forceReconnect = false) => {
     console.log("App: Ripristino visibilità (force=" + forceReconnect + ")...");
 
+    // Aggiorniamo subito lo stato su Firebase
+    updateAppStatus(true);
+
     // 1. Forza Firebase a ricollegarsi solo se richiesto (freeze reale)
     if (window.db && forceReconnect) {
         window.db.goOffline();
@@ -78,8 +81,25 @@ setInterval(() => {
 }, 2000);
 
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) handleAppResume(false);
+    const isVisible = !document.hidden;
+    if (isVisible) handleAppResume(false);
+    updateAppStatus(isVisible);
 });
+
+// --- GESTIONE PRESENZA E FOCUS (HEARTBEAT) ---
+const updateAppStatus = (isFocused) => {
+    if (window.myId && window.db) {
+        db.ref(`presence/${window.myId}`).update({
+            isFocused: isFocused,
+            lastActive: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
+};
+
+// Heartbeat ogni 15 secondi per confermare la presenza
+setInterval(() => {
+    if (!document.hidden) updateAppStatus(true);
+}, 15000);
 
 // --- UNLOCK AUDIO (SPECIFICO PER iOS/IPHONE) ---
 // Su iPhone l'audio deve essere attivato da un gesto esplicito dell'utente.
@@ -481,12 +501,27 @@ async function validateIdentity() {
 
 async function sendPushNotification(targetId, text) {
     if (!VALIDATION_SERVER_URL || !targetId) return;
-    const url = `${VALIDATION_SERVER_URL}?action=notify&targetId=${targetId}&sender=${encodeURIComponent(window.myName)}&text=${encodeURIComponent(text)}`;
+    // Messaggio generico per la privacy
+    const genericText = "Hai nuovi messaggi su Sfida Telegrafia! 📻";
+    const url = `${VALIDATION_SERVER_URL}?action=notify&targetId=${targetId}&text=${encodeURIComponent(genericText)}`;
     try {
         fetch(url, { mode: 'no-cors' });
         console.log("Push: Richiesta inviata per " + targetId);
     } catch(e) { console.error("Push Error:", e); }
 }
+
+window.requestTelegramPushPermissions = function() {
+    if (tg.requestWriteAccess) {
+        tg.requestWriteAccess((allowed) => {
+            if (allowed) {
+                showToast("✅ Notifiche di Sistema attivate!");
+                if (window.db && window.myId) db.ref(`users/${window.myId}/pushEnabled`).set(true);
+            }
+        });
+    } else {
+        showToast("⚠️ Funzionalità non supportata da questa versione di Telegram.");
+    }
+};
 
 window.startApp = startApp;
 
@@ -1409,15 +1444,24 @@ if (els.sendChatBtn) {
             senderId: myId // Necessario per eliminazione e sicurezza
         });
 
-        // --- INVIO NOTIFICHE PUSH AGLI OFFLINE (SOLO IN STANZA) ---
+        // --- INVIO NOTIFICHE PUSH AGLI OFFLINE/DISTRAI (SOLO IN STANZA) ---
         if (ctx === 'room' && rc) {
             db.ref(`rooms/${rc}/players`).once('value', (snap) => {
                 snap.forEach((pSnap) => {
                     const pId = pSnap.key;
                     if (pId !== myId) {
                         db.ref(`presence/${pId}`).once('value', (presSnap) => {
-                            if (!presSnap.exists()) {
-                                // L'utente è offline! Verifichiamo se vuole le notifiche
+                            const presData = presSnap.val() || {};
+                            const now = Date.now();
+
+                            // Notifichiamo se:
+                            // 1. L'utente è offline (nodo sparito o lastActive > 35s)
+                            // 2. L'utente ha l'app abbassata (isFocused === false)
+                            const isAppNotAccessible = !presSnap.exists() ||
+                                                      presData.isFocused === false ||
+                                                      (now - (presData.lastActive || 0)) > 35000;
+
+                            if (isAppNotAccessible) {
                                 db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
                                     if (prefSnap.val() !== false) {
                                         sendPushNotification(pId, txt);
