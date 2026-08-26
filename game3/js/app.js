@@ -9,25 +9,10 @@ const APP_VERSION = "20260807.223";
 // URL della Web App di Google Apps Script per la validazione identità
 const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
 
-// --- MAPPA DOM DINAMICA ---
-window.els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
-const els = window.els;
+window.Telegram.WebApp.ready();
+window.Telegram.WebApp.expand();
 
-// --- INIZIALIZZAZIONE TELEGRAM ---
-if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.ready();
-    window.Telegram.WebApp.expand();
-    window.tg = window.Telegram.WebApp;
-} else {
-    // Mock per ambiente non-Telegram
-    window.tg = {
-        ready: () => {}, expand: () => {}, onEvent: () => {},
-        initDataUnsafe: { user: { id: "0000", first_name: "Operatore" } },
-        viewportHeight: window.innerHeight,
-        isExpanded: true
-    };
-}
-
+window.tg = window.Telegram.WebApp;
 const tg = window.tg;
 window.tgUser = tg.initDataUnsafe?.user;
 const tgUser = window.tgUser;
@@ -102,14 +87,14 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // --- GESTIONE PRESENZA E FOCUS (HEARTBEAT) ---
-function updateAppStatus(isFocused) {
+const updateAppStatus = (isFocused) => {
     if (window.myId && window.db) {
         db.ref(`presence/${window.myId}`).update({
             isFocused: isFocused,
             lastActive: firebase.database.ServerValue.TIMESTAMP
         });
     }
-}
+};
 
 // Heartbeat ogni 15 secondi per confermare la presenza
 setInterval(() => {
@@ -132,7 +117,9 @@ window.addEventListener('mousedown', unlockAudio);
 window.addEventListener('touchstart', unlockAudio);
 window.addEventListener('keydown', unlockAudio);
 
-// --- MAPPA DOM DINAMICA (GIÀ DEFINITA IN ALTO) ---
+// --- MAPPA DOM DINAMICA (Proxy) ---
+window.els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
+const els = window.els;
 
 window.escapeHtml = function(str) {
     if (!str) return "";
@@ -518,38 +505,10 @@ async function sendPushNotification(targetId, text) {
     const genericText = "Hai nuovi messaggi su Sfida Telegrafia! 📻";
     const url = `${VALIDATION_SERVER_URL}?action=notify&targetId=${targetId}&text=${encodeURIComponent(genericText)}`;
     try {
-        console.log("DEBUG_PUSH: Chiamata a GAS per " + targetId);
         fetch(url, { mode: 'no-cors' });
+        console.log("Push: Richiesta inviata per " + targetId);
     } catch(e) { console.error("Push Error:", e); }
 }
-
-window.checkAndSendPush = function(rc, txt) {
-    console.log("DEBUG_PUSH: Controllo destinatari per " + rc);
-    db.ref(`rooms/${rc}/players`).once('value', (snap) => {
-        snap.forEach((pSnap) => {
-            const pId = pSnap.key;
-            if (pId !== myId) {
-                db.ref(`presence/${pId}`).once('value', (presSnap) => {
-                    const presData = presSnap.val() || {};
-                    const now = Date.now();
-                    const isFocused = presData.isFocused !== false;
-                    const lastActiveDiff = now - (presData.lastActive || 0);
-                    const isTimedOut = lastActiveDiff > 35000;
-
-                    console.log(`DEBUG_PUSH: Utente ${pId} -> Focus: ${isFocused}, LastActive: ${Math.round(lastActiveDiff/1000)}s fa`);
-
-                    if (!presSnap.exists() || !isFocused || isTimedOut) {
-                        db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
-                            if (prefSnap.val() !== false) {
-                                sendPushNotification(pId, txt);
-                            }
-                        });
-                    }
-                });
-            }
-        });
-    });
-};
 
 window.requestTelegramPushPermissions = function() {
     const btn = document.getElementById('pushNotifBtn');
@@ -912,7 +871,7 @@ function initGame() {
 
         const savedLang = localStorage.getItem('gameLang');
         if (savedLang) window.setLanguage(savedLang); else updateMuteBtnUI();
-
+        
         window.loadDictionaries().then(() => {
             let today = new Date().toISOString().split('T')[0];
 
@@ -1521,10 +1480,42 @@ if (els.sendChatBtn) {
             senderId: myId // Necessario per eliminazione e sicurezza
         });
 
+        // --- INVIO NOTIFICHE PUSH AGLI OFFLINE/DISTRAI (SOLO IN STANZA) ---
         if (ctx === 'room' && rc) {
-            if (typeof window.checkAndSendPush === 'function') {
-                window.checkAndSendPush(rc, txt);
-            }
+            console.log("DEBUG_PUSH: Controllo destinatari per stanza " + rc);
+            db.ref(`rooms/${rc}/players`).once('value', (snap) => {
+                if (!snap.exists()) { console.log("DEBUG_PUSH: Nessun giocatore trovato nella stanza."); return; }
+                snap.forEach((pSnap) => {
+                    const pId = pSnap.key;
+                    if (pId !== myId) {
+                        db.ref(`presence/${pId}`).once('value', (presSnap) => {
+                            const presData = presSnap.val() || {};
+                            const now = Date.now();
+
+                            const isFocused = presData.isFocused !== false;
+                            const lastActiveDiff = now - (presData.lastActive || 0);
+                            const isTimedOut = lastActiveDiff > 35000;
+
+                            console.log(`DEBUG_PUSH: Utente ${pId} -> isFocused: ${isFocused}, LastActive: ${Math.round(lastActiveDiff/1000)}s fa`);
+
+                            const isAppNotAccessible = !presSnap.exists() || !isFocused || isTimedOut;
+
+                            if (isAppNotAccessible) {
+                                console.log("DEBUG_PUSH: Utente inattivo. Controllo preferenze push...");
+                                db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
+                                    if (prefSnap.val() !== false) {
+                                        sendPushNotification(pId, txt);
+                                    } else {
+                                        console.log("DEBUG_PUSH: L'utente ha disattivato le notifiche nel profilo.");
+                                    }
+                                });
+                            } else {
+                                console.log("DEBUG_PUSH: Utente attivo nell'app, push saltata.");
+                            }
+                        });
+                    }
+                });
+            });
         }
 
         if (els.chatInput) els.chatInput.value = '';
@@ -1534,7 +1525,6 @@ if (els.sendChatBtn) {
 if (els.chatInput) {
     els.chatInput.onkeypress = (e) => {
         if (e.key === 'Enter') els.sendChatBtn?.click();
-    };
 }
 
 if (els.sendLobbyChatBtn) {
@@ -1558,9 +1548,33 @@ if (els.sendLobbyChatBtn) {
         });
 
         // --- NOTIFICHE PUSH ANCHE PER LA LOBBY ---
-        if (typeof window.checkAndSendPush === 'function') {
-            window.checkAndSendPush(rc, txt);
-        }
+        db.ref(`rooms/${rc}/players`).once('value', (snap) => {
+            console.log("DEBUG_PUSH: Controllo lobby per stanza " + rc);
+            snap.forEach((pSnap) => {
+                const pId = pSnap.key;
+                if (pId !== myId) {
+                    db.ref(`presence/${pId}`).once('value', (presSnap) => {
+                        const presData = presSnap.val() || {};
+                        const now = Date.now();
+                        const isFocused = presData.isFocused !== false;
+                        const lastActiveDiff = now - (presData.lastActive || 0);
+                        const isTimedOut = lastActiveDiff > 35000;
+
+                        console.log(`DEBUG_PUSH_LOBBY: Utente ${pId} -> isFocused: ${isFocused}, LastActive: ${Math.round(lastActiveDiff/1000)}s fa`);
+
+                        const isAppNotAccessible = !presSnap.exists() || !isFocused || isTimedOut;
+
+                        if (isAppNotAccessible) {
+                            db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
+                                if (prefSnap.val() !== false) {
+                                    sendPushNotification(pId, txt);
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        });
 
         if (els.lobbyChatInput) els.lobbyChatInput.value = '';
     };
