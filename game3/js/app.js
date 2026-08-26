@@ -1,5 +1,503 @@
-// Versione corretta di app.js con fix sintassi e log di debug avanzati
-// ... (resto del file sopra invariato) ...
+// ============================================================================
+// APP.JS - ENTRY POINT & GLOBAL STATE
+// ============================================================================
+
+const BOT_USERNAME = "cwappgame_bot";
+const WEBAPP_NAME = "cwgame";
+const APP_VERSION = "20260807.223";
+
+// URL della Web App di Google Apps Script per la validazione identità
+const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+
+window.Telegram.WebApp.ready();
+window.Telegram.WebApp.expand();
+
+window.tg = window.Telegram.WebApp;
+const tg = window.tg;
+window.tgUser = tg.initDataUnsafe?.user;
+const tgUser = window.tgUser;
+window.tgUsername = tgUser?.username || "";
+const tgUsername = window.tgUsername;
+const startParam = tg.initDataUnsafe?.start_param;
+
+// --- GESTIONE SCHERMO RESIZE E TASTIERA MOBILE ---
+if (typeof tg.disableVerticalSwipes === 'function') {
+    tg.disableVerticalSwipes();
+}
+
+function updateViewportHeight() {
+    if (!tg.isExpanded) tg.expand();
+    const height = tg.viewportHeight || tg.viewportStableHeight || window.innerHeight;
+    document.documentElement.style.height = `${height}px`;
+    document.body.style.height = `${height}px`;
+    document.body.style.minHeight = `${height}px`;
+}
+
+updateViewportHeight();
+tg.onEvent('viewportChanged', updateViewportHeight);
+window.addEventListener('resize', updateViewportHeight);
+window.addEventListener('focus', updateViewportHeight);
+
+// --- GESTIONE RIPRISTINO APP (PREVIENE APP BLOCCATA) ---
+const handleAppResume = (forceReconnect = false) => {
+    console.log("App: Ripristino visibilità (force=" + forceReconnect + ")...");
+
+    // Aggiorniamo subito lo stato su Firebase
+    updateAppStatus(true);
+
+    // 1. Forza Firebase a ricollegarsi solo se richiesto (freeze reale)
+    if (window.db && forceReconnect) {
+        window.db.goOffline();
+        setTimeout(() => { if (window.db) window.db.goOnline(); }, 100);
+    } else if (window.db) {
+        window.db.goOnline(); // Riattiva semplicemente se era in sleep
+    }
+
+    // 2. Ripristina l'audio se possibile
+    if (typeof window.resumeAudioContext === 'function') {
+        window.resumeAudioContext();
+    }
+
+    // 3. Ricarica dati vitali resettando i listener se siamo fuori da una partita
+    if (window.myId && window.db && !gameRunning) {
+         if (typeof window.listeners !== 'undefined') {
+             if (window.listeners.presence) { window.listeners.presence.ref.off(); window.listeners.presence = null; }
+             if (window.listeners.roomsList) { window.listeners.roomsList.ref.off(); window.listeners.roomsList = null; }
+         }
+         if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();
+         if (typeof window.listenToRooms === 'function') window.listenToRooms();
+    }
+};
+
+// WATCHDOG: Rileva sospensioni profonde (es. schermo spento a lungo)
+let lastWatchdogTick = Date.now();
+setInterval(() => {
+    const now = Date.now();
+    if (now - lastWatchdogTick > 10000) { // Salto di 10 secondi
+        console.warn("App: Watchdog rileva risveglio profondo, forzo riconnessione...");
+        handleAppResume(true);
+    }
+    lastWatchdogTick = now;
+}, 2000);
+
+document.addEventListener('visibilitychange', () => {
+    const isVisible = !document.hidden;
+    if (isVisible) handleAppResume(false);
+    updateAppStatus(isVisible);
+});
+
+// --- GESTIONE PRESENZA E FOCUS (HEARTBEAT) ---
+const updateAppStatus = (isFocused) => {
+    if (window.myId && window.db) {
+        db.ref(`presence/${window.myId}`).update({
+            isFocused: isFocused,
+            lastActive: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
+};
+
+// Heartbeat ogni 15 secondi per confermare la presenza
+setInterval(() => {
+    if (!document.hidden) updateAppStatus(true);
+}, 15000);
+
+// --- UNLOCK AUDIO (SPECIFICO PER iOS/IPHONE) ---
+// Su iPhone l'audio deve essere attivato da un gesto esplicito dell'utente.
+// Questo listener si attiva al primo tocco o click e "sblocca" l'AudioContext.
+const unlockAudio = () => {
+    if (typeof window.resumeAudioContext === 'function') {
+        window.resumeAudioContext();
+    }
+    // Rimuoviamo i listener una volta sbloccato l'audio per non appesantire il sistema
+    window.removeEventListener('mousedown', unlockAudio);
+    window.removeEventListener('touchstart', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+};
+window.addEventListener('mousedown', unlockAudio);
+window.addEventListener('touchstart', unlockAudio);
+window.addEventListener('keydown', unlockAudio);
+
+// --- MAPPA DOM DINAMICA (Proxy) ---
+window.els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
+const els = window.els;
+
+window.escapeHtml = function(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+};
+
+// --- COSTANTI DI STORAGE ---
+const STORAGE_ROOM_KEY = "cwgame_last_room";
+const STORAGE_DAILY_STATUS_KEY = "cwgame_daily_shown";
+const STORAGE_LAST_ANNOUNCEMENT_ID = "cwgame_last_announcement_id";
+const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
+const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted";
+const STORAGE_PREF_WPM = "cwgame_pref_wpm";
+const STORAGE_PREF_WORDS = "cwgame_pref_words";
+const STORAGE_PREF_TONE = "cwgame_pref_tone";
+const STORAGE_PREF_CHAR_SPACE = "cwgame_pref_char_space";
+const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space";
+const STORAGE_PREF_FIXED = "cwgame_pref_fixed";
+const STORAGE_PREF_EASY = "cwgame_pref_easy";
+const STORAGE_PREF_SPECTATE = "cwgame_pref_spectate";
+const STORAGE_PUSH_NOTIFS_KEY = "cwgame_push_notifs";
+const STORAGE_CHAT_CW_ENABLED = "cwgame_chat_cw_enabled";
+const STORAGE_CHAT_CW_WPM = "cwgame_chat_cw_wpm";
+const STORAGE_CHAT_CW_TONE = "cwgame_chat_cw_tone";
+
+const DEBUG_MODE = false;
+window.logDebug = (...args) => { if (DEBUG_MODE) console.log(...args); };
+
+// --- STATO GLOBALE ---
+window.myName = "";
+window.myId = "";
+window.myPrivacy = true;
+window.myPrivacyOnline = false;
+window.myPrivacyLeaderboard = false;
+window.myPushNotifs = localStorage.getItem(STORAGE_PUSH_NOTIFS_KEY) !== 'false';
+window.myTeamId = null;
+window.myTeamName = "";
+window.isTeamCaptain = false;
+let db = null, auth = null, currentLang = 'it';
+window.activeChatContext = null; // RESO GLOBALE
+let activeTab = "room", isChatDrawerOpen = false;
+let isGlobalChatMuted = false;
+let isChatCwEnabled = false, chatCwWpm = 20, chatCwTone = 600;
+let chatCwAudioQueue = [], isChatCwPlaying = false;
+window.lastPlayedCwMsgTs = 0;
+window.lastChatSentTs = 0; // Cooldown anti-spam per la chat
+
+window.isChallenging = false;
+window.isRejoining = false;
+window.outgoingChallengeId = null; // ID dell'utente che HO sfidato
+window.incomingChallengeId = null; // ID dell'utente che MI sfida
+window.activeTrnId = null;
+window.roomCode = "";
+window.roomHostId = null;
+window.lastPlayerCount = 0;
+window.gameStartPlayerCount = 0;
+window.gameRunning = false;
+window.inputActive = false;
+window.audioCtx = null;
+window.gameWords = [];
+window.wordIndex = 0;
+window.currentWpm = 20;
+window.baseWpm = 20;
+window.currentTone = 600;
+window.peakWpm = 0;
+window.totalScore = 0;
+window.currentStreak = 0;
+window.usedReplay = false;
+window.matchDetailsArray = [];
+window.isSinglePlayer = false;
+window.currentMode = "standard";
+window.requestedWordCount = 10;
+window.isFixedSpeed = false;
+window.isEasyMode = false;
+window.lastWordStartTime = 0;
+
+// STATO CORSO CW
+let isCourseMode = false, courseSessionTimer = null, coursePauseInterval = null;
+window.courseData = null;
+
+// STATO CO-OP
+let isCoopMode = false, coopActiveFreqIndex = 0;
+let coopTimerInterval = null, coopDecayInterval = null;
+window.perfectionQueue = []; // Coda per la modalità Perfezione
+window.isPerfectionRetry = false; // Flag per sapere se la parola attuale è un recupero
+window.perfectionWordsDone = 0; // Contatore parole nuove completate (corrette o sbagliate)
+window.currentPerfectionWord = null;
+window.currentPerfectionWpm = null;
+
+// STATO ARCADE
+let isArcadeMode = false, arcadeLives = 3, arcadeScore = 0, arcadeLevel = 1;
+let arcadeWpm = 15, arcadeWordLen = 3, arcadeWordsSolved = 0, arcadeWordsAtCurrentLen = 0;
+let arcadeActiveBrick = null, arcadeNextBrickTimeout = null;
+
+// TIMERS E SCHEDULER
+let lobbyTimerInterval = null, quizTimerInterval = null, ppTimerInterval = null;
+let brCheckInterval = null, brTimerInterval = null;
+let serverTimeOffset = 0;
+let brBannerTimeout = null, brBannerDismissedToday = false;
+let lastBRRoundPlayed = -1;
+
+window.charSpaceWpm = 0;
+window.wordSpaceMult = 1.0;
+window.lastPlayedWordId = 0;
+window.lastSeenGuessId = 0;
+
+window.masterDictionary = [];
+window.itDictionary = [];
+window.enDictionary = [];
+window.arcadeDictionary = [];
+window.customDictionary = [];
+
+let currentQuizQuestion = null, quizActiveBuzzerId = null;
+let quizQuestionIndex = 0, randomizedQuizQuestions = [], lastLoadedQuizIndex = -1;
+let nextWordTimeout = null;
+let sessionCharErrors = Object.create(null), sessionErrorsByWpm = Object.create(null);
+let userMatchHistory = [];
+
+// GESTIONE INATTIVITÀ
+let lastActivityTs = Date.now();
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minuti
+
+// GESTORE CENTRALE LISTENER
+const listeners = {
+    room: null, chat: null, pingPong: null, players: null, quizState: null,
+    roomLb: null, presence: null, roomsList: null, invites: null, inviteAccepted: null,
+    outgoingInvite: null, team: null, allTeams: null, trn: null, activeChat: {}
+};
+
+// --- UTILS ---
+window.countInvalidChars = function(str) {
+    if (!str) return 0;
+    const safeRegex = /[a-zA-Z0-9 ÀÈÉÌÒÙàèéìòù]/gu;
+    const clean = str.replace(safeRegex, '');
+    return [...clean].length;
+};
+
+window.isNameValid = function(str) {
+    if (!str) return false;
+    const invalidCount = window.countInvalidChars(str);
+    // Contiamo quanti caratteri alfanumerici reali ci sono
+    const validCount = str.replace(/[^a-zA-Z0-9ÀÈÉÌÒÙàèéìòù]/gu, '').length;
+
+    // Regola: Massimo 1 icona/simbolo E almeno 2 caratteri di testo/numeri
+    if (invalidCount >= 2) return false;
+    if (validCount < 2) return false;
+    return true;
+};
+
+function fisherYatesShuffle(array) {
+    if (!Array.isArray(array)) return [];
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+function clearAllTimers() {
+    // Fermiamo tutti gli intervalli e timeout di sistema
+    const timers = [
+        lobbyTimerInterval, quizTimerInterval, ppTimerInterval,
+        brTimerInterval, brCheckInterval,
+        coopTimerInterval, coopDecayInterval,
+        courseSessionTimer, coursePauseInterval,
+        arcadeNextBrickTimeout, nextWordTimeout
+    ];
+    timers.forEach(t => { if(t) { clearInterval(t); clearTimeout(t); } });
+
+    lobbyTimerInterval = quizTimerInterval = ppTimerInterval = null;
+    brTimerInterval = brCheckInterval = null;
+    coopTimerInterval = coopDecayInterval = null;
+    courseSessionTimer = coursePauseInterval = null;
+    arcadeNextBrickTimeout = null;
+    nextWordTimeout = null;
+}
+
+/**
+ * RESET RIGOROSO DELLO STATO DI GIOCO
+ * Da chiamare PRIMA di inizializzare i parametri di una nuova sessione
+ */
+window.resetGameState = function() {
+    console.log("Game Core: Full state reset...");
+
+    // 1. Ferma tutto ciò che è in esecuzione
+    gameRunning = false;
+    inputActive = false;
+    clearAllTimers();
+    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+
+    // 2. Resetta flag di modalità (Verranno reimpostati dalla logica di avvio)
+    isCourseMode = false;
+    isCoopMode = false;
+    isArcadeMode = false;
+    if (typeof window.stopTowerClimb === 'function') window.stopTowerClimb();
+    window.isSinglePlayer = false;
+    currentMode = 'standard';
+    coopActiveFreqIndex = 0; // RESET INDICE FREQUENZA CO-OP
+
+    // 2b. Reset specifico Perfezione
+    window.perfectionQueue = [];
+    window.isPerfectionRetry = false;
+    window.perfectionWordsDone = 0;
+    window.currentPerfectionWord = null;
+    window.currentPerfectionWpm = null;
+
+    // 3. Ripristina UI Input (Fix Spectator/Course residuals)
+    if (els.permanentGameInput) {
+        els.permanentGameInput.disabled = false;
+        els.permanentGameInput.placeholder = "Digita qui...";
+        els.permanentGameInput.value = "";
+    }
+    if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
+    if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
+
+    // 4. Resetta variabili di sessione
+    wordIndex = 0;
+    totalScore = 0;
+    currentStreak = 0;
+    peakWpm = 0;
+    matchDetailsArray = [];
+    usedReplay = false;
+
+    // 5. Pulisce sessione corso pendente
+    if (window.courseData) {
+        window.courseData.current_day_session = null;
+    }
+
+    // 6. Resetta parametri audio avanzati
+    window.charSpaceWpm = 0;
+    window.wordSpaceMult = 1.0;
+    window.isFixedSpeed = false;
+    window.isEasyMode = false;
+    window.isAllowSpectators = false;
+};
+
+window.forceAppUpdate = function() {
+    showToast("Aggiornamento...");
+    if ('caches' in window) caches.keys().then(n => n.forEach(c => caches.delete(c)));
+    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
+    setTimeout(() => { location.replace(location.pathname + "?v=" + Date.now()); }, 300);
+};
+
+if (els.updateBannerBtn) els.updateBannerBtn.addEventListener('click', window.forceAppUpdate);
+
+function showToast(message) {
+    // DISATTIVIAMO LE NOTIFICHE VISIVE DURANTE IL GIOCO
+    if (gameRunning || isCourseMode) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    if (els.toastContainer) {
+        els.toastContainer.appendChild(toast);
+        setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 4000);
+    }
+}
+
+window.openTelegramProfile = function(username) {
+    if (username && String(username).trim() !== "") tg.openTelegramLink('https://t.me/' + username);
+    else tg.showAlert("Profilo privato o senza username pubblico.");
+};
+
+window.toggleLanguage = function() {
+    const newLang = (currentLang === 'it') ? 'en' : 'it';
+    window.setLanguage(newLang);
+    window.updateDictionary();
+    showToast(newLang === 'it' ? "Lingua: Italiano" : "Language: English");
+};
+
+function updateMuteBtnUI() {
+    if (els.muteGlobalChatBtn) {
+        els.muteGlobalChatBtn.textContent = isGlobalChatMuted
+            ? (currentLang === 'it' ? "🔇 Notifiche Disattivate" : "🔇 Notifications Muted")
+            : (currentLang === 'it' ? "🔊 Notifiche Attive" : "🔊 Notifications Active");
+    }
+}
+window.updateMuteBtnUI = updateMuteBtnUI;
+
+// --- REGOLAMENTO ---
+window.loadRegolamento = async function() {
+    if (!els.regolamentoContainer) return;
+    try {
+        const response = await fetch('regolamento.html');
+        if (!response.ok) throw new Error();
+        const html = await response.text();
+
+        // Creiamo un elemento temporaneo per il parsing sicuro
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        // Rimuoviamo eventuali script malevoli se presenti (ulteriori precauzione)
+        const scripts = doc.querySelectorAll('script');
+        scripts.forEach(s => s.remove());
+
+        // Pulizia sicura del contenitore e inserimento
+        els.regolamentoContainer.innerHTML = '';
+        while (doc.body.firstChild) {
+            els.regolamentoContainer.appendChild(doc.body.firstChild);
+        }
+
+        if (els.sendFeedbackBtn) {
+            els.sendFeedbackBtn.onclick = () => {
+                const url = `https://t.me/share/url?text=${encodeURIComponent("💡 Suggerimento: \n\n[Scrivi qui...]")}`;
+                if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
+            };
+        }
+    } catch (e) {
+        console.error("Regolamento load error:", e);
+        els.regolamentoContainer.innerHTML = `<div style="text-align:center;padding:15px;"><h3>📜 Regole</h3><p>Decodifica il Morse e scala la classifica!</p></div>`;
+    }
+};
+
+if(document.getElementById('gameModeInput')) document.getElementById('gameModeInput').addEventListener('change', () => window.checkGameTypeUI?.());
+if(document.getElementById('gameTypeInput')) document.getElementById('gameTypeInput').addEventListener('change', () => window.checkGameTypeUI?.());
+
+// --- STARTUP ---
+async function startApp() {
+    if (!tgUser) {
+        if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
+        if (els.errorScreen) els.errorScreen.classList.add('active-screen');
+        return;
+    }
+
+    // 1. Fase di Verifica Identità (Backend Google Apps Script)
+    const statusText = document.getElementById('initStatusText');
+    if (statusText) statusText.textContent = "Verifica identità Morse...";
+
+    try {
+        const isVerified = await validateIdentity();
+        if (!isVerified) {
+            if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
+            if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
+            return;
+        }
+    } catch (e) {
+        console.error("Validation failed:", e);
+        if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
+        if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
+        return;
+    }
+
+    // 2. Proseguiamo con l'avvio normale
+    myName = tgUser.first_name;
+    myId = tgUser.id.toString();
+    initGame();
+}
+
+async function validateIdentity() {
+    if (!VALIDATION_SERVER_URL || !VALIDATION_SERVER_URL.startsWith("http")) {
+        console.warn("Security: Validation URL not set, skipping.");
+        return true;
+    }
+
+    try {
+        const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(tg.initData);
+
+        const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            redirect: 'follow'
+        });
+
+        if (!response.ok) return false;
+
+        const result = await response.json();
+        return result.status === 'ok';
+    } catch (err) {
+        console.error("Validation: Request failed", err);
+        return false;
+    }
+}
 
 async function sendPushNotification(targetId, text) {
     if (!VALIDATION_SERVER_URL || !targetId) return;
@@ -1032,7 +1530,6 @@ if (els.chatInput) {
 
 if (els.sendLobbyChatBtn) {
     els.sendLobbyChatBtn.onclick = async () => {
-    
         const now = Date.now();
         if (now - window.lastChatSentTs < 2000) return showToast("🐌 Vai più piano! Attendi 2 secondi.");
 
