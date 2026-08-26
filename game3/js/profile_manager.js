@@ -456,6 +456,10 @@ window.showProfileScreen = function() {
     if (els.privacyOnlineCheckbox) els.privacyOnlineCheckbox.checked = window.myPrivacyOnline ?? false;
     if (els.privacyLeaderboardCheckbox) els.privacyLeaderboardCheckbox.checked = window.myPrivacyLeaderboard ?? false;
     if (els.pushNotificationsCheckbox) els.pushNotificationsCheckbox.checked = window.myPushNotifs ?? true;
+
+    if (typeof window.updatePushBtnUI === 'function') {
+        window.updatePushBtnUI(document.getElementById('pushNotifBtn'));
+    }
 };
 
 window.openMatchDetails = function(matchKey) {

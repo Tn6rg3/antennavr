@@ -511,15 +511,49 @@ async function sendPushNotification(targetId, text) {
 }
 
 window.requestTelegramPushPermissions = function() {
+    const btn = document.getElementById('pushNotifBtn');
+
+    // Se sono già attive, le disattiviamo
+    if (window.myPushNotifs) {
+        window.myPushNotifs = false;
+        if (window.db && window.myId) db.ref(`users/${window.myId}/pushNotifications`).set(false);
+        localStorage.setItem(STORAGE_PUSH_NOTIFS_KEY, "false");
+        showToast("🔕 Notifiche disattivate");
+        updatePushBtnUI(btn);
+        return;
+    }
+
+    // Se sono disattivate, chiediamo il permesso e attiviamo
     if (tg.requestWriteAccess) {
         tg.requestWriteAccess((allowed) => {
             if (allowed) {
+                window.myPushNotifs = true;
+                if (window.db && window.myId) {
+                    db.ref(`users/${window.myId}/pushNotifications`).set(true);
+                    db.ref(`users/${window.myId}/pushEnabled`).set(true);
+                }
+                localStorage.setItem(STORAGE_PUSH_NOTIFS_KEY, "true");
                 showToast("✅ Notifiche di Sistema attivate!");
-                if (window.db && window.myId) db.ref(`users/${window.myId}/pushEnabled`).set(true);
+                updatePushBtnUI(btn);
             }
         });
     } else {
         showToast("⚠️ Funzionalità non supportata da questa versione di Telegram.");
+    }
+};
+
+window.updatePushBtnUI = function(btn) {
+    if (!btn) btn = document.getElementById('pushNotifBtn');
+    if (!btn) return;
+
+    if (window.myPushNotifs) {
+        btn.textContent = "🔔 Notifiche: ATTIVE";
+        btn.style.backgroundColor = "var(--btn-success-bg, #28a745)";
+        btn.style.color = "#fff";
+    } else {
+        btn.textContent = "🔕 Notifiche: DISATTIVATE";
+        btn.style.backgroundColor = "var(--btn-secondary-bg, #6c757d)";
+        btn.style.color = "#fff";
     }
 };
 
