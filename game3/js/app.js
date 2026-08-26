@@ -125,6 +125,7 @@ const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space";
 const STORAGE_PREF_FIXED = "cwgame_pref_fixed";
 const STORAGE_PREF_EASY = "cwgame_pref_easy";
 const STORAGE_PREF_SPECTATE = "cwgame_pref_spectate";
+const STORAGE_PUSH_NOTIFS_KEY = "cwgame_push_notifs";
 const STORAGE_CHAT_CW_ENABLED = "cwgame_chat_cw_enabled";
 const STORAGE_CHAT_CW_WPM = "cwgame_chat_cw_wpm";
 const STORAGE_CHAT_CW_TONE = "cwgame_chat_cw_tone";
@@ -138,6 +139,7 @@ window.myId = "";
 window.myPrivacy = true;
 window.myPrivacyOnline = false;
 window.myPrivacyLeaderboard = false;
+window.myPushNotifs = localStorage.getItem(STORAGE_PUSH_NOTIFS_KEY) !== 'false';
 window.myTeamId = null;
 window.myTeamName = "";
 window.isTeamCaptain = false;
@@ -476,6 +478,16 @@ async function validateIdentity() {
         return false;
     }
 }
+
+async function sendPushNotification(targetId, text) {
+    if (!VALIDATION_SERVER_URL || !targetId) return;
+    const url = `${VALIDATION_SERVER_URL}?action=notify&targetId=${targetId}&sender=${encodeURIComponent(window.myName)}&text=${encodeURIComponent(text)}`;
+    try {
+        fetch(url, { mode: 'no-cors' });
+        console.log("Push: Richiesta inviata per " + targetId);
+    } catch(e) { console.error("Push Error:", e); }
+}
+
 window.startApp = startApp;
 
 function initGame() {
@@ -668,6 +680,14 @@ function initGame() {
             needsUpdate = true;
         } else {
             window.myPrivacyLeaderboard = data.privacyLeaderboard;
+        }
+
+        if (data.pushNotifications === undefined) {
+            window.myPushNotifs = true;
+            updates.pushNotifications = true;
+            needsUpdate = true;
+        } else {
+            window.myPushNotifs = data.pushNotifications;
         }
 
         if (needsUpdate) {
@@ -1388,6 +1408,28 @@ if (els.sendChatBtn) {
             ts: firebase.database.ServerValue.TIMESTAMP,
             senderId: myId // Necessario per eliminazione e sicurezza
         });
+
+        // --- INVIO NOTIFICHE PUSH AGLI OFFLINE (SOLO IN STANZA) ---
+        if (ctx === 'room' && rc) {
+            db.ref(`rooms/${rc}/players`).once('value', (snap) => {
+                snap.forEach((pSnap) => {
+                    const pId = pSnap.key;
+                    if (pId !== myId) {
+                        db.ref(`presence/${pId}`).once('value', (presSnap) => {
+                            if (!presSnap.exists()) {
+                                // L'utente è offline! Verifichiamo se vuole le notifiche
+                                db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
+                                    if (prefSnap.val() !== false) {
+                                        sendPushNotification(pId, txt);
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
         if (els.chatInput) els.chatInput.value = '';
     };
 }
