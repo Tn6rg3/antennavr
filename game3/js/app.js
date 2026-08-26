@@ -1482,7 +1482,9 @@ if (els.sendChatBtn) {
 
         // --- INVIO NOTIFICHE PUSH AGLI OFFLINE/DISTRAI (SOLO IN STANZA) ---
         if (ctx === 'room' && rc) {
+            console.log("DEBUG_PUSH: Controllo destinatari per stanza " + rc);
             db.ref(`rooms/${rc}/players`).once('value', (snap) => {
+                if (!snap.exists()) { console.log("DEBUG_PUSH: Nessun giocatore trovato nella stanza."); return; }
                 snap.forEach((pSnap) => {
                     const pId = pSnap.key;
                     if (pId !== myId) {
@@ -1490,19 +1492,25 @@ if (els.sendChatBtn) {
                             const presData = presSnap.val() || {};
                             const now = Date.now();
 
-                            // Notifichiamo se:
-                            // 1. L'utente è offline (nodo sparito o lastActive > 35s)
-                            // 2. L'utente ha l'app abbassata (isFocused === false)
-                            const isAppNotAccessible = !presSnap.exists() ||
-                                                      presData.isFocused === false ||
-                                                      (now - (presData.lastActive || 0)) > 35000;
+                            const isFocused = presData.isFocused !== false;
+                            const lastActiveDiff = now - (presData.lastActive || 0);
+                            const isTimedOut = lastActiveDiff > 35000;
+
+                            console.log(`DEBUG_PUSH: Utente ${pId} -> isFocused: ${isFocused}, LastActive: ${Math.round(lastActiveDiff/1000)}s fa`);
+
+                            const isAppNotAccessible = !presSnap.exists() || !isFocused || isTimedOut;
 
                             if (isAppNotAccessible) {
+                                console.log("DEBUG_PUSH: Utente inattivo. Controllo preferenze push...");
                                 db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
                                     if (prefSnap.val() !== false) {
                                         sendPushNotification(pId, txt);
+                                    } else {
+                                        console.log("DEBUG_PUSH: L'utente ha disattivato le notifiche nel profilo.");
                                     }
                                 });
+                            } else {
+                                console.log("DEBUG_PUSH: Utente attivo nell'app, push saltata.");
                             }
                         });
                     }
@@ -1541,15 +1549,20 @@ if (els.sendLobbyChatBtn) {
 
         // --- NOTIFICHE PUSH ANCHE PER LA LOBBY ---
         db.ref(`rooms/${rc}/players`).once('value', (snap) => {
+            console.log("DEBUG_PUSH: Controllo lobby per stanza " + rc);
             snap.forEach((pSnap) => {
                 const pId = pSnap.key;
                 if (pId !== myId) {
                     db.ref(`presence/${pId}`).once('value', (presSnap) => {
                         const presData = presSnap.val() || {};
                         const now = Date.now();
-                        const isAppNotAccessible = !presSnap.exists() ||
-                                                  presData.isFocused === false ||
-                                                  (now - (presData.lastActive || 0)) > 35000;
+                        const isFocused = presData.isFocused !== false;
+                        const lastActiveDiff = now - (presData.lastActive || 0);
+                        const isTimedOut = lastActiveDiff > 35000;
+
+                        console.log(`DEBUG_PUSH_LOBBY: Utente ${pId} -> isFocused: ${isFocused}, LastActive: ${Math.round(lastActiveDiff/1000)}s fa`);
+
+                        const isAppNotAccessible = !presSnap.exists() || !isFocused || isTimedOut;
 
                         if (isAppNotAccessible) {
                             db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
