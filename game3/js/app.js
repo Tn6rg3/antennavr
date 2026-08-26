@@ -792,12 +792,14 @@ function initGame() {
             });
         } catch(e) { console.warn("Cleanup error:", e); }
 
-        // --- PULIZIA SESSIONI PRECEDENTI ---
-        // Se l'app si è chiusa male, l'utente potrebbe avere ancora una stanza "waiting" a suo nome.
-        // La puliamo all'avvio per evitare "ghost rooms" in bacheca.
+        // --- PULIZIA SESSIONI PRECEDENTI (SOLO SE VECCHIE) ---
         db.ref('rooms').orderByChild('hostId').equalTo(window.myId).once('value', s => {
+            const now = Date.now() + serverTimeOffset;
             s.forEach(roomSnap => {
-                if (roomSnap.val().status === 'waiting') {
+                const room = roomSnap.val();
+                // Eliminiamo solo se la stanza è in waiting da più di 1 minuto
+                // Questo permette di cambiare dispositivo senza killare la stanza appena creata
+                if (room.status === 'waiting' && (!room.createdAt || (now - room.createdAt) > 60000)) {
                     roomSnap.ref.remove();
                     db.ref(`public_lobby_rooms/${roomSnap.key}`).remove();
                 }
@@ -1536,6 +1538,31 @@ if (els.sendLobbyChatBtn) {
             ts: firebase.database.ServerValue.TIMESTAMP,
             senderId: myId
         });
+
+        // --- NOTIFICHE PUSH ANCHE PER LA LOBBY ---
+        db.ref(`rooms/${rc}/players`).once('value', (snap) => {
+            snap.forEach((pSnap) => {
+                const pId = pSnap.key;
+                if (pId !== myId) {
+                    db.ref(`presence/${pId}`).once('value', (presSnap) => {
+                        const presData = presSnap.val() || {};
+                        const now = Date.now();
+                        const isAppNotAccessible = !presSnap.exists() ||
+                                                  presData.isFocused === false ||
+                                                  (now - (presData.lastActive || 0)) > 35000;
+
+                        if (isAppNotAccessible) {
+                            db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
+                                if (prefSnap.val() !== false) {
+                                    sendPushNotification(pId, txt);
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        });
+
         if (els.lobbyChatInput) els.lobbyChatInput.value = '';
     };
 }
