@@ -1530,6 +1530,7 @@ if (els.chatInput) {
 
 if (els.sendLobbyChatBtn) {
     els.sendLobbyChatBtn.onclick = async () => {
+        console.log("DEBUG_CLICK: Click su Invia Lobby rilevato!");
         const now = Date.now();
         if (now - window.lastChatSentTs < 2000) return showToast("🐌 Vai più piano! Attendi 2 secondi.");
 
