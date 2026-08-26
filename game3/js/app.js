@@ -1,1694 +1,849 @@
-// ============================================================================
-// APP.JS - ENTRY POINT & GLOBAL STATE
-// ============================================================================
+// js/profile_manager.js
 
-const BOT_USERNAME = "cwappgame_bot";
-const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.223";
-
-// URL della Web App di Google Apps Script per la validazione identità
-const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
-
-window.Telegram.WebApp.ready();
-window.Telegram.WebApp.expand();
-
-window.tg = window.Telegram.WebApp;
-const tg = window.tg;
-window.tgUser = tg.initDataUnsafe?.user;
-const tgUser = window.tgUser;
-window.tgUsername = tgUser?.username || "";
-const tgUsername = window.tgUsername;
-const startParam = tg.initDataUnsafe?.start_param;
-
-// --- GESTIONE SCHERMO RESIZE E TASTIERA MOBILE ---
-if (typeof tg.disableVerticalSwipes === 'function') {
-    tg.disableVerticalSwipes();
-}
-
-function updateViewportHeight() {
-    if (!tg.isExpanded) tg.expand();
-    const height = tg.viewportHeight || tg.viewportStableHeight || window.innerHeight;
-    document.documentElement.style.height = `${height}px`;
-    document.body.style.height = `${height}px`;
-    document.body.style.minHeight = `${height}px`;
-}
-
-updateViewportHeight();
-tg.onEvent('viewportChanged', updateViewportHeight);
-window.addEventListener('resize', updateViewportHeight);
-window.addEventListener('focus', updateViewportHeight);
-
-// --- GESTIONE RIPRISTINO APP (PREVIENE APP BLOCCATA) ---
-const handleAppResume = (forceReconnect = false) => {
-    console.log("App: Ripristino visibilità (force=" + forceReconnect + ")...");
-
-    // Aggiorniamo subito lo stato su Firebase
-    updateAppStatus(true);
-
-    // 1. Forza Firebase a ricollegarsi solo se richiesto (freeze reale)
-    if (window.db && forceReconnect) {
-        window.db.goOffline();
-        setTimeout(() => { if (window.db) window.db.goOnline(); }, 100);
-    } else if (window.db) {
-        window.db.goOnline(); // Riattiva semplicemente se era in sleep
-    }
-
-    // 2. Ripristina l'audio se possibile
-    if (typeof window.resumeAudioContext === 'function') {
-        window.resumeAudioContext();
-    }
-
-    // 3. Ricarica dati vitali resettando i listener se siamo fuori da una partita
-    if (window.myId && window.db && !gameRunning) {
-         if (typeof window.listeners !== 'undefined') {
-             if (window.listeners.presence) { window.listeners.presence.ref.off(); window.listeners.presence = null; }
-             if (window.listeners.roomsList) { window.listeners.roomsList.ref.off(); window.listeners.roomsList = null; }
-         }
-         if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();
-         if (typeof window.listenToRooms === 'function') window.listenToRooms();
-    }
+window.getWeekNumber = function(d) {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+    return d.getUTCFullYear() + "-W" + Math.ceil((((d - new Date(Date.UTC(d.getUTCFullYear(),0,1))) / 86400000) + 1)/7).toString().padStart(2, '0');
 };
 
-// WATCHDOG: Rileva sospensioni profonde (es. schermo spento a lungo)
-let lastWatchdogTick = Date.now();
-setInterval(() => {
-    const now = Date.now();
-    if (now - lastWatchdogTick > 10000) { // Salto di 10 secondi
-        console.warn("App: Watchdog rileva risveglio profondo, forzo riconnessione...");
-        handleAppResume(true);
-    }
-    lastWatchdogTick = now;
-}, 2000);
-
-document.addEventListener('visibilitychange', () => {
-    const isVisible = !document.hidden;
-    if (isVisible) handleAppResume(false);
-    updateAppStatus(isVisible);
-});
-
-// --- GESTIONE PRESENZA E FOCUS (HEARTBEAT) ---
-const updateAppStatus = (isFocused) => {
-    if (window.myId && window.db) {
-        db.ref(`presence/${window.myId}`).update({
-            isFocused: isFocused,
-            lastActive: firebase.database.ServerValue.TIMESTAMP
-        });
-    }
-};
-
-// Heartbeat ogni 15 secondi per confermare la presenza
-setInterval(() => {
-    if (!document.hidden) updateAppStatus(true);
-}, 15000);
-
-// --- UNLOCK AUDIO (SPECIFICO PER iOS/IPHONE) ---
-// Su iPhone l'audio deve essere attivato da un gesto esplicito dell'utente.
-// Questo listener si attiva al primo tocco o click e "sblocca" l'AudioContext.
-const unlockAudio = () => {
-    if (typeof window.resumeAudioContext === 'function') {
-        window.resumeAudioContext();
-    }
-    // Rimuoviamo i listener una volta sbloccato l'audio per non appesantire il sistema
-    window.removeEventListener('mousedown', unlockAudio);
-    window.removeEventListener('touchstart', unlockAudio);
-    window.removeEventListener('keydown', unlockAudio);
-};
-window.addEventListener('mousedown', unlockAudio);
-window.addEventListener('touchstart', unlockAudio);
-window.addEventListener('keydown', unlockAudio);
-
-// --- MAPPA DOM DINAMICA (Proxy) ---
-window.els = new Proxy({}, { get: (target, id) => document.getElementById(id) });
-const els = window.els;
-
-window.escapeHtml = function(str) {
-    if (!str) return "";
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-};
-
-// --- COSTANTI DI STORAGE ---
-const STORAGE_ROOM_KEY = "cwgame_last_room";
-const STORAGE_DAILY_STATUS_KEY = "cwgame_daily_shown";
-const STORAGE_LAST_ANNOUNCEMENT_ID = "cwgame_last_announcement_id";
-const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
-const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted";
-const STORAGE_PREF_WPM = "cwgame_pref_wpm";
-const STORAGE_PREF_WORDS = "cwgame_pref_words";
-const STORAGE_PREF_TONE = "cwgame_pref_tone";
-const STORAGE_PREF_CHAR_SPACE = "cwgame_pref_char_space";
-const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space";
-const STORAGE_PREF_FIXED = "cwgame_pref_fixed";
-const STORAGE_PREF_EASY = "cwgame_pref_easy";
-const STORAGE_PREF_SPECTATE = "cwgame_pref_spectate";
-const STORAGE_PUSH_NOTIFS_KEY = "cwgame_push_notifs";
-const STORAGE_CHAT_CW_ENABLED = "cwgame_chat_cw_enabled";
-const STORAGE_CHAT_CW_WPM = "cwgame_chat_cw_wpm";
-const STORAGE_CHAT_CW_TONE = "cwgame_chat_cw_tone";
-
-const DEBUG_MODE = false;
-window.logDebug = (...args) => { if (DEBUG_MODE) console.log(...args); };
-
-// --- STATO GLOBALE ---
-window.myName = "";
-window.myId = "";
-window.myPrivacy = true;
-window.myPrivacyOnline = false;
-window.myPrivacyLeaderboard = false;
-window.myPushNotifs = localStorage.getItem(STORAGE_PUSH_NOTIFS_KEY) !== 'false';
-window.myTeamId = null;
-window.myTeamName = "";
-window.isTeamCaptain = false;
-let db = null, auth = null, currentLang = 'it';
-window.activeChatContext = null; // RESO GLOBALE
-let activeTab = "room", isChatDrawerOpen = false;
-let isGlobalChatMuted = false;
-let isChatCwEnabled = false, chatCwWpm = 20, chatCwTone = 600;
-let chatCwAudioQueue = [], isChatCwPlaying = false;
-window.lastPlayedCwMsgTs = 0;
-window.lastChatSentTs = 0; // Cooldown anti-spam per la chat
-
-window.isChallenging = false;
-window.isRejoining = false;
-window.outgoingChallengeId = null; // ID dell'utente che HO sfidato
-window.incomingChallengeId = null; // ID dell'utente che MI sfida
-window.activeTrnId = null;
-window.roomCode = "";
-window.roomHostId = null;
-window.lastPlayerCount = 0;
-window.gameStartPlayerCount = 0;
-window.gameRunning = false;
-window.inputActive = false;
-window.audioCtx = null;
-window.gameWords = [];
-window.wordIndex = 0;
-window.currentWpm = 20;
-window.baseWpm = 20;
-window.currentTone = 600;
-window.peakWpm = 0;
-window.totalScore = 0;
-window.currentStreak = 0;
-window.usedReplay = false;
-window.matchDetailsArray = [];
-window.isSinglePlayer = false;
-window.currentMode = "standard";
-window.requestedWordCount = 10;
-window.isFixedSpeed = false;
-window.isEasyMode = false;
-window.lastWordStartTime = 0;
-
-// STATO CORSO CW
-let isCourseMode = false, courseSessionTimer = null, coursePauseInterval = null;
-window.courseData = null;
-
-// STATO CO-OP
-let isCoopMode = false, coopActiveFreqIndex = 0;
-let coopTimerInterval = null, coopDecayInterval = null;
-window.perfectionQueue = []; // Coda per la modalità Perfezione
-window.isPerfectionRetry = false; // Flag per sapere se la parola attuale è un recupero
-window.perfectionWordsDone = 0; // Contatore parole nuove completate (corrette o sbagliate)
-window.currentPerfectionWord = null;
-window.currentPerfectionWpm = null;
-
-// STATO ARCADE
-let isArcadeMode = false, arcadeLives = 3, arcadeScore = 0, arcadeLevel = 1;
-let arcadeWpm = 15, arcadeWordLen = 3, arcadeWordsSolved = 0, arcadeWordsAtCurrentLen = 0;
-let arcadeActiveBrick = null, arcadeNextBrickTimeout = null;
-
-// TIMERS E SCHEDULER
-let lobbyTimerInterval = null, quizTimerInterval = null, ppTimerInterval = null;
-let brCheckInterval = null, brTimerInterval = null;
-let serverTimeOffset = 0;
-let brBannerTimeout = null, brBannerDismissedToday = false;
-let lastBRRoundPlayed = -1;
-
-window.charSpaceWpm = 0;
-window.wordSpaceMult = 1.0;
-window.lastPlayedWordId = 0;
-window.lastSeenGuessId = 0;
-
-window.masterDictionary = [];
-window.itDictionary = [];
-window.enDictionary = [];
-window.arcadeDictionary = [];
-window.customDictionary = [];
-
-let currentQuizQuestion = null, quizActiveBuzzerId = null;
-let quizQuestionIndex = 0, randomizedQuizQuestions = [], lastLoadedQuizIndex = -1;
-let nextWordTimeout = null;
-let sessionCharErrors = Object.create(null), sessionErrorsByWpm = Object.create(null);
-let userMatchHistory = [];
-
-// GESTIONE INATTIVITÀ
-let lastActivityTs = Date.now();
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minuti
-
-// GESTORE CENTRALE LISTENER
-const listeners = {
-    room: null, chat: null, pingPong: null, players: null, quizState: null,
-    roomLb: null, presence: null, roomsList: null, invites: null, inviteAccepted: null,
-    outgoingInvite: null, team: null, allTeams: null, trn: null, activeChat: {}
-};
-
-// --- UTILS ---
-window.countInvalidChars = function(str) {
-    if (!str) return 0;
-    const safeRegex = /[a-zA-Z0-9 ÀÈÉÌÒÙàèéìòù]/gu;
-    const clean = str.replace(safeRegex, '');
-    return [...clean].length;
-};
-
-window.isNameValid = function(str) {
-    if (!str) return false;
-    const invalidCount = window.countInvalidChars(str);
-    // Contiamo quanti caratteri alfanumerici reali ci sono
-    const validCount = str.replace(/[^a-zA-Z0-9ÀÈÉÌÒÙàèéìòù]/gu, '').length;
-
-    // Regola: Massimo 1 icona/simbolo E almeno 2 caratteri di testo/numeri
-    if (invalidCount >= 2) return false;
-    if (validCount < 2) return false;
-    return true;
-};
-
-function fisherYatesShuffle(array) {
-    if (!Array.isArray(array)) return [];
-    const arr = [...array];
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-}
-
-function clearAllTimers() {
-    // Fermiamo tutti gli intervalli e timeout di sistema
-    const timers = [
-        lobbyTimerInterval, quizTimerInterval, ppTimerInterval,
-        brTimerInterval, brCheckInterval,
-        coopTimerInterval, coopDecayInterval,
-        courseSessionTimer, coursePauseInterval,
-        arcadeNextBrickTimeout, nextWordTimeout
-    ];
-    timers.forEach(t => { if(t) { clearInterval(t); clearTimeout(t); } });
-
-    lobbyTimerInterval = quizTimerInterval = ppTimerInterval = null;
-    brTimerInterval = brCheckInterval = null;
-    coopTimerInterval = coopDecayInterval = null;
-    courseSessionTimer = coursePauseInterval = null;
-    arcadeNextBrickTimeout = null;
-    nextWordTimeout = null;
-}
-
-/**
- * RESET RIGOROSO DELLO STATO DI GIOCO
- * Da chiamare PRIMA di inizializzare i parametri di una nuova sessione
- */
-window.resetGameState = function() {
-    console.log("Game Core: Full state reset...");
-
-    // 1. Ferma tutto ciò che è in esecuzione
-    gameRunning = false;
-    inputActive = false;
-    clearAllTimers();
-    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
-
-    // 2. Resetta flag di modalità (Verranno reimpostati dalla logica di avvio)
-    isCourseMode = false;
-    isCoopMode = false;
-    isArcadeMode = false;
-    if (typeof window.stopTowerClimb === 'function') window.stopTowerClimb();
-    window.isSinglePlayer = false;
-    currentMode = 'standard';
-    coopActiveFreqIndex = 0; // RESET INDICE FREQUENZA CO-OP
-
-    // 2b. Reset specifico Perfezione
-    window.perfectionQueue = [];
-    window.isPerfectionRetry = false;
-    window.perfectionWordsDone = 0;
-    window.currentPerfectionWord = null;
-    window.currentPerfectionWpm = null;
-
-    // 3. Ripristina UI Input (Fix Spectator/Course residuals)
-    if (els.permanentGameInput) {
-        els.permanentGameInput.disabled = false;
-        els.permanentGameInput.placeholder = "Digita qui...";
-        els.permanentGameInput.value = "";
-    }
-    if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
-    if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
-
-    // 4. Resetta variabili di sessione
-    wordIndex = 0;
-    totalScore = 0;
-    currentStreak = 0;
-    peakWpm = 0;
-    matchDetailsArray = [];
-    usedReplay = false;
-
-    // 5. Pulisce sessione corso pendente
-    if (window.courseData) {
-        window.courseData.current_day_session = null;
-    }
-
-    // 6. Resetta parametri audio avanzati
-    window.charSpaceWpm = 0;
-    window.wordSpaceMult = 1.0;
-    window.isFixedSpeed = false;
-    window.isEasyMode = false;
-    window.isAllowSpectators = false;
-};
-
-window.forceAppUpdate = function() {
-    showToast("Aggiornamento...");
-    if ('caches' in window) caches.keys().then(n => n.forEach(c => caches.delete(c)));
-    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
-    setTimeout(() => { location.replace(location.pathname + "?v=" + Date.now()); }, 300);
-};
-
-if (els.updateBannerBtn) els.updateBannerBtn.addEventListener('click', window.forceAppUpdate);
-
-function showToast(message) {
-    // DISATTIVIAMO LE NOTIFICHE VISIVE DURANTE IL GIOCO
-    if (gameRunning || isCourseMode) return;
-
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
-    if (els.toastContainer) {
-        els.toastContainer.appendChild(toast);
-        setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 4000);
-    }
-}
-
-window.openTelegramProfile = function(username) {
-    if (username && String(username).trim() !== "") tg.openTelegramLink('https://t.me/' + username);
-    else tg.showAlert("Profilo privato o senza username pubblico.");
-};
-
-window.toggleLanguage = function() {
-    const newLang = (currentLang === 'it') ? 'en' : 'it';
-    window.setLanguage(newLang);
-    window.updateDictionary();
-    showToast(newLang === 'it' ? "Lingua: Italiano" : "Language: English");
-};
-
-function updateMuteBtnUI() {
-    if (els.muteGlobalChatBtn) {
-        els.muteGlobalChatBtn.textContent = isGlobalChatMuted
-            ? (currentLang === 'it' ? "🔇 Notifiche Disattivate" : "🔇 Notifications Muted")
-            : (currentLang === 'it' ? "🔊 Notifiche Attive" : "🔊 Notifications Active");
-    }
-}
-window.updateMuteBtnUI = updateMuteBtnUI;
-
-// --- REGOLAMENTO ---
-window.loadRegolamento = async function() {
-    if (!els.regolamentoContainer) return;
-    try {
-        const response = await fetch('regolamento.html');
-        if (!response.ok) throw new Error();
-        const html = await response.text();
-
-        // Creiamo un elemento temporaneo per il parsing sicuro
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-
-        // Rimuoviamo eventuali script malevoli se presenti (ulteriori precauzione)
-        const scripts = doc.querySelectorAll('script');
-        scripts.forEach(s => s.remove());
-
-        // Pulizia sicura del contenitore e inserimento
-        els.regolamentoContainer.innerHTML = '';
-        while (doc.body.firstChild) {
-            els.regolamentoContainer.appendChild(doc.body.firstChild);
-        }
-
-        if (els.sendFeedbackBtn) {
-            els.sendFeedbackBtn.onclick = () => {
-                const url = `https://t.me/share/url?text=${encodeURIComponent("💡 Suggerimento: \n\n[Scrivi qui...]")}`;
-                if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
-            };
-        }
-    } catch (e) {
-        console.error("Regolamento load error:", e);
-        els.regolamentoContainer.innerHTML = `<div style="text-align:center;padding:15px;"><h3>📜 Regole</h3><p>Decodifica il Morse e scala la classifica!</p></div>`;
-    }
-};
-
-if(document.getElementById('gameModeInput')) document.getElementById('gameModeInput').addEventListener('change', () => window.checkGameTypeUI?.());
-if(document.getElementById('gameTypeInput')) document.getElementById('gameTypeInput').addEventListener('change', () => window.checkGameTypeUI?.());
-
-// --- STARTUP ---
-async function startApp() {
-    if (!tgUser) {
-        if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
-        if (els.errorScreen) els.errorScreen.classList.add('active-screen');
-        return;
-    }
-
-    // 1. Fase di Verifica Identità (Backend Google Apps Script)
-    const statusText = document.getElementById('initStatusText');
-    if (statusText) statusText.textContent = "Verifica identità Morse...";
-
-    try {
-        const isVerified = await validateIdentity();
-        if (!isVerified) {
-            if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
-            if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
-            return;
-        }
-    } catch (e) {
-        console.error("Validation failed:", e);
-        if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
-        if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
-        return;
-    }
-
-    // 2. Proseguiamo con l'avvio normale
-    myName = tgUser.first_name;
-    myId = tgUser.id.toString();
-    initGame();
-}
-
-async function validateIdentity() {
-    if (!VALIDATION_SERVER_URL || !VALIDATION_SERVER_URL.startsWith("http")) {
-        console.warn("Security: Validation URL not set, skipping.");
-        return true;
-    }
-
-    try {
-        const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(tg.initData);
-
-        const response = await fetch(url, {
-            method: 'GET',
-            mode: 'cors',
-            redirect: 'follow'
-        });
-
-        if (!response.ok) return false;
-
-        const result = await response.json();
-        return result.status === 'ok';
-    } catch (err) {
-        console.error("Validation: Request failed", err);
-        return false;
-    }
-}
-
-async function sendPushNotification(targetId, text) {
-    if (!VALIDATION_SERVER_URL || !targetId) return;
-    // Messaggio generico per la privacy
-    const genericText = "Hai nuovi messaggi su Sfida Telegrafia! 📻";
-    const url = `${VALIDATION_SERVER_URL}?action=notify&targetId=${targetId}&text=${encodeURIComponent(genericText)}`;
-    try {
-        fetch(url, { mode: 'no-cors' });
-        console.log("Push: Richiesta inviata per " + targetId);
-    } catch(e) { console.error("Push Error:", e); }
-}
-
-window.requestTelegramPushPermissions = function() {
-    const btn = document.getElementById('pushNotifBtn');
-
-    // Se sono già attive, le disattiviamo
-    if (window.myPushNotifs) {
-        window.myPushNotifs = false;
-        if (window.db && window.myId) db.ref(`users/${window.myId}/pushNotifications`).set(false);
-        localStorage.setItem(STORAGE_PUSH_NOTIFS_KEY, "false");
-        showToast("🔕 Notifiche disattivate");
-        updatePushBtnUI(btn);
-        return;
-    }
-
-    // Se sono disattivate, chiediamo il permesso e attiviamo
-    if (tg.requestWriteAccess) {
-        tg.requestWriteAccess((allowed) => {
-            if (allowed) {
-                window.myPushNotifs = true;
-                if (window.db && window.myId) {
-                    db.ref(`users/${window.myId}/pushNotifications`).set(true);
-                    db.ref(`users/${window.myId}/pushEnabled`).set(true);
-                }
-                localStorage.setItem(STORAGE_PUSH_NOTIFS_KEY, "true");
-                showToast("✅ Notifiche di Sistema attivate!");
-                updatePushBtnUI(btn);
-            }
-        });
-    } else {
-        showToast("⚠️ Funzionalità non supportata da questa versione di Telegram.");
-    }
-};
-
-window.updatePushBtnUI = function(btn) {
-    if (!btn) btn = document.getElementById('pushNotifBtn');
-    if (!btn) return;
-
-    if (window.myPushNotifs) {
-        btn.textContent = "🔔 Notifiche: ATTIVE";
-        btn.style.backgroundColor = "var(--btn-success-bg, #28a745)";
-        btn.style.color = "#fff";
-    } else {
-        btn.textContent = "🔕 Notifiche: DISATTIVATE";
-        btn.style.backgroundColor = "var(--btn-secondary-bg, #6c757d)";
-        btn.style.color = "#fff";
-    }
-};
-
-window.startApp = startApp;
-
-function initGame() {
-    const firebaseConfig = {
-        apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
-        authDomain: "telegrafiabot.firebaseapp.com",
-        databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "telegrafiabot",
-        storageBucket: "telegrafiabot.firebasestorage.app",
-        messagingSenderId: "575790683327",
-        appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
-    };
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-
-    // --- ESPORTAZIONE GLOBALE PER CONSOLE E DEBUG ---
-    window.db = firebase.database();
-    window.auth = firebase.auth();
-    db = window.db;
-    auth = window.auth;
-
-    isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
-    if (els.startWpmInput) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM) || 20;
-    if (els.wordCountInput) els.wordCountInput.value = localStorage.getItem(STORAGE_PREF_WORDS) || 10;
-    if (els.toneInput) els.toneInput.value = localStorage.getItem(STORAGE_PREF_TONE) || 600;
-
-    // RIPRISTINO IMPOSTAZIONI AGGIUNTIVE
-    if (els.charSpaceInput) els.charSpaceInput.value = localStorage.getItem(STORAGE_PREF_CHAR_SPACE) || "";
-    if (els.wordSpaceSelect) els.wordSpaceSelect.value = localStorage.getItem(STORAGE_PREF_WORD_SPACE) || "1.0";
-    if (els.fixedSpeedCheckbox) els.fixedSpeedCheckbox.checked = localStorage.getItem(STORAGE_PREF_FIXED) === 'true';
-    if (els.easyModeCheckbox) els.easyModeCheckbox.checked = localStorage.getItem(STORAGE_PREF_EASY) === 'true';
-    if (els.allowSpectatorsCheckbox) els.allowSpectatorsCheckbox.checked = localStorage.getItem(STORAGE_PREF_SPECTATE) === 'true';
-
-    // SALVATAGGIO AUTOMATICO DELLE PREFERENZE AL CAMBIO
-    const savePref = (key, val) => localStorage.setItem(key, val);
-    els.startWpmInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_WPM, e.target.value));
-    els.wordCountInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORDS, e.target.value));
-    els.toneInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_TONE, e.target.value));
-    els.charSpaceInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_CHAR_SPACE, e.target.value));
-    els.wordSpaceSelect?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORD_SPACE, e.target.value));
-    els.fixedSpeedCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_FIXED, e.target.checked));
-    els.easyModeCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_EASY, e.target.checked));
-    els.allowSpectatorsCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_SPECTATE, e.target.checked));
-
-    isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
-    chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;
-    chatCwTone = parseInt(localStorage.getItem(STORAGE_CHAT_CW_TONE)) || 600;
-
-    // RIPRISTINO VALORI INPUT CHAT CW
-    if (els.chatCwWpmInput) els.chatCwWpmInput.value = chatCwWpm;
-    if (els.chatCwToneInput) els.chatCwToneInput.value = chatCwTone;
-
-    // SALVATAGGIO AUTOMATICO IMPOSTAZIONI CHAT CW
-    els.chatCwWpmInput?.addEventListener('change', (e) => {
-        chatCwWpm = parseInt(e.target.value) || 20;
-        localStorage.setItem(STORAGE_CHAT_CW_WPM, chatCwWpm);
-    });
-    els.chatCwToneInput?.addEventListener('change', (e) => {
-        chatCwTone = parseInt(e.target.value) || 600;
-        localStorage.setItem(STORAGE_CHAT_CW_TONE, chatCwTone);
-    });
-
-    if (els.toggleChatCwBtn) {
-        const updateBtn = () => {
-            // Sincronizzazione variabile globale con stato reale
-            isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
-            els.toggleChatCwBtn.textContent = isChatCwEnabled ? "📻 CW: ON" : "📻 CW: OFF";
-            els.toggleChatCwBtn.className = isChatCwEnabled ? "btn btn-success" : "btn btn-secondary";
-            if (els.chatCwSettingsPanel) els.chatCwSettingsPanel.style.display = isChatCwEnabled ? 'block' : 'none';
+window.updateActivity = function(won = false) {
+    const now = new Date();
+    const dKey = now.toISOString().split('T')[0];
+    const wKey = window.getWeekNumber(now);
+    const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+
+    const increment = firebase.database.ServerValue.increment(1);
+
+    ['daily/'+dKey, 'weekly/'+wKey, 'monthly/'+mKey].forEach(path => {
+        const updates = {
+            games: increment,
+            name: myName,
+            lastPlayed: firebase.database.ServerValue.TIMESTAMP
         };
-        updateBtn();
-        els.toggleChatCwBtn.onclick = () => {
-            const newState = !(localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true');
-            localStorage.setItem(STORAGE_CHAT_CW_ENABLED, newState);
-            isChatCwEnabled = newState; // Forza aggiornamento variabile globale
-            updateBtn();
-            if (typeof listenToChat === 'function') listenToChat();
-        };
-    }
+        if (won) updates.wins = increment;
 
-    auth.signInAnonymously().then(async () => {
-        window.myId = tgUser.id.toString();
-        console.log("CW Game: Auth success, Telegram ID:", window.myId);
-
-        // --- SISTEMA DI MAPPING E PRESENZA ---
-        db.ref('.info/connected').on('value', async (s) => {
-            if (s.val() === true && window.myId) {
-                console.log("App: Connessione stabilita, ripristino mapping e presenza...");
-
-                // 1. Ripristina il mapping di sicurezza (Fondamentale per le regole Firebase)
-                try {
-                    const mappingRef = db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`);
-                    await mappingRef.set(window.myId);
-                    mappingRef.onDisconnect().remove();
-                } catch (e) { console.error("Mapping Error:", e); }
-
-                // 2. Ripristina la presenza online
-                const pRef = db.ref(`presence/${window.myId}`);
-                pRef.onDisconnect().remove();
-                const presenceData = {
-                    name: window.myName || tgUser.first_name,
-                    username: window.myPrivacy ? "" : tgUsername,
-                    status: 'online',
-                    uid: firebase.auth().currentUser.uid,
-                    ts: firebase.database.ServerValue.TIMESTAMP,
-                    lastActive: firebase.database.ServerValue.TIMESTAMP
-                };
-                if (window.userProgression?.level) presenceData.level = window.userProgression.level;
-                pRef.set(presenceData);
-
-                // 3. Forza il ricontrollo dei permessi Admin al ripristino della connessione
-                if (typeof window.setupBugSystem === 'function') {
-                    window.setupBugSystem();
-                }
-            }
-        });
-
-        const userRef = db.ref(`users/${window.myId}`);
-        const snap = await userRef.once('value');
-        const data = snap.val() || {};
-
-        // --- PROTEZIONE ANTI-SPAM (USERNAME GATE) ---
-        // Se l'utente non ha username E non esiste ancora nel database, lo blocchiamo
-        if (!tgUsername && !snap.exists()) {
-            if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
-            if (els.noUsernameScreen) els.noUsernameScreen.classList.add('active-screen');
-            return; // Interrompiamo l'avvio
-        }
-
-        // --- GESTIONE ALIAS E PRIVACY DI DEFAULT ---
-        let needsUpdate = false;
-        const updates = {};
-
-        // VALIDAZIONE RIGOROSA NOMINATIVO (Max 1 icona, min 2 testo)
-        let rawName = data.alias || tgUser.first_name || "Operatore";
-        const isValid = window.isNameValid(rawName);
-
-        if (!isValid) {
-            // Se l'utente ha già un nome assegnato dal sistema in passato, lo riusiamo
-            if (data.assignedDefaultName) {
-                window.myName = data.assignedDefaultName;
-                if (data.alias !== window.myName) {
-                    updates.alias = window.myName;
-                    needsUpdate = true;
-                }
-            } else {
-                // Generiamo un nuovo nome GiocatoreX
-                try {
-                    const result = await db.ref('appConfig/userCounter').transaction(curr => (curr || 0) + 1);
-                    const newCount = result.snapshot.val();
-                    window.myName = "Giocatore" + newCount;
-                    updates.assignedDefaultName = window.myName;
-                    updates.alias = window.myName;
-                    needsUpdate = true;
-
-                    setTimeout(() => {
-                        tg.showAlert("⚠️ Il tuo nome non è valido (richiesto testo e max 1 icona). Ti è stato assegnato il nome: " + window.myName + ". Puoi cambiarlo nel Profilo.");
-                    }, 3000);
-                } catch(e) {
-                    console.error("Counter Error:", e);
-                    window.myName = "Giocatore";
-                }
-            }
-        } else {
-            window.myName = rawName;
-            if (!data.alias) {
-                updates.alias = window.myName;
-                needsUpdate = true;
-            }
-        }
-
-        if (data.privacyUsername === undefined) {
-            window.myPrivacy = true;
-            updates.privacyUsername = true;
-            needsUpdate = true;
-        } else {
-            window.myPrivacy = data.privacyUsername;
-        }
-
-        if (data.privacyOnline === undefined) {
-            window.myPrivacyOnline = false; // Default: visibile online
-            updates.privacyOnline = false;
-            needsUpdate = true;
-        } else {
-            window.myPrivacyOnline = data.privacyOnline;
-        }
-
-        if (data.privacyLeaderboard === undefined) {
-            window.myPrivacyLeaderboard = false; // Default: visibile in classifica
-            updates.privacyLeaderboard = false;
-            needsUpdate = true;
-        } else {
-            window.myPrivacyLeaderboard = data.privacyLeaderboard;
-        }
-
-        if (data.pushNotifications === undefined) {
-            window.myPushNotifs = true;
-            updates.pushNotifications = true;
-            needsUpdate = true;
-        } else {
-            window.myPushNotifs = data.pushNotifications;
-        }
-
-        if (needsUpdate) {
-            await userRef.update(updates);
-            console.log("Privacy: Applied default settings (Privacy ON, Alias set).");
-        }
-
-        if (!snap.exists() || !data.welcomed) {
-            // Aggiorniamo welcomed e i dati base
-            await userRef.update({ welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP });
-            window.isNewUserWaitingWelcome = true; // Flag per coordinare la sfida giornaliera
-            if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'flex';
-        }
-
-        if (els.playerName) els.playerName.textContent = window.myName;
-
-        // --- SISTEMA LAZY CLEANUP GIORNALIERO ---
-        try {
-            const cleanupRef = db.ref('appConfig/lastCleanupTs');
-            cleanupRef.once('value', snap => {
-                const lastCleanup = snap.val() || 0;
-                const now = Date.now();
-                const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-                if (now - lastCleanup > ONE_DAY_MS) {
-                    console.log("CW Game: Running daily chat cleanup...");
-                    // Svuotiamo le chat principali per mantenere il DB leggero
-                    db.ref('globalChat').remove();
-                    db.ref('courseChat').remove();
-                    db.ref('courseChats').remove(); // Pulizia aule tutor
-                    cleanupRef.set(now);
-                }
-            });
-        } catch(e) { console.warn("Cleanup error:", e); }
-
-        // --- PULIZIA SESSIONI PRECEDENTI (SOLO SE VECCHIE) ---
-        db.ref('rooms').orderByChild('hostId').equalTo(window.myId).once('value', s => {
-            const now = Date.now() + serverTimeOffset;
-            s.forEach(roomSnap => {
-                const room = roomSnap.val();
-                // Eliminiamo solo se la stanza è in waiting da più di 1 minuto
-                // Questo permette di cambiare dispositivo senza killare la stanza appena creata
-                if (room.status === 'waiting' && (!room.createdAt || (now - room.createdAt) > 60000)) {
-                    roomSnap.ref.remove();
-                    db.ref(`public_lobby_rooms/${roomSnap.key}`).remove();
-                }
-            });
-        });
-
-        // --- SBLOCCO UI CRITICO ---
-        if (els.loadingText) els.loadingText.style.display = 'none';
-        if (els.createRoomBtn) {
-            els.createRoomBtn.disabled = false;
-            console.log("CW Game: UI Unlocked.");
-        }
-
-        db.ref('.info/connected').on('value', s => {
-            if (!s.val()) return;
-            const pRef = db.ref(`presence/${myId}`);
-            pRef.onDisconnect().remove();
-            const presenceData = {
-                name: myName,
-                username: myPrivacy ? "" : tgUsername,
-                status: 'online',
-                uid: firebase.auth().currentUser.uid,
-                ts: firebase.database.ServerValue.TIMESTAMP,
-                lastActive: firebase.database.ServerValue.TIMESTAMP
-            };
-
-            if (window.userProgression && window.userProgression.level) {
-                presenceData.level = window.userProgression.level;
-            }
-
-            pRef.set(presenceData);
-        });
-
-        // --- MONITORAGGIO INATTIVITÀ ---
-        const updateActivity = () => { lastActivityTs = Date.now(); };
-        ['mousedown', 'keydown', 'touchstart', 'input'].forEach(evt => window.addEventListener(evt, updateActivity));
-
-        setInterval(() => {
-            const now = Date.now();
-            if (now - lastActivityTs > INACTIVITY_TIMEOUT_MS) {
-                console.log("Inattività rilevata (15 min). Chiusura sessione.");
-                if (roomCode) {
-                    window.showToast?.(currentLang === 'it' ? "Sessione chiusa per inattività." : "Session closed due to inactivity.");
-                    window.exitRoomCleanly?.(false, true);
-                }
-                // Rimuoviamo anche la presenza per sicurezza
-                db.ref(`presence/${myId}`).remove();
-                // Fermiamo l'aggiornamento automatico fino alla prossima interazione
-            } else if (db && myId) {
-                // Aggiorna il timestamp sul server ogni minuto per mostrare che siamo vivi
-                db.ref(`presence/${myId}/lastActive`).set(firebase.database.ServerValue.TIMESTAMP);
-            }
-        }, 60000); // Controllo ogni minuto
-
-        if (startParam) {
-            if (startParam.startsWith('team_')) window.processTeamInvite?.(startParam.replace('team_', ''));
-            else if (startParam.startsWith('room_')) window.joinSpecificRoom?.(startParam.replace('room_', ''));
-        } else {
-            const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
-            if (lastRoom) {
-                db.ref(`rooms/${lastRoom}`).once('value', s => {
-                    if (s.exists() && s.val().status !== 'finished') {
-                        roomCode = lastRoom; if (els.rejoinContainer) els.rejoinContainer.style.display = 'block';
-                        showScreen('setupScreen');
-                    } else { localStorage.removeItem(STORAGE_ROOM_KEY); showScreen('setupScreen'); }
-                });
-            } else showScreen('setupScreen');
-        }
-
-        const savedLang = localStorage.getItem('gameLang');
-        if (savedLang) window.setLanguage(savedLang); else updateMuteBtnUI();
-        
-        window.loadDictionaries().then(() => {
-            let today = new Date().toISOString().split('T')[0];
-
-            if (startParam) return;
-
-            // Verifichiamo se l'utente ha già giocato o iniziato la sfida OGGI
-            db.ref(`users/${myId}`).once('value', userSnap => {
-                const userData = userSnap.val() || {};
-                const history = userData.history || {};
-                const lastAttemptDate = userData.daily_attempt || "";
-
-                let alreadyPlayedToday = (lastAttemptDate === today);
-
-                if (!alreadyPlayedToday) {
-                    Object.values(history).forEach(m => {
-                        if (!m.date) return;
-                        const mDate = new Date(m.date).toISOString().split('T')[0];
-                        if (m.mode === 'daily_challenge' && mDate === today) alreadyPlayedToday = true;
-                    });
-                }
-
-                const alreadyShownToday = localStorage.getItem(STORAGE_DAILY_STATUS_KEY) === today;
-
-                if (!alreadyPlayedToday && !alreadyShownToday && els.dailyChallengeModal) {
-                    // Se l'utente è nuovo, aspettiamo che chiuda il benvenuto
-                    if (window.isNewUserWaitingWelcome) {
-                        window.pendingDailyChallengeShow = true;
-                    } else {
-                        els.dailyChallengeModal.style.display = 'flex';
-                    }
-                } else if (alreadyPlayedToday) {
-                    // Aggiorniamo il cache locale se Firebase dice che abbiamo giocato
-                    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
-                }
-            });
-        });
-
-        const savedCustom = localStorage.getItem(STORAGE_CUSTOM_DICT_KEY);
-        if (savedCustom) { try { window.customDictionary = JSON.parse(savedCustom); window.updateCustomDictStatus?.(); } catch(e) { console.error("Local Storage Error:", e); } }
-
-        window.listenToRooms?.();
-        window.listenToOnlineUsers?.();
-        window.listenToInvites?.();
-
-        // --- ATTIVAZIONE SISTEMA SFIDE (Fix Avvio Simultaneo) ---
-        if (typeof window.listenToInviteAccepted === 'function') {
-            window.listenToInviteAccepted();
-        }
-
-        window.initBattleRoyaleScheduler?.();
-        window.initGlobalNotificationListener?.(); // AVVIO LISTENER BACKGROUND
-        window.loadRegolamento();
-        window.initProgression?.();
-        window.initCourseManager?.();
-        window.initQuizManager?.();
-        window.setupBugSystem?.();
-        window.initAdminAnnouncementListener();
-        window.checkBugFeedback();
-
-        // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
-        const updateVers = () => {
-            if (els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
-            const footer = document.getElementById('appVersionFooter');
-            if (footer) footer.textContent = APP_VERSION;
-        };
-        updateVers();
-        setTimeout(updateVers, 1500); // Forza dopo caricamento altri script
-
-        db.ref('appConfig/latestVersion').on('value', snap => {
-            const latestStr = snap.val() ? String(snap.val()).trim() : "";
-            const currentStr = String(APP_VERSION).trim();
-            if (latestStr && latestStr !== currentStr) {
-                if (els.updateBanner) els.updateBanner.style.display = 'block';
-            } else {
-                if (els.updateBanner) els.updateBanner.style.display = 'none';
-            }
-        });
-    }).catch(err => {
-        console.error("CW Game: Auth Error", err);
-        const statusText = document.getElementById('initStatusText');
-        if (statusText) {
-            statusText.textContent = "Errore di connessione al server Morse. Ricarica l'app o riprova più tardi.";
-            statusText.style.color = "#f44336";
-        }
-    });
-
-    window.populateGameModesUI?.();
-    window.checkGameTypeUI?.();
-    setTimeout(() => { window.checkGameTypeUI?.(); }, 1200);
-}
-
-/**
- * LISTENER ANNUNCI AMMINISTRATORE (Global Popup)
- */
-window.initAdminAnnouncementListener = function() {
-    if (!db) return;
-
-    db.ref('admin_announcement').on('value', snap => {
-        const data = snap.val();
-        if (!data || !data.active || !data.text) {
-            if (els.adminAnnouncementModal) els.adminAnnouncementModal.style.display = 'none';
-            return;
-        }
-
-        const annId = data.id || "default";
-        const lastSeen = localStorage.getItem(STORAGE_LAST_ANNOUNCEMENT_ID);
-
-        // Se l'ID è diverso da quello salvato, mostriamo il popup
-        if (annId !== lastSeen) {
-            if (els.adminAnnouncementModal && els.adminAnnouncementText) {
-                if (els.adminAnnouncementTitle) els.adminAnnouncementTitle.textContent = data.title || "Comunicazione";
-                els.adminAnnouncementText.innerHTML = data.text.replace(/\n/g, '<br>');
-                els.adminAnnouncementModal.style.display = 'flex';
-
-                // Bottone di conferma
-                if (els.btnConfirmAnnouncement) {
-                    els.btnConfirmAnnouncement.onclick = () => {
-                        localStorage.setItem(STORAGE_LAST_ANNOUNCEMENT_ID, annId);
-                        els.adminAnnouncementModal.style.display = 'none';
-                    };
-                }
-            }
-        }
+        db.ref(`activity/${path}/${myId}`).update(updates).then(() => {
+            if (path.startsWith('daily')) window.checkActivityAndAwardMedals();
+        }).catch(err => console.error("Error updating activity:", err));
     });
 };
 
-window.closeWelcomeAndCheckDaily = function() {
-    if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'none';
-    window.isNewUserWaitingWelcome = false;
-
-    // Se c'è una sfida giornaliera in attesa, mostrala ora
-    if (window.pendingDailyChallengeShow && els.dailyChallengeModal) {
-        setTimeout(() => {
-            els.dailyChallengeModal.style.display = 'flex';
-            window.pendingDailyChallengeShow = false;
-        }, 500);
-    }
-};
-
-// --- SISTEMA BUG E ADMIN ---
-window.setupBugSystem = function() {
-    const badge = document.getElementById('bugsBadge');
-    if (!db) return;
-
-    // Rilevamento Admin basato su Permessi Firebase
-    // Tentiamo di leggere bugReports: se Firebase lo permette, siamo admin.
-    db.ref('bugReports').limitToLast(1).once('value').then(snap => {
-        window.isAdmin = true;
-        if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
-        window.updateAdminBadge();
-
-        // 2. Tutor Requests Listener (Attivo solo se siamo effettivamente admin)
-        db.ref('tutorRequests').off('value');
-        db.ref('tutorRequests').on('value', () => {
-            window.updateAdminBadge();
-        });
-    }).catch((error) => {
-        // Nascondiamo il pannello SOLO se l'errore è esplicitamente di permessi mancanti
-        // e se siamo effettivamente collegati (per evitare falsi positivi durante il freeze)
-        if (error.code === 'PERMISSION_DENIED') {
-            window.isAdmin = false;
-            if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
-            if (badge) badge.style.display = 'none';
-        }
-    });
-
-    // 3. Invio Bug (Per tutti)
-    if (document.getElementById('btnSendBugReport')) {
-        document.getElementById('btnSendBugReport').onclick = () => {
-            const textarea = document.getElementById('bugReportText');
-            if (!textarea) return;
-            const text = textarea.value.trim();
-            if (text.length < 5) return showToast("Messaggio troppo breve!");
-
-            db.ref('bugReports').push({
-                from: myName,
-                fromId: myId,
-                username: tgUsername || "N/A",
-                msg: text,
-                ts: firebase.database.ServerValue.TIMESTAMP,
-                date: new Date().toLocaleString('it-IT')
-            }).then(() => {
-                showToast("Segnalazione inviata! Grazie.");
-                textarea.value = "";
-            }).catch(() => showToast("Errore nell'invio."));
-        };
-    }
-
-    // 4. Lettori (Solo Admin)
-    if (els.btnReadAllBugs) {
-        els.btnReadAllBugs.onclick = () => window.loadAdminBugs();
-    }
-    if (els.btnReadTutorRequests) {
-        els.btnReadTutorRequests.onclick = () => window.loadAdminTutorRequests();
-    }
-
-    // --- GESTIONE INVIO ANNUNCIO GLOBALE (ADMIN) ---
-    if (els.btnAdminSendAnnouncement) {
-        els.btnAdminSendAnnouncement.onclick = () => {
-            const title = els.adminAnnTitleInput?.value.trim() || "Comunicazione";
-            const text = els.adminAnnTextInput?.value.trim();
-
-            if (!text || text.length < 5) return showToast("Testo annuncio troppo breve!");
-
-            if (confirm("Inviare questo annuncio a TUTTI gli utenti?")) {
-                const newId = "ann_" + Date.now(); // ID automatico basato sul tempo
-                db.ref('admin_announcement').set({
-                    active: true,
-                    id: newId,
-                    title: title,
-                    text: text,
-                    ts: firebase.database.ServerValue.TIMESTAMP
-                }).then(() => {
-                    // Segnamo l'annuncio come già letto per l'admin stesso, così non gli appare il pop-up
-                    localStorage.setItem(STORAGE_LAST_ANNOUNCEMENT_ID, newId);
-                    showToast("Annuncio pubblicato con successo! 🚀");
-                    if (els.adminAnnTitleInput) els.adminAnnTitleInput.value = "";
-                    if (els.adminAnnTextInput) els.adminAnnTextInput.value = "";
-                }).catch(err => {
-                    console.error("Admin: Error publishing announcement", err);
-                    showToast("Errore durante la pubblicazione.");
-                });
-            }
-        };
-    }
-
-    if (els.btnAdminClearAnnouncement) {
-        els.btnAdminClearAnnouncement.onclick = () => {
-            if (confirm("Rimuovere l'annuncio attivo? Non apparirà più a nessuno.")) {
-                db.ref('admin_announcement').update({ active: false }).then(() => {
-                    showToast("Annuncio rimosso.");
-                });
-            }
-        };
-    }
-
-    // --- TASTO DEV: RESET SFIDA GIORNALIERA ---
-    if (els.btnDevResetDaily) {
-        els.btnDevResetDaily.onclick = async () => {
-            if (!confirm("Sei lo Sviluppatore. Vuoi resettare la tua sfida di oggi?")) return;
-            const today = new Date().toISOString().split('T')[0];
-
-            try {
-                // 1. Rimuove dalla classifica
-                await db.ref(`leaderboard/daily_challenge/${today}/${myId}`).remove();
-
-                // 2. Rimuove dallo storico
-                const hSnap = await db.ref(`users/${myId}/history`).orderByChild('mode').equalTo('daily_challenge').once('value');
-                hSnap.forEach(s => {
-                    const val = s.val();
-                    if (val && val.date && new Date(val.date).toISOString().split('T')[0] === today) {
-                        s.ref.remove();
-                    }
-                });
-
-                // 3. Pulisce cache locale
-                localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
-
-                showToast("Sfida resettata! Ricarica l'app.");
-                setTimeout(() => location.reload(), 1000);
-            } catch(e) { alert("Errore: " + e.message); }
-        };
-    }
-};
-
-window.updateAdminBadge = async function() {
-    const badge = document.getElementById('bugsBadge');
-    if (!badge || !db) return;
+window.checkActivityAndAwardMedals = async function() {
+    const now = new Date();
+    const dKey = now.toISOString().split('T')[0];
+    const wKey = window.getWeekNumber(now);
+    const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
 
     try {
-        const lastSeenBugTs = parseInt(localStorage.getItem('cw_last_bug_ts') || 0);
-
-        // Contiamo bug nuovi e tutor requests pendenti
-        const [bugsSnap, tutorSnap] = await Promise.all([
-            db.ref('bugReports').once('value'),
-            db.ref('tutorRequests').once('value')
+        const [dSnap, wSnap, mSnap, uMedals] = await Promise.all([
+            db.ref(`activity/daily/${dKey}/${myId}`).once('value'),
+            db.ref(`activity/weekly/${wKey}/${myId}`).once('value'),
+            db.ref(`activity/monthly/${mKey}/${myId}`).once('value'),
+            db.ref(`users/${myId}/medals`).once('value')
         ]);
 
-        let count = 0;
-        if (bugsSnap.exists()) {
-            bugsSnap.forEach(c => { if (c.val().ts > lastSeenBugTs) count++; });
-        }
-        if (tutorSnap.exists()) {
-            count += Object.keys(tutorSnap.val()).length;
-        }
+        const dData = dSnap.val() || { games: 0 }, wData = wSnap.val() || { games: 0 }, mData = mSnap.val() || { games: 0 };
+        let myMedals = uMedals.val() || {};
 
-        if (count > 0) {
-            badge.textContent = count;
-            badge.style.display = 'flex';
-        } else {
-            badge.style.display = 'none';
-        }
-    } catch(e) { console.error("Firebase Security Logic Error:", e); }
-};
-
-window.loadAdminBugs = function() {
-    const list = document.getElementById('adminBugList');
-    if (!list) return;
-
-    localStorage.setItem('cw_last_bug_ts', Date.now());
-    window.updateAdminBadge();
-
-    list.innerHTML = "Caricamento...";
-    db.ref('bugReports').once('value', snap => {
-        list.innerHTML = "";
-        if (!snap.exists()) { list.innerHTML = "Nessuna segnalazione."; return; }
-        snap.forEach(child => {
-            const bug = child.val();
-            const item = document.createElement('div');
-            item.style.padding = "8px";
-            item.style.borderBottom = "1px solid var(--hint-color)";
-
-            // Header: Utente
-            const header = document.createElement('div');
-            header.style.color = "var(--link-color)";
-            header.style.fontWeight = "bold";
-            header.textContent = `👤 ${bug.from || "Anonimo"} (@${bug.username || "N/A"})`;
-
-            // Data
-            const dateDiv = document.createElement('div');
-            dateDiv.style.fontSize = "0.7em";
-            dateDiv.style.color = "var(--hint-color)";
-            dateDiv.textContent = bug.date || "";
-
-            // Messaggio
-            const msgDiv = document.createElement('div');
-            msgDiv.style.marginTop = "4px";
-            msgDiv.style.whiteSpace = "pre-wrap";
-            msgDiv.textContent = bug.msg || "";
-
-            // Area Bottoni
-            const btnArea = document.createElement('div');
-            btnArea.style.display = "flex";
-            btnArea.style.gap = "8px";
-            btnArea.style.marginTop = "5px";
-
-            // Tasto Rispondi
-            const replyBtn = document.createElement('button');
-            replyBtn.style.cssText = "flex:1; font-size:0.7em; background:var(--link-color); color:white; border:none; border-radius:4px; padding:6px; cursor:pointer;";
-            replyBtn.textContent = "Rispondi";
-            replyBtn.onclick = () => window.openBugReply(child.key, bug.fromId, bug.msg);
-
-            // Tasto Elimina
-            const delBtn = document.createElement('button');
-            delBtn.style.cssText = "flex:1; font-size:0.7em; background:#d32f2f; color:white; border:none; border-radius:4px; padding:6px; cursor:pointer;";
-            delBtn.textContent = "Elimina";
-            delBtn.onclick = () => {
-                if (confirm('Eliminare definitivamente questa segnalazione?')) {
-                    db.ref(`bugReports/${child.key}`).remove().then(() => {
-                        item.remove();
-                        showToast('Eliminato');
-                        window.updateAdminBadge();
-                    }).catch(e => {
-                        console.error("Delete Error:", e);
-                        alert("Errore permessi Firebase: " + e.message);
-                    });
-                }
-            };
-
-            item.appendChild(header);
-            item.appendChild(dateDiv);
-            item.appendChild(msgDiv);
-            btnArea.appendChild(replyBtn);
-            btnArea.appendChild(delBtn);
-            item.appendChild(btnArea);
-            list.prepend(item);
-        });
-    });
-};
-
-window.openBugReply = function(bugKey, userId, originalMsg) {
-    if (!userId) return alert("Impossibile rispondere: ID utente mancante.");
-    const replyText = prompt(`Invia feedback per: "${originalMsg.substring(0, 30)}..."\n\nScrivi la tua risposta (es: Risolto, Grazie, ecc.):`);
-    if (!replyText || replyText.trim() === "") return;
-
-    db.ref(`users/${userId}/bugFeedback`).push({
-        reply: replyText.trim(),
-        originalMsg: originalMsg,
-        ts: firebase.database.ServerValue.TIMESTAMP,
-        date: new Date().toLocaleString('it-IT')
-    }).then(() => {
-        showToast("Risposta inviata!");
-    }).catch(e => alert("Errore invio: " + e.message));
-};
-
-window.checkBugFeedback = function() {
-    if (!myId) return;
-    db.ref(`users/${myId}/bugFeedback`).once('value', snap => {
-        if (!snap.exists()) return;
-
-        snap.forEach(child => {
-            const feedback = child.val();
-            const modal = document.getElementById('bugFeedbackModal');
-            const origMsg = document.getElementById('feedbackOriginalMsg');
-            const replyText = document.getElementById('feedbackReplyText');
-            const closeBtn = document.getElementById('btnCloseFeedbackModal');
-
-            if (modal && origMsg && replyText && closeBtn) {
-                origMsg.textContent = `"${feedback.originalMsg}"`;
-                replyText.textContent = feedback.reply;
-
-                setTimeout(() => {
-                    modal.style.display = 'flex';
-                }, 2000);
-
-                closeBtn.onclick = () => {
-                    modal.style.display = 'none';
-                    db.ref(`users/${myId}/bugFeedback/${child.key}`).remove();
-                };
+        const validKeys = [dKey, wKey, mKey, 'daily_champ'];
+        for (let id in myMedals) {
+            if (!validKeys.includes(myMedals[id].periodKey)) {
+                await db.ref(`users/${myId}/medals/${id}`).remove();
+                delete myMedals[id];
             }
-        });
-    });
-};
-
-window.loadAdminTutorRequests = function() {
-    const list = document.getElementById('adminBugList');
-    if (!list) return;
-    list.innerHTML = "Caricamento richieste...";
-
-    db.ref('tutorRequests').once('value', snap => {
-        list.innerHTML = "";
-        if (!snap.exists()) {
-            list.innerHTML = "Nessuna richiesta pendente.";
-            return;
         }
-        snap.forEach(child => {
-            const req = child.val();
-            const item = document.createElement('div');
-            item.style.padding = "10px";
-            item.style.borderBottom = "1px solid #673ab7";
-            item.style.background = "rgba(103, 58, 183, 0.05)";
 
-            const title = document.createElement('div');
-            title.style.fontWeight = "bold";
-            title.style.color = "#9575cd";
-            title.textContent = `🎓 Richiesta da: ${req.name || "Anonimo"}`;
-
-            const info = document.createElement('div');
-            info.style.fontSize = "0.75em";
-            info.style.color = "var(--hint-color)";
-            info.textContent = `ID: ${req.uid || ""} | @${req.username || "N/A"}`;
-
-            const btnArea = document.createElement('div');
-            btnArea.style.display = "flex";
-            btnArea.style.gap = "10px";
-            btnArea.style.marginTop = "8px";
-
-            const approveBtn = document.createElement('button');
-            approveBtn.style.cssText = "flex:1; background:#4caf50; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;";
-            approveBtn.textContent = "APPROVA ✅";
-            approveBtn.onclick = () => window.approveTutor(child.key, req.uid, req.name);
-
-            const rejectBtn = document.createElement('button');
-            rejectBtn.style.cssText = "flex:1; background:#d32f2f; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;";
-            rejectBtn.textContent = "RIFIUTA ❌";
-            rejectBtn.onclick = () => {
-                if (confirm('Rifiutare questa richiesta?')) {
-                    db.ref(`tutorRequests/${child.key}`).remove().then(() => {
-                        window.updateAdminBadge();
-                        item.remove();
-                    });
-                }
-            };
-
-            btnArea.appendChild(approveBtn);
-            btnArea.appendChild(rejectBtn);
-            item.appendChild(title);
-            item.appendChild(info);
-            item.appendChild(btnArea);
-            list.prepend(item);
-        });
-    });
-};
-
-window.approveTutor = function(reqId, uid, name) {
-    if (!confirm(`Approvare ${name} come TUTOR?`)) return;
-
-    // 1. Imposta ruolo nell'utente
-    db.ref(`users/${uid}/course`).update({
-        role: 'tutor',
-        active_plan: true,
-        enrolledAt: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => {
-        // 2. Registra nell'elenco globale iscritti (per visibilità tutor)
-        db.ref(`courseActiveEnrollments/${uid}`).set({
-            name: name,
-            role: 'tutor',
-            ts: firebase.database.ServerValue.TIMESTAMP
-        });
-        // 3. Rimuovi la richiesta
-        db.ref(`tutorRequests/${reqId}`).remove();
-        showToast(`Operatore ${name} approvato come Tutor!`);
-        document.getElementById('btnReadTutorRequests').click(); // Refresh
-    }).catch(e => {
-        showToast("Errore durante l'approvazione.");
-    });
-};
-
-// --- SFIDA GIORNALIERA ---
-if (els.btnPlayDailyNow) {
-    els.btnPlayDailyNow.onclick = () => {
-        if (els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none';
-
-        // Reset preventivo per evitare conflitti con altre modalità (es. corso)
-        window.resetGameState();
-
-        currentMode = 'daily_challenge';
-        window.isSinglePlayer = true;
-        currentWpm = baseWpm = 15;
-        requestedWordCount = 20;
-
-        // USA ID UNIVOC_O ANCHE PER LA SFIDA GIORNALIERA
-        roomCode = "DAILY_" + window.myId;
-        gameWords = window.getGameWords(requestedWordCount, currentMode);
-        currentTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || 600;
-
-        const startDaily = () => {
-            // SEGNIAMO IL TENTATIVO IMMEDIATAMENTE PER EVITARE REPLAY IN CASO DI ABBANDONO/RELOAD
-            let today = new Date().toISOString().split('T')[0];
-            db.ref(`users/${myId}/daily_attempt`).set(today);
-            localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
-
-            const dailyData = {
-                status: 'countdown',
-                type: 'single',
-                mode: currentMode,
-                wpm: currentWpm,
-                tone: currentTone,
-                wordCount: requestedWordCount,
-                createdAt: firebase.database.ServerValue.TIMESTAMP,
-                hostId: myId,
-                fixedSpeed: false,
-                easyMode: false,
-                game_words: gameWords // Inseriamo le parole atomicamente
-            };
-
-            db.ref('rooms/' + roomCode).set(dailyData).then(() => {
-                window.joinRoomLogic?.(false);
-            })
-            .catch(err => {
-                console.error("Daily Challenge Start Error:", err);
-                showToast("Errore avvio sfida. Riprova tra un istante.");
-            });
+        const check = (count, thresh, id, title, desc, icon, pKey) => {
+            if (count >= thresh && (!myMedals[id] || myMedals[id].periodKey !== pKey)) {
+                window.awardMedal(id, title, desc, icon, pKey);
+                myMedals[id] = { periodKey: pKey };
+                return true;
+            }
+            return false;
         };
 
-        // Per utenti nuovi, diamo un piccolo margine extra per la propagazione dei permessi Firebase
-        if (window.isNewUserWaitingWelcome === false) {
-            setTimeout(startDaily, 800);
-        } else {
-            startDaily();
+        check(dData.games, 3, 'd_bronze', "Bronzo Giornaliero", "Hai giocato 3 partite oggi!", "🥉", dKey);
+        check(dData.games, 7, 'd_silver', "Argento Giornaliero", "Sei un veterano! 7 partite oggi!", "🥈", dKey);
+        check(dData.games, 15, 'd_gold', "Oro Giornaliero", "Incredibile! 15 partite in un giorno!", "🥇", dKey);
+        check(wData.games, 20, 'w_active', "Stakanovista Settimanale", "20 partite questa settimana!", "🎖️", wKey);
+        check(wData.games, 50, 'w_pro', "Campione Settimanale", "50 partite! Una leggenda questa settimana!", "🏆", wKey);
+        check(mData.games, 150, 'm_legend', "Titano del Mese", "150 partite! Il gioco non ha segreti per te.", "💎", mKey);
+    } catch(e) { console.error("Medals Logic Error:", e); }
+    window.updateMedalGallery();
+};
+
+window.awardMedal = function(id, title, desc, icon, periodKey) {
+    db.ref(`users/${myId}/medals/${id}`).set({ title, date: new Date().toLocaleDateString('it-IT'), icon, periodKey });
+    if (els.overlayMedalIcon) els.overlayMedalIcon.textContent = icon;
+    if (els.overlayMedalTitle) els.overlayMedalTitle.textContent = title;
+    if (els.overlayMedalDesc) els.overlayMedalDesc.textContent = desc;
+    if (els.medalOverlay) els.medalOverlay.style.display = 'flex';
+    if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.type = 'triangle';
+        const now = audioCtx.currentTime;
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.5);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+        osc.start(now);
+        osc.stop(now + 0.8);
+    } catch(e) { console.warn("Audio Context error:", e); }
+
+    window.updateMedalGallery();
+};
+
+window.updateMedalGallery = function() {
+    if (!els.myMedalsContainer) return;
+    db.ref(`users/${myId}/medals`).once('value', snap => {
+        if (!snap.exists()) {
+            els.myMedalsContainer.innerHTML = '<span style="font-size:0.6em; color:var(--hint-color);">Nessuna medaglia.</span>';
+            return;
         }
-    };
-}
-if (els.btnShareDaily) {
-    els.btnShareDaily.onclick = () => {
-        const text = `🏆 Ho completato la Sfida Giornaliera Morse!\n🎯 Punteggio: ${totalScore} pt\n🚀 Velocità di picco: ${peakWpm} WPM\n\nProva anche tu su Sfida Telegrafia! 📻`;
-        const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`)}&text=${encodeURIComponent(text)}`;
-        if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
-    };
-}
+        els.myMedalsContainer.innerHTML = '';
+        const frag = document.createDocumentFragment();
 
-if (els.btnPlayDailyLater) els.btnPlayDailyLater.onclick = () => { if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none'; };
-if (els.btnDeclineDaily) els.btnDeclineDaily.onclick = () => {
-    const today = new Date().toISOString().split('T')[0];
-    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
-    db.ref(`users/${myId}/daily_attempt`).set(today); // Sincronizziamo il rifiuto
-    if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none';
-};
-
-// --- CONDIVISIONE ---
-window.shareAppToFriends = function() {
-    const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`)}&text=${encodeURIComponent("📻 Unisciti a me su Sfida Telegrafia!")}`;
-    if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
-};
-
-window.inviteFriendsToRoom = function() {
-    if (!roomCode) return showToast("Nessuna stanza attiva.");
-    const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=room_${roomCode}`)}&text=${encodeURIComponent(`📻 Unisciti alla mia stanza su Sfida Telegrafia!\nCodice Stanza: #${roomCode}`)}`;
-    if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
-};
-
-// --- LISTENER PULSANTI CHAT ---
-if (els.inviteFriendsBtn) {
-    els.inviteFriendsBtn.onclick = () => window.inviteFriendsToRoom();
-}
-
-if (els.sendChatBtn) {
-    els.sendChatBtn.onclick = async () => {
-        const now = Date.now();
-        if (now - window.lastChatSentTs < 2000) return showToast("🐌 Vai più piano! Attendi 2 secondi.");
-
-        if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
-        const txt = els.chatInput?.value.trim();
-        if (!txt) return;
-        if (txt.length > 200) return showToast(currentLang === 'it' ? "⚠️ Messaggio troppo lungo (max 200 car.)" : "⚠️ Message too long (max 200 chars)");
-
-        window.lastChatSentTs = now;
-        const rc = window.roomCode;
-        const ctx = window.activeChatContext;
-        let ref = (ctx === 'room' && rc) ? db.ref(`rooms/${rc}/chat`).push() : db.ref('globalChat').push();
-        ref.set({
-            name: myName,
-            username: myPrivacy ? "" : tgUsername,
-            text: txt,
-            ts: firebase.database.ServerValue.TIMESTAMP,
-            senderId: myId // Necessario per eliminazione e sicurezza
+        Object.values(snap.val()).forEach(m => {
+            const span = document.createElement('span');
+            span.textContent = (m.count && m.count > 1) ? `${m.count}x ${m.icon}` : m.icon;
+            span.title = `${m.title} (${m.date})`;
+            span.onclick = () => showToast(`${m.title} - ${m.date}`);
+            span.style.cursor = "pointer";
+            frag.appendChild(span);
         });
+        els.myMedalsContainer.appendChild(frag);
+    });
+};
 
-        // --- INVIO NOTIFICHE PUSH AGLI OFFLINE/DISTRAI (SOLO IN STANZA) ---
-        if (ctx === 'room' && rc) {
-            console.log("DEBUG_PUSH: Controllo destinatari per stanza " + rc);
-            db.ref(`rooms/${rc}/players`).once('value', (snap) => {
-                if (!snap.exists()) { console.log("DEBUG_PUSH: Nessun giocatore trovato nella stanza."); return; }
-                snap.forEach((pSnap) => {
-                    const pId = pSnap.key;
-                    if (pId !== myId) {
-                        db.ref(`presence/${pId}`).once('value', (presSnap) => {
-                            const presData = presSnap.val() || {};
-                            const now = Date.now();
+window.switchActTab = function(period) {
+    document.querySelectorAll('#participationScreen .tab-btn').forEach(b => b.classList.remove('active-tab'));
+    const targetTab = els[`tab${period.charAt(0).toUpperCase() + period.slice(1)}Act`];
+    if (targetTab) targetTab.classList.add('active-tab');
 
-                            const isFocused = presData.isFocused !== false;
-                            const lastActiveDiff = now - (presData.lastActive || 0);
-                            const isTimedOut = lastActiveDiff > 35000;
+    const now = new Date();
+    let key = period === 'daily' ? now.toISOString().split('T')[0] :
+              period === 'weekly' ? window.getWeekNumber(now) :
+              now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
 
-                            console.log(`DEBUG_PUSH: Utente ${pId} -> isFocused: ${isFocused}, LastActive: ${Math.round(lastActiveDiff/1000)}s fa`);
+    if (els.actListTitle) {
+        els.actListTitle.textContent = period === 'daily' ? "I più attivi di Oggi" :
+                                       period === 'weekly' ? "I più attivi della Settimana" : "I più attivi del Mese";
+    }
+    window.renderActivityRankings(period, key);
+    window.updateMedalGallery();
+};
 
-                            const isAppNotAccessible = !presSnap.exists() || !isFocused || isTimedOut;
+window.renderActivityRankings = function(period, key) {
+    if (!els.activityRankList) return;
+    els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Caricamento...</li>';
 
-                            if (isAppNotAccessible) {
-                                console.log("DEBUG_PUSH: Utente inattivo. Controllo preferenze push...");
-                                db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
-                                    if (prefSnap.val() !== false) {
-                                        sendPushNotification(pId, txt);
-                                    } else {
-                                        console.log("DEBUG_PUSH: L'utente ha disattivato le notifiche nel profilo.");
-                                    }
-                                });
-                            } else {
-                                console.log("DEBUG_PUSH: Utente attivo nell'app, push saltata.");
-                            }
-                        });
+    db.ref(`activity/${period}/${key}`).once('value').then(snap => {
+        els.activityRankList.innerHTML = '';
+        let users = [];
+        if (snap.exists()) {
+            snap.forEach(child => {
+                const u = child.val();
+                if (u && typeof u === 'object') users.push({ id: child.key, ...u });
+            });
+        }
+
+        users.sort((a, b) => (b.games || 0) - (a.games || 0));
+        users = users.slice(0, 50);
+
+        if (users.length === 0) {
+            els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna attività registrata.</li>';
+            return;
+        }
+
+        const frag = document.createDocumentFragment();
+        users.forEach((u, idx) => {
+            let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
+            const li = document.createElement('li');
+            const nameSpan = document.createElement('span');
+            nameSpan.appendChild(document.createTextNode(medal + " "));
+            const nameB = document.createElement('b');
+            nameB.textContent = u.name || "Anonimo";
+            nameSpan.appendChild(nameB);
+
+            const statsSpan = document.createElement('span');
+            const gamesB = document.createElement('b');
+            gamesB.textContent = u.games || 0;
+            statsSpan.appendChild(gamesB);
+            statsSpan.appendChild(document.createTextNode(" part. "));
+
+            const winsSmall = document.createElement('small');
+            winsSmall.style.color = '#4caf50';
+            winsSmall.textContent = `(${u.wins || 0} v.)`;
+            statsSpan.appendChild(winsSmall);
+
+            li.appendChild(nameSpan);
+            li.appendChild(statsSpan);
+            frag.appendChild(li);
+        });
+        els.activityRankList.appendChild(frag);
+    }).catch(err => {
+        els.activityRankList.innerHTML = `
+            <li style="justify-content:center; color:var(--hint-color); flex-direction:column; text-align:center;">
+                <span>Errore nel caricamento.</span>
+                <small style="font-size:0.7em; opacity:0.7;">${err.message}</small>
+            </li>`;
+    });
+};
+
+// --- NUOVA GESTIONE PROFILO E STATISTICHE ANALITICHE ---
+
+// Funzioni handler isolate per non creare duplicati in memoria ad ogni switch di tab
+const handleStatsInputEnter = (e) => {
+    if (e.key === 'Enter') {
+        e.target.blur();
+        window.loadAdvancedStats();
+    }
+};
+
+const handleStatsInputFocus = (e) => {
+    setTimeout(() => { e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
+};
+
+window.switchProfileTab = function(tabId) {
+    const infoBtn = document.getElementById('btnTabProfile');
+    const statsBtn = document.getElementById('btnTabStats');
+    const infoArea = document.getElementById('profileInfoArea');
+    const statsArea = document.getElementById('profileStatsArea');
+    const courseArea = document.getElementById('profileCourseArea');
+    const tabsHeader = document.getElementById('profileTabsHeader');
+
+    if (infoBtn) infoBtn.classList.remove('active-tab');
+    if (statsBtn) statsBtn.classList.remove('active-tab');
+
+    if (infoArea) infoArea.style.display = 'none';
+    if (statsArea) statsArea.style.display = 'none';
+    if (courseArea) courseArea.style.display = 'none';
+
+    if (tabId === 'info') {
+        if (tabsHeader) tabsHeader.style.display = 'flex';
+        if (infoBtn) infoBtn.classList.add('active-tab');
+        if (infoArea) infoArea.style.display = 'flex';
+        window.loadProfileInfo();
+    } else if (tabId === 'stats') {
+        if (tabsHeader) tabsHeader.style.display = 'flex';
+        if (statsBtn) statsBtn.classList.add('active-tab');
+        if (statsArea) statsArea.style.display = 'flex';
+
+        const bTh = document.getElementById('bigramThresholdInput');
+        const wTh = document.getElementById('wordThresholdInput');
+
+        if (bTh) {
+            bTh.removeEventListener('keydown', handleStatsInputEnter);
+            bTh.addEventListener('keydown', handleStatsInputEnter);
+            bTh.removeEventListener('focus', handleStatsInputFocus);
+            bTh.addEventListener('focus', handleStatsInputFocus);
+            bTh.removeEventListener('change', window.loadAdvancedStats);
+            bTh.addEventListener('change', window.loadAdvancedStats);
+        }
+        if (wTh) {
+            wTh.removeEventListener('keydown', handleStatsInputEnter);
+            wTh.addEventListener('keydown', handleStatsInputEnter);
+            wTh.removeEventListener('focus', handleStatsInputFocus);
+            wTh.addEventListener('focus', handleStatsInputFocus);
+            wTh.removeEventListener('change', window.loadAdvancedStats);
+            wTh.addEventListener('change', window.loadAdvancedStats);
+        }
+
+        window.loadAdvancedStats();
+    } else if (tabId === 'course') {
+        if (tabsHeader) tabsHeader.style.display = 'none';
+        if (courseArea) courseArea.style.display = 'flex';
+        if (typeof window.hideCourseMessageBadge === 'function') window.hideCourseMessageBadge();
+        if (typeof window.renderCourseTabView === 'function') window.renderCourseTabView();
+    }
+};
+
+window.loadProfileInfo = function() {
+    const listContainer = document.getElementById('matchHistoryList');
+    if (!listContainer) return;
+    listContainer.innerHTML = '<li style="justify-content:center;">Caricamento...</li>';
+
+    if (!myId) return;
+
+    db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value').then(snap => {
+        listContainer.innerHTML = '';
+        window.userMatchHistory = [];
+
+        snap.forEach(child => { window.userMatchHistory.push({ key: child.key, ...child.val() }); });
+        window.userMatchHistory.reverse();
+
+        if (window.userMatchHistory.length === 0) {
+            listContainer.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna partita.</li>';
+            return;
+        }
+
+        const frag = document.createDocumentFragment();
+        window.userMatchHistory.forEach(match => {
+            const d = new Date(match.date || Date.now());
+            const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
+            let modeIcon = match.mode === 'callsign' ? '🎙️' : match.mode === 'pingpong' ? '🏓' : match.mode === 'chars' ? '⌨️' : (match.mode === 'daily_challenge' ? '📅' : '🔤');
+
+            const li = document.createElement('li');
+            li.style.cssText = "flex-direction:column; align-items:flex-start; padding:8px;";
+            li.innerHTML = `
+                <div style="display:flex; justify-content:space-between; width:100%; font-size:0.85em;">
+                    <b>${modeIcon} ${(match.mode || "GIOCO").toUpperCase()}</b>
+                    <span style="color:var(--hint-color)">${dateStr}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; width:100%; margin-top:5px; align-items:center;">
+                    <span><b>${match.score} pt</b> <small>(${match.wpm} WPM)</small></span>
+                    <div style="display:flex; gap:5px;">
+                        <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${match.key}')" style="width:auto; padding:2px 10px;">Vedi</button>
+                        <button class="action-btn-small btn-danger" onclick="window.deleteHistoryItem('${match.key}')" style="width:auto; padding:2px 6px;">🗑️</button>
+                    </div>
+                </div>
+            `;
+            frag.appendChild(li);
+        });
+        listContainer.appendChild(frag);
+    }).catch(err => {
+        console.error("Profile: Error loading history:", err);
+        listContainer.innerHTML = '<li style="justify-content:center; color:red;">Errore caricamento.</li>';
+    });
+};
+
+window.loadAdvancedStats = function() {
+    const wpmContainer = document.getElementById('wpmErrorChartContainer');
+    const bigramContainer = document.getElementById('bigramErrorsContainer');
+    const wordContainer = document.getElementById('wordErrorsContainer');
+
+    const bigramTh = parseInt(document.getElementById('bigramThresholdInput')?.value) || 3;
+    const wordTh = parseInt(document.getElementById('wordThresholdInput')?.value) || 3;
+
+    if (wpmContainer) wpmContainer.innerHTML = 'Caricamento...';
+    if (bigramContainer) bigramContainer.innerHTML = 'Caricamento...';
+    if (wordContainer) wordContainer.innerHTML = 'Caricamento...';
+
+    db.ref(`users/${myId}/stats`).once('value').then(snap => {
+        const stats = snap.val() || {};
+
+        // A. DIAGNOSTICA LUNGHEZZA
+        const lengthCont = document.getElementById('lengthStatsContainer');
+        if (lengthCont) {
+            lengthCont.innerHTML = '';
+            const lData = stats.lengthStats || {};
+            const sortedLens = Object.keys(lData).sort((a,b) => parseInt(a)-parseInt(b));
+            if (sortedLens.length === 0) {
+                lengthCont.innerHTML = '<p style="font-size:0.7em; color:#666;">Dati insufficienti.</p>';
+            } else {
+                const frag = document.createDocumentFragment();
+                sortedLens.forEach(len => {
+                    const d = lData[len];
+                    const acc = Math.round(((d.total - d.errors) / d.total) * 100);
+                    const color = acc > 85 ? '#2e7d32' : acc > 70 ? '#f57f17' : '#d32f2f';
+                    const row = document.createElement('div');
+                    row.style.cssText = "display:flex; align-items:center; gap:8px; font-size:0.75em; color: #000;";
+                    row.innerHTML = `<span style="width:55px; color: #333; font-weight: bold;">${len} Car.</span>
+                        <div style="flex-grow:1; height:8px; background:rgba(0,0,0,0.1); border-radius:4px; overflow:hidden;">
+                            <div style="width:${acc}%; height:100%; background:${color}; transition: width 0.5s ease-out;"></div>
+                        </div>
+                        <span style="width:35px; text-align:right; font-weight:bold; color:${color}">${acc}%</span>`;
+                    frag.appendChild(row);
+                });
+                lengthCont.appendChild(frag);
+            }
+        }
+
+        // B. DIAGNOSTICA POSIZIONALE
+        const pData = stats.positionalErrors || { start:0, mid:0, end:0, totalErrors:0 };
+        const totalP = pData.totalErrors || 1;
+        const calcP = (val) => Math.round((val / totalP) * 100) + "%";
+        if (document.getElementById('posStartStat')) document.getElementById('posStartStat').querySelector('b').textContent = calcP(pData.start);
+        if (document.getElementById('posMidStat')) document.getElementById('posMidStat').querySelector('b').textContent = calcP(pData.mid);
+        if (document.getElementById('posEndStat')) document.getElementById('posEndStat').querySelector('b').textContent = calcP(pData.end);
+
+        // 1. Errori per WPM
+        if (wpmContainer) {
+            wpmContainer.innerHTML = '';
+            const wpmErrs = stats.errorsByWpm || {};
+            const sortedWpm = Object.keys(wpmErrs).sort((a,b) => parseInt(b) - parseInt(a));
+            if (sortedWpm.length === 0) {
+                wpmContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color);">Nessun dato.</p>';
+            } else {
+                const frag = document.createDocumentFragment();
+                sortedWpm.forEach(wpm => {
+                    const total = Object.values(wpmErrs[wpm]).reduce((a,b) => a+b, 0);
+                    const div = document.createElement('div');
+                    div.style.cssText = "display:flex; justify-content:space-between; border-bottom:1px solid rgba(0,0,0,0.05); padding:4px 0; color: var(--text-color);";
+                    div.innerHTML = `<b>${wpm} WPM</b> <span style="color:#d32f2f; font-weight: bold;">${total} err.</span>`;
+                    frag.appendChild(div);
+                });
+                wpmContainer.appendChild(frag);
+            }
+        }
+
+        // 2. Bigrammi (Coppie) Sbagliate
+        if (bigramContainer) {
+            bigramContainer.innerHTML = '';
+            const bigrams = stats.bigramErrors || {};
+            const filteredBigrams = Object.entries(bigrams).filter(e => {
+                const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
+                return count >= bigramTh;
+            }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 20);
+
+            if (filteredBigrams.length === 0) {
+                bigramContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.8em;">Sotto soglia.</p>';
+            } else {
+                const frag = document.createDocumentFragment();
+                filteredBigrams.forEach(([pair, data]) => {
+                    const count = data.count || data;
+                    const avgWpm = data.avgWpm || 20;
+                    const div = document.createElement('div');
+                    div.className = 'leaderboard-row';
+                    div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color);";
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                            <span><b style="color: #d32f2f;">${pair}</b> <small style="color: var(--hint-color);">(${count})</small></span>
+                            <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${pair}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
+                        </div>
+                    `;
+                    frag.appendChild(div);
+                });
+                bigramContainer.appendChild(frag);
+            }
+        }
+
+        // 3. Parole Critiche
+        if (wordContainer) {
+            wordContainer.innerHTML = '';
+            const words = stats.wordErrors || {};
+            const criticalWords = Object.entries(words).filter(e => {
+                const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
+                return count >= wordTh;
+            }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1]));
+
+            if (criticalWords.length === 0) {
+                wordContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.8em;">Sotto soglia.</p>';
+            } else {
+                const frag = document.createDocumentFragment();
+                criticalWords.forEach(([word, data]) => {
+                    const count = data.count || data;
+                    const avgWpm = data.avgWpm || 20;
+                    const div = document.createElement('div');
+                    div.className = 'leaderboard-row';
+                    div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color);";
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                            <span style="overflow:hidden; text-overflow:ellipsis;"><b style="color: #d32f2f;">${word}</b> <small style="color: var(--hint-color);">(${count})</small></span>
+                            <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${word}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
+                        </div>
+                        <div style="font-size:0.7em; color: var(--hint-color);">Velocità media errore: ${avgWpm} WPM</div>
+                    `;
+                    frag.appendChild(div);
+                });
+                wordContainer.appendChild(frag);
+            }
+        }
+    });
+};
+
+window.showProfileScreen = function() {
+    window.showScreen('profileScreen');
+    window.switchProfileTab('info');
+
+    if (els.userAliasInput) els.userAliasInput.value = window.myName || "";
+
+    if (els.privacyUsernameCheckbox) els.privacyUsernameCheckbox.checked = window.myPrivacy ?? true;
+    if (els.privacyOnlineCheckbox) els.privacyOnlineCheckbox.checked = window.myPrivacyOnline ?? false;
+    if (els.privacyLeaderboardCheckbox) els.privacyLeaderboardCheckbox.checked = window.myPrivacyLeaderboard ?? false;
+    if (els.pushNotificationsCheckbox) els.pushNotificationsCheckbox.checked = window.myPushNotifs ?? true;
+
+    if (typeof window.updatePushBtnUI === 'function') {
+        window.updatePushBtnUI(document.getElementById('pushNotifBtn'));
+    }
+};
+
+window.openMatchDetails = function(matchKey) {
+    if (!window.userMatchHistory) return;
+    const match = window.userMatchHistory.find(m => m.key === matchKey);
+    if (!match || !els.matchDetailsBody || !els.matchDetailsModal) return;
+
+    els.matchDetailsBody.innerHTML = '';
+    const h3 = els.matchDetailsModal.querySelector('h3');
+    if (h3) h3.textContent = `Dettagli Match - ${match.mode.toUpperCase()}`;
+
+    const frag = document.createDocumentFragment();
+    (match.details || []).forEach(row => {
+        const tr = document.createElement('tr');
+        const isCorrect = (row.real === row.typed);
+        let color = row.points > 0 ? "#4caf50" : (!isCorrect ? "#d32f2f" : "#999999");
+
+        const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || '-';
+        const tdReal = document.createElement('td');
+
+        if (typeof window.renderDiffSecure === 'function') {
+            window.renderDiffSecure(tdReal, row.real, row.typed || '');
+        } else {
+            const bReal = document.createElement('b'); bReal.textContent = row.real; tdReal.appendChild(bReal);
+        }
+
+        const tdActions = document.createElement('td');
+        tdActions.style.textAlign = 'center';
+
+        const ptsSpan = document.createElement('span');
+        ptsSpan.style.color = color;
+        ptsSpan.style.fontWeight = 'bold';
+        ptsSpan.style.display = 'block';
+        ptsSpan.textContent = row.points;
+        tdActions.appendChild(ptsSpan);
+
+        if (!isCorrect) {
+            const replayBtn = document.createElement('button');
+            replayBtn.className = 'action-btn-small btn-secondary';
+            replayBtn.style.padding = '2px 6px';
+            replayBtn.style.marginTop = '2px';
+            replayBtn.style.width = 'auto';
+            replayBtn.innerHTML = '🔊';
+            const replayWpm = row.wpm || match.wpm || 20;
+            replayBtn.onclick = () => window.playMorseAudio(row.real, replayWpm, true);
+            tdActions.appendChild(replayBtn);
+        }
+
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdActions);
+        frag.appendChild(tr);
+    });
+
+    els.matchDetailsBody.appendChild(frag);
+    els.matchDetailsModal.style.display = 'flex';
+};
+
+window.deleteHistoryItem = function(key) {
+    if (confirm("Eliminare questa partita?")) {
+        db.ref(`users/${myId}/history/${key}`).remove().then(() => window.loadProfileInfo());
+    }
+};
+
+window.syncUserNameEverywhere = async function(userId, newName, newUsername, privLb = false) {
+    // 1. Presenza
+    await db.ref(`presence/${userId}`).update({
+        name: newName,
+        username: newUsername,
+        privacyLeaderboard: privLb
+    });
+
+    if (window.roomCode) {
+        await db.ref(`rooms/${window.roomCode}/players/${userId}`).update({ name: newName, username: newUsername });
+    }
+
+    // 5. Leaderboard
+    await window.updateUserInAllLeaderboards(newName, newUsername, privLb);
+
+    // 6. Tornei
+    if (window.activeTrnId) {
+        try {
+            const trnSnap = await db.ref(`tournaments/${window.activeTrnId}/matches`).once('value');
+            if (trnSnap.exists()) {
+                const matches = trnSnap.val();
+                const updates = {};
+                for (const mId in matches) {
+                    const match = matches[mId];
+                    if (match.playerA && match.playerA.id === userId) updates[`${mId}/playerA/name`] = newName;
+                    if (match.playerB && match.playerB.id === userId) updates[`${mId}/playerB/name`] = newName;
+                }
+                if (Object.keys(updates).length > 0) {
+                    await db.ref(`tournaments/${window.activeTrnId}/matches`).update(updates);
+                }
+            }
+        } catch(e) { console.error("Trn Sync Error:", e); }
+    }
+};
+
+window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb = false) {
+    console.log("Privacy: Updating all leaderboard entries for user...");
+    const updates = { name: newName, username: newUsername, privacyLeaderboard: privLb };
+
+    const fixedPaths = [
+        `leaderboard/callsign/global/${myId}`,
+        `leaderboard/arcade/all/${myId}`,
+        `leaderboard/arcade/global/${myId}`,
+        `leaderboard/la_torre/all/${myId}`
+    ];
+
+    const today = new Date().toISOString().split('T')[0];
+    fixedPaths.push(`leaderboard/daily_challenge/${today}/${myId}`);
+
+    for (const path of fixedPaths) {
+        db.ref(path).once('value').then(snap => {
+            if (snap.exists()) db.ref(path).update(updates);
+        }).catch(()=> {});
+    }
+
+    const categories = ['standard', 'chars', 'quiz', 'pingpong'];
+    for (const cat of categories) {
+        db.ref(`leaderboard/${cat}`).once('value').then(catSnap => {
+            if (catSnap.exists()) {
+                catSnap.forEach(subNode => {
+                    if (subNode.hasChild(myId)) {
+                        subNode.child(myId).ref.update(updates);
                     }
                 });
-            });
+            }
+        }).catch(e => console.warn(`Clean LB ${cat} error:`, e));
+    }
+};
+
+// --- LOGICA SALVATAGGIO ERRORI AVANZATI OTTIMIZZATA ---
+
+window.trackAdvancedErrors = function(realWord, userWord, wpm) {
+    if (!myId) return;
+
+    const real = realWord.toUpperCase();
+    const typed = userWord.toUpperCase();
+    const isError = (real !== typed);
+    const len = real.length;
+
+    // Aggiornamento atomico delle lunghezze (indipendente dagli errori)
+    const statsBase = db.ref(`users/${myId}/stats`);
+    statsBase.child(`lengthStats/${len}/total`).set(firebase.database.ServerValue.increment(1));
+
+    if (isError) {
+        statsBase.child(`lengthStats/${len}/errors`).set(firebase.database.ServerValue.increment(1));
+        statsBase.child(`positionalErrors/totalErrors`).set(firebase.database.ServerValue.increment(1));
+
+        // Tracciamento Posizionale (solo il primo errore trovato nella stringa)
+        for (let i = 0; i < real.length; i++) {
+            if (real[i] !== typed[i]) {
+                const pos = i / (real.length - 1 || 1); // Evita divisione per zero
+                if (pos <= 0.2) statsBase.child(`positionalErrors/start`).set(firebase.database.ServerValue.increment(1));
+                else if (pos >= 0.8) statsBase.child(`positionalErrors/end`).set(firebase.database.ServerValue.increment(1));
+                else statsBase.child(`positionalErrors/mid`).set(firebase.database.ServerValue.increment(1));
+                break;
+            }
         }
 
-        if (els.chatInput) els.chatInput.value = '';
-    };
-}
-
-if (els.chatInput) {
-    els.chatInput.onkeypress = (e) => {
-        if (e.key === 'Enter') els.sendChatBtn?.click();
-    };
-}
-
-if (els.sendLobbyChatBtn) {
-    els.sendLobbyChatBtn.onclick = async () => {
-        const now = Date.now();
-        if (now - window.lastChatSentTs < 2000) return showToast("🐌 Vai più piano! Attendi 2 secondi.");
-
-        if (typeof window.canUserChat === 'function' && !(await window.canUserChat())) return;
-        const txt = els.lobbyChatInput?.value.trim();
-        const rc = window.roomCode;
-        if (!txt || !rc) return;
-        if (txt.length > 200) return showToast(currentLang === 'it' ? "⚠️ Messaggio troppo lungo (max 200 car.)" : "⚠️ Message too long (max 200 chars)");
-
-        window.lastChatSentTs = now;
-        db.ref(`rooms/${rc}/chat`).push().set({
-            name: myName,
-            username: myPrivacy ? "" : tgUsername,
-            text: txt,
-            ts: firebase.database.ServerValue.TIMESTAMP,
-            senderId: myId
+        // Tracciamento Parola via Transaction (per calcolare in sicurezza avgWpm)
+        statsBase.child(`wordErrors/${real}`).transaction(data => {
+            if (!data) return { count: 1, avgWpm: wpm };
+            const oldCount = data.count || (typeof data === 'number' ? data : 0);
+            const oldWpm = data.avgWpm || wpm;
+            const newCount = oldCount + 1;
+            return {
+                count: newCount,
+                avgWpm: Math.round(((oldWpm * oldCount) + wpm) / newCount)
+            };
         });
 
-        // --- NOTIFICHE PUSH ANCHE PER LA LOBBY ---
-        db.ref(`rooms/${rc}/players`).once('value', (snap) => {
-            console.log("DEBUG_PUSH: Controllo lobby per stanza " + rc);
-            snap.forEach((pSnap) => {
-                const pId = pSnap.key;
-                if (pId !== myId) {
-                    db.ref(`presence/${pId}`).once('value', (presSnap) => {
-                        const presData = presSnap.val() || {};
-                        const now = Date.now();
-                        const isFocused = presData.isFocused !== false;
-                        const lastActiveDiff = now - (presData.lastActive || 0);
-                        const isTimedOut = lastActiveDiff > 35000;
+        // Tracciamento Bigrammi via Transaction
+        for (let i = 0; i < real.length - 1; i++) {
+            if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
+                const pair = real.substring(i, i + 2);
+                statsBase.child(`bigramErrors/${pair}`).transaction(data => {
+                    if (!data) return { count: 1, avgWpm: wpm };
+                    const oldCount = data.count || (typeof data === 'number' ? data : 0);
+                    const oldWpm = data.avgWpm || wpm;
+                    return {
+                        count: oldCount + 1,
+                        avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1))
+                    };
+                });
+            }
+        }
+    }
+};
 
-                        console.log(`DEBUG_PUSH_LOBBY: Utente ${pId} -> isFocused: ${isFocused}, LastActive: ${Math.round(lastActiveDiff/1000)}s fa`);
+// --- AZIONI PULSANTI ---
 
-                        const isAppNotAccessible = !presSnap.exists() || !isFocused || isTimedOut;
+if (els.saveAliasBtn) {
+    els.saveAliasBtn.addEventListener('click', async () => {
+        const alias = els.userAliasInput ? els.userAliasInput.value.trim() : "";
+        const privacy = els.privacyUsernameCheckbox ? els.privacyUsernameCheckbox.checked : true;
+        const privacyOnline = els.privacyOnlineCheckbox ? els.privacyOnlineCheckbox.checked : false;
+        const privacyLeaderboard = els.privacyLeaderboardCheckbox ? els.privacyLeaderboardCheckbox.checked : false;
+        const pushNotifs = els.pushNotificationsCheckbox ? els.pushNotificationsCheckbox.checked : true;
 
-                        if (isAppNotAccessible) {
-                            db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
-                                if (prefSnap.val() !== false) {
-                                    sendPushNotification(pId, txt);
-                                }
-                            });
-                        }
+        if (alias) {
+            const isValid = (typeof window.isNameValid === 'function') ? window.isNameValid(alias) : true;
+            if (!isValid) return alert("L'Alias non è valido. Deve contenere almeno 2 caratteri di testo e massimo 1 icona.");
+            if (alias.length > 15) return alert("L'Alias non può superare i 15 caratteri.");
+        }
+
+        if (privacy && !alias) return alert("L'Alias è obbligatorio se nascondi lo username Telegram!");
+
+        const newName = alias || (window.tgUser ? window.tgUser.first_name : "Operatore");
+        const currentUsername = privacy ? "" : window.tgUsername;
+
+        try {
+            await db.ref(`users/${window.myId}`).update({
+                alias: alias || null,
+                privacyUsername: privacy,
+                privacyOnline: privacyOnline,
+                privacyLeaderboard: privacyLeaderboard,
+                pushNotifications: pushNotifs
+            });
+
+            window.myName = newName;
+            window.myPrivacy = privacy;
+            window.myPrivacyOnline = privacyOnline;
+            window.myPrivacyLeaderboard = privacyLeaderboard;
+            window.myPushNotifs = pushNotifs;
+            if (typeof STORAGE_PUSH_NOTIFS_KEY !== 'undefined') localStorage.setItem(STORAGE_PUSH_NOTIFS_KEY, pushNotifs);
+            else localStorage.setItem("cwgame_push_notifs", pushNotifs);
+
+            if (els.playerName) els.playerName.textContent = window.myName;
+            showToast("Profilo aggiornato!");
+
+            await window.syncUserNameEverywhere(window.myId, newName, currentUsername, privacyLeaderboard);
+        } catch(e) {
+            alert("Errore durante il salvataggio: " + e.message);
+        }
+    });
+}
+
+if (document.getElementById('resetStatsBtn')) {
+    document.getElementById('resetStatsBtn').addEventListener('click', async () => {
+        if (confirm("Vuoi azzerare tutte le tue statistiche?")) {
+            try {
+                await Promise.all([ db.ref(`users/${myId}/stats`).remove(), db.ref(`users/${myId}/history`).remove() ]);
+                showToast("Dati azzerati!");
+                window.loadProfileInfo();
+            } catch(e) { alert("Errore."); }
+        }
+    });
+}
+
+const btnResetErrorStats = document.getElementById('btnResetErrorStats');
+if (btnResetErrorStats) {
+    btnResetErrorStats.addEventListener('click', () => {
+        if (confirm("Vuoi azzerare solo i dati analitici degli errori? Lo storico rimarrà intatto.")) {
+            Promise.all([
+                db.ref(`users/${myId}/stats/bigramErrors`).remove(),
+                db.ref(`users/${myId}/stats/wordErrors`).remove(),
+                db.ref(`users/${myId}/stats/charErrors`).remove()
+            ]).then(() => {
+                showToast("Dati errori azzerati!");
+                window.loadAdvancedStats();
+            });
+        }
+    });
+}
+
+const btnCreateErrorDict = document.getElementById('btnCreateErrorDict');
+if (btnCreateErrorDict) {
+    btnCreateErrorDict.addEventListener('click', () => {
+        db.ref(`users/${myId}/stats/wordErrors`).once('value', snap => {
+            const words = snap.val() || {};
+            const wordTh = parseInt(document.getElementById('wordThresholdInput')?.value) || 3;
+            const critical = Object.entries(words)
+                .filter(e => {
+                    const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
+                    return count >= wordTh;
+                })
+                .map(e => e[0]);
+
+            if (critical.length === 0) return showToast(`Non hai ancora abbastanza parole critiche (min. ${wordTh} errori).`);
+
+            window.customDictionary = critical;
+            localStorage.setItem(window.STORAGE_CUSTOM_DICT_KEY || 'customDict', JSON.stringify(critical));
+            showToast(`✅ Creato dizionario con ${critical.length} parole difficili!`);
+            window.showScreen('setupScreen');
+            if (els.gameTypeInput) els.gameTypeInput.value = 'single';
+            if (els.gameModeInput) {
+                els.gameModeInput.value = 'custom';
+                if (typeof window.checkGameTypeUI === 'function') window.checkGameTypeUI();
+            }
+        });
+    });
+}
+
+if (els.deleteDataBtn) {
+    els.deleteDataBtn.onclick = async () => {
+        if (!confirm("ATTENZIONE: Questa azione eliminerà DEFINITIVAMENTE tutto il tuo profilo.\nVuoi procedere?")) return;
+        if (!confirm("CONFERMA FINALE: Sei assolutamente sicuro? Tutti i record in classifica verranno rimossi.")) return;
+
+        showToast("Eliminazione dati in corso...");
+
+        try {
+            const now = new Date();
+            const dKey = now.toISOString().split('T')[0];
+            const wKey = window.getWeekNumber(now);
+            const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
+            const firebaseUid = firebase.auth().currentUser?.uid;
+
+            // Raggruppamento delle rimozioni dirette per velocizzare
+            const deletePromises = [
+                db.ref(`users/${window.myId}`).remove(),
+                db.ref(`presence/${window.myId}`).remove(),
+                db.ref(`courseActiveEnrollments/${window.myId}`).remove(),
+                db.ref(`activity/daily/${dKey}/${window.myId}`).remove(),
+                db.ref(`activity/weekly/${wKey}/${window.myId}`).remove(),
+                db.ref(`activity/monthly/${mKey}/${window.myId}`).remove(),
+                db.ref(`invites/${window.myId}`).remove(),
+                db.ref(`invite_accepted/${window.myId}`).remove(),
+                db.ref(`leaderboard/callsign/global/${window.myId}`).remove(),
+                db.ref(`leaderboard/arcade/all/${window.myId}`).remove(),
+                db.ref(`leaderboard/arcade/global/${window.myId}`).remove()
+            ];
+
+            if (firebaseUid) deletePromises.push(db.ref(`uid_mapping/${firebaseUid}`).remove());
+
+            // Aggiunta pulizia dalle leaderboard dinamiche
+            const categories = ['standard', 'chars', 'quiz', 'pingpong'];
+            for (const cat of categories) {
+                const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
+                if (catSnap.exists()) {
+                    catSnap.forEach(subNode => {
+                        if (subNode.hasChild(window.myId)) deletePromises.push(subNode.child(window.myId).ref.remove());
                     });
                 }
-            });
-        });
-
-        if (els.lobbyChatInput) els.lobbyChatInput.value = '';
-    };
-}
-
-if (els.lobbyChatInput) {
-    els.lobbyChatInput.onkeypress = (e) => {
-        if (e.key === 'Enter') els.sendLobbyChatBtn?.click();
-    };
-}
-}
-if (els.clearChatBtn) {
-    els.clearChatBtn.onclick = () => {
-        if (confirm('Vuoi cancellare la cronologia?')) {
-            if (activeChatContext === 'room' && roomCode) db.ref(`rooms/${roomCode}/chat`).remove();
-            else if (activeChatContext === 'team' && myTeamId) db.ref(`teams/${myTeamId}/chat`).remove();
-            else db.ref('globalChat').remove();
-        }
-    };
-}
-if (els.muteGlobalChatBtn) {
-    els.muteGlobalChatBtn.onclick = () => {
-        isGlobalChatMuted = !isGlobalChatMuted;
-        localStorage.setItem(STORAGE_CHAT_MUTED_KEY, isGlobalChatMuted);
-        updateMuteBtnUI();
-        showToast(isGlobalChatMuted ? "Notifiche silenziate." : "Notifiche riattivate.");
-    };
-}
-
-// --- CREAZIONE STANZA ---
-if (els.createRoomBtn) {
-    els.createRoomBtn.onclick = () => {
-        const gType = els.gameTypeInput.value, gMode = els.gameModeInput.value;
-        if (gType === 'tournament') { window.showScreen('teamsScreen'); return; }
-        if (gMode === 'custom' && window.customDictionary.length === 0) return showToast("Carica un file!");
-
-        // Reset preventivo PRIMA di impostare i nuovi parametri della sessione
-        window.resetGameState();
-
-        window.isChallenging = false;
-        window.outgoingChallengeId = null;
-        window.incomingChallengeId = null;
-        window.currentMode = gMode || 'standard';
-        window.isSinglePlayer = (gType === 'single');
-        window.currentWpm = window.baseWpm = (window.currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
-        window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
-        window.currentTone = parseInt(els.toneInput?.value) || 600;
-
-        if (gType === 'transmission') {
-            window.startTransmissionFree(gMode);
-            return;
-        }
-
-        // --- LETTURA OPZIONI AVANZATE ---
-        const isFixed = window.isSinglePlayer && els.fixedSpeedCheckbox?.checked;
-        const isEasy = window.isSinglePlayer && els.easyModeCheckbox?.checked;
-        const allowSpectators = window.isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
-
-        // Se l'input è vuoto o non siamo in Solo, impostiamo 0 (spaziatura automatica proporzionale)
-        let cSpace = (window.isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
-        let wSpace = window.isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
-
-        window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
-        window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode);
-
-        const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
-
-        const roomRef = db.ref('rooms/' + window.roomCode);
-        const roomData = {
-            status: window.isSinglePlayer ? 'countdown' : 'waiting',
-            type: window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
-            mode: window.currentMode,
-            wpm: window.currentWpm,
-            tone: window.currentTone,
-            wordCount: window.requestedWordCount,
-            fixedSpeed: !!isFixed,
-            easyMode: !!isEasy,
-            allowSpectators: !!allowSpectators,
-            charSpaceWpm: cSpace,
-            wordSpaceMult: wSpace,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            expiresAt: expires,
-            hostId: window.myId,
-            game_words: window.gameWords // Inseriamo le parole atomicamente
-        };
-
-        roomRef.set(roomData).then(() => {
-            if (!window.isSinglePlayer) {
-                // PULIZIA AUTOMATICA: Se l'Host si disconnette completamente da Firebase, rimuovi la stanza
-                roomRef.onDisconnect().remove();
-
-                const lobbyRef = db.ref(`public_lobby_rooms/${window.roomCode}`);
-                lobbyRef.set({
-                    mode: window.currentMode,
-                    pCount: 1,
-                    wpm: window.currentWpm,
-                    status: 'waiting',
-                    expiresAt: expires,
-                    hostId: window.myId // Fondamentale per identificare la propria stanza in bacheca
-                });
-                lobbyRef.onDisconnect().remove();
             }
 
-            if (window.isSinglePlayer && allowSpectators) {
-                db.ref(`presence/${window.myId}`).update({
-                    allowSpectators: true,
-                    activeRoomCode: window.roomCode
+            // Pulizia richieste Tutor
+            const tutorReqSnap = await db.ref('tutorRequests').once('value');
+            if (tutorReqSnap.exists()) {
+                tutorReqSnap.forEach(child => {
+                    if (child.val().uid === window.myId) deletePromises.push(child.ref.remove());
                 });
             }
 
-            window.joinRoomLogic?.(false);
-        });
+            // Gestione Squadra
+            if (window.myTeamId) {
+                const teamRef = db.ref(`teams/${window.myTeamId}`);
+                const teamSnap = await teamRef.once('value');
+                if (teamSnap.exists()) {
+                    const team = teamSnap.val();
+                    const members = team.members || {};
+                    const memberIds = Object.keys(members).filter(id => id !== window.myId);
+
+                    if (memberIds.length === 0) {
+                        deletePromises.push(teamRef.remove());
+                        const trnSnap = await db.ref('tournaments').once('value');
+                        if (trnSnap.exists()) {
+                            trnSnap.forEach(tSnap => {
+                                deletePromises.push(db.ref(`tournaments/${tSnap.key}/teams/${window.myTeamId}`).remove());
+                                deletePromises.push(db.ref(`tournaments/${tSnap.key}/standings/${window.myTeamId}`).remove());
+                            });
+                        }
+                    } else if (team.captainId === window.myId) {
+                        deletePromises.push(teamRef.update({ captainId: memberIds[0] }));
+                        deletePromises.push(teamRef.child(`members/${window.myId}`).remove());
+                    } else {
+                        deletePromises.push(teamRef.child(`members/${window.myId}`).remove());
+                    }
+                }
+            }
+
+            // Attesa di tutte le rimozioni parallele
+            await Promise.all(deletePromises);
+            showToast("Profilo eliminato con successo.");
+
+            localStorage.clear();
+            setTimeout(() => {
+                if (window.tg && typeof window.tg.close === 'function') window.tg.close();
+                else location.reload();
+            }, 1500);
+
+        } catch (e) {
+            console.error("Delete Data Error:", e);
+            alert("Errore durante l'eliminazione: " + e.message);
+        }
     };
 }
-
-// --- LISTA STANZE (SPOSTATO IN SOCIAL_MANAGER.JS) ---
