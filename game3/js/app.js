@@ -1610,7 +1610,6 @@ if (els.createRoomBtn) {
         if (gType === 'tournament') { window.showScreen('teamsScreen'); return; }
         if (gMode === 'custom' && window.customDictionary.length === 0) return showToast("Carica un file!");
 
-        // Reset preventivo PRIMA di impostare i nuovi parametri della sessione
         window.resetGameState();
 
         window.isChallenging = false;
@@ -1622,7 +1621,6 @@ if (els.createRoomBtn) {
         window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         window.currentTone = parseInt(els.toneInput?.value) || 600;
 
-        // Nuova opzione per raggruppamento parole
         window.wordsPerGroup = (window.currentMode === 'standard_plus') ? (parseInt(document.getElementById('wordsPerGroupInput')?.value) || 2) : 1;
 
         if (gType === 'transmission') {
@@ -1630,19 +1628,16 @@ if (els.createRoomBtn) {
             return;
         }
 
-        // --- LETTURA OPZIONI AVANZATE ---
         const isFixed = window.isSinglePlayer && els.fixedSpeedCheckbox?.checked;
         const isEasy = window.isSinglePlayer && els.easyModeCheckbox?.checked;
         const allowSpectators = window.isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
 
-        // Se l'input è vuoto o non siamo in Solo, impostiamo 0 (spaziatura automatica proporzionale)
         let cSpace = (window.isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
         let wSpace = window.isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
 
         window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
 
         const createAndJoinRoom = (stats = {}) => {
-            // Passiamo l'opzione groupSize e stats alla generazione parole
             window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode, {
                 groupSize: window.wordsPerGroup,
                 stats: stats
@@ -1667,7 +1662,7 @@ if (els.createRoomBtn) {
                 createdAt: firebase.database.ServerValue.TIMESTAMP,
                 expiresAt: expires,
                 hostId: window.myId,
-                game_words: window.gameWords // Inseriamo le parole atomicamente
+                game_words: window.gameWords
             };
 
             roomRef.set(roomData).then(() => {
@@ -1680,9 +1675,14 @@ if (els.createRoomBtn) {
                         wpm: window.currentWpm,
                         status: 'waiting',
                         expiresAt: expires,
-                        hostId: window.myId // Fondamentale per identificare la propria stanza in bacheca
+                        hostId: window.myId
                     });
                     lobbyRef.onDisconnect().remove();
+                } else if (allowSpectators) {
+                    db.ref(`presence/${window.myId}`).update({
+                        allowSpectators: true,
+                        activeRoomCode: window.roomCode
+                    });
                 }
                 window.joinRoomLogic(false);
             });
@@ -1700,18 +1700,6 @@ if (els.createRoomBtn) {
         } else {
             createAndJoinRoom();
         }
-    };
-}
-
-            if (window.isSinglePlayer && allowSpectators) {
-                db.ref(`presence/${window.myId}`).update({
-                    allowSpectators: true,
-                    activeRoomCode: window.roomCode
-                });
-            }
-
-            window.joinRoomLogic?.(false);
-        });
     };
 }
 
