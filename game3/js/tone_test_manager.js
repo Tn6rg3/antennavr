@@ -20,7 +20,6 @@ window.openToneTest = function() {
 window.startToneTest = function() {
     if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
 
-    // Sicurezza: inizializziamo audioCtx se non esiste
     if (!window.audioCtx) {
         window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
@@ -41,7 +40,11 @@ window.startToneTest = function() {
     const input = document.getElementById('toneTestInput');
     if (input) {
         input.value = "";
-        input.oninput = window.handleToneTestInput;
+        // Rimuoviamo oninput automatico, ora usiamo i bottoni
+        input.oninput = null;
+        input.onkeypress = (e) => {
+            if (e.key === 'Enter') e.target.blur(); // Chiude tastiera su mobile
+        };
         setTimeout(() => input.focus(), 500);
     }
 
@@ -64,7 +67,7 @@ window.playNextTestSample = function() {
 
     const status = document.getElementById('toneTestStatus');
     if (status) {
-        status.textContent = "Ascolta e digita...";
+        status.textContent = "Cosa hai sentito?";
         status.style.color = "inherit";
     }
 
@@ -72,80 +75,65 @@ window.playNextTestSample = function() {
     if (input) {
         input.value = "";
         input.style.borderColor = "var(--link-color)";
+        input.placeholder = "?";
+        input.focus();
     }
 
-    // Usiamo una variabile locale per il tono durante la sessione di test
-    // per evitare conflitti con il sistema globale se resettato troppo in fretta
     const originalTone = window.currentTone;
     window.currentTone = window.currentTestTone;
-
     if (typeof playMorseAudio === 'function') {
-        // Non usiamo await qui per non bloccare la UI,
-        // ma playMorseAudio è sincrona nella fase di scheduling
         playMorseAudio(window.currentTestChar, window.currentTestWpm, true);
     }
-
-    // Ripristiniamo dopo un piccolo delay per sicurezza dello scheduling
-    setTimeout(() => {
-        window.currentTone = originalTone;
-    }, 100);
+    setTimeout(() => { window.currentTone = originalTone; }, 100);
 };
 
-window.handleToneTestInput = function(e) {
+window.recordToneFeedback = function(isLimpidoSubjective) {
     if (!window.isToneTestRunning) return;
-    const val = e.target.value.trim().toUpperCase();
-    if (val.length === 0) return;
 
-    const isGood = (val === window.currentTestChar);
-    window.recordToneFeedback(isGood);
-};
+    const input = document.getElementById('toneTestInput');
+    const userVal = input ? input.value.trim().toUpperCase() : "";
 
-window.recordToneFeedback = function(isGood) {
-    if (!window.isToneTestRunning) return;
+    if (!userVal) {
+        showToast("Scrivi prima il carattere!");
+        return;
+    }
+
+    const isCorrectObjective = (userVal === window.currentTestChar);
 
     window.toneTestResultsData.push({
         freq: window.currentTestTone,
         wpm: window.currentTestWpm,
-        good: isGood
+        correct: isCorrectObjective,
+        limpido: isLimpidoSubjective
     });
 
     const countEl = document.getElementById('toneTestCount');
     const errorEl = document.getElementById('toneTestErrors');
-    const input = document.getElementById('toneTestInput');
     const status = document.getElementById('toneTestStatus');
 
-    countEl.textContent = window.toneTestResultsData.length;
-    if (!isGood) {
-        errorEl.textContent = window.toneTestResultsData.filter(d => !d.good).length;
-        input.style.borderColor = "#f44336";
-        status.textContent = `❌ Errato! (Era ${window.currentTestChar})`;
-        status.style.color = "#f44336";
+    if (countEl) countEl.textContent = window.toneTestResultsData.length;
+
+    if (!isCorrectObjective) {
+        if (errorEl) errorEl.textContent = window.toneTestResultsData.filter(d => !d.correct).length;
+        if (input) input.style.borderColor = "#f44336";
+        if (status) {
+            status.textContent = `Era: ${window.currentTestChar}`;
+            status.style.color = "#f44336";
+        }
     } else {
-        input.style.borderColor = "#4caf50";
-        status.textContent = "✅ Corretto!";
-        status.style.color = "#4caf50";
+        if (input) input.style.borderColor = "#4caf50";
+        if (status) {
+            status.textContent = isLimpidoSubjective ? "✨ Perfetto!" : "👍 Capito (ma faticoso)";
+            status.style.color = "#4caf50";
+        }
     }
 
-    // Passiamo alla prossima parola dopo un breve delay
+    // Delay per feedback prima del prossimo
     setTimeout(() => {
         if (window.isToneTestRunning) {
             window.playNextTestSample();
-            if (input) input.focus();
         }
-    }, 800);
-};
-
-window.stopToneTest = function() {
-    window.isToneTestRunning = false;
-    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
-
-    if (window.toneTestResultsData.length < 5) {
-        alert("Fai almeno 5 prove per avere un'analisi attendibile.");
-        window.openToneTest();
-        return;
-    }
-
-    window.analyzeToneResults();
+    }, 1000);
 };
 
 window.analyzeToneResults = function() {
@@ -157,19 +145,22 @@ window.analyzeToneResults = function() {
 
     data.forEach(d => {
         const bucket = Math.round(d.freq / 50) * 50;
-        if (!buckets[bucket]) buckets[bucket] = { total: 0, good: 0, score: 0 };
+        if (!buckets[bucket]) buckets[bucket] = { total: 0, score: 0 };
         buckets[bucket].total++;
-        if (d.good) {
-            buckets[bucket].good++;
-            buckets[bucket].score += (d.wpm / 10);
+
+        // Punteggio pesato:
+        // + Corretto e Limpido: 10 punti * (WPM/10)
+        // + Corretto ma Sgradevole: 4 punti
+        // - Errato: -10 punti
+        if (d.correct) {
+            if (d.limpido) buckets[bucket].score += (10 * (d.wpm / 15));
+            else buckets[bucket].score += 4;
         } else {
-            buckets[bucket].score -= 5; // Penalità più severa per l'errore oggettivo
+            buckets[bucket].score -= 10;
         }
     });
 
-    let bestFreq = 600;
-    let maxScore = -999;
-
+    let bestFreq = 600, maxScore = -999;
     Object.keys(buckets).forEach(f => {
         if (buckets[f].score > maxScore) {
             maxScore = buckets[f].score;
@@ -178,19 +169,19 @@ window.analyzeToneResults = function() {
     });
 
     const verdict = document.getElementById('toneTestVerdict');
-    const correctCount = data.filter(d => d.good).length;
-    const accuracy = Math.round((correctCount / data.length) * 100);
+    const acc = Math.round((data.filter(d => d.correct).length / data.length) * 100);
+    const limpidoPerc = Math.round((data.filter(d => d.limpido).length / data.length) * 100);
 
-    verdict.innerHTML = `Accuratezza totale: <b>${accuracy}%</b><br>` +
+    verdict.innerHTML = `Precisione: <b>${acc}%</b> | Gradimento: <b>${limpidoPerc}%</b><br>` +
                        `Tono consigliato: <b style="color:var(--champ-color); font-size:1.5em;">${bestFreq} Hz</b>.<br><br>` +
-                       `<small>Il tuo orecchio ha decodificato meglio a questa frequenza nonostante le variazioni di velocità.</small>`;
+                       `<small>Questa frequenza offre il miglior bilanciamento tra chiarezza e piacevolezza d'ascolto.</small>`;
 
     document.getElementById('btnApplyBestTone').onclick = () => {
         const toneInput = document.getElementById('toneInput');
         if (toneInput) toneInput.value = bestFreq;
         window.currentTone = bestFreq;
         localStorage.setItem('cwgame_pref_tone', bestFreq);
-        showToast(`Tono impostato a ${bestFreq}Hz! 📻`);
+        showToast(`Tono ${bestFreq}Hz applicato! 📻`);
         document.getElementById('toneTestModal').style.display = 'none';
     };
 
