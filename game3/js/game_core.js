@@ -1237,7 +1237,97 @@ window.finishGame = function() {
             }
         }, 3000);
     }
+
+    // --- NUOVO: REPORT ALLENAMENTO MIRATO ---
+    if (currentMode === 'target_training' && window.targetTrainingContext) {
+        setTimeout(() => {
+            window.generateTargetTrainingReport();
+        }, 2000); // Ritardo per permettere di vedere la classifica o la fine partita
+    }
 }
+
+window.generateTargetTrainingReport = function() {
+    const ctx = window.targetTrainingContext;
+    if (!ctx || !ctx.targetChars) return;
+
+    const modal = document.getElementById('targetTrainingReportModal');
+    const content = document.getElementById('targetTrainingReportContent');
+    if (!modal || !content) return;
+
+    // 1. Analisi sessione attuale
+    let sessionCharStats = {};
+    matchDetailsArray.forEach(match => {
+        const real = match.real.toUpperCase();
+        const typed = match.typed.toUpperCase();
+        for (let i = 0; i < real.length; i++) {
+            const char = real[i];
+            if (!sessionCharStats[char]) sessionCharStats[char] = { attempts: 0, errors: 0 };
+            sessionCharStats[char].attempts++;
+            if (real[i] !== typed[i]) sessionCharStats[char].errors++;
+        }
+    });
+
+    let reportHtml = `<p style="margin-bottom:15px; font-style:italic; opacity:0.9;">Questo allenamento si è focalizzato sui tuoi <b>blocchi cognitivi</b> rilevati dalle statistiche precedenti.</p>`;
+
+    let improved = [], repeated = [], perfect = [];
+
+    ctx.targetChars.forEach(char => {
+        const s = sessionCharStats[char];
+        if (!s || s.attempts === 0) return;
+
+        const dbChar = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(char) : char.replace(/\./g, '_dot_');
+        const oldData = ctx.initialStats[dbChar] || { attempts: 1, errors: 1 };
+        const oldAcc = (oldData.attempts - oldData.errors) / oldData.attempts;
+        const newAcc = (s.attempts - s.errors) / s.attempts;
+
+        const row = document.createElement('div');
+        row.style.cssText = "margin-bottom:12px; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px; border-left:4px solid;";
+
+        let statusText = "";
+        let color = "";
+
+        if (s.errors === 0) {
+            perfect.push(char);
+            color = "#4caf50";
+            statusText = "✨ PERFETTO IN QUESTA SESSIONE!";
+        } else if (newAcc > oldAcc) {
+            improved.push(char);
+            color = "#2196f3";
+            statusText = `📈 MIGLIORAMENTO: ${Math.round(newAcc*100)}% (era ${Math.round(oldAcc*100)}%)`;
+        } else {
+            repeated.push(char);
+            color = "#f44336";
+            statusText = `⚠️ ANCORA CRITICO: ${s.errors} errori su ${s.attempts} passaggi.`;
+        }
+
+        reportHtml += `
+            <div style="margin-bottom:10px; border-left: 4px solid ${color}; padding-left:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <b style="font-size:1.2em; color:${color};">${char}</b>
+                    <small style="opacity:0.7;">${s.attempts} passaggi</small>
+                </div>
+                <div style="font-size:0.85em; font-weight:bold; color:${color};">${statusText}</div>
+            </div>
+        `;
+    });
+
+    // Sintesi finale
+    let summaryText = "";
+    if (perfect.length === ctx.targetChars.length) {
+        summaryText = "🚀 PERFORMANCE LEGGENDARIA! Hai azzerato tutti i tuoi blocchi critici in questa sessione. Continua così per consolidare il risultato.";
+    } else if (improved.length > repeated.length) {
+        summaryText = "👍 OTTIMO BENEFICIO! L'allenamento mirato sta funzionando: la maggior parte dei tuoi caratteri critici ha mostrato un miglioramento.";
+    } else if (repeated.length > 0) {
+        summaryText = "🧐 ALLENAMENTO NECESSARIO. Hai ancora difficoltà su alcuni caratteri. Ti consigliamo di ripetere questa modalità a una velocità leggermente inferiore.";
+    } else {
+        summaryText = "Dati insufficienti per una valutazione completa, continua ad allenarti!";
+    }
+
+    reportHtml += `<div style="margin-top:20px; padding:15px; background:var(--sec-bg-color); border-radius:10px; border:1px dashed var(--champ-color); text-align:center; font-weight:bold;">${summaryText}</div>`;
+
+    content.innerHTML = reportHtml;
+    modal.style.display = 'flex';
+};
 
 window.showMatchShareButtons = function() {
     if (currentMode === 'course') return; // OTTIMIZZAZIONE: Nessun social nel corso

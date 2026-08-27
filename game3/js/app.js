@@ -1691,13 +1691,30 @@ if (els.createRoomBtn) {
         if (gMode === 'target_training') {
             db.ref(`users/${myId}/stats`).once('value').then(snap => {
                 const stats = snap.val() || {};
-                const hasData = stats.charStats && Object.keys(stats.charStats).length > 0;
+                const charStats = stats.charStats || {};
+
+                // Salviamo lo stato iniziale per il report finale
+                window.targetTrainingContext = {
+                    initialStats: JSON.parse(JSON.stringify(charStats)),
+                    targetChars: Object.entries(charStats)
+                        .map(([char, d]) => {
+                            const dbChar = (typeof window.firebaseUnescape === 'function') ? window.firebaseUnescape(char) : char.replace(/_dot_/g, '.');
+                            return { char: dbChar.toUpperCase(), acc: (d.attempts > 0 ? (d.attempts - d.errors) / d.attempts : 1), attempts: d.attempts };
+                        })
+                        .filter(c => c.attempts >= 3 && c.acc < 0.85)
+                        .sort((a,b) => a.acc - b.acc)
+                        .map(c => c.char)
+                        .slice(0, 7)
+                };
+
+                const hasData = window.targetTrainingContext.targetChars.length > 0;
                 if (!hasData) {
                     showToast("ℹ️ Dati insufficienti per l'Allenamento Mirato. Gioca altre modalità per raccogliere statistiche!");
                 }
                 createAndJoinRoom(stats);
             });
         } else {
+            window.targetTrainingContext = null;
             createAndJoinRoom();
         }
     };
