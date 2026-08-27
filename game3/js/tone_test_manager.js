@@ -4,6 +4,7 @@ window.toneTestResultsData = [];
 window.isToneTestRunning = false;
 window.currentTestTone = 0;
 window.currentTestWpm = 0;
+window.currentTestChar = "";
 
 window.openToneTest = function() {
     const modal = document.getElementById('toneTestModal');
@@ -26,6 +27,14 @@ window.startToneTest = function() {
     document.getElementById('toneTestSetup').style.display = 'none';
     document.getElementById('toneTestRunning').style.display = 'block';
     document.getElementById('toneTestCount').textContent = '0';
+    document.getElementById('toneTestErrors').textContent = '0';
+
+    const input = document.getElementById('toneTestInput');
+    if (input) {
+        input.value = "";
+        input.oninput = window.handleToneTestInput;
+        setTimeout(() => input.focus(), 500);
+    }
 
     window.playNextTestSample();
 };
@@ -38,25 +47,37 @@ window.playNextTestSample = function() {
     const minWpm = parseInt(document.getElementById('toneTestMinWpm').value) || 15;
     const maxWpm = parseInt(document.getElementById('toneTestMaxWpm').value) || 30;
 
-    // Scegliamo un tono e una velocità casuali nel range
     window.currentTestTone = Math.floor(Math.random() * (maxFreq - minFreq + 1)) + minFreq;
     window.currentTestWpm = Math.floor(Math.random() * (maxWpm - minWpm + 1)) + minWpm;
 
-    // Scegliamo un carattere o numero casuale
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    const char = chars[Math.floor(Math.random() * chars.length)];
+    window.currentTestChar = chars[Math.floor(Math.random() * chars.length)];
 
-    document.getElementById('toneTestStatus').textContent = "Ascolta il segnale...";
+    const status = document.getElementById('toneTestStatus');
+    status.textContent = "Ascolta e digita...";
+    status.style.color = "inherit";
 
-    // Salviamo il tono globale, suoniamo, e ripristiniamo (per non interferire con il gioco)
-    const originalTone = window.currentTone;
-    window.currentTone = window.currentTestTone;
-
-    if (typeof playMorseAudio === 'function') {
-        playMorseAudio(char, window.currentTestWpm, true);
+    const input = document.getElementById('toneTestInput');
+    if (input) {
+        input.value = "";
+        input.style.borderColor = "var(--link-color)";
     }
 
+    const originalTone = window.currentTone;
+    window.currentTone = window.currentTestTone;
+    if (typeof playMorseAudio === 'function') {
+        playMorseAudio(window.currentTestChar, window.currentTestWpm, true);
+    }
     window.currentTone = originalTone;
+};
+
+window.handleToneTestInput = function(e) {
+    if (!window.isToneTestRunning) return;
+    const val = e.target.value.trim().toUpperCase();
+    if (val.length === 0) return;
+
+    const isGood = (val === window.currentTestChar);
+    window.recordToneFeedback(isGood);
 };
 
 window.recordToneFeedback = function(isGood) {
@@ -68,19 +89,30 @@ window.recordToneFeedback = function(isGood) {
         good: isGood
     });
 
-    document.getElementById('toneTestCount').textContent = window.toneTestResultsData.length;
-
-    // Piccolo feedback visivo
+    const countEl = document.getElementById('toneTestCount');
+    const errorEl = document.getElementById('toneTestErrors');
+    const input = document.getElementById('toneTestInput');
     const status = document.getElementById('toneTestStatus');
-    status.textContent = isGood ? "✅ Ricevuto Bene" : "❌ Ricevuto Male";
-    status.style.color = isGood ? "#4caf50" : "#f44336";
 
+    countEl.textContent = window.toneTestResultsData.length;
+    if (!isGood) {
+        errorEl.textContent = window.toneTestResultsData.filter(d => !d.good).length;
+        input.style.borderColor = "#f44336";
+        status.textContent = `❌ Errato! (Era ${window.currentTestChar})`;
+        status.style.color = "#f44336";
+    } else {
+        input.style.borderColor = "#4caf50";
+        status.textContent = "✅ Corretto!";
+        status.style.color = "#4caf50";
+    }
+
+    // Passiamo alla prossima parola dopo un breve delay
     setTimeout(() => {
         if (window.isToneTestRunning) {
-            status.style.color = "inherit";
             window.playNextTestSample();
+            if (input) input.focus();
         }
-    }, 600);
+    }, 800);
 };
 
 window.stopToneTest = function() {
@@ -88,7 +120,7 @@ window.stopToneTest = function() {
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
 
     if (window.toneTestResultsData.length < 5) {
-        alert("Raccogli almeno 5 campioni per avere un'analisi attendibile.");
+        alert("Fai almeno 5 prove per avere un'analisi attendibile.");
         window.openToneTest();
         return;
     }
@@ -101,26 +133,23 @@ window.analyzeToneResults = function() {
     document.getElementById('toneTestResults').style.display = 'block';
 
     const data = window.toneTestResultsData;
-
-    // Dividiamo il range in "secchi" da 50Hz per l'analisi
     const buckets = {};
+
     data.forEach(d => {
         const bucket = Math.round(d.freq / 50) * 50;
         if (!buckets[bucket]) buckets[bucket] = { total: 0, good: 0, score: 0 };
         buckets[bucket].total++;
         if (d.good) {
             buckets[bucket].good++;
-            // Più è alto il WPM, più "pesa" il voto positivo
             buckets[bucket].score += (d.wpm / 10);
         } else {
-            buckets[bucket].score -= 2;
+            buckets[bucket].score -= 5; // Penalità più severa per l'errore oggettivo
         }
     });
 
     let bestFreq = 600;
     let maxScore = -999;
 
-    // Troviamo il secchio con lo score migliore
     Object.keys(buckets).forEach(f => {
         if (buckets[f].score > maxScore) {
             maxScore = buckets[f].score;
@@ -129,8 +158,12 @@ window.analyzeToneResults = function() {
     });
 
     const verdict = document.getElementById('toneTestVerdict');
-    verdict.innerHTML = `Il tuo tono ideale rilevato è <b style="color:var(--champ-color); font-size:1.5em;">${bestFreq} Hz</b>.<br><br>` +
-                       `<small>Analisi basata su ${data.length} campioni con velocità fino a ${Math.max(...data.map(d=>d.wpm))} WPM.</small>`;
+    const correctCount = data.filter(d => d.good).length;
+    const accuracy = Math.round((correctCount / data.length) * 100);
+
+    verdict.innerHTML = `Accuratezza totale: <b>${accuracy}%</b><br>` +
+                       `Tono consigliato: <b style="color:var(--champ-color); font-size:1.5em;">${bestFreq} Hz</b>.<br><br>` +
+                       `<small>Il tuo orecchio ha decodificato meglio a questa frequenza nonostante le variazioni di velocità.</small>`;
 
     document.getElementById('btnApplyBestTone').onclick = () => {
         const toneInput = document.getElementById('toneInput');
@@ -150,12 +183,21 @@ window.renderToneChart = function(buckets, best) {
     chart.innerHTML = '';
 
     const frequencies = Object.keys(buckets).sort((a,b) => a-b);
-    const maxVal = Math.max(...Object.values(buckets).map(b => Math.abs(b.score))) || 1;
+    let minScore = 0, maxScore = 1;
+    Object.values(buckets).forEach(b => {
+        if (b.score < minScore) minScore = b.score;
+        if (b.score > maxScore) maxScore = b.score;
+    });
+
+    const range = maxScore - minScore;
 
     frequencies.forEach(f => {
         const b = buckets[f];
         const bar = document.createElement('div');
-        const height = Math.max(10, (Math.abs(b.score) / maxVal) * 100);
+        // Normalizziamo l'altezza rispetto al range dei punteggi
+        const normalizedScore = (b.score - minScore) / range;
+        const height = Math.max(5, normalizedScore * 100);
+
         const color = parseInt(f) === best ? 'var(--champ-color)' : (b.score > 0 ? 'var(--link-color)' : '#f44336');
 
         bar.style.cssText = `flex:1; height:${height}%; background:${color}; border-top-left-radius:3px; border-top-right-radius:3px; transition: height 0.5s; position:relative;`;

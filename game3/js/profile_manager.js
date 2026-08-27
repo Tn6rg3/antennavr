@@ -684,7 +684,7 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
 
                 // 4. Matrice di Confusione e Errori Carattere
                 const realChar = real[i];
-                const typedChar = typed[i] || "∅"; // Usiamo ∅ se il carattere è stato omesso
+                const typedChar = typed[i] || "[OMESSO]"; // Chiariamo che il carattere manca
                 let dbReal = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(realChar) : realChar.replace(/\./g, '_dot_');
 
                 statsBase.child(`charStats/${dbReal}/errors`).set(firebase.database.ServerValue.increment(1));
