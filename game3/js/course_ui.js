@@ -120,13 +120,20 @@ window.renderTutorPanel = function() {
             const enroll = enrollments[uid];
             const lesson = p.current_lesson || 2;
             const accuracy = p.last_z2_accuracy ? Math.round(p.last_z2_accuracy * 100) : 0;
+            const lastSess = p.last_session_date || null;
+
+            let inactivityLabel = "";
+            if (lastSess) {
+                const diffDays = Math.floor((new Date() - new Date(lastSess)) / (1000 * 60 * 60 * 24));
+                if (diffDays >= 2) inactivityLabel = `<span style="color:#f44336; font-weight:bold; font-size:0.8em;">⚠️ INATTIVO ${diffDays} GG</span>`;
+            } else {
+                inactivityLabel = `<span style="color:var(--hint-color); font-size:0.8em;">MAI ALLENATO</span>`;
+            }
 
             const row = document.createElement('div');
-            row.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px;";
+            row.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px; cursor:pointer;";
 
-            // Cliccando sulla riga si aprono le statistiche (comportamento standard)
             row.onclick = (e) => {
-                // Se abbiamo cliccato sul badge LIVE, non apriamo le statistiche
                 if (e.target.closest('.live-badge')) return;
                 window.showStudentDetailedStats(uid, enroll.name || 'Corsista');
             };
@@ -139,13 +146,14 @@ window.renderTutorPanel = function() {
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <b style="color:#b39ddb;">👤 ${enroll.name || 'Anonimo'}</b>
                     <div style="display:flex; gap:5px; align-items:center;">
+                        ${inactivityLabel}
                         <span style="color:${p.reminders_count > 0 ? '#f44336' : '#4caf50'}">⚠️ ${p.reminders_count || 0}</span>
                         ${liveBadgeHtml}
                     </div>
                 </div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; font-size:0.9em; color:var(--hint-color);">
                     <span>Lez: ${lesson}</span><span>Acc: ${accuracy}%</span>
-                    <span>XP: ${p.total_xp || 0}</span><span>Data: ${p.last_session_date || 'Mai'}</span>
+                    <span>XP: ${p.total_xp || 0}</span><span>Ultima: ${lastSess || '---'}</span>
                 </div>
             `;
             list.appendChild(row);
@@ -174,12 +182,23 @@ window.showStudentDetailedStats = function(uid, name) {
     // Reset dettagli precedenti per pulizia UI
     const charArea = document.getElementById('tutorCharDetailArea');
     const sessArea = document.getElementById('tutorSessionDetailArea');
+    const heatmap = document.getElementById('tutorStudentHeatmap');
+    const historyCont = document.getElementById('tutorStudentHistory');
+    const trendCont = document.getElementById('tutorStudentTrend');
+
     if (charArea) charArea.style.display = 'none';
     if (sessArea) sessArea.style.display = 'none';
+    if (heatmap) heatmap.innerHTML = '<p style="text-align:center; padding:10px;">Caricamento...</p>';
+    if (historyCont) historyCont.innerHTML = '';
+    if (trendCont) trendCont.innerHTML = '';
 
-    db.ref(`users/${uid}`).once('value', snap => {
-        const u = snap.val() || {};
-        const p = (u.course && u.course.progress) || {};
+    // Carichiamo i nodi separatamente per efficienza
+    Promise.all([
+        db.ref(`users/${uid}/course/progress`).once('value'),
+        db.ref(`users/${uid}/history`).orderByChild('mode').equalTo('course').limitToLast(15).once('value')
+    ]).then(([progSnap, histSnap]) => {
+        const p = progSnap.val() || {};
+        const historyData = histSnap.val() || {};
 
         // 1. HEATMAP INTERATTIVA
         const hm = document.getElementById('tutorStudentHeatmap');
@@ -202,7 +221,6 @@ window.showStudentDetailedStats = function(uid, name) {
                     box.style.color = '#fff';
                 }
 
-                // Click sul carattere per i dettagli tecnici
                 box.onclick = () => {
                     const detailArea = document.getElementById('tutorCharDetailArea');
                     const detailTitle = document.getElementById('tutorCharDetailTitle');
@@ -221,7 +239,6 @@ window.showStudentDetailedStats = function(uid, name) {
                     `;
                     detailArea.scrollIntoView({ behavior: 'smooth' });
                 };
-
                 hm.appendChild(box);
             });
         }
@@ -230,9 +247,10 @@ window.showStudentDetailedStats = function(uid, name) {
         const hs = document.getElementById('tutorStudentHistory');
         if (hs) {
             hs.innerHTML = '';
-            const history = Object.values(u.history || {}).filter(h => h.mode === 'course').slice(-15).reverse();
+            const history = Object.values(historyData).sort((a,b) => (b.date || 0) - (a.date || 0));
+
             if (history.length === 0) {
-                hs.innerHTML = '<p style="text-align:center; opacity:0.5;">Nessuna sessione registrata.</p>';
+                hs.innerHTML = '<p style="text-align:center; opacity:0.5; padding:10px;">Nessuna sessione registrata.</p>';
             } else {
                 let totalAcc = 0, totalWpm = 0, count = 0;
 
@@ -250,10 +268,12 @@ window.showStudentDetailedStats = function(uid, name) {
                     const div = document.createElement('div');
                     div.style.cssText = "padding:8px; background:rgba(255,255,255,0.05); border-radius:6px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; border:1px solid rgba(255,255,255,0.05);";
 
+                    const dateStr = h.date ? new Date(h.date).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : 'Data ignota';
+
                     div.innerHTML = `
                         <div style="display:flex; flex-direction:column;">
-                            <span style="font-weight:bold; font-size:0.9em;">${new Date(h.date).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})}</span>
-                            <small style="color:var(--hint-color);">${h.score} XP | ${h.wpm} WPM</small>
+                            <span style="font-weight:bold; font-size:0.9em;">${dateStr}</span>
+                            <small style="color:var(--hint-color);">${h.score || 0} XP | ${h.wpm || 20} WPM</small>
                         </div>
                         <div style="text-align:right; display:flex; align-items:center; gap:8px;">
                             <b style="color:${sessAcc >= 90 ? '#4caf50' : sessAcc >= 70 ? '#ff9800' : '#d32f2f'}">${sessAcc}%</b>
@@ -261,19 +281,18 @@ window.showStudentDetailedStats = function(uid, name) {
                         </div>
                     `;
 
-                    // Click sulla sessione per vedere le parole specifiche
                     div.onclick = () => {
                         const detailArea = document.getElementById('tutorSessionDetailArea');
                         const detailContent = document.getElementById('tutorSessionDetailContent');
                         if (!detailArea || !detailContent) return;
 
                         detailArea.style.display = 'block';
-                        document.getElementById('tutorSessionDetailTitle').textContent = `Sessione del ${new Date(h.date).toLocaleDateString()}`;
+                        document.getElementById('tutorSessionDetailTitle').textContent = `Dettaglio del ${new Date(h.date).toLocaleDateString()}`;
 
                         if (details.length === 0) {
-                            detailContent.innerHTML = '<p style="text-align:center; opacity:0.5; padding:20px;">Dati di dettaglio non disponibili per questa sessione (vecchia build).</p>';
+                            detailContent.innerHTML = '<p style="text-align:center; opacity:0.5; padding:20px;">Dati di dettaglio non disponibili.</p>';
                         } else {
-                            let html = '<table style="width:100%; border-collapse:collapse; font-size:0.9em;">';
+                            let html = '<table style="width:100%; border-collapse:collapse; font-size:0.95em; color:var(--text-color);">';
                             html += '<thead style="border-bottom:1px solid rgba(255,255,255,0.1); color:var(--hint-color);"><tr><th style="text-align:left; padding:4px;">Target</th><th style="text-align:left; padding:4px;">Input</th><th style="padding:4px;">Esito</th></tr></thead><tbody>';
                             details.forEach(d => {
                                 const isCorrect = d.points > 0;
@@ -288,11 +307,10 @@ window.showStudentDetailedStats = function(uid, name) {
                         }
                         detailArea.scrollIntoView({ behavior: 'smooth' });
                     };
-
                     hs.appendChild(div);
                 });
 
-                // 3. TREND E ANALISI (ULtime 15 sessioni)
+                // 3. TREND E ANALISI
                 const tr = document.getElementById('tutorStudentTrend');
                 if (tr && count > 0) {
                     const avgA = Math.round(totalAcc / count);
@@ -308,14 +326,13 @@ window.showStudentDetailedStats = function(uid, name) {
                                 <b style="font-size:1.3em; color:var(--link-color);">${avgW} WPM</b>
                             </div>
                         </div>
-                        <div style="font-size:0.8em; color:var(--hint-color); text-align:center; font-style:italic;">
-                            Analisi basata sulle ultime <b>${count}</b> sessioni del corso.<br>
-                            ${avgA >= 90 ? '🚀 Il corsista è pronto per salire di WPM.' : avgA < 75 ? '⚠️ Il corsista ha difficoltà, suggerire più Z2.' : '👍 Progresso regolare.'}
-                        </div>
                     `;
                 }
             }
         }
+    }).catch(err => {
+        console.error("Tutor Stats Error:", err);
+        if (heatmap) heatmap.innerHTML = '<p style="color:red; text-align:center;">Errore caricamento dati.</p>';
     });
 };
 

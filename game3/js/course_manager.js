@@ -259,7 +259,8 @@ window.checkCourseInactivity = function() {
     const diffDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
 
     if (diffDays >= 2) {
-        const yesterdayIdx = (today.getDay() + 5) % 7;
+        // Calcoliamo l'indice di ieri (0:Dom, 1:Lun...)
+        const yesterdayIdx = (today.getDay() + 6) % 7;
         const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[yesterdayIdx] : null;
 
         if (dayData && dayData.sessions.some(s => s.type !== 'REST')) {
