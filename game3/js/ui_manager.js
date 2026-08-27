@@ -126,6 +126,7 @@ window.checkGameTypeUI = function() {
         btn: document.getElementById('createRoomBtn'),
         startWpm: document.getElementById('startWpmInput'),
         wordCount: document.getElementById('wordCountInput'),
+        wordsPerGroup: document.getElementById('wordsPerGroupContainer'),
         koch: document.getElementById('setupKochLevelContainer'),
         keyer: document.getElementById('mainMenuKeyerConfig')
     };
@@ -137,6 +138,7 @@ window.checkGameTypeUI = function() {
     if (containers.spacing) containers.spacing.style.display = (isSingle && !isTx) ? 'flex' : 'none';
     if (containers.custom) containers.custom.style.display = (isSingle && !isTx) ? 'flex' : 'none';
     if (containers.spectator) containers.spectator.style.display = (isSingle && !isTx) ? 'flex' : 'none';
+    if (containers.wordsPerGroup) containers.wordsPerGroup.style.display = (selectedMode === 'standard_plus') ? 'block' : 'none';
 
     // --- LOGICA TRASMISSIONE ---
     if (containers.koch) containers.koch.style.display = isTx ? 'block' : 'none';

@@ -30,6 +30,41 @@ window.GAME_MODES = {
             return fisherYatesShuffle(master).slice(0, num).map(w => String(w).toUpperCase());
         }
     },
+    "standard_plus": {
+        id: "standard_plus",
+        titleIt: "Parole Comuni +",
+        titleEn: "Common Words +",
+        icon: "➕",
+        defaultWpm: 20,
+        defaultWordCount: 10,
+        wpmConfigurable: true,
+        wordCountConfigurable: true,
+        fixedSpeedAllowed: true,
+        spacingConfigurable: true,
+        generateWords: function(num, dicts, options) {
+            const master = (dicts && Array.isArray(dicts.master) && dicts.master.length > 0)
+                ? dicts.master
+                : ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
+
+            const groupSize = parseInt(options?.groupSize) || 2;
+            const totalNeeded = num * groupSize;
+            const shuffled = fisherYatesShuffle(master);
+
+            // Se il dizionario è piccolo, lo duplichiamo per coprire la richiesta
+            let source = [...shuffled];
+            while (source.length < totalNeeded) source = source.concat(fisherYatesShuffle(master));
+
+            let groups = [];
+            for (let i = 0; i < num; i++) {
+                let group = [];
+                for (let j = 0; j < groupSize; j++) {
+                    group.push(source[i * groupSize + j]);
+                }
+                groups.push(group.join(" ").toUpperCase());
+            }
+            return groups;
+        }
+    },
     "perfection": {
         id: "perfection",
         titleIt: "Perfezione (Zero Errori)",

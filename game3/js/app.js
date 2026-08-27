@@ -1622,6 +1622,9 @@ if (els.createRoomBtn) {
         window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         window.currentTone = parseInt(els.toneInput?.value) || 600;
 
+        // Nuova opzione per raggruppamento parole
+        window.wordsPerGroup = (window.currentMode === 'standard_plus') ? (parseInt(document.getElementById('wordsPerGroupInput')?.value) || 2) : 1;
+
         if (gType === 'transmission') {
             window.startTransmissionFree(gMode);
             return;
@@ -1637,7 +1640,9 @@ if (els.createRoomBtn) {
         let wSpace = window.isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
 
         window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
-        window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode);
+
+        // Passiamo l'opzione groupSize alla generazione parole
+        window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode, { groupSize: window.wordsPerGroup });
 
         const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
@@ -1646,6 +1651,7 @@ if (els.createRoomBtn) {
             status: window.isSinglePlayer ? 'countdown' : 'waiting',
             type: window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
             mode: window.currentMode,
+            groupSize: window.wordsPerGroup,
             wpm: window.currentWpm,
             tone: window.currentTone,
             wordCount: window.requestedWordCount,

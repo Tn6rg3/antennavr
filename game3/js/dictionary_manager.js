@@ -49,10 +49,10 @@ window.getDailyWords = function(num) {
     return dict.slice(0, num).map(w => w.toUpperCase());
 };
 
-window.getGameWords = function(num, mode) {
+window.getGameWords = function(num, mode, options = {}) {
     if (mode === 'daily_challenge') return window.getDailyWords(num);
     if (window.GAME_MODES && window.GAME_MODES[mode] && typeof window.GAME_MODES[mode].generateWords === 'function') {
-        return window.GAME_MODES[mode].generateWords(num, { master: window.masterDictionary, custom: window.customDictionary });
+        return window.GAME_MODES[mode].generateWords(num, { master: window.masterDictionary, custom: window.customDictionary }, options);
     }
     // Se siamo in modalità standard ma c'è un dizionario personalizzato carico, usalo
     if (mode === 'standard' && window.customDictionary && window.customDictionary.length > 0) {

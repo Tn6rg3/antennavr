@@ -453,6 +453,9 @@ window.openInviteModal = function(targetId, targetName) {
             const wpm = wpmInput ? parseInt(wpmInput.value) : 20;
             const wordCount = wcInput ? parseInt(wcInput.value) : 10;
 
+            // Per gli inviti usiamo il valore impostato nel menu principale se siamo in std_plus
+            const groupSize = (mode === 'standard_plus') ? (parseInt(document.getElementById('wordsPerGroupInput')?.value) || 2) : 1;
+
             console.log("RPG: Sending Game Invite to:", targetId, "Mode:", mode);
 
             db.ref(`invites/${targetId}`).set({
@@ -463,6 +466,7 @@ window.openInviteModal = function(targetId, targetName) {
                 mode: mode,
                 wpm: wpm,
                 wordCount: wordCount,
+                groupSize: groupSize,
                 ts: firebase.database.ServerValue.TIMESTAMP
             }).then(() => {
                 showToast("Sfida inviata a " + targetName + " 🚀");
@@ -728,13 +732,17 @@ window.listenToInvites = function() {
                     els.acceptInviteBtn.textContent = "⌛ Avvio...";
 
                     const roomCodeNew = Math.floor(1000 + Math.random() * 9000).toString();
-                    const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard');
+
+                    // Recuperiamo groupSize se presente nell'invito, altrimenti default 2 per std_plus, 1 per gli altri
+                    const groupSizeInv = inv.groupSize || (inv.mode === 'standard_plus' ? 2 : 1);
+                    const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard', { groupSize: groupSizeInv });
                     const isCoop = (inv.mode === 'conquest');
 
                     const roomData = {
                         status: 'countdown',
                         type: isCoop ? 'coop' : 'multi',
                         mode: inv.mode || 'standard',
+                        groupSize: groupSizeInv,
                         wpm: inv.wpm || 20,
                         tone: 600,
                         wordCount: inv.wordCount || 10,

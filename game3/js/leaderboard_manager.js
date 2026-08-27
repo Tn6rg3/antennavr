@@ -8,12 +8,14 @@ window.lbGroups = {
     ],
     single: [
         { val: 'std_single', it: '👤 Record Parole', en: '👤 Words Records' },
+        { val: 'std_plus_single', it: '👤 Record Parole +', en: '👤 Words + Records' },
         { val: 'chars_single', it: '👤 Record Caratteri', en: '👤 Chars Records' },
         { val: 'quiz_single', it: '👤 Record Quiz', en: '👤 Quiz Records' },
         { val: 'custom_single', it: '👤 Record Personale', en: '👤 Personal Records' }
     ],
     multi: [
         { val: 'std_multi', it: '⚔️ Match Parole (Multi)', en: '⚔️ Words Matches' },
+        { val: 'std_plus_multi', it: '⚔️ Match Parole + (Multi)', en: '⚔️ Words + Matches' },
         { val: 'chars_multi', it: '⚔️ Match Caratteri (Multi)', en: '⚔️ Chars Matches' },
         { val: 'quiz_multi', it: '⚔️ Match Quiz (Multi)', en: '⚔️ Quiz Matches' },
         { val: 'pingpong', it: '🏓 Match Ping Pong', en: '🏓 Ping Pong Matches' },
@@ -101,7 +103,8 @@ window.showLeaderboardTab = function(modeValue) {
         if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
 
         let baseMode = 'standard';
-        if (modeValue.includes('chars')) baseMode = 'chars';
+        if (modeValue.includes('std_plus')) baseMode = 'standard_plus';
+        else if (modeValue.includes('chars')) baseMode = 'chars';
         else if (modeValue.includes('quiz')) baseMode = 'quiz';
         else if (modeValue.includes('callsign')) baseMode = 'callsign';
         else if (modeValue.includes('custom')) baseMode = 'custom';

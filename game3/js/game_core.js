@@ -1371,7 +1371,8 @@ function finishGameNavigation(mode, wordCount, isSingle, code) {
 
     // Determiniamo il sotto-modo (select) per la navigazione
     let subMode = isSingle ? 'std_single' : 'std_multi';
-    if (mode === 'callsign') subMode = 'cwfreak';
+    if (mode === 'standard_plus') subMode = isSingle ? 'std_plus_single' : 'std_plus_multi';
+    else if (mode === 'callsign') subMode = 'cwfreak';
     else if (mode === 'quiz') subMode = isSingle ? 'quiz_single' : 'quiz_multi';
     else if (mode === 'chars') subMode = isSingle ? 'chars_single' : 'chars_multi';
     else if (mode === 'pingpong') subMode = 'pingpong';
