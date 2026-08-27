@@ -532,6 +532,11 @@
                     </div>
                 </div>
             </div>
+
+            <!-- OTTIMIZZAZIONE TONO -->
+            <div style="margin-top:15px; padding-top:10px; border-top:1px solid #ccc; text-align: center;">
+                <button onclick="window.openToneTest()" class="btn-link" style="font-size:0.85em; font-weight:bold; color:var(--link-color); text-decoration:none;">🎧 Test Udito: Trova il tuo Tono Ideale</button>
+            </div>
         </div>
 
         <div class="box-panel" style="max-height: 120px; margin-bottom:8px; padding: 5px;">
@@ -1855,13 +1860,80 @@
     <button id="btnCloseCourseResults" class="btn-success" style="width: 100%; padding: 12px;">TORNA AL MENU 🚀</button>
 </div>
 
-<!-- MODAL: REPORT ALLENAMENTO MIRATO (RADAR) -->
-<div id="targetTrainingReportModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9500; border: 3px solid var(--champ-color); border-radius: 16px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 15px 50px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto;">
-    <h2 style="color: var(--champ-color); margin: 0 0 15px 0; text-align: center; text-transform: uppercase; letter-spacing: 1px;">🎯 Debriefing Radar</h2>
-    <div id="targetTrainingReportContent" style="font-size: 0.95em; line-height: 1.5; text-align: left;">
-        <!-- Generato via JS -->
+<!-- MODAL: TEST OTTIMIZZAZIONE TONO -->
+<div id="toneTestModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9600; border: 3px solid var(--link-color); border-radius: 16px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 15px 50px rgba(0,0,0,0.9); max-height: 95vh; overflow-y: auto;">
+    <h2 style="color: var(--link-color); margin: 0 0 15px 0; text-align: center;">🎧 Laboratorio Tono</h2>
+
+    <div id="toneTestSetup">
+        <p style="font-size:0.85em; line-height:1.4; margin-bottom:15px;">Questo test ti aiuterà a trovare la frequenza acustica che il tuo cervello decodifica con meno sforzo.</p>
+
+        <div class="box-panel" style="background:rgba(0,0,0,0.2); border-color:var(--hint-color); padding:10px;">
+            <h4 style="margin:0 0 10px 0; font-size:0.9em;">1. Imposta Range di Scansione</h4>
+            <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                <div style="flex:1;">
+                    <label style="font-size:0.7em; display:block;">Min (Hz):</label>
+                    <input type="number" id="toneTestMinFreq" value="350" min="300" max="1200" style="width:100%; padding:8px;">
+                </div>
+                <div style="flex:1;">
+                    <label style="font-size:0.7em; display:block;">Max (Hz):</label>
+                    <input type="number" id="toneTestMaxFreq" value="900" min="300" max="1200" style="width:100%; padding:8px;">
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+                <div style="flex:1;">
+                    <label style="font-size:0.7em; display:block;">WPM Min:</label>
+                    <input type="number" id="toneTestMinWpm" value="15" min="5" max="50" style="width:100%; padding:8px;">
+                </div>
+                <div style="flex:1;">
+                    <label style="font-size:0.7em; display:block;">WPM Max:</label>
+                    <input type="number" id="toneTestMaxWpm" value="30" min="5" max="50" style="width:100%; padding:8px;">
+                </div>
+            </div>
+        </div>
+
+        <button onclick="window.startToneTest()" class="btn-success" style="width:100%; padding:15px; margin-top:15px; font-weight:bold; font-size:1.1em;">INIZIA SCANSIONE 🚀</button>
+        <button onclick="document.getElementById('toneTestModal').style.display='none'" class="btn-secondary" style="width:100%; margin-top:10px;">Chiudi</button>
     </div>
-    <button onclick="document.getElementById('targetTrainingReportModal').style.display='none'" class="btn-success" style="width: 100%; padding: 15px; font-weight: bold; margin-top: 15px;">HO CAPITO, GRAZIE ✅</button>
+
+    <div id="toneTestRunning" style="display:none; text-align:center;">
+        <div id="toneTestPulse" style="width:80px; height:80px; background:var(--link-color); border-radius:50%; margin:20px auto; display:flex; align-items:center; justify-content:center; animation: pulse 1s infinite;">
+            <span style="font-size:2em;">📻</span>
+        </div>
+        <p style="font-size:1.1em; font-weight:bold; margin-bottom:5px;" id="toneTestStatus">Ascolta il segnale...</p>
+        <p style="font-size:0.8em; color:var(--hint-color); margin-bottom:20px;">Com'è la ricezione di questo suono?</p>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+            <button onclick="window.recordToneFeedback(true)" class="btn-success" style="height:100px; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+                <span style="font-size:2em;">✅</span>
+                <span style="font-size:0.9em; font-weight:bold; margin-top:5px;">LIMPIDO</span>
+            </button>
+            <button onclick="window.recordToneFeedback(false)" class="btn-danger" style="height:100px; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+                <span style="font-size:2em;">❌</span>
+                <span style="font-size:0.9em; font-weight:bold; margin-top:5px;">SGRADEVOLE</span>
+            </button>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:15px;">
+            <div style="font-size:0.8em; color:var(--hint-color);">Campioni raccolti: <b id="toneTestCount" style="color:white;">0</b></div>
+        </div>
+
+        <button onclick="window.stopToneTest()" class="btn-danger" style="width:100%; padding:12px;">TERMINA E ANALIZZA 📊</button>
+    </div>
+
+    <div id="toneTestResults" style="display:none;">
+        <div style="background:var(--sec-bg-color); padding:15px; border-radius:12px; border:2px solid var(--champ-color); margin-bottom:20px; text-align:center;">
+            <h3 style="color:var(--champ-color); margin-top:0;">RISULTATO ANALISI</h3>
+            <div id="toneTestVerdict" style="font-size:1.1em; line-height:1.4; margin:15px 0;"></div>
+            <button id="btnApplyBestTone" class="btn-success" style="width:100%; padding:12px; font-weight:bold;">IMPOSTA QUESTO TONO ✅</button>
+        </div>
+
+        <div id="toneTestChart" style="height:150px; background:rgba(255,255,255,0.03); border-radius:8px; position:relative; display:flex; align-items:flex-end; gap:2px; padding:10px; margin-bottom:15px;">
+            <!-- Barre generate via JS -->
+        </div>
+
+        <button onclick="window.openToneTest()" class="btn-secondary" style="width:100%;">RIPETI TEST 🔄</button>
+        <button onclick="document.getElementById('toneTestModal').style.display='none'" class="btn-link" style="width:100%; margin-top:10px; color:var(--hint-color);">Chiudi</button>
+    </div>
 </div>
 
 <!-- MODAL: STATISTICHE CORSISTA (PER TUTOR) -->
@@ -1930,6 +2002,7 @@
             "js/tower_manager.js",
             "js/pingpong_manager.js",
             "js/spectator_manager.js",
+            "js/tone_test_manager.js",
             "js/game_core.js"
         ];
         scripts.forEach(function(src) {
