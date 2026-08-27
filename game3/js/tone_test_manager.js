@@ -40,12 +40,14 @@ window.startToneTest = function() {
     const input = document.getElementById('toneTestInput');
     if (input) {
         input.value = "";
-        // Rimuoviamo oninput automatico, ora usiamo i bottoni
         input.oninput = null;
         input.onkeypress = (e) => {
-            if (e.key === 'Enter') e.target.blur(); // Chiude tastiera su mobile
+            if (e.key === 'Enter') e.preventDefault();
         };
-        setTimeout(() => input.focus(), 500);
+        input.onblur = () => {
+            if (window.isToneTestRunning) setTimeout(() => input.focus(), 10);
+        };
+        setTimeout(() => input.focus(), 300);
     }
 
     window.playNextTestSample();
@@ -76,7 +78,8 @@ window.playNextTestSample = function() {
         input.value = "";
         input.style.borderColor = "var(--link-color)";
         input.placeholder = "?";
-        input.focus();
+        // NON chiamiamo focus() qui se è già attivo per non far saltare la tastiera
+        if (document.activeElement !== input) input.focus();
     }
 
     const originalTone = window.currentTone;
@@ -132,8 +135,22 @@ window.recordToneFeedback = function(isLimpidoSubjective) {
     setTimeout(() => {
         if (window.isToneTestRunning) {
             window.playNextTestSample();
+            if (input) input.focus();
         }
     }, 1000);
+};
+
+window.stopToneTest = function() {
+    window.isToneTestRunning = false;
+    if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
+
+    if (window.toneTestResultsData.length < 5) {
+        alert("Fai almeno 5 prove per avere un'analisi attendibile.");
+        window.openToneTest();
+        return;
+    }
+
+    window.analyzeToneResults();
 };
 
 window.analyzeToneResults = function() {
