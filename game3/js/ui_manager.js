@@ -171,7 +171,24 @@ window.checkGameTypeUI = function() {
 
         if (containers.startWpm) {
             containers.startWpm.disabled = (modeCfg.wpmConfigurable === false);
-            if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) {
+
+            if (selectedMode === 'target_training') {
+                // Per l'allenamento mirato, cerchiamo il WPM critico in tempo reale
+                db.ref(`users/${myId}/stats/errorsByWpm`).once('value', snap => {
+                    const errorsByWpm = snap.val() || {};
+                    const wpmEntries = Object.entries(errorsByWpm);
+                    if (wpmEntries.length > 0) {
+                        let maxErrors = -1, autoWpm = 20;
+                        wpmEntries.forEach(([w, chars]) => {
+                            const total = Object.values(chars).reduce((a, b) => a + b, 0);
+                            if (total > maxErrors) { maxErrors = total; autoWpm = parseInt(w); }
+                        });
+                        containers.startWpm.value = autoWpm;
+                    } else {
+                        containers.startWpm.value = localStorage.getItem('cwgame_pref_wpm') || 20;
+                    }
+                });
+            } else if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) {
                 containers.startWpm.value = modeCfg.defaultWpm;
             } else {
                 // RIPRISTINO PREFERENZA UTENTE se la modalità lo permette

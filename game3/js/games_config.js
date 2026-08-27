@@ -72,7 +72,7 @@ window.GAME_MODES = {
         icon: "🎯",
         defaultWpm: 20,
         defaultWordCount: 15,
-        wpmConfigurable: true,
+        wpmConfigurable: false,
         wordCountConfigurable: true,
         fixedSpeedAllowed: true,
         spacingConfigurable: true,
