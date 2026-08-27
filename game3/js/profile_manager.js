@@ -663,72 +663,69 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb
 window.trackAdvancedErrors = function(realWord, userWord, wpm) {
     if (!myId) return;
 
-    const real = realWord.toUpperCase();
-    const typed = userWord.toUpperCase();
-    const isError = (real !== typed);
-    const len = real.length;
+    // Dividiamo i gruppi in singole parole per evitare l'effetto "trascinamento" degli errori
+    const realWords = realWord.toUpperCase().split(' ');
+    const typedWords = userWord.toUpperCase().split(' ');
 
     const statsBase = db.ref(`users/${myId}/stats`);
 
-    // 1. Aggiornamento atomico delle lunghezze (indipendente dagli errori)
-    statsBase.child(`lengthStats/${len}/total`).set(firebase.database.ServerValue.increment(1));
+    realWords.forEach((real, wordIdx) => {
+        const typed = typedWords[wordIdx] || "";
+        const isWordError = (real !== typed);
+        const len = real.length;
 
-    // 2. Tracciamento Caratteri (Tentativi totali)
-    for (let char of real) {
-        let dbChar = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(char) : char.replace(/\./g, '_dot_');
-        statsBase.child(`charStats/${dbChar}/attempts`).set(firebase.database.ServerValue.increment(1));
-    }
+        // 1. Aggiornamento atomico delle lunghezze (per singola parola)
+        statsBase.child(`lengthStats/${len}/total`).set(firebase.database.ServerValue.increment(1));
 
-    if (isError) {
-        statsBase.child(`lengthStats/${len}/errors`).set(firebase.database.ServerValue.increment(1));
-
-        // 3. Tracciamento Posizionale (Analisi di TUTTI i caratteri della parola)
-        for (let i = 0; i < real.length; i++) {
-            if (real[i] !== typed[i]) {
-                const pos = i / (real.length - 1 || 1);
-
-                // Incrementiamo il totale posizionale per ogni errore trovato
-                statsBase.child(`positionalErrors/totalErrors`).set(firebase.database.ServerValue.increment(1));
-
-                if (pos <= 0.33) statsBase.child(`positionalErrors/start`).set(firebase.database.ServerValue.increment(1));
-                else if (pos >= 0.66) statsBase.child(`positionalErrors/end`).set(firebase.database.ServerValue.increment(1));
-                else statsBase.child(`positionalErrors/mid`).set(firebase.database.ServerValue.increment(1));
-
-                // 4. Matrice di Confusione e Errori Carattere
-                const realChar = real[i];
-                const typedChar = typed[i] || "OMESSO"; // Rimosse parentesi quadre per sicurezza Firebase
-
-                // Funzione di escape locale per chiavi sicure in Firebase
-                const safeKey = (char) => {
-                    if (char === ' ') return "SPACE";
-                    if (typeof window.firebaseEscape === 'function') return window.firebaseEscape(char);
-                    return char.replace(/\./g, '_dot_').replace(/#/g, '_hash_').replace(/\$/g, '_dollar_').replace(/\[/g, '_lbrac_').replace(/\]/g, '_rbrac_');
-                };
-
-                let dbReal = safeKey(realChar);
-                let dbTyped = safeKey(typedChar);
-
-                statsBase.child(`charStats/${dbReal}/errors`).set(firebase.database.ServerValue.increment(1));
-                statsBase.child(`confusionMatrix/${dbReal}->${dbTyped}`).set(firebase.database.ServerValue.increment(1));
-
-                // 4b. Errori per WPM (per la diagnostica velocità)
-                statsBase.child(`errorsByWpm/${wpm}/${dbReal}`).set(firebase.database.ServerValue.increment(1));
-            }
+        // 2. Tracciamento Caratteri (Tentativi totali nel gruppo)
+        for (let char of real) {
+            let dbChar = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(char) : char.replace(/\./g, '_dot_');
+            statsBase.child(`charStats/${dbChar}/attempts`).set(firebase.database.ServerValue.increment(1));
         }
 
-        // 5. Tracciamento Parola via Transaction
-        statsBase.child(`wordErrors/${real}`).transaction(data => {
-            if (!data) return { count: 1, avgWpm: wpm };
-            const oldCount = data.count || (typeof data === 'number' ? data : 0);
-            const oldWpm = data.avgWpm || wpm;
-            const newCount = oldCount + 1;
-            return {
-                count: newCount,
-                avgWpm: Math.round(((oldWpm * oldCount) + wpm) / newCount)
-            };
-        });
+        if (isWordError) {
+            statsBase.child(`lengthStats/${len}/errors`).set(firebase.database.ServerValue.increment(1));
 
-        // 6. Tracciamento Bigrammi via Transaction
+            // 3. Tracciamento Posizionale (Analisi entro i confini della singola parola)
+            for (let i = 0; i < real.length; i++) {
+                if (real[i] !== typed[i]) {
+                    const pos = i / (real.length - 1 || 1);
+                    statsBase.child(`positionalErrors/totalErrors`).set(firebase.database.ServerValue.increment(1));
+
+                    if (pos <= 0.33) statsBase.child(`positionalErrors/start`).set(firebase.database.ServerValue.increment(1));
+                    else if (pos >= 0.66) statsBase.child(`positionalErrors/end`).set(firebase.database.ServerValue.increment(1));
+                    else statsBase.child(`positionalErrors/mid`).set(firebase.database.ServerValue.increment(1));
+
+                    // 4. Matrice di Confusione e Errori Carattere
+                    const realChar = real[i];
+                    const typedChar = typed[i] || "OMESSO";
+
+                    const safeKey = (char) => {
+                        if (char === ' ') return "SPACE";
+                        if (typeof window.firebaseEscape === 'function') return window.firebaseEscape(char);
+                        return char.replace(/\./g, '_dot_').replace(/#/g, '_hash_').replace(/\$/g, '_dollar_').replace(/\[/g, '_lbrac_').replace(/\]/g, '_rbrac_');
+                    };
+
+                    let dbReal = safeKey(realChar);
+                    let dbTyped = safeKey(typedChar);
+
+                    statsBase.child(`charStats/${dbReal}/errors`).set(firebase.database.ServerValue.increment(1));
+                    statsBase.child(`confusionMatrix/${dbReal}->${dbTyped}`).set(firebase.database.ServerValue.increment(1));
+                    statsBase.child(`errorsByWpm/${wpm}/${dbReal}`).set(firebase.database.ServerValue.increment(1));
+                }
+            }
+
+            // 5. Tracciamento Parola via Transaction
+            statsBase.child(`wordErrors/${real}`).transaction(data => {
+                if (!data) return { count: 1, avgWpm: wpm };
+                const oldCount = data.count || (typeof data === 'number' ? data : 0);
+                const oldWpm = data.avgWpm || wpm;
+                const newCount = oldCount + 1;
+                return { count: newCount, avgWpm: Math.round(((oldWpm * oldCount) + wpm) / newCount) };
+            });
+        }
+
+        // 6. Tracciamento Bigrammi (entro la parola)
         for (let i = 0; i < real.length - 1; i++) {
             if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
                 const pair = real.substring(i, i + 2);
@@ -736,14 +733,11 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
                     if (!data) return { count: 1, avgWpm: wpm };
                     const oldCount = data.count || (typeof data === 'number' ? data : 0);
                     const oldWpm = data.avgWpm || wpm;
-                    return {
-                        count: oldCount + 1,
-                        avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1))
-                    };
+                    return { count: oldCount + 1, avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1)) };
                 });
             }
         }
-    }
+    });
 };
 
 // --- AZIONI PULSANTI ---
