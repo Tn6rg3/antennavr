@@ -18,16 +18,25 @@ window.openToneTest = function() {
 };
 
 window.startToneTest = function() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
+
+    // Sicurezza: inizializziamo audioCtx se non esiste
+    if (!window.audioCtx) {
+        window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
 
     window.toneTestResultsData = [];
     window.isToneTestRunning = true;
 
-    document.getElementById('toneTestSetup').style.display = 'none';
-    document.getElementById('toneTestRunning').style.display = 'block';
-    document.getElementById('toneTestCount').textContent = '0';
-    document.getElementById('toneTestErrors').textContent = '0';
+    const setupArea = document.getElementById('toneTestSetup');
+    const runningArea = document.getElementById('toneTestRunning');
+    const countEl = document.getElementById('toneTestCount');
+    const errorEl = document.getElementById('toneTestErrors');
+
+    if (setupArea) setupArea.style.display = 'none';
+    if (runningArea) runningArea.style.display = 'block';
+    if (countEl) countEl.textContent = '0';
+    if (errorEl) errorEl.textContent = '0';
 
     const input = document.getElementById('toneTestInput');
     if (input) {
@@ -42,10 +51,10 @@ window.startToneTest = function() {
 window.playNextTestSample = function() {
     if (!window.isToneTestRunning) return;
 
-    const minFreq = parseInt(document.getElementById('toneTestMinFreq').value) || 350;
-    const maxFreq = parseInt(document.getElementById('toneTestMaxFreq').value) || 900;
-    const minWpm = parseInt(document.getElementById('toneTestMinWpm').value) || 15;
-    const maxWpm = parseInt(document.getElementById('toneTestMaxWpm').value) || 30;
+    const minFreq = parseInt(document.getElementById('toneTestMinFreq')?.value) || 350;
+    const maxFreq = parseInt(document.getElementById('toneTestMaxFreq')?.value) || 900;
+    const minWpm = parseInt(document.getElementById('toneTestMinWpm')?.value) || 15;
+    const maxWpm = parseInt(document.getElementById('toneTestMaxWpm')?.value) || 30;
 
     window.currentTestTone = Math.floor(Math.random() * (maxFreq - minFreq + 1)) + minFreq;
     window.currentTestWpm = Math.floor(Math.random() * (maxWpm - minWpm + 1)) + minWpm;
@@ -54,8 +63,10 @@ window.playNextTestSample = function() {
     window.currentTestChar = chars[Math.floor(Math.random() * chars.length)];
 
     const status = document.getElementById('toneTestStatus');
-    status.textContent = "Ascolta e digita...";
-    status.style.color = "inherit";
+    if (status) {
+        status.textContent = "Ascolta e digita...";
+        status.style.color = "inherit";
+    }
 
     const input = document.getElementById('toneTestInput');
     if (input) {
@@ -63,12 +74,21 @@ window.playNextTestSample = function() {
         input.style.borderColor = "var(--link-color)";
     }
 
+    // Usiamo una variabile locale per il tono durante la sessione di test
+    // per evitare conflitti con il sistema globale se resettato troppo in fretta
     const originalTone = window.currentTone;
     window.currentTone = window.currentTestTone;
+
     if (typeof playMorseAudio === 'function') {
+        // Non usiamo await qui per non bloccare la UI,
+        // ma playMorseAudio è sincrona nella fase di scheduling
         playMorseAudio(window.currentTestChar, window.currentTestWpm, true);
     }
-    window.currentTone = originalTone;
+
+    // Ripristiniamo dopo un piccolo delay per sicurezza dello scheduling
+    setTimeout(() => {
+        window.currentTone = originalTone;
+    }, 100);
 };
 
 window.handleToneTestInput = function(e) {
