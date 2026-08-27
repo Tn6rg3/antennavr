@@ -385,8 +385,9 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     }
 
     // 5. SOLO PRACTICE (Record Individuali)
-    let baseMode = tabType.replace('_single', '');
+    let baseMode = tabType.replace('_single', '').replace('_multi', '');
     if (baseMode === 'std') baseMode = 'standard';
+    if (baseMode === 'std_plus') baseMode = 'standard_plus';
 
     const dbPath = `leaderboard/${baseMode}`;
     console.log("LB: Fetching Solo from:", dbPath);

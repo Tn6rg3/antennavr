@@ -1097,7 +1097,15 @@ window.finishGame = function() {
                 let todayStr = new Date().toISOString().split('T')[0];
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${window.myId}`;
             } else {
-                const modeFolder = window.currentMode === 'callsign' ? 'callsign/global' : `${window.currentMode === 'quiz' ? 'quiz' : window.currentMode === 'chars' ? 'chars' : window.currentMode === 'pingpong' ? 'pingpong' : 'standard'}/${!isActuallyMulti ? 'single' : 'multi'}_${window.requestedWordCount}`;
+                const modeMap = {
+                    'callsign': 'callsign/global',
+                    'quiz': 'quiz',
+                    'chars': 'chars',
+                    'pingpong': 'pingpong',
+                    'standard_plus': 'standard_plus'
+                };
+                const baseFolder = modeMap[window.currentMode] || 'standard';
+                const modeFolder = window.currentMode === 'callsign' ? baseFolder : `${baseFolder}/${!isActuallyMulti ? 'single' : 'multi'}_${window.requestedWordCount}`;
                 dbPath = `leaderboard/${modeFolder}/${window.myId}`;
             }
 
@@ -1304,7 +1312,7 @@ window.saveMatchSummary = function(playersData) {
     let baseMode = currentMode;
     if (baseMode === 'std') baseMode = 'standard';
 
-    const validModes = ['standard', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign'];
+    const validModes = ['standard', 'standard_plus', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign'];
     let category = validModes.includes(baseMode) ? baseMode : 'standard';
 
     // Aggiungiamo sempre il suffisso _multi per la classifica "Sfide"
