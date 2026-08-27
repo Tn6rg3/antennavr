@@ -1641,47 +1641,67 @@ if (els.createRoomBtn) {
 
         window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
 
-        // Passiamo l'opzione groupSize alla generazione parole
-        window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode, { groupSize: window.wordsPerGroup });
+        const createAndJoinRoom = (stats = {}) => {
+            // Passiamo l'opzione groupSize e stats alla generazione parole
+            window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode, {
+                groupSize: window.wordsPerGroup,
+                stats: stats
+            });
 
-        const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
+            const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
-        const roomRef = db.ref('rooms/' + window.roomCode);
-        const roomData = {
-            status: window.isSinglePlayer ? 'countdown' : 'waiting',
-            type: window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
-            mode: window.currentMode,
-            groupSize: window.wordsPerGroup,
-            wpm: window.currentWpm,
-            tone: window.currentTone,
-            wordCount: window.requestedWordCount,
-            fixedSpeed: !!isFixed,
-            easyMode: !!isEasy,
-            allowSpectators: !!allowSpectators,
-            charSpaceWpm: cSpace,
-            wordSpaceMult: wSpace,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            expiresAt: expires,
-            hostId: window.myId,
-            game_words: window.gameWords // Inseriamo le parole atomicamente
+            const roomRef = db.ref('rooms/' + window.roomCode);
+            const roomData = {
+                status: window.isSinglePlayer ? 'countdown' : 'waiting',
+                type: window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
+                mode: window.currentMode,
+                groupSize: window.wordsPerGroup,
+                wpm: window.currentWpm,
+                tone: window.currentTone,
+                wordCount: window.requestedWordCount,
+                fixedSpeed: !!isFixed,
+                easyMode: !!isEasy,
+                allowSpectators: !!allowSpectators,
+                charSpaceWpm: cSpace,
+                wordSpaceMult: wSpace,
+                createdAt: firebase.database.ServerValue.TIMESTAMP,
+                expiresAt: expires,
+                hostId: window.myId,
+                game_words: window.gameWords // Inseriamo le parole atomicamente
+            };
+
+            roomRef.set(roomData).then(() => {
+                if (!window.isSinglePlayer) {
+                    roomRef.onDisconnect().remove();
+                    const lobbyRef = db.ref(`public_lobby_rooms/${window.roomCode}`);
+                    lobbyRef.set({
+                        mode: window.currentMode,
+                        pCount: 1,
+                        wpm: window.currentWpm,
+                        status: 'waiting',
+                        expiresAt: expires,
+                        hostId: window.myId // Fondamentale per identificare la propria stanza in bacheca
+                    });
+                    lobbyRef.onDisconnect().remove();
+                }
+                window.joinRoomLogic(false);
+            });
         };
 
-        roomRef.set(roomData).then(() => {
-            if (!window.isSinglePlayer) {
-                // PULIZIA AUTOMATICA: Se l'Host si disconnette completamente da Firebase, rimuovi la stanza
-                roomRef.onDisconnect().remove();
-
-                const lobbyRef = db.ref(`public_lobby_rooms/${window.roomCode}`);
-                lobbyRef.set({
-                    mode: window.currentMode,
-                    pCount: 1,
-                    wpm: window.currentWpm,
-                    status: 'waiting',
-                    expiresAt: expires,
-                    hostId: window.myId // Fondamentale per identificare la propria stanza in bacheca
-                });
-                lobbyRef.onDisconnect().remove();
-            }
+        if (gMode === 'target_training') {
+            db.ref(`users/${myId}/stats`).once('value').then(snap => {
+                const stats = snap.val() || {};
+                const hasData = stats.charStats && Object.keys(stats.charStats).length > 0;
+                if (!hasData) {
+                    showToast("ℹ️ Dati insufficienti per l'Allenamento Mirato. Gioca altre modalità per raccogliere statistiche!");
+                }
+                createAndJoinRoom(stats);
+            });
+        } else {
+            createAndJoinRoom();
+        }
+    };
+}
 
             if (window.isSinglePlayer && allowSpectators) {
                 db.ref(`presence/${window.myId}`).update({

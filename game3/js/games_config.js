@@ -65,6 +65,53 @@ window.GAME_MODES = {
             return groups;
         }
     },
+    "target_training": {
+        id: "target_training",
+        titleIt: "Allenamento Mirato (Statistiche)",
+        titleEn: "Targeted Training (Stats)",
+        icon: "🎯",
+        defaultWpm: 20,
+        defaultWordCount: 15,
+        wpmConfigurable: true,
+        wordCountConfigurable: true,
+        fixedSpeedAllowed: true,
+        spacingConfigurable: true,
+        generateWords: function(num, dicts, options) {
+            const master = (dicts && Array.isArray(dicts.master) && dicts.master.length > 0) ? dicts.master : ["RADIO", "MORSE", "TELEGRAFIA"];
+            const stats = options?.stats || {};
+            const charStats = stats.charStats || {};
+
+            // 1. Identifichiamo i caratteri critici (accuratezza < 85% e almeno 3 tentativi)
+            const criticalChars = Object.entries(charStats)
+                .map(([char, d]) => {
+                    const dbChar = (typeof window.firebaseUnescape === 'function') ? window.firebaseUnescape(char) : char.replace(/_dot_/g, '.');
+                    return { char: dbChar.toUpperCase(), acc: (d.attempts > 0 ? (d.attempts - d.errors) / d.attempts : 1), attempts: d.attempts };
+                })
+                .filter(c => c.attempts >= 3 && c.acc < 0.85)
+                .sort((a,b) => a.acc - b.acc)
+                .map(c => c.char)
+                .slice(0, 7);
+
+            if (criticalChars.length === 0) {
+                return fisherYatesShuffle(master).slice(0, num).map(w => w.toUpperCase());
+            }
+
+            // 2. Filtriamo il dizionario
+            let weightedWords = master.map(word => {
+                const w = word.toUpperCase();
+                let score = 0;
+                criticalChars.forEach(c => { if (w.includes(c)) score += 10; });
+                return { word: w, score: score };
+            }).filter(obj => obj.score > 0);
+
+            if (weightedWords.length < num) {
+                weightedWords = weightedWords.concat(master.map(w => ({ word: w.toUpperCase(), score: 1 })));
+            }
+
+            weightedWords.sort((a, b) => b.score - a.score || Math.random() - 0.5);
+            return weightedWords.slice(0, num).map(obj => obj.word);
+        }
+    },
     "perfection": {
         id: "perfection",
         titleIt: "Perfezione (Zero Errori)",

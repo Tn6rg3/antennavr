@@ -1102,7 +1102,8 @@ window.finishGame = function() {
                     'quiz': 'quiz',
                     'chars': 'chars',
                     'pingpong': 'pingpong',
-                    'standard_plus': 'standard_plus'
+                    'standard_plus': 'standard_plus',
+                    'target_training': 'target_training'
                 };
                 const baseFolder = modeMap[window.currentMode] || 'standard';
                 const modeFolder = window.currentMode === 'callsign' ? baseFolder : `${baseFolder}/${!isActuallyMulti ? 'single' : 'multi'}_${window.requestedWordCount}`;
@@ -1312,7 +1313,7 @@ window.saveMatchSummary = function(playersData) {
     let baseMode = currentMode;
     if (baseMode === 'std') baseMode = 'standard';
 
-    const validModes = ['standard', 'standard_plus', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign'];
+    const validModes = ['standard', 'standard_plus', 'target_training', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign'];
     let category = validModes.includes(baseMode) ? baseMode : 'standard';
 
     // Aggiungiamo sempre il suffisso _multi per la classifica "Sfide"

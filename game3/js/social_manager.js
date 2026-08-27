@@ -733,45 +733,54 @@ window.listenToInvites = function() {
 
                     const roomCodeNew = Math.floor(1000 + Math.random() * 9000).toString();
 
-                    // Recuperiamo groupSize se presente nell'invito, altrimenti default 2 per std_plus, 1 per gli altri
-                    const groupSizeInv = inv.groupSize || (inv.mode === 'standard_plus' ? 2 : 1);
-                    const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard', { groupSize: groupSizeInv });
-                    const isCoop = (inv.mode === 'conquest');
+                    const createRoomNode = (stats = {}) => {
+                        const groupSizeInv = inv.groupSize || (inv.mode === 'standard_plus' ? 2 : 1);
+                        const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard', {
+                            groupSize: groupSizeInv,
+                            stats: stats
+                        });
+                        const isCoop = (inv.mode === 'conquest');
 
-                    const roomData = {
-                        status: 'countdown',
-                        type: isCoop ? 'coop' : 'multi',
-                        mode: inv.mode || 'standard',
-                        groupSize: groupSizeInv,
-                        wpm: inv.wpm || 20,
-                        tone: 600,
-                        wordCount: inv.wordCount || 10,
-                        createdAt: firebase.database.ServerValue.TIMESTAMP,
-                        hostId: inv.fromId,
-                        game_words: words // Inseriamo le parole atomicamente per evitare race conditions
+                        const roomData = {
+                            status: 'countdown',
+                            type: isCoop ? 'coop' : 'multi',
+                            mode: inv.mode || 'standard',
+                            groupSize: groupSizeInv,
+                            wpm: inv.wpm || 20,
+                            tone: 600,
+                            wordCount: inv.wordCount || 10,
+                            createdAt: firebase.database.ServerValue.TIMESTAMP,
+                            hostId: inv.fromId,
+                            game_words: words
+                        };
+
+                        db.ref(`rooms/${roomCodeNew}`).set(roomData).then(() => {
+                            db.ref(`invite_accepted/${inv.fromId}`).set({
+                                roomCode: roomCodeNew,
+                                ts: firebase.database.ServerValue.TIMESTAMP
+                            });
+                            db.ref(`invites/${myId}`).remove();
+                            window.resetLocalChallengeState();
+                            window.closeInviteModal();
+                            els.acceptInviteBtn.disabled = false;
+                            els.acceptInviteBtn.textContent = "ACCETTA ✅";
+                            roomCode = roomCodeNew;
+                            window.joinRoomLogic(false);
+                        }).catch(err => {
+                            console.error("Accept Invite Error:", err);
+                            els.acceptInviteBtn.disabled = false;
+                            els.acceptInviteBtn.textContent = "ACCETTA ✅";
+                            showToast("Errore durante l'accettazione.");
+                        });
                     };
 
-                    db.ref(`rooms/${roomCodeNew}`).set(roomData).then(() => {
-                        db.ref(`invite_accepted/${inv.fromId}`).set({
-                            roomCode: roomCodeNew,
-                            ts: firebase.database.ServerValue.TIMESTAMP
+                    if (inv.mode === 'target_training') {
+                        db.ref(`users/${myId}/stats`).once('value').then(snap => {
+                            createRoomNode(snap.val() || {});
                         });
-                        db.ref(`invites/${myId}`).remove();
-                        window.resetLocalChallengeState();
-                        window.closeInviteModal();
-
-                        // Reset bottone per futuro uso
-                        els.acceptInviteBtn.disabled = false;
-                        els.acceptInviteBtn.textContent = "ACCETTA ✅";
-
-                        roomCode = roomCodeNew;
-                        window.joinRoomLogic(false);
-                    }).catch(err => {
-                        console.error("Accept Invite Error:", err);
-                        els.acceptInviteBtn.disabled = false;
-                        els.acceptInviteBtn.textContent = "ACCETTA ✅";
-                        showToast("Errore durante l'accettazione.");
-                    });
+                    } else {
+                        createRoomNode();
+                    }
                 };
             }
 
