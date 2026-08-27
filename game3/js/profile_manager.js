@@ -355,8 +355,10 @@ window.loadAdvancedStats = function() {
 
         // B. DIAGNOSTICA POSIZIONALE
         const pData = stats.positionalErrors || { start:0, mid:0, end:0, totalErrors:0 };
-        const totalP = pData.totalErrors || 1;
-        const calcP = (val) => Math.round((val / totalP) * 100) + "%";
+        // Calcoliamo il totale reale sommando le parti se totalErrors non esiste (compatibilità)
+        const realTotal = pData.totalErrors || ((pData.start || 0) + (pData.mid || 0) + (pData.end || 0)) || 1;
+        const calcP = (val) => Math.round(((val || 0) / realTotal) * 100) + "%";
+
         if (document.getElementById('posStartStat')) document.getElementById('posStartStat').querySelector('b').textContent = calcP(pData.start);
         if (document.getElementById('posMidStat')) document.getElementById('posMidStat').querySelector('b').textContent = calcP(pData.mid);
         if (document.getElementById('posEndStat')) document.getElementById('posEndStat').querySelector('b').textContent = calcP(pData.end);
@@ -667,29 +669,29 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
 
     if (isError) {
         statsBase.child(`lengthStats/${len}/errors`).set(firebase.database.ServerValue.increment(1));
-        statsBase.child(`positionalErrors/totalErrors`).set(firebase.database.ServerValue.increment(1));
 
-        // 3. Tracciamento Posizionale (solo il primo errore trovato nella stringa)
+        // 3. Tracciamento Posizionale (Analisi di TUTTI i caratteri della parola)
         for (let i = 0; i < real.length; i++) {
             if (real[i] !== typed[i]) {
                 const pos = i / (real.length - 1 || 1);
-                if (pos <= 0.2) statsBase.child(`positionalErrors/start`).set(firebase.database.ServerValue.increment(1));
-                else if (pos >= 0.8) statsBase.child(`positionalErrors/end`).set(firebase.database.ServerValue.increment(1));
+
+                // Incrementiamo il totale posizionale per ogni errore trovato
+                statsBase.child(`positionalErrors/totalErrors`).set(firebase.database.ServerValue.increment(1));
+
+                if (pos <= 0.33) statsBase.child(`positionalErrors/start`).set(firebase.database.ServerValue.increment(1));
+                else if (pos >= 0.66) statsBase.child(`positionalErrors/end`).set(firebase.database.ServerValue.increment(1));
                 else statsBase.child(`positionalErrors/mid`).set(firebase.database.ServerValue.increment(1));
 
-                // 4. Matrice di Confusione e Errori Carattere (solo per il carattere sbagliato)
-                if (real[i] && typed[i]) {
-                    const realChar = real[i];
-                    const typedChar = typed[i];
-                    let dbReal = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(realChar) : realChar.replace(/\./g, '_dot_');
+                // 4. Matrice di Confusione e Errori Carattere
+                const realChar = real[i];
+                const typedChar = typed[i] || "∅"; // Usiamo ∅ se il carattere è stato omesso
+                let dbReal = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(realChar) : realChar.replace(/\./g, '_dot_');
 
-                    statsBase.child(`charStats/${dbReal}/errors`).set(firebase.database.ServerValue.increment(1));
-                    statsBase.child(`confusionMatrix/${realChar}->${typedChar}`).set(firebase.database.ServerValue.increment(1));
+                statsBase.child(`charStats/${dbReal}/errors`).set(firebase.database.ServerValue.increment(1));
+                statsBase.child(`confusionMatrix/${realChar}->${typedChar}`).set(firebase.database.ServerValue.increment(1));
 
-                    // 4b. Errori per WPM (per la diagnostica velocità)
-                    statsBase.child(`errorsByWpm/${wpm}/${realChar}`).set(firebase.database.ServerValue.increment(1));
-                }
-                break;
+                // 4b. Errori per WPM (per la diagnostica velocità)
+                statsBase.child(`errorsByWpm/${wpm}/${realChar}`).set(firebase.database.ServerValue.increment(1));
             }
         }
 
