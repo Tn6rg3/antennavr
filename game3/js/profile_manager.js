@@ -395,7 +395,19 @@ window.loadAdvancedStats = function() {
                 matrixCont.innerHTML = '<p style="text-align:center; color:var(--hint-color); font-size:0.8em; margin-top:20px;">Dati in raccolta...</p>';
             } else {
                 sortedMatrix.forEach(([key, count]) => {
-                    const [real, typed] = key.split('->');
+                    let [real, typed] = key.split('->');
+
+                    // Unescape per la visualizzazione
+                    const unescapeKey = (k) => {
+                        if (k === 'SPACE') return "Spazio";
+                        if (k === 'OMESSO') return "Mancante";
+                        if (typeof window.firebaseUnescape === 'function') return window.firebaseUnescape(k);
+                        return k.replace(/_dot_/g, '.').replace(/_hash_/g, '#').replace(/_dollar_/g, '$').replace(/_lbrac_/g, '[').replace(/_rbrac_/g, ']');
+                    };
+
+                    real = unescapeKey(real);
+                    typed = unescapeKey(typed);
+
                     const div = document.createElement('div');
                     div.style.cssText = "display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid rgba(0,0,0,0.03);";
                     div.innerHTML = `<span><b>${real}</b> <small>scambiato per</small> <b>${typed}</b></span> <b style="color:#d32f2f;">${count}</b>`;
@@ -684,14 +696,23 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
 
                 // 4. Matrice di Confusione e Errori Carattere
                 const realChar = real[i];
-                const typedChar = typed[i] || "[OMESSO]"; // Chiariamo che il carattere manca
-                let dbReal = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(realChar) : realChar.replace(/\./g, '_dot_');
+                const typedChar = typed[i] || "OMESSO"; // Rimosse parentesi quadre per sicurezza Firebase
+
+                // Funzione di escape locale per chiavi sicure in Firebase
+                const safeKey = (char) => {
+                    if (char === ' ') return "SPACE";
+                    if (typeof window.firebaseEscape === 'function') return window.firebaseEscape(char);
+                    return char.replace(/\./g, '_dot_').replace(/#/g, '_hash_').replace(/\$/g, '_dollar_').replace(/\[/g, '_lbrac_').replace(/\]/g, '_rbrac_');
+                };
+
+                let dbReal = safeKey(realChar);
+                let dbTyped = safeKey(typedChar);
 
                 statsBase.child(`charStats/${dbReal}/errors`).set(firebase.database.ServerValue.increment(1));
-                statsBase.child(`confusionMatrix/${realChar}->${typedChar}`).set(firebase.database.ServerValue.increment(1));
+                statsBase.child(`confusionMatrix/${dbReal}->${dbTyped}`).set(firebase.database.ServerValue.increment(1));
 
                 // 4b. Errori per WPM (per la diagnostica velocità)
-                statsBase.child(`errorsByWpm/${wpm}/${realChar}`).set(firebase.database.ServerValue.increment(1));
+                statsBase.child(`errorsByWpm/${wpm}/${dbReal}`).set(firebase.database.ServerValue.increment(1));
             }
         }
 
