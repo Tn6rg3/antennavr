@@ -1855,6 +1855,15 @@
     <button id="btnCloseCourseResults" class="btn-success" style="width: 100%; padding: 12px;">TORNA AL MENU 🚀</button>
 </div>
 
+<!-- MODAL: REPORT ALLENAMENTO MIRATO (RADAR) -->
+<div id="targetTrainingReportModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9500; border: 3px solid var(--champ-color); border-radius: 16px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 15px 50px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto;">
+    <h2 style="color: var(--champ-color); margin: 0 0 15px 0; text-align: center; text-transform: uppercase; letter-spacing: 1px;">🎯 Debriefing Radar</h2>
+    <div id="targetTrainingReportContent" style="font-size: 0.95em; line-height: 1.5; text-align: left;">
+        <!-- Generato via JS -->
+    </div>
+    <button onclick="document.getElementById('targetTrainingReportModal').style.display='none'" class="btn-success" style="width: 100%; padding: 15px; font-weight: bold; margin-top: 15px;">HO CAPITO, GRAZIE ✅</button>
+</div>
+
 <!-- MODAL: STATISTICHE CORSISTA (PER TUTOR) -->
 <div id="tutorStudentStatsModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; height: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9000; border: 2px solid #673ab7; border-radius: 12px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
     <h3 id="tutorStudentStatsTitle" style="margin-top:0; text-align: center; color: #9575cd;">Dati Corsista</h3>
