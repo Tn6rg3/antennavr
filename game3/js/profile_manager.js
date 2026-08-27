@@ -661,15 +661,16 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb
 // --- LOGICA SALVATAGGIO ERRORI AVANZATI OTTIMIZZATA ---
 
 window.trackAdvancedErrors = function(realWord, userWord, wpm) {
-    if (!myId) return;
+    if (!myId || !realWord) return;
 
-    // Dividiamo i gruppi in singole parole per evitare l'effetto "trascinamento" degli errori
-    const realWords = realWord.toUpperCase().split(' ');
-    const typedWords = userWord.toUpperCase().split(' ');
+    // Dividiamo i gruppi in singole parole e filtriamo eventuali stringhe vuote
+    const realWords = realWord.toUpperCase().split(' ').filter(w => w.length > 0);
+    const typedWords = userWord.toUpperCase().split(' ').filter(w => w.length > 0);
 
     const statsBase = db.ref(`users/${myId}/stats`);
 
     realWords.forEach((real, wordIdx) => {
+        // ... (resto della logica)
         const typed = typedWords[wordIdx] || "";
         const isWordError = (real !== typed);
         const len = real.length;
