@@ -381,6 +381,59 @@ window.loadAdvancedStats = function() {
             }
         }
 
+        // --- NUOVA SEZIONE: MATRICE CONFUSIONE E BLOCCHI COGNITIVI ---
+        const matrixCont = document.getElementById('confusionMatrixContainer');
+        const blocksCont = document.getElementById('cognitiveBlocksContainer');
+
+        if (matrixCont) {
+            matrixCont.innerHTML = '';
+            const matrix = stats.confusionMatrix || {};
+            const sortedMatrix = Object.entries(matrix).sort((a,b) => b[1] - a[1]).slice(0, 15);
+            if (sortedMatrix.length === 0) {
+                matrixCont.innerHTML = '<p style="text-align:center; color:var(--hint-color); font-size:0.8em; margin-top:20px;">Dati in raccolta...</p>';
+            } else {
+                sortedMatrix.forEach(([key, count]) => {
+                    const [real, typed] = key.split('->');
+                    const div = document.createElement('div');
+                    div.style.cssText = "display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid rgba(0,0,0,0.03);";
+                    div.innerHTML = `<span><b>${real}</b> <small>scambiato per</small> <b>${typed}</b></span> <b style="color:#d32f2f;">${count}</b>`;
+                    matrixCont.appendChild(div);
+                });
+            }
+        }
+
+        if (blocksCont) {
+            blocksCont.innerHTML = '';
+            const charStats = stats.charStats || {};
+            const criticalChars = Object.entries(charStats)
+                .map(([char, d]) => {
+                    const dbChar = (typeof window.firebaseUnescape === 'function') ? window.firebaseUnescape(char) : char.replace(/_dot_/g, '.');
+                    return { char: dbChar, acc: (d.attempts > 0 ? (d.attempts - d.errors) / d.attempts : 1), attempts: d.attempts };
+                })
+                .filter(c => c.attempts >= 5 && c.acc < 0.85)
+                .sort((a,b) => a.acc - b.acc)
+                .slice(0, 10);
+
+            if (criticalChars.length === 0) {
+                blocksCont.innerHTML = '<p style="text-align:center; color:var(--hint-color); font-size:0.8em; margin-top:20px;">Nessun blocco critico.</p>';
+            } else {
+                criticalChars.forEach(c => {
+                    const perc = Math.round(c.acc * 100);
+                    const div = document.createElement('div');
+                    div.style.cssText = "margin-bottom:8px;";
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; font-size:0.8em; margin-bottom:2px;">
+                            <b>${c.char}</b> <span style="color:#d32f2f;">${perc}% acc.</span>
+                        </div>
+                        <div style="width:100%; height:4px; background:rgba(0,0,0,0.1); border-radius:2px; overflow:hidden;">
+                            <div style="width:${perc}%; height:100%; background:#d32f2f;"></div>
+                        </div>
+                    `;
+                    blocksCont.appendChild(div);
+                });
+            }
+        }
+
         // 2. Bigrammi (Coppie) Sbagliate
         if (bigramContainer) {
             bigramContainer.innerHTML = '';
@@ -601,26 +654,46 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
     const isError = (real !== typed);
     const len = real.length;
 
-    // Aggiornamento atomico delle lunghezze (indipendente dagli errori)
     const statsBase = db.ref(`users/${myId}/stats`);
+
+    // 1. Aggiornamento atomico delle lunghezze (indipendente dagli errori)
     statsBase.child(`lengthStats/${len}/total`).set(firebase.database.ServerValue.increment(1));
+
+    // 2. Tracciamento Caratteri (Tentativi totali)
+    for (let char of real) {
+        let dbChar = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(char) : char.replace(/\./g, '_dot_');
+        statsBase.child(`charStats/${dbChar}/attempts`).set(firebase.database.ServerValue.increment(1));
+    }
 
     if (isError) {
         statsBase.child(`lengthStats/${len}/errors`).set(firebase.database.ServerValue.increment(1));
         statsBase.child(`positionalErrors/totalErrors`).set(firebase.database.ServerValue.increment(1));
 
-        // Tracciamento Posizionale (solo il primo errore trovato nella stringa)
+        // 3. Tracciamento Posizionale (solo il primo errore trovato nella stringa)
         for (let i = 0; i < real.length; i++) {
             if (real[i] !== typed[i]) {
-                const pos = i / (real.length - 1 || 1); // Evita divisione per zero
+                const pos = i / (real.length - 1 || 1);
                 if (pos <= 0.2) statsBase.child(`positionalErrors/start`).set(firebase.database.ServerValue.increment(1));
                 else if (pos >= 0.8) statsBase.child(`positionalErrors/end`).set(firebase.database.ServerValue.increment(1));
                 else statsBase.child(`positionalErrors/mid`).set(firebase.database.ServerValue.increment(1));
+
+                // 4. Matrice di Confusione e Errori Carattere (solo per il carattere sbagliato)
+                if (real[i] && typed[i]) {
+                    const realChar = real[i];
+                    const typedChar = typed[i];
+                    let dbReal = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(realChar) : realChar.replace(/\./g, '_dot_');
+
+                    statsBase.child(`charStats/${dbReal}/errors`).set(firebase.database.ServerValue.increment(1));
+                    statsBase.child(`confusionMatrix/${realChar}->${typedChar}`).set(firebase.database.ServerValue.increment(1));
+
+                    // 4b. Errori per WPM (per la diagnostica velocità)
+                    statsBase.child(`errorsByWpm/${wpm}/${realChar}`).set(firebase.database.ServerValue.increment(1));
+                }
                 break;
             }
         }
 
-        // Tracciamento Parola via Transaction (per calcolare in sicurezza avgWpm)
+        // 5. Tracciamento Parola via Transaction
         statsBase.child(`wordErrors/${real}`).transaction(data => {
             if (!data) return { count: 1, avgWpm: wpm };
             const oldCount = data.count || (typeof data === 'number' ? data : 0);
@@ -632,7 +705,7 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
             };
         });
 
-        // Tracciamento Bigrammi via Transaction
+        // 6. Tracciamento Bigrammi via Transaction
         for (let i = 0; i < real.length - 1; i++) {
             if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
                 const pair = real.substring(i, i + 2);
@@ -713,12 +786,8 @@ if (document.getElementById('resetStatsBtn')) {
 const btnResetErrorStats = document.getElementById('btnResetErrorStats');
 if (btnResetErrorStats) {
     btnResetErrorStats.addEventListener('click', () => {
-        if (confirm("Vuoi azzerare solo i dati analitici degli errori? Lo storico rimarrà intatto.")) {
-            Promise.all([
-                db.ref(`users/${myId}/stats/bigramErrors`).remove(),
-                db.ref(`users/${myId}/stats/wordErrors`).remove(),
-                db.ref(`users/${myId}/stats/charErrors`).remove()
-            ]).then(() => {
+        if (confirm("Vuoi azzerare TUTTI i dati analitici degli errori? Lo storico rimarrà intatto.")) {
+            db.ref(`users/${myId}/stats`).remove().then(() => {
                 showToast("Dati errori azzerati!");
                 window.loadAdvancedStats();
             });

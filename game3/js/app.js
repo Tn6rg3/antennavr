@@ -240,7 +240,6 @@ window.customDictionary = [];
 let currentQuizQuestion = null, quizActiveBuzzerId = null;
 let quizQuestionIndex = 0, randomizedQuizQuestions = [], lastLoadedQuizIndex = -1;
 let nextWordTimeout = null;
-let sessionCharErrors = Object.create(null), sessionErrorsByWpm = Object.create(null);
 let userMatchHistory = [];
 
 // GESTIONE INATTIVITÀ

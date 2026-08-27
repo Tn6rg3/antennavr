@@ -826,7 +826,7 @@ window.startCountdownSequence = function() {
     if (!isRejoining) {
         totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0; usedReplay = false;
         peakWpm = currentWpm;
-        sessionCharErrors = Object.create(null); sessionErrorsByWpm = Object.create(null); matchDetailsArray = [];
+        matchDetailsArray = [];
     }
     if (els.tableBody) els.tableBody.innerHTML = "";
     window.lastPlayedWordId = 0;
@@ -1144,24 +1144,6 @@ window.finishGame = function() {
         if (typeof window.addXP === 'function') {
             const xpGain = Math.floor(totalScore / 10) + 50; // XP base + bonus partita
             window.addXP(xpGain, "Match Finished");
-        }
-
-        if (Object.keys(sessionCharErrors).length > 0) {
-            db.ref(`users/${myId}/stats/charErrors`).once('value', s => {
-                let curr = s.val() || {};
-                for (let char in sessionCharErrors) curr[char] = (curr[char] || 0) + sessionCharErrors[char];
-                db.ref(`users/${myId}/stats/charErrors`).set(curr);
-            });
-        }
-        if (Object.keys(sessionErrorsByWpm).length > 0) {
-            db.ref(`users/${myId}/stats/errorsByWpm`).once('value', s => {
-                let curr = s.val() || {};
-                for (let w in sessionErrorsByWpm) {
-                    if (!curr[w]) curr[w] = {};
-                    for (let c in sessionErrorsByWpm[w]) curr[w][c] = (curr[w][c] || 0) + sessionErrorsByWpm[w][c];
-                }
-                db.ref(`users/${myId}/stats/errorsByWpm`).set(curr);
-            });
         }
     }
 
@@ -1638,17 +1620,6 @@ window.handleWordSubmission = function(userWord) {
                 addedAt: window.perfectionWordsDone
             });
         }
-        let wrongChars = [];
-        for (let i = 0; i < Math.max(currentWord.length, userWord.length); i++) {
-            if (userWord[i] !== currentWord[i] && currentWord[i]) {
-                if (!wrongChars.includes(currentWord[i])) wrongChars.push(currentWord[i]);
-            }
-        }
-        if (!sessionErrorsByWpm[activeWpmForThisWord]) sessionErrorsByWpm[activeWpmForThisWord] = Object.create(null);
-        wrongChars.forEach(c => {
-            sessionCharErrors[c] = (sessionCharErrors[c] || 0) + 1;
-            sessionErrorsByWpm[activeWpmForThisWord][c] = (sessionErrorsByWpm[activeWpmForThisWord][c] || 0) + 1;
-        });
     }
 
     // Avanzamento WPM e Missioni
