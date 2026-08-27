@@ -1516,10 +1516,37 @@ window.getLevenshteinDistance = function(a, b) {
 
 window.renderDiffSecure = function(container, real, typed) {
     if (!real) return;
+
+    // Se ci sono spazi, analizziamo parola per parola per evitare l'effetto trascinamento degli errori
+    if (real.includes(' ')) {
+        const rWords = real.toUpperCase().split(' ');
+        const tWords = (typed || "").toUpperCase().split(' ');
+
+        rWords.forEach((rw, wIdx) => {
+            const tw = tWords[wIdx] || "";
+            for (let i = 0; i < rw.length; i++) {
+                const span = document.createElement('span');
+                if (!tw[i] || tw[i] !== rw[i]) {
+                    span.style.color = "#d32f2f";
+                    span.style.fontWeight = "bold";
+                    span.style.textDecoration = "underline";
+                }
+                span.textContent = rw[i];
+                container.appendChild(span);
+            }
+            if (wIdx < rWords.length - 1) {
+                const s = document.createElement('span');
+                s.innerHTML = "&nbsp;";
+                container.appendChild(s);
+            }
+        });
+        return;
+    }
+
     const r = real.toUpperCase();
     const t = (typed || "").toUpperCase();
     for (let i = 0; i < Math.max(r.length, t.length); i++) {
-        if (!r[i]) continue; // Se la parola reale è finita, ignoriamo extra dell'utente qui (mostriamo solo la correzione)
+        if (!r[i]) continue;
         const span = document.createElement('span');
         if (!t[i] || t[i] !== r[i]) {
             span.style.color = "#d32f2f";
@@ -1697,12 +1724,33 @@ window.handleWordSubmission = function(userWord) {
 
     let points = 0, scoreColor = "";
     const reactionMs = Date.now() - lastWordStartTime;
-    const levDist = window.getLevenshteinDistance(currentWord, userWord);
+    let levDist = 0;
 
-    // Calcolo Punti
-    if (typeof window.calculateGamePoints === 'function') {
-        const res = window.calculateGamePoints(currentMode, currentWord, userWord, activeWpmForThisWord, reactionMs, levDist, usedReplay);
-        points = res.points; scoreColor = res.scoreColor;
+    // --- LOGICA SPECIALE PER PAROLE COMUNI + (GRANULARE) ---
+    if (currentMode === 'standard_plus' && currentWord.includes(' ')) {
+        const rWords = currentWord.split(' ');
+        const tWords = userWord.split(' ');
+        let totalP = 0;
+        let totalLd = 0;
+
+        rWords.forEach((rw, idx) => {
+            const tw = tWords[idx] || "";
+            const ld = window.getLevenshteinDistance(rw, tw);
+            totalLd += ld;
+            const res = window.calculateGamePoints('standard', rw, tw, activeWpmForThisWord, reactionMs, ld, usedReplay);
+            totalP += res.points;
+        });
+
+        points = totalP;
+        levDist = totalLd;
+        scoreColor = (levDist === 0) ? "#4caf50" : (levDist < 3 ? "#ff9800" : "#d32f2f");
+    } else {
+        levDist = window.getLevenshteinDistance(currentWord, userWord);
+        // Calcolo Punti Standard
+        if (typeof window.calculateGamePoints === 'function') {
+            const res = window.calculateGamePoints(currentMode, currentWord, userWord, activeWpmForThisWord, reactionMs, levDist, usedReplay);
+            points = res.points; scoreColor = res.scoreColor;
+        }
     }
 
     // --- NUOVO TRACCIAMENTO STATISTICO AVANZATO ---
