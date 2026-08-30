@@ -734,17 +734,18 @@ window.listenToInvites = function() {
                     const roomCodeNew = Math.floor(1000 + Math.random() * 9000).toString();
 
                     const createRoomNode = (stats = {}) => {
-                        const groupSizeInv = inv.groupSize || (inv.mode === 'standard_plus' ? 2 : 1);
-                        const words = window.getGameWords(inv.wordCount || 10, inv.mode || 'standard', {
+                        const targetMode = inv.mode || 'standard';
+                        const groupSizeInv = inv.groupSize || (targetMode === 'standard_plus' ? 2 : 1);
+                        const words = (targetMode === 'qso') ? [] : window.getGameWords(inv.wordCount || 10, targetMode, {
                             groupSize: groupSizeInv,
                             stats: stats
                         });
-                        const isCoop = (inv.mode === 'conquest');
+                        const isCoop = (targetMode === 'conquest');
 
                         const roomData = {
                             status: 'countdown',
                             type: isCoop ? 'coop' : 'multi',
-                            mode: inv.mode || 'standard',
+                            mode: targetMode,
                             groupSize: groupSizeInv,
                             wpm: inv.wpm || 20,
                             tone: 600,

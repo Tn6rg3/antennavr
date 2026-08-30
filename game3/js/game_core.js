@@ -897,33 +897,32 @@ window.startCountdownSequence = function() {
             setTimeout(() => {
                 if (!gameRunning) return;
 
-                isCoopMode = (currentMode === 'conquest');
+                const mode = window.currentMode;
+                isCoopMode = (mode === 'conquest');
                 if (els.coopArea) els.coopArea.style.display = isCoopMode ? 'flex' : 'none';
                 if (els.tableWrapper) els.tableWrapper.style.display = isCoopMode ? 'none' : 'block';
 
-                const finalMode = window.currentMode;
-                console.log("Countdown finished. Final Mode:", finalMode);
-                showToast("Avvio: " + finalMode);
+                console.log("Countdown finished. Final Mode:", mode);
 
-                if (finalMode === 'conquest' || isCoopMode) {
+                if (mode === 'conquest' || isCoopMode) {
                     if (typeof window.startCoopSequence === 'function') { window.startCoopSequence(); return; }
-                } else if (finalMode === 'course') {
+                } else if (mode === 'course') {
                     if (typeof window.startCourseSessionSequence === 'function') { window.startCourseSessionSequence(); return; }
-                } else if (finalMode === 'quiz') {
+                } else if (mode === 'quiz') {
                     if (typeof window.startQuizSequence === 'function') { window.startQuizSequence(); return; }
-                } else if (finalMode === 'qso') {
+                } else if (mode === 'qso') {
                     console.log("Countdown: Entering QSO Mode via startQsoMode()");
                     if (typeof window.startQsoMode === 'function') {
                         window.startQsoMode();
-                        return; // USCITA FORZATA PER QSO
+                        return; // BLOCCO ASSOLUTO PER QSO
                     } else {
                         console.error("QSO Error: window.startQsoMode is NOT a function!");
                     }
                 }
 
-                console.log("Countdown: Falling back to gameArea for mode:", finalMode);
+                // Se arriviamo qui, non è una modalità speciale, quindi mostriamo il gameArea (parole)
                 window.showScreen('gameArea');
-                if (finalMode === 'pingpong') {
+                if (mode === 'pingpong') {
                     if (typeof window.initPingPongManager === 'function') window.initPingPongManager();
                     if (typeof window.setupPingPongListener === 'function') window.setupPingPongListener();
                 } else {
