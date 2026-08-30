@@ -195,7 +195,7 @@ window.currentStreak = 0;
 window.usedReplay = false;
 window.matchDetailsArray = [];
 window.isSinglePlayer = false;
-window.currentMode = "standard";
+window.window.currentMode = "standard";
 window.requestedWordCount = 10;
 window.isFixedSpeed = false;
 window.isEasyMode = false;
@@ -320,11 +320,11 @@ window.resetGameState = function() {
     isCoopMode = false;
     isArcadeMode = false;
     if (typeof window.stopTowerClimb === 'function') window.stopTowerClimb();
-    if (typeof window.exitQsoMode === 'function' && window.currentMode === 'qso') {
+    if (typeof window.exitQsoMode === 'function' && window.window.currentMode === 'qso') {
         // Pulizia QSO se stavamo uscendo da lì
     }
     window.isSinglePlayer = false;
-    currentMode = 'standard';
+    window.currentMode = 'standard';
     coopActiveFreqIndex = 0; // RESET INDICE FREQUENZA CO-OP
 
     // 2b. Reset specifico Perfezione
@@ -1386,14 +1386,14 @@ if (els.btnPlayDailyNow) {
         // Reset preventivo per evitare conflitti con altre modalità (es. corso)
         window.resetGameState();
 
-        currentMode = 'daily_challenge';
+        window.currentMode = 'daily_challenge';
         window.isSinglePlayer = true;
         currentWpm = baseWpm = 15;
         requestedWordCount = 20;
 
         // USA ID UNIVOC_O ANCHE PER LA SFIDA GIORNALIERA
         roomCode = "DAILY_" + window.myId;
-        gameWords = window.getGameWords(requestedWordCount, currentMode);
+        gameWords = window.getGameWords(requestedWordCount, window.currentMode);
         currentTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || 600;
 
         const startDaily = () => {
@@ -1405,7 +1405,7 @@ if (els.btnPlayDailyNow) {
             const dailyData = {
                 status: 'countdown',
                 type: 'single',
-                mode: currentMode,
+                mode: window.currentMode,
                 wpm: currentWpm,
                 tone: currentTone,
                 wordCount: requestedWordCount,
@@ -1624,14 +1624,14 @@ if (els.createRoomBtn) {
         window.isChallenging = false;
         window.outgoingChallengeId = null;
         window.incomingChallengeId = null;
-        window.currentMode = gMode || 'standard';
-        console.log("Create Room: Initial Mode selection ->", gMode, "Global currentMode ->", window.currentMode);
+        window.window.currentMode = gMode || 'standard';
+        console.log("Create Room: Initial Mode selection ->", gMode, "Global window.currentMode ->", window.window.currentMode);
         window.isSinglePlayer = (gType === 'single');
-        window.currentWpm = window.baseWpm = (window.currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
-        window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
+        window.currentWpm = window.baseWpm = (window.window.currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
+        window.requestedWordCount = (window.window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         window.currentTone = parseInt(els.toneInput?.value) || 600;
 
-        window.wordsPerGroup = (window.currentMode === 'standard_plus') ? (parseInt(document.getElementById('wordsPerGroupInput')?.value) || 2) : 1;
+        window.wordsPerGroup = (window.window.currentMode === 'standard_plus') ? (parseInt(document.getElementById('wordsPerGroupInput')?.value) || 2) : 1;
 
         if (gType === 'transmission') {
             window.startTransmissionFree(gMode);
@@ -1648,7 +1648,7 @@ if (els.createRoomBtn) {
         window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
 
         const createAndJoinRoom = (stats = {}) => {
-            window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode, {
+            window.gameWords = window.getGameWords(window.requestedWordCount, window.window.currentMode, {
                 groupSize: window.wordsPerGroup,
                 stats: stats
             });
@@ -1659,7 +1659,7 @@ if (els.createRoomBtn) {
             const roomData = {
                 status: window.isSinglePlayer ? 'countdown' : 'waiting',
                 type: window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
-                mode: window.currentMode,
+                mode: window.window.currentMode,
                 groupSize: window.wordsPerGroup,
                 wpm: window.currentWpm,
                 tone: window.currentTone,
@@ -1680,7 +1680,7 @@ if (els.createRoomBtn) {
                     roomRef.onDisconnect().remove();
                     const lobbyRef = db.ref(`public_lobby_rooms/${window.roomCode}`);
                     lobbyRef.set({
-                        mode: window.currentMode,
+                        mode: window.window.currentMode,
                         pCount: 1,
                         wpm: window.currentWpm,
                         status: 'waiting',

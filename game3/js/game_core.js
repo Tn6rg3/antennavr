@@ -264,7 +264,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
 
             if (gameRunning) {
                 // Se abbandoniamo la sfida giornaliera, registriamo l'evento nel passato per bloccare nuovi tentativi
-                if (currentMode === 'daily_challenge') {
+                if (window.currentMode === 'daily_challenge') {
                     db.ref(`users/${myId}/history`).push().set({
                         date: firebase.database.ServerValue.TIMESTAMP,
                         mode: 'daily_challenge',
@@ -443,8 +443,8 @@ window.listenToRoomInBackground = function() {
             // Sincronizzazione parametri avanzati della stanza
             currentWpm = rData.wpm;
             baseWpm = rData.wpm;
-            window.currentMode = rData.mode || 'standard';
-            console.log("Room Monitor: CRITICAL MODE SYNC ->", window.currentMode);
+            window.window.currentMode = rData.mode || 'standard';
+            console.log("Room Monitor: CRITICAL MODE SYNC ->", window.window.currentMode);
             requestedWordCount = rData.wordCount || 10;
 
             window.isSinglePlayer = (rData.type === 'single');
@@ -663,7 +663,7 @@ window.renderPlayersList = function(playersData, hostId) {
         els.playersList.appendChild(li);
     });
 
-    const isTrnOrPP = roomCode.startsWith("TRN_") || currentMode === 'pingpong';
+    const isTrnOrPP = roomCode.startsWith("TRN_") || window.currentMode === 'pingpong';
     const amIHost = (myId === hostId) || roomCode.startsWith("TRN_");
     const myData = playersData[myId];
     const amIReady = myData?.ready;
@@ -740,7 +740,7 @@ window.startCountdownSequence = function() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (listeners.room) listeners.room.off();
 
-    isCourseMode = (currentMode === 'course');
+    isCourseMode = (window.currentMode === 'course');
     if (!isSinglePlayer) {
         // Recuperiamo il conteggio iniziale dei giocatori che iniziano la sfida
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
@@ -781,7 +781,7 @@ window.startCountdownSequence = function() {
                         if (currentStatus === 'playing' || hasAbandoned) {
                             if (currentPCount === 1 && players[myId]) {
                                 // --- FIX CO-OP: Se siamo in collaborazione, la partita NON termina se resta solo 1 giocatore ---
-                                if (currentMode === 'conquest' || isCoopMode) {
+                                if (window.currentMode === 'conquest' || isCoopMode) {
                                     showToast(currentLang === 'it' ? "Il tuo compagno ha abbandonato. Continua la missione da solo! ⚔️" : "Your teammate left. Continue the mission alone! ⚔️");
                                     return;
                                 }
@@ -858,7 +858,7 @@ window.startCountdownSequence = function() {
     if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
     if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
 
-    if (currentMode === 'pingpong' && (myId === roomHostId || roomCode.startsWith("TRN_"))) {
+    if (window.currentMode === 'pingpong' && (myId === roomHostId || roomCode.startsWith("TRN_"))) {
         // RESET E INIZIALIZZAZIONE PING PONG (Il primo sender è sempre l'Host o chi avvia il match)
         const initialSender = roomHostId || myId;
         db.ref(`rooms/${roomCode}/pingpong`).set({
@@ -896,7 +896,7 @@ window.startCountdownSequence = function() {
             setTimeout(() => {
                 if (!gameRunning) return;
 
-                const mode = window.currentMode || 'standard';
+                const mode = window.window.currentMode || 'standard';
                 console.log("Countdown finished. Final Mode:", mode);
 
                 isCoopMode = (mode === 'conquest');
@@ -938,7 +938,7 @@ window.resumeGameSequence = function() {
     gameRunning = true;
     isRejoining = false;
 
-    isCoopMode = (currentMode === 'conquest');
+    isCoopMode = (window.currentMode === 'conquest');
     if (els.coopArea) els.coopArea.style.display = isCoopMode ? 'flex' : 'none';
     if (els.tableWrapper) els.tableWrapper.style.display = isCoopMode ? 'none' : 'block';
 
@@ -957,7 +957,7 @@ window.resumeGameSequence = function() {
         });
     }
 
-    const mode = window.currentMode;
+    const mode = window.window.currentMode;
     if (mode === 'conquest' || isCoopMode) {
         if (typeof window.startCoopSequence === 'function') window.startCoopSequence();
         return;
@@ -981,17 +981,17 @@ window.resumeGameSequence = function() {
 
 window.playNextWord = function() {
     // BLOCCO DI SICUREZZA ASSOLUTO PER QSO
-    if (window.currentMode === 'qso') {
+    if (window.window.currentMode === 'qso') {
         console.warn("GameCore: playNextWord interrotto perché in modalità QSO.");
         if (typeof window.startQsoMode === 'function') window.startQsoMode();
         return;
     }
 
-    if (!gameRunning || window.currentMode === 'pingpong') return;
+    if (!gameRunning || window.window.currentMode === 'pingpong') return;
     if (isCourseMode) return window.playNextCourseGroup?.();
 
     // --- LOGICA PERFEZIONE: Gestione flussi ---
-    if (currentMode === 'perfection') {
+    if (window.currentMode === 'perfection') {
         const queueLen = window.perfectionQueue ? window.perfectionQueue.length : 0;
 
         // Fine partita: parole finite E coda vuota
@@ -1029,14 +1029,14 @@ window.playNextWord = function() {
         if (wordIndex >= requestedWordCount) return window.finishGame();
     }
 
-    if (currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
+    if (window.currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
     inputActive = true;
     usedReplay = false;
 
     let currentWord = "";
     let activeWpm = currentWpm;
 
-    if (currentMode === 'perfection' && window.isPerfectionRetry) {
+    if (window.currentMode === 'perfection' && window.isPerfectionRetry) {
         currentWord = window.currentPerfectionWord.toUpperCase();
         activeWpm = window.currentPerfectionWpm;
         showToast(currentLang === 'it' ? "🔄 RECUPERO ERRORE" : "🔄 ERROR RETRY", 1000);
@@ -1139,7 +1139,7 @@ window.finishGame = function() {
             const isActuallyMulti = (pArray.length >= 2) || (!isSinglePlayer && gameStartPlayerCount >= 2);
 
             let dbPath;
-            if (window.currentMode === 'daily_challenge') {
+            if (window.window.currentMode === 'daily_challenge') {
                 let todayStr = new Date().toISOString().split('T')[0];
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${window.myId}`;
             } else {
@@ -1151,8 +1151,8 @@ window.finishGame = function() {
                     'standard_plus': 'standard_plus',
                     'target_training': 'target_training'
                 };
-                const baseFolder = modeMap[window.currentMode] || 'standard';
-                const modeFolder = window.currentMode === 'callsign' ? baseFolder : `${baseFolder}/${!isActuallyMulti ? 'single' : 'multi'}_${window.requestedWordCount}`;
+                const baseFolder = modeMap[window.window.currentMode] || 'standard';
+                const modeFolder = window.window.currentMode === 'callsign' ? baseFolder : `${baseFolder}/${!isActuallyMulti ? 'single' : 'multi'}_${window.requestedWordCount}`;
                 dbPath = `leaderboard/${modeFolder}/${window.myId}`;
             }
 
@@ -1192,7 +1192,7 @@ window.finishGame = function() {
     }
 
     if (matchDetailsArray.length > 0) {
-        db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: currentMode, score: totalScore, wpm: peakWpm, type: isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
+        db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: window.currentMode, score: totalScore, wpm: peakWpm, type: isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
         if (typeof window.updateActivity === 'function') window.updateActivity(totalScore > 0);
 
         // --- ASSEGNAZIONE XP FINALE (RPG) ---
@@ -1206,10 +1206,10 @@ window.finishGame = function() {
     window.showPostMatchReplayButtons();
 
     // --- MODIFICA: RESTA NELLA SCHERMATA GIOCO PER REVISIONE ---
-    const qBtn = (currentMode === 'quiz') ? els.quitQuizBtn : els.quitGameBtn;
+    const qBtn = (window.currentMode === 'quiz') ? els.quitQuizBtn : els.quitGameBtn;
 
     if (qBtn) {
-        if (currentMode === 'course') {
+        if (window.currentMode === 'course') {
             qBtn.textContent = currentLang === 'it' ? "Torna al Corso" : "Back to Course";
         } else {
             qBtn.textContent = currentLang === 'it' ? "Vai alla Classifica" : "Go to Leaderboard";
@@ -1219,7 +1219,7 @@ window.finishGame = function() {
         qBtn.classList.add('btn-success');
 
         // Salviamo lo stato del gioco corrente per la navigazione classifiche
-        const savedMode = currentMode;
+        const savedMode = window.currentMode;
         const savedWordCount = requestedWordCount;
         const savedSinglePlayer = isSinglePlayer;
         const savedRoomCode = roomCode;
@@ -1273,7 +1273,7 @@ window.finishGame = function() {
     if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<b style="color:var(--champ-color)">FINITO!</b> PT: ${totalScore}`;
 
     // --- NUOVO: AUTO-NAVIGAZIONE PER SFIDA GIORNALIERA ---
-    if (currentMode === 'daily_challenge' && totalScore > 0) {
+    if (window.currentMode === 'daily_challenge' && totalScore > 0) {
         setTimeout(() => {
             if (typeof window.finishGameNavigation === 'function') {
                 const savedRoom = roomCode;
@@ -1285,7 +1285,7 @@ window.finishGame = function() {
     }
 
     // --- NUOVO: REPORT ALLENAMENTO MIRATO ---
-    if (currentMode === 'target_training' && window.targetTrainingContext) {
+    if (window.currentMode === 'target_training' && window.targetTrainingContext) {
         setTimeout(() => {
             window.generateTargetTrainingReport();
         }, 2000); // Ritardo per permettere di vedere la classifica o la fine partita
@@ -1376,7 +1376,7 @@ window.generateTargetTrainingReport = function() {
 };
 
 window.showMatchShareButtons = function() {
-    if (currentMode === 'course') return; // OTTIMIZZAZIONE: Nessun social nel corso
+    if (window.currentMode === 'course') return; // OTTIMIZZAZIONE: Nessun social nel corso
 
     // Cerchiamo un contenitore dove inserire i bottoni, o lo creiamo sotto la tabella
     let shareContainer = document.getElementById('matchShareContainer');
@@ -1399,8 +1399,8 @@ window.showMatchShareButtons = function() {
 
     btn.onclick = () => {
         const appUrl = encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`);
-        let modeName = (currentMode || "Match").toUpperCase();
-        if (currentMode === 'daily_challenge') modeName = "Sfida Giornaliera";
+        let modeName = (window.currentMode || "Match").toUpperCase();
+        if (window.currentMode === 'daily_challenge') modeName = "Sfida Giornaliera";
 
         const textMsg = encodeURIComponent(`📻 ${modeName} CW!\nHo totalizzato ${totalScore} pt (Velocità: ${currentWpm} WPM).\nRiesci a fare di meglio?`);
         const shareUrl = `https://t.me/share/url?url=${appUrl}&text=${textMsg}`;
@@ -1446,7 +1446,7 @@ window.saveMatchSummary = function(playersData) {
     }
 
     // Determiniamo il percorso corretto
-    let baseMode = currentMode;
+    let baseMode = window.currentMode;
     if (baseMode === 'std') baseMode = 'standard';
 
     const validModes = ['standard', 'standard_plus', 'target_training', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign', 'qso'];
@@ -1459,7 +1459,7 @@ window.saveMatchSummary = function(playersData) {
 
     const matchSummary = {
         players: players,
-        mode: currentMode,
+        mode: window.currentMode,
         wordCount: safeWordCount,
         date: new Date().toLocaleDateString('it-IT'),
         ts: firebase.database.ServerValue.TIMESTAMP
@@ -1623,7 +1623,7 @@ if (els.permanentGameInput) {
             }
             return;
         }
-        if (currentMode === 'chars' && inputActive && gameRunning) {
+        if (window.currentMode === 'chars' && inputActive && gameRunning) {
             const rawVal = els.permanentGameInput.value;
             // Estraiamo solo il carattere digitato ignorando spazi/controlli aggiunti dal tablet
             const cleanVal = rawVal.replace(/\s/g, '').toUpperCase();
@@ -1635,7 +1635,7 @@ if (els.permanentGameInput) {
         }
     });
     els.permanentGameInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && inputActive && gameRunning && currentMode !== 'chars') {
+        if (e.key === 'Enter' && inputActive && gameRunning && window.currentMode !== 'chars') {
             const val = els.permanentGameInput.value.trim().toUpperCase();
             if (val) {
                 window.handleWordSubmission(val);
@@ -1709,7 +1709,7 @@ window.handleWordSubmission = function(userWord) {
     }
 
     // 2. MODALITÀ CONQUISTA (CO-OP)
-    if (currentMode === 'conquest') {
+    if (window.currentMode === 'conquest') {
         if (coopActiveFreqIndex === 0) return showToast("⚠️ Seleziona prima una Frequenza!");
         const currentWord = gameWords[0];
         const isCorrect = userWord === currentWord;
@@ -1760,7 +1760,7 @@ window.handleWordSubmission = function(userWord) {
     let currentWord;
     let activeWpmForThisWord = currentWpm;
 
-    if (currentMode === 'perfection' && window.isPerfectionRetry) {
+    if (window.currentMode === 'perfection' && window.isPerfectionRetry) {
         currentWord = window.currentPerfectionWord.toUpperCase();
         activeWpmForThisWord = window.currentPerfectionWpm;
     } else {
@@ -1773,7 +1773,7 @@ window.handleWordSubmission = function(userWord) {
     let levDist = 0;
 
     // --- LOGICA SPECIALE PER PAROLE COMUNI + (GRANULARE) ---
-    if (currentMode === 'standard_plus' && currentWord.includes(' ')) {
+    if (window.currentMode === 'standard_plus' && currentWord.includes(' ')) {
         const rWords = currentWord.split(' ');
         const tWords = userWord.split(' ');
         let totalP = 0;
@@ -1794,7 +1794,7 @@ window.handleWordSubmission = function(userWord) {
         levDist = window.getLevenshteinDistance(currentWord, userWord);
         // Calcolo Punti Standard
         if (typeof window.calculateGamePoints === 'function') {
-            const res = window.calculateGamePoints(currentMode, currentWord, userWord, activeWpmForThisWord, reactionMs, levDist, usedReplay);
+            const res = window.calculateGamePoints(window.currentMode, currentWord, userWord, activeWpmForThisWord, reactionMs, levDist, usedReplay);
             points = res.points; scoreColor = res.scoreColor;
         }
     }
@@ -1806,7 +1806,7 @@ window.handleWordSubmission = function(userWord) {
 
     // Gestione Errori e Coda Perfezione
     if (levDist > 0 || usedReplay) {
-        if (currentMode === 'perfection') {
+        if (window.currentMode === 'perfection') {
             // Aggiungiamo alla coda memorizzando QUANDO è stata aggiunta per il cooldown
             window.perfectionQueue.push({
                 word: currentWord,
@@ -1819,7 +1819,7 @@ window.handleWordSubmission = function(userWord) {
     // Avanzamento WPM e Missioni
     if (levDist === 0 && !usedReplay) {
         if (!window.isPerfectionRetry) {
-            if (!isFixedSpeed && currentMode !== 'chars') {
+            if (!isFixedSpeed && window.currentMode !== 'chars') {
                 currentWpm += 2;
                 if (currentWpm > peakWpm) peakWpm = currentWpm;
             }
@@ -1834,7 +1834,7 @@ window.handleWordSubmission = function(userWord) {
     } else {
         // RESET STREAK IN CASO DI ERRORE O REPLAY
         window.currentStreak = 0;
-        if (!isFixedSpeed && currentMode !== 'chars') {
+        if (!isFixedSpeed && window.currentMode !== 'chars') {
             if (usedReplay || levDist > 1) {
                 currentWpm = Math.max(10, currentWpm - 2);
             } else if (levDist === 1) {
@@ -1848,14 +1848,14 @@ window.handleWordSubmission = function(userWord) {
     matchDetailsArray.push({ real: currentWord, typed: userWord, points: points, wpm: activeWpmForThisWord, ms: reactionMs, isRetry: window.isPerfectionRetry });
 
     // UI Tabella
-    if (currentMode !== 'pingpong') {
+    if (window.currentMode !== 'pingpong') {
         const tr = document.createElement('tr');
         if (window.isPerfectionRetry) tr.style.background = "rgba(76, 175, 80, 0.05)";
         const tdTyped = document.createElement('td'); tdTyped.textContent = userWord || "-";
         const tdReal = document.createElement('td');
 
         // MODIFICA PERFEZIONE: Se è un errore, non mostriamo la parola reale (Nascosta 🔒)
-        if (currentMode === 'perfection' && (levDist > 0 || usedReplay)) {
+        if (window.currentMode === 'perfection' && (levDist > 0 || usedReplay)) {
             tdReal.innerHTML = `<span style="opacity:0.5; font-size:0.9em; font-style:italic;">[Nascosto 🔒]</span>`;
         } else {
             window.renderDiffSecure(tdReal, currentWord, userWord);
@@ -1865,7 +1865,7 @@ window.handleWordSubmission = function(userWord) {
         tdPoints.style.textAlign = 'center';
         tdPoints.style.color = scoreColor;
         tdPoints.style.fontWeight = 'bold';
-        tdPoints.innerHTML = (currentMode === 'chars' ? points : (usedReplay ? '0' : (points > 0 ? "+"+points : points))) + (window.isPerfectionRetry ? " 🔄" : "");
+        tdPoints.innerHTML = (window.currentMode === 'chars' ? points : (usedReplay ? '0' : (points > 0 ? "+"+points : points))) + (window.isPerfectionRetry ? " 🔄" : "");
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
         if (els.tableBody) { els.tableBody.appendChild(tr); els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight; }
     }
@@ -1873,7 +1873,7 @@ window.handleWordSubmission = function(userWord) {
     if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
 
     // FINE PAROLA: Avanzamento e Sincronizzazione
-    if (currentMode === 'pingpong') {
+    if (window.currentMode === 'pingpong') {
         wordIndex++;
         db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
             if (d) {
@@ -1952,7 +1952,7 @@ if (els.leaveLobbyBtn) {
 if (els.startMultiplayerBtn) {
     els.startMultiplayerBtn.onclick = function() {
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
-            if (currentMode === 'pingpong' && (snap.exists() ? Object.keys(snap.val()).length : 0) < 2) {
+            if (window.currentMode === 'pingpong' && (snap.exists() ? Object.keys(snap.val()).length : 0) < 2) {
                 return alert("Ping Pong richiede almeno 2 giocatori in stanza per iniziare!");
             }
             db.ref(`rooms/${roomCode}`).update({ status: 'countdown', expiresAt: null });
@@ -2014,7 +2014,7 @@ document.addEventListener('visibilitychange', () => {
             inputActive = false;
             showToast("⚠️ Schermo spento: parola considerata persa!");
 
-            if (currentMode === 'conquest') {
+            if (window.currentMode === 'conquest') {
                 db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
                     if (!state || state.status !== 'playing') return state;
                     state.progress = Math.max(0, (state.progress || 0) - 2);
@@ -2026,10 +2026,10 @@ document.addEventListener('visibilitychange', () => {
                     }
                 }, 1000);
 
-            } else if (currentMode === 'quiz') {
+            } else if (window.currentMode === 'quiz') {
                 if (typeof submitQuizAnswer === 'function') submitQuizAnswer(-1);
 
-            } else if (currentMode === 'pingpong') {
+            } else if (window.currentMode === 'pingpong') {
                 if (typeof window.sendAutoPingPongWord === 'function') window.sendAutoPingPongWord();
 
             } else {
