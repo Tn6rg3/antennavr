@@ -64,10 +64,12 @@ window.initTransmissionManager = function() {
             const setupScreen = document.getElementById('setupScreen');
             const txScreen = document.getElementById('transmissionScreen');
             const profileScreen = document.getElementById('profileScreen');
+            const qsoArea = document.getElementById('qsoArea');
 
             const isSetupActive = setupScreen && setupScreen.classList.contains('active-screen');
             const isTxActive = txScreen && txScreen.classList.contains('active-screen');
             const isProfileActive = profileScreen && profileScreen.classList.contains('active-screen');
+            const isQsoActive = qsoArea && qsoArea.classList.contains('active-screen');
 
             // Nel menu setup, disabilitiamo il keyer globale (mouse/paddles) per evitare
             // interferenze con la UI, a meno che non ci sia una sessione attiva (molto raro qui).
@@ -75,8 +77,8 @@ window.initTransmissionManager = function() {
                 return (window.transmissionState.sessionRunning || window.groupTxState.running);
             }
 
-            // Nella Stazione Radio standalone, il keyer è sempre ammesso
-            if (isTxActive) return true;
+            // Nella Stazione Radio standalone o QSO, il keyer è sempre ammesso
+            if (isTxActive || isQsoActive) return true;
 
             // Nel Profilo (Corso), ammesso solo se la vista Trasmissione è visibile
             if (isProfileActive) {
@@ -153,6 +155,14 @@ window.initTransmissionManager = function() {
                     const inner = btn.querySelector('span');
                     if (inner) inner.style.opacity = "0.6";
                 }
+
+                // --- QSO BUTTON FEEDBACK ---
+                const qsoBtn = document.getElementById('qsoMorseKeyBtn');
+                if (qsoBtn) {
+                    qsoBtn.style.transform = "scale(0.92)";
+                    const qsoInner = qsoBtn.querySelector('span');
+                    if (qsoInner) qsoInner.style.opacity = "0.6";
+                }
             };
 
             window.handleStraightKeyUp = (e) => {
@@ -182,12 +192,26 @@ window.initTransmissionManager = function() {
                     const inner = btn.querySelector('span');
                     if (inner) inner.style.opacity = "0.2";
                 }
+
+                // --- QSO BUTTON FEEDBACK ---
+                const qsoBtn = document.getElementById('qsoMorseKeyBtn');
+                if (qsoBtn) {
+                    qsoBtn.style.transform = "scale(1)";
+                    const qsoInner = qsoBtn.querySelector('span');
+                    if (qsoInner) qsoInner.style.opacity = "0.2";
+                }
             };
 
             keyBtn.addEventListener('mousedown', window.handleStraightKeyDown);
             keyBtn.addEventListener('touchstart', window.handleStraightKeyDown, {passive: false});
             window.addEventListener('mouseup', window.handleStraightKeyUp);
             window.addEventListener('touchend', window.handleStraightKeyUp, {passive: false});
+        }
+
+        const qsoKeyBtn = document.getElementById('qsoMorseKeyBtn');
+        if (qsoKeyBtn) {
+            qsoKeyBtn.addEventListener('mousedown', window.handleStraightKeyDown);
+            qsoKeyBtn.addEventListener('touchstart', window.handleStraightKeyDown, {passive: false});
         }
 
         const keyBtnGroups = document.getElementById('morseKeyBtnGroups');
@@ -219,6 +243,62 @@ window.initTransmissionManager = function() {
     // BINDING ESERCIZIO GRUPPI
     setupButtonLocal('btnStartGroupTx', window.startGroupTx);
     setupButtonLocal('btnStopGroupTx', window.stopGroupTx);
+
+    // BINDING SERIALE / USB
+    window.connectSerial = async function() {
+        let serialAPI = navigator.serial;
+        if (!serialAPI) return alert("Browser o Sistema non supportato per USB (Usa Chrome/Edge su Desktop).");
+
+        try {
+            const port = await serialAPI.requestPort({
+                filters: [
+                    { usbVendorId: 0x2341 }, { usbVendorId: 0x1B4F },
+                    { usbVendorId: 0x239A }, { usbVendorId: 0x1A86 }
+                ]
+            });
+            await port.open({ baudRate: 500000 });
+            await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+
+            showToast("USB Connessa! 🟢");
+            const btn = document.getElementById('btnConnectUsbGlobal');
+            if (btn) { btn.textContent = "✅ USB OK"; btn.classList.replace('btn-success', 'btn-secondary'); }
+
+            window.readSerialData(port);
+        } catch (e) {
+            console.error(e);
+            alert("Nessuna porta selezionata o errore di connessione.");
+        }
+    };
+
+    window.readSerialData = async function(port) {
+        const reader = port.readable.getReader();
+        try {
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) { reader.releaseLock(); break; }
+
+                const source = document.getElementById('mainInputSourceSelect')?.value;
+                if (source !== 'serial') continue;
+
+                for (let i = 0; i < value.length; i++) {
+                    const byte = value[i];
+                    // Logica Arduino Standard: 1 o '1' (49) o 'D' (68) -> Dot, 2 o 'L' (76) -> Dash, 0 o '0' (48) -> Stop
+                    if (byte === 1 || byte === 49 || byte === 68) {
+                        if (typeof window.startTone === 'function') window.startTone(window.keyerState.tone);
+                        window.handleKeyerEvent('on', 50); // Durata fittizia per trigger
+                    }
+                    else if (byte === 2 || byte === 76) {
+                        if (typeof window.startTone === 'function') window.startTone(window.keyerState.tone);
+                        window.handleKeyerEvent('on', 150);
+                    }
+                    else if (byte === 0 || byte === 48) {
+                        if (typeof window.stopTone === 'function') window.stopTone();
+                        window.handleKeyerEvent('off', 50);
+                    }
+                }
+            }
+        } catch(err) { console.error("Serial Read Error:", err); }
+    };
 
     // CONFIGURAZIONE KEYER
     const kToggle = document.getElementById('keyerEnableToggle');
@@ -295,6 +375,16 @@ window.initTransmissionManager = function() {
     });
 
     setupButtonLocal('btnMapKeyDit', () => {
+        window.keyerState.mappingTarget = 'dit';
+        const b = document.getElementById('btnMapKeyDit');
+        if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
+    });
+    setupButtonLocal('btnMapKeyDah', () => {
+        window.keyerState.mappingTarget = 'dah';
+        const b = document.getElementById('btnMapKeyDah');
+        if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }
+    });
+    setupButtonLocal('btnMapKeyVert', () => {
         window.keyerState.mappingTarget = 'vert';
         const b = document.getElementById('btnMapKeyVert');
         if (b) { b.textContent = "Premi un tasto..."; b.classList.add('pulse'); }

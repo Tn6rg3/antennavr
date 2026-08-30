@@ -292,6 +292,19 @@ window.GAME_MODES = {
         fixedSpeedAllowed: false,
         spacingConfigurable: false,
         generateWords: function(num, dicts) { return []; }
+    },
+    "qso": {
+        id: "qso",
+        titleIt: "QSO Telegrafico (P2P)",
+        titleEn: "Telegraphic QSO (P2P)",
+        icon: "📻",
+        defaultWpm: 20,
+        defaultWordCount: 0,
+        wpmConfigurable: true,
+        wordCountConfigurable: false,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: false,
+        generateWords: function(num, dicts) { return []; }
     }
 };
 

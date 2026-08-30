@@ -56,6 +56,11 @@ window.startTone = function(freq) {
     osc.start();
     window.manualOscillator = osc;
     window.manualGain = gain;
+
+    // --- QSO INTEGRATION ---
+    if (typeof window.currentMode !== 'undefined' && window.currentMode === 'qso') {
+        if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('DN', f);
+    }
 };
 
 window.stopTone = function() {
@@ -79,6 +84,11 @@ window.stopTone = function() {
 
     window.manualOscillator = null;
     window.manualGain = null;
+
+    // --- QSO INTEGRATION ---
+    if (typeof window.currentMode !== 'undefined' && window.currentMode === 'qso') {
+        if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('UP', 0);
+    }
 };
 
 window.stopAllMorseAudio = function() {

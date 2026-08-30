@@ -154,6 +154,7 @@ window.goBackToMenu = function() {
         const tx = document.getElementById('courseTransmissionView');
         const groups = document.getElementById('groupTxContainer');
         const courseView = document.getElementById('courseTabActiveView');
+        const keyerCfg = document.getElementById('mainMenuKeyerConfig');
 
         // Ripristiniamo la visibilità del pannello configurazione interno
         if (tx) {
@@ -164,6 +165,13 @@ window.goBackToMenu = function() {
         // Ordine di ripristino: prima i gruppi dentro la vista tx, poi la vista tx dentro il corso
         if (groups && tx) tx.appendChild(groups);
         if (tx && courseView) courseView.appendChild(tx);
+
+        // Riporta il pannello keyer nella sua "casa" originale nel menu Setup
+        if (keyerCfg) {
+            const setupScreen = document.getElementById('setupScreen');
+            const boxPanel = setupScreen?.querySelector('.box-panel');
+            if (boxPanel) boxPanel.insertBefore(keyerCfg, document.getElementById('createRoomBtn'));
+        }
 
         st.innerHTML = "";
     }
@@ -885,6 +893,9 @@ window.startCountdownSequence = function() {
                 }
                 if (currentMode === 'quiz') {
                     if (typeof window.startQuizSequence === 'function') return window.startQuizSequence();
+                }
+                if (currentMode === 'qso') {
+                    if (typeof window.startQsoMode === 'function') return window.startQsoMode();
                 }
 
                 window.showScreen('gameArea');

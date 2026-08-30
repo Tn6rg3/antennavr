@@ -18,8 +18,10 @@ window.populateGameModesUI = function() {
     Object.values(window.GAME_MODES || {}).forEach(mode => {
         // --- LOGICA FILTRI ---
         if (isSingle) {
-            if (mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx') return;
+            // QSO non è ammesso in Solo
+            if (mode.id === 'qso' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx') return;
         } else if (isMulti) {
+            // Modalità ammesse in Multi
             if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx') return;
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
@@ -131,13 +133,13 @@ window.checkGameTypeUI = function() {
         keyer: document.getElementById('mainMenuKeyerConfig')
     };
 
-    if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcadeType || isTx) ? 'none' : 'block';
+    if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcadeType || isTx || selectedMode === 'qso') ? 'none' : 'block';
 
-    if (containers.fixed) containers.fixed.style.display = (isSingle && !isTx) ? 'flex' : 'none';
-    if (containers.easy) containers.easy.style.display = (isSingle && !isTx) ? 'flex' : 'none';
-    if (containers.spacing) containers.spacing.style.display = (isSingle && !isTx) ? 'flex' : 'none';
-    if (containers.custom) containers.custom.style.display = (isSingle && !isTx) ? 'flex' : 'none';
-    if (containers.spectator) containers.spectator.style.display = (isSingle && !isTx) ? 'flex' : 'none';
+    if (containers.fixed) containers.fixed.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
+    if (containers.easy) containers.easy.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
+    if (containers.spacing) containers.spacing.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
+    if (containers.custom) containers.custom.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
+    if (containers.spectator) containers.spectator.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
     if (containers.wordsPerGroup) containers.wordsPerGroup.style.display = (selectedMode === 'standard_plus') ? 'block' : 'none';
 
     // --- LOGICA TRASMISSIONE ---
