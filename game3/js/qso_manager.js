@@ -169,26 +169,31 @@ window.startQsoMode = function() {
 
     // Fallback automatico Relay
     setTimeout(() => {
-        if (!window.qsoState.conn && window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
+        if (!window.qsoState.conn && window.window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
             window.activateQsoRelayMode();
         }
     }, 12000);
 };
 
 window.activateQsoRelayMode = function() {
-    if (window.qsoState.conn || window.qsoState.isRelayMode) return;
+    if (window.qsoState.isRelayMode) return;
 
     window.qsoState.isRelayMode = true;
     window.updateQsoStatus("MODALITÀ RELAY (Server) 🛰️", "#ff9800");
-    showToast("P2P non disponibile. Uso Relay Firebase.");
+    console.log("QSO: Relay Mode Activated.");
 
     if (window.roomCode) {
-        // Comunichiamo agli altri che siamo in modalità Relay
+        // Notifichiamo la stanza
         db.ref(`rooms/${window.roomCode}/qso_state`).update({ relayActive: true });
 
+        // Ascolto segnali (Piano B)
         db.ref(`rooms/${window.roomCode}/qso_relay`).on('value', snap => {
             const data = snap.val();
             if (!data || data.senderId === window.myId) return;
+
+            // Forziamo il relay anche su di noi se riceviamo traffico relay
+            if (!window.qsoState.isRelayMode) window.activateQsoRelayMode();
+
             if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
             else if (data.type === 'UP') window.stopQsoRemoteTone(0);
         });
@@ -244,29 +249,22 @@ window.setupQsoDataChannel = function(c) {
             window.qsoState.timeOffset = Date.now() - (d.remoteTs + (rtt / 2));
         }
         else if (d.type === 'DN') {
-            cowindow.activateQsoRelayMode = function() {
-    if (window.qsoState.isRelayMode) return;
+            const target = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
+            window.playQsoRemoteTone(d.f, Math.max(0.005, (target - Date.now()) / 1000));
+        }
+        else if (d.type === 'UP') {
+            const target = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
+            window.stopQsoRemoteTone(Math.max(0.005, (target - Date.now()) / 1000));
+        }
+    });
 
-    window.qsoState.isRelayMode = true;
-    window.updateQsoStatus("MODALITÀ RELAY (Server) 🛰️", "#ff9800");
-    console.log("QSO: Relay Mode Activated.");
-
-    if (window.roomCode) {
-        // Comunichiamo agli altri che siamo in modalità Relay
-        db.ref(`rooms/${window.roomCode}/qso_state`).update({ relayActive: true });
-
-        db.ref(`rooms/${window.roomCode}/qso_relay`).on('value', snap => {
-            const data = snap.val();
-            if (!data || data.senderId === window.myId) return;
-
-            // Forziamo il relay anche su di noi se riceviamo traffico relay
-            if (!window.qsoState.isRelayMode) window.activateQsoRelayMode();
-
-            if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
-            else if (data.type === 'UP') window.stopQsoRemoteTone(0);
-        });
-    }
+    c.on('close', () => {
+        window.updateQsoStatus("DISCONNESSO", "#e74c3c");
+        window.qsoState.conn = null;
+    });
 };
+
+// --- CORE AUDIO E DECODER ---
 
 window.playQsoRemoteTone = function(freq, delaySec) {
     if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
