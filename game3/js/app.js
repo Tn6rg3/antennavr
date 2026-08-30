@@ -784,11 +784,43 @@ function initGame() {
                 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
                 if (now - lastCleanup > ONE_DAY_MS) {
-                    console.log("CW Game: Running daily chat cleanup...");
-                    // Svuotiamo le chat principali per mantenere il DB leggero
+                    console.log("CW Game: Running daily database garbage collector...");
+                    // 1. Svuotiamo le chat principali
                     db.ref('globalChat').remove();
                     db.ref('courseChat').remove();
-                    db.ref('courseChats').remove(); // Pulizia aule tutor
+                    db.ref('courseChats').remove();
+
+                    // 2. Pulizia stanze orfane o scadute
+                    db.ref('rooms').once('value', roomsSnap => {
+                        if (!roomsSnap.exists()) return;
+                        roomsSnap.forEach(rSnap => {
+                            const r = rSnap.val();
+                            const players = r.players || {};
+                            const hasPlayers = Object.keys(players).length > 0;
+                            const isExpired = r.expiresAt && now > r.expiresAt;
+                            const isVeryOld = r.createdAt && (now - r.createdAt) > (ONE_DAY_MS * 2); // Più di 48h
+
+                            if (!hasPlayers || isExpired || isVeryOld) {
+                                console.log(`GC: Rimuovo stanza ${rSnap.key} (Motivo: Orfana/Scaduta)`);
+                                rSnap.ref.remove();
+                                db.ref(`public_lobby_rooms/${rSnap.key}`).remove();
+                            }
+                        });
+                    });
+
+                    // 3. Pulizia lobby pubblica (stanze fantasma senza corrispondenza in /rooms)
+                    db.ref('public_lobby_rooms').once('value', lobbySnap => {
+                        if (!lobbySnap.exists()) return;
+                        lobbySnap.forEach(lSnap => {
+                            db.ref(`rooms/${lSnap.key}`).once('value', rCheck => {
+                                if (!rCheck.exists()) {
+                                    console.log(`GC: Rimuovo lobby fantasma ${lSnap.key}`);
+                                    lSnap.ref.remove();
+                                }
+                            });
+                        });
+                    });
+
                     cleanupRef.set(now);
                 }
             });
