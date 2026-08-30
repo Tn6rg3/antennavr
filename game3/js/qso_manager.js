@@ -16,29 +16,13 @@ window.qsoState = {
     isInitialized: false,
     isRelayMode: false,
     decoder: {
-        lastEdgeTime: 0, buffer: "", wordTimeout: null
+        lastEdgeTime: 0,
+        sequence: [], // Memorizza impulsi ON/OFF per analisi precisa
+        wordTimeout: null
     },
     canvas: {
-        ctx: null, animationId: null
-    }
-};
-
-window.activateQsoRelayMode = function() {
-    if (window.qsoState.conn || window.qsoState.isRelayMode) return;
-
-    window.qsoState.isRelayMode = true;
-    window.updateQsoStatus("MODALITÀ RELAY (Firebase) 🛰️", "#ff9800");
-    showToast("P2P non disponibile. Attivazione Relay via Server.");
-
-    // Ascoltiamo i segnali dell'altro tramite Firebase
-    if (window.roomCode) {
-        db.ref(`rooms/${window.roomCode}/qso_relay`).on('value', snap => {
-            const data = snap.val();
-            if (!data || data.senderId === window.myId) return;
-
-            if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
-            else if (data.type === 'UP') window.stopQsoRemoteTone(0);
-        });
+        ctx: null,
+        animationId: null
     }
 };
 
@@ -122,7 +106,7 @@ window.startQsoVisualizer = function() {
     const draw = () => {
         if (!window.qsoState.isInitialized) return;
 
-        // Effetto scorrimento
+        // Effetto scorrimento Waterfall
         const imageData = ctx.getImageData(1, 0, canvas.width - 1, canvas.height);
         ctx.putImageData(imageData, 0, 0);
 
@@ -131,10 +115,10 @@ window.startQsoVisualizer = function() {
 
         if (window.qsoState.rxIsTx) {
             ctx.fillStyle = "var(--champ-color)";
-            ctx.fillRect(canvas.width - 1, canvas.height/2 - 10, 1, 20);
+            ctx.fillRect(canvas.width - 1, canvas.height/2 - 12, 1, 24);
         } else if (window.transmissionState.isDown || (window.keyerState && window.keyerState.currentSymbol)) {
             ctx.fillStyle = "var(--link-color)";
-            ctx.fillRect(canvas.width - 1, canvas.height/2 - 5, 1, 10);
+            ctx.fillRect(canvas.width - 1, canvas.height/2 - 6, 1, 12);
         }
 
         window.qsoState.canvas.animationId = requestAnimationFrame(draw);
@@ -165,17 +149,8 @@ window.startQsoMode = function() {
         }
     });
 
-    // Fallback automatico se il P2P non si connette entro 12 secondi
-    setTimeout(() => {
-        if (!window.qsoState.conn && window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
-            window.activateQsoRelayMode();
-        }
-    }, 12000);
-
     window.qsoState.peer.on('open', (id) => {
-        console.log("QSO: PeerJS opened with ID:", id);
         window.updateQsoStatus("IN ATTESA...", "#f39c12");
-
         if (window.roomCode) {
             db.ref(`rooms/${window.roomCode}/players/${window.myId}/peerId`).set(id);
             window.listenForQsoPartner();
@@ -183,92 +158,91 @@ window.startQsoMode = function() {
     });
 
     window.qsoState.peer.on('connection', (incoming) => {
-        console.log("QSO: Incoming connection from", incoming.peer);
         window.setupQsoDataChannel(incoming);
     });
 
     window.qsoState.peer.on('error', (err) => {
         console.error("QSO: PeerJS Error:", err);
         window.updateQsoStatus("ERRORE P2P", "#e74c3c");
+        window.activateQsoRelayMode();
     });
+
+    // Fallback automatico Relay
+    setTimeout(() => {
+        if (!window.qsoState.conn && window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
+            window.activateQsoRelayMode();
+        }
+    }, 12000);
+};
+
+window.activateQsoRelayMode = function() {
+    if (window.qsoState.conn || window.qsoState.isRelayMode) return;
+    window.qsoState.isRelayMode = true;
+    window.updateQsoStatus("MODALITÀ RELAY 🛰️", "#ff9800");
+    showToast("P2P non disponibile. Relay via Server attivo.");
+
+    if (window.roomCode) {
+        db.ref(`rooms/${window.roomCode}/qso_relay`).on('value', snap => {
+            const data = snap.val();
+            if (!data || data.senderId === window.myId) return;
+            if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
+            else if (data.type === 'UP') window.stopQsoRemoteTone(0);
+        });
+    }
 };
 
 window.listenForQsoPartner = function() {
     if (!window.roomCode) return;
-
     db.ref(`rooms/${window.roomCode}/players`).off('value');
     db.ref(`rooms/${window.roomCode}/players`).on('value', (snap) => {
         const players = snap.val() || {};
-        const pIds = Object.keys(players);
-
-        pIds.forEach(pId => {
-            if (pId !== window.myId && players[pId].peerId) {
-                const partnerPeerId = players[pId].peerId;
+        for (let pId in players) {
+            if (pId !== window.myId && players[pId].peerId && !window.qsoState.conn) {
                 const name = players[pId].name || "Partner";
-
-                const nameEl = document.getElementById('qsoPartnerName');
-                if (nameEl && !window.qsoState.conn) {
-                    nameEl.textContent = "Partner trovato: " + name + ". In attesa di segnale...";
-                }
-
-                if (!window.qsoState.conn) {
-                    console.log("QSO: Initiating connection to:", partnerPeerId);
-                    window.qsoState.partnerName = name;
-                    const connection = window.qsoState.peer.connect(partnerPeerId, {
-                        reliable: false,
-                        metadata: { name: window.myName }
-                    });
-                    window.setupQsoDataChannel(connection);
-                }
+                document.getElementById('qsoPartnerName').textContent = "Connessione a: " + name;
+                const connection = window.qsoState.peer.connect(players[pId].peerId, {
+                    reliable: false, metadata: { name: window.myName }
+                });
+                window.setupQsoDataChannel(connection);
             }
-        });
+        }
     });
 };
 
 window.setupQsoDataChannel = function(c) {
     window.qsoState.conn = c;
-
     c.on('open', () => {
-        console.log("QSO: DataChannel connected!");
-        window.updateQsoStatus("CONNESSO P2P ✅", "#2ecc71");
-        const nameEl = document.getElementById('qsoPartnerName');
-        if (nameEl) nameEl.textContent = "Connesso con: " + (c.metadata?.name || window.qsoState.partnerName);
-
+        window.updateQsoStatus("CONNESSO ✅", "#2ecc71");
+        document.getElementById('qsoPartnerName').textContent = "Connesso con: " + (c.metadata?.name || "Partner");
         window.qsoState.conn.send({ type: 'PING', ts: Date.now() });
         window.qsoState.syncInterval = setInterval(() => {
-            if (window.qsoState.conn && window.qsoState.conn.open) {
-                window.qsoState.conn.send({ type: 'PING', ts: Date.now() });
-            }
+            if (window.qsoState.conn?.open) window.qsoState.conn.send({ type: 'PING', ts: Date.now() });
         }, 5000);
     });
 
     c.on('data', (d) => {
-        if (d.type === 'PING') {
-            c.send({ type: 'PONG', origTs: d.ts, remoteTs: Date.now() });
-        }
+        if (d.type === 'PING') c.send({ type: 'PONG', origTs: d.ts, remoteTs: Date.now() });
         else if (d.type === 'PONG') {
             const rtt = Date.now() - d.origTs;
             window.qsoState.timeOffset = Date.now() - (d.remoteTs + (rtt / 2));
         }
         else if (d.type === 'DN') {
-            const targetTimeMs = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
-            const delaySec = Math.max(0.005, (targetTimeMs - Date.now()) / 1000);
-            window.playQsoRemoteTone(d.f, delaySec);
+            const target = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
+            window.playQsoRemoteTone(d.f, Math.max(0.005, (target - Date.now()) / 1000));
         }
         else if (d.type === 'UP') {
-            const targetTimeMs = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
-            const delaySec = Math.max(0.005, (targetTimeMs - Date.now()) / 1000);
-            window.stopQsoRemoteTone(delaySec);
+            const target = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
+            window.stopQsoRemoteTone(Math.max(0.005, (target - Date.now()) / 1000));
         }
     });
 
     c.on('close', () => {
-        console.log("QSO: Connection closed by partner.");
-        window.updateQsoStatus("PARTNER DISCONNESSO", "#e74c3c");
+        window.updateQsoStatus("DISCONNESSO", "#e74c3c");
         window.qsoState.conn = null;
-        if (window.qsoState.syncInterval) clearInterval(window.qsoState.syncInterval);
     });
 };
+
+// --- CORE AUDIO E DECODER ---
 
 window.playQsoRemoteTone = function(freq, delaySec) {
     if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
@@ -277,6 +251,8 @@ window.playQsoRemoteTone = function(freq, delaySec) {
 
     const now = Date.now();
     const scheduleTime = window.audioCtx.currentTime + delaySec;
+    const wpm = window.keyerState.wpm;
+    const unit = 1200 / wpm;
 
     if (!window.preOscRemote) {
         window.preOscRemote = window.audioCtx.createOscillator();
@@ -286,85 +262,67 @@ window.playQsoRemoteTone = function(freq, delaySec) {
         window.preOscRemote.start();
     }
 
+    // --- AUDIO SOFT-RAMP (No clicks) ---
     window.preOscRemote.frequency.setValueAtTime(freq, scheduleTime);
     window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
     window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, scheduleTime);
-    window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.002);
+    window.preGainRemote.gain.linearRampToValueAtTime(0.5, scheduleTime + 0.007);
 
-    // --- DECODER LOGIC (DN) ---
+    // --- DECODER LOGIC ---
+    if (window.qsoState.decoder.wordTimeout) clearTimeout(window.qsoState.decoder.wordTimeout);
     const gap = now - window.qsoState.decoder.lastEdgeTime;
-    const wpm = window.keyerState.wpm;
-    const unit = 1200 / wpm;
 
-    if (gap > unit * 2.5) {
+    if (gap > unit * 2.5 && window.qsoState.decoder.sequence.length > 0) {
         window.finalizeQsoChar();
         if (gap > unit * 6) window.appendQsoText(" ");
     }
     window.qsoState.decoder.lastEdgeTime = now;
-    if (window.qsoState.decoder.wordTimeout) clearTimeout(window.qsoState.decoder.wordTimeout);
 
-    const indicator = document.getElementById('qsoRxIndicator');
-    if (indicator) indicator.style.backgroundColor = "var(--champ-color)";
-
+    document.getElementById('qsoRxIndicator').style.backgroundColor = "var(--champ-color)";
     if (window.qsoState.remoteWatchdog) clearTimeout(window.qsoState.remoteWatchdog);
-    window.qsoState.remoteWatchdog = setTimeout(() => {
-        if (window.qsoState.rxIsTx) window.stopQsoRemoteTone(0);
-    }, 2000);
+    window.qsoState.remoteWatchdog = setTimeout(() => { if (window.qsoState.rxIsTx) window.stopQsoRemoteTone(0); }, 2000);
 };
 
 window.stopQsoRemoteTone = function(delaySec) {
     const now = Date.now();
     const duration = now - window.qsoState.decoder.lastEdgeTime;
+    const scheduleTime = window.audioCtx.currentTime + delaySec;
     const wpm = window.keyerState.wpm;
     const unit = 1200 / wpm;
 
-    window.qsoState.decoder.buffer += (duration > unit * 2) ? "-" : ".";
-    window.qsoState.decoder.lastEdgeTime = now;
-
-    window.qsoState.decoder.wordTimeout = setTimeout(() => {
-        window.finalizeQsoChar();
-    }, unit * 4);
-
+    // --- AUDIO SOFT-RAMP ---
+    if (window.preGainRemote) {
+        window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
+        window.preGainRemote.gain.linearRampToValueAtTime(0, scheduleTime + 0.007);
+    }
     window.qsoState.rxIsTx = false;
-    if (!window.audioCtx || !window.preGainRemote) return;
+    document.getElementById('qsoRxIndicator').style.backgroundColor = "#333";
 
-    const scheduleTime = window.audioCtx.currentTime + delaySec;
-    window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-    window.preGainRemote.gain.setTargetAtTime(0, scheduleTime, 0.005);
-
-    const indicator = document.getElementById('qsoRxIndicator');
-    if (indicator) indicator.style.backgroundColor = "#333";
+    // --- DECODER STORE ---
+    window.qsoState.decoder.sequence.push(duration > unit * 2.0 ? "-" : ".");
+    window.qsoState.decoder.lastEdgeTime = now;
+    window.qsoState.decoder.wordTimeout = setTimeout(() => window.finalizeQsoChar(), unit * 4);
 };
 
 window.finalizeQsoChar = function() {
-    const buf = window.qsoState.decoder.buffer;
-    if (!buf) return;
-    let found = "?";
-    for (let char in window.morseDict) {
-        if (window.morseDict[char] === buf) { found = char; break; }
-    }
-    window.appendQsoText(found);
-    window.qsoState.decoder.buffer = "";
+    const code = window.qsoState.decoder.sequence.join("");
+    if (!code) return;
+    let char = "?";
+    for (let c in window.morseDict) { if (window.morseDict[c] === code) { char = c; break; } }
+    window.appendQsoText(char);
+    window.qsoState.decoder.sequence = [];
 };
 
 window.appendQsoText = function(t) {
     window.qsoState.decodedText += t;
-    const logEl = document.getElementById('qsoDecodedText');
-    if (logEl) {
-        logEl.textContent = window.qsoState.decodedText;
-        logEl.scrollTop = logEl.scrollHeight;
-    }
+    const el = document.getElementById('qsoDecodedText');
+    if (el) { el.textContent = window.qsoState.decodedText; el.scrollTop = el.scrollHeight; }
 };
 
 window.sendQsoEvent = function(type, freq) {
-    if (window.qsoState.conn && window.qsoState.conn.open) {
-        window.qsoState.conn.send({ type: type, f: freq, ts: Date.now() });
-    }
-
+    if (window.qsoState.conn?.open) window.qsoState.conn.send({ type, f: freq, ts: Date.now() });
     if (window.qsoState.isRelayMode && window.roomCode) {
-        db.ref(`rooms/${window.roomCode}/qso_relay`).set({
-            type: type, f: freq, senderId: window.myId, ts: Date.now()
-        });
+        db.ref(`rooms/${window.roomCode}/qso_relay`).set({ type, f: freq, senderId: window.myId, ts: Date.now() });
     }
 };
 
@@ -376,15 +334,13 @@ window.updateQsoStatus = function(msg, color) {
 window.exitQsoMode = function() {
     if (window.roomCode) db.ref(`rooms/${window.roomCode}/players`).off('value');
     if (window.qsoState.syncInterval) clearInterval(window.qsoState.syncInterval);
-    if (window.qsoState.conn) window.qsoState.conn.close();
-    if (window.qsoState.peer) window.qsoState.peer.destroy();
+    window.qsoState.conn?.close();
+    window.qsoState.peer?.destroy();
     if (window.qsoState.canvas.animationId) cancelAnimationFrame(window.qsoState.canvas.animationId);
-
     window.qsoState.conn = null;
     window.qsoState.peer = null;
     window.qsoState.isInitialized = false;
-
-    if (typeof window.stopTone === 'function') window.stopTone();
+    window.stopTone();
     if (window.preGainRemote) window.preGainRemote.gain.value = 0;
     window.exitRoomCleanly(false, true);
 };
