@@ -12,6 +12,8 @@ window.qsoState = {
     syncInterval: null,
     rxIsTx: false,
     remoteWatchdog: null,
+    decodedText: '',
+    isInitialized: false,
     decoder: {
         lastEdgeTime: 0,
         buffer: "",
@@ -61,7 +63,6 @@ window.initQsoManager = function() {
         wpmIn.onchange = (e) => {
             const val = parseInt(e.target.value) || 20;
             window.keyerState.wpm = val;
-            // Aggiorna anche l'input nel menu principale per coerenza
             const mainWpm = document.getElementById('keyerWpmInput');
             if (mainWpm) mainWpm.value = val;
             window.saveKeyerSettings();
@@ -87,12 +88,10 @@ window.startQsoVisualizer = function() {
     if (!ctx) return;
 
     const canvas = ctx.canvas;
-    let x = 0;
-
     const draw = () => {
         if (!window.qsoState.isInitialized) return;
 
-        // Effetto scorrimento (Waterfall-like simple)
+        // Effetto scorrimento
         const imageData = ctx.getImageData(1, 0, canvas.width - 1, canvas.height);
         ctx.putImageData(imageData, 0, 0);
 
@@ -102,7 +101,7 @@ window.startQsoVisualizer = function() {
         if (window.qsoState.rxIsTx) {
             ctx.fillStyle = "var(--champ-color)";
             ctx.fillRect(canvas.width - 1, canvas.height/2 - 10, 1, 20);
-        } else if (window.transmissionState.isDown || window.keyerState.currentSymbol) {
+        } else if (window.transmissionState.isDown || (window.keyerState && window.keyerState.currentSymbol)) {
             ctx.fillStyle = "var(--link-color)";
             ctx.fillRect(canvas.width - 1, canvas.height/2 - 5, 1, 10);
         }
@@ -114,13 +113,11 @@ window.startQsoVisualizer = function() {
 
 window.startQsoMode = function() {
     console.log("QSO: Starting Mode...");
+    showToast("Entrata in modalità QSO...");
     window.initQsoManager();
     window.showScreen('qsoArea');
 
-    // Inizializziamo PeerJS con il nostro ID Telegram (univoco)
-    // Usiamo un prefisso per evitare conflitti con altre app PeerJS
     const myPeerId = "CWGAME_" + window.myId;
-
     if (window.qsoState.peer) window.qsoState.peer.destroy();
 
     window.qsoState.peer = new Peer(myPeerId, {
@@ -137,7 +134,6 @@ window.startQsoMode = function() {
         console.log("QSO: PeerJS opened with ID:", id);
         window.updateQsoStatus("IN ATTESA...", "#f39c12");
 
-        // Scriviamo il nostro PeerID nel nodo player della stanza Firebase
         if (window.roomCode) {
             db.ref(`rooms/${window.roomCode}/players/${window.myId}/peerId`).set(id);
             window.listenForQsoPartner();
@@ -158,9 +154,7 @@ window.startQsoMode = function() {
 window.listenForQsoPartner = function() {
     if (!window.roomCode) return;
 
-    // Rimuoviamo eventuali listener precedenti
     db.ref(`rooms/${window.roomCode}/players`).off('value');
-
     db.ref(`rooms/${window.roomCode}/players`).on('value', (snap) => {
         const players = snap.val() || {};
         const pIds = Object.keys(players);
@@ -178,7 +172,6 @@ window.listenForQsoPartner = function() {
                 if (!window.qsoState.conn) {
                     console.log("QSO: Initiating connection to:", partnerPeerId);
                     window.qsoState.partnerName = name;
-
                     const connection = window.qsoState.peer.connect(partnerPeerId, {
                         reliable: false,
                         metadata: { name: window.myName }
@@ -196,11 +189,9 @@ window.setupQsoDataChannel = function(c) {
     c.on('open', () => {
         console.log("QSO: DataChannel connected!");
         window.updateQsoStatus("CONNESSO P2P ✅", "#2ecc71");
-
         const nameEl = document.getElementById('qsoPartnerName');
         if (nameEl) nameEl.textContent = "Connesso con: " + (c.metadata?.name || window.qsoState.partnerName);
 
-        // Avviamo sincronizzazione clock
         window.qsoState.conn.send({ type: 'PING', ts: Date.now() });
         window.qsoState.syncInterval = setInterval(() => {
             if (window.qsoState.conn && window.qsoState.conn.open) {
@@ -218,13 +209,11 @@ window.setupQsoDataChannel = function(c) {
             window.qsoState.timeOffset = Date.now() - (d.remoteTs + (rtt / 2));
         }
         else if (d.type === 'DN') {
-            // Tasto giù (Down)
             const targetTimeMs = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
             const delaySec = Math.max(0.005, (targetTimeMs - Date.now()) / 1000);
             window.playQsoRemoteTone(d.f, delaySec);
         }
         else if (d.type === 'UP') {
-            // Tasto su (Up)
             const targetTimeMs = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
             const delaySec = Math.max(0.005, (targetTimeMs - Date.now()) / 1000);
             window.stopQsoRemoteTone(delaySec);
@@ -242,7 +231,6 @@ window.setupQsoDataChannel = function(c) {
 window.playQsoRemoteTone = function(freq, delaySec) {
     if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
     window.qsoState.rxIsTx = true;
-
     if (!window.audioCtx) return;
 
     const now = Date.now();
@@ -273,7 +261,6 @@ window.playQsoRemoteTone = function(freq, delaySec) {
     window.qsoState.decoder.lastEdgeTime = now;
     if (window.qsoState.decoder.wordTimeout) clearTimeout(window.qsoState.decoder.wordTimeout);
 
-    // Visual indicator
     const indicator = document.getElementById('qsoRxIndicator');
     if (indicator) indicator.style.backgroundColor = "var(--champ-color)";
 
@@ -310,13 +297,9 @@ window.stopQsoRemoteTone = function(delaySec) {
 window.finalizeQsoChar = function() {
     const buf = window.qsoState.decoder.buffer;
     if (!buf) return;
-
     let found = "?";
     for (let char in window.morseDict) {
-        if (window.morseDict[char] === buf) {
-            found = char;
-            break;
-        }
+        if (window.morseDict[char] === buf) { found = char; break; }
     }
     window.appendQsoText(found);
     window.qsoState.decoder.buffer = "";
@@ -333,27 +316,17 @@ window.appendQsoText = function(t) {
 
 window.sendQsoEvent = function(type, freq) {
     if (window.qsoState.conn && window.qsoState.conn.open) {
-        window.qsoState.conn.send({
-            type: type, // 'DN' or 'UP'
-            f: freq,
-            ts: Date.now()
-        });
+        window.qsoState.conn.send({ type: type, f: freq, ts: Date.now() });
     }
 };
 
 window.updateQsoStatus = function(msg, color) {
     const el = document.getElementById('qsoStatusText');
-    if (el) {
-        el.textContent = "P2P: " + msg;
-        el.style.color = color;
-    }
+    if (el) { el.textContent = "P2P: " + msg; el.style.color = color; }
 };
 
 window.exitQsoMode = function() {
-    if (window.roomCode) {
-        db.ref(`rooms/${window.roomCode}/players`).off('value');
-    }
-
+    if (window.roomCode) db.ref(`rooms/${window.roomCode}/players`).off('value');
     if (window.qsoState.syncInterval) clearInterval(window.qsoState.syncInterval);
     if (window.qsoState.conn) window.qsoState.conn.close();
     if (window.qsoState.peer) window.qsoState.peer.destroy();
@@ -365,44 +338,5 @@ window.exitQsoMode = function() {
 
     if (typeof window.stopTone === 'function') window.stopTone();
     if (window.preGainRemote) window.preGainRemote.gain.value = 0;
-
-    window.exitRoomCleanly(false, true);
-};
-
-window.sendQsoEvent = function(type, freq) {
-    if (window.qsoState.conn && window.qsoState.conn.open) {
-        window.qsoState.conn.send({
-            type: type, // 'DN' or 'UP'
-            f: freq,
-            ts: Date.now()
-        });
-    }
-};
-
-window.updateQsoStatus = function(msg, color) {
-    const el = document.getElementById('qsoStatusText');
-    if (el) {
-        el.textContent = "P2P: " + msg;
-        el.style.color = color;
-    }
-};
-
-window.exitQsoMode = function() {
-    if (window.roomCode) {
-        db.ref(`rooms/${window.roomCode}/players`).off('value');
-    }
-
-    if (window.qsoState.syncInterval) clearInterval(window.qsoState.syncInterval);
-    if (window.qsoState.conn) window.qsoState.conn.close();
-    if (window.qsoState.peer) window.qsoState.peer.destroy();
-    if (window.qsoState.canvas.animationId) cancelAnimationFrame(window.qsoState.canvas.animationId);
-
-    window.qsoState.conn = null;
-    window.qsoState.peer = null;
-    window.qsoState.isInitialized = false;
-
-    if (typeof window.stopTone === 'function') window.stopTone();
-    if (window.preGainRemote) window.preGainRemote.gain.value = 0;
-
     window.exitRoomCleanly(false, true);
 };

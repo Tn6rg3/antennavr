@@ -30,7 +30,7 @@ window.showScreen = function(screenId) {
     if (typeof hideChat === 'function') hideChat();
     if (els.matchDetailsModal) els.matchDetailsModal.style.display = 'none';
 
-    const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen'].includes(screenId);
+    const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen', 'qsoArea'].includes(screenId);
 
     // Inizializziamo il cache DOM se entriamo in gioco
     if (isPlayingScreen && typeof window.initDOMCache === 'function') {
@@ -444,6 +444,8 @@ window.listenToRoomInBackground = function() {
             currentWpm = rData.wpm;
             baseWpm = rData.wpm;
             currentMode = rData.mode || 'standard';
+            window.currentMode = currentMode; // Forza allineamento globale
+            console.log("Room Monitor: Current Mode is ->", currentMode, "(from DB:", rData.mode, ")");
             requestedWordCount = rData.wordCount || 10;
 
             window.isSinglePlayer = (rData.type === 'single');
@@ -885,21 +887,29 @@ window.startCountdownSequence = function() {
                 if (els.coopArea) els.coopArea.style.display = isCoopMode ? 'flex' : 'none';
                 if (els.tableWrapper) els.tableWrapper.style.display = isCoopMode ? 'none' : 'block';
 
-                if (currentMode === 'conquest') {
-                    if (typeof window.startCoopSequence === 'function') return window.startCoopSequence();
-                }
-                if (currentMode === 'course') {
-                    if (typeof window.startCourseSessionSequence === 'function') return window.startCourseSessionSequence();
-                }
-                if (currentMode === 'quiz') {
-                    if (typeof window.startQuizSequence === 'function') return window.startQuizSequence();
-                }
-                if (currentMode === 'qso') {
-                    if (typeof window.startQsoMode === 'function') return window.startQsoMode();
+                const finalMode = window.currentMode;
+                console.log("Countdown finished. Final Mode:", finalMode);
+                showToast("Avvio: " + finalMode);
+
+                if (finalMode === 'conquest' || isCoopMode) {
+                    if (typeof window.startCoopSequence === 'function') { window.startCoopSequence(); return; }
+                } else if (finalMode === 'course') {
+                    if (typeof window.startCourseSessionSequence === 'function') { window.startCourseSessionSequence(); return; }
+                } else if (finalMode === 'quiz') {
+                    if (typeof window.startQuizSequence === 'function') { window.startQuizSequence(); return; }
+                } else if (finalMode === 'qso') {
+                    console.log("Countdown: Entering QSO Mode via startQsoMode()");
+                    if (typeof window.startQsoMode === 'function') {
+                        window.startQsoMode();
+                        return; // USCITA FORZATA PER QSO
+                    } else {
+                        console.error("QSO Error: window.startQsoMode is NOT a function!");
+                    }
                 }
 
+                console.log("Countdown: Falling back to gameArea for mode:", finalMode);
                 window.showScreen('gameArea');
-                if (currentMode === 'pingpong') {
+                if (finalMode === 'pingpong') {
                     if (typeof window.initPingPongManager === 'function') window.initPingPongManager();
                     if (typeof window.setupPingPongListener === 'function') window.setupPingPongListener();
                 } else {
@@ -935,19 +945,25 @@ window.resumeGameSequence = function() {
         });
     }
 
-    if (currentMode === 'conquest') {
+    const mode = window.currentMode;
+    if (mode === 'conquest' || isCoopMode) {
         if (typeof window.startCoopSequence === 'function') window.startCoopSequence();
-    } else if (currentMode === 'quiz') {
+        return;
+    } else if (mode === 'quiz') {
         if (typeof window.startQuizSequence === 'function') window.startQuizSequence();
+        return;
+    } else if (mode === 'qso') {
+        if (typeof window.startQsoMode === 'function') window.startQsoMode();
+        return;
+    }
+
+    window.showScreen('gameArea');
+    if (mode === 'pingpong') {
+        if (typeof window.initPingPongManager === 'function') window.initPingPongManager();
+        if (typeof window.setupPingPongListener === 'function') window.setupPingPongListener();
     } else {
-        window.showScreen('gameArea');
-        if (currentMode === 'pingpong') {
-            if (typeof window.initPingPongManager === 'function') window.initPingPongManager();
-            if (typeof window.setupPingPongListener === 'function') window.setupPingPongListener();
-        } else {
-            setTimeout(() => { if (els.permanentGameInput) els.permanentGameInput.focus(); }, 200);
-            setTimeout(() => { if (gameRunning) window.playNextWord(); }, 800);
-        }
+        setTimeout(() => { if (els.permanentGameInput) els.permanentGameInput.focus(); }, 200);
+        setTimeout(() => { if (gameRunning) window.playNextWord(); }, 800);
     }
 };
 

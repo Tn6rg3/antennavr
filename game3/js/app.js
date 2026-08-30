@@ -320,6 +320,9 @@ window.resetGameState = function() {
     isCoopMode = false;
     isArcadeMode = false;
     if (typeof window.stopTowerClimb === 'function') window.stopTowerClimb();
+    if (typeof window.exitQsoMode === 'function' && window.currentMode === 'qso') {
+        // Pulizia QSO se stavamo uscendo da lì
+    }
     window.isSinglePlayer = false;
     currentMode = 'standard';
     coopActiveFreqIndex = 0; // RESET INDICE FREQUENZA CO-OP
