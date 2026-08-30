@@ -1603,9 +1603,12 @@
 
 <!-- AREA QSO P2P -->
 <div id="qsoArea" class="screen" style="overflow-y: auto; display: none; flex-direction: column;">
-    <div class="header-stats" style="background: rgba(33,150,243,0.1); border-bottom: 1px solid var(--link-color); flex-shrink: 0;">
-        <div id="qsoStatusText" style="color: var(--link-color); font-weight: bold;">P2P: DISCONNESSO 🔴</div>
-        <div id="qsoPartnerName" style="font-size: 0.8em; opacity: 0.8;">In attesa...</div>
+    <div class="header-stats" style="background: #2c3e50; border-bottom: 2px solid #ff9800; flex-shrink: 0; display:flex; justify-content:space-between; align-items:center; padding: 8px 15px; position: sticky; top: 0; z-index: 10;">
+        <div style="display:flex; flex-direction:column;">
+            <div id="qsoStatusText" style="color: #fff; font-weight: bold; font-size: 0.85em;">P2P: IN ATTESA 🔴</div>
+            <div id="qsoPartnerName" style="font-size: 0.7em; opacity: 0.8; color: #eee;">Ricerca partner...</div>
+        </div>
+        <button id="btnForceQsoRelay" class="btn-success" style="width:auto; margin:0; padding:8px 12px; font-size:0.7em; background:#ff9800; border:2px solid #fff; box-shadow: 0 0 10px rgba(255,152,0,0.5); animation: pulse 1.5s infinite;" onclick="window.activateQsoRelayMode()">PIANO B: USA SERVER 🛰️</button>
     </div>
 
     <!-- OSCILLOSCOPIO / WATERFALL -->
