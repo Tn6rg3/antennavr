@@ -1648,13 +1648,13 @@ if (els.createRoomBtn) {
         window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
 
         const createAndJoinRoom = async (stats = {}) => {
-            console.log("Create Room: Preparazione sessione per ID " + window.myId);
+            logDebug("Create Room: Preparazione sessione...");
 
             const myUid = firebase.auth().currentUser?.uid;
             if (myUid) {
                 try {
                     await db.ref(`uid_mapping/${myUid}`).set(window.myId);
-                } catch (e) { console.error("Create Room: Errore mapping", e); }
+                } catch (e) { logDebug("Create Room: Errore mapping", e); }
             }
 
             window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode, {
