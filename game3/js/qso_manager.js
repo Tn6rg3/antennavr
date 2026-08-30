@@ -167,12 +167,22 @@ window.startQsoMode = function() {
         window.activateQsoRelayMode();
     });
 
-    // Fallback automatico Relay
+    // Ascolto immediato stato Relay globale (Sincronizzato)
+    if (window.roomCode) {
+        db.ref(`rooms/${window.roomCode}/qso_state/relayActive`).on('value', snap => {
+            if (snap.val() === true && !window.qsoState.conn && !window.qsoState.isRelayMode) {
+                console.log("QSO: Partner activated Relay, following...");
+                window.activateQsoRelayMode();
+            }
+        });
+    }
+
+    // Fallback automatico locale se il P2P non si connette entro 10 secondi
     setTimeout(() => {
-        if (!window.qsoState.conn && window.window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
+        if (!window.qsoState.conn && window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
             window.activateQsoRelayMode();
         }
-    }, 12000);
+    }, 10000);
 };
 
 window.activateQsoRelayMode = function() {
