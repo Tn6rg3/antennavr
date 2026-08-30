@@ -1602,30 +1602,33 @@
 </div>
 
 <!-- AREA QSO P2P -->
-<div id="qsoArea" class="screen">
-    <div class="header-stats" style="background: rgba(33,150,243,0.1); border-bottom: 1px solid var(--link-color);">
+<div id="qsoArea" class="screen" style="overflow-y: auto; display: none; flex-direction: column;">
+    <div class="header-stats" style="background: rgba(33,150,243,0.1); border-bottom: 1px solid var(--link-color); flex-shrink: 0;">
         <div id="qsoStatusText" style="color: var(--link-color); font-weight: bold;">P2P: DISCONNESSO 🔴</div>
         <div id="qsoPartnerName" style="font-size: 0.8em; opacity: 0.8;">In attesa...</div>
     </div>
 
-    <!-- OSCILLOSCOPIO / WATERFALL (Placeholder visivo) -->
-    <div class="box-panel" style="background: #000; border-color: var(--link-color); padding: 0; height: 80px; position: relative; overflow: hidden; margin-bottom: 10px; display:flex; align-items:center; justify-content:center;">
+    <!-- OSCILLOSCOPIO / WATERFALL -->
+    <div class="box-panel" style="background: #000; border-color: var(--link-color); padding: 0; height: 80px; position: relative; overflow: hidden; margin-bottom: 10px; display:flex; align-items:center; justify-content:center; flex-shrink: 0;">
         <canvas id="qsoOscilloscope" style="width: 100%; height: 100%;"></canvas>
         <div id="qsoRxIndicator" style="position:absolute; top:10px; right:10px; width:15px; height:15px; border-radius:50%; background:#333; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>
         <div style="position:absolute; color:rgba(33,150,243,0.3); font-family:monospace; font-size:0.7em; pointer-events:none;">P2P ZERO-LATENCY ENGINE</div>
     </div>
 
     <!-- LOG QSO (Testo Decodificato) -->
-    <div class="box-panel" style="flex-grow: 1; min-height: 120px; background: #111; border-color: var(--champ-color); padding: 10px; position: relative; display: flex; flex-direction: column;">
+    <div id="qsoDecoderBox" class="box-panel" style="flex-grow: 1; min-height: 100px; background: #111; border-color: var(--champ-color); padding: 10px; position: relative; display: flex; flex-direction: column; transition: all 0.3s ease;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;">
             <small style="color:var(--hint-color); font-weight:bold; text-transform:uppercase; font-size:0.65em;">Ricezione Log (Automatica)</small>
-            <button id="btnClearQsoLog" class="btn-link" style="font-size:0.7em; padding:0; margin:0; text-decoration:none; color:var(--hint-color);">Pulisci 🗑️</button>
+            <div style="display:flex; gap:10px;">
+                <button id="btnClearQsoLog" class="btn-link" style="font-size:0.75em; padding:0; margin:0; text-decoration:none; color:var(--hint-color);">Pulisci 🗑️</button>
+                <button onclick="window.toggleQsoLog()" class="btn-link" style="font-size:0.75em; padding:0; margin:0; text-decoration:none; color:var(--link-color);" id="btnToggleQsoLog">Nascondi 🔼</button>
+            </div>
         </div>
         <div id="qsoDecodedText" style="flex-grow:1; font-family:'Courier New', Courier, monospace; font-size:1.2em; color:var(--champ-color); font-weight:bold; white-space:pre-wrap; overflow-y:auto; word-break:break-all; line-height:1.2;">...</div>
     </div>
 
     <!-- AREA MANIPOLAZIONE E CONTROLLI -->
-    <div class="box-panel" style="margin-top: 10px; border-color: var(--link-color); padding: 10px;">
+    <div class="box-panel" style="margin-top: 10px; border-color: var(--link-color); padding: 10px; flex-shrink: 0;">
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-bottom:10px;">
             <div>
                 <label style="font-size:0.65em; display:block; color:var(--hint-color);">WPM</label>
@@ -1636,14 +1639,17 @@
                 <input type="number" id="qsoToneInput" value="600" min="400" max="1000" step="50" style="width:100%; padding:5px; font-size:0.85em; text-align:center;">
             </div>
             <div style="display:flex; align-items:flex-end;">
-                <button id="qsoConfigBtn" class="action-btn-small btn-secondary" style="width:100%; padding:7px 0; font-size:0.7em;" onclick="document.getElementById('mainMenuKeyerConfig').style.display='block'; this.parentElement.parentElement.parentElement.appendChild(document.getElementById('mainMenuKeyerConfig'))">TIPO TASTO</button>
+                <button id="qsoConfigBtn" class="action-btn-small btn-secondary" style="width:100%; padding:7px 0; font-size:0.7em;" onclick="const cfg=document.getElementById('mainMenuKeyerConfig'); cfg.style.display='block'; document.getElementById('qsoConfigContainer').appendChild(cfg); cfg.scrollIntoView({behavior:'smooth'});">TIPO TASTO</button>
             </div>
         </div>
 
-        <div style="display:flex; justify-content:center; align-items:center; margin-bottom:10px;">
-             <!-- TASTO TELEGRAFICO QSO -->
-             <button id="qsoMorseKeyBtn" style="width:100px; height:100px; border-radius:50%; background:linear-gradient(145deg, #333, #111); border:4px solid var(--link-color); box-shadow: 0 8px 15px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.1); cursor:pointer; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color: transparent; user-select: none; transition: transform 0.05s;">
-                <span style="width:50px; height:50px; border-radius:50%; background:var(--link-color); opacity:0.2; display:block;"></span>
+        <!-- CONTAINER PER CONFIGURAZIONE MANIPOLATORE (DENTRO QSO) -->
+        <div id="qsoConfigContainer" style="width: 100%; margin-bottom: 10px;"></div>
+
+        <div style="display:flex; justify-content:center; align-items:center; margin-bottom:15px; margin-top:5px;">
+             <!-- TASTO TELEGRAFICO QSO (INGRANDITO) -->
+             <button id="qsoMorseKeyBtn" style="width:130px; height:130px; border-radius:50%; background:linear-gradient(145deg, #333, #111); border:5px solid var(--link-color); box-shadow: 0 10px 20px rgba(0,0,0,0.6), inset 0 2px 8px rgba(255,255,255,0.15); cursor:pointer; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color: transparent; user-select: none; transition: transform 0.05s;">
+                <span style="width:65px; height:65px; border-radius:50%; background:var(--link-color); opacity:0.25; display:block;"></span>
             </button>
         </div>
 
