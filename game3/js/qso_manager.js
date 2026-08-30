@@ -83,6 +83,20 @@ window.initQsoManager = function() {
     window.qsoState.isInitialized = true;
 };
 
+window.toggleQsoLog = function() {
+    const box = document.getElementById('qsoDecoderBox');
+    const btn = document.getElementById('btnToggleQsoLog');
+    if (!box || !btn) return;
+
+    if (box.style.display !== 'none') {
+        box.style.display = 'none';
+        btn.textContent = "Mostra Log 🔽";
+    } else {
+        box.style.display = 'flex';
+        btn.textContent = "Nascondi 🔼";
+    }
+};
+
 window.startQsoVisualizer = function() {
     const ctx = window.qsoState.canvas.ctx;
     if (!ctx) return;

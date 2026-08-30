@@ -473,10 +473,11 @@ window.initTransmissionManager = function() {
 
         // --- AGGIUNTA: SUPPORTO MOUSE PER TRASMISSIONE ---
         window.addEventListener('mousedown', (e) => {
-            const isAnySessionRunning = window.transmissionState.sessionRunning || window.groupTxState.running;
+            const isQsoActive = typeof window.currentMode !== 'undefined' && window.currentMode === 'qso' && gameRunning;
+            const isAnySessionRunning = window.transmissionState.sessionRunning || window.groupTxState.running || isQsoActive;
 
             // 0. ESCLUSIONE RIGOROSA ELEMENTI INTERATTIVI
-            const interactiveTags = ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT', 'LABEL', 'OPTION', 'A', 'SPAN'];
+            const interactiveTags = ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT', 'LABEL', 'OPTION', 'A', 'SPAN', 'CANVAS'];
             if (interactiveTags.includes(e.target.tagName) || e.target.closest('button') || e.target.closest('.box-panel')) {
                 // Se stiamo cliccando su un elemento UI, permettiamo l'interazione normale e usciamo dal keyer
                 return;
@@ -502,9 +503,8 @@ window.initTransmissionManager = function() {
                 e.stopPropagation();
             } else {
                 // SE NON SIAMO IN SESSIONE E NON È PERMESSO IL KEYER (o è disattivato), USCIAMO
-                // Nota: Il modo Verticale (V) è manuale e lo facciamo funzionare sempre se il contesto lo permette
-                if (!keyerAllowed) return;
-                if (window.keyerState.mode !== 'V' && !window.keyerState.enabled) return;
+                if (!keyerAllowed && !isQsoActive) return;
+                if (window.keyerState.mode !== 'V' && !window.keyerState.enabled && !isQsoActive) return;
             }
 
             // --- GESTIONE BLOCCO MOUSE SOFTWARE ---
@@ -557,7 +557,8 @@ window.initTransmissionManager = function() {
         });
 
         window.addEventListener('mouseup', (e) => {
-            if (!window.keyerState.enabled) return;
+            const isQsoActive = typeof window.currentMode !== 'undefined' && window.currentMode === 'qso' && gameRunning;
+            if (!window.keyerState.enabled && !isQsoActive) return;
             if (window.keyerState.mode === 'V') {
                 if (typeof window.handleStraightKeyUp === 'function') window.handleStraightKeyUp(e);
             } else {
