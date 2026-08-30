@@ -1625,6 +1625,7 @@ if (els.createRoomBtn) {
         window.outgoingChallengeId = null;
         window.incomingChallengeId = null;
         window.currentMode = gMode || 'standard';
+        console.log("Create Room: Initial Mode selection ->", gMode, "Global currentMode ->", window.currentMode);
         window.isSinglePlayer = (gType === 'single');
         window.currentWpm = window.baseWpm = (window.currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
         window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));

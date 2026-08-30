@@ -512,7 +512,21 @@ window.joinRoomLogic = function(isReconnect = false) {
             }
 
             window.showScreen('lobbyScreen');
-            if (els.lobbyTitleText) els.lobbyTitleText.textContent = roomCode.startsWith("TRN_") ? "Lobby Incontro Torneo 🥊" : "Lobby Stanza Libera";
+            if (els.lobbyTitleText) {
+                if (roomCode.startsWith("TRN_")) {
+                    els.lobbyTitleText.textContent = "Lobby Incontro Torneo 🥊";
+                } else {
+                    const m = rData.mode || 'standard';
+                    const modeCfg = window.GAME_MODES[m];
+                    const modeTitle = modeCfg ? (currentLang === 'it' ? modeCfg.titleIt : modeCfg.titleEn) : "Stanza Libera";
+                    els.lobbyTitleText.textContent = "Lobby " + modeTitle;
+
+                    const badge = document.getElementById('lobbyModeBadge');
+                    if (badge) {
+                        badge.innerHTML = `<span style="background:var(--link-color); color:white; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:bold; text-transform:uppercase;">MODALITÀ: ${modeTitle}</span>`;
+                    }
+                }
+            }
             if (els.permanentGameInput) els.permanentGameInput.blur();
             playerRef.onDisconnect().update({ online: false });
 
@@ -1430,7 +1444,7 @@ window.saveMatchSummary = function(playersData) {
     let baseMode = currentMode;
     if (baseMode === 'std') baseMode = 'standard';
 
-    const validModes = ['standard', 'standard_plus', 'target_training', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign'];
+    const validModes = ['standard', 'standard_plus', 'target_training', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign', 'qso'];
     let category = validModes.includes(baseMode) ? baseMode : 'standard';
 
     // Aggiungiamo sempre il suffisso _multi per la classifica "Sfide"

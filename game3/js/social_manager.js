@@ -819,13 +819,17 @@ window.addOrUpdateRoomCard = function(code, room) {
     }
 
     li.innerHTML = '';
-    let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.'
-                 : room.mode === 'pingpong' ? '🏓 Ping Pong'
-                 : room.mode === 'quiz' ? '❓ Quiz'
-                 : room.mode === 'qso' ? '📻 QSO P2P'
-                 : room.mode === 'standard_plus' ? '➕ Parole +'
-                 : (room.mode === 'conquest' || room.type === 'coop') ? '⚔️ Conquista'
-                 : '🔤 Parole';
+    const m = room.mode || 'standard';
+    console.log(`Lobby: Rendering room ${code}, mode: ${m}`);
+
+    let modeLabel = '🔤 Parole';
+    if (m === 'callsign') modeLabel = '🎙️ Nom.';
+    else if (m === 'pingpong') modeLabel = '🏓 Ping Pong';
+    else if (m === 'quiz') modeLabel = '❓ Quiz';
+    else if (m === 'qso') modeLabel = '📻 QSO P2P';
+    else if (m === 'standard_plus') modeLabel = '➕ Parole +';
+    else if (m === 'conquest' || room.type === 'coop') modeLabel = '⚔️ Conquista';
+    else if (window.GAME_MODES[m]) modeLabel = (window.GAME_MODES[m].icon || '🔤') + ' ' + (currentLang === 'it' ? window.GAME_MODES[m].titleIt : window.GAME_MODES[m].titleEn);
 
     // Se leggiamo da public_lobby_rooms non abbiamo .players, usiamo .pCount
     const pCount = (room.players ? Object.keys(room.players).length : 0) || (room.pCount || 1);
@@ -843,7 +847,7 @@ window.addOrUpdateRoomCard = function(code, room) {
 
     const span = document.createElement('span');
     const bTitle = document.createElement('b');
-    bTitle.textContent = `#${code} - ${modeIcon}`;
+    bTitle.textContent = `#${code} - ${modeLabel}`;
     const infoText = `${pCount} Gioc. | ${room.wpm} WPM`;
     const smallInfo = document.createElement('small');
     smallInfo.textContent = infoText;
