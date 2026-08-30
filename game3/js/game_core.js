@@ -443,9 +443,8 @@ window.listenToRoomInBackground = function() {
             // Sincronizzazione parametri avanzati della stanza
             currentWpm = rData.wpm;
             baseWpm = rData.wpm;
-            currentMode = rData.mode || 'standard';
-            window.currentMode = currentMode; // Forza allineamento globale
-            console.log("Room Monitor: Current Mode is ->", currentMode, "(from DB:", rData.mode, ")");
+            window.currentMode = rData.mode || 'standard';
+            console.log("Room Monitor: CRITICAL MODE SYNC ->", window.currentMode);
             requestedWordCount = rData.wordCount || 10;
 
             window.isSinglePlayer = (rData.type === 'single');
@@ -897,12 +896,12 @@ window.startCountdownSequence = function() {
             setTimeout(() => {
                 if (!gameRunning) return;
 
-                const mode = window.currentMode;
+                const mode = window.currentMode || 'standard';
+                console.log("Countdown finished. Final Mode:", mode);
+
                 isCoopMode = (mode === 'conquest');
                 if (els.coopArea) els.coopArea.style.display = isCoopMode ? 'flex' : 'none';
                 if (els.tableWrapper) els.tableWrapper.style.display = isCoopMode ? 'none' : 'block';
-
-                console.log("Countdown finished. Final Mode:", mode);
 
                 if (mode === 'conquest' || isCoopMode) {
                     if (typeof window.startCoopSequence === 'function') { window.startCoopSequence(); return; }
@@ -981,7 +980,14 @@ window.resumeGameSequence = function() {
 };
 
 window.playNextWord = function() {
-    if (!gameRunning || currentMode === 'pingpong') return;
+    // BLOCCO DI SICUREZZA ASSOLUTO PER QSO
+    if (window.currentMode === 'qso') {
+        console.warn("GameCore: playNextWord interrotto perché in modalità QSO.");
+        if (typeof window.startQsoMode === 'function') window.startQsoMode();
+        return;
+    }
+
+    if (!gameRunning || window.currentMode === 'pingpong') return;
     if (isCourseMode) return window.playNextCourseGroup?.();
 
     // --- LOGICA PERFEZIONE: Gestione flussi ---
