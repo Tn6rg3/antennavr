@@ -962,6 +962,12 @@ function initGame() {
 
     window.populateGameModesUI?.();
     window.checkGameTypeUI?.();
+
+    // Attiviamo subito il gestore trasmissione per avere i tasti pronti ovunque
+    if (typeof window.initTransmissionManager === 'function') {
+        window.initTransmissionManager();
+    }
+
     setTimeout(() => { window.checkGameTypeUI?.(); }, 1200);
 }
 
