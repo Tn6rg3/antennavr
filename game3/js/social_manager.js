@@ -822,6 +822,8 @@ window.addOrUpdateRoomCard = function(code, room) {
     let modeIcon = room.mode === 'callsign' ? '🎙️ Nom.'
                  : room.mode === 'pingpong' ? '🏓 Ping Pong'
                  : room.mode === 'quiz' ? '❓ Quiz'
+                 : room.mode === 'qso' ? '📻 QSO P2P'
+                 : room.mode === 'standard_plus' ? '➕ Parole +'
                  : (room.mode === 'conquest' || room.type === 'coop') ? '⚔️ Conquista'
                  : '🔤 Parole';
 
