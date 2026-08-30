@@ -14,7 +14,7 @@ window.qsoState = {
     decodedText: '',
     isInitialized: false,
     isRelayMode: false,
-    lastRelayEventId: null,
+    lastProcessedEventId: null,
     decoder: {
         lastEdgeTime: 0,
         sequence: [],
@@ -31,20 +31,14 @@ window.initQsoManager = function() {
     console.log("QSO: Initializing Manager...");
 
     const quitBtn = document.getElementById('quitQsoBtn');
-    if (quitBtn) {
-        quitBtn.onclick = () => {
-            if (confirm("Vuoi chiudere il collegamento QSO?")) window.exitQsoMode();
-        };
-    }
+    if (quitBtn) quitBtn.onclick = () => { if (confirm("Vuoi chiudere il QSO?")) window.exitQsoMode(); };
 
     const clearLogBtn = document.getElementById('btnClearQsoLog');
-    if (clearLogBtn) {
-        clearLogBtn.onclick = () => {
-            window.qsoState.decodedText = "";
-            const logEl = document.getElementById('qsoDecodedText');
-            if (logEl) logEl.textContent = "...";
-        };
-    }
+    if (clearLogBtn) clearLogBtn.onclick = () => {
+        window.qsoState.decodedText = "";
+        const logEl = document.getElementById('qsoDecodedText');
+        if (logEl) logEl.textContent = "...";
+    };
 
     const canvas = document.getElementById('qsoOscilloscope');
     if (canvas) {
@@ -60,8 +54,7 @@ window.initQsoManager = function() {
         wpmIn.onchange = (e) => {
             const val = parseInt(e.target.value) || 20;
             window.keyerState.wpm = val;
-            const mainWpm = document.getElementById('keyerWpmInput');
-            if (mainWpm) mainWpm.value = val;
+            const m = document.getElementById('keyerWpmInput'); if (m) m.value = val;
             window.saveKeyerSettings();
         };
     }
@@ -69,10 +62,8 @@ window.initQsoManager = function() {
         toneIn.value = window.keyerState.tone;
         toneIn.onchange = (e) => {
             const val = parseInt(e.target.value) || 600;
-            window.keyerState.tone = val;
-            window.currentTone = val;
-            const mainTone = document.getElementById('keyerToneInput');
-            if (mainTone) mainTone.value = val;
+            window.keyerState.tone = val; window.currentTone = val;
+            const m = document.getElementById('keyerToneInput'); if (m) m.value = val;
             window.saveKeyerSettings();
         };
     }
@@ -91,8 +82,7 @@ window.toggleQsoLog = function() {
 };
 
 window.startQsoVisualizer = function() {
-    const ctx = window.qsoState.canvas.ctx;
-    if (!ctx) return;
+    const ctx = window.qsoState.canvas.ctx; if (!ctx) return;
     const canvas = ctx.canvas;
     const draw = () => {
         if (!window.qsoState.isInitialized) return;
@@ -116,25 +106,26 @@ window.startQsoMode = function() {
     console.log("QSO: Starting Mode...");
     window.initQsoManager();
     window.showScreen('qsoArea');
+    window.qsoState.isRelayMode = false;
 
     const myPeerId = "CWGAME_" + window.myId;
     if (window.qsoState.peer) window.qsoState.peer.destroy();
 
+    // AGGIUNTA SERVER TURN PER MOBILE/NAT
     window.qsoState.peer = new Peer(myPeerId, {
         config: {
             'iceServers': [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
                 { urls: 'stun:stun.cloudflare.com:3478' },
                 { urls: 'stun:stun.services.mozilla.com' },
-                { urls: 'stun:stun.l.google.com:19305' }
+                { urls: 'stun:stun.metered.ca:443' }
             ]
         }
     });
 
     window.qsoState.peer.on('open', (id) => {
-        window.updateQsoStatus("IN ATTESA P2P...", "#f39c12");
+        window.updateQsoStatus("ATTESA P2P...", "#f39c12");
         if (window.roomCode) {
             db.ref(`rooms/${window.roomCode}/players/${window.myId}/peerId`).set(id);
             window.listenForQsoPartner();
@@ -142,22 +133,12 @@ window.startQsoMode = function() {
     });
 
     window.qsoState.peer.on('connection', (incoming) => window.setupQsoDataChannel(incoming));
-
     window.qsoState.peer.on('error', (err) => {
-        console.warn("QSO P2P Error, switching to Relay...");
-        window.activateQsoRelayMode();
+        console.warn("P2P Error:", err.type);
+        if (err.type !== 'peer-unavailable') window.activateQsoRelayMode();
     });
 
-    // Ascolto segnale Relay dal Partner
-    if (window.roomCode) {
-        db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).on('value', snap => {
-            if (snap.val() === true && !window.qsoState.conn && !window.qsoState.isRelayMode) {
-                window.activateQsoRelayMode();
-            }
-        });
-    }
-
-    // Fallback automatico locale se non connessi entro 10s
+    // Auto-Relay dopo 10 secondi
     setTimeout(() => {
         if (!window.qsoState.conn && window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
             window.activateQsoRelayMode();
@@ -169,20 +150,22 @@ window.activateQsoRelayMode = function() {
     if (window.qsoState.isRelayMode) return;
     window.qsoState.isRelayMode = true;
     window.updateQsoStatus("MODALITÀ RELAY 🛰️", "#ff9800");
-    showToast("Uso Server Firebase (Relay)");
+    const btn = document.getElementById('btnForceQsoRelay'); if (btn) btn.style.display = 'none';
 
     if (window.roomCode) {
         db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).set(true);
 
-        // Ricezione via Relay (Firebase)
-        // Usiamo on('child_added') per non perdere sequenze rapide
+        // LOGICA RICEZIONE RELAY MULTI-EVENTO
         const relayRef = db.ref(`rooms/${window.roomCode}/qso_relay`);
-        relayRef.limitToLast(1).on('child_added', snap => {
+        relayRef.limitToLast(5).on('child_added', snap => {
             const data = snap.val();
             if (!data || data.senderId === window.myId) return;
 
-            if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
-            else if (data.type === 'UP') window.stopQsoRemoteTone(0);
+            // Verifichiamo che l'evento sia nuovo (max 2 secondi fa)
+            if (Date.now() - data.ts < 2000) {
+                if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
+                else if (data.type === 'UP') window.stopQsoRemoteTone(0);
+            }
         });
     }
 };
@@ -198,17 +181,20 @@ window.listenForQsoPartner = function() {
             }
         }
     });
+
+    db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).on('value', snap => {
+        if (snap.val() === true && !window.qsoState.conn) window.activateQsoRelayMode();
+    });
 };
 
 window.setupQsoDataChannel = function(c) {
     window.qsoState.conn = c;
     c.on('open', () => {
         window.updateQsoStatus("CONNESSO ✅", "#2ecc71");
-        document.getElementById('qsoPartnerName').textContent = "Connesso con: " + (c.metadata?.name || "Partner");
+        const b = document.getElementById('btnForceQsoRelay'); if (b) b.style.display = 'none';
+        document.getElementById('qsoPartnerName').textContent = "Partner: " + (c.metadata?.name || "Operatore");
         window.qsoState.conn.send({ type: 'PING', ts: Date.now() });
-        window.qsoState.syncInterval = setInterval(() => {
-            if (window.qsoState.conn?.open) window.qsoState.conn.send({ type: 'PING', ts: Date.now() });
-        }, 5000);
+        window.qsoState.syncInterval = setInterval(() => { if (window.qsoState.conn?.open) window.qsoState.conn.send({ type: 'PING', ts: Date.now() }); }, 5000);
     });
     c.on('data', d => {
         if (d.type === 'PING') c.send({ type: 'PONG', origTs: d.ts, remoteTs: Date.now() });
@@ -245,7 +231,7 @@ window.playQsoRemoteTone = function(freq, delaySec) {
     }
     window.preOscRemote.frequency.setTargetAtTime(freq, scheduleTime, 0.002);
     window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-    window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.012);
+    window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.02); // Rampa 20ms
 
     if (window.qsoState.decoder.wordTimeout) clearTimeout(window.qsoState.decoder.wordTimeout);
     const gap = now - window.qsoState.decoder.lastEdgeTime;
@@ -267,7 +253,7 @@ window.stopQsoRemoteTone = function(delaySec) {
 
     if (window.preGainRemote) {
         window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-        window.preGainRemote.gain.setTargetAtTime(0, scheduleTime, 0.012);
+        window.preGainRemote.gain.setTargetAtTime(0, scheduleTime, 0.02); // Rampa 20ms
     }
     window.qsoState.rxIsTx = false;
     document.getElementById('qsoRxIndicator').style.backgroundColor = "#333";
@@ -277,8 +263,7 @@ window.stopQsoRemoteTone = function(delaySec) {
 };
 
 window.finalizeQsoChar = function() {
-    const code = window.qsoState.decoder.sequence.join("");
-    if (!code) return;
+    const code = window.qsoState.decoder.sequence.join(""); if (!code) return;
     let char = "?";
     for (let c in window.morseDict) { if (window.morseDict[c] === code) { char = c; break; } }
     window.appendQsoText(char);
@@ -292,10 +277,7 @@ window.appendQsoText = function(t) {
 };
 
 window.sendQsoEvent = function(type, freq) {
-    if (window.qsoState.conn?.open) {
-        window.qsoState.conn.send({ type, f: freq, ts: Date.now() });
-    }
-    // Sempre invio anche via Relay se attivo
+    if (window.qsoState.conn?.open) window.qsoState.conn.send({ type, f: freq, ts: Date.now() });
     if (window.qsoState.isRelayMode && window.roomCode) {
         db.ref(`rooms/${window.roomCode}/qso_relay`).push({ type, f: freq, senderId: window.myId, ts: Date.now() });
     }
@@ -313,11 +295,9 @@ window.exitQsoMode = function() {
         db.ref(`rooms/${window.roomCode}/qso_relay`).off('value');
     }
     if (window.qsoState.syncInterval) clearInterval(window.qsoState.syncInterval);
-    window.qsoState.conn?.close();
-    window.qsoState.peer?.destroy();
+    window.qsoState.conn?.close(); window.qsoState.peer?.destroy();
     if (window.qsoState.canvas.animationId) cancelAnimationFrame(window.qsoState.canvas.animationId);
-    window.qsoState.conn = null;
-    window.qsoState.peer = null;
+    window.qsoState.conn = null; window.qsoState.peer = null;
     window.qsoState.isInitialized = false;
     window.stopTone();
     if (window.preGainRemote) window.preGainRemote.gain.value = 0;
