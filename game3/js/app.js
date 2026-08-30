@@ -1648,13 +1648,17 @@ if (els.createRoomBtn) {
         window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
 
         const createAndJoinRoom = async (stats = {}) => {
-            // --- FIX SICUREZZA: Verifichiamo che il mapping sia pronto ---
+            console.log("Create Room: Verifico permessi per ID " + window.myId);
+
             const myUid = firebase.auth().currentUser?.uid;
             if (myUid) {
-                const mapCheck = await db.ref(`uid_mapping/${myUid}`).once('value');
-                if (!mapCheck.exists()) {
-                    console.warn("App: Mapping non pronto, forzo registrazione...");
+                try {
+                    // Scriviamo e ASPETTIAMO la conferma dal server
                     await db.ref(`uid_mapping/${myUid}`).set(window.myId);
+                    console.log("Create Room: Mapping confermato dal server.");
+                } catch (e) {
+                    console.error("Create Room: Errore critico mapping", e);
+                    return showToast("Errore di sincronizzazione account. Ricarica l'app.");
                 }
             }
 
@@ -1664,12 +1668,16 @@ if (els.createRoomBtn) {
             });
 
             const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
+            window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
 
             const roomRef = db.ref('rooms/' + window.roomCode);
 
-            // Prima di fare il SET, puliamo eventuali residui se la stanza esiste già
-            // Questo evita il Permission Denied se l'Host è lo stesso
-            await roomRef.remove().catch(() => {});
+            try {
+                await roomRef.remove();
+                console.log("Create Room: Stanza pulita.");
+            } catch (e) {
+                console.warn("Create Room: Pulizia stanza non necessaria.");
+            }
 
             const roomData = {
                 status: window.isSinglePlayer ? 'countdown' : 'waiting',
