@@ -14,6 +14,7 @@ window.qsoState = {
     decodedText: '',
     isInitialized: false,
     isRelayMode: false,
+    lastRelayEventId: null,
     decoder: {
         lastEdgeTime: 0,
         sequence: [],
@@ -125,7 +126,9 @@ window.startQsoMode = function() {
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun.cloudflare.com:3478' }
+                { urls: 'stun:stun.cloudflare.com:3478' },
+                { urls: 'stun:stun.services.mozilla.com' },
+                { urls: 'stun:stun.l.google.com:19305' }
             ]
         }
     });
@@ -145,7 +148,7 @@ window.startQsoMode = function() {
         window.activateQsoRelayMode();
     });
 
-    // Sincronizzazione Relay Globale
+    // Ascolto segnale Relay dal Partner
     if (window.roomCode) {
         db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).on('value', snap => {
             if (snap.val() === true && !window.qsoState.conn && !window.qsoState.isRelayMode) {
@@ -154,7 +157,7 @@ window.startQsoMode = function() {
         });
     }
 
-    // Fallback automatico se non connessi entro 10s
+    // Fallback automatico locale se non connessi entro 10s
     setTimeout(() => {
         if (!window.qsoState.conn && window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
             window.activateQsoRelayMode();
@@ -169,23 +172,17 @@ window.activateQsoRelayMode = function() {
     showToast("Uso Server Firebase (Relay)");
 
     if (window.roomCode) {
-        // Segnaliamo il nostro stato relay
         db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).set(true);
 
-        // Ascoltiamo i segnali di TUTTI i partecipanti nella stanza
-        db.ref(`rooms/${window.roomCode}/qso_relay`).on('value', snap => {
-            const allRelays = snap.val() || {};
-            for (let senderId in allRelays) {
-                if (senderId === window.myId) continue; // Salta se sono io
+        // Ricezione via Relay (Firebase)
+        // Usiamo on('child_added') per non perdere sequenze rapide
+        const relayRef = db.ref(`rooms/${window.roomCode}/qso_relay`);
+        relayRef.limitToLast(1).on('child_added', snap => {
+            const data = snap.val();
+            if (!data || data.senderId === window.myId) return;
 
-                const data = allRelays[senderId];
-                // Usiamo un timestamp per evitare di rieseguire lo stesso segnale
-                if (data.ts > (window.qsoState.lastRelayTs || 0)) {
-                    window.qsoState.lastRelayTs = data.ts;
-                    if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
-                    else if (data.type === 'UP') window.stopQsoRemoteTone(0);
-                }
-            }
+            if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
+            else if (data.type === 'UP') window.stopQsoRemoteTone(0);
         });
     }
 };
@@ -248,7 +245,7 @@ window.playQsoRemoteTone = function(freq, delaySec) {
     }
     window.preOscRemote.frequency.setTargetAtTime(freq, scheduleTime, 0.002);
     window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-    window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.012); // Rampa dolce
+    window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.012);
 
     if (window.qsoState.decoder.wordTimeout) clearTimeout(window.qsoState.decoder.wordTimeout);
     const gap = now - window.qsoState.decoder.lastEdgeTime;
@@ -270,7 +267,7 @@ window.stopQsoRemoteTone = function(delaySec) {
 
     if (window.preGainRemote) {
         window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-        window.preGainRemote.gain.setTargetAtTime(0, scheduleTime, 0.012); // Rampa dolce
+        window.preGainRemote.gain.setTargetAtTime(0, scheduleTime, 0.012);
     }
     window.qsoState.rxIsTx = false;
     document.getElementById('qsoRxIndicator').style.backgroundColor = "#333";
@@ -295,9 +292,12 @@ window.appendQsoText = function(t) {
 };
 
 window.sendQsoEvent = function(type, freq) {
-    if (window.qsoState.conn?.open) window.qsoState.conn.send({ type, f: freq, ts: Date.now() });
+    if (window.qsoState.conn?.open) {
+        window.qsoState.conn.send({ type, f: freq, ts: Date.now() });
+    }
+    // Sempre invio anche via Relay se attivo
     if (window.qsoState.isRelayMode && window.roomCode) {
-        db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).set({ type, f: freq, ts: Date.now() });
+        db.ref(`rooms/${window.roomCode}/qso_relay`).push({ type, f: freq, senderId: window.myId, ts: Date.now() });
     }
 };
 
