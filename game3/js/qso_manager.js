@@ -14,14 +14,31 @@ window.qsoState = {
     remoteWatchdog: null,
     decodedText: '',
     isInitialized: false,
+    isRelayMode: false,
     decoder: {
-        lastEdgeTime: 0,
-        buffer: "",
-        wordTimeout: null
+        lastEdgeTime: 0, buffer: "", wordTimeout: null
     },
     canvas: {
-        ctx: null,
-        animationId: null
+        ctx: null, animationId: null
+    }
+};
+
+window.activateQsoRelayMode = function() {
+    if (window.qsoState.conn || window.qsoState.isRelayMode) return;
+
+    window.qsoState.isRelayMode = true;
+    window.updateQsoStatus("MODALITÀ RELAY (Firebase) 🛰️", "#ff9800");
+    showToast("P2P non disponibile. Attivazione Relay via Server.");
+
+    // Ascoltiamo i segnali dell'altro tramite Firebase
+    if (window.roomCode) {
+        db.ref(`rooms/${window.roomCode}/qso_relay`).on('value', snap => {
+            const data = snap.val();
+            if (!data || data.senderId === window.myId) return;
+
+            if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
+            else if (data.type === 'UP') window.stopQsoRemoteTone(0);
+        });
     }
 };
 
@@ -127,7 +144,7 @@ window.startQsoVisualizer = function() {
 
 window.startQsoMode = function() {
     console.log("QSO: Starting Mode...");
-    showToast("Entrata in modalità QSO...");
+    showToast("Ricerca partner P2P...");
     window.initQsoManager();
     window.showScreen('qsoArea');
 
@@ -139,10 +156,21 @@ window.startQsoMode = function() {
             'iceServers': [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun.cloudflare.com:3478' }
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+                { urls: 'stun:stun.cloudflare.com:3478' },
+                { urls: 'stun:stun.services.mozilla.com' }
             ]
         }
     });
+
+    // Fallback automatico se il P2P non si connette entro 12 secondi
+    setTimeout(() => {
+        if (!window.qsoState.conn && window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
+            window.activateQsoRelayMode();
+        }
+    }, 12000);
 
     window.qsoState.peer.on('open', (id) => {
         console.log("QSO: PeerJS opened with ID:", id);
@@ -331,6 +359,12 @@ window.appendQsoText = function(t) {
 window.sendQsoEvent = function(type, freq) {
     if (window.qsoState.conn && window.qsoState.conn.open) {
         window.qsoState.conn.send({ type: type, f: freq, ts: Date.now() });
+    }
+
+    if (window.qsoState.isRelayMode && window.roomCode) {
+        db.ref(`rooms/${window.roomCode}/qso_relay`).set({
+            type: type, f: freq, senderId: window.myId, ts: Date.now()
+        });
     }
 };
 
