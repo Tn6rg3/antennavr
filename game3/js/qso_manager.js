@@ -141,9 +141,18 @@ window.startQsoMode = function() {
     window.qsoState.peer.on('connection', (incoming) => window.setupQsoDataChannel(incoming));
 
     window.qsoState.peer.on('error', (err) => {
-        console.error("QSO P2P Error, switching to Relay...");
+        console.warn("QSO P2P Error, switching to Relay...");
         window.activateQsoRelayMode();
     });
+
+    // Sincronizzazione Relay Globale
+    if (window.roomCode) {
+        db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).on('value', snap => {
+            if (snap.val() === true && !window.qsoState.conn && !window.qsoState.isRelayMode) {
+                window.activateQsoRelayMode();
+            }
+        });
+    }
 
     // Fallback automatico se non connessi entro 10s
     setTimeout(() => {
@@ -163,19 +172,26 @@ window.activateQsoRelayMode = function() {
         // Segnaliamo il nostro stato relay
         db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).set(true);
 
-        // Ascoltiamo i segnali del partner su Firebase
-        db.ref(`rooms/${window.roomCode}/qso_relay`).on('child_changed', snap => {
-            const data = snap.val();
-            if (!data || snap.key === window.myId) return;
-            if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
-            else if (data.type === 'UP') window.stopQsoRemoteTone(0);
+        // Ascoltiamo i segnali di TUTTI i partecipanti nella stanza
+        db.ref(`rooms/${window.roomCode}/qso_relay`).on('value', snap => {
+            const allRelays = snap.val() || {};
+            for (let senderId in allRelays) {
+                if (senderId === window.myId) continue; // Salta se sono io
+
+                const data = allRelays[senderId];
+                // Usiamo un timestamp per evitare di rieseguire lo stesso segnale
+                if (data.ts > (window.qsoState.lastRelayTs || 0)) {
+                    window.qsoState.lastRelayTs = data.ts;
+                    if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
+                    else if (data.type === 'UP') window.stopQsoRemoteTone(0);
+                }
+            }
         });
     }
 };
 
 window.listenForQsoPartner = function() {
     if (!window.roomCode) return;
-    db.ref(`rooms/${window.roomCode}/players`).off('value');
     db.ref(`rooms/${window.roomCode}/players`).on('value', snap => {
         const players = snap.val() || {};
         for (let pId in players) {
@@ -184,11 +200,6 @@ window.listenForQsoPartner = function() {
                 window.setupQsoDataChannel(connection);
             }
         }
-    });
-
-    // Sincronizzazione Relay: se il partner attiva relay, lo seguiamo
-    db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).on('value', snap => {
-        if (snap.val() === true && !window.qsoState.conn) window.activateQsoRelayMode();
     });
 };
 
@@ -237,7 +248,7 @@ window.playQsoRemoteTone = function(freq, delaySec) {
     }
     window.preOscRemote.frequency.setTargetAtTime(freq, scheduleTime, 0.002);
     window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-    window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.008);
+    window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.012); // Rampa dolce
 
     if (window.qsoState.decoder.wordTimeout) clearTimeout(window.qsoState.decoder.wordTimeout);
     const gap = now - window.qsoState.decoder.lastEdgeTime;
@@ -259,7 +270,7 @@ window.stopQsoRemoteTone = function(delaySec) {
 
     if (window.preGainRemote) {
         window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-        window.preGainRemote.gain.setTargetAtTime(0, scheduleTime, 0.008);
+        window.preGainRemote.gain.setTargetAtTime(0, scheduleTime, 0.012); // Rampa dolce
     }
     window.qsoState.rxIsTx = false;
     document.getElementById('qsoRxIndicator').style.backgroundColor = "#333";
@@ -286,7 +297,7 @@ window.appendQsoText = function(t) {
 window.sendQsoEvent = function(type, freq) {
     if (window.qsoState.conn?.open) window.qsoState.conn.send({ type, f: freq, ts: Date.now() });
     if (window.qsoState.isRelayMode && window.roomCode) {
-        db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).update({ type, f: freq, ts: Date.now() });
+        db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).set({ type, f: freq, ts: Date.now() });
     }
 };
 
@@ -296,7 +307,11 @@ window.updateQsoStatus = function(msg, color) {
 };
 
 window.exitQsoMode = function() {
-    if (window.roomCode) db.ref(`rooms/${window.roomCode}/players`).off('value');
+    if (window.roomCode) {
+        db.ref(`rooms/${window.roomCode}/players`).off('value');
+        db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).off('value');
+        db.ref(`rooms/${window.roomCode}/qso_relay`).off('value');
+    }
     if (window.qsoState.syncInterval) clearInterval(window.qsoState.syncInterval);
     window.qsoState.conn?.close();
     window.qsoState.peer?.destroy();
