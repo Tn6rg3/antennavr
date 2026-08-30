@@ -244,22 +244,29 @@ window.setupQsoDataChannel = function(c) {
             window.qsoState.timeOffset = Date.now() - (d.remoteTs + (rtt / 2));
         }
         else if (d.type === 'DN') {
-            const target = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
-            window.playQsoRemoteTone(d.f, Math.max(0.005, (target - Date.now()) / 1000));
-        }
-        else if (d.type === 'UP') {
-            const target = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
-            window.stopQsoRemoteTone(Math.max(0.005, (target - Date.now()) / 1000));
-        }
-    });
+            cowindow.activateQsoRelayMode = function() {
+    if (window.qsoState.isRelayMode) return;
 
-    c.on('close', () => {
-        window.updateQsoStatus("DISCONNESSO", "#e74c3c");
-        window.qsoState.conn = null;
-    });
+    window.qsoState.isRelayMode = true;
+    window.updateQsoStatus("MODALITÀ RELAY (Server) 🛰️", "#ff9800");
+    console.log("QSO: Relay Mode Activated.");
+
+    if (window.roomCode) {
+        // Comunichiamo agli altri che siamo in modalità Relay
+        db.ref(`rooms/${window.roomCode}/qso_state`).update({ relayActive: true });
+
+        db.ref(`rooms/${window.roomCode}/qso_relay`).on('value', snap => {
+            const data = snap.val();
+            if (!data || data.senderId === window.myId) return;
+
+            // Forziamo il relay anche su di noi se riceviamo traffico relay
+            if (!window.qsoState.isRelayMode) window.activateQsoRelayMode();
+
+            if (data.type === 'DN') window.playQsoRemoteTone(data.f, 0);
+            else if (data.type === 'UP') window.stopQsoRemoteTone(0);
+        });
+    }
 };
-
-// --- CORE AUDIO E DECODER ---
 
 window.playQsoRemoteTone = function(freq, delaySec) {
     if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
@@ -279,11 +286,10 @@ window.playQsoRemoteTone = function(freq, delaySec) {
         window.preOscRemote.start();
     }
 
-    // --- AUDIO SOFT-RAMP (No clicks) ---
-    window.preOscRemote.frequency.setValueAtTime(freq, scheduleTime);
+    // --- AUDIO ANTI-CLICK (15ms Exponential Attack) ---
+    window.preOscRemote.frequency.setTargetAtTime(freq, scheduleTime, 0.002);
     window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-    window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, scheduleTime);
-    window.preGainRemote.gain.linearRampToValueAtTime(0.5, scheduleTime + 0.007);
+    window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.008);
 
     // --- DECODER LOGIC ---
     if (window.qsoState.decoder.wordTimeout) clearTimeout(window.qsoState.decoder.wordTimeout);
@@ -295,7 +301,9 @@ window.playQsoRemoteTone = function(freq, delaySec) {
     }
     window.qsoState.decoder.lastEdgeTime = now;
 
-    document.getElementById('qsoRxIndicator').style.backgroundColor = "var(--champ-color)";
+    const indicator = document.getElementById('qsoRxIndicator');
+    if (indicator) indicator.style.backgroundColor = "var(--champ-color)";
+
     if (window.qsoState.remoteWatchdog) clearTimeout(window.qsoState.remoteWatchdog);
     window.qsoState.remoteWatchdog = setTimeout(() => { if (window.qsoState.rxIsTx) window.stopQsoRemoteTone(0); }, 2000);
 };
@@ -307,15 +315,14 @@ window.stopQsoRemoteTone = function(delaySec) {
     const wpm = window.keyerState.wpm;
     const unit = 1200 / wpm;
 
-    // --- AUDIO SOFT-RAMP ---
     if (window.preGainRemote) {
         window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-        window.preGainRemote.gain.linearRampToValueAtTime(0, scheduleTime + 0.007);
+        window.preGainRemote.gain.setTargetAtTime(0, scheduleTime, 0.008);
     }
     window.qsoState.rxIsTx = false;
-    document.getElementById('qsoRxIndicator').style.backgroundColor = "#333";
+    const indicator = document.getElementById('qsoRxIndicator');
+    if (indicator) indicator.style.backgroundColor = "#333";
 
-    // --- DECODER STORE ---
     window.qsoState.decoder.sequence.push(duration > unit * 2.0 ? "-" : ".");
     window.qsoState.decoder.lastEdgeTime = now;
     window.qsoState.decoder.wordTimeout = setTimeout(() => window.finalizeQsoChar(), unit * 4);
