@@ -1648,41 +1648,33 @@ if (els.createRoomBtn) {
         window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
 
         const createAndJoinRoom = async (stats = {}) => {
-            console.log("Create Room: Verifico permessi per ID " + window.myId);
+            console.log("Create Room: Preparazione sessione per ID " + window.myId);
 
             const myUid = firebase.auth().currentUser?.uid;
             if (myUid) {
                 try {
-                    // Scriviamo e ASPETTIAMO la conferma dal server
                     await db.ref(`uid_mapping/${myUid}`).set(window.myId);
-                    console.log("Create Room: Mapping confermato dal server.");
-                } catch (e) {
-                    console.error("Create Room: Errore critico mapping", e);
-                    return showToast("Errore di sincronizzazione account. Ricarica l'app.");
-                }
+                } catch (e) { console.error("Create Room: Errore mapping", e); }
             }
 
-            window.gameWords = window.getGameWords(window.requestedWordCount, window.window.currentMode, {
+            window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode, {
                 groupSize: window.wordsPerGroup,
                 stats: stats
             });
 
             const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
-            window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
+
+            // --- FIX: ID Univoco per evitare colllisioni di permessi ---
+            window.roomCode = window.isSinglePlayer ?
+                "SOLO_" + window.myId + "_" + Math.floor(Date.now()/1000) :
+                Math.floor(1000 + Math.random() * 9000).toString();
 
             const roomRef = db.ref('rooms/' + window.roomCode);
-
-            try {
-                await roomRef.remove();
-                console.log("Create Room: Stanza pulita.");
-            } catch (e) {
-                console.warn("Create Room: Pulizia stanza non necessaria.");
-            }
 
             const roomData = {
                 status: window.isSinglePlayer ? 'countdown' : 'waiting',
                 type: window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
-                mode: window.window.currentMode,
+                mode: window.currentMode,
                 groupSize: window.wordsPerGroup,
                 wpm: window.currentWpm,
                 tone: window.currentTone,
@@ -1699,11 +1691,12 @@ if (els.createRoomBtn) {
             };
 
             roomRef.set(roomData).then(() => {
+                console.log("Create Room: Stanza creata con successo ->", window.roomCode);
                 if (!window.isSinglePlayer) {
                     roomRef.onDisconnect().remove();
                     const lobbyRef = db.ref(`public_lobby_rooms/${window.roomCode}`);
                     lobbyRef.set({
-                        mode: window.window.currentMode,
+                        mode: window.currentMode,
                         pCount: 1,
                         wpm: window.currentWpm,
                         status: 'waiting',
@@ -1718,6 +1711,9 @@ if (els.createRoomBtn) {
                     });
                 }
                 window.joinRoomLogic(false);
+            }).catch(err => {
+                console.error("Create Room: Errore SET database", err);
+                showToast("Errore di connessione al database. Riprova.");
             });
         };
 
