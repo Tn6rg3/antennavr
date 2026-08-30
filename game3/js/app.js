@@ -1647,7 +1647,17 @@ if (els.createRoomBtn) {
 
         window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
 
-        const createAndJoinRoom = (stats = {}) => {
+        const createAndJoinRoom = async (stats = {}) => {
+            // --- FIX SICUREZZA: Verifichiamo che il mapping sia pronto ---
+            const myUid = firebase.auth().currentUser?.uid;
+            if (myUid) {
+                const mapCheck = await db.ref(`uid_mapping/${myUid}`).once('value');
+                if (!mapCheck.exists()) {
+                    console.warn("App: Mapping non pronto, forzo registrazione...");
+                    await db.ref(`uid_mapping/${myUid}`).set(window.myId);
+                }
+            }
+
             window.gameWords = window.getGameWords(window.requestedWordCount, window.window.currentMode, {
                 groupSize: window.wordsPerGroup,
                 stats: stats
@@ -1656,6 +1666,11 @@ if (els.createRoomBtn) {
             const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
             const roomRef = db.ref('rooms/' + window.roomCode);
+
+            // Prima di fare il SET, puliamo eventuali residui se la stanza esiste già
+            // Questo evita il Permission Denied se l'Host è lo stesso
+            await roomRef.remove().catch(() => {});
+
             const roomData = {
                 status: window.isSinglePlayer ? 'countdown' : 'waiting',
                 type: window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
