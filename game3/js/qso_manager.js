@@ -177,11 +177,15 @@ window.startQsoMode = function() {
 
 window.activateQsoRelayMode = function() {
     if (window.qsoState.conn || window.qsoState.isRelayMode) return;
+
     window.qsoState.isRelayMode = true;
-    window.updateQsoStatus("MODALITÀ RELAY 🛰️", "#ff9800");
-    showToast("P2P non disponibile. Relay via Server attivo.");
+    window.updateQsoStatus("MODALITÀ RELAY (Server) 🛰️", "#ff9800");
+    showToast("P2P non disponibile. Uso Relay Firebase.");
 
     if (window.roomCode) {
+        // Comunichiamo agli altri che siamo in modalità Relay
+        db.ref(`rooms/${window.roomCode}/qso_state`).update({ relayActive: true });
+
         db.ref(`rooms/${window.roomCode}/qso_relay`).on('value', snap => {
             const data = snap.val();
             if (!data || data.senderId === window.myId) return;
@@ -203,8 +207,21 @@ window.listenForQsoPartner = function() {
                 const connection = window.qsoState.peer.connect(players[pId].peerId, {
                     reliable: false, metadata: { name: window.myName }
                 });
+
+                connection.on('error', (err) => {
+                    console.log("QSO: Connection error, switching to Relay.");
+                    window.activateQsoRelayMode();
+                });
+
                 window.setupQsoDataChannel(connection);
             }
+        }
+    });
+
+    // Ascoltiamo se l'altro ha già attivato il relay
+    db.ref(`rooms/${window.roomCode}/qso_state/relayActive`).on('value', snap => {
+        if (snap.val() === true && !window.qsoState.conn && !window.qsoState.isRelayMode) {
+            window.activateQsoRelayMode();
         }
     });
 };
