@@ -6,15 +6,17 @@ window.qsoState = {
     partnerId: null,
     partnerName: '---',
     status: 'DISCONNESSO',
-    clockOffset: 0, // Differenza tra performance.now() locale e remoto
-    playbackDelay: 0.3, // Buffer di 300ms (in secondi per WebAudio)
+    clockOffset: 0,
+    playbackDelay: 0.4, // Buffer a 400ms per stabilità totale
     syncInterval: null,
+    hbInterval: null,   // Timer Heartbeat
     rxIsTx: false,
     remoteWatchdog: null,
     decodedText: '',
     isInitialized: false,
     isRelayMode: false,
-    lastProcessedSeq: 0
+    lastProcessedSeq: 0,
+    outgoingSeq: 0      // Contatore sequenza in uscita
 };
 
 window.initQsoManager = function() {
@@ -102,21 +104,45 @@ window.setupQsoDataChannel = function(c) {
         window.updateQsoStatus("CONNESSO ✅", "#2ecc71");
         document.getElementById('qsoPartnerName').textContent = "Partner: " + (c.metadata?.name || "Operatore");
 
-        // Sincronizzazione iniziale
+        // 1. Sincronizzazione iniziale
         window.qsoState.conn.send({ type: 'SYNC', pNow: performance.now() });
+
+        // 2. Avvio HEARTBEAT di sistema (ogni 300ms)
+        if (window.qsoState.hbInterval) clearInterval(window.qsoState.hbInterval);
+        window.qsoState.hbInterval = setInterval(() => {
+            if (window.qsoState.conn?.open) {
+                window.qsoState.conn.send({
+                    type: 'HB',
+                    isDown: window.transmissionState.isDown || !!window.manualOscillator,
+                    f: window.currentTone,
+                    ts: performance.now(),
+                    seq: window.qsoState.outgoingSeq++
+                });
+            }
+        }, 300);
     });
 
     c.on('data', d => {
+        const now = performance.now();
         if (d.type === 'SYNC') {
-            // Calcolo offset temporale tra i due orologi ad alta precisione
             window.qsoState.clockOffset = performance.now() - d.pNow;
             return;
         }
 
+        // --- FILTRO SEQUENZA (Scarta pacchetti vecchi arrivati tardi) ---
+        if (d.seq && d.seq < window.qsoState.lastProcessedSeq) return;
+        window.qsoState.lastProcessedSeq = d.seq || 0;
+
+        // --- GESTIONE HEARTBEAT (Snapshot Recovery) ---
+        if (d.type === 'HB') {
+            if (!d.isDown && window.remoteOscillator) {
+                // Se l'heartbeat dice che il tasto è su, ma noi stiamo ancora suonando -> Spegniamo.
+                window.stopRemoteTone(0);
+            }
+            return;
+        }
+
         // --- RICEZIONE CON JITTER BUFFER ---
-        const now = performance.now();
-        // Calcoliamo quando il segnale dovrebbe essere riprodotto
-        // TempoOriginale + Offset + Buffer Fisso
         const scheduledPNow = d.ts + window.qsoState.clockOffset + (window.qsoState.playbackDelay * 1000);
         const delaySec = (scheduledPNow - now) / 1000;
 
@@ -125,9 +151,19 @@ window.setupQsoDataChannel = function(c) {
         } else if (d.type === 'UP') {
             window.stopRemoteTone(Math.max(0, delaySec));
         }
+
+        // Watchdog di sicurezza locale
+        if (window.qsoState.remoteWatchdog) clearTimeout(window.qsoState.remoteWatchdog);
+        window.qsoState.remoteWatchdog = setTimeout(() => {
+            if (window.remoteOscillator) window.stopRemoteTone(0);
+        }, 1000);
     });
 
-    c.on('close', () => { window.updateQsoStatus("DISCONNESSO", "#e74c3c"); window.qsoState.conn = null; });
+    c.on('close', () => {
+        window.updateQsoStatus("DISCONNESSO", "#e74c3c");
+        if (window.qsoState.hbInterval) clearInterval(window.qsoState.hbInterval);
+        window.qsoState.conn = null;
+    });
 };
 
 window.sendQsoEvent = function(type, freq) {
@@ -135,7 +171,8 @@ window.sendQsoEvent = function(type, freq) {
         window.qsoState.conn.send({
             type: type,
             f: freq,
-            ts: performance.now() // Timestamp ad alta precisione
+            ts: performance.now(),
+            seq: window.qsoState.outgoingSeq++
         });
     }
 };
