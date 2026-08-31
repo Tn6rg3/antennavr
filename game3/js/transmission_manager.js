@@ -148,6 +148,12 @@ window.initTransmissionManager = function() {
                 }
 
                 if (typeof window.startTone === 'function') window.startTone(window.keyerState.tone);
+
+                // QSO: Invio evento separato dall'audio per evitare scoppiettii
+                if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
+                    window.sendQsoEvent('DN', window.keyerState.tone);
+                }
+
                 const btn = document.getElementById('morseKeyBtn');
                 if (btn) {
                     btn.style.transform = "scale(0.92)";
@@ -185,6 +191,12 @@ window.initTransmissionManager = function() {
                 window.transmissionState.lastEventTime = now;
 
                 if (typeof window.stopTone === 'function') window.stopTone();
+
+                // QSO: Invio evento separato dall'audio
+                if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
+                    window.sendQsoEvent('UP', 0);
+                }
+
                 const btn = document.getElementById('morseKeyBtn');
                 if (btn) {
                     btn.style.transform = "scale(1)";
@@ -984,6 +996,12 @@ window.playKeyerSymbol = function() {
     const duration = (symbol === 'dah') ? (unit * 3) : unit;
 
     if (typeof window.startTone === 'function') window.startTone(window.keyerState.tone);
+
+    // QSO: Invio evento asincrono per Iambic
+    if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
+        window.sendQsoEvent('DN', window.keyerState.tone);
+    }
+
     window.handleKeyerEvent('on', duration);
 
     // Monitoriamo se durante questo elemento l'utente tocca l'altra paletta (Squeeze durante segnale)
@@ -996,6 +1014,12 @@ window.playKeyerSymbol = function() {
     setTimeout(() => {
         clearInterval(monitor);
         if (typeof window.stopTone === 'function') window.stopTone();
+
+        // QSO: Invio evento asincrono per Iambic
+        if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
+            window.sendQsoEvent('UP', 0);
+        }
+
         window.handleKeyerEvent('off', unit);
 
         // Logica Mode B: se l'opposto è stato toccato e ora non c'è nulla premuto,

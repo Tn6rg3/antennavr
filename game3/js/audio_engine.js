@@ -34,7 +34,6 @@ window.resumeAudioContext = function() {
 window.startTone = function(freq) {
     window.resumeAudioContext();
 
-    // Se c'è un oscillatore ancora attivo (anche se in fase di spegnimento), lo chiudiamo subito
     if (window.manualOscillator) {
         try {
             window.manualGain.gain.cancelScheduledValues(window.audioCtx.currentTime);
@@ -52,7 +51,6 @@ window.startTone = function(freq) {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(f, now);
 
-    // RAMPA LINEARE IDENTICA AGLI ESERCIZI (12ms)
     gain.gain.setValueAtTime(0, now);
     gain.gain.linearRampToValueAtTime(0.5, now + 0.012);
 
@@ -62,11 +60,6 @@ window.startTone = function(freq) {
     osc.start(now);
     window.manualOscillator = osc;
     window.manualGain = gain;
-
-    // QSO: Invio evento
-    if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
-        window.sendQsoEvent('DN', f);
-    }
 };
 
 window.stopTone = function() {
@@ -79,7 +72,6 @@ window.stopTone = function() {
     if (gain) {
         gain.gain.cancelScheduledValues(now);
         gain.gain.setValueAtTime(gain.gain.value, now);
-        // RAMPA LINEARE DI CHIUSURA (12ms) - RISOLVE IL "COLPETTO"
         gain.gain.linearRampToValueAtTime(0, now + 0.012);
     }
 
@@ -92,10 +84,6 @@ window.stopTone = function() {
 
     window.manualOscillator = null;
     window.manualGain = null;
-
-    if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
-        window.sendQsoEvent('UP', 0);
-    }
 };
 
 // --- CANALE REMOTO (RICEZIONE P2P/RELAY) ---
