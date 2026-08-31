@@ -1138,15 +1138,13 @@ window.finishGame = function() {
     }
 
     if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {
-        // ... logica record esistente ...
-
         // --- NUOVO: CONTROLLO VALUTAZIONE GIOCO ---
         setTimeout(() => {
             if (typeof window.checkGameRating === 'function') {
                 window.checkGameRating();
             }
         }, 4000);
-    }
+
         db.ref(`rooms/${window.roomCode}/players`).once('value', snap => {
             const playersData = snap.val() || {};
             const pArray = Object.values(playersData);
