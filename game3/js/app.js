@@ -195,7 +195,7 @@ window.currentStreak = 0;
 window.usedReplay = false;
 window.matchDetailsArray = [];
 window.isSinglePlayer = false;
-window.window.currentMode = "standard";
+window.currentMode = "standard";
 window.requestedWordCount = 10;
 window.isFixedSpeed = false;
 window.isEasyMode = false;
@@ -320,7 +320,7 @@ window.resetGameState = function() {
     isCoopMode = false;
     isArcadeMode = false;
     if (typeof window.stopTowerClimb === 'function') window.stopTowerClimb();
-    if (typeof window.exitQsoMode === 'function' && window.window.currentMode === 'qso') {
+    if (typeof window.exitQsoMode === 'function' && window.currentMode === 'qso') {
         // Pulizia QSO se stavamo uscendo da lì
     }
     window.isSinglePlayer = false;
@@ -441,8 +441,14 @@ window.loadRegolamento = async function() {
     }
 };
 
-if(document.getElementById('gameModeInput')) document.getElementById('gameModeInput').addEventListener('change', () => window.checkGameTypeUI?.());
-if(document.getElementById('gameTypeInput')) document.getElementById('gameTypeInput').addEventListener('change', () => window.checkGameTypeUI?.());
+if(document.getElementById('gameModeInput')) document.getElementById('gameModeInput').addEventListener('change', () => {
+    window.checkGameTypeUI?.();
+    if (typeof window.displayGlobalRatings === 'function') window.displayGlobalRatings();
+});
+if(document.getElementById('gameTypeInput')) document.getElementById('gameTypeInput').addEventListener('change', () => {
+    window.checkGameTypeUI?.();
+    if (typeof window.displayGlobalRatings === 'function') window.displayGlobalRatings();
+});
 
 // --- STARTUP ---
 async function startApp() {
@@ -1656,14 +1662,14 @@ if (els.createRoomBtn) {
         window.isChallenging = false;
         window.outgoingChallengeId = null;
         window.incomingChallengeId = null;
-        window.window.currentMode = gMode || 'standard';
-        console.log("Create Room: Initial Mode selection ->", gMode, "Global window.currentMode ->", window.window.currentMode);
+        window.currentMode = gMode || 'standard';
+        console.log("Create Room: Initial Mode selection ->", gMode, "Global window.currentMode ->", window.currentMode);
         window.isSinglePlayer = (gType === 'single');
-        window.currentWpm = window.baseWpm = (window.window.currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
-        window.requestedWordCount = (window.window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
+        window.currentWpm = window.baseWpm = (window.currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
+        window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         window.currentTone = parseInt(els.toneInput?.value) || 600;
 
-        window.wordsPerGroup = (window.window.currentMode === 'standard_plus') ? (parseInt(document.getElementById('wordsPerGroupInput')?.value) || 2) : 1;
+        window.wordsPerGroup = (window.currentMode === 'standard_plus') ? (parseInt(document.getElementById('wordsPerGroupInput')?.value) || 2) : 1;
 
         if (gType === 'transmission') {
             window.startTransmissionFree(gMode);

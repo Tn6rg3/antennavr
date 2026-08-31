@@ -1,7 +1,7 @@
 // js/rating_manager.js
 
 window.getGameRatingKey = function() {
-    const mode = window.window.currentMode || 'standard';
+    const mode = window.currentMode || 'standard';
     const type = window.isSinglePlayer ? 'single' : (window.isCoopMode ? 'coop' : 'multi');
     return `${mode}_${type}`;
 };
@@ -18,7 +18,7 @@ window.checkGameRating = function() {
             const modal = document.getElementById('gameRatingModal');
             if (modal) {
                 const title = document.getElementById('ratingTitle');
-                const modeCfg = window.GAME_MODES[window.window.currentMode];
+                const modeCfg = window.GAME_MODES[window.currentMode];
                 if (title && modeCfg) {
                     title.textContent = `Ti piace "${modeCfg.titleIt}"?`;
                 }
@@ -90,6 +90,34 @@ window.loadUserRatings = function() {
         });
     });
 };
+
+window.displayGlobalRatings = function() {
+    db.ref('ratings/stats').once('value', snap => {
+        const stats = snap.val() || {};
+        const modeSelect = document.getElementById('gameModeInput');
+        if (!modeSelect) return;
+
+        Array.from(modeSelect.options).forEach(opt => {
+            const mode = opt.value;
+            const type = document.getElementById('gameTypeInput')?.value === 'single' ? 'single' : 'multi';
+            const key = `${mode}_${type}`;
+
+            if (stats[key]) {
+                const ups = stats[key].up || 0;
+                if (ups > 0) {
+                    // Aggiungiamo il contatore pollici accanto al nome della modalità
+                    const baseText = opt.textContent.split(' 👍')[0];
+                    opt.textContent = `${baseText} 👍 ${ups}`;
+                }
+            }
+        });
+    });
+};
+
+// Caricamento statistiche all'avvio del menu
+setTimeout(() => {
+    if (typeof window.displayGlobalRatings === 'function') window.displayGlobalRatings();
+}, 3000);
 
 window.updateRating = function(key, newVote) {
     db.ref(`users/${myId}/ratings/${key}`).once('value', snap => {
