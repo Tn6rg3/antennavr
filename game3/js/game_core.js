@@ -33,11 +33,11 @@ window.showScreen = function(screenId) {
     // --- GESTIONE CHAT GIOCO (Nascondi in Singolo) ---
     const gameChatBtn = document.getElementById('txt_game_chat_btn');
     if (gameChatBtn) {
-        gameChatBtn.style.display = (screenId === 'gameArea' && window.window.isSinglePlayer) ? 'none' : 'block';
+        gameChatBtn.style.display = (screenId === 'gameArea' && window.isSinglePlayer) ? 'none' : 'block';
     }
     const qsoChatBtn = document.getElementById('txt_qso_chat_btn');
     if (qsoChatBtn) {
-        qsoChatBtn.style.display = (screenId === 'qsoArea' && window.window.isSinglePlayer) ? 'none' : 'block';
+        qsoChatBtn.style.display = (screenId === 'qsoArea' && window.isSinglePlayer) ? 'none' : 'block';
     }
 
     const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen', 'qsoArea'].includes(screenId);
@@ -457,7 +457,7 @@ window.listenToRoomInBackground = function() {
             console.log("Room Monitor: CRITICAL MODE SYNC ->", window.currentMode);
             requestedWordCount = rData.wordCount || 10;
 
-            window.window.isSinglePlayer = (rData.type === 'single');
+            window.isSinglePlayer = (rData.type === 'single');
             window.isFixedSpeed = !!rData.fixedSpeed;
             window.isEasyMode = !!rData.easyMode;
             window.isAllowSpectators = !!rData.allowSpectators;
@@ -1435,7 +1435,7 @@ window.showMatchShareButtons = function() {
 };
 
 window.saveMatchSummary = function(playersData) {
-    if (!playersData || window.window.isSinglePlayer || isCourseMode || !roomCode) return;
+    if (!playersData || window.isSinglePlayer || isCourseMode || !roomCode) return;
 
     // --- FIX: Usiamo roomCode come ID univoco del match per garantire la sincronizzazione ---
     // Essendo il roomCode unico per sessione, entrambi i giocatori scriveranno nello stesso nodo.
@@ -1583,14 +1583,27 @@ window.getLevenshteinDistance = function(a, b) {
 window.speakWord = function(text) {
     if (!('speechSynthesis' in window)) return;
 
-    // Fermiamo eventuali pronunce in corso
+    // Fermiamo eventuali pronunce in corso per evitare sovrapposizioni
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text.toLowerCase());
-    utterance.lang = (currentLang === 'it') ? 'it-IT' : 'en-US';
+    // Pulizia testo (rimuoviamo caratteri speciali se presenti)
+    const cleanText = text.replace(/[\/\=]/g, " ").toLowerCase();
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+
+    // Cerchiamo una voce nella lingua corretta
+    const voices = window.speechSynthesis.getVoices();
+    const langCode = (currentLang === 'it') ? 'it-IT' : 'en-US';
+
+    utterance.lang = langCode;
     utterance.rate = window.voiceRate || 1.0;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
+
+    // Se le voci sono caricate, proviamo a selezionare quella giusta
+    if (voices.length > 0) {
+        const preferredVoice = voices.find(v => v.lang === langCode) || voices[0];
+        utterance.voice = preferredVoice;
+    }
 
     window.speechSynthesis.speak(utterance);
 };
