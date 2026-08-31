@@ -94,19 +94,21 @@ window.startRemoteTone = function(freq) {
     if (window.remoteOscillator) return;
 
     const f = freq || window.currentTone || 600;
+    const now = window.audioCtx.currentTime;
     const osc = window.audioCtx.createOscillator();
     const gain = window.audioCtx.createGain();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(f, window.audioCtx.currentTime);
+    osc.frequency.setValueAtTime(f, now);
 
-    gain.gain.setValueAtTime(0, window.audioCtx.currentTime);
-    gain.gain.setTargetAtTime(0.5, window.audioCtx.currentTime, 0.008);
+    gain.gain.setValueAtTime(0, now);
+    // Unifichiamo alla rampa lineare da 12ms per massima pulizia
+    gain.gain.linearRampToValueAtTime(0.5, now + 0.012);
 
     osc.connect(gain);
     gain.connect(window.audioCtx.destination);
 
-    osc.start();
+    osc.start(now);
     window.remoteOscillator = osc;
     window.remoteGain = gain;
 
@@ -123,7 +125,8 @@ window.stopRemoteTone = function() {
 
     if (gain) {
         gain.gain.cancelScheduledValues(now);
-        gain.gain.setTargetAtTime(0, now, 0.008);
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.012);
     }
 
     setTimeout(() => {

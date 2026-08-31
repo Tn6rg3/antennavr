@@ -14,11 +14,7 @@ window.qsoState = {
     decodedText: '',
     isInitialized: false,
     isRelayMode: false,
-    relayStartTime: 0,
-    canvas: {
-        ctx: null,
-        animationId: null
-    }
+    relayStartTime: 0
 };
 
 window.initQsoManager = function() {
@@ -32,12 +28,6 @@ window.initQsoManager = function() {
         const logEl = document.getElementById('qsoDecodedText');
         if (logEl) logEl.textContent = "...";
     };
-
-    const canvas = document.getElementById('qsoOscilloscope');
-    if (canvas) {
-        window.qsoState.canvas.ctx = canvas.getContext('2d');
-        window.startQsoVisualizer();
-    }
 
     const wpmIn = document.getElementById('qsoWpmInput');
     const toneIn = document.getElementById('qsoToneInput');
@@ -60,27 +50,6 @@ window.initQsoManager = function() {
         };
     }
     window.qsoState.isInitialized = true;
-};
-
-window.startQsoVisualizer = function() {
-    const ctx = window.qsoState.canvas.ctx; if (!ctx) return;
-    const canvas = ctx.canvas;
-    const draw = () => {
-        if (!window.qsoState.isInitialized) return;
-        const imageData = ctx.getImageData(1, 0, canvas.width - 1, canvas.height);
-        ctx.putImageData(imageData, 0, 0);
-        ctx.fillStyle = "#000";
-        ctx.fillRect(canvas.width - 1, 0, 1, canvas.height);
-        if (window.qsoState.rxIsTx) {
-            ctx.fillStyle = "var(--champ-color)";
-            ctx.fillRect(canvas.width - 1, canvas.height/2 - 12, 1, 24);
-        } else if (window.transmissionState.isDown || (window.keyerState && window.keyerState.currentSymbol)) {
-            ctx.fillStyle = "var(--link-color)";
-            ctx.fillRect(canvas.width - 1, canvas.height/2 - 6, 1, 12);
-        }
-        window.qsoState.canvas.animationId = requestAnimationFrame(draw);
-    };
-    draw();
 };
 
 window.startQsoMode = function() {
@@ -211,11 +180,9 @@ window.exitQsoMode = function() {
     if (window.roomCode) {
         db.ref(`rooms/${window.roomCode}/players`).off('value');
         db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).off('value');
-        db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).remove();
     }
     if (window.qsoState.syncInterval) clearInterval(window.qsoState.syncInterval);
     window.qsoState.conn?.close(); window.qsoState.peer?.destroy();
-    if (window.qsoState.canvas.animationId) cancelAnimationFrame(window.qsoState.canvas.animationId);
     window.qsoState.conn = null; window.qsoState.peer = null;
     window.qsoState.isInitialized = false;
     window.stopTone();
