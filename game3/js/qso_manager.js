@@ -140,20 +140,33 @@ window.setupQsoDataChannel = function(c) {
         window.updateQsoStatus("CONNESSO ✅", "#2ecc71");
         const b = document.getElementById('btnForceQsoRelay'); if (b) b.style.display = 'none';
         document.getElementById('qsoPartnerName').textContent = "Partner: " + (c.metadata?.name || "Operatore");
+
+        // --- SINCRONIZZAZIONE OROLOGI ---
         window.qsoState.conn.send({ type: 'PING', ts: Date.now() });
-        window.qsoState.syncInterval = setInterval(() => { if (window.qsoState.conn?.open) window.qsoState.conn.send({ type: 'PING', ts: Date.now() }); }, 5000);
+        window.qsoState.syncInterval = setInterval(() => {
+            if (window.qsoState.conn?.open) window.qsoState.conn.send({ type: 'PING', ts: Date.now() });
+        }, 5000);
     });
+
     c.on('data', d => {
-        if (d.type === 'PING') c.send({ type: 'PONG', origTs: d.ts, remoteTs: Date.now() });
+        const now = Date.now();
+        if (d.type === 'PING') {
+            c.send({ type: 'PONG', origTs: d.ts, remoteTs: now });
+        }
         else if (d.type === 'PONG') {
-            const rtt = Date.now() - d.origTs;
-            window.qsoState.timeOffset = Date.now() - (d.remoteTs + (rtt / 2));
+            const rtt = now - d.origTs;
+            window.qsoState.timeOffset = now - (d.remoteTs + (rtt / 2));
         }
         else if (d.type === 'DN') {
-            if (typeof window.startRemoteTone === 'function') window.startRemoteTone(d.f);
+            // Buffer Jitter: programmiamo il suono tra 180ms
+            const targetTimeMs = d.ts + window.qsoState.timeOffset + 180;
+            const delaySec = Math.max(0.005, (targetTimeMs - now) / 1000);
+            if (typeof window.startRemoteTone === 'function') window.startRemoteTone(d.f, delaySec);
         }
         else if (d.type === 'UP') {
-            if (typeof window.stopRemoteTone === 'function') window.stopRemoteTone();
+            const targetTimeMs = d.ts + window.qsoState.timeOffset + 180;
+            const delaySec = Math.max(0.005, (targetTimeMs - now) / 1000);
+            if (typeof window.stopRemoteTone === 'function') window.stopRemoteTone(delaySec);
         }
     });
     c.on('close', () => { window.updateQsoStatus("DISCONNESSO", "#e74c3c"); window.qsoState.conn = null; });

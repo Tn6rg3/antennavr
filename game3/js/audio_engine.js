@@ -107,31 +107,31 @@ window.stopTone = function() {
 };
 
 // --- CANALE REMOTO (RICEZIONE P2P / RELAY) ---
-window.startRemoteTone = function(freq) {
+window.startRemoteTone = function(freq, delaySec = 0) {
     initPersistentOscillators();
     if (!window.preGainRemote) return;
 
     const f = freq || window.currentTone || 600;
-    const now = window.audioCtx.currentTime;
+    const scheduleTime = window.audioCtx.currentTime + delaySec;
 
-    window.preOscRemote.frequency.setTargetAtTime(f, now, 0.001);
+    window.preOscRemote.frequency.setTargetAtTime(f, scheduleTime, 0.001);
 
-    window.preGainRemote.gain.cancelScheduledValues(now);
-    window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, now);
-    window.preGainRemote.gain.setTargetAtTime(0.5, now, 0.003);
+    window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
+    window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, scheduleTime);
+    window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.003);
 
     const indicator = document.getElementById('qsoRxIndicator');
     if (indicator) indicator.style.backgroundColor = "var(--champ-color)";
 };
 
-window.stopRemoteTone = function() {
+window.stopRemoteTone = function(delaySec = 0) {
     if (!window.preGainRemote) return;
 
-    const now = window.audioCtx.currentTime;
+    const scheduleTime = window.audioCtx.currentTime + delaySec;
 
-    window.preGainRemote.gain.cancelScheduledValues(now);
-    window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, now);
-    window.preGainRemote.gain.setTargetAtTime(0, now, 0.003);
+    window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
+    window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, scheduleTime);
+    window.preGainRemote.gain.setTargetAtTime(0, scheduleTime, 0.003);
 
     const indicator = document.getElementById('qsoRxIndicator');
     if (indicator) indicator.style.backgroundColor = "#333";
