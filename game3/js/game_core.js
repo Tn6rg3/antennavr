@@ -1589,6 +1589,21 @@ window.getLevenshteinDistance = function(a, b) {
     return matrix[b.length][a.length];
 };
 
+window.testVoice = function() {
+    if (!('speechSynthesis' in window)) return showToast("Sintesi vocale non supportata.");
+
+    // Lo sblocco avviene tramite il click dell'utente
+    const text = (currentLang === 'it') ? "Sintesi vocale attiva" : "Voice synthesis active";
+
+    // Salviamo temporaneamente lo stato e forziamo la voce
+    const oldMode = window.isSpeakMode;
+    window.isSpeakMode = true;
+    window.speakWord(text);
+    window.isSpeakMode = oldMode;
+
+    showToast("Prova in corso...");
+};
+
 window.speakWord = function(text) {
     if (!window.isSpeakMode || !('speechSynthesis' in window)) return;
     if (!text) return;
