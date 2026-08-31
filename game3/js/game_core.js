@@ -1581,17 +1581,21 @@ window.getLevenshteinDistance = function(a, b) {
 };
 
 window.speakWord = function(text) {
-    if (!('speechSynthesis' in window)) return;
+    if (!('speechSynthesis' in window)) {
+        console.error("TTS: SpeechSynthesis not supported in this browser.");
+        return;
+    }
 
-    // Fermiamo eventuali pronunce in corso per evitare sovrapposizioni
+    // Fermiamo eventuali pronunce in corso
     window.speechSynthesis.cancel();
 
-    // Pulizia testo (rimuoviamo caratteri speciali se presenti)
-    const cleanText = text.replace(/[\/\=]/g, " ").toLowerCase();
-    const utterance = new SpeechSynthesisUtterance(cleanText);
+    if (!text) return;
 
-    // Cerchiamo una voce nella lingua corretta
-    const voices = window.speechSynthesis.getVoices();
+    // Pulizia testo
+    const cleanText = text.replace(/[\/\=]/g, " ").toLowerCase();
+    console.log("TTS: Preparing to speak ->", cleanText);
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     const langCode = (currentLang === 'it') ? 'it-IT' : 'en-US';
 
     utterance.lang = langCode;
@@ -1599,13 +1603,29 @@ window.speakWord = function(text) {
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
-    // Se le voci sono caricate, proviamo a selezionare quella giusta
-    if (voices.length > 0) {
-        const preferredVoice = voices.find(v => v.lang === langCode) || voices[0];
-        utterance.voice = preferredVoice;
-    }
+    // Gestione eventi per debug
+    utterance.onstart = () => console.log("TTS: Start speaking...");
+    utterance.onerror = (e) => console.error("TTS: Error during speaking:", e);
+    utterance.onend = () => console.log("TTS: Finished speaking.");
 
-    window.speechSynthesis.speak(utterance);
+    const doSpeak = () => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            const preferredVoice = voices.find(v => v.lang.startsWith(langCode.split('-')[0])) || voices[0];
+            utterance.voice = preferredVoice;
+        }
+        window.speechSynthesis.speak(utterance);
+    };
+
+    if (window.speechSynthesis.getVoices().length === 0) {
+        window.speechSynthesis.onvoiceschanged = () => {
+            window.speechSynthesis.onvoiceschanged = null;
+            doSpeak();
+        };
+        setTimeout(doSpeak, 100);
+    } else {
+        doSpeak();
+    }
 };
 
 window.renderDiffSecure = function(container, real, typed) {
@@ -1955,12 +1975,16 @@ window.handleWordSubmission = function(userWord) {
 
         usedReplay = false;
         if (nextWordTimeout) clearTimeout(nextWordTimeout);
+
+        // --- FIX ASCOLTO: Ritardo più lungo per permettere alla voce di finire ---
+        const nextWordDelay = window.isSpeakMode ? 2500 : 1000;
+
         nextWordTimeout = setTimeout(() => {
             if (gameRunning) {
                 if (els.permanentGameInput) els.permanentGameInput.value = "";
                 window.playNextWord();
             }
-        }, 1000);
+        }, nextWordDelay);
     }
 };
 
