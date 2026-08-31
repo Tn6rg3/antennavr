@@ -461,6 +461,8 @@ window.listenToRoomInBackground = function() {
             window.isFixedSpeed = !!rData.fixedSpeed;
             window.isEasyMode = !!rData.easyMode;
             window.isAllowSpectators = !!rData.allowSpectators;
+            window.isSpeakMode = !!rData.speakMode; // NUOVO
+            window.voiceRate = rData.voiceRate || 1.0; // NUOVO
             window.charSpaceWpm = rData.charSpaceWpm || 0;
             window.wordSpaceMult = rData.wordSpaceMult || 1.0;
 
@@ -1578,6 +1580,21 @@ window.getLevenshteinDistance = function(a, b) {
     return matrix[b.length][a.length];
 };
 
+window.speakWord = function(text) {
+    if (!('speechSynthesis' in window)) return;
+
+    // Fermiamo eventuali pronunce in corso
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text.toLowerCase());
+    utterance.lang = (currentLang === 'it') ? 'it-IT' : 'en-US';
+    utterance.rate = window.voiceRate || 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    window.speechSynthesis.speak(utterance);
+};
+
 window.renderDiffSecure = function(container, real, typed) {
     if (!real) return;
 
@@ -1890,6 +1907,11 @@ window.handleWordSubmission = function(userWord) {
     }
 
     if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
+
+    // --- NUOVA LOGICA ASCOLTO (TTS) ---
+    if (window.isSpeakMode && currentWord) {
+        window.speakWord(currentWord);
+    }
 
     // FINE PAROLA: Avanzamento e Sincronizzazione
     if (window.currentMode === 'pingpong') {

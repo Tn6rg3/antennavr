@@ -124,6 +124,8 @@ window.checkGameTypeUI = function() {
         spacing: document.getElementById('advancedSpacingContainer'),
         custom: document.getElementById('customDictControl'),
         spectator: document.getElementById('spectatorContainer'),
+        speak: document.getElementById('speakModeContainer'),
+        voiceRate: document.getElementById('voiceRateDiv'),
         arcadeBtn: document.getElementById('startArcadeBtn'),
         btn: document.getElementById('createRoomBtn'),
         startWpm: document.getElementById('startWpmInput'),
@@ -215,6 +217,11 @@ window.checkGameTypeUI = function() {
 
     if (containers.custom) containers.custom.style.display = (isSingle && selectedMode === 'custom') ? 'flex' : 'none';
     if (containers.spectator) containers.spectator.style.display = isSingle ? 'flex' : 'none';
+
+    // --- NUOVA LOGICA ASCOLTO (TTS) ---
+    const isSpeakAvailable = isSingle && selectedMode === 'standard';
+    if (containers.speak) containers.speak.style.display = isSpeakAvailable ? 'flex' : 'none';
+    if (containers.voiceRate) containers.voiceRate.style.display = isSpeakAvailable ? 'flex' : 'none';
 
     if (containers.arcadeBtn) {
         containers.arcadeBtn.style.display = isArcadeType ? 'block' : 'none';

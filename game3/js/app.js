@@ -199,6 +199,8 @@ window.currentMode = "standard";
 window.requestedWordCount = 10;
 window.isFixedSpeed = false;
 window.isEasyMode = false;
+window.isSpeakMode = false; // NUOVO
+window.voiceRate = 1.0;     // NUOVO
 window.lastWordStartTime = 0;
 
 // STATO CORSO CW
@@ -1701,6 +1703,8 @@ if (els.createRoomBtn) {
         const isFixed = window.window.isSinglePlayer && els.fixedSpeedCheckbox?.checked;
         const isEasy = window.window.isSinglePlayer && els.easyModeCheckbox?.checked;
         const allowSpectators = window.window.isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
+        const isSpeak = window.window.isSinglePlayer && document.getElementById('speakModeCheckbox')?.checked;
+        const vRate = parseFloat(document.getElementById('voiceRateSelect')?.value) || 1.0;
 
         let cSpace = (window.window.isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
         let wSpace = window.window.isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
@@ -1748,6 +1752,8 @@ if (els.createRoomBtn) {
                 wordCount: window.requestedWordCount,
                 fixedSpeed: !!isFixed,
                 easyMode: !!isEasy,
+                speakMode: !!isSpeak,
+                voiceRate: vRate,
                 allowSpectators: !!allowSpectators,
                 charSpaceWpm: cSpace,
                 wordSpaceMult: wSpace,
