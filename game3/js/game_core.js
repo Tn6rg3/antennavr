@@ -30,6 +30,16 @@ window.showScreen = function(screenId) {
     if (typeof hideChat === 'function') hideChat();
     if (els.matchDetailsModal) els.matchDetailsModal.style.display = 'none';
 
+    // --- GESTIONE CHAT GIOCO (Nascondi in Singolo) ---
+    const gameChatBtn = document.getElementById('txt_game_chat_btn');
+    if (gameChatBtn) {
+        gameChatBtn.style.display = (screenId === 'gameArea' && window.isSinglePlayer) ? 'none' : 'block';
+    }
+    const qsoChatBtn = document.getElementById('txt_qso_chat_btn');
+    if (qsoChatBtn) {
+        qsoChatBtn.style.display = (screenId === 'qsoArea' && window.isSinglePlayer) ? 'none' : 'block';
+    }
+
     const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen', 'qsoArea'].includes(screenId);
 
     // Inizializziamo il cache DOM se entriamo in gioco
@@ -1128,6 +1138,15 @@ window.finishGame = function() {
     }
 
     if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {
+        // ... logica record esistente ...
+
+        // --- NUOVO: CONTROLLO VALUTAZIONE GIOCO ---
+        setTimeout(() => {
+            if (typeof window.checkGameRating === 'function') {
+                window.checkGameRating();
+            }
+        }, 4000);
+    }
         db.ref(`rooms/${window.roomCode}/players`).once('value', snap => {
             const playersData = snap.val() || {};
             const pArray = Object.values(playersData);

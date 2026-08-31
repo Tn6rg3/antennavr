@@ -222,21 +222,12 @@ window.playQsoRemoteTone = function(freq, delaySec) {
     window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
     window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.015);
 
-    if (window.qsoState.decoder.wordTimeout) clearTimeout(window.qsoState.decoder.wordTimeout);
-    const gap = Date.now() - window.qsoState.decoder.lastEdgeTime;
-    const unit = 1200 / window.keyerState.wpm;
-    if (gap > unit * 2.5 && window.qsoState.decoder.sequence.length > 0) {
-        window.finalizeQsoChar();
-        if (gap > unit * 6) window.appendQsoText(" ");
-    }
-    window.qsoState.decoder.lastEdgeTime = Date.now();
     document.getElementById('qsoRxIndicator').style.backgroundColor = "var(--champ-color)";
     if (window.qsoState.remoteWatchdog) clearTimeout(window.qsoState.remoteWatchdog);
     window.qsoState.remoteWatchdog = setTimeout(() => { if (window.qsoState.rxIsTx) window.stopQsoRemoteTone(0); }, 2000);
 };
 
 window.stopQsoRemoteTone = function(delaySec) {
-    const duration = Date.now() - window.qsoState.decoder.lastEdgeTime;
     const scheduleTime = window.audioCtx.currentTime + delaySec;
     if (window.preGainRemote) {
         window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
@@ -244,10 +235,6 @@ window.stopQsoRemoteTone = function(delaySec) {
     }
     window.qsoState.rxIsTx = false;
     document.getElementById('qsoRxIndicator').style.backgroundColor = "#333";
-    const unit = 1200 / window.keyerState.wpm;
-    window.qsoState.decoder.sequence.push(duration > unit * 2.0 ? "-" : ".");
-    window.qsoState.decoder.lastEdgeTime = Date.now();
-    window.qsoState.decoder.wordTimeout = setTimeout(() => window.finalizeQsoChar(), unit * 4);
 };
 
 window.finalizeQsoChar = function() {

@@ -211,16 +211,20 @@ const handleStatsInputFocus = (e) => {
 window.switchProfileTab = function(tabId) {
     const infoBtn = document.getElementById('btnTabProfile');
     const statsBtn = document.getElementById('btnTabStats');
+    const ratingsBtn = document.getElementById('btnTabRatings');
     const infoArea = document.getElementById('profileInfoArea');
     const statsArea = document.getElementById('profileStatsArea');
+    const ratingsArea = document.getElementById('profileRatingsArea');
     const courseArea = document.getElementById('profileCourseArea');
     const tabsHeader = document.getElementById('profileTabsHeader');
 
     if (infoBtn) infoBtn.classList.remove('active-tab');
     if (statsBtn) statsBtn.classList.remove('active-tab');
+    if (ratingsBtn) ratingsBtn.classList.remove('active-tab');
 
     if (infoArea) infoArea.style.display = 'none';
     if (statsArea) statsArea.style.display = 'none';
+    if (ratingsArea) ratingsArea.style.display = 'none';
     if (courseArea) courseArea.style.display = 'none';
 
     if (tabId === 'info') {
@@ -232,28 +236,12 @@ window.switchProfileTab = function(tabId) {
         if (tabsHeader) tabsHeader.style.display = 'flex';
         if (statsBtn) statsBtn.classList.add('active-tab');
         if (statsArea) statsArea.style.display = 'flex';
-
-        const bTh = document.getElementById('bigramThresholdInput');
-        const wTh = document.getElementById('wordThresholdInput');
-
-        if (bTh) {
-            bTh.removeEventListener('keydown', handleStatsInputEnter);
-            bTh.addEventListener('keydown', handleStatsInputEnter);
-            bTh.removeEventListener('focus', handleStatsInputFocus);
-            bTh.addEventListener('focus', handleStatsInputFocus);
-            bTh.removeEventListener('change', window.loadAdvancedStats);
-            bTh.addEventListener('change', window.loadAdvancedStats);
-        }
-        if (wTh) {
-            wTh.removeEventListener('keydown', handleStatsInputEnter);
-            wTh.addEventListener('keydown', handleStatsInputEnter);
-            wTh.removeEventListener('focus', handleStatsInputFocus);
-            wTh.addEventListener('focus', handleStatsInputFocus);
-            wTh.removeEventListener('change', window.loadAdvancedStats);
-            wTh.addEventListener('change', window.loadAdvancedStats);
-        }
-
         window.loadAdvancedStats();
+    } else if (tabId === 'ratings') {
+        if (tabsHeader) tabsHeader.style.display = 'flex';
+        if (ratingsBtn) ratingsBtn.classList.add('active-tab');
+        if (ratingsArea) ratingsArea.style.display = 'flex';
+        if (typeof window.loadUserRatings === 'function') window.loadUserRatings();
     } else if (tabId === 'course') {
         if (tabsHeader) tabsHeader.style.display = 'none';
         if (courseArea) courseArea.style.display = 'flex';
