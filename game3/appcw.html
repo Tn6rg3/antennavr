@@ -288,9 +288,12 @@
                 <label id="easyModeContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: var(--champ-color); cursor: pointer;">
                     <input type="checkbox" id="easyModeCheckbox"> <span id="txt_easy_mode">Semplice</span>
                 </label>
-                <label id="speakModeContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: #64b5f6; cursor: pointer;">
-                    <input type="checkbox" id="speakModeCheckbox"> <span>🎧 Ascolto</span>
-                </label>
+                <div id="speakModeContainer" style="display: none; align-items: center; gap: 8px; font-size: 0.85em; font-weight: bold;">
+                    <label style="color: #64b5f6; cursor: pointer; display: flex; align-items: center; gap: 5px; margin: 0;">
+                        <input type="checkbox" id="speakModeCheckbox"> <span>🎧 Ascolto</span>
+                    </label>
+                    <button onclick="window.testVoice()" style="background: rgba(100, 181, 246, 0.1); border: 1px solid #64b5f6; color: #64b5f6; padding: 3px 10px; border-radius: 6px; font-size: 0.75em; cursor: pointer; text-transform: uppercase; font-weight: bold; outline: none; -webkit-tap-highlight-color: transparent;">🔊 Prova</button>
+                </div>
                 <label id="spectatorContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: #fbc02d; cursor: pointer;">
                     <input type="checkbox" id="allowSpectatorsCheckbox"> <span>👁️ Spettatori</span>
                 </label>
