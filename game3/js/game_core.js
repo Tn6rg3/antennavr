@@ -1687,12 +1687,12 @@ if (els.permanentGameInput) {
             }
         }
     });
-    els.permanentGameInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && inputActive && gameRunning && window.currentMode !== 'chars') {
+    els.permanentGameInput.addEventListener('keydown', function(e) {
+        if ((e.key === 'Enter' || e.keyCode === 13) && inputActive && gameRunning && window.currentMode !== 'chars') {
             const val = els.permanentGameInput.value.trim().toUpperCase();
             if (val) {
                 // --- SBLOCCO VOCE PER MOBILE (AL TOCCO ENTER) ---
-                if (window.isSpeakMode) {
+                if (window.isSpeakMode && ('speechSynthesis' in window)) {
                     const silent = new SpeechSynthesisUtterance(" ");
                     silent.volume = 0.001;
                     window.speechSynthesis.speak(silent);

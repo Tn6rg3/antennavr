@@ -194,7 +194,7 @@ window.totalScore = 0;
 window.currentStreak = 0;
 window.usedReplay = false;
 window.matchDetailsArray = [];
-window.window.isSinglePlayer = false;
+window.isSinglePlayer = false;
 window.currentMode = "standard";
 window.requestedWordCount = 10;
 window.isFixedSpeed = false;
@@ -325,7 +325,7 @@ window.resetGameState = function() {
     if (typeof window.exitQsoMode === 'function' && window.currentMode === 'qso') {
         // Pulizia QSO se stavamo uscendo da lì
     }
-    window.window.isSinglePlayer = false;
+    window.isSinglePlayer = false;
     window.currentMode = 'standard';
     coopActiveFreqIndex = 0; // RESET INDICE FREQUENZA CO-OP
 
@@ -1449,7 +1449,7 @@ if (els.btnPlayDailyNow) {
         window.resetGameState();
 
         window.currentMode = 'daily_challenge';
-        window.window.isSinglePlayer = true;
+        window.isSinglePlayer = true;
         currentWpm = baseWpm = 15;
         requestedWordCount = 20;
 
@@ -1677,6 +1677,13 @@ if (els.muteGlobalChatBtn) {
 // --- CREAZIONE STANZA ---
 if (els.createRoomBtn) {
     els.createRoomBtn.onclick = () => {
+        // --- SBLOCCO TTS MOBILE (IMPERCETTIBILE) ---
+        if (('speechSynthesis' in window)) {
+            const unlock = new SpeechSynthesisUtterance(" ");
+            unlock.volume = 0.001;
+            window.speechSynthesis.speak(unlock);
+        }
+
         const gType = els.gameTypeInput.value, gMode = els.gameModeInput.value;
         if (gType === 'tournament') { window.showScreen('teamsScreen'); return; }
         if (gMode === 'custom' && window.customDictionary.length === 0) return showToast("Carica un file!");
@@ -1688,7 +1695,7 @@ if (els.createRoomBtn) {
         window.incomingChallengeId = null;
         window.currentMode = gMode || 'standard';
         console.log("Create Room: Initial Mode selection ->", gMode, "Global window.currentMode ->", window.currentMode);
-        window.window.isSinglePlayer = (gType === 'single');
+        window.isSinglePlayer = (gType === 'single');
         window.currentWpm = window.baseWpm = (window.currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
         window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         window.currentTone = parseInt(els.toneInput?.value) || 600;
@@ -1700,16 +1707,16 @@ if (els.createRoomBtn) {
             return;
         }
 
-        const isFixed = window.window.isSinglePlayer && els.fixedSpeedCheckbox?.checked;
-        const isEasy = window.window.isSinglePlayer && els.easyModeCheckbox?.checked;
-        const allowSpectators = window.window.isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
-        const isSpeak = window.window.isSinglePlayer && document.getElementById('speakModeCheckbox')?.checked;
+        const isFixed = window.isSinglePlayer && els.fixedSpeedCheckbox?.checked;
+        const isEasy = window.isSinglePlayer && els.easyModeCheckbox?.checked;
+        const allowSpectators = window.isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
+        const isSpeak = window.isSinglePlayer && document.getElementById('speakModeCheckbox')?.checked;
         const vRate = parseFloat(document.getElementById('voiceRateSelect')?.value) || 1.0;
 
-        let cSpace = (window.window.isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
-        let wSpace = window.window.isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
+        let cSpace = (window.isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
+        let wSpace = window.isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
 
-        window.roomCode = window.window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
+        window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
 
         const createAndJoinRoom = async (stats = {}) => {
             logDebug("Create Room: Preparazione sessione...");
@@ -1726,10 +1733,10 @@ if (els.createRoomBtn) {
                 stats: stats
             });
 
-            const expires = window.window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
+            const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
             // --- FIX COLLISIONE ID STANZA (Robust ID) ---
-            if (window.window.isSinglePlayer) {
+            if (window.isSinglePlayer) {
                 window.roomCode = "SOLO_" + window.myId + "_" + Math.floor(Date.now()/1000);
             } else {
                 const rand = Math.floor(10000 + Math.random() * 90000);
@@ -1743,8 +1750,8 @@ if (els.createRoomBtn) {
             if (check.exists()) return els.createRoomBtn.click();
 
             const roomData = {
-                status: window.window.isSinglePlayer ? 'countdown' : 'waiting',
-                type: window.window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
+                status: window.isSinglePlayer ? 'countdown' : 'waiting',
+                type: window.isSinglePlayer ? 'single' : (gType === 'coop' ? 'coop' : 'multi'),
                 mode: window.currentMode,
                 groupSize: window.wordsPerGroup,
                 wpm: window.currentWpm,
@@ -1765,7 +1772,7 @@ if (els.createRoomBtn) {
 
             roomRef.set(roomData).then(() => {
                 console.log("Create Room: Stanza creata con successo ->", window.roomCode);
-                if (!window.window.isSinglePlayer) {
+                if (!window.isSinglePlayer) {
                     roomRef.onDisconnect().remove();
                     const lobbyRef = db.ref(`public_lobby_rooms/${window.roomCode}`);
                     lobbyRef.set({
