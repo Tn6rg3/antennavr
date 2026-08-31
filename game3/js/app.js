@@ -1724,12 +1724,19 @@ if (els.createRoomBtn) {
 
             const expires = window.window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
-            // --- FIX: ID Univoco per evitare colllisioni di permessi ---
-            window.roomCode = window.window.isSinglePlayer ?
-                "SOLO_" + window.myId + "_" + Math.floor(Date.now()/1000) :
-                Math.floor(1000 + Math.random() * 9000).toString();
+            // --- FIX COLLISIONE ID STANZA (Robust ID) ---
+            if (window.window.isSinglePlayer) {
+                window.roomCode = "SOLO_" + window.myId + "_" + Math.floor(Date.now()/1000);
+            } else {
+                const rand = Math.floor(10000 + Math.random() * 90000);
+                window.roomCode = rand.toString() + Date.now().toString().slice(-3);
+            }
 
             const roomRef = db.ref('rooms/' + window.roomCode);
+
+            // Verifica preventiva unicità
+            const check = await roomRef.once('value');
+            if (check.exists()) return els.createRoomBtn.click();
 
             const roomData = {
                 status: window.window.isSinglePlayer ? 'countdown' : 'waiting',
