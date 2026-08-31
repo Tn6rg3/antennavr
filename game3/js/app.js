@@ -505,10 +505,11 @@ async function startApp() {
     myId = tgUser.id.toString();
 
     // --- TELEGRAM TTS FIX: Svegliamo il motore vocale ---
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.getVoices();
-        if (window.speechSynthesis.onvoiceschanged !== undefined) {
-            window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    const synth = window.speechSynthesis || window.webkitSpeechSynthesis;
+    if (synth) {
+        synth.getVoices();
+        if (synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = () => synth.getVoices();
         }
     }
 

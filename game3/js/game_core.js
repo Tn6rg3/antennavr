@@ -1590,7 +1590,8 @@ window.getLevenshteinDistance = function(a, b) {
 };
 
 window.testVoice = function() {
-    if (!('speechSynthesis' in window)) return showToast("Sintesi vocale non supportata.");
+    const synth = window.speechSynthesis || window.webkitSpeechSynthesis;
+    if (!synth) return showToast("Sintesi vocale non supportata dal browser.");
 
     // Lo sblocco avviene tramite il click dell'utente
     const text = (currentLang === 'it') ? "Sintesi vocale attiva" : "Voice synthesis active";
@@ -1605,11 +1606,12 @@ window.testVoice = function() {
 };
 
 window.speakWord = function(text) {
-    if (!window.isSpeakMode || !('speechSynthesis' in window)) return;
+    const synth = window.speechSynthesis || window.webkitSpeechSynthesis;
+    if (!window.isSpeakMode || !synth) return;
     if (!text) return;
 
     // Reset immediato per Telegram Mobile
-    window.speechSynthesis.cancel();
+    synth.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text.replace(/[\/\=]/g, " ").toLowerCase());
     const langCode = (currentLang === 'it') ? 'it-IT' : 'en-US';
@@ -1620,13 +1622,13 @@ window.speakWord = function(text) {
     utterance.volume = 1.0;
 
     // Recupero voci dinamico (Fix Telegram)
-    const voices = window.speechSynthesis.getVoices();
+    const voices = synth.getVoices();
     if (voices.length > 0) {
         const preferredVoice = voices.find(v => v.lang === langCode || v.lang.startsWith(langCode.split('-')[0]));
         if (preferredVoice) utterance.voice = preferredVoice;
     }
 
-    window.speechSynthesis.speak(utterance);
+    synth.speak(utterance);
 };
 
 window.renderDiffSecure = function(container, real, typed) {
