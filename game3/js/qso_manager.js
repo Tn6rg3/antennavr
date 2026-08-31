@@ -7,7 +7,7 @@ window.qsoState = {
     partnerName: '---',
     status: 'DISCONNESSO',
     timeOffset: 0,
-    playbackDelay: 150,
+    playbackDelay: 500,
     syncInterval: null,
     rxIsTx: false,
     remoteWatchdog: null,
@@ -114,7 +114,10 @@ window.listenForQsoPartner = function() {
         for (let pId in players) {
             if (pId !== window.myId && players[pId].peerId && !window.qsoState.conn) {
                 const partnerId = pId;
-                const connection = window.qsoState.peer.connect(players[pId].peerId, { reliable: false, metadata: { name: window.myName } });
+                const connection = window.qsoState.peer.connect(players[pId].peerId, {
+                    reliable: true, // FORZA TCP (Consegna garantita e ordinata)
+                    metadata: { name: window.myName }
+                });
                 window.setupQsoDataChannel(connection);
 
                 // --- ASCOLTO RELAY OTTIMIZZATO ---
