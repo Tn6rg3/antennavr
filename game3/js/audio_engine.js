@@ -21,7 +21,7 @@ window.resumeAudioContext = function() {
     try {
         if (!window.audioCtx) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
-            window.audioCtx = new AudioContext({ latencyHint: 'interactive', sampleRate: 44100 });
+            window.audioCtx = new AudioContext({ latencyHint: 'interactive' });
         }
         if (window.audioCtx.state === 'suspended') window.audioCtx.resume();
     } catch(e) {}
@@ -46,7 +46,7 @@ function initPersistentOscillators() {
     }
 }
 
-// --- CANALE LOCALE (TRASMISSIONE MANUALE) ---
+// --- CANALE LOCALE (TRASMISSIONE / TOUCH / MOUSE) ---
 window.startTone = function(freq) {
     initPersistentOscillators();
     if (!window.preGainLocal) return;
@@ -54,11 +54,11 @@ window.startTone = function(freq) {
     const f = freq || window.currentTone || 600;
     const now = window.audioCtx.currentTime;
 
-    window.preOscLocal.frequency.setTargetAtTime(f, now, 0.001);
+    window.preOscLocal.frequency.setValueAtTime(f, now);
     window.preGainLocal.gain.cancelScheduledValues(now);
     window.preGainLocal.gain.setValueAtTime(window.preGainLocal.gain.value, now);
-    // Rampa lineare 10ms per attacco pulito
-    window.preGainLocal.gain.linearRampToValueAtTime(0.5, now + 0.010);
+    // Rampa "Koch" a 5ms: netta ma senza click
+    window.preGainLocal.gain.linearRampToValueAtTime(0.5, now + 0.005);
 
     if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
         window.sendQsoEvent('DN', f);
@@ -70,28 +70,24 @@ window.stopTone = function() {
     const now = window.audioCtx.currentTime;
     window.preGainLocal.gain.cancelScheduledValues(now);
     window.preGainLocal.gain.setValueAtTime(window.preGainLocal.gain.value, now);
-    window.preGainLocal.gain.linearRampToValueAtTime(0, now + 0.010);
+    window.preGainLocal.gain.linearRampToValueAtTime(0, now + 0.005);
 
     if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
         window.sendQsoEvent('UP', 0);
     }
 };
 
-// --- CANALE REMOTO (RICEZIONE P2P - SCHEDULATA) ---
+// --- CANALE REMOTO (RICEZIONE PARTNER) ---
 window.startRemoteTone = function(freq, delaySec = 0) {
     initPersistentOscillators();
     if (!window.preGainRemote) return;
-
     const f = freq || window.currentTone || 600;
-    // La riproduzione avviene al tempo esatto del WebAudio Clock + il ritardo del buffer
     const startTime = window.audioCtx.currentTime + delaySec;
-
     window.preOscRemote.frequency.setValueAtTime(f, startTime);
     window.preGainRemote.gain.cancelScheduledValues(startTime);
     window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, startTime);
-    window.preGainRemote.gain.linearRampToValueAtTime(0.5, startTime + 0.010);
+    window.preGainRemote.gain.linearRampToValueAtTime(0.5, startTime + 0.005);
 
-    // Indicatore visivo (approssimato a causa del buffer)
     setTimeout(() => {
         const indicator = document.getElementById('qsoRxIndicator');
         if (indicator) indicator.style.backgroundColor = "var(--champ-color)";
@@ -101,10 +97,9 @@ window.startRemoteTone = function(freq, delaySec = 0) {
 window.stopRemoteTone = function(delaySec = 0) {
     if (!window.preGainRemote) return;
     const stopTime = window.audioCtx.currentTime + delaySec;
-
     window.preGainRemote.gain.cancelScheduledValues(stopTime);
     window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, stopTime);
-    window.preGainRemote.gain.linearRampToValueAtTime(0, stopTime + 0.010);
+    window.preGainRemote.gain.linearRampToValueAtTime(0, stopTime + 0.005);
 
     setTimeout(() => {
         const indicator = document.getElementById('qsoRxIndicator');
@@ -118,8 +113,9 @@ window.stopAllMorseAudio = function() {
         window.activeOscillators.forEach(osc => { try { osc.stop(); osc.disconnect(); } catch(e) {} });
         window.activeOscillators = [];
     }
-    if (window.preGainLocal) window.preGainLocal.gain.setTargetAtTime(0, window.audioCtx.currentTime, 0.005);
-    if (window.preGainRemote) window.preGainRemote.gain.setTargetAtTime(0, window.audioCtx.currentTime, 0.005);
+    const now = window.audioCtx.currentTime;
+    if (window.preGainLocal) window.preGainLocal.gain.linearRampToValueAtTime(0, now + 0.005);
+    if (window.preGainRemote) window.preGainRemote.gain.linearRampToValueAtTime(0, now + 0.005);
 };
 
 window.startBluetoothKeepAlive = function() {
@@ -184,8 +180,8 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
                     osc.connect(gain).connect(window.audioCtx.destination);
                     const duration = (symbol === '-') ? (3 * charUnit) : charUnit;
                     gain.gain.setValueAtTime(0, time);
-                    gain.gain.linearRampToValueAtTime(0.5, time + 0.010);
-                    gain.gain.setValueAtTime(0.5, time + duration - 0.010);
+                    gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
+                    gain.gain.setValueAtTime(0.5, time + duration - 0.005);
                     gain.gain.linearRampToValueAtTime(0, time + duration);
                     osc.start(time);
                     osc.stop(time + duration + 0.05);
