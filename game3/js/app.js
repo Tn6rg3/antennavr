@@ -451,6 +451,7 @@ if(document.getElementById('gameTypeInput')) document.getElementById('gameTypeIn
 });
 
 // --- STARTUP ---
+// --- STARTUP ---
 async function startApp() {
     if (!tgUser) {
         if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
@@ -458,12 +459,29 @@ async function startApp() {
         return;
     }
 
+    // --- WATCHDOG: Rileva se l'app non si carica entro 20 secondi ---
+    const loadTimeout = setTimeout(async () => {
+        const loadingVisible = els.loadingScreen && els.loadingScreen.classList.contains('active-screen');
+        if (loadingVisible) {
+            console.error("Watchdog: Caricamento troppo lungo, invio notifica di errore...");
+            const errorMsg = "⚠️ <b>L'app sta impiegando troppo tempo a caricarsi.</b>\nÈ possibile che sia in corso un aggiornamento o che ci sia un problema di rete. Riprova tra un minuto! 📻";
+            // Chiamata silenziosa al GAS per notificare l'utente tramite bot
+            fetch(`${VALIDATION_SERVER_URL}?action=notify&targetId=${window.myId}&text=${encodeURIComponent(errorMsg)}`, { mode: 'no-cors' });
+
+            if (document.getElementById('initStatusText')) {
+                document.getElementById('initStatusText').innerHTML = "Rete lenta o aggiornamento in corso...<br><small>Ti abbiamo inviato una notifica sul bot.</small>";
+            }
+        }
+    }, 20000);
+
     // 1. Fase di Verifica Identità (Backend Google Apps Script)
     const statusText = document.getElementById('initStatusText');
     if (statusText) statusText.textContent = "Verifica identità Morse...";
 
     try {
         const isVerified = await validateIdentity();
+        clearTimeout(loadTimeout); // Caricamento riuscito, fermiamo il watchdog
+
         if (!isVerified) {
             if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
             if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
@@ -471,6 +489,10 @@ async function startApp() {
         }
     } catch (e) {
         console.error("Validation failed:", e);
+        // Se GAS risponde con errore, attiviamo la notifica bot
+        const gasErrorMsg = "⚠️ <b>Errore di autenticazione.</b>\nIl server dei permessi non risponde. Riprova tra poco.";
+        fetch(`${VALIDATION_SERVER_URL}?action=notify&targetId=${window.myId}&text=${encodeURIComponent(gasErrorMsg)}`, { mode: 'no-cors' });
+
         if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
         if (els.validationErrorScreen) els.validationErrorScreen.classList.add('active-screen');
         return;
