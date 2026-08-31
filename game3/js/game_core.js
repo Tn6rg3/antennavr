@@ -1591,30 +1591,27 @@ window.getLevenshteinDistance = function(a, b) {
 
 window.speakWord = function(text) {
     if (!window.isSpeakMode || !('speechSynthesis' in window)) return;
-
     if (!text) return;
 
-    // Su mobile cancel() può dare problemi se chiamato troppo spesso,
-    // lo usiamo solo se necessario per pulire la coda
-    if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+    // Reset immediato per Telegram Mobile
+    window.speechSynthesis.cancel();
 
-    const cleanText = text.replace(/[\/\=]/g, " ").toLowerCase();
-    const utterance = new SpeechSynthesisUtterance(cleanText);
+    const utterance = new SpeechSynthesisUtterance(text.replace(/[\/\=]/g, " ").toLowerCase());
+    const langCode = (currentLang === 'it') ? 'it-IT' : 'en-US';
 
-    utterance.lang = (currentLang === 'it') ? 'it-IT' : 'en-US';
+    utterance.lang = langCode;
     utterance.rate = window.voiceRate || 1.0;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
+    // Recupero voci dinamico (Fix Telegram)
     const voices = window.speechSynthesis.getVoices();
     if (voices.length > 0) {
-        utterance.voice = voices.find(v => v.lang.startsWith(utterance.lang.split('-')[0])) || voices[0];
+        const preferredVoice = voices.find(v => v.lang === langCode || v.lang.startsWith(langCode.split('-')[0]));
+        if (preferredVoice) utterance.voice = preferredVoice;
     }
 
-    // Piccolissimo ritardo per non sovrapporsi al suono del tasto
-    setTimeout(() => {
-        window.speechSynthesis.speak(utterance);
-    }, 100);
+    window.speechSynthesis.speak(utterance);
 };
 
 window.renderDiffSecure = function(container, real, typed) {

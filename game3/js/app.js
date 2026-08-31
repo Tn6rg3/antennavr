@@ -503,6 +503,14 @@ async function startApp() {
     // 2. Proseguiamo con l'avvio normale
     myName = tgUser.first_name;
     myId = tgUser.id.toString();
+    // --- TELEGRAM TTS FIX: Svegliamo il motore vocale ---
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.getVoices();
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+        }
+    }
+
     initGame();
 }
 
