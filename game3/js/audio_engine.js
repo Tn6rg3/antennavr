@@ -8,21 +8,26 @@ window.morseDict = {
     'À': '.--.-', 'È': '..-..', 'É': '..-..', 'Ì': '.---.', 'Ò': '---.', 'Ù': '..--'
 };
 
-window.activeOscillators = [];
-window.manualOscillator = null;
-window.manualGain = null;
-window.remoteOscillator = null;
-window.remoteGain = null;
+window.activeOscillators = []; // Mantenuto per compatibilità con playMorseAudio (misto)
+window.preOscLocal = null;
+window.preGainLocal = null;
+window.preOscRemote = null;
+window.preGainRemote = null;
+
 window.morsePlayToken = 0;
 window.btKeepAliveOsc = null;
 
 /**
- * FUNZIONE DI RIPRISTINO AUDIO (SPECIFICA PER iOS/iPhone)
+ * FUNZIONE DI RIPRISTINO AUDIO (Ottimizzata per interattività)
  */
 window.resumeAudioContext = function() {
     try {
         if (!window.audioCtx) {
-            window.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            window.audioCtx = new AudioContext({
+                latencyHint: 'interactive',
+                sampleRate: 48000
+            });
         }
         if (window.audioCtx.state === 'suspended' || window.audioCtx.state === 'interrupted') {
             window.audioCtx.resume();
@@ -30,143 +35,124 @@ window.resumeAudioContext = function() {
     } catch(e) { console.error("AudioEngine: Error resuming context:", e); }
 };
 
-// --- CANALE LOCALE (TRASMISSIONE) ---
-window.startTone = function(freq) {
+/**
+ * INIZIALIZZAZIONE OSCILLATORI PERSISTENTI (Architettura CW.HTML)
+ * Questa funzione crea oscillatori che rimangono SEMPRE accesi.
+ * Il suono viene controllato solo aprendo/chiudendo il "rubinetto" del Gain.
+ * Questo elimina alla radice ogni scoppiettio (clic) di accensione/spegnimento.
+ */
+function initPersistentOscillators() {
     window.resumeAudioContext();
+    if (!window.audioCtx) return;
 
-    if (window.manualOscillator) {
-        try {
-            window.manualGain.gain.cancelScheduledValues(window.audioCtx.currentTime);
-            window.manualOscillator.stop();
-            window.manualOscillator.disconnect();
-        } catch(e) {}
-        window.manualOscillator = null;
+    // Canale Locale (Trasmissione)
+    if (!window.preOscLocal) {
+        window.preOscLocal = window.audioCtx.createOscillator();
+        window.preGainLocal = window.audioCtx.createGain();
+        window.preOscLocal.type = 'sine';
+        window.preOscLocal.connect(window.preGainLocal).connect(window.audioCtx.destination);
+        window.preGainLocal.gain.value = 0;
+        window.preOscLocal.start();
+        console.log("AudioEngine: Local Oscillator Started (Persistent)");
     }
+
+    // Canale Remoto (Ricezione)
+    if (!window.preOscRemote) {
+        window.preOscRemote = window.audioCtx.createOscillator();
+        window.preGainRemote = window.audioCtx.createGain();
+        window.preOscRemote.type = 'sine';
+        window.preOscRemote.connect(window.preGainRemote).connect(window.audioCtx.destination);
+        window.preGainRemote.gain.value = 0;
+        window.preOscRemote.start();
+        console.log("AudioEngine: Remote Oscillator Started (Persistent)");
+    }
+}
+
+// --- CANALE LOCALE (TRASMISSIONE / QSO MANUALE) ---
+window.startTone = function(freq) {
+    initPersistentOscillators();
+    if (!window.preGainLocal) return;
 
     const f = freq || window.currentTone || 600;
     const now = window.audioCtx.currentTime;
-    const osc = window.audioCtx.createOscillator();
-    const gain = window.audioCtx.createGain();
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(f, now);
+    // Cambiamo frequenza dolcemente (per evitare salti di fase)
+    window.preOscLocal.frequency.setTargetAtTime(f, now, 0.001);
 
-    gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.5, now + 0.012);
+    // Apriamo il volume con rampa esponenziale dolce (Standard Radio)
+    window.preGainLocal.gain.cancelScheduledValues(now);
+    window.preGainLocal.gain.setValueAtTime(window.preGainLocal.gain.value, now);
+    window.preGainLocal.gain.setTargetAtTime(0.5, now, 0.003); // Attack costante
 
-    osc.connect(gain);
-    gain.connect(window.audioCtx.destination);
-
-    osc.start(now);
-    window.manualOscillator = osc;
-    window.manualGain = gain;
+    // Integrazione QSO
+    if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
+        window.sendQsoEvent('DN', f);
+    }
 };
 
 window.stopTone = function() {
-    if (!window.manualOscillator) return;
+    if (!window.preGainLocal) return;
 
-    const osc = window.manualOscillator;
-    const gain = window.manualGain;
     const now = window.audioCtx.currentTime;
 
-    if (gain) {
-        gain.gain.cancelScheduledValues(now);
-        gain.gain.setValueAtTime(gain.gain.value, now);
-        // Rampa lineare di chiusura (12ms)
-        gain.gain.linearRampToValueAtTime(0, now + 0.012);
+    // Chiudiamo il volume con rampa esponenziale dolce
+    window.preGainLocal.gain.cancelScheduledValues(now);
+    window.preGainLocal.gain.setValueAtTime(window.preGainLocal.gain.value, now);
+    window.preGainLocal.gain.setTargetAtTime(0, now, 0.003); // Release costante
+
+    // Integrazione QSO
+    if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
+        window.sendQsoEvent('UP', 0);
     }
-
-    // STOP SINCRONIZZATO: Aspetta esattamente la fine della rampa (13ms)
-    setTimeout(() => {
-        try {
-            osc.stop();
-            osc.disconnect();
-        } catch(e) {}
-    }, 13);
-
-    window.manualOscillator = null;
-    window.manualGain = null;
 };
 
-// --- CANALE REMOTO (RICEZIONE P2P/RELAY) ---
+// --- CANALE REMOTO (RICEZIONE P2P / RELAY) ---
 window.startRemoteTone = function(freq) {
-    window.resumeAudioContext();
-
-    // Pulisce aggressivamente oscillatori remoti precedenti per evitare interferenze e scoppiettii
-    if (window.remoteOscillator) {
-        try {
-            window.remoteGain.gain.cancelScheduledValues(window.audioCtx.currentTime);
-            window.remoteOscillator.stop();
-            window.remoteOscillator.disconnect();
-        } catch(e) {}
-        window.remoteOscillator = null;
-        window.remoteGain = null;
-    }
+    initPersistentOscillators();
+    if (!window.preGainRemote) return;
 
     const f = freq || window.currentTone || 600;
     const now = window.audioCtx.currentTime;
-    const osc = window.audioCtx.createOscillator();
-    const gain = window.audioCtx.createGain();
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(f, now);
+    window.preOscRemote.frequency.setTargetAtTime(f, now, 0.001);
 
-    gain.gain.setValueAtTime(0, now);
-    // Unifichiamo alla rampa lineare da 12ms per massima pulizia
-    gain.gain.linearRampToValueAtTime(0.5, now + 0.012);
-
-    osc.connect(gain);
-    gain.connect(window.audioCtx.destination);
-
-    osc.start(now);
-    window.remoteOscillator = osc;
-    window.remoteGain = gain;
+    window.preGainRemote.gain.cancelScheduledValues(now);
+    window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, now);
+    window.preGainRemote.gain.setTargetAtTime(0.5, now, 0.003);
 
     const indicator = document.getElementById('qsoRxIndicator');
     if (indicator) indicator.style.backgroundColor = "var(--champ-color)";
 };
 
 window.stopRemoteTone = function() {
-    if (!window.remoteOscillator) return;
+    if (!window.preGainRemote) return;
 
-    const osc = window.remoteOscillator;
-    const gain = window.remoteGain;
     const now = window.audioCtx.currentTime;
 
-    if (gain) {
-        gain.gain.cancelScheduledValues(now);
-        gain.gain.setValueAtTime(gain.gain.value, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.012);
-    }
-
-    // STOP SINCRONIZZATO (13ms)
-    setTimeout(() => {
-        try {
-            osc.stop();
-            osc.disconnect();
-        } catch(e) {}
-    }, 13);
-
-    window.remoteOscillator = null;
-    window.remoteGain = null;
+    window.preGainRemote.gain.cancelScheduledValues(now);
+    window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, now);
+    window.preGainRemote.gain.setTargetAtTime(0, now, 0.003);
 
     const indicator = document.getElementById('qsoRxIndicator');
     if (indicator) indicator.style.backgroundColor = "#333";
 };
 
+// --- COMPATIBILITÀ E PULIZIA ---
+
 window.stopAllMorseAudio = function() {
     window.morsePlayToken++;
+
+    // Fermiamo gli oscillatori temporanei di playMorseAudio
     if (window.activeOscillators && window.activeOscillators.length > 0) {
         window.activeOscillators.forEach(osc => {
-            try {
-                osc.stop();
-                osc.disconnect();
-            } catch(e) { console.error("Audio Engine Disconnect Error:", e); }
+            try { osc.stop(); osc.disconnect(); } catch(e) {}
         });
         window.activeOscillators = [];
     }
-    window.stopTone();
-    window.stopRemoteTone();
+
+    // Chiudiamo istantaneamente i canali persistenti
+    if (window.preGainLocal) window.preGainLocal.gain.setTargetAtTime(0, window.audioCtx.currentTime, 0.001);
+    if (window.preGainRemote) window.preGainRemote.gain.setTargetAtTime(0, window.audioCtx.currentTime, 0.001);
 };
 
 window.startBluetoothKeepAlive = function() {
@@ -179,43 +165,40 @@ window.startBluetoothKeepAlive = function() {
         osc.type = 'sine';
         osc.frequency.value = 30;
         gain.gain.value = 0.0005;
-
-        osc.connect(gain);
-        gain.connect(window.audioCtx.destination);
+        osc.connect(gain).connect(window.audioCtx.destination);
         osc.start();
-
         window.btKeepAliveOsc = osc;
-    } catch(e) { console.error("Audio Engine Disconnect Error:", e); }
+    } catch(e) {}
 };
 
 window.playBeep = function(freq, duration) {
     window.resumeAudioContext();
-    window.startBluetoothKeepAlive();
-
     try {
         const osc = window.audioCtx.createOscillator();
         const gain = window.audioCtx.createGain();
         osc.frequency.value = freq;
-        osc.connect(gain);
-        gain.connect(window.audioCtx.destination);
+        osc.connect(gain).connect(window.audioCtx.destination);
         const time = window.audioCtx.currentTime;
         gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
-        gain.gain.setValueAtTime(0.5, time + duration - 0.005);
+        gain.gain.linearRampToValueAtTime(0.3, time + 0.005);
+        gain.gain.setValueAtTime(0.3, time + duration - 0.005);
         gain.gain.linearRampToValueAtTime(0, time + duration);
         osc.start(time);
-        osc.stop(time + duration);
-    } catch(e) { console.error("Audio Engine Disconnect Error:", e); }
+        osc.stop(time + duration + 0.1);
+    } catch(e) {}
 };
 
 window.playNotificationSound = function() {
-    if (gameRunning || isCourseMode) return;
-
+    if (typeof gameRunning !== 'undefined' && gameRunning) return;
     window.resumeAudioContext();
     window.playBeep(880, 0.08);
     setTimeout(() => window.playBeep(1100, 0.1), 120);
 };
 
+/**
+ * PLAY MORSE AUDIO (Esercizi Koch / Ricezione Parole)
+ * Mantenuto per compatibilità, ma ottimizzato con rampe dolci.
+ */
 window.playMorseAudio = function(text, wpm, forcePlay = false) {
     return new Promise(resolve => {
         window.resumeAudioContext();
@@ -245,15 +228,13 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
                     const osc = window.audioCtx.createOscillator();
                     const gain = window.audioCtx.createGain();
                     osc.frequency.value = window.currentTone || 600;
-                    osc.connect(gain);
-                    gain.connect(window.audioCtx.destination);
+                    osc.connect(gain).connect(window.audioCtx.destination);
 
                     const duration = (symbol === '-') ? (3 * charUnit) : charUnit;
 
                     gain.gain.setValueAtTime(0, time);
-                    gain.gain.linearRampToValueAtTime(0.5, time + 0.012); // Coerenza rampa
-                    gain.gain.setValueAtTime(0.5, time + duration - 0.012);
-                    gain.gain.linearRampToValueAtTime(0, time + duration);
+                    gain.gain.setTargetAtTime(0.5, time, 0.003); // Rampa dolce
+                    gain.gain.setTargetAtTime(0, time + duration - 0.003, 0.003); // Rampa dolce
 
                     osc.start(time);
                     osc.stop(time + duration + 0.05);
