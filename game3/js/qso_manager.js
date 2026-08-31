@@ -15,11 +15,6 @@ window.qsoState = {
     isInitialized: false,
     isRelayMode: false,
     relayStartTime: 0,
-    decoder: {
-        lastEdgeTime: 0,
-        sequence: [],
-        wordTimeout: null
-    },
     canvas: {
         ctx: null,
         animationId: null
@@ -65,16 +60,6 @@ window.initQsoManager = function() {
         };
     }
     window.qsoState.isInitialized = true;
-};
-
-window.toggleQsoLog = function() {
-    const box = document.getElementById('qsoDecoderBox');
-    const btn = document.getElementById('btnToggleQsoLog');
-    if (box && btn) {
-        const isHidden = box.style.display === 'none';
-        box.style.display = isHidden ? 'flex' : 'none';
-        btn.textContent = isHidden ? "Nascondi 🔼" : "Mostra Log 🔽";
-    }
 };
 
 window.startQsoVisualizer = function() {
@@ -163,15 +148,16 @@ window.listenForQsoPartner = function() {
                 const connection = window.qsoState.peer.connect(players[pId].peerId, { reliable: false, metadata: { name: window.myName } });
                 window.setupQsoDataChannel(connection);
 
-                // --- ASCOLTO RELAY OTTIMIZZATO (Stateless) ---
+                // --- ASCOLTO RELAY OTTIMIZZATO ---
                 const partnerRelayRef = db.ref(`rooms/${window.roomCode}/qso_relay/${partnerId}`);
                 partnerRelayRef.on('child_added', rSnap => {
                     const data = rSnap.val();
                     if (!data) return;
-                    // Suoniamo il segnale
-                    if (data.s === 1) window.playQsoRemoteTone(data.f, 0);
-                    else if (data.s === 0) window.stopQsoRemoteTone(0);
-                    // CANCELLAZIONE IMMEDIATA: Risparmio banda e storage
+                    if (data.s === 1) {
+                        if (typeof window.startRemoteTone === 'function') window.startRemoteTone(data.f);
+                    } else if (data.s === 0) {
+                        if (typeof window.stopRemoteTone === 'function') window.stopRemoteTone();
+                    }
                     rSnap.ref.remove();
                 });
             }
@@ -195,66 +181,18 @@ window.setupQsoDataChannel = function(c) {
             window.qsoState.timeOffset = Date.now() - (d.remoteTs + (rtt / 2));
         }
         else if (d.type === 'DN') {
-            const target = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
-            window.playQsoRemoteTone(d.f, Math.max(0.005, (target - Date.now()) / 1000));
+            if (typeof window.startRemoteTone === 'function') window.startRemoteTone(d.f);
         }
         else if (d.type === 'UP') {
-            const target = d.ts + window.qsoState.timeOffset + window.qsoState.playbackDelay;
-            window.stopQsoRemoteTone(Math.max(0.005, (target - Date.now()) / 1000));
+            if (typeof window.stopRemoteTone === 'function') window.stopRemoteTone();
         }
     });
     c.on('close', () => { window.updateQsoStatus("DISCONNESSO", "#e74c3c"); window.qsoState.conn = null; });
 };
 
-window.playQsoRemoteTone = function(freq, delaySec) {
-    if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
-    window.qsoState.rxIsTx = true;
-    if (!window.audioCtx) return;
-    const scheduleTime = window.audioCtx.currentTime + delaySec;
-    if (!window.preOscRemote) {
-        window.preOscRemote = window.audioCtx.createOscillator();
-        window.preGainRemote = window.audioCtx.createGain();
-        window.preOscRemote.connect(window.preGainRemote).connect(window.audioCtx.destination);
-        window.preGainRemote.gain.value = 0;
-        window.preOscRemote.start();
-    }
-    window.preOscRemote.frequency.setTargetAtTime(freq, scheduleTime, 0.002);
-    window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-    window.preGainRemote.gain.setTargetAtTime(0.5, scheduleTime, 0.015);
-
-    document.getElementById('qsoRxIndicator').style.backgroundColor = "var(--champ-color)";
-    if (window.qsoState.remoteWatchdog) clearTimeout(window.qsoState.remoteWatchdog);
-    window.qsoState.remoteWatchdog = setTimeout(() => { if (window.qsoState.rxIsTx) window.stopQsoRemoteTone(0); }, 2000);
-};
-
-window.stopQsoRemoteTone = function(delaySec) {
-    const scheduleTime = window.audioCtx.currentTime + delaySec;
-    if (window.preGainRemote) {
-        window.preGainRemote.gain.cancelScheduledValues(scheduleTime);
-        window.preGainRemote.gain.setTargetAtTime(0, scheduleTime, 0.015);
-    }
-    window.qsoState.rxIsTx = false;
-    document.getElementById('qsoRxIndicator').style.backgroundColor = "#333";
-};
-
-window.finalizeQsoChar = function() {
-    const code = window.qsoState.decoder.sequence.join(""); if (!code) return;
-    let char = "?";
-    for (let c in window.morseDict) { if (window.morseDict[c] === code) { char = c; break; } }
-    window.appendQsoText(char);
-    window.qsoState.decoder.sequence = [];
-};
-
-window.appendQsoText = function(t) {
-    window.qsoState.decodedText += t;
-    const el = document.getElementById('qsoDecodedText');
-    if (el) { el.textContent = window.qsoState.decodedText; el.scrollTop = el.scrollHeight; }
-};
-
 window.sendQsoEvent = function(type, freq) {
     const now = Date.now();
     if (window.qsoState.conn?.open) window.qsoState.conn.send({ type, f: freq, ts: now });
-    // Invio via Firebase (OTTIMIZZATO)
     if ((window.qsoState.isRelayMode || !window.qsoState.conn) && window.roomCode) {
         db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).push({
             s: (type === 'DN' ? 1 : 0),
@@ -281,6 +219,6 @@ window.exitQsoMode = function() {
     window.qsoState.conn = null; window.qsoState.peer = null;
     window.qsoState.isInitialized = false;
     window.stopTone();
-    if (window.preGainRemote) window.preGainRemote.gain.value = 0;
+    window.stopRemoteTone();
     window.exitRoomCleanly(false, true);
 };

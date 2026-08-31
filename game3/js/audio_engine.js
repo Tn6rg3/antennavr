@@ -11,12 +11,13 @@ window.morseDict = {
 window.activeOscillators = [];
 window.manualOscillator = null;
 window.manualGain = null;
+window.remoteOscillator = null;
+window.remoteGain = null;
 window.morsePlayToken = 0;
 window.btKeepAliveOsc = null;
 
 /**
  * FUNZIONE DI RIPRISTINO AUDIO (SPECIFICA PER iOS/iPhone)
- * Tenta di riattivare il contesto audio se sospeso o bloccato.
  */
 window.resumeAudioContext = function() {
     try {
@@ -24,20 +25,14 @@ window.resumeAudioContext = function() {
             window.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
         }
         if (window.audioCtx.state === 'suspended' || window.audioCtx.state === 'interrupted') {
-            window.audioCtx.resume().then(() => {
-                console.log("AudioEngine: Pacemaker riattivato. Stato:", window.audioCtx.state);
-            }).catch(err => {
-                // Silenziamo l'errore se è causato da mancanza di interazione (normale in background)
-                if (err.name !== 'NotAllowedError') console.warn("AudioEngine: Resume posticipato (attesa tocco).");
-            });
+            window.audioCtx.resume();
         }
-    } catch(e) { console.error("AudioEngine: Errore critico ripristino:", e); }
+    } catch(e) { console.error("AudioEngine: Error resuming context:", e); }
 };
 
+// --- CANALE LOCALE (TRASMISSIONE) ---
 window.startTone = function(freq) {
     window.resumeAudioContext();
-
-
     if (window.manualOscillator) return;
 
     const f = freq || window.currentTone || 600;
@@ -45,10 +40,11 @@ window.startTone = function(freq) {
     const gain = window.audioCtx.createGain();
 
     osc.type = 'sine';
-    osc.frequency.value = f;
+    osc.frequency.setValueAtTime(f, window.audioCtx.currentTime);
 
     gain.gain.setValueAtTime(0, window.audioCtx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.5, window.audioCtx.currentTime + 0.005);
+    // Rampa dolce da 15ms per eliminare scoppiettii
+    gain.gain.setTargetAtTime(0.5, window.audioCtx.currentTime, 0.008);
 
     osc.connect(gain);
     gain.connect(window.audioCtx.destination);
@@ -57,9 +53,8 @@ window.startTone = function(freq) {
     window.manualOscillator = osc;
     window.manualGain = gain;
 
-    // --- QSO INTEGRATION ---
-    if (typeof window.currentMode !== 'undefined' && window.currentMode === 'qso') {
-        if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('DN', f);
+    if (window.window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
+        window.sendQsoEvent('DN', f);
     }
 };
 
@@ -68,27 +63,78 @@ window.stopTone = function() {
 
     const osc = window.manualOscillator;
     const gain = window.manualGain;
-
     const now = window.audioCtx.currentTime;
+
     if (gain) {
-        gain.gain.setValueAtTime(gain.gain.value, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.005);
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setTargetAtTime(0, now, 0.008);
     }
 
     setTimeout(() => {
         try {
             osc.stop();
             osc.disconnect();
-        } catch(e) { console.error("Audio Engine Disconnect Error:", e); }
-    }, 20);
+        } catch(e) {}
+    }, 60);
 
     window.manualOscillator = null;
     window.manualGain = null;
 
-    // --- QSO INTEGRATION ---
-    if (typeof window.currentMode !== 'undefined' && window.currentMode === 'qso') {
-        if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('UP', 0);
+    if (window.window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
+        window.sendQsoEvent('UP', 0);
     }
+};
+
+// --- CANALE REMOTO (RICEZIONE P2P/RELAY) ---
+window.startRemoteTone = function(freq) {
+    window.resumeAudioContext();
+    if (window.remoteOscillator) return;
+
+    const f = freq || window.currentTone || 600;
+    const osc = window.audioCtx.createOscillator();
+    const gain = window.audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(f, window.audioCtx.currentTime);
+
+    gain.gain.setValueAtTime(0, window.audioCtx.currentTime);
+    gain.gain.setTargetAtTime(0.5, window.audioCtx.currentTime, 0.008);
+
+    osc.connect(gain);
+    gain.connect(window.audioCtx.destination);
+
+    osc.start();
+    window.remoteOscillator = osc;
+    window.remoteGain = gain;
+
+    const indicator = document.getElementById('qsoRxIndicator');
+    if (indicator) indicator.style.backgroundColor = "var(--champ-color)";
+};
+
+window.stopRemoteTone = function() {
+    if (!window.remoteOscillator) return;
+
+    const osc = window.remoteOscillator;
+    const gain = window.remoteGain;
+    const now = window.audioCtx.currentTime;
+
+    if (gain) {
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setTargetAtTime(0, now, 0.008);
+    }
+
+    setTimeout(() => {
+        try {
+            osc.stop();
+            osc.disconnect();
+        } catch(e) {}
+    }, 60);
+
+    window.remoteOscillator = null;
+    window.remoteGain = null;
+
+    const indicator = document.getElementById('qsoRxIndicator');
+    if (indicator) indicator.style.backgroundColor = "#333";
 };
 
 window.stopAllMorseAudio = function() {
@@ -102,8 +148,8 @@ window.stopAllMorseAudio = function() {
         });
         window.activeOscillators = [];
     }
-    // Fermiamo anche il tono manuale se attivo durante stopAll
     window.stopTone();
+    window.stopRemoteTone();
 };
 
 window.startBluetoothKeepAlive = function() {
@@ -114,8 +160,8 @@ window.startBluetoothKeepAlive = function() {
         const osc = window.audioCtx.createOscillator();
         const gain = window.audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.value = 30; // Frequenza infrasuono (non udibile)
-        gain.gain.value = 0.0005; // Volume impercettibile ma sufficiente per il chip BT
+        osc.frequency.value = 30;
+        gain.gain.value = 0.0005;
 
         osc.connect(gain);
         gain.connect(window.audioCtx.destination);
@@ -146,7 +192,6 @@ window.playBeep = function(freq, duration) {
 };
 
 window.playNotificationSound = function() {
-    // DISATTIVIAMO LE NOTIFICHE SONORE DURANTE IL GIOCO
     if (gameRunning || isCourseMode) return;
 
     window.resumeAudioContext();
@@ -182,19 +227,19 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
 
                     const osc = window.audioCtx.createOscillator();
                     const gain = window.audioCtx.createGain();
-                    osc.frequency.value = currentTone;
+                    osc.frequency.value = window.currentTone || 600;
                     osc.connect(gain);
                     gain.connect(window.audioCtx.destination);
 
                     const duration = (symbol === '-') ? (3 * charUnit) : charUnit;
 
                     gain.gain.setValueAtTime(0, time);
-                    gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
-                    gain.gain.setValueAtTime(0.5, time + duration - 0.005);
+                    gain.gain.linearRampToValueAtTime(0.5, time + 0.012); // Coerenza rampa
+                    gain.gain.setValueAtTime(0.5, time + duration - 0.012);
                     gain.gain.linearRampToValueAtTime(0, time + duration);
 
                     osc.start(time);
-                    osc.stop(time + duration);
+                    osc.stop(time + duration + 0.05);
                     window.activeOscillators.push(osc);
 
                     time += duration;
