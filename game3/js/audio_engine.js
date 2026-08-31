@@ -36,25 +36,27 @@ window.startTone = function(freq) {
     if (window.manualOscillator) return;
 
     const f = freq || window.currentTone || 600;
+    const now = window.audioCtx.currentTime;
     const osc = window.audioCtx.createOscillator();
     const gain = window.audioCtx.createGain();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(f, window.audioCtx.currentTime);
+    osc.frequency.setValueAtTime(f, now);
 
-    gain.gain.setValueAtTime(0, window.audioCtx.currentTime);
-    // Rampa dolce da 15ms per eliminare scoppiettii
-    gain.gain.setTargetAtTime(0.5, window.audioCtx.currentTime, 0.008);
+    // Usa la stessa rampa lineare pulita degli esercizi (12ms)
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.5, now + 0.012);
 
     osc.connect(gain);
     gain.connect(window.audioCtx.destination);
 
-    osc.start();
+    osc.start(now);
     window.manualOscillator = osc;
     window.manualGain = gain;
 
+    // QSO: Invio asincrono per non disturbare l'audio locale
     if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
-        window.sendQsoEvent('DN', f);
+        setTimeout(() => { if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('DN', f); }, 0);
     }
 };
 
@@ -67,7 +69,8 @@ window.stopTone = function() {
 
     if (gain) {
         gain.gain.cancelScheduledValues(now);
-        gain.gain.setTargetAtTime(0, now, 0.008);
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.012);
     }
 
     setTimeout(() => {
@@ -81,7 +84,7 @@ window.stopTone = function() {
     window.manualGain = null;
 
     if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
-        window.sendQsoEvent('UP', 0);
+        setTimeout(() => { if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('UP', 0); }, 0);
     }
 };
 
