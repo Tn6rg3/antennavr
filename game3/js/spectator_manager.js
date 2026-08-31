@@ -56,39 +56,23 @@ window.watchSpecificRoom = function(code, targetName) {
         }
 
         // --- SINCRONIZZAZIONE TABELLA (MATCH DETAILS) ---
-        // Se non abbiamo ancora un listener specifico per i dettagli dell'host, lo creiamo ora
+        // OTTIMIZZAZIONE: Carichiamo lo storico completo solo una volta all'ingresso
         if (!hostDetailsListener && hostId) {
-            hostDetailsListener = roomRef.child(`players/${hostId}/matchDetails`).on('value', dSnap => {
-                if (!dSnap.exists()) return;
-                const matchDetails = dSnap.val();
-                if (els.tableBody) {
-                    els.tableBody.innerHTML = "";
-                    matchDetails.forEach(row => {
-                        const tr = document.createElement('tr');
-                        const tdTyped = document.createElement('td');
-                        tdTyped.textContent = row.typed || "-";
+            console.log("Spectator: Initializing Incremental Sync for Host:", hostId);
 
-                        const tdReal = document.createElement('td');
-                        const bReal = document.createElement('b');
-                        if (typeof window.renderDiffSecure === 'function') window.renderDiffSecure(bReal, row.real, row.typed || "");
-                        else bReal.textContent = row.real;
-                        tdReal.appendChild(bReal);
-
-                        const tdPoints = document.createElement('td');
-                        tdPoints.style.color = row.points > 0 ? "#4caf50" : "#d32f2f";
-                        tdPoints.style.fontWeight = "bold";
-                        tdPoints.textContent = row.points;
-
-                        tr.appendChild(tdTyped);
-                        tr.appendChild(tdReal);
-                        tr.appendChild(tdPoints);
-                        els.tableBody.appendChild(tr);
-                    });
-
-                    setTimeout(() => {
-                        if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
-                    }, 50);
+            // 1. Caricamento iniziale dei dati presenti (una sola volta)
+            roomRef.child(`players/${hostId}/matchDetailsFull`).once('value', initSnap => {
+                if (els.tableBody) els.tableBody.innerHTML = "";
+                if (initSnap.exists()) {
+                    initSnap.val().forEach(row => window.appendSpectatorRow(row));
                 }
+            });
+
+            // 2. Ascolto solo dell'ULTIMO aggiornamento (Risparmio download massiccio)
+            hostDetailsListener = roomRef.child(`players/${hostId}/lastUpdate`).on('value', dSnap => {
+                const lastRow = dSnap.val();
+                if (!lastRow) return;
+                window.appendSpectatorRow(lastRow);
             });
         }
 
@@ -124,6 +108,39 @@ window.watchSpecificRoom = function(code, targetName) {
         db.ref(`rooms/${roomCode}/liveAudio`).off('value', onAudioChange);
         mySpectatorRef.remove();
     };
+};
+
+window.appendSpectatorRow = function(row) {
+    if (!els.tableBody) return;
+
+    // Evitiamo duplicati (controllo base se la parola reale è l'ultima inserita)
+    const rows = els.tableBody.querySelectorAll('tr');
+    if (rows.length > 0) {
+        const lastRow = rows[rows.length - 1];
+        if (lastRow.cells[1] && lastRow.cells[1].textContent === row.real && lastRow.cells[0].textContent === (row.typed || "-")) return;
+    }
+
+    const tr = document.createElement('tr');
+    const tdTyped = document.createElement('td');
+    tdTyped.textContent = row.typed || "-";
+
+    const tdReal = document.createElement('td');
+    const bReal = document.createElement('b');
+    if (typeof window.renderDiffSecure === 'function') window.renderDiffSecure(bReal, row.real, row.typed || "");
+    else bReal.textContent = row.real;
+    tdReal.appendChild(bReal);
+
+    const tdPoints = document.createElement('td');
+    tdPoints.style.color = row.points > 0 ? "#4caf50" : "#d32f2f";
+    tdPoints.style.fontWeight = "bold";
+    tdPoints.textContent = row.points;
+
+    tr.appendChild(tdTyped);
+    tr.appendChild(tdReal);
+    tr.appendChild(tdPoints);
+    els.tableBody.appendChild(tr);
+
+    if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
 };
 
 window.stopWatchingCleanly = function() {

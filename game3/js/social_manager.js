@@ -412,7 +412,8 @@ window.listenToOnlineUsers = function() {
     if (listeners.presence) return;
 
     if (els.onlineUsersList) els.onlineUsersList.innerHTML = '';
-    const presenceRef = db.ref('presence').limitToLast(50);
+    // OTTIMIZZAZIONE: Carichiamo solo i 25 utenti più attivi invece di tutti (risparmio download massiccio)
+    const presenceRef = db.ref('presence').limitToLast(25);
 
     const onAdded = presenceRef.on('child_added', snap => {
         if (snap.key !== myId) window.renderOrUpdateUserListItem(snap.key, snap.val());
