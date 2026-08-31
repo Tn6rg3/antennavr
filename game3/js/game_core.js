@@ -1590,45 +1590,60 @@ window.getLevenshteinDistance = function(a, b) {
 };
 
 window.testVoice = function() {
-    const synth = window.speechSynthesis || window.webkitSpeechSynthesis;
-    if (!synth) return showToast("Sintesi vocale non supportata dal browser.");
+    const synth = window.speechSynthesis || window.webkitSpeechSynthesis || (window.navigator && window.navigator.speechSynthesis);
+    if (!synth) {
+        console.error("TTS: No synthesis object found on window or navigator.");
+        return showToast("Errore: API Voce non trovata nel browser.");
+    }
 
-    // Lo sblocco avviene tramite il click dell'utente
-    const text = (currentLang === 'it') ? "Sintesi vocale attiva" : "Voice synthesis active";
+    // Forza caricamento voci
+    synth.getVoices();
 
-    // Salviamo temporaneamente lo stato e forziamo la voce
-    const oldMode = window.isSpeakMode;
-    window.isSpeakMode = true;
-    window.speakWord(text);
-    window.isSpeakMode = oldMode;
+    const text = (currentLang === 'it') ? "Sintesi vocale pronta" : "Voice synthesis ready";
 
-    showToast("Prova in corso...");
+    try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = (currentLang === 'it') ? 'it-IT' : 'en-US';
+        utterance.volume = 1.0;
+        utterance.rate = 1.0;
+
+        synth.cancel();
+        synth.speak(utterance);
+        showToast("Prova inviata...");
+    } catch (e) {
+        console.error("TTS Test Error:", e);
+        showToast("Errore avvio voce: " + e.message);
+    }
 };
 
 window.speakWord = function(text) {
-    const synth = window.speechSynthesis || window.webkitSpeechSynthesis;
+    const synth = window.speechSynthesis || window.webkitSpeechSynthesis || (window.navigator && window.navigator.speechSynthesis);
     if (!window.isSpeakMode || !synth) return;
     if (!text) return;
 
     // Reset immediato per Telegram Mobile
     synth.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text.replace(/[\/\=]/g, " ").toLowerCase());
-    const langCode = (currentLang === 'it') ? 'it-IT' : 'en-US';
+    try {
+        const utterance = new SpeechSynthesisUtterance(text.replace(/[\/\=]/g, " ").toLowerCase());
+        const langCode = (currentLang === 'it') ? 'it-IT' : 'en-US';
 
-    utterance.lang = langCode;
-    utterance.rate = window.voiceRate || 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
+        utterance.lang = langCode;
+        utterance.rate = window.voiceRate || 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
 
-    // Recupero voci dinamico (Fix Telegram)
-    const voices = synth.getVoices();
-    if (voices.length > 0) {
-        const preferredVoice = voices.find(v => v.lang === langCode || v.lang.startsWith(langCode.split('-')[0]));
-        if (preferredVoice) utterance.voice = preferredVoice;
+        // Recupero voci dinamico (Fix Telegram)
+        const voices = synth.getVoices();
+        if (voices.length > 0) {
+            const preferredVoice = voices.find(v => v.lang === langCode || v.lang.startsWith(langCode.split('-')[0]));
+            if (preferredVoice) utterance.voice = preferredVoice;
+        }
+
+        synth.speak(utterance);
+    } catch(e) {
+        console.error("TTS Speak Error:", e);
     }
-
-    synth.speak(utterance);
 };
 
 window.renderDiffSecure = function(container, real, typed) {
