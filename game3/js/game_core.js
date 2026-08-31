@@ -1592,10 +1592,11 @@ window.getLevenshteinDistance = function(a, b) {
 window.speakWord = function(text) {
     if (!window.isSpeakMode || !('speechSynthesis' in window)) return;
 
-    // Reset immediato
-    window.speechSynthesis.cancel();
-
     if (!text) return;
+
+    // Su mobile cancel() può dare problemi se chiamato troppo spesso,
+    // lo usiamo solo se necessario per pulire la coda
+    if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
 
     const cleanText = text.replace(/[\/\=]/g, " ").toLowerCase();
     const utterance = new SpeechSynthesisUtterance(cleanText);
@@ -1610,7 +1611,10 @@ window.speakWord = function(text) {
         utterance.voice = voices.find(v => v.lang.startsWith(utterance.lang.split('-')[0])) || voices[0];
     }
 
-    window.speechSynthesis.speak(utterance);
+    // Piccolissimo ritardo per non sovrapporsi al suono del tasto
+    setTimeout(() => {
+        window.speechSynthesis.speak(utterance);
+    }, 100);
 };
 
 window.renderDiffSecure = function(container, real, typed) {

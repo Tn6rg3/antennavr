@@ -220,7 +220,22 @@ window.checkGameTypeUI = function() {
 
     // --- NUOVA LOGICA ASCOLTO (TTS) ---
     const isSpeakAvailable = isSingle && selectedMode === 'standard';
-    if (containers.speak) containers.speak.style.display = isSpeakAvailable ? 'flex' : 'none';
+    if (containers.speak) {
+        containers.speak.style.display = isSpeakAvailable ? 'flex' : 'none';
+        // Listener per sblocco voce su mobile al tocco della checkbox
+        const chk = document.getElementById('speakModeCheckbox');
+        if (chk && !chk.dataset.listenerAdded) {
+            chk.dataset.listenerAdded = "true";
+            chk.addEventListener('change', () => {
+                if (chk.checked && ('speechSynthesis' in window)) {
+                    console.log("TTS: Unlocking audio on checkbox toggle...");
+                    const unlock = new SpeechSynthesisUtterance(" ");
+                    unlock.volume = 0.001;
+                    window.speechSynthesis.speak(unlock);
+                }
+            });
+        }
+    }
     if (containers.voiceRate) containers.voiceRate.style.display = isSpeakAvailable ? 'flex' : 'none';
 
     if (containers.arcadeBtn) {
