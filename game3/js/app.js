@@ -503,6 +503,13 @@ async function startApp() {
     // 2. Proseguiamo con l'avvio normale
     myName = tgUser.first_name;
     myId = tgUser.id.toString();
+
+    // --- REGISTRAZIONE IDENTITÀ IMMEDIATA (Fix Permission Denied) ---
+    if (firebase.auth().currentUser) {
+        db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(myId)
+            .then(() => console.log("App: Identità mappata con successo."))
+            .catch(e => console.warn("App: Errore mappatura iniziale:", e));
+    }
     // --- TELEGRAM TTS FIX: Svegliamo il motore vocale ---
     if ('speechSynthesis' in window) {
         window.speechSynthesis.getVoices();
