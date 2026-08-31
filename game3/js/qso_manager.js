@@ -7,7 +7,7 @@ window.qsoState = {
     partnerName: '---',
     status: 'DISCONNESSO',
     clockOffset: 0,
-    playbackDelay: 0.4, // Buffer a 400ms per stabilità totale
+    playbackDelay: 0.8, // Buffer a 800ms per stabilità totale
     syncInterval: null,
     hbInterval: null,   // Timer Heartbeat
     rxIsTx: false,
