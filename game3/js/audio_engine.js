@@ -43,9 +43,9 @@ window.startTone = function(freq) {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(f, now);
 
-    // Usa la stessa rampa lineare pulita degli esercizi (12ms)
+    // RAMPA ANTI-CLICK PROFESSIONALE (Exponential 15ms)
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.5, now + 0.012);
+    gain.gain.setTargetAtTime(0.5, now, 0.005);
 
     osc.connect(gain);
     gain.connect(window.audioCtx.destination);
@@ -54,9 +54,9 @@ window.startTone = function(freq) {
     window.manualOscillator = osc;
     window.manualGain = gain;
 
-    // QSO: Invio asincrono per non disturbare l'audio locale
+    // QSO: Invio asincrono ritardato per proteggere la purezza audio locale
     if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
-        setTimeout(() => { if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('DN', f); }, 0);
+        setTimeout(() => { if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('DN', f); }, 5);
     }
 };
 
@@ -69,8 +69,7 @@ window.stopTone = function() {
 
     if (gain) {
         gain.gain.cancelScheduledValues(now);
-        gain.gain.setValueAtTime(gain.gain.value, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.012);
+        gain.gain.setTargetAtTime(0, now, 0.005); // Rampa dolce in uscita
     }
 
     setTimeout(() => {
@@ -78,13 +77,13 @@ window.stopTone = function() {
             osc.stop();
             osc.disconnect();
         } catch(e) {}
-    }, 60);
+    }, 80);
 
     window.manualOscillator = null;
     window.manualGain = null;
 
     if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
-        setTimeout(() => { if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('UP', 0); }, 0);
+        setTimeout(() => { if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('UP', 0); }, 5);
     }
 };
 

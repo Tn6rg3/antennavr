@@ -161,13 +161,21 @@ window.setupQsoDataChannel = function(c) {
 
 window.sendQsoEvent = function(type, freq) {
     const now = Date.now();
+    // 1. Invio P2P (Prioritario e Leggero)
     if (window.qsoState.conn?.open) window.qsoState.conn.send({ type, f: freq, ts: now });
+
+    // 2. Invio Firebase (Relay - Pesante)
     if ((window.qsoState.isRelayMode || !window.qsoState.conn) && window.roomCode) {
-        db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).push({
-            s: (type === 'DN' ? 1 : 0),
-            f: freq,
-            ts: now
-        });
+        // Differiamo l'operazione di 10ms per non disturbare il thread audio
+        setTimeout(() => {
+            if (window.roomCode) {
+                db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).push({
+                    s: (type === 'DN' ? 1 : 0),
+                    f: freq,
+                    ts: now
+                });
+            }
+        }, 10);
     }
 };
 
