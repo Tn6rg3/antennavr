@@ -1864,10 +1864,41 @@ window.handleWordSubmission = function(userWord) {
     const lastEntry = { real: currentWord, typed: userWord, points: points, wpm: activeWpmForThisWord, ms: reactionMs, isRetry: window.isPerfectionRetry };
     matchDetailsArray.push(lastEntry);
 
-    // ... (UI Tabella esistente) ...
+    // UI Tabella
+    if (window.currentMode !== 'pingpong') {
+        const tr = document.createElement('tr');
+        if (window.isPerfectionRetry) tr.style.background = "rgba(76, 175, 80, 0.05)";
+        const tdTyped = document.createElement('td'); tdTyped.textContent = userWord || "-";
+        const tdReal = document.createElement('td');
 
+        // MODIFICA PERFEZIONE: Se è un errore, non mostriamo la parola reale (Nascosta 🔒)
+        if (window.currentMode === 'perfection' && (levDist > 0 || usedReplay)) {
+            tdReal.innerHTML = `<span style="opacity:0.5; font-size:0.9em; font-style:italic;">[Nascosto 🔒]</span>`;
+        } else {
+            window.renderDiffSecure(tdReal, currentWord, userWord);
+        }
+
+        const tdPoints = document.createElement('td');
+        tdPoints.style.textAlign = 'center';
+        tdPoints.style.color = scoreColor;
+        tdPoints.style.fontWeight = 'bold';
+        tdPoints.innerHTML = (window.currentMode === 'chars' ? points : (usedReplay ? '0' : (points > 0 ? "+"+points : points))) + (window.isPerfectionRetry ? " 🔄" : "");
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
+        if (els.tableBody) { els.tableBody.appendChild(tr); els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight; }
+    }
+
+    if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
+
+    // FINE PAROLA: Avanzamento e Sincronizzazione
     if (window.currentMode === 'pingpong') {
-        // ... (Logica pingpong esistente) ...
+        wordIndex++;
+        db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
+            if (d) {
+                d.senderId = myId; d.word = ''; d.wordsPlayed = (d.wordsPlayed || 0) + 1;
+                d.lastGuess = { id: Date.now(), real: currentWord, typed: userWord, points: points };
+            }
+            return d;
+        });
     } else {
         if (!window.isPerfectionRetry) {
             wordIndex++;
