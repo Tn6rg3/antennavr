@@ -75,29 +75,25 @@ window.loadUserRatings = function() {
             if (!modeCfg) return;
 
             const div = document.createElement('div');
-            div.style.cssText = "display:flex; align-items:center; padding:6px 10px; background:rgba(255,255,255,0.05); border-radius:10px; margin-bottom:6px; border:1px solid rgba(255,255,255,0.05); overflow:hidden; width:100%; box-sizing:border-box;";
+            div.style.cssText = "display:grid; grid-template-columns: 1fr 35px 35px; align-items:center; gap:10px; padding:10px 12px; background:rgba(255,255,255,0.05); border-radius:12px; margin-bottom:8px; border:1px solid rgba(255,255,255,0.08); width:100%; box-sizing:border-box;";
 
             const info = document.createElement('div');
-            info.style.cssText = "flex-grow:1; min-width: 0; text-align: left; line-height:1.2;";
-            info.innerHTML = `<b style="color:var(--link-color); font-size:0.85em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">${modeCfg.titleIt}</b><small style="opacity:0.6; font-size:0.65em; text-transform:uppercase;">${type}</small>`;
-
-            const actions = document.createElement('div');
-            actions.style.cssText = "display:flex; gap:8px; flex-shrink:0; margin-left:10px;";
+            info.style.cssText = "min-width: 0; text-align: left; overflow:hidden;";
+            info.innerHTML = `<b style="color:var(--link-color); font-size:0.85em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">${modeCfg.titleIt}</b><small style="opacity:0.6; font-size:0.65em; text-transform:uppercase; display:block;">${type}</small>`;
 
             const btnUp = document.createElement('button');
             btnUp.innerHTML = '👍';
-            btnUp.style.cssText = `background:none; border:none; font-size:1.1em; cursor:pointer; padding:0; transition:all 0.2s; opacity:${vote === 'up' ? '1' : '0.2'}; transform:${vote === 'up' ? 'scale(1.1)' : 'scale(0.9)'};`;
+            btnUp.style.cssText = `background:none; border:none; font-size:1.2em; cursor:pointer; padding:0; margin:0; transition:all 0.2s; opacity:${vote === 'up' ? '1' : '0.15'}; transform:${vote === 'up' ? 'scale(1.1)' : 'scale(0.9)'};`;
             btnUp.onclick = () => window.updateRating(key, 'up');
 
             const btnDown = document.createElement('button');
             btnDown.innerHTML = '👎';
-            btnDown.style.cssText = `background:none; border:none; font-size:1.1em; cursor:pointer; padding:0; transition:all 0.2s; opacity:${vote === 'down' ? '1' : '0.2'}; transform:${vote === 'down' ? 'scale(1.1)' : 'scale(0.9)'};`;
+            btnDown.style.cssText = `background:none; border:none; font-size:1.2em; cursor:pointer; padding:0; margin:0; transition:all 0.2s; opacity:${vote === 'down' ? '1' : '0.15'}; transform:${vote === 'down' ? 'scale(1.1)' : 'scale(0.9)'};`;
             btnDown.onclick = () => window.updateRating(key, 'down');
 
-            actions.appendChild(btnUp);
-            actions.appendChild(btnDown);
             div.appendChild(info);
-            div.appendChild(actions);
+            div.appendChild(btnUp);
+            div.appendChild(btnDown);
             container.appendChild(div);
         });
     });
