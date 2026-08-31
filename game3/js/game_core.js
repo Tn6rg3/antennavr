@@ -1590,54 +1590,59 @@ window.getLevenshteinDistance = function(a, b) {
 };
 
 window.testVoice = function() {
-    const synth = window.speechSynthesis || window.webkitSpeechSynthesis || speechSynthesis || (navigator && navigator.speechSynthesis);
-    const Utterance = window.SpeechSynthesisUtterance || window.webkitSpeechSynthesisUtterance || SpeechSynthesisUtterance;
-
-    if (!synth || !Utterance) {
-        return showToast(`Errore: Motore vocale non trovato (${!synth?'S-No':''}${!Utterance?'U-No':''})`);
+    const synth = window.speechSynthesis || window.webkitSpeechSynthesis || (window.navigator && window.navigator.speechSynthesis);
+    if (!synth) {
+        console.error("TTS: No synthesis object found on window or navigator.");
+        return showToast("Errore: API Voce non trovata nel browser.");
     }
 
-    try {
-        synth.cancel();
-        const text = (currentLang === 'it') ? "Sintesi vocale pronta" : "Voice synthesis ready";
-        const msg = new Utterance(text);
-        msg.lang = (currentLang === 'it') ? 'it-IT' : 'en-US';
-        msg.volume = 1.0;
-        msg.rate = 1.0;
+    // Forza caricamento voci
+    synth.getVoices();
 
-        synth.speak(msg);
+    const text = (currentLang === 'it') ? "Sintesi vocale pronta" : "Voice synthesis ready";
+
+    try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = (currentLang === 'it') ? 'it-IT' : 'en-US';
+        utterance.volume = 1.0;
+        utterance.rate = 1.0;
+
+        synth.cancel();
+        synth.speak(utterance);
         showToast("Prova inviata...");
     } catch (e) {
-        showToast("Errore avvio: " + e.message);
+        console.error("TTS Test Error:", e);
+        showToast("Errore avvio voce: " + e.message);
     }
 };
 
 window.speakWord = function(text) {
-    const synth = window.speechSynthesis || window.webkitSpeechSynthesis || speechSynthesis || (navigator && navigator.speechSynthesis);
-    const Utterance = window.SpeechSynthesisUtterance || window.webkitSpeechSynthesisUtterance || SpeechSynthesisUtterance;
+    const synth = window.speechSynthesis || window.webkitSpeechSynthesis || (window.navigator && window.navigator.speechSynthesis);
+    if (!window.isSpeakMode || !synth) return;
+    if (!text) return;
 
-    if (!window.isSpeakMode || !synth || !Utterance || !text) return;
-
+    // Reset immediato per Telegram Mobile
     synth.cancel();
+
     try {
-        const cleanText = text.replace(/[\/\=]/g, " ").toLowerCase();
-        const msg = new Utterance(cleanText);
+        const utterance = new SpeechSynthesisUtterance(text.replace(/[\/\=]/g, " ").toLowerCase());
         const langCode = (currentLang === 'it') ? 'it-IT' : 'en-US';
 
-        msg.lang = langCode;
-        msg.rate = window.voiceRate || 1.0;
-        msg.pitch = 1.0;
-        msg.volume = 1.0;
+        utterance.lang = langCode;
+        utterance.rate = window.voiceRate || 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
 
+        // Recupero voci dinamico (Fix Telegram)
         const voices = synth.getVoices();
         if (voices.length > 0) {
             const preferredVoice = voices.find(v => v.lang === langCode || v.lang.startsWith(langCode.split('-')[0]));
-            if (preferredVoice) msg.voice = preferredVoice;
+            if (preferredVoice) utterance.voice = preferredVoice;
         }
 
-        synth.speak(msg);
+        synth.speak(utterance);
     } catch(e) {
-        console.error("TTS Error:", e);
+        console.error("TTS Speak Error:", e);
     }
 };
 
