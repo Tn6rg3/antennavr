@@ -1590,51 +1590,27 @@ window.getLevenshteinDistance = function(a, b) {
 };
 
 window.speakWord = function(text) {
-    if (!('speechSynthesis' in window)) {
-        console.error("TTS: SpeechSynthesis not supported in this browser.");
-        return;
-    }
+    if (!window.isSpeakMode || !('speechSynthesis' in window)) return;
 
-    // Fermiamo eventuali pronunce in corso
+    // Reset immediato
     window.speechSynthesis.cancel();
 
     if (!text) return;
 
-    // Pulizia testo
     const cleanText = text.replace(/[\/\=]/g, " ").toLowerCase();
-    console.log("TTS: Preparing to speak ->", cleanText);
-
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    const langCode = (currentLang === 'it') ? 'it-IT' : 'en-US';
 
-    utterance.lang = langCode;
+    utterance.lang = (currentLang === 'it') ? 'it-IT' : 'en-US';
     utterance.rate = window.voiceRate || 1.0;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
-    // Gestione eventi per debug
-    utterance.onstart = () => console.log("TTS: Start speaking...");
-    utterance.onerror = (e) => console.error("TTS: Error during speaking:", e);
-    utterance.onend = () => console.log("TTS: Finished speaking.");
-
-    const doSpeak = () => {
-        const voices = window.speechSynthesis.getVoices();
-        if (voices.length > 0) {
-            const preferredVoice = voices.find(v => v.lang.startsWith(langCode.split('-')[0])) || voices[0];
-            utterance.voice = preferredVoice;
-        }
-        window.speechSynthesis.speak(utterance);
-    };
-
-    if (window.speechSynthesis.getVoices().length === 0) {
-        window.speechSynthesis.onvoiceschanged = () => {
-            window.speechSynthesis.onvoiceschanged = null;
-            doSpeak();
-        };
-        setTimeout(doSpeak, 100);
-    } else {
-        doSpeak();
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+        utterance.voice = voices.find(v => v.lang.startsWith(utterance.lang.split('-')[0])) || voices[0];
     }
+
+    window.speechSynthesis.speak(utterance);
 };
 
 window.renderDiffSecure = function(container, real, typed) {
@@ -1715,6 +1691,12 @@ if (els.permanentGameInput) {
         if (e.key === 'Enter' && inputActive && gameRunning && window.currentMode !== 'chars') {
             const val = els.permanentGameInput.value.trim().toUpperCase();
             if (val) {
+                // --- SBLOCCO VOCE PER MOBILE (AL TOCCO ENTER) ---
+                if (window.isSpeakMode) {
+                    const silent = new SpeechSynthesisUtterance(" ");
+                    silent.volume = 0.001;
+                    window.speechSynthesis.speak(silent);
+                }
                 window.handleWordSubmission(val);
                 els.permanentGameInput.value = "";
             }
@@ -1986,7 +1968,7 @@ window.handleWordSubmission = function(userWord) {
         if (nextWordTimeout) clearTimeout(nextWordTimeout);
 
         // --- FIX ASCOLTO: Ritardo più lungo per permettere alla voce di finire ---
-        const nextWordDelay = window.isSpeakMode ? 2500 : 1000;
+        const nextWordDelay = window.isSpeakMode ? 3000 : 1000;
 
         nextWordTimeout = setTimeout(() => {
             if (gameRunning) {
