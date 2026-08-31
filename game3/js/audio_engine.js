@@ -53,7 +53,7 @@ window.startTone = function(freq) {
     window.manualOscillator = osc;
     window.manualGain = gain;
 
-    if (window.window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
+    if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
         window.sendQsoEvent('DN', f);
     }
 };
@@ -80,7 +80,7 @@ window.stopTone = function() {
     window.manualOscillator = null;
     window.manualGain = null;
 
-    if (window.window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
+    if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
         window.sendQsoEvent('UP', 0);
     }
 };

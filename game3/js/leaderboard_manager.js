@@ -27,6 +27,9 @@ window.lbGroups = {
         { val: 'la_torre', it: '🗼 La Torre (Scalata)', en: '🗼 The Tower (Climb)' },
         { val: 'arcade', it: '🕹️ Arcade Interception', en: '🕹️ Arcade Interception' },
         { val: 'cwfreak', it: '🎙️ Nominativi (CW Freak)', en: '🎙️ Callsigns (CW Freak)' }
+    ],
+    ratings: [
+        { val: 'game_ratings', it: '👍 Gradimento Modalità', en: '👍 Mode Ratings' }
     ]
 };
 
@@ -100,6 +103,8 @@ window.showLeaderboardTab = function(modeValue) {
         window.fetchAndRenderGlobalLeaderboard('arcade', null);
     } else if (modeValue === 'la_torre') {
         window.fetchAndRenderGlobalLeaderboard('la_torre', null);
+    } else if (modeValue === 'game_ratings') {
+        window.fetchAndRenderGameRatings();
     } else {
         // Gestione dinamica Multi/Single per Parole, Caratteri, Quiz, Ping Pong
         if (els.lbFilterArea) els.lbFilterArea.style.display = 'block';
@@ -843,5 +848,63 @@ window.fetchAndRenderActiveTournamentLeaderboard = function() {
         } else {
             els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">Nessun torneo attivo al momento.</p>`;
         }
+    });
+};
+
+window.fetchAndRenderGameRatings = function() {
+    if (!els.leaderboardContainer) return;
+    els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento gradimento...':'Loading ratings...'}</p>`;
+
+    db.ref('ratings/stats').once('value', snap => {
+        if (!snap.exists()) {
+            els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">Ancora nessuna valutazione ricevuta.</p>`;
+            return;
+        }
+
+        const stats = snap.val();
+        els.leaderboardContainer.innerHTML = '';
+
+        // Convertiamo in array per l'ordinamento
+        const list = [];
+        Object.entries(stats).forEach(([key, data]) => {
+            const parts = key.split('_');
+            const type = parts.pop();
+            const mode = parts.join('_');
+            const modeCfg = window.GAME_MODES[mode];
+            if (!modeCfg) return;
+
+            const ups = data.up || 0;
+            const downs = data.down || 0;
+            const total = ups + downs;
+            const score = total > 0 ? (ups / total) * 100 : 0;
+
+            list.push({ mode: modeCfg.titleIt, type, ups, downs, score });
+        });
+
+        // Ordiniamo per percentuale di gradimento
+        list.sort((a, b) => b.score - a.score || b.ups - a.ups);
+
+        list.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'leaderboard-row';
+            row.style.cssText = "margin-bottom:8px; padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; display:flex; justify-content:space-between; align-items:center;";
+
+            row.innerHTML = `
+                <div style="flex-grow:1;">
+                    <b style="color:var(--link-color)">${item.mode}</b><br>
+                    <small style="opacity:0.6; font-size:0.75em;">Modo: ${item.type.toUpperCase()}</small>
+                </div>
+                <div style="text-align:right; min-width:100px;">
+                    <div style="font-size:1.1em;">
+                        <span style="color:#4caf50">👍 ${item.ups}</span>
+                        <span style="color:#d32f2f; margin-left:10px;">👎 ${item.downs}</span>
+                    </div>
+                    <div style="width:100%; height:4px; background:rgba(255,255,255,0.1); border-radius:2px; margin-top:4px; overflow:hidden;">
+                        <div style="width:${item.score}%; height:100%; background:#4caf50;"></div>
+                    </div>
+                </div>
+            `;
+            els.leaderboardContainer.appendChild(row);
+        });
     });
 };

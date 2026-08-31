@@ -120,7 +120,7 @@ window.startQsoMode = function() {
     }
 
     setTimeout(() => {
-        if (!window.qsoState.conn && window.window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
+        if (!window.qsoState.conn && window.currentMode === 'qso' && !window.qsoState.isRelayMode) {
             window.activateQsoRelayMode();
         }
     }, 12000);

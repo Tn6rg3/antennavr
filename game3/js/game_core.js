@@ -33,11 +33,11 @@ window.showScreen = function(screenId) {
     // --- GESTIONE CHAT GIOCO (Nascondi in Singolo) ---
     const gameChatBtn = document.getElementById('txt_game_chat_btn');
     if (gameChatBtn) {
-        gameChatBtn.style.display = (screenId === 'gameArea' && window.isSinglePlayer) ? 'none' : 'block';
+        gameChatBtn.style.display = (screenId === 'gameArea' && window.window.isSinglePlayer) ? 'none' : 'block';
     }
     const qsoChatBtn = document.getElementById('txt_qso_chat_btn');
     if (qsoChatBtn) {
-        qsoChatBtn.style.display = (screenId === 'qsoArea' && window.isSinglePlayer) ? 'none' : 'block';
+        qsoChatBtn.style.display = (screenId === 'qsoArea' && window.window.isSinglePlayer) ? 'none' : 'block';
     }
 
     const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen', 'qsoArea'].includes(screenId);
@@ -231,7 +231,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     if (listeners.pingPong && roomCode) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (roomCode) { db.ref(`rooms/${roomCode}/coop_state`).off(); }
 
-    isCoopMode = false;
+    window.window.isCoopMode = false;
     if (els.coopArea) els.coopArea.style.display = 'none';
     if (els.tableWrapper) els.tableWrapper.style.display = 'block';
 
@@ -288,7 +288,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
 
                 db.ref(`rooms/${currentCode}/players/${myId}`).update({ finished: true, abandoned: true, online: false }).then(() => {
                     // Se siamo in multiplayer, aggiorniamo subito il riepilogo match per la classifica
-                    if (!isSinglePlayer && !isCourseMode) {
+                    if (!window.isSinglePlayer && !isCourseMode) {
                         db.ref(`rooms/${currentCode}/players`).once('value', s => {
                             if (s.exists()) window.saveMatchSummary(s.val());
                         });
@@ -453,11 +453,11 @@ window.listenToRoomInBackground = function() {
             // Sincronizzazione parametri avanzati della stanza
             currentWpm = rData.wpm;
             baseWpm = rData.wpm;
-            window.window.currentMode = rData.mode || 'standard';
-            console.log("Room Monitor: CRITICAL MODE SYNC ->", window.window.currentMode);
+            window.currentMode = rData.mode || 'standard';
+            console.log("Room Monitor: CRITICAL MODE SYNC ->", window.currentMode);
             requestedWordCount = rData.wordCount || 10;
 
-            window.isSinglePlayer = (rData.type === 'single');
+            window.window.isSinglePlayer = (rData.type === 'single');
             window.isFixedSpeed = !!rData.fixedSpeed;
             window.isEasyMode = !!rData.easyMode;
             window.isAllowSpectators = !!rData.allowSpectators;
@@ -543,7 +543,7 @@ window.joinRoomLogic = function(isReconnect = false) {
                 // Se sono l'Host o è un invito accettato, accepted è sempre true
                 const isInviteAccepted = window.lastIncomingInvite && window.lastIncomingInvite.fromId === roomHostId;
                 const amIHost = (myId === roomHostId);
-                const shouldAutoAccept = isSinglePlayer || amIHost || isInviteAccepted || roomCode.startsWith("TRN_");
+                const shouldAutoAccept = window.isSinglePlayer || amIHost || isInviteAccepted || roomCode.startsWith("TRN_");
 
                 playerRef.set({
                     name: myName,
@@ -576,7 +576,7 @@ window.joinRoomLogic = function(isReconnect = false) {
             window.listenToRoomInBackground();
 
             // --- AVVIO TIMER SCADENZA LOBBY (Solo se Multi e se presente expiresAt) ---
-            if (!isSinglePlayer && rData.expiresAt) {
+            if (!window.isSinglePlayer && rData.expiresAt) {
                 window.startLobbyTimer(rData.expiresAt);
             } else if (els.lobbyTimerText) {
                 els.lobbyTimerText.textContent = "";
@@ -751,7 +751,7 @@ window.startCountdownSequence = function() {
     if (listeners.room) listeners.room.off();
 
     isCourseMode = (window.currentMode === 'course');
-    if (!isSinglePlayer) {
+    if (!window.isSinglePlayer) {
         // Recuperiamo il conteggio iniziale dei giocatori che iniziano la sfida
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
             const initialPlayers = snap.val() || {};
@@ -791,7 +791,7 @@ window.startCountdownSequence = function() {
                         if (currentStatus === 'playing' || hasAbandoned) {
                             if (currentPCount === 1 && players[myId]) {
                                 // --- FIX CO-OP: Se siamo in collaborazione, la partita NON termina se resta solo 1 giocatore ---
-                                if (window.currentMode === 'conquest' || isCoopMode) {
+                                if (window.currentMode === 'conquest' || window.window.isCoopMode) {
                                     showToast(currentLang === 'it' ? "Il tuo compagno ha abbandonato. Continua la missione da solo! ⚔️" : "Your teammate left. Continue the mission alone! ⚔️");
                                     return;
                                 }
@@ -834,7 +834,7 @@ window.startCountdownSequence = function() {
     if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: 0`;
 
     // --- GESTIONE CONTATORE SPETTATORI (REAL-TIME) ---
-    if (isSinglePlayer && window.isAllowSpectators) {
+    if (window.isSinglePlayer && window.isAllowSpectators) {
         if (els.spectatorsCountDisplay) {
             els.spectatorsCountDisplay.style.display = 'inline-block';
             els.spectatorsCountDisplay.textContent = '👁️ 0';
@@ -906,14 +906,14 @@ window.startCountdownSequence = function() {
             setTimeout(() => {
                 if (!gameRunning) return;
 
-                const mode = window.window.currentMode || 'standard';
+                const mode = window.currentMode || 'standard';
                 console.log("Countdown finished. Final Mode:", mode);
 
-                isCoopMode = (mode === 'conquest');
-                if (els.coopArea) els.coopArea.style.display = isCoopMode ? 'flex' : 'none';
-                if (els.tableWrapper) els.tableWrapper.style.display = isCoopMode ? 'none' : 'block';
+                window.window.isCoopMode = (mode === 'conquest');
+                if (els.coopArea) els.coopArea.style.display = window.window.isCoopMode ? 'flex' : 'none';
+                if (els.tableWrapper) els.tableWrapper.style.display = window.window.isCoopMode ? 'none' : 'block';
 
-                if (mode === 'conquest' || isCoopMode) {
+                if (mode === 'conquest' || window.window.isCoopMode) {
                     if (typeof window.startCoopSequence === 'function') { window.startCoopSequence(); return; }
                 } else if (mode === 'course') {
                     if (typeof window.startCourseSessionSequence === 'function') { window.startCourseSessionSequence(); return; }
@@ -948,9 +948,9 @@ window.resumeGameSequence = function() {
     gameRunning = true;
     isRejoining = false;
 
-    isCoopMode = (window.currentMode === 'conquest');
-    if (els.coopArea) els.coopArea.style.display = isCoopMode ? 'flex' : 'none';
-    if (els.tableWrapper) els.tableWrapper.style.display = isCoopMode ? 'none' : 'block';
+    window.window.isCoopMode = (window.currentMode === 'conquest');
+    if (els.coopArea) els.coopArea.style.display = window.window.isCoopMode ? 'flex' : 'none';
+    if (els.tableWrapper) els.tableWrapper.style.display = window.window.isCoopMode ? 'none' : 'block';
 
     if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
     if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: ${totalScore}`;
@@ -967,8 +967,8 @@ window.resumeGameSequence = function() {
         });
     }
 
-    const mode = window.window.currentMode;
-    if (mode === 'conquest' || isCoopMode) {
+    const mode = window.currentMode;
+    if (mode === 'conquest' || window.window.isCoopMode) {
         if (typeof window.startCoopSequence === 'function') window.startCoopSequence();
         return;
     } else if (mode === 'quiz') {
@@ -991,13 +991,13 @@ window.resumeGameSequence = function() {
 
 window.playNextWord = function() {
     // BLOCCO DI SICUREZZA ASSOLUTO PER QSO
-    if (window.window.currentMode === 'qso') {
+    if (window.currentMode === 'qso') {
         console.warn("GameCore: playNextWord interrotto perché in modalità QSO.");
         if (typeof window.startQsoMode === 'function') window.startQsoMode();
         return;
     }
 
-    if (!gameRunning || window.window.currentMode === 'pingpong') return;
+    if (!gameRunning || window.currentMode === 'pingpong') return;
     if (isCourseMode) return window.playNextCourseGroup?.();
 
     // --- LOGICA PERFEZIONE: Gestione flussi ---
@@ -1088,7 +1088,7 @@ window.playNextWord = function() {
 
 window.finishGame = function() {
     // Se vinciamo a tavolino con 0 punti, diamo un punto simbolico per attivare il salvataggio
-    if (totalScore === 0 && !isSinglePlayer && !isCourseMode) {
+    if (totalScore === 0 && !window.isSinglePlayer && !isCourseMode) {
         totalScore = 1;
     }
 
@@ -1109,7 +1109,7 @@ window.finishGame = function() {
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
 
     // Se è una partita singola, segnamo la stanza come finita sul server e poi la puliamo
-    if (roomCode && isSinglePlayer) {
+    if (roomCode && window.isSinglePlayer) {
         db.ref(`rooms/${roomCode}/status`).set('finished');
         // PULIZIA: Rimuoviamo la stanza singola dopo 5 secondi (tempo per caricare la leaderboard)
         const cleanupCode = roomCode;
@@ -1138,6 +1138,7 @@ window.finishGame = function() {
     }
 
     if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {
+        console.log("FinishGame: Scheduling Rating Check for mode", window.currentMode);
         // --- NUOVO: CONTROLLO VALUTAZIONE GIOCO ---
         setTimeout(() => {
             if (typeof window.checkGameRating === 'function') {
@@ -1153,10 +1154,10 @@ window.finishGame = function() {
             // Determiniamo se è un multiplayer se:
             // 1. Ci sono effettivamente 2 o più persone nel nodo finale
             // 2. OPPURE la stanza non era single player e il conteggio iniziale era >= 2
-            const isActuallyMulti = (pArray.length >= 2) || (!isSinglePlayer && gameStartPlayerCount >= 2);
+            const isActuallyMulti = (pArray.length >= 2) || (!window.isSinglePlayer && gameStartPlayerCount >= 2);
 
             let dbPath;
-            if (window.window.currentMode === 'daily_challenge') {
+            if (window.currentMode === 'daily_challenge') {
                 let todayStr = new Date().toISOString().split('T')[0];
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${window.myId}`;
             } else {
@@ -1168,8 +1169,8 @@ window.finishGame = function() {
                     'standard_plus': 'standard_plus',
                     'target_training': 'target_training'
                 };
-                const baseFolder = modeMap[window.window.currentMode] || 'standard';
-                const modeFolder = window.window.currentMode === 'callsign' ? baseFolder : `${baseFolder}/${!isActuallyMulti ? 'single' : 'multi'}_${window.requestedWordCount}`;
+                const baseFolder = modeMap[window.currentMode] || 'standard';
+                const modeFolder = window.currentMode === 'callsign' ? baseFolder : `${baseFolder}/${!isActuallyMulti ? 'single' : 'multi'}_${window.requestedWordCount}`;
                 dbPath = `leaderboard/${modeFolder}/${window.myId}`;
             }
 
@@ -1209,7 +1210,7 @@ window.finishGame = function() {
     }
 
     if (matchDetailsArray.length > 0) {
-        db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: window.currentMode, score: totalScore, wpm: peakWpm, type: isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
+        db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: window.currentMode, score: totalScore, wpm: peakWpm, type: window.isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
         if (typeof window.updateActivity === 'function') window.updateActivity(totalScore > 0);
 
         // --- ASSEGNAZIONE XP FINALE (RPG) ---
@@ -1238,7 +1239,7 @@ window.finishGame = function() {
         // Salviamo lo stato del gioco corrente per la navigazione classifiche
         const savedMode = window.currentMode;
         const savedWordCount = requestedWordCount;
-        const savedSinglePlayer = isSinglePlayer;
+        const savedSinglePlayer = window.isSinglePlayer;
         const savedRoomCode = roomCode;
 
         qBtn.onclick = function() {
@@ -1432,7 +1433,7 @@ window.showMatchShareButtons = function() {
 };
 
 window.saveMatchSummary = function(playersData) {
-    if (!playersData || window.isSinglePlayer || isCourseMode || !roomCode) return;
+    if (!playersData || window.window.isSinglePlayer || isCourseMode || !roomCode) return;
 
     // --- FIX: Usiamo roomCode come ID univoco del match per garantire la sincronizzazione ---
     // Essendo il roomCode unico per sessione, entrambi i giocatori scriveranno nello stesso nodo.

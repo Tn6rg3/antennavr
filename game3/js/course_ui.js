@@ -825,7 +825,7 @@ window.actualStartCourseGame = function() {
     if (modal) modal.style.display = 'none';
 
     currentMode = 'course';
-    isSinglePlayer = true;
+    window.isSinglePlayer = true;
     currentWpm = parseInt(window.courseData.settings.start_wpm);
     roomCode = "COURSE_" + window.myId;
 

@@ -7,49 +7,58 @@ window.getGameRatingKey = function() {
 };
 
 window.checkGameRating = function() {
-    if (!myId) return;
+    console.log("Rating: Checking if modal should be shown...");
+    if (!window.myId || !window.db) { console.warn("Rating: Missing ID or DB"); return; }
     const key = window.getGameRatingKey();
+    console.log("Rating: Mode Key ->", key, " (Single:", window.isSinglePlayer, "Mode:", window.currentMode, ")");
 
-    // Non chiediamo il voto per il corso o modalità temporanee
-    if (key.startsWith('course') || key.startsWith('spectator')) return;
+    // Non chiediamo il voto per il corso, modalità spettatore o sfida giornaliera
+    if (key.startsWith('course') || key.startsWith('spectator') || key.startsWith('daily_challenge')) return;
 
-    db.ref(`users/${myId}/ratings/${key}`).once('value', snap => {
+    window.db.ref(`users/${window.myId}/ratings/${key}`).once('value', snap => {
         if (!snap.exists()) {
+            console.log("Rating: User hasn't rated yet, showing modal.");
             const modal = document.getElementById('gameRatingModal');
             if (modal) {
                 const title = document.getElementById('ratingTitle');
-                const modeCfg = window.GAME_MODES[window.currentMode];
-                if (title && modeCfg) {
-                    title.textContent = `Ti piace "${modeCfg.titleIt}"?`;
+                const modeName = window.GAME_MODES[window.currentMode]?.titleIt || window.currentMode;
+                const typeName = window.isSinglePlayer ? "Singolo" : (window.isCoopMode ? "Co-op" : "Multiplayer");
+
+                if (title) {
+                    title.textContent = `Ti piace "${modeName}" (${typeName})?`;
                 }
                 modal.style.display = 'flex';
+            } else {
+                console.error("Rating: Modal element NOT FOUND!");
             }
+        } else {
+            console.log("Rating: User already rated this combination.");
         }
     });
 };
 
 window.submitGameRating = function(vote) {
-    if (!myId) return;
+    if (!window.myId || !window.db) return;
     const key = window.getGameRatingKey();
     const modal = document.getElementById('gameRatingModal');
 
     if (modal) modal.style.display = 'none';
 
     // 1. Salviamo il voto dell'utente
-    db.ref(`users/${myId}/ratings/${key}`).set(vote).then(() => {
+    window.db.ref(`users/${window.myId}/ratings/${key}`).set(vote).then(() => {
         // 2. Aggiorniamo le statistiche globali (incremento anonimo)
-        db.ref(`ratings/stats/${key}/${vote}`).set(firebase.database.ServerValue.increment(1));
+        window.db.ref(`ratings/stats/${key}/${vote}`).set(firebase.database.ServerValue.increment(1));
         showToast(vote === 'up' ? "Grazie per il feedback! 👍" : "Grazie per il feedback! 👎");
     });
 };
 
 window.loadUserRatings = function() {
     const container = document.getElementById('userRatingsList');
-    if (!container) return;
+    if (!container || !window.myId || !window.db) return;
 
     container.innerHTML = '<p style="text-align:center; opacity:0.5;">Caricamento voti...</p>';
 
-    db.ref(`users/${myId}/ratings`).once('value', snap => {
+    window.db.ref(`users/${window.myId}/ratings`).once('value', snap => {
         container.innerHTML = '';
         if (!snap.exists()) {
             container.innerHTML = '<p style="text-align:center; opacity:0.5; font-size:0.8em;">Non hai ancora espresso valutazioni.</p>';
@@ -58,28 +67,31 @@ window.loadUserRatings = function() {
 
         const ratings = snap.val();
         Object.entries(ratings).forEach(([key, vote]) => {
-            const [mode, type] = key.split('_');
+            const parts = key.split('_');
+            const type = parts.pop();
+            const mode = parts.join('_');
+
             const modeCfg = window.GAME_MODES[mode];
             if (!modeCfg) return;
 
             const div = document.createElement('div');
-            div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; margin-bottom:6px; border:1px solid rgba(255,255,255,0.05);";
+            div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:rgba(255,255,255,0.05); border-radius:10px; margin-bottom:8px; border:1px solid rgba(255,255,255,0.05); gap:10px;";
 
             const info = document.createElement('div');
-            info.innerHTML = `<b style="color:var(--link-color)">${modeCfg.titleIt}</b><br><small style="opacity:0.6; font-size:0.75em;">Modo: ${type.toUpperCase()}</small>`;
+            info.style.cssText = "flex: 1; min-width: 0; text-align: left;";
+            info.innerHTML = `<b style="color:var(--link-color); font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">${modeCfg.titleIt}</b><small style="opacity:0.6; font-size:0.7em;">${type.toUpperCase()}</small>`;
 
             const actions = document.createElement('div');
-            actions.style.display = 'flex';
-            actions.style.gap = '10px';
+            actions.style.cssText = "display:flex; gap:5px; flex-shrink:0; background:rgba(0,0,0,0.2); padding:4px 8px; border-radius:20px;";
 
             const btnUp = document.createElement('button');
             btnUp.innerHTML = '👍';
-            btnUp.style.cssText = `background:none; border:none; font-size:1.2em; cursor:pointer; opacity:${vote === 'up' ? '1' : '0.3'}; transform:${vote === 'up' ? 'scale(1.2)' : 'scale(1)'};`;
+            btnUp.style.cssText = `background:none; border:none; font-size:1.1em; cursor:pointer; padding:2px; transition:all 0.2s; opacity:${vote === 'up' ? '1' : '0.2'}; transform:${vote === 'up' ? 'scale(1.2)' : 'scale(1)'};`;
             btnUp.onclick = () => window.updateRating(key, 'up');
 
             const btnDown = document.createElement('button');
             btnDown.innerHTML = '👎';
-            btnDown.style.cssText = `background:none; border:none; font-size:1.2em; cursor:pointer; opacity:${vote === 'down' ? '1' : '0.3'}; transform:${vote === 'down' ? 'scale(1.2)' : 'scale(1)'};`;
+            btnDown.style.cssText = `background:none; border:none; font-size:1.1em; cursor:pointer; padding:2px; transition:all 0.2s; opacity:${vote === 'down' ? '1' : '0.2'}; transform:${vote === 'down' ? 'scale(1.2)' : 'scale(1)'};`;
             btnDown.onclick = () => window.updateRating(key, 'down');
 
             actions.appendChild(btnUp);
@@ -92,20 +104,21 @@ window.loadUserRatings = function() {
 };
 
 window.displayGlobalRatings = function() {
-    db.ref('ratings/stats').once('value', snap => {
+    if (!window.db) return;
+    window.db.ref('ratings/stats').once('value', snap => {
         const stats = snap.val() || {};
         const modeSelect = document.getElementById('gameModeInput');
         if (!modeSelect) return;
 
         Array.from(modeSelect.options).forEach(opt => {
             const mode = opt.value;
-            const type = document.getElementById('gameTypeInput')?.value === 'single' ? 'single' : 'multi';
+            const gameType = document.getElementById('gameTypeInput')?.value;
+            const type = gameType === 'single' ? 'single' : (gameType === 'coop' ? 'coop' : 'multi');
             const key = `${mode}_${type}`;
 
             if (stats[key]) {
                 const ups = stats[key].up || 0;
                 if (ups > 0) {
-                    // Aggiungiamo il contatore pollici accanto al nome della modalità
                     const baseText = opt.textContent.split(' 👍')[0];
                     opt.textContent = `${baseText} 👍 ${ups}`;
                 }
@@ -114,26 +127,25 @@ window.displayGlobalRatings = function() {
     });
 };
 
-// Caricamento statistiche all'avvio del menu
-setTimeout(() => {
-    if (typeof window.displayGlobalRatings === 'function') window.displayGlobalRatings();
-}, 3000);
-
 window.updateRating = function(key, newVote) {
-    db.ref(`users/${myId}/ratings/${key}`).once('value', snap => {
+    if (!window.myId || !window.db) return;
+    window.db.ref(`users/${window.myId}/ratings/${key}`).once('value', snap => {
         const oldVote = snap.val();
         if (oldVote === newVote) return;
 
-        // Aggiorniamo il voto dell'utente
-        db.ref(`users/${myId}/ratings/${key}`).set(newVote).then(() => {
-            // Decrementiamo il vecchio contatore globale e incrementiamo il nuovo
+        window.db.ref(`users/${window.myId}/ratings/${key}`).set(newVote).then(() => {
             const updates = {};
             updates[`ratings/stats/${key}/${oldVote}`] = firebase.database.ServerValue.increment(-1);
             updates[`ratings/stats/${key}/${newVote}`] = firebase.database.ServerValue.increment(1);
-            db.ref().update(updates);
+            window.db.ref().update(updates);
 
             window.loadUserRatings();
             showToast("Valutazione aggiornata!");
         });
     });
 };
+
+// Caricamento statistiche all'avvio del menu
+setTimeout(() => {
+    if (typeof window.displayGlobalRatings === 'function') window.displayGlobalRatings();
+}, 3000);

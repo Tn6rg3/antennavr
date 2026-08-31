@@ -1,7 +1,7 @@
 // js/coop_manager.js
 
 window.startCoopSequence = function() {
-    isCoopMode = true;
+    window.isCoopMode = true;
     showScreen('gameArea');
     if (els.coopArea) els.coopArea.style.display = 'flex';
     if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
@@ -187,7 +187,7 @@ window.setupCoopFreqButtons = function() {
                             gameWords[0] = newWord;
                             stopAllMorseAudio();
                             setTimeout(() => {
-                                if (gameRunning && isCoopMode && coopActiveFreqIndex === num) {
+                                if (gameRunning && window.isCoopMode && coopActiveFreqIndex === num) {
                                     playMorseAudio(newWord, currentWpm);
                                 }
                             }, 300);

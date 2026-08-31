@@ -44,7 +44,7 @@ window.startQuizSequence = function() {
 
     const availableQuestions = window.getAvailableQuizQuestions();
 
-    if (roomCode && !isSinglePlayer) {
+    if (roomCode && !window.isSinglePlayer) {
         if (listeners.quizState) db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState);
 
         listeners.quizState = db.ref(`rooms/${roomCode}/quiz_state`).on('value', snap => {
@@ -143,7 +143,7 @@ window.playQuizAudioSequence = async function() {
 
 window.enableQuizControls = function() {
     inputActive = true;
-    if (isSinglePlayer) {
+    if (window.isSinglePlayer) {
         window.disableQuizButtons(false);
     } else {
         if (els.quizBuzzer) els.quizBuzzer.style.display = 'block';
@@ -168,15 +168,15 @@ window.startQuizTimer = function(seconds) {
             clearInterval(quizTimerInterval);
             if (inputActive) {
                 showToast("Tempo scaduto!");
-                if (isSinglePlayer || quizActiveBuzzerId === myId) window.submitQuizAnswer(-1);
+                if (window.isSinglePlayer || quizActiveBuzzerId === myId) window.submitQuizAnswer(-1);
             }
         }
     }, 100);
 };
 
 window.submitQuizAnswer = function(index) {
-    if (!isSinglePlayer && (!inputActive || quizActiveBuzzerId !== myId)) return;
-    if (isSinglePlayer && !inputActive) return;
+    if (!window.isSinglePlayer && (!inputActive || quizActiveBuzzerId !== myId)) return;
+    if (window.isSinglePlayer && !inputActive) return;
     if (quizTimerInterval) clearInterval(quizTimerInterval);
     inputActive = false;
     window.disableQuizButtons(true);
@@ -231,7 +231,7 @@ window.submitQuizAnswer = function(index) {
             if (els['btnQuiz'+l]) els['btnQuiz'+l].style.backgroundColor = "";
         });
 
-        if (roomCode && !isSinglePlayer) {
+        if (roomCode && !window.isSinglePlayer) {
             db.ref(`rooms/${roomCode}/quiz_state`).transaction(state => {
                 if (state && state.activeBuzzerId === myId) {
                     state.questionIndex = (state.questionIndex || 0) + 1;
@@ -239,7 +239,7 @@ window.submitQuizAnswer = function(index) {
                 }
                 return state;
             });
-        } else if (isSinglePlayer) {
+        } else if (window.isSinglePlayer) {
             quizQuestionIndex++;
             window.loadNextQuizQuestion();
         }
@@ -296,7 +296,7 @@ window.initQuizManager = function() {
     // Buzzer (Multiplayer)
     if (els.quizBuzzer) {
         els.quizBuzzer.onclick = () => {
-            if (!roomCode || isSinglePlayer || quizActiveBuzzerId) return;
+            if (!roomCode || window.isSinglePlayer || quizActiveBuzzerId) return;
 
             db.ref(`rooms/${roomCode}/quiz_state/activeBuzzerId`).transaction(current => {
                 if (current === null) return myId;
