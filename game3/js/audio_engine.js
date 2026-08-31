@@ -72,15 +72,17 @@ window.stopTone = function() {
     if (gain) {
         gain.gain.cancelScheduledValues(now);
         gain.gain.setValueAtTime(gain.gain.value, now);
+        // Rampa lineare di chiusura (12ms)
         gain.gain.linearRampToValueAtTime(0, now + 0.012);
     }
 
+    // STOP SINCRONIZZATO: Aspetta esattamente la fine della rampa (13ms)
     setTimeout(() => {
         try {
             osc.stop();
             osc.disconnect();
         } catch(e) {}
-    }, 60);
+    }, 13);
 
     window.manualOscillator = null;
     window.manualGain = null;
@@ -137,12 +139,13 @@ window.stopRemoteTone = function() {
         gain.gain.linearRampToValueAtTime(0, now + 0.012);
     }
 
+    // STOP SINCRONIZZATO (13ms)
     setTimeout(() => {
         try {
             osc.stop();
             osc.disconnect();
         } catch(e) {}
-    }, 60);
+    }, 13);
 
     window.remoteOscillator = null;
     window.remoteGain = null;
