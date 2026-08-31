@@ -33,7 +33,16 @@ window.resumeAudioContext = function() {
 // --- CANALE LOCALE (TRASMISSIONE) ---
 window.startTone = function(freq) {
     window.resumeAudioContext();
-    if (window.manualOscillator) return;
+
+    // Se c'è un oscillatore ancora attivo (anche se in fase di spegnimento), lo chiudiamo subito
+    if (window.manualOscillator) {
+        try {
+            window.manualGain.gain.cancelScheduledValues(window.audioCtx.currentTime);
+            window.manualOscillator.stop();
+            window.manualOscillator.disconnect();
+        } catch(e) {}
+        window.manualOscillator = null;
+    }
 
     const f = freq || window.currentTone || 600;
     const now = window.audioCtx.currentTime;
@@ -43,9 +52,9 @@ window.startTone = function(freq) {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(f, now);
 
-    // RAMPA ANTI-CLICK PROFESSIONALE (Exponential 15ms)
+    // RAMPA LINEARE IDENTICA AGLI ESERCIZI (12ms)
     gain.gain.setValueAtTime(0, now);
-    gain.gain.setTargetAtTime(0.5, now, 0.005);
+    gain.gain.linearRampToValueAtTime(0.5, now + 0.012);
 
     osc.connect(gain);
     gain.connect(window.audioCtx.destination);
@@ -54,9 +63,9 @@ window.startTone = function(freq) {
     window.manualOscillator = osc;
     window.manualGain = gain;
 
-    // QSO: Invio asincrono ritardato per proteggere la purezza audio locale
+    // QSO: Invio evento
     if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
-        setTimeout(() => { if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('DN', f); }, 5);
+        window.sendQsoEvent('DN', f);
     }
 };
 
@@ -69,7 +78,9 @@ window.stopTone = function() {
 
     if (gain) {
         gain.gain.cancelScheduledValues(now);
-        gain.gain.setTargetAtTime(0, now, 0.005); // Rampa dolce in uscita
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        // RAMPA LINEARE DI CHIUSURA (12ms) - RISOLVE IL "COLPETTO"
+        gain.gain.linearRampToValueAtTime(0, now + 0.012);
     }
 
     setTimeout(() => {
@@ -77,13 +88,13 @@ window.stopTone = function() {
             osc.stop();
             osc.disconnect();
         } catch(e) {}
-    }, 80);
+    }, 60);
 
     window.manualOscillator = null;
     window.manualGain = null;
 
     if (window.currentMode === 'qso' && typeof window.sendQsoEvent === 'function') {
-        setTimeout(() => { if (typeof window.sendQsoEvent === 'function') window.sendQsoEvent('UP', 0); }, 5);
+        window.sendQsoEvent('UP', 0);
     }
 };
 
