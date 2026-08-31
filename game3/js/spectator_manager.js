@@ -33,42 +33,7 @@ window.watchSpecificRoom = function(code, targetName) {
     mySpectatorRef.onDisconnect().remove();
 
     const roomRef = db.ref(`rooms/${roomCode}`);
-
-    // OTTIMIZZAZIONE SPETTATORE: Invece di ascoltare l'intera stanza (pesante),
-    // ascoltiamo solo i matchDetails e lo stato di finitura del giocatore host.
-    const onDetailsChange = roomRef.child(`players/${code.replace('COURSE_', '').replace('SOLO_', '').replace('DAILY_', '')}/matchDetails`).on('value', snap => {
-        if (!snap.exists()) return;
-        const matchDetails = snap.val();
-
-        if (els.tableBody) {
-            els.tableBody.innerHTML = "";
-            matchDetails.forEach(row => {
-                const tr = document.createElement('tr');
-                const tdTyped = document.createElement('td');
-                tdTyped.textContent = row.typed || "-";
-
-                const tdReal = document.createElement('td');
-                const bReal = document.createElement('b');
-                if (typeof window.renderDiffSecure === 'function') window.renderDiffSecure(bReal, row.real, row.typed || "");
-                else bReal.textContent = row.real;
-                tdReal.appendChild(bReal);
-
-                const tdPoints = document.createElement('td');
-                tdPoints.style.color = row.points > 0 ? "#4caf50" : "#d32f2f";
-                tdPoints.style.fontWeight = "bold";
-                tdPoints.textContent = row.points;
-
-                tr.appendChild(tdTyped);
-                tr.appendChild(tdReal);
-                tr.appendChild(tdPoints);
-                els.tableBody.appendChild(tr);
-            });
-
-            setTimeout(() => {
-                if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
-            }, 50);
-        }
-    });
+    let hostDetailsListener = null;
 
     const onStatusChange = roomRef.on('value', snap => {
         if (!snap.exists()) {
@@ -78,8 +43,9 @@ window.watchSpecificRoom = function(code, targetName) {
         }
 
         const roomData = snap.val();
-        // Cerchiamo l'Host/Corsista usando l'hostId salvato nella stanza
-        const hostData = roomData.players ? (roomData.players[roomData.hostId] || Object.values(roomData.players)[0]) : null;
+        const hostId = roomData.hostId;
+        const players = roomData.players || {};
+        const hostData = players[hostId] || Object.values(players)[0];
 
         if (roomData.tone) currentTone = roomData.tone;
 
@@ -87,6 +53,43 @@ window.watchSpecificRoom = function(code, targetName) {
             showToast("🏁 La partita che stavi osservando è terminata!");
             window.stopWatchingCleanly();
             return;
+        }
+
+        // --- SINCRONIZZAZIONE TABELLA (MATCH DETAILS) ---
+        // Se non abbiamo ancora un listener specifico per i dettagli dell'host, lo creiamo ora
+        if (!hostDetailsListener && hostId) {
+            hostDetailsListener = roomRef.child(`players/${hostId}/matchDetails`).on('value', dSnap => {
+                if (!dSnap.exists()) return;
+                const matchDetails = dSnap.val();
+                if (els.tableBody) {
+                    els.tableBody.innerHTML = "";
+                    matchDetails.forEach(row => {
+                        const tr = document.createElement('tr');
+                        const tdTyped = document.createElement('td');
+                        tdTyped.textContent = row.typed || "-";
+
+                        const tdReal = document.createElement('td');
+                        const bReal = document.createElement('b');
+                        if (typeof window.renderDiffSecure === 'function') window.renderDiffSecure(bReal, row.real, row.typed || "");
+                        else bReal.textContent = row.real;
+                        tdReal.appendChild(bReal);
+
+                        const tdPoints = document.createElement('td');
+                        tdPoints.style.color = row.points > 0 ? "#4caf50" : "#d32f2f";
+                        tdPoints.style.fontWeight = "bold";
+                        tdPoints.textContent = row.points;
+
+                        tr.appendChild(tdTyped);
+                        tr.appendChild(tdReal);
+                        tr.appendChild(tdPoints);
+                        els.tableBody.appendChild(tr);
+                    });
+
+                    setTimeout(() => {
+                        if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
+                    }, 50);
+                }
+            });
         }
 
         const currentSpeed = hostData.wpm || roomData.wpm || 20;
@@ -116,8 +119,8 @@ window.watchSpecificRoom = function(code, targetName) {
     });
 
     window.currentSpectatorCleanup = function() {
-        roomRef.child('players').off(); // Spegne i listener sui dettagli
-        roomRef.off('value'); // Spegne listener di stato
+        if (hostDetailsListener) roomRef.child('players').off();
+        roomRef.off('value');
         db.ref(`rooms/${roomCode}/liveAudio`).off('value', onAudioChange);
         mySpectatorRef.remove();
     };
