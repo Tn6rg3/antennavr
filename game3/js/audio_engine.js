@@ -101,7 +101,17 @@ window.stopTone = function() {
 // --- CANALE REMOTO (RICEZIONE P2P/RELAY) ---
 window.startRemoteTone = function(freq) {
     window.resumeAudioContext();
-    if (window.remoteOscillator) return;
+
+    // Pulisce aggressivamente oscillatori remoti precedenti per evitare interferenze e scoppiettii
+    if (window.remoteOscillator) {
+        try {
+            window.remoteGain.gain.cancelScheduledValues(window.audioCtx.currentTime);
+            window.remoteOscillator.stop();
+            window.remoteOscillator.disconnect();
+        } catch(e) {}
+        window.remoteOscillator = null;
+        window.remoteGain = null;
+    }
 
     const f = freq || window.currentTone || 600;
     const now = window.audioCtx.currentTime;
