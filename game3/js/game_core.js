@@ -749,6 +749,15 @@ window.renderPlayersList = function(playersData, hostId) {
 };
 
 window.startCountdownSequence = function() {
+    // --- SBLOCCO TTS PER MOBILE (iOS/Android) ---
+    if (window.isSpeakMode && ('speechSynthesis' in window)) {
+        window.speechSynthesis.cancel(); // Reset
+        const silent = new SpeechSynthesisUtterance("OK");
+        silent.volume = 0; // Silenzioso
+        window.speechSynthesis.speak(silent);
+        console.log("TTS: Audio warmed up for mobile device.");
+    }
+
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (listeners.room) listeners.room.off();
 
