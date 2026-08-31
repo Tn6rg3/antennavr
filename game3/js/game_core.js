@@ -1,26 +1,5 @@
 // js/game_core.js
 
-window.ttsUnlocked = false;
-window.unlockTTS = function() {
-    if (!window.ttsUnlocked && ('speechSynthesis' in window)) {
-        const Utterance = window.SpeechSynthesisUtterance || window.webkitSpeechSynthesisUtterance || SpeechSynthesisUtterance;
-        const synth = window.speechSynthesis || window.webkitSpeechSynthesis;
-        
-        if (synth && Utterance) {
-            try {
-                synth.cancel();
-                const silentMsg = new Utterance(" ");
-                silentMsg.volume = 0.001; 
-                synth.speak(silentMsg);
-                window.ttsUnlocked = true;
-                console.log("TTS: Motore vocale sbloccato tramite interazione utente.");
-            } catch (e) {
-                console.error("TTS: Errore nello sblocco del motore vocale", e);
-            }
-        }
-    }
-};
-
 window.domCache = {};
 window.initDOMCache = function() {
     const ids = [
@@ -382,6 +361,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     }
 };
 
+// Listener silenzioso quando l'utente naviga l'app ma è in una stanza
 window.listenToRoomInBackground = function() {
     if (!roomCode || window.isRoomMonitorActive) return;
 
@@ -420,6 +400,7 @@ window.listenToRoomInBackground = function() {
         }
 
         // 1. SINCRONIZZAZIONE BACHECA PUBBLICA (Sempre se Host)
+        // Garantiamo che gli altri utenti vedano il numero reale di persone in lobby
         if (amIHost && rData.status === 'waiting') {
             db.ref(`public_lobby_rooms/${roomCode}`).update({ pCount: pCount });
         }
@@ -449,10 +430,15 @@ window.listenToRoomInBackground = function() {
                     console.log("Room Monitor: New player join detected!");
                     window.showRoomEventModal("Nuovo Ingresso 👤", "Qualcuno è entrato nella tua stanza.");
                     if (typeof window.playBeep === 'function') window.playBeep(700, 0.2);
+                } else if (pCount < window.lastPlayerCount) {
+                    console.log("Room Monitor: Player left room.");
+                    // Notifica opzionale per l'uscita
+                    // window.showRoomEventModal("Abbandono 👤", "Un utente è uscito dalla stanza.");
                 }
             }
         }
 
+        // Aggiorniamo i contatori per il prossimo evento
         window.lastPlayerCount = pCount;
         window.lastAcceptedCount = acceptedCount;
 
@@ -462,7 +448,7 @@ window.listenToRoomInBackground = function() {
             localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
             window.isRoomMonitorActive = false;
 
-            gameRunning = true; 
+            gameRunning = true; // Importante: deve essere true prima di caricare i parametri
 
             // Sincronizzazione parametri avanzati della stanza
             currentWpm = rData.wpm;
@@ -475,15 +461,17 @@ window.listenToRoomInBackground = function() {
             window.isFixedSpeed = !!rData.fixedSpeed;
             window.isEasyMode = !!rData.easyMode;
             window.isAllowSpectators = !!rData.allowSpectators;
-            window.isSpeakMode = !!rData.speakMode;
-            window.voiceRate = rData.voiceRate || 1.0; 
+            window.isSpeakMode = !!rData.speakMode; // NUOVO
+            window.voiceRate = rData.voiceRate || 1.0; // NUOVO
             window.charSpaceWpm = rData.charSpaceWpm || 0;
             window.wordSpaceMult = rData.wordSpaceMult || 1.0;
 
+            // --- OTTIMIZZAZIONE DOWNLOAD: Carichiamo le parole solo una volta ---
             db.ref(`rooms/${roomCode}/game_words`).once('value', wSnap => {
                 if (wSnap.exists()) {
                     gameWords = wSnap.val();
                 } else if (rData.words) {
+                    // Fallback per compatibilità sessioni vecchie
                     gameWords = rData.words;
                 }
 
@@ -505,10 +493,12 @@ window.joinSpecificRoom = function(code) {
 window.joinRoomLogic = function(isReconnect = false) {
     gameRunning = false;
 
+    // 1. Recuperiamo prima i dati della stanza per sapere chi è l'Host
     db.ref(`rooms/${roomCode}`).once('value', roomSnap => {
         const rData = roomSnap.val();
         if (!rData) return window.exitRoomCleanly(true);
 
+        // Sincronizziamo l'Host ID fondamentale
         roomHostId = rData.hostId;
         window.roomCreatedAt = rData.createdAt || 0;
 
@@ -552,6 +542,7 @@ window.joinRoomLogic = function(isReconnect = false) {
             playerRef.onDisconnect().update({ online: false });
 
             if (!pData) {
+                // Se sono l'Host o è un invito accettato, accepted è sempre true
                 const isInviteAccepted = window.lastIncomingInvite && window.lastIncomingInvite.fromId === roomHostId;
                 const amIHost = (myId === roomHostId);
                 const shouldAutoAccept = window.isSinglePlayer || amIHost || isInviteAccepted || roomCode.startsWith("TRN_");
@@ -567,6 +558,7 @@ window.joinRoomLogic = function(isReconnect = false) {
                     online: true,
                     accepted: shouldAutoAccept
                 }).then(() => {
+                    // Aggiornamento bacheca real-time
                     db.ref(`rooms/${roomCode}/players`).once('value', s => {
                         const count = s.exists() ? Object.keys(s.val()).length : 1;
                         db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(count);
@@ -574,6 +566,7 @@ window.joinRoomLogic = function(isReconnect = false) {
                 });
             } else {
                 playerRef.update({ online: true, name: myName, username: myPrivacy ? "" : tgUsername });
+                // Sincronizziamo bacheca al rientro
                 db.ref(`rooms/${roomCode}/players`).once('value', s => {
                     const count = s.exists() ? Object.keys(s.val()).length : 1;
                     db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(count);
@@ -584,6 +577,7 @@ window.joinRoomLogic = function(isReconnect = false) {
             window.isRoomMonitorActive = false;
             window.listenToRoomInBackground();
 
+            // --- AVVIO TIMER SCADENZA LOBBY (Solo se Multi e se presente expiresAt) ---
             if (!window.isSinglePlayer && rData.expiresAt) {
                 window.startLobbyTimer(rData.expiresAt);
             } else if (els.lobbyTimerText) {
@@ -593,6 +587,9 @@ window.joinRoomLogic = function(isReconnect = false) {
     });
 };
 
+/**
+ * GESTORE TIMER LOBBY (SCADENZA STANZA)
+ */
 window.startLobbyTimer = function(expiresAt) {
     if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
     if (!els.lobbyTimerText) return;
@@ -605,6 +602,7 @@ window.startLobbyTimer = function(expiresAt) {
             clearInterval(lobbyTimerInterval);
             els.lobbyTimerText.textContent = "STANZA SCADUTA!";
 
+            // Se sono l'Host, elimino la stanza automaticamente
             if (myId === roomHostId) {
                 showToast("Tempo scaduto! La stanza è stata chiusa.");
                 window.exitRoomCleanly(true);
@@ -631,6 +629,7 @@ window.renderPlayersList = function(playersData, hostId) {
     if (!els.playersList) return;
     els.playersList.innerHTML = '';
 
+    // Filtriamo i giocatori che hanno effettivamente accettato la sfida
     const playersArray = Object.entries(playersData);
     const count = playersArray.length;
     const acceptedPlayers = playersArray.filter(([id, data]) => data.accepted);
@@ -645,10 +644,11 @@ window.renderPlayersList = function(playersData, hostId) {
     let allReady = true;
     if (acceptedCount < 2) allReady = false;
 
+    // Mostriamo TUTTI i giocatori per visibilità, ma evidenziamo chi ha accettato
     playersArray.forEach(([id, data]) => {
         if (data.accepted && !data.ready) allReady = false;
         const li = document.createElement('li');
-        li.style.opacity = data.accepted ? "1" : "0.6";
+        li.style.opacity = data.accepted ? "1" : "0.6"; // Più chiaro se non confermato
 
         const nSpan = document.createElement('span');
         let statusIcon = data.accepted ? (data.ready ? '✅' : '⏳') : '👀';
@@ -684,13 +684,13 @@ window.renderPlayersList = function(playersData, hostId) {
     if (els.acceptChallengeBtn) {
         els.acceptChallengeBtn.style.display = (!amIHost && !haveIAccepted) ? 'block' : 'none';
         els.acceptChallengeBtn.onclick = () => {
-            window.unlockTTS(); // FIX TTS: Sblocco all'accettazione
             if (els.acceptChallengeBtn.disabled) return;
             els.acceptChallengeBtn.disabled = true;
             els.acceptChallengeBtn.textContent = "⌛ Elaborazione...";
 
             db.ref(`rooms/${roomCode}/players/${myId}`).update({ accepted: true }).then(() => {
                 db.ref(`rooms/${roomCode}/players`).once('value', s => {
+                    // --- FIX: Usiamo il conteggio totale dei presenti per coerenza bacheca ---
                     const totalCount = s.exists() ? Object.keys(s.val()).length : 1;
                     db.ref(`public_lobby_rooms/${roomCode}/pCount`).set(totalCount);
 
@@ -749,41 +749,59 @@ window.renderPlayersList = function(playersData, hostId) {
 };
 
 window.startCountdownSequence = function() {
-    window.unlockTTS(); // Richiamo di sicurezza addizionale
+    // --- SBLOCCO TTS PER MOBILE (iOS/Android) ---
+    if (window.isSpeakMode && ('speechSynthesis' in window)) {
+        window.speechSynthesis.cancel(); // Reset
+        const silent = new SpeechSynthesisUtterance("OK");
+        silent.volume = 0; // Silenzioso
+        window.speechSynthesis.speak(silent);
+        console.log("TTS: Audio warmed up for mobile device.");
+    }
 
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (listeners.room) listeners.room.off();
 
     isCourseMode = (window.currentMode === 'course');
     if (!window.isSinglePlayer) {
+        // Recuperiamo il conteggio iniziale dei giocatori che iniziano la sfida
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
             const initialPlayers = snap.val() || {};
+            // Non forziamo più a 2, lasciamo che il listener aggiorni il conteggio dinamico
             gameStartPlayerCount = Object.keys(initialPlayers).length;
 
             console.log("Match Start: Initial player count =", gameStartPlayerCount);
 
             if (listeners.players) db.ref(`rooms/${roomCode}/players`).off('value', listeners.players);
             listeners.players = db.ref(`rooms/${roomCode}/players`).on('value', pSnap => {
+                // Monitoriamo solo se la partita è effettivamente in corso o nel countdown
                 if (!gameRunning) return;
 
                 const players = pSnap.val() || {};
                 const currentPCount = Object.keys(players).length;
 
+                // --- NUOVA LOGICA DI RILEVAMENTO ABBANDONO (Più robusta) ---
+
+                // 1. Durante il countdown, aggiorniamo il conteggio di partenza se entrano nuovi giocatori
+                // Questo risolve il problema delle sfide dirette dove l'host entra un istante dopo l'accept
                 if (currentPCount > gameStartPlayerCount) {
                     gameStartPlayerCount = currentPCount;
                     console.log("Match Countdown: Player count updated to", gameStartPlayerCount);
                     return;
                 }
 
+                // 2. Verifichiamo l'abbandono solo se siamo oltre il countdown (o se il calo è drastico)
                 const playersArray = Object.values(players);
                 const hasAbandoned = playersArray.some(p => p.abandoned);
 
                 if (gameStartPlayerCount >= 2 && (currentPCount < gameStartPlayerCount || hasAbandoned)) {
+                    // Verifichiamo lo stato reale della stanza prima di chiudere
                     db.ref(`rooms/${roomCode}/status`).once('value', sSnap => {
                         const currentStatus = sSnap.val();
 
+                        // Chiudiamo a tavolino solo se la partita era iniziata o se l'abbandono è esplicito
                         if (currentStatus === 'playing' || hasAbandoned) {
                             if (currentPCount === 1 && players[myId]) {
+                                // --- FIX CO-OP: Se siamo in collaborazione, la partita NON termina se resta solo 1 giocatore ---
                                 if (window.currentMode === 'conquest' || window.window.isCoopMode) {
                                     showToast(currentLang === 'it' ? "Il tuo compagno ha abbandonato. Continua la missione da solo! ⚔️" : "Your teammate left. Continue the mission alone! ⚔️");
                                     return;
@@ -800,11 +818,14 @@ window.startCountdownSequence = function() {
                     });
                 }
 
+                // Caso 2: Qualcuno è ancora nel nodo ma è andato Offline (Crash o chiusura app)
+                // Lo gestiamo solo per il match 1vs1 per ora
                 if (gameStartPlayerCount === 2 && currentPCount === 2) {
                     const myNameLower = (myName || "").toLowerCase();
                     const opponent = Object.values(players).find(p => (p.name || "").toLowerCase() !== myNameLower);
 
                     if (opponent && opponent.online === false) {
+                        // Aspettiamo un momento per vedere se rientra
                         setTimeout(() => {
                             if (!gameRunning) return;
                             db.ref(`rooms/${roomCode}/players`).once('value', s => {
@@ -823,18 +844,21 @@ window.startCountdownSequence = function() {
     if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
     if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: 0`;
 
+    // --- GESTIONE CONTATORE SPETTATORI (REAL-TIME) ---
     if (window.isSinglePlayer && window.isAllowSpectators) {
         if (els.spectatorsCountDisplay) {
             els.spectatorsCountDisplay.style.display = 'inline-block';
             els.spectatorsCountDisplay.textContent = '👁️ 0';
         }
 
+        // Pulizia listener precedente se presente
         if (listeners.spectators) db.ref(`rooms/${roomCode}/spectators`).off('value', listeners.spectators);
 
         listeners.spectators = db.ref(`rooms/${roomCode}/spectators`).on('value', snap => {
             const count = snap.exists() ? Object.keys(snap.val()).length : 0;
             if (els.spectatorsCountDisplay) {
                 els.spectatorsCountDisplay.textContent = `👁️ ${count}`;
+                // Piccolo effetto visivo quando entra qualcuno
                 els.spectatorsCountDisplay.style.transform = 'scale(1.2)';
                 setTimeout(() => { if(els.spectatorsCountDisplay) els.spectatorsCountDisplay.style.transform = 'scale(1)'; }, 200);
             }
@@ -856,6 +880,7 @@ window.startCountdownSequence = function() {
     if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
 
     if (window.currentMode === 'pingpong' && (myId === roomHostId || roomCode.startsWith("TRN_"))) {
+        // RESET E INIZIALIZZAZIONE PING PONG (Il primo sender è sempre l'Host o chi avvia il match)
         const initialSender = roomHostId || myId;
         db.ref(`rooms/${roomCode}/pingpong`).set({
             senderId: initialSender,
@@ -868,6 +893,7 @@ window.startCountdownSequence = function() {
 
     window.showScreen('countdownScreen');
 
+    // RESET CONDIVISIONE
     const share = document.getElementById('matchShareContainer');
     if (share) share.style.display = 'none';
 
@@ -908,12 +934,13 @@ window.startCountdownSequence = function() {
                     console.log("Countdown: Entering QSO Mode via startQsoMode()");
                     if (typeof window.startQsoMode === 'function') {
                         window.startQsoMode();
-                        return;
+                        return; // BLOCCO ASSOLUTO PER QSO
                     } else {
                         console.error("QSO Error: window.startQsoMode is NOT a function!");
                     }
                 }
 
+                // Se arriviamo qui, non è una modalità speciale, quindi mostriamo il gameArea (parole)
                 window.showScreen('gameArea');
                 if (mode === 'pingpong') {
                     if (typeof window.initPingPongManager === 'function') window.initPingPongManager();
@@ -974,6 +1001,7 @@ window.resumeGameSequence = function() {
 };
 
 window.playNextWord = function() {
+    // BLOCCO DI SICUREZZA ASSOLUTO PER QSO
     if (window.currentMode === 'qso') {
         console.warn("GameCore: playNextWord interrotto perché in modalità QSO.");
         if (typeof window.startQsoMode === 'function') window.startQsoMode();
@@ -983,24 +1011,32 @@ window.playNextWord = function() {
     if (!gameRunning || window.currentMode === 'pingpong') return;
     if (isCourseMode) return window.playNextCourseGroup?.();
 
+    // --- LOGICA PERFEZIONE: Gestione flussi ---
     if (window.currentMode === 'perfection') {
         const queueLen = window.perfectionQueue ? window.perfectionQueue.length : 0;
 
+        // Fine partita: parole finite E coda vuota
         if (wordIndex >= requestedWordCount && queueLen === 0) {
             return window.finishGame();
         }
 
+        // Decidiamo se pescare un recupero
         const canRetry = queueLen > 0;
-        const mustRetry = wordIndex >= requestedWordCount; 
+        const mustRetry = wordIndex >= requestedWordCount; // Abbiamo finito le nuove, dobbiamo svuotare la coda
 
+        // Filtriamo la coda: peschiamo solo parole che hanno un "cooldown" di almeno 3 parole nuove
+        // Se però abbiamo finito le parole nuove (mustRetry), ignoriamo il cooldown per non bloccare il gioco
         const availableRetries = mustRetry ? window.perfectionQueue : window.perfectionQueue.filter(r => (window.perfectionWordsDone - r.addedAt) >= 3);
 
+        // Proponiamo un recupero ogni 4 parole nuove, o se siamo obbligati (fine mazzo)
         const shouldRetry = (availableRetries.length > 0) && (window.perfectionWordsDone % 4 === 0 || mustRetry);
 
         if (shouldRetry && !window.isPerfectionRetry) {
+            // Peschiamo una parola a caso tra quelle disponibili
             const rndIdx = Math.floor(Math.random() * availableRetries.length);
             const retryObjOrig = availableRetries[rndIdx];
 
+            // Troviamo l'indice reale nella coda originale (importante per splice corretto)
             const realIdx = window.perfectionQueue.indexOf(retryObjOrig);
             const retryObj = window.perfectionQueue.splice(realIdx, 1)[0];
 
@@ -1026,6 +1062,7 @@ window.playNextWord = function() {
         activeWpm = window.currentPerfectionWpm;
         showToast(currentLang === 'it' ? "🔄 RECUPERO ERRORE" : "🔄 ERROR RETRY", 1000);
     } else {
+        // Attesa caricamento parole se necessario
         if (!gameWords || !gameWords[wordIndex]) {
             console.log("GameCore: Parole non pronte, attendo...");
             setTimeout(window.playNextWord, 200);
@@ -1035,6 +1072,7 @@ window.playNextWord = function() {
         activeWpm = currentWpm;
     }
 
+    // UI Feedback
     const easyHint = document.getElementById('easyModeHint');
     if (isEasyMode && easyHint) {
         const shuffled = currentWord.split('').sort(() => Math.random() - 0.5).join('');
@@ -1060,13 +1098,14 @@ window.playNextWord = function() {
 };
 
 window.finishGame = function() {
+    // Se vinciamo a tavolino con 0 punti, diamo un punto simbolico per attivare il salvataggio
     if (totalScore === 0 && !window.isSinglePlayer && !isCourseMode) {
         totalScore = 1;
     }
 
     gameRunning = false;
     inputActive = false;
-    window.isRoomMonitorActive = false; 
+    window.isRoomMonitorActive = false; // Disattiva il monitor di background per questa stanza
 
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
     if (els.permanentGameInput) els.permanentGameInput.blur();
@@ -1080,8 +1119,10 @@ window.finishGame = function() {
     if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
 
+    // Se è una partita singola, segnamo la stanza come finita sul server e poi la puliamo
     if (roomCode && window.isSinglePlayer) {
         db.ref(`rooms/${roomCode}/status`).set('finished');
+        // PULIZIA: Rimuoviamo la stanza singola dopo 5 secondi (tempo per caricare la leaderboard)
         const cleanupCode = roomCode;
         setTimeout(() => {
             if (cleanupCode) db.ref(`rooms/${cleanupCode}`).remove();
@@ -1101,7 +1142,7 @@ window.finishGame = function() {
     });
 
     if (roomCode) {
-        window.lastFinishedRoomCode = roomCode; 
+        window.lastFinishedRoomCode = roomCode; // Salviamo l'ultimo codice per la leaderboard
         const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
         myPlayerRef.update({ finished: true, score: totalScore, wpm: peakWpm, matchDetails: matchDetailsArray });
         myPlayerRef.onDisconnect().cancel();
@@ -1109,6 +1150,7 @@ window.finishGame = function() {
 
     if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {
         console.log("FinishGame: Scheduling Rating Check for mode", window.currentMode);
+        // --- NUOVO: CONTROLLO VALUTAZIONE GIOCO ---
         setTimeout(() => {
             if (typeof window.checkGameRating === 'function') {
                 window.checkGameRating();
@@ -1119,6 +1161,10 @@ window.finishGame = function() {
             const playersData = snap.val() || {};
             const pArray = Object.values(playersData);
 
+            // --- FIX CLASSIFICA SFIDE ---
+            // Determiniamo se è un multiplayer se:
+            // 1. Ci sono effettivamente 2 o più persone nel nodo finale
+            // 2. OPPURE la stanza non era single player e il conteggio iniziale era >= 2
             const isActuallyMulti = (pArray.length >= 2) || (!window.isSinglePlayer && gameStartPlayerCount >= 2);
 
             let dbPath;
@@ -1145,6 +1191,7 @@ window.finishGame = function() {
                 let oldWpm = oldData ? (Number(oldData.wpm) || 0) : 0;
                 const myLevel = window.userProgression?.level || 1;
 
+                // Aggiorniamo se il punteggio è migliore, OPPURE se il punteggio è uguale ma la velocità è superiore
                 if (!oldData || window.totalScore > oldScore || (window.totalScore === oldScore && window.peakWpm > oldWpm)) {
                     db.ref(dbPath).set({
                         name: window.myName,
@@ -1158,6 +1205,7 @@ window.finishGame = function() {
                     });
                     window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
                 } else {
+                    // Anche se non è record, aggiorniamo il livello se è cambiato
                     if (oldData && oldData.level !== myLevel) {
                         db.ref(dbPath).update({ level: myLevel });
                     }
@@ -1165,6 +1213,7 @@ window.finishGame = function() {
                 }
             });
 
+            // --- SALVATAGGIO RIEPILOGO MATCH (CRONOLOGIA SFIDE) ---
             if (isActuallyMulti) {
                 window.saveMatchSummary(snap.val());
             }
@@ -1175,14 +1224,17 @@ window.finishGame = function() {
         db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: window.currentMode, score: totalScore, wpm: peakWpm, type: window.isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
         if (typeof window.updateActivity === 'function') window.updateActivity(totalScore > 0);
 
+        // --- ASSEGNAZIONE XP FINALE (RPG) ---
         if (typeof window.addXP === 'function') {
-            const xpGain = Math.floor(totalScore / 10) + 50; 
+            const xpGain = Math.floor(totalScore / 10) + 50; // XP base + bonus partita
             window.addXP(xpGain, "Match Finished");
         }
     }
 
+    // --- MOSTRA TASTI RIASCOLTO NELLA TABELLA SOLO A FINE PARTITA ---
     window.showPostMatchReplayButtons();
 
+    // --- MODIFICA: RESTA NELLA SCHERMATA GIOCO PER REVISIONE ---
     const qBtn = (window.currentMode === 'quiz') ? els.quitQuizBtn : els.quitGameBtn;
 
     if (qBtn) {
@@ -1195,6 +1247,7 @@ window.finishGame = function() {
         qBtn.classList.remove('btn-danger');
         qBtn.classList.add('btn-success');
 
+        // Salviamo lo stato del gioco corrente per la navigazione classifiche
         const savedMode = window.currentMode;
         const savedWordCount = requestedWordCount;
         const savedSinglePlayer = window.isSinglePlayer;
@@ -1206,12 +1259,15 @@ window.finishGame = function() {
             const singleToRoute = savedSinglePlayer;
             const codeToRoute = savedRoomCode;
 
+            // --- FIX: Impostiamo lbManualRouting PRIMA di uscire per evitare redirect alla Home ---
             window.lbManualRouting = (modeToRoute !== 'course');
 
+            // Pulizia UI e ripristino bottone originale
             qBtn.textContent = currentLang === 'it' ? "Abbandona" : "Quit";
             qBtn.classList.add('btn-danger');
             qBtn.classList.remove('btn-success');
 
+            // Ripristino onclick originale in base alla modalità
             if (modeToRoute === 'quiz') {
                 if (typeof window.initQuizManager === 'function') window.initQuizManager();
             } else {
@@ -1230,17 +1286,22 @@ window.finishGame = function() {
                 return;
             }
 
+            // Usciamo dalla stanza (ora rispetterà lbManualRouting)
             window.exitRoomCleanly(false, false);
+
+            // Eseguiamo la navigazione alla classifica
             window.finishGameNavigation(modeToRoute, wcToRoute, singleToRoute, codeToRoute);
         };
     }
 
+    // Pulizia eventuale container condivisione precedente
     const oldShare = document.getElementById('matchShareContainer');
     if (oldShare) oldShare.style.display = 'none';
 
     if (els.gameInputArea) els.gameInputArea.style.display = 'none';
     if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<b style="color:var(--champ-color)">FINITO!</b> PT: ${totalScore}`;
 
+    // --- NUOVO: AUTO-NAVIGAZIONE PER SFIDA GIORNALIERA ---
     if (window.currentMode === 'daily_challenge' && totalScore > 0) {
         setTimeout(() => {
             if (typeof window.finishGameNavigation === 'function') {
@@ -1252,10 +1313,11 @@ window.finishGame = function() {
         }, 3000);
     }
 
+    // --- NUOVO: REPORT ALLENAMENTO MIRATO ---
     if (window.currentMode === 'target_training' && window.targetTrainingContext) {
         setTimeout(() => {
             window.generateTargetTrainingReport();
-        }, 2000); 
+        }, 2000); // Ritardo per permettere di vedere la classifica o la fine partita
     }
 }
 
@@ -1267,6 +1329,7 @@ window.generateTargetTrainingReport = function() {
     const content = document.getElementById('targetTrainingReportContent');
     if (!modal || !content) return;
 
+    // 1. Analisi sessione attuale
     let sessionCharStats = {};
     matchDetailsArray.forEach(match => {
         const real = match.real.toUpperCase();
@@ -1323,6 +1386,7 @@ window.generateTargetTrainingReport = function() {
         `;
     });
 
+    // Sintesi finale
     let summaryText = "";
     if (perfect.length === ctx.targetChars.length) {
         summaryText = "🚀 PERFORMANCE LEGGENDARIA! Hai azzerato tutti i tuoi blocchi critici in questa sessione. Continua così per consolidare il risultato.";
@@ -1341,8 +1405,9 @@ window.generateTargetTrainingReport = function() {
 };
 
 window.showMatchShareButtons = function() {
-    if (window.currentMode === 'course') return; 
+    if (window.currentMode === 'course') return; // OTTIMIZZAZIONE: Nessun social nel corso
 
+    // Cerchiamo un contenitore dove inserire i bottoni, o lo creiamo sotto la tabella
     let shareContainer = document.getElementById('matchShareContainer');
     if (!shareContainer) {
         shareContainer = document.createElement('div');
@@ -1381,11 +1446,15 @@ window.showMatchShareButtons = function() {
 window.saveMatchSummary = function(playersData) {
     if (!playersData || window.isSinglePlayer || isCourseMode || !roomCode) return;
 
+    // --- FIX: Usiamo roomCode come ID univoco del match per garantire la sincronizzazione ---
+    // Essendo il roomCode unico per sessione, entrambi i giocatori scriveranno nello stesso nodo.
     const matchId = roomCode;
     const safeWordCount = requestedWordCount || 10;
 
+    // Recuperiamo i dati dei giocatori
     const players = Object.entries(playersData).map(([pid, p]) => {
         let pName = p.name || "Sconosciuto";
+        // Fallback robusto se il nome manca nel nodo player (es. ritardo sync)
         if ((pName === "Sconosciuto" || !pName) && pid === window.myId) pName = window.myName;
 
         return {
@@ -1399,17 +1468,20 @@ window.saveMatchSummary = function(playersData) {
         };
     });
 
+    // Se c'è solo un giocatore (e non è abbandonato), non è un match multiplayer valido da salvare
     if (players.length < 2) {
         console.log("Summary: Skipping save, match not multiplayer (only 1 player).");
         return;
     }
 
+    // Determiniamo il percorso corretto
     let baseMode = window.currentMode;
     if (baseMode === 'std') baseMode = 'standard';
 
     const validModes = ['standard', 'standard_plus', 'target_training', 'chars', 'quiz', 'pingpong', 'conquest', 'callsign', 'qso'];
     let category = validModes.includes(baseMode) ? baseMode : 'standard';
 
+    // Aggiungiamo sempre il suffisso _multi per la classifica "Sfide"
     if (category !== 'pingpong' && category !== 'conquest') {
         if (!category.endsWith("_multi")) category += "_multi";
     }
@@ -1441,8 +1513,10 @@ window.showPostMatchReplayButtons = function() {
 
         const isCorrect = (detail.real === detail.typed);
         if (!isCorrect) {
+            // Troviamo la cella Pt / 🔊 (indice 2)
             const tdActions = row.cells[2];
             if (tdActions) {
+                // Puliamo prima per sicurezza se richiamata più volte
                 const oldBtn = tdActions.querySelector('.action-btn-small');
                 if (oldBtn) oldBtn.remove();
 
@@ -1463,11 +1537,13 @@ function finishGameNavigation(mode, wordCount, isSingle, code) {
     window.lbManualRouting = true;
     window.showScreen('leaderboardScreen');
 
+    // Determiniamo la categoria principale (tab)
     let mainGroup = 'multi';
     if (mode === 'daily_challenge') mainGroup = 'daily';
     else if (mode === 'callsign' || mode === 'arcade') mainGroup = 'special';
     else if (isSingle) mainGroup = 'single';
 
+    // Determiniamo il sotto-modo (select) per la navigazione
     let subMode = isSingle ? 'std_single' : 'std_multi';
     if (mode === 'standard_plus') subMode = isSingle ? 'std_plus_single' : 'std_plus_multi';
     else if (mode === 'callsign') subMode = 'cwfreak';
@@ -1568,6 +1644,7 @@ window.speakWord = function(text) {
 window.renderDiffSecure = function(container, real, typed) {
     if (!real) return;
 
+    // Se ci sono spazi, analizziamo parola per parola per evitare l'effetto trascinamento degli errori
     if (real.includes(' ')) {
         const rWords = real.toUpperCase().split(' ');
         const tWords = (typed || "").toUpperCase().split(' ');
@@ -1629,8 +1706,10 @@ if (els.permanentGameInput) {
         }
         if (window.currentMode === 'chars' && inputActive && gameRunning) {
             const rawVal = els.permanentGameInput.value;
+            // Estraiamo solo il carattere digitato ignorando spazi/controlli aggiunti dal tablet
             const cleanVal = rawVal.replace(/\s/g, '').toUpperCase();
             if (cleanVal.length >= 1) {
+                // Prendiamo l'ultimo carattere inserito in caso di buffer tastiera
                 window.handleWordSubmission(cleanVal[cleanVal.length - 1]);
                 els.permanentGameInput.value = "";
             }
@@ -1640,8 +1719,12 @@ if (els.permanentGameInput) {
         if ((e.key === 'Enter' || e.keyCode === 13) && inputActive && gameRunning && window.currentMode !== 'chars') {
             const val = els.permanentGameInput.value.trim().toUpperCase();
             if (val) {
-                // FIX TTS: Sblocco al tocco invio
-                window.unlockTTS();
+                // --- SBLOCCO VOCE PER MOBILE (AL TOCCO ENTER) ---
+                if (window.isSpeakMode && ('speechSynthesis' in window)) {
+                    const silent = new SpeechSynthesisUtterance(" ");
+                    silent.volume = 0.001;
+                    window.speechSynthesis.speak(silent);
+                }
                 window.handleWordSubmission(val);
                 els.permanentGameInput.value = "";
             }
@@ -1657,6 +1740,7 @@ window.handleWordSubmission = function(userWord) {
 
     userWord = userWord.substring(0, 50).trim().toUpperCase();
 
+    // 1. MODALITÀ CORSO
     if (isCourseMode) {
         inputActive = false;
         const currentWord = gameWords[wordIndex] || "";
@@ -1711,6 +1795,7 @@ window.handleWordSubmission = function(userWord) {
         return;
     }
 
+    // 2. MODALITÀ CONQUISTA (CO-OP)
     if (window.currentMode === 'conquest') {
         if (coopActiveFreqIndex === 0) return showToast("⚠️ Seleziona prima una Frequenza!");
         const currentWord = gameWords[0];
@@ -1757,6 +1842,7 @@ window.handleWordSubmission = function(userWord) {
         return;
     }
 
+    // 3. ALTRE MODALITÀ (Standard, Perfection, Chars, Callsign, PingPong)
     inputActive = false;
     let currentWord;
     let activeWpmForThisWord = currentWpm;
@@ -1773,6 +1859,7 @@ window.handleWordSubmission = function(userWord) {
     const reactionMs = Date.now() - lastWordStartTime;
     let levDist = 0;
 
+    // --- LOGICA SPECIALE PER PAROLE COMUNI + (GRANULARE) ---
     if (window.currentMode === 'standard_plus' && currentWord.includes(' ')) {
         const rWords = currentWord.split(' ');
         const tWords = userWord.split(' ');
@@ -1792,18 +1879,22 @@ window.handleWordSubmission = function(userWord) {
         scoreColor = (levDist === 0) ? "#4caf50" : (levDist < 3 ? "#ff9800" : "#d32f2f");
     } else {
         levDist = window.getLevenshteinDistance(currentWord, userWord);
+        // Calcolo Punti Standard
         if (typeof window.calculateGamePoints === 'function') {
             const res = window.calculateGamePoints(window.currentMode, currentWord, userWord, activeWpmForThisWord, reactionMs, levDist, usedReplay);
             points = res.points; scoreColor = res.scoreColor;
         }
     }
 
+    // --- NUOVO TRACCIAMENTO STATISTICO AVANZATO ---
     if (typeof window.trackAdvancedErrors === 'function') {
         window.trackAdvancedErrors(currentWord, userWord, activeWpmForThisWord);
     }
 
+    // Gestione Errori e Coda Perfezione
     if (levDist > 0 || usedReplay) {
         if (window.currentMode === 'perfection') {
+            // Aggiungiamo alla coda memorizzando QUANDO è stata aggiunta per il cooldown
             window.perfectionQueue.push({
                 word: currentWord,
                 wpm: activeWpmForThisWord,
@@ -1812,12 +1903,14 @@ window.handleWordSubmission = function(userWord) {
         }
     }
 
+    // Avanzamento WPM e Missioni
     if (levDist === 0 && !usedReplay) {
         if (!window.isPerfectionRetry) {
             if (!isFixedSpeed && window.currentMode !== 'chars') {
                 currentWpm += 2;
                 if (currentWpm > peakWpm) peakWpm = currentWpm;
             }
+            // AGGIORNAMENTO STREAK E MISSIONI
             window.currentStreak++;
             if (typeof window.updateMissionProgress === 'function') {
                 window.updateMissionProgress('count', 1);
@@ -1826,6 +1919,7 @@ window.handleWordSubmission = function(userWord) {
             }
         }
     } else {
+        // RESET STREAK IN CASO DI ERRORE O REPLAY
         window.currentStreak = 0;
         if (!isFixedSpeed && window.currentMode !== 'chars') {
             if (usedReplay || levDist > 1) {
@@ -1841,12 +1935,14 @@ window.handleWordSubmission = function(userWord) {
     const lastEntry = { real: currentWord, typed: userWord, points: points, wpm: activeWpmForThisWord, ms: reactionMs, isRetry: window.isPerfectionRetry };
     matchDetailsArray.push(lastEntry);
 
+    // UI Tabella
     if (window.currentMode !== 'pingpong') {
         const tr = document.createElement('tr');
         if (window.isPerfectionRetry) tr.style.background = "rgba(76, 175, 80, 0.05)";
         const tdTyped = document.createElement('td'); tdTyped.textContent = userWord || "-";
         const tdReal = document.createElement('td');
 
+        // MODIFICA PERFEZIONE: Se è un errore, non mostriamo la parola reale (Nascosta 🔒)
         if (window.currentMode === 'perfection' && (levDist > 0 || usedReplay)) {
             tdReal.innerHTML = `<span style="opacity:0.5; font-size:0.9em; font-style:italic;">[Nascosto 🔒]</span>`;
         } else {
@@ -1864,10 +1960,12 @@ window.handleWordSubmission = function(userWord) {
 
     if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${totalScore}`;
 
+    // --- NUOVA LOGICA ASCOLTO (TTS) ---
     if (window.isSpeakMode && currentWord) {
         window.speakWord(currentWord);
     }
 
+    // FINE PAROLA: Avanzamento e Sincronizzazione
     if (window.currentMode === 'pingpong') {
         wordIndex++;
         db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
@@ -1883,18 +1981,21 @@ window.handleWordSubmission = function(userWord) {
             window.perfectionWordsDone++;
         }
         if (roomCode) {
+            // OTTIMIZZAZIONE: Inviamo solo l'ultimo aggiornamento invece di tutto l'array
             db.ref(`rooms/${roomCode}/players/${myId}`).update({
                 score: totalScore,
                 wpm: currentWpm,
                 wordIndex: wordIndex,
                 lastUpdate: lastEntry
             });
+            // Salviamo l'array completo solo nel nodo storico (una volta a fine match sarebbe ideale, ma per ora lo lasciamo per sicurezza ma in un nodo meno "ascoltato")
             db.ref(`rooms/${roomCode}/players/${myId}/matchDetailsFull`).set(matchDetailsArray);
         }
 
         usedReplay = false;
         if (nextWordTimeout) clearTimeout(nextWordTimeout);
 
+        // --- FIX ASCOLTO: Ritardo più lungo per permettere alla voce di finire ---
         const nextWordDelay = window.isSpeakMode ? 3000 : 1000;
 
         nextWordTimeout = setTimeout(() => {
@@ -1905,6 +2006,8 @@ window.handleWordSubmission = function(userWord) {
         }, nextWordDelay);
     }
 };
+
+
 
 if (els.quitGameBtn) {
     els.quitGameBtn.onclick = function() {
@@ -1924,11 +2027,14 @@ if (els.deleteRoomBtn) {
             const currentCode = roomCode;
             window.exitRoomCleanly(true, false);
             if (currentCode) {
+                // PULIZIA INTELLIGENTE:
+                // Se è un torneo (TRN_), non eliminiamo la stanza per non bloccare gli altri, andiamo solo offline
                 if (currentCode.startsWith("TRN_")) {
                     db.ref(`rooms/${currentCode}/players/${myId}`).update({ online: false });
                     window.isDeletingRoom = false;
                     if (els.deleteRoomBtn) els.deleteRoomBtn.disabled = false;
                 } else {
+                    // Se siamo Host di una stanza standard, eliminiamo tutto (Stanza + Lobby pubblica)
                     db.ref(`public_lobby_rooms/${currentCode}`).remove();
                     db.ref(`rooms/${currentCode}`).remove().finally(() => {
                         window.isDeletingRoom = false;
@@ -1952,7 +2058,6 @@ if (els.leaveLobbyBtn) {
 
 if (els.startMultiplayerBtn) {
     els.startMultiplayerBtn.onclick = function() {
-        window.unlockTTS(); // FIX TTS: Sblocco all'avvio host
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
             if (window.currentMode === 'pingpong' && (snap.exists() ? Object.keys(snap.val()).length : 0) < 2) {
                 return alert("Ping Pong richiede almeno 2 giocatori in stanza per iniziare!");
@@ -1965,10 +2070,38 @@ if (els.startMultiplayerBtn) {
 
 if (els.readyBtn) {
     els.readyBtn.addEventListener('click', () => {
-        window.unlockTTS(); // FIX TTS: Sblocco stato pronto
         if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ ready: true });
     });
 }
+
+// Rimossa inizializzazione ridondante, gestita in initPingPongManager
+/*
+if (els.btnSendPingPong) {
+    els.btnSendPingPong.onclick = function() {
+        const input = document.getElementById('pingPongWordToSend');
+        const val = input ? input.value.trim().toUpperCase() : "";
+        if (!val) return;
+
+        db.ref(`rooms/${roomCode}/pingpong`).transaction(d => {
+            if (d && !d.word) {
+                d.word = val;
+                d.wordId = (d.wordId || 0) + 1;
+                d.senderId = myId;
+            }
+            return d;
+        });
+    };
+}
+*/
+
+// Rimossa inizializzazione ridondante, gestita in initPingPongManager
+/*
+if (document.getElementById('pingPongWordToSend')) {
+    document.getElementById('pingPongWordToSend').onkeypress = function(e) {
+        if (e.key === 'Enter') els.btnSendPingPong.click();
+    };
+}
+*/
 
 window.lostFocusDuringWord = false;
 
@@ -2062,53 +2195,64 @@ window.startTransmissionFree = function(mode) {
     const container = document.getElementById('standaloneTxContainer');
     if (!screen || !container) return;
 
+    // Reset UI
     window.showScreen('transmissionScreen');
     container.innerHTML = "";
 
+    // Recuperiamo i parametri impostati nel menu principale
     const wpm = parseInt(document.getElementById('startWpmInput')?.value) || 20;
     const tone = parseInt(document.getElementById('toneInput')?.value) || 600;
     const lesson = parseInt(document.getElementById('setupKochLevelInput')?.value) || 2;
 
+    // Sincronizziamo lo stato per il TransmissionManager
     if (window.keyerState) {
         window.keyerState.wpm = wpm;
         window.keyerState.tone = tone;
         window.currentTone = tone;
     }
 
+    // Forza la lezione Koch scelta per la sessione libera
     if (!window.courseData) window.courseData = { progress: {}, settings: {} };
     if (!window.courseData.progress) window.courseData.progress = {};
     window.courseData.progress.current_lesson = lesson;
     if (!window.courseData.settings) window.courseData.settings = {};
     window.courseData.settings.start_wpm = wpm;
 
+    // SPOSTAMENTO ELEMENTI (Invece di clonazione per preservare listener)
     if (mode === 'standard' || mode === 'groups_tx') {
         const source = document.getElementById('courseTransmissionView');
         if (source) {
-            container.appendChild(source); 
+            container.appendChild(source); // Sposta fisicamente l'elemento originale
             source.style.display = "flex";
 
+            // Nascondiamo il pannello configurazione interno (ne abbiamo uno nel menu principale)
             const cfg = source.querySelector('.box-panel');
             if (cfg) cfg.style.display = "none";
 
+            // Gestione visibilità sezioni specifiche
             const groupCont = document.getElementById('groupTxContainer');
             if (groupCont) groupCont.style.display = (mode === 'groups_tx') ? 'block' : 'none';
 
+            // RESET STATO UI DEL MODULO (Punto di domanda, ecc)
             const targetEl = document.getElementById('txTargetChar');
             const feedbackEl = document.getElementById('txFeedbackText');
             if (targetEl) targetEl.textContent = "?";
             if (feedbackEl) feedbackEl.textContent = (mode === 'groups_tx') ? "Premi AVVIA per iniziare i gruppi" : "Premi AVVIA per allenarti";
 
+            // Re-inizializziamo i listener (necessario se il DOM è stato spostato)
             setTimeout(() => {
                 if (typeof window.initTransmissionManager === 'function') window.initTransmissionManager();
             }, 100);
         }
     } else if (mode === 'real_tx') {
+        // Avvio Modalità Ricezione Audio Reale
         window.showScreen('realTxScreen');
         if (typeof window.initAudioAnalyzer === 'function') {
             window.initAudioAnalyzer();
         }
     }
 };
+
 
 function mulberry32(a) {
     return function() {
@@ -2119,6 +2263,7 @@ function mulberry32(a) {
     };
 }
 
+// --- AVVIO APP (SICUREZZA DOM E MODULI) ---
 function bootApp() {
     console.log("CW Game: Booting app...");
     if (typeof window.initDOMCache === 'function') window.initDOMCache();
