@@ -83,13 +83,20 @@ window.startQsoMode = function() {
 
         if (customServerUrl) {
             console.log("🔗 Collegamento al Bridge dedicato su Raspberry:", customServerUrl);
-            // Estraiamo host, porta e path dall'URL (es: http://ip:9000/qso)
             try {
-                const url = new URL(customServerUrl);
+                // Puliamo l'URL per sicurezza
+                const cleanUrl = customServerUrl.replace(/\/$/, "");
+                const url = new URL(cleanUrl);
+
                 peerConfig.host = url.hostname;
                 peerConfig.port = url.port || 80;
-                peerConfig.path = url.pathname;
+                // Importante: se il server risponde alla radice, il path deve essere "/"
+                peerConfig.path = '/';
                 peerConfig.secure = url.protocol === 'https:';
+
+                // Debug per console
+                console.log(`Configurazione Peer: Host=${peerConfig.host}, Port=${peerConfig.port}, Path=${peerConfig.path}`);
+
                 window.updateQsoStatus("BRIDGE RASPBERRY ATTIVO", "#2ecc71");
             } catch (e) {
                 console.error("Errore parsing customServerUrl, uso server standard", e);
