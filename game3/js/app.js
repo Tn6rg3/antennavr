@@ -477,28 +477,16 @@ async function startApp() {
         return;
     }
 
-    // --- WATCHDOG: Rileva se l'app non si carica entro 20 secondi ---
-    const loadTimeout = setTimeout(async () => {
-        const loadingVisible = els.loadingScreen && els.loadingScreen.classList.contains('active-screen');
-        if (loadingVisible) {
-            console.error("Watchdog: Caricamento troppo lungo, invio notifica di errore...");
-            const errorMsg = "⚠️ <b>L'app sta impiegando troppo tempo a caricarsi.</b>\nÈ possibile che sia in corso un aggiornamento o che ci sia un problema di rete. Riprova tra un minuto! 📻";
-            // Chiamata silenziosa al GAS per notificare l'utente tramite bot
-            fetch(`${VALIDATION_SERVER_URL}?action=notify&targetId=${window.myId}&text=${encodeURIComponent(errorMsg)}`, { mode: 'no-cors' });
-
-            if (document.getElementById('initStatusText')) {
-                document.getElementById('initStatusText').innerHTML = "Rete lenta o aggiornamento in corso...<br><small>Ti abbiamo inviato una notifica sul bot.</small>";
-            }
-        }
-    }, 20000);
-
     // 1. Fase di Verifica Identità (Backend Google Apps Script)
     const statusText = document.getElementById('initStatusText');
     if (statusText) statusText.textContent = "Verifica identità Morse...";
 
     try {
         const isVerified = await validateIdentity();
-        clearTimeout(loadTimeout); // Caricamento riuscito, fermiamo il watchdog
+
+        // Segnaliamo che l'app ha superato la fase critica di avvio
+        window.appIsReady = true;
+        if (window.bootstrapTimer) clearTimeout(window.bootstrapTimer);
 
         if (!isVerified) {
             if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
@@ -640,6 +628,20 @@ function initGame() {
     window.auth = firebase.auth();
     db = window.db;
     auth = window.auth;
+
+    // --- CONTROLLO MANUTENZIONE (Firebase) ---
+    db.ref('appConfig/maintenance').on('value', snap => {
+        if (snap.val() === true) {
+            console.warn("App: Modalità manutenzione attiva.");
+            window.appIsReady = true; // Ferma il bootstrap watchdog
+            if (window.bootstrapTimer) clearTimeout(window.bootstrapTimer);
+
+            const screens = document.querySelectorAll('.screen');
+            screens.forEach(s => s.classList.remove('active-screen'));
+            if (els.maintenanceScreen) els.maintenanceScreen.classList.add('active-screen');
+            if (els.loadingScreen) els.loadingScreen.style.display = 'none';
+        }
+    });
 
     isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
     if (els.startWpmInput) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM) || 20;
