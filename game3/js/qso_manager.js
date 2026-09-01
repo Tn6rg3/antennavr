@@ -61,6 +61,9 @@ window.startQsoMode = function() {
     window.qsoState.isRelayMode = false;
     window.qsoState.relayStartTime = Date.now();
     const btn = document.getElementById('btnForceQsoRelay'); if (btn) btn.style.display = 'block';
+    const echoBtn = document.getElementById('btnToggleQsoEcho'); if (echoBtn) echoBtn.style.display = 'block';
+    window.qsoState.echoActive = false;
+    if (echoBtn) { echoBtn.textContent = "TEST CANALE (ECHO): OFF"; echoBtn.className = "btn-warning"; }
 
     const myPeerId = "CWGAME_" + window.myId;
     if (window.qsoState.peer) window.qsoState.peer.destroy();
@@ -212,14 +215,54 @@ window.exitQsoMode = function() {
     if (window.roomCode) {
         db.ref(`rooms/${window.roomCode}/players`).off('value');
         db.ref(`rooms/${window.roomCode}/qso_state/relay_active`).off('value');
-        db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).remove();
+        if (!window.qsoState.echoActive) db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).remove();
     }
     if (window.qsoState.syncInterval) clearInterval(window.qsoState.syncInterval);
     if (window.qsoState.hbInterval) clearInterval(window.qsoState.hbInterval);
+    if (window.qsoState.echoListener) {
+        db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).off('child_added', window.qsoState.echoListener);
+        window.qsoState.echoListener = null;
+    }
     window.qsoState.conn?.close(); window.qsoState.peer?.destroy();
     window.qsoState.conn = null; window.qsoState.peer = null;
     window.qsoState.isInitialized = false;
     window.stopTone();
     window.stopRemoteTone();
     window.exitRoomCleanly(false, true);
+};
+
+window.toggleQsoEcho = function() {
+    if (!window.roomCode) { alert("Crea o entra in una stanza prima di attivare l'Echo Test."); return; }
+    const btn = document.getElementById('btnToggleQsoEcho');
+    window.qsoState.echoActive = !window.qsoState.echoActive;
+
+    const myRelayRef = db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`);
+
+    if (window.qsoState.echoActive) {
+        window.qsoState.echoStartTime = Date.now();
+        if (btn) { btn.textContent = "ECHO TEST: ON 🔊"; btn.className = "btn-success"; }
+        window.updateQsoStatus("ECHO TEST ATTIVO", "#2ecc71");
+
+        window.qsoState.echoListener = (rSnap) => {
+            const data = rSnap.val();
+            // Ascoltiamo solo eventi futuri rispetto all'attivazione dell'echo
+            if (!data || data.ts < window.qsoState.echoStartTime) return;
+
+            // Riproduciamo il tono che abbiamo appena inviato a Firebase
+            if (data.s === 1) {
+                if (typeof window.startRemoteTone === 'function') window.startRemoteTone(data.f);
+            } else if (data.s === 0) {
+                if (typeof window.stopRemoteTone === 'function') window.stopRemoteTone();
+            }
+        };
+        myRelayRef.on('child_added', window.qsoState.echoListener);
+    } else {
+        if (btn) { btn.textContent = "ECHO TEST: OFF"; btn.className = "btn-warning"; }
+        window.updateQsoStatus("ECHO TEST SPENTO", "#f39c12");
+        if (window.qsoState.echoListener) {
+            myRelayRef.off('child_added', window.qsoState.echoListener);
+            window.qsoState.echoListener = null;
+        }
+        if (typeof window.stopRemoteTone === 'function') window.stopRemoteTone();
+    }
 };
