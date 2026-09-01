@@ -273,31 +273,42 @@ window.toggleQsoEcho = function() {
         if (btn) { btn.textContent = "ECHO TEST: ON 🔊"; btn.className = "btn-success"; }
         window.updateQsoStatus("ECHO TEST ATTIVO", "#2ecc71");
 
+        // Setup del buffer identico a quello dei partner per simulazione reale
+        const echoBuffer = {
+            baseTime: 0,
+            remoteBaseTime: 0,
+            bufferDelay: 1.0 // 1 secondo di ritardo per sentire chiaramente l'eco
+        };
+
         window.qsoState.echoListener = (rSnap) => {
             const data = rSnap.val();
             if (!data) return;
-            console.log(`[QSO] Ricevuto da Firebase (Echo): s=${data.s}, f=${data.f}, diff=${Date.now() - data.ts}ms`);
 
-            // Ascoltiamo solo eventi futuri rispetto all'attivazione dell'echo
-            if (data.ts < window.qsoState.echoStartTime) {
-                console.log("[QSO] Salto evento vecchio");
-                return;
+            // Filtriamo i pacchetti vecchi
+            if (data.ts < window.qsoState.echoStartTime) return;
+
+            // Inizializzazione sincronizzazione (come farebbe il partner)
+            if (echoBuffer.remoteBaseTime === 0) {
+                echoBuffer.remoteBaseTime = data.ts;
+                echoBuffer.baseTime = (window.audioCtx?.currentTime || 0) + echoBuffer.bufferDelay;
+                console.log("[QSO-ECHO] Sincronizzazione buffer avviata");
             }
 
-            // Riproduciamo il tono che abbiamo appena inviato a Firebase
-            // Applichiamo un ritardo artificiale di 1 secondo per sentire l'eco distintamente
-            setTimeout(() => {
-                if (data.s === 1) {
-                    if (typeof window.startRemoteTone === 'function') {
-                        console.log("[QSO] Esecuzione startRemoteTone (Delayed Echo)");
-                        window.startRemoteTone(data.f);
-                    }
-                } else if (data.s === 0) {
-                    if (typeof window.stopRemoteTone === 'function') {
-                        window.stopRemoteTone();
-                    }
+            // Calcolo del tempo esatto in cui deve suonare (basato sul TS di Firebase)
+            const offset = (data.ts - echoBuffer.remoteBaseTime) / 1000;
+            const scheduledTime = echoBuffer.baseTime + offset;
+            const now = window.audioCtx?.currentTime || 0;
+            const delaySec = Math.max(0, scheduledTime - now);
+
+            if (data.s === 1) {
+                if (typeof window.startRemoteTone === 'function') {
+                    window.startRemoteTone(data.f, delaySec);
                 }
-            }, 1000);
+            } else if (data.s === 0) {
+                if (typeof window.stopRemoteTone === 'function') {
+                    window.stopRemoteTone(delaySec);
+                }
+            }
         };
         myRelayRef.on('child_added', window.qsoState.echoListener);
     } else {
