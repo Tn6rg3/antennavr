@@ -504,7 +504,7 @@ window.renderActiveTournament = function(trnSnap) {
     }
 };
 
-if (els.goToTeamsBtn) els.goToTeamsBtn.addEventListener('click', () => window.showScreen('teamsScreen'));
+// Listener rimosso: la navigazione ai tornei avviene ora tramite il menu "Tipo di Gioco"
 
 window.processTeamInvite = function(inviteTeamId) {
     db.ref(`teams/${inviteTeamId}`).once('value', snap => {

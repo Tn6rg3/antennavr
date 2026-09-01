@@ -291,7 +291,7 @@ window.setLanguage = function(lang) {
     if (langBtn) langBtn.textContent = lang.toUpperCase();
 
     const textMap = {
-        txt_hello: t.hello, txt_free_challenge_title: t.free_challenge, txt_play_solo_title: t.play_solo,
+        txt_hello: t.hello,
         txt_game_type_label: t.game_type, txt_mode_label: t.mode,
         txt_opt_multi: t.opt_multi, txt_opt_single: t.opt_single,
         txt_opt_coop: t.opt_coop, txt_opt_trn: t.opt_trn, txt_opt_arcade: t.opt_arcade, txt_opt_tx: t.opt_tx,
@@ -310,7 +310,7 @@ window.setLanguage = function(lang) {
         txt_alias_hint: t.alias_hint, txt_privacy_label: t.privacy_label, txt_privacy_hint: t.privacy_hint,
         txt_wrong_chars_title: t.wrong_chars, txt_wpm_error_title: t.wpm_error, txt_match_history_title: t.match_history,
         txt_back_btn: t.back_to_menu, deleteDataBtn: t.delete_data, tabDailyAct: t.daily, tabWeeklyAct: t.weekly,
-        tabMonthlyAct: t.monthly, goToTeamsBtn: t.teams_btn, tabTeamGestBtn: t.tab_my_team, tabAllTeamsBtn: t.tab_all_teams,
+        tabMonthlyAct: t.monthly, tabTeamGestBtn: t.tab_my_team, tabAllTeamsBtn: t.tab_all_teams,
         tabTournamentsBtn: t.tab_tournaments, txt_custom_dict_title: t.custom_title, txt_custom_dict_desc: t.custom_desc,
         txt_select_file_btn: t.select_file, txt_custom_hint1: t.custom_hint1, txt_custom_hint2: t.custom_hint2,
         txt_custom_hint3: t.custom_hint3, txt_close_custom_btn: t.chat_close, txt_manage_custom_btn: t.manage_custom,
