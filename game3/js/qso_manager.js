@@ -199,7 +199,9 @@ window.sendQsoEvent = function(type, freq) {
     if (window.qsoState.conn?.open) {
         window.qsoState.conn.send({ type, f: freq, ts: nowP, seq: window.qsoState.outgoingSeq++ });
     }
-    if ((window.qsoState.isRelayMode || !window.qsoState.conn) && window.roomCode) {
+    // Invio a Firebase se siamo in Relay Mode O se l'Echo Test è attivo
+    if ((window.qsoState.isRelayMode || window.qsoState.echoActive || !window.qsoState.conn) && window.roomCode) {
+        console.log(`[QSO] Invio a Firebase: ${type} @ ${freq}Hz (Echo: ${window.qsoState.echoActive})`);
         db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).push({
             s: (type === 'DN' ? 1 : 0), f: freq, ts: nowD
         });
@@ -240,19 +242,32 @@ window.toggleQsoEcho = function() {
 
     if (window.qsoState.echoActive) {
         window.qsoState.echoStartTime = Date.now();
+        console.log(`[QSO] Echo attivato. Path: rooms/${window.roomCode}/qso_relay/${window.myId}`);
         if (btn) { btn.textContent = "ECHO TEST: ON 🔊"; btn.className = "btn-success"; }
         window.updateQsoStatus("ECHO TEST ATTIVO", "#2ecc71");
 
         window.qsoState.echoListener = (rSnap) => {
             const data = rSnap.val();
+            if (!data) return;
+            console.log(`[QSO] Ricevuto da Firebase (Echo): s=${data.s}, f=${data.f}, diff=${Date.now() - data.ts}ms`);
+
             // Ascoltiamo solo eventi futuri rispetto all'attivazione dell'echo
-            if (!data || data.ts < window.qsoState.echoStartTime) return;
+            if (data.ts < window.qsoState.echoStartTime) {
+                console.log("[QSO] Salto evento vecchio");
+                return;
+            }
 
             // Riproduciamo il tono che abbiamo appena inviato a Firebase
             if (data.s === 1) {
-                if (typeof window.startRemoteTone === 'function') window.startRemoteTone(data.f);
+                if (typeof window.startRemoteTone === 'function') {
+                    console.log("[QSO] Esecuzione startRemoteTone");
+                    window.startRemoteTone(data.f);
+                } else console.warn("[QSO] startRemoteTone non definita");
             } else if (data.s === 0) {
-                if (typeof window.stopRemoteTone === 'function') window.stopRemoteTone();
+                if (typeof window.stopRemoteTone === 'function') {
+                    console.log("[QSO] Esecuzione stopRemoteTone");
+                    window.stopRemoteTone();
+                } else console.warn("[QSO] stopRemoteTone non definita");
             }
         };
         myRelayRef.on('child_added', window.qsoState.echoListener);
