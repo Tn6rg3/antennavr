@@ -79,9 +79,15 @@ window.GAME_MODES = {
         generateWords: function(num, dicts, options) {
             const master = (dicts && Array.isArray(dicts.master) && dicts.master.length > 0) ? dicts.master : ["RADIO", "MORSE", "TELEGRAFIA"];
             const stats = options?.stats || {};
-            const charStats = stats.charStats || {};
 
-            // 1. Identifichiamo i caratteri critici (accuratezza < 85% e almeno 3 tentativi)
+            // 1. ESTRAZIONE ERRORI MULTILIVELLO
+            const charStats = stats.charStats || {};
+            const wordErrors = stats.wordErrors || {};
+            const bigramErrors = stats.bigramErrors || {};
+            const trigramErrors = stats.trigramErrors || {};
+            const quadgramErrors = stats.quadgramErrors || {};
+
+            // 1a. Caratteri Critici (Acc < 85%)
             const criticalChars = Object.entries(charStats)
                 .map(([char, d]) => {
                     const dbChar = (typeof window.firebaseUnescape === 'function') ? window.firebaseUnescape(char) : char.replace(/_dot_/g, '.');
@@ -89,27 +95,66 @@ window.GAME_MODES = {
                 })
                 .filter(c => c.attempts >= 3 && c.acc < 0.85)
                 .sort((a,b) => a.acc - b.acc)
-                .map(c => c.char)
-                .slice(0, 7);
+                .slice(0, 10);
 
-            if (criticalChars.length === 0) {
+            // 1b. Sequenze Critiche (N-grammi con almeno 2 errori)
+            const getCritNGrams = (node, minErr) => Object.entries(node || {})
+                .filter(e => (e[1].count || e[1]) >= minErr)
+                .map(e => e[0].toUpperCase());
+
+            const critQuads = getCritNGrams(quadgramErrors, 2);
+            const critTris = getCritNGrams(trigramErrors, 2);
+            const critBis = getCritNGrams(bigramErrors, 3);
+            const critWords = Object.entries(wordErrors)
+                .filter(e => (e[1].count || e[1]) >= 2)
+                .map(e => e[0].toUpperCase());
+
+            if (criticalChars.length === 0 && critWords.length === 0 && critTris.length === 0) {
                 return fisherYatesShuffle(master).slice(0, num).map(w => w.toUpperCase());
             }
 
-            // 2. Filtriamo il dizionario
+            // 2. ALGORITMO DI SCORING POTENZIATO
             let weightedWords = master.map(word => {
                 const w = word.toUpperCase();
                 let score = 0;
-                criticalChars.forEach(c => { if (w.includes(c)) score += 10; });
+
+                // Peso massimo se è una parola che abbiamo già sbagliato
+                if (critWords.includes(w)) score += 100;
+
+                // Pesi per sequenze (più sono lunghe, più sono importanti)
+                critQuads.forEach(q => { if (w.includes(q)) score += 50; });
+                critTris.forEach(t => { if (w.includes(t)) score += 30; });
+                critBis.forEach(b => { if (w.includes(b)) score += 15; });
+
+                // Pesi per caratteri singoli
+                criticalChars.forEach(c => {
+                    if (w.includes(c.char)) {
+                        // Il punteggio aumenta se l'accuratezza sul carattere è molto bassa
+                        score += Math.round((1 - c.acc) * 40);
+                    }
+                });
+
                 return { word: w, score: score };
             }).filter(obj => obj.score > 0);
 
-            if (weightedWords.length < num) {
-                weightedWords = weightedWords.concat(master.map(w => ({ word: w.toUpperCase(), score: 1 })));
+            // 3. SELEZIONE E DIVERSIFICAZIONE
+            let finalWords = [];
+
+            // Inseriamo prioritariamente le parole con score più alto
+            weightedWords.sort((a, b) => b.score - a.score || Math.random() - 0.5);
+
+            // Prendiamo un mix per non essere ripetitivi
+            const topPool = weightedWords.slice(0, Math.max(num, 30));
+            finalWords = fisherYatesShuffle(topPool).slice(0, num).map(obj => obj.word);
+
+            // Fallback se non ci sono abbastanza parole mirate
+            if (finalWords.length < num) {
+                const needed = num - finalWords.length;
+                const extra = fisherYatesShuffle(master).slice(0, needed).map(w => w.toUpperCase());
+                finalWords = finalWords.concat(extra);
             }
 
-            weightedWords.sort((a, b) => b.score - a.score || Math.random() - 0.5);
-            return weightedWords.slice(0, num).map(obj => obj.word);
+            return finalWords;
         }
     },
     "perfection": {
