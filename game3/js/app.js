@@ -543,11 +543,17 @@ async function validateIdentity() {
 
 async function sendPushNotification(targetId, text) {
     if (!VALIDATION_SERVER_URL || !targetId) return;
-    // Messaggio generico per la privacy
-    const genericText = "Hai nuovi messaggi su Sfida Telegrafia! 📻";
-    const url = `${VALIDATION_SERVER_URL}?action=notify&targetId=${targetId}&text=${encodeURIComponent(genericText)}`;
+
+    // Usiamo il testo fornito o un messaggio generico di fallback
+    const notificationText = (text && text.trim() !== "") ? text.substring(0, 150) : "Hai nuovi messaggi su Sfida Telegrafia! 📻";
+
+    const url = `${VALIDATION_SERVER_URL}?action=notify&targetId=${targetId}&text=${encodeURIComponent(notificationText)}`;
     try {
-        fetch(url, { mode: 'no-cors' });
+        // Proviamo mode: 'cors' per avere feedback sulla riuscita, ma manteniamo fallback se fallisce per CORS
+        fetch(url, { mode: 'cors' }).catch(() => {
+            // Fallback silenzioso se CORS blocca la lettura della risposta
+            fetch(url, { mode: 'no-cors' });
+        });
         console.log("Push: Richiesta inviata per " + targetId);
     } catch(e) { console.error("Push Error:", e); }
 }
@@ -1063,7 +1069,18 @@ window.initAdminAnnouncementListener = function() {
         if (annId !== lastSeen) {
             if (els.adminAnnouncementModal && els.adminAnnouncementText) {
                 if (els.adminAnnouncementTitle) els.adminAnnouncementTitle.textContent = data.title || "Comunicazione";
-                els.adminAnnouncementText.innerHTML = data.text.replace(/\n/g, '<br>');
+
+                // Protezione XSS: Usiamo textContent e aggiungiamo <br> manualmente
+                els.adminAnnouncementText.textContent = '';
+                if (data.text) {
+                    data.text.split('\n').forEach((line, index, array) => {
+                        els.adminAnnouncementText.appendChild(document.createTextNode(line));
+                        if (index < array.length - 1) {
+                            els.adminAnnouncementText.appendChild(document.createElement('br'));
+                        }
+                    });
+                }
+
                 els.adminAnnouncementModal.style.display = 'flex';
 
                 // Bottone di conferma
