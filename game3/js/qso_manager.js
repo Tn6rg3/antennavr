@@ -235,6 +235,10 @@ window.exitQsoMode = function() {
 
 window.toggleQsoEcho = function() {
     if (!window.roomCode) { alert("Crea o entra in una stanza prima di attivare l'Echo Test."); return; }
+
+    // Forza l'attivazione dell'audio
+    if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
+
     const btn = document.getElementById('btnToggleQsoEcho');
     window.qsoState.echoActive = !window.qsoState.echoActive;
 
@@ -258,17 +262,19 @@ window.toggleQsoEcho = function() {
             }
 
             // Riproduciamo il tono che abbiamo appena inviato a Firebase
-            if (data.s === 1) {
-                if (typeof window.startRemoteTone === 'function') {
-                    console.log("[QSO] Esecuzione startRemoteTone");
-                    window.startRemoteTone(data.f);
-                } else console.warn("[QSO] startRemoteTone non definita");
-            } else if (data.s === 0) {
-                if (typeof window.stopRemoteTone === 'function') {
-                    console.log("[QSO] Esecuzione stopRemoteTone");
-                    window.stopRemoteTone();
-                } else console.warn("[QSO] stopRemoteTone non definita");
-            }
+            // Applichiamo un ritardo artificiale di 1 secondo per sentire l'eco distintamente
+            setTimeout(() => {
+                if (data.s === 1) {
+                    if (typeof window.startRemoteTone === 'function') {
+                        console.log("[QSO] Esecuzione startRemoteTone (Delayed Echo)");
+                        window.startRemoteTone(data.f);
+                    }
+                } else if (data.s === 0) {
+                    if (typeof window.stopRemoteTone === 'function') {
+                        window.stopRemoteTone();
+                    }
+                }
+            }, 1000);
         };
         myRelayRef.on('child_added', window.qsoState.echoListener);
     } else {
