@@ -17,7 +17,9 @@ window.qsoState = {
     isRelayMode: false,
     relayStartTime: 0,
     lastProcessedSeq: 0,
-    outgoingSeq: 0
+    outgoingSeq: 0,
+    remoteIsOn: false,
+    echoActive: false
 };
 
 window.initQsoManager = function() {
@@ -224,7 +226,6 @@ window.sendQsoEvent = function(type, freq) {
     }
     // Invio a Firebase se siamo in Relay Mode O se l'Echo Test è attivo
     if ((window.qsoState.isRelayMode || window.qsoState.echoActive || !window.qsoState.conn) && window.roomCode) {
-        console.log(`[QSO] Invio a Firebase: ${type} @ ${freq}Hz (Echo: ${window.qsoState.echoActive})`);
         db.ref(`rooms/${window.roomCode}/qso_relay/${window.myId}`).push({
             s: (type === 'DN' ? 1 : 0), f: freq, ts: nowD
         });
