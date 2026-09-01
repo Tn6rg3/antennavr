@@ -228,21 +228,25 @@ window.switchProfileTab = function(tabId) {
     if (courseArea) courseArea.style.display = 'none';
 
     if (tabId === 'info') {
+        if (els.statsActionButtons) els.statsActionButtons.style.display = 'none';
         if (tabsHeader) tabsHeader.style.display = 'flex';
         if (infoBtn) infoBtn.classList.add('active-tab');
         if (infoArea) infoArea.style.display = 'flex';
         window.loadProfileInfo();
     } else if (tabId === 'stats') {
+        if (els.statsActionButtons) els.statsActionButtons.style.display = 'flex';
         if (tabsHeader) tabsHeader.style.display = 'flex';
         if (statsBtn) statsBtn.classList.add('active-tab');
         if (statsArea) statsArea.style.display = 'flex';
         window.loadAdvancedStats();
     } else if (tabId === 'ratings') {
+        if (els.statsActionButtons) els.statsActionButtons.style.display = 'none';
         if (tabsHeader) tabsHeader.style.display = 'flex';
         if (ratingsBtn) ratingsBtn.classList.add('active-tab');
         if (ratingsArea) ratingsArea.style.display = 'flex';
         if (typeof window.loadUserRatings === 'function') window.loadUserRatings();
     } else if (tabId === 'course') {
+        if (els.statsActionButtons) els.statsActionButtons.style.display = 'none';
         if (tabsHeader) tabsHeader.style.display = 'none';
         if (courseArea) courseArea.style.display = 'flex';
         if (typeof window.hideCourseMessageBadge === 'function') window.hideCourseMessageBadge();
@@ -302,17 +306,26 @@ window.loadProfileInfo = function() {
 window.loadAdvancedStats = function() {
     const wpmContainer = document.getElementById('wpmErrorChartContainer');
     const bigramContainer = document.getElementById('bigramErrorsContainer');
+    const trigramContainer = document.getElementById('trigramErrorsContainer');
+    const quadgramContainer = document.getElementById('quadgramErrorsContainer');
     const wordContainer = document.getElementById('wordErrorsContainer');
 
     const bigramTh = parseInt(document.getElementById('bigramThresholdInput')?.value) || 3;
+    const trigramTh = parseInt(document.getElementById('trigramThresholdInput')?.value) || 2;
+    const quadgramTh = parseInt(document.getElementById('quadgramThresholdInput')?.value) || 2;
     const wordTh = parseInt(document.getElementById('wordThresholdInput')?.value) || 3;
 
     if (wpmContainer) wpmContainer.innerHTML = 'Caricamento...';
     if (bigramContainer) bigramContainer.innerHTML = 'Caricamento...';
+    if (trigramContainer) trigramContainer.innerHTML = 'Caricamento...';
+    if (quadgramContainer) quadgramContainer.innerHTML = 'Caricamento...';
     if (wordContainer) wordContainer.innerHTML = 'Caricamento...';
 
     db.ref(`users/${myId}/stats`).once('value').then(snap => {
         const stats = snap.val() || {};
+
+        // 0. GRAFICO TREND
+        window.renderAccuracyTrend(stats.accuracyTrend || {});
 
         // A. DIAGNOSTICA LUNGHEZZA
         const lengthCont = document.getElementById('lengthStatsContainer');
@@ -343,7 +356,6 @@ window.loadAdvancedStats = function() {
 
         // B. DIAGNOSTICA POSIZIONALE
         const pData = stats.positionalErrors || { start:0, mid:0, end:0, totalErrors:0 };
-        // Calcoliamo il totale reale sommando le parti se totalErrors non esiste (compatibilità)
         const realTotal = pData.totalErrors || ((pData.start || 0) + (pData.mid || 0) + (pData.end || 0)) || 1;
         const calcP = (val) => Math.round(((val || 0) / realTotal) * 100) + "%";
 
@@ -371,7 +383,7 @@ window.loadAdvancedStats = function() {
             }
         }
 
-        // --- NUOVA SEZIONE: MATRICE CONFUSIONE E BLOCCHI COGNITIVI ---
+        // --- MATRICE CONFUSIONE E BLOCCHI COGNITIVI ---
         const matrixCont = document.getElementById('confusionMatrixContainer');
         const blocksCont = document.getElementById('cognitiveBlocksContainer');
 
@@ -384,18 +396,14 @@ window.loadAdvancedStats = function() {
             } else {
                 sortedMatrix.forEach(([key, count]) => {
                     let [real, typed] = key.split('->');
-
-                    // Unescape per la visualizzazione
                     const unescapeKey = (k) => {
                         if (k === 'SPACE') return "Spazio";
                         if (k === 'OMESSO') return "Mancante";
                         if (typeof window.firebaseUnescape === 'function') return window.firebaseUnescape(k);
                         return k.replace(/_dot_/g, '.').replace(/_hash_/g, '#').replace(/_dollar_/g, '$').replace(/_lbrac_/g, '[').replace(/_rbrac_/g, ']');
                     };
-
                     real = unescapeKey(real);
                     typed = unescapeKey(typed);
-
                     const div = document.createElement('div');
                     div.style.cssText = "display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid rgba(0,0,0,0.03);";
                     div.innerHTML = `<span><b>${real}</b> <small>scambiato per</small> <b>${typed}</b></span> <b style="color:#d32f2f;">${count}</b>`;
@@ -436,36 +444,10 @@ window.loadAdvancedStats = function() {
             }
         }
 
-        // 2. Bigrammi (Coppie) Sbagliate
-        if (bigramContainer) {
-            bigramContainer.innerHTML = '';
-            const bigrams = stats.bigramErrors || {};
-            const filteredBigrams = Object.entries(bigrams).filter(e => {
-                const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
-                return count >= bigramTh;
-            }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 20);
-
-            if (filteredBigrams.length === 0) {
-                bigramContainer.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.8em;">Sotto soglia.</p>';
-            } else {
-                const frag = document.createDocumentFragment();
-                filteredBigrams.forEach(([pair, data]) => {
-                    const count = data.count || data;
-                    const avgWpm = data.avgWpm || 20;
-                    const div = document.createElement('div');
-                    div.className = 'leaderboard-row';
-                    div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.85em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color);";
-                    div.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                            <span><b style="color: #d32f2f;">${pair}</b> <small style="color: var(--hint-color);">(${count})</small></span>
-                            <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${pair}', ${avgWpm}, true)" style="width:30px; padding:2px 0;">🔊</button>
-                        </div>
-                    `;
-                    frag.appendChild(div);
-                });
-                bigramContainer.appendChild(frag);
-            }
-        }
+        // RENDERING N-GRAMMI (Coppie, Triple, Quadruple)
+        window.renderNGramTable(stats.bigramErrors, bigramContainer, bigramTh);
+        window.renderNGramTable(stats.trigramErrors, trigramContainer, trigramTh);
+        window.renderNGramTable(stats.quadgramErrors, quadgramContainer, quadgramTh);
 
         // 3. Parole Critiche
         if (wordContainer) {
@@ -499,6 +481,152 @@ window.loadAdvancedStats = function() {
             }
         }
     });
+};
+
+window.renderNGramTable = function(dataNode, container, threshold) {
+    if (!container) return;
+    container.innerHTML = '';
+    const items = dataNode || {};
+    const filtered = Object.entries(items).filter(e => {
+        const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
+        return count >= threshold;
+    }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 15);
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.7em; margin-top:10px;">Sotto soglia.</p>';
+        return;
+    }
+
+    const frag = document.createDocumentFragment();
+    filtered.forEach(([seq, data]) => {
+        const count = data.count || data;
+        const avgWpm = data.avgWpm || 20;
+        const div = document.createElement('div');
+        div.className = 'leaderboard-row';
+        div.style.cssText = "padding:4px; margin-bottom:2px; font-size:0.8em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.02); color: var(--text-color);";
+        div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                <span><b style="color: #d32f2f;">${seq}</b> <small style="color: var(--hint-color);">(${count})</small></span>
+                <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${seq}', ${avgWpm}, true)" style="width:25px; padding:1px 0; font-size:0.7em;">🔊</button>
+            </div>
+        `;
+        frag.appendChild(div);
+    });
+    container.appendChild(frag);
+};
+
+// --- LISTENERS SOGLIE ANALISI ---
+['bigramThresholdInput', 'trigramThresholdInput', 'quadgramThresholdInput', 'wordThresholdInput'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('change', () => window.loadAdvancedStats());
+        el.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.target.blur(); window.loadAdvancedStats(); } });
+    }
+});
+
+window.renderAccuracyTrend = function(trendData) {
+    const canvas = document.getElementById('accuracyTrendChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.offsetWidth;
+    const height = canvas.offsetHeight;
+
+    // Setup canvas resolution
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
+    const entries = Object.entries(trendData).sort((a,b) => a[0].localeCompare(b[0])).slice(-30);
+    if (entries.length < 2) {
+        ctx.fillStyle = "#999";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Gioca più partite per vedere il grafico", width/2, height/2);
+        return;
+    }
+
+    const points = entries.map(e => (e[1].sum / e[1].total) * 100);
+    const padding = 20;
+    const chartW = width - padding * 2;
+    const chartH = height - padding * 2;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Grid
+    ctx.strokeStyle = "#eee";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = padding + (chartH / 4) * i;
+        ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(width - padding, y); ctx.stroke();
+    }
+
+    // Line
+    ctx.strokeStyle = "var(--link-color)";
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+
+    points.forEach((p, i) => {
+        const x = padding + (chartW / (points.length - 1)) * i;
+        const y = padding + chartH - (chartH * (p / 100));
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Area
+    ctx.lineTo(padding + chartW, padding + chartH);
+    ctx.lineTo(padding, padding + chartH);
+    ctx.fillStyle = "rgba(51, 144, 236, 0.1)";
+    ctx.fill();
+
+    // Dots
+    ctx.fillStyle = "var(--link-color)";
+    points.forEach((p, i) => {
+        const x = padding + (chartW / (points.length - 1)) * i;
+        const y = padding + chartH - (chartH * (p / 100));
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    });
+};
+
+window.showStatInfo = function(type) {
+    const modal = document.getElementById('statInfoModal');
+    const title = document.getElementById('statInfoTitle');
+    const text = document.getElementById('statInfoText');
+    if (!modal || !title || !text) return;
+
+    const info = {
+        trend: {
+            t: "Andamento Accuratezza",
+            m: "Mostra la tua precisione media giornaliera negli ultimi 30 giorni di gioco. Una linea che sale indica un miglioramento nel riconoscimento dei caratteri."
+        },
+        diagnostics: {
+            t: "Diagnostica Operatore",
+            m: "Analisi basata sulla lunghezza delle parole e sulla posizione degli errori. Ti aiuta a capire se hai difficoltà con le parole lunghe o se perdi la concentrazione a metà parola."
+        },
+        wpm_errors: {
+            t: "Errori per Velocità",
+            m: "Identifica a quale velocità (WPM) commetti più errori. Utile per trovare il tuo 'muro' attuale e su cosa lavorare per superarlo."
+        },
+        confusion: {
+            t: "Matrice di Confusione",
+            m: "Rivela quali caratteri il tuo cervello tende a scambiare tra loro. Ad esempio, se scambi spesso la 'S' (...) con la 'H' (....), indica una difficoltà nel conteggio rapido dei punti."
+        },
+        blocks: {
+            t: "Blocchi Cognitivi",
+            m: "Caratteri che hanno un'accuratezza inferiore all'85%. Sono i tuoi punti deboli 'fissi' che richiedono esercizio mirato."
+        },
+        ngrams: {
+            t: "Analisi Sequenze (N-Grammi)",
+            m: "Le coppie, triple e quadruple mostrano sequenze di caratteri in cui il tuo ritmo di ricezione si spezza. Spesso l'errore non è sulla lettera, ma sul 'legame' tra esse."
+        }
+    };
+
+    const d = info[type] || { t: "Informazione", m: "Dettagli non disponibili." };
+    title.textContent = d.t;
+    text.textContent = d.m;
+    modal.style.display = 'flex';
 };
 
 window.showProfileScreen = function() {
@@ -651,22 +779,24 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb
 window.trackAdvancedErrors = function(realWord, userWord, wpm) {
     if (!myId || !realWord) return;
 
-    // Dividiamo i gruppi in singole parole e filtriamo eventuali stringhe vuote
     const realWords = realWord.toUpperCase().split(' ').filter(w => w.length > 0);
     const typedWords = userWord.toUpperCase().split(' ').filter(w => w.length > 0);
-
     const statsBase = db.ref(`users/${myId}/stats`);
+    const today = new Date().toISOString().split('T')[0];
 
     realWords.forEach((real, wordIdx) => {
-        // ... (resto della logica)
         const typed = typedWords[wordIdx] || "";
         const isWordError = (real !== typed);
         const len = real.length;
 
-        // 1. Aggiornamento atomico delle lunghezze (per singola parola)
+        // Accuratezza Trend (Giornaliera)
+        statsBase.child(`accuracyTrend/${today}`).transaction(data => {
+            if (!data) return { total: 1, sum: (isWordError ? 0 : 1) };
+            return { total: data.total + 1, sum: data.sum + (isWordError ? 0 : 1) };
+        });
+
         statsBase.child(`lengthStats/${len}/total`).set(firebase.database.ServerValue.increment(1));
 
-        // 2. Tracciamento Caratteri (Tentativi totali nel gruppo)
         for (let char of real) {
             let dbChar = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(char) : char.replace(/\./g, '_dot_');
             statsBase.child(`charStats/${dbChar}/attempts`).set(firebase.database.ServerValue.increment(1));
@@ -675,36 +805,29 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
         if (isWordError) {
             statsBase.child(`lengthStats/${len}/errors`).set(firebase.database.ServerValue.increment(1));
 
-            // 3. Tracciamento Posizionale (Analisi entro i confini della singola parola)
             for (let i = 0; i < real.length; i++) {
                 if (real[i] !== typed[i]) {
                     const pos = i / (real.length - 1 || 1);
                     statsBase.child(`positionalErrors/totalErrors`).set(firebase.database.ServerValue.increment(1));
-
                     if (pos <= 0.33) statsBase.child(`positionalErrors/start`).set(firebase.database.ServerValue.increment(1));
                     else if (pos >= 0.66) statsBase.child(`positionalErrors/end`).set(firebase.database.ServerValue.increment(1));
                     else statsBase.child(`positionalErrors/mid`).set(firebase.database.ServerValue.increment(1));
 
-                    // 4. Matrice di Confusione e Errori Carattere
                     const realChar = real[i];
                     const typedChar = typed[i] || "OMESSO";
-
                     const safeKey = (char) => {
                         if (char === ' ') return "SPACE";
                         if (typeof window.firebaseEscape === 'function') return window.firebaseEscape(char);
                         return char.replace(/\./g, '_dot_').replace(/#/g, '_hash_').replace(/\$/g, '_dollar_').replace(/\[/g, '_lbrac_').replace(/\]/g, '_rbrac_');
                     };
-
                     let dbReal = safeKey(realChar);
                     let dbTyped = safeKey(typedChar);
-
                     statsBase.child(`charStats/${dbReal}/errors`).set(firebase.database.ServerValue.increment(1));
                     statsBase.child(`confusionMatrix/${dbReal}->${dbTyped}`).set(firebase.database.ServerValue.increment(1));
                     statsBase.child(`errorsByWpm/${wpm}/${dbReal}`).set(firebase.database.ServerValue.increment(1));
                 }
             }
 
-            // 5. Tracciamento Parola via Transaction
             statsBase.child(`wordErrors/${real}`).transaction(data => {
                 if (!data) return { count: 1, avgWpm: wpm };
                 const oldCount = data.count || (typeof data === 'number' ? data : 0);
@@ -714,18 +837,25 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
             });
         }
 
-        // 6. Tracciamento Bigrammi (entro la parola)
-        for (let i = 0; i < real.length - 1; i++) {
-            if (typed[i] !== real[i] || typed[i+1] !== real[i+1]) {
-                const pair = real.substring(i, i + 2);
-                statsBase.child(`bigramErrors/${pair}`).transaction(data => {
-                    if (!data) return { count: 1, avgWpm: wpm };
-                    const oldCount = data.count || (typeof data === 'number' ? data : 0);
-                    const oldWpm = data.avgWpm || wpm;
-                    return { count: oldCount + 1, avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1)) };
-                });
+        // N-Grammi (Bigrammi, Trigrammi, Quadrigrammi)
+        const processNGram = (n, nodeName) => {
+            for (let i = 0; i <= real.length - n; i++) {
+                const subReal = real.substring(i, i + n);
+                const subTyped = typed.substring(i, i + n);
+                if (subReal !== subTyped) {
+                    statsBase.child(`${nodeName}/${subReal}`).transaction(data => {
+                        if (!data) return { count: 1, avgWpm: wpm };
+                        const oldCount = data.count || (typeof data === 'number' ? data : 0);
+                        const oldWpm = data.avgWpm || wpm;
+                        return { count: oldCount + 1, avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1)) };
+                    });
+                }
             }
-        }
+        };
+
+        processNGram(2, 'bigramErrors');
+        processNGram(3, 'trigramErrors');
+        processNGram(4, 'quadgramErrors');
     });
 };
 
@@ -922,3 +1052,173 @@ if (els.deleteDataBtn) {
         }
     };
 }
+
+/**
+ * LOGICA INFO STATISTICHE (TOOLTIPS)
+ */
+window.showStatInfo = function(type) {
+    const modal = document.getElementById('statInfoModal');
+    const title = document.getElementById('statInfoTitle');
+    const text = document.getElementById('statInfoText');
+    if (!modal || !title || !text) return;
+
+    const info = {
+        trend: {
+            t: "Andamento Accuratezza",
+            m: "Mostra la tua precisione media giornaliera negli ultimi 30 giorni di gioco. Una linea che sale indica un miglioramento nel riconoscimento dei caratteri."
+        },
+        diagnostics: {
+            t: "Diagnostica Operatore",
+            m: "Analisi basata sulla lunghezza delle parole e sulla posizione degli errori. Ti aiuta a capire se hai difficoltà con le parole lunghe o se perdi la concentrazione a metà parola."
+        },
+        wpm_errors: {
+            t: "Errori per Velocità",
+            m: "Identifica a quale velocità (WPM) commetti più errori. Utile per trovare il tuo 'muro' attuale e su cosa lavorare per superarlo."
+        },
+        confusion: {
+            t: "Matrice di Confusione",
+            m: "Rivela quali caratteri il tuo cervello tende a scambiare tra loro. Ad esempio, se scambi spesso la 'S' (...) con la 'H' (....), indica una difficoltà nel conteggio rapido dei punti."
+        },
+        blocks: {
+            t: "Blocchi Cognitivi",
+            m: "Caratteri che hanno un'accuratezza inferiore all'85%. Sono i tuoi punti deboli 'fissi' che richiedono esercizio mirato."
+        },
+        ngrams: {
+            t: "Analisi Sequenze (N-Grammi)",
+            m: "Le coppie, triple e quadruple mostrano sequenze di caratteri in cui il tuo ritmo di ricezione si spezza. Spesso l'errore non è sulla lettera, ma sul 'legame' tra esse."
+        }
+    };
+
+    const d = info[type] || { t: "Informazione", m: "Dettagli non disponibili." };
+    title.textContent = d.t;
+    text.textContent = d.m;
+    modal.style.display = 'flex';
+};
+
+/**
+ * RENDERING GRAFICO TREND (CANVAS)
+ */
+window.renderAccuracyTrend = function(trendData) {
+    const canvas = document.getElementById('accuracyTrendChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // Dimensioni CSS
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+
+    // Setup risoluzione alta (DPR)
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
+    const entries = Object.entries(trendData).sort((a,b) => a[0].localeCompare(b[0])).slice(-30);
+    if (entries.length < 2) {
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = "#999";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Gioca più partite per vedere il grafico", width/2, height/2);
+        return;
+    }
+
+    const points = entries.map(e => (e[1].sum / e[1].total) * 100);
+    const padding = 25;
+    const chartW = width - padding * 2;
+    const chartH = height - padding * 2;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Griglia Orizzontale
+    ctx.strokeStyle = "rgba(0,0,0,0.05)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = padding + (chartH / 4) * i;
+        ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(width - padding, y); ctx.stroke();
+
+        // Etichette %
+        ctx.fillStyle = "#aaa";
+        ctx.font = "8px sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText((100 - i * 25) + "%", padding - 5, y + 3);
+    }
+
+    // Linea
+    ctx.strokeStyle = "#3390ec";
+    ctx.lineWidth = 3;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+
+    points.forEach((p, i) => {
+        const x = padding + (chartW / (points.length - 1)) * i;
+        const y = padding + chartH - (chartH * (p / 100));
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Area sfumata
+    ctx.lineTo(padding + chartW, padding + chartH);
+    ctx.lineTo(padding, padding + chartH);
+    const grad = ctx.createLinearGradient(0, padding, 0, padding + chartH);
+    grad.addColorStop(0, "rgba(51, 144, 236, 0.2)");
+    grad.addColorStop(1, "rgba(51, 144, 236, 0)");
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Punti (Dots)
+    ctx.fillStyle = "#3390ec";
+    points.forEach((p, i) => {
+        const x = padding + (chartW / (points.length - 1)) * i;
+        const y = padding + chartH - (chartH * (p / 100));
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    });
+};
+
+/**
+ * RENDERING TABELLE N-GRAMMI
+ */
+window.renderNGramTable = function(dataNode, container, threshold) {
+    if (!container) return;
+    container.innerHTML = '';
+    const items = dataNode || {};
+    const filtered = Object.entries(items).filter(e => {
+        const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
+        return count >= threshold;
+    }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 15);
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.7em; margin-top:10px;">Dati in raccolta...</p>';
+        return;
+    }
+
+    const frag = document.createDocumentFragment();
+    filtered.forEach(([seq, data]) => {
+        const count = data.count || data;
+        const avgWpm = data.avgWpm || 20;
+        const div = document.createElement('div');
+        div.className = 'leaderboard-row';
+        div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.8em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color); border-radius:6px; border:none;";
+        div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                <span><b style="color: #d32f2f; font-family: monospace; font-size: 1.1em;">${seq}</b> <small style="color: var(--hint-color);">(${count})</small></span>
+                <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${seq}', ${avgWpm}, true)" style="width:30px; padding:3px 0; font-size:0.8em; border-radius:50%;">🔊</button>
+            </div>
+        `;
+        frag.appendChild(div);
+    });
+    container.appendChild(frag);
+};
+
+// --- LISTENERS SOGLIE ANALISI ---
+['bigramThresholdInput', 'trigramThresholdInput', 'quadgramThresholdInput', 'wordThresholdInput'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('change', () => window.loadAdvancedStats());
+        el.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.target.blur(); window.loadAdvancedStats(); } });
+    }
+});
