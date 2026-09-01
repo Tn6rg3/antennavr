@@ -1948,7 +1948,18 @@ window.handleWordSubmission = function(userWord) {
 
     if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}`;
     totalScore += points;
-    const lastEntry = { real: currentWord, typed: userWord, points: points, wpm: activeWpmForThisWord, ms: reactionMs, isRetry: window.isPerfectionRetry };
+
+    const isActuallyCorrect = (levDist === 0 && !usedReplay);
+    const lastEntry = {
+        real: currentWord,
+        typed: userWord,
+        points: points,
+        wpm: activeWpmForThisWord,
+        ms: reactionMs,
+        isRetry: window.isPerfectionRetry,
+        correct: isActuallyCorrect,
+        usedReplay: !!usedReplay
+    };
     matchDetailsArray.push(lastEntry);
 
     // UI Tabella

@@ -1199,7 +1199,14 @@ window.renderAccuracyTrend = function(trendData) {
 window.trackSessionAccuracy = function(matchDetails) {
     if (!myId || !matchDetails || matchDetails.length === 0) return;
 
-    const correctCount = matchDetails.filter(m => m.points > 0).length;
+    // Calcolo accuratezza REALE: solo parole identiche al 100% e senza aiuto (replay)
+    const correctCount = matchDetails.filter(m => {
+        // Se abbiamo il flag 'correct' salvato da game_core usiamolo,
+        // altrimenti fallback sulla comparazione stringhe (più lenta ma sicura)
+        if (m.hasOwnProperty('correct')) return m.correct;
+        return (m.real || "").toUpperCase() === (m.typed || "").toUpperCase() && !m.usedReplay;
+    }).length;
+
     const accuracy = Math.round((correctCount / matchDetails.length) * 100);
 
     const sessionsRef = db.ref(`users/${myId}/stats/accuracySessions`);
@@ -1242,7 +1249,10 @@ window.trackTargetedTrainingSession = function(matchDetails) {
         }
     });
 
-    const sessionAccuracy = matchDetails.filter(m => m.points > 0).length / matchDetails.length;
+    const sessionAccuracy = matchDetails.filter(m => {
+        if (m.hasOwnProperty('correct')) return m.correct;
+        return (m.real || "").toUpperCase() === (m.typed || "").toUpperCase() && !m.usedReplay;
+    }).length / matchDetails.length;
 
     db.ref(`users/${myId}/stats/targetedHistory`).push({
         ts: firebase.database.ServerValue.TIMESTAMP,
