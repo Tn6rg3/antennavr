@@ -365,7 +365,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
 window.listenToRoomInBackground = function() {
     if (!roomCode || window.isRoomMonitorActive) return;
 
-    console.log("Room Monitor: Enabling for " + roomCode);
+    console.log("Room Monitor: Enabling for", roomCode);
     window.isRoomMonitorActive = true;
 
     if (listeners.room) { listeners.room.off(); listeners.room = null; }
@@ -1506,7 +1506,7 @@ window.saveMatchSummary = function(playersData) {
     };
 
     const summaryPath = `leaderboard/recent_matches/${category}/${safeWordCount}/${matchId}`;
-    console.log("Summary: Saving match to " + summaryPath, matchSummary);
+    console.log("Summary: Saving match to", summaryPath, matchSummary);
 
     db.ref(summaryPath).set(matchSummary).then(() => {
         console.log("Summary: Match saved successfully.");

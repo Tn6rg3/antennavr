@@ -56,7 +56,7 @@ window.addEventListener('focus', updateViewportHeight);
 
 // --- GESTIONE RIPRISTINO APP (PREVIENE APP BLOCCATA) ---
 const handleAppResume = (forceReconnect = false) => {
-    console.log("App: Ripristino visibilità (force=" + forceReconnect + ")...");
+    console.log("App: Ripristino visibilità (force=%o)...", forceReconnect);
 
     // Aggiorniamo subito lo stato su Firebase
     updateAppStatus(true);
@@ -558,7 +558,7 @@ async function sendPushNotification(targetId, text) {
             // Fallback silenzioso se CORS blocca la lettura della risposta
             fetch(url, { mode: 'no-cors' });
         });
-        console.log("Push: Richiesta inviata per " + targetId);
+        console.log("Push: Richiesta inviata per", targetId);
     } catch(e) { console.error("Push Error:", e); }
 }
 
@@ -1597,7 +1597,7 @@ if (els.sendChatBtn) {
 
         // --- INVIO NOTIFICHE PUSH AGLI OFFLINE/DISTRAI (SOLO IN STANZA) ---
         if (ctx === 'room' && rc) {
-            console.log("DEBUG_PUSH: Controllo destinatari per stanza " + rc);
+            console.log("DEBUG_PUSH: Controllo destinatari per stanza", rc);
             db.ref(`rooms/${rc}/players`).once('value', (snap) => {
                 if (!snap.exists()) { console.log("DEBUG_PUSH: Nessun giocatore trovato nella stanza."); return; }
                 snap.forEach((pSnap) => {
@@ -1664,7 +1664,7 @@ if (els.sendLobbyChatBtn) {
 
         // --- NOTIFICHE PUSH ANCHE PER LA LOBBY ---
         db.ref(`rooms/${rc}/players`).once('value', (snap) => {
-            console.log("DEBUG_PUSH: Controllo lobby per stanza " + rc);
+            console.log("DEBUG_PUSH: Controllo lobby per stanza", rc);
             snap.forEach((pSnap) => {
                 const pId = pSnap.key;
                 if (pId !== myId) {

@@ -219,7 +219,7 @@ window.initGlobalNotificationListener = function() {
         // 3. Filtro messaggi propri (non vogliamo notifiche per ciò che scriviamo noi)
         if (m.name === window.myName || m.senderId === window.myId) return;
 
-        console.log("Chat: New background message detected from " + m.name);
+        console.log("Chat: New background message detected from", m.name);
         window.handleNewChatMessage('globalChat', m, snap.key);
     });
 
