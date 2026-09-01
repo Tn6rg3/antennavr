@@ -557,11 +557,23 @@
     </div>
 
     <!-- SEZIONE 2: ANALISI ERRORI AVANZATA -->
-    <div id="profileStatsArea" class="screen-content" style="display: none; padding-bottom: 30px;">
+    <div id="profileStatsArea" class="screen-content" style="display: none; padding-bottom: 80px;">
+
+        <!-- ANDAMENTO TEMPORALE -->
+        <div class="box-panel" style="margin-bottom:12px; background: #fff; border-color: var(--link-color);">
+            <h3 style="color:var(--link-color); font-size:1em; margin-bottom:10px; display:flex; align-items:center; justify-content:center; gap:8px;">
+                📈 Andamento Accuratezza
+                <span class="info-icon" onclick="window.showStatInfo('trend')">ⓘ</span>
+            </h3>
+            <canvas id="accuracyTrendChart" style="width:100%; height:150px; background:#f9f9f9; border-radius:8px; border:1px solid #eee;"></canvas>
+        </div>
 
         <!-- DASHBOARD ANALITICA -->
         <div class="box-panel" style="margin-bottom:12px; background: #f5f5f5; border-color: var(--champ-color); color: #000;">
-            <h3 style="color:var(--champ-color); font-size:1em; margin-bottom:10px; text-align: left;">🧠 Diagnostica Operatore</h3>
+            <h3 style="color:var(--champ-color); font-size:1em; margin-bottom:10px; text-align: left; display:flex; align-items:center; justify-content:space-between;">
+                🧠 Diagnostica Operatore
+                <span class="info-icon" onclick="window.showStatInfo('diagnostics')">ⓘ</span>
+            </h3>
 
             <!-- Accuratezza per Lunghezza -->
             <div style="margin-bottom:15px;">
@@ -597,7 +609,10 @@
         </div>
 
         <div class="box-panel" style="max-height: 120px; margin-bottom:8px; padding: 5px;">
-            <h3 style="font-size: 0.85em; margin-bottom:4px;">⚠️ Errori per Velocità (WPM)</h3>
+            <h3 style="font-size: 0.85em; margin-bottom:4px; display:flex; align-items:center; justify-content:center; gap:5px;">
+                ⚠️ Errori per Velocità (WPM)
+                <span class="info-icon" onclick="window.showStatInfo('wpm_errors')">ⓘ</span>
+            </h3>
             <div id="wpmErrorChartContainer" style="overflow-y:auto; font-size: 0.8em;"></div>
         </div>
 
@@ -605,26 +620,63 @@
         <div style="display: flex; gap: 8px; width: 100%; flex-shrink: 0; min-height: 200px; margin-bottom: 8px;">
             <!-- Matrice di Confusione -->
             <div class="box-panel" style="flex: 1; display:flex; flex-direction:column; padding: 5px;">
-                <h3 style="font-size: 0.85em; margin-bottom:2px;">🔄 Matrice Confusione</h3>
+                <h3 style="font-size: 0.85em; margin-bottom:2px; display:flex; align-items:center; justify-content:center; gap:5px;">
+                    🔄 Matrice Confusione
+                    <span class="info-icon" onclick="window.showStatInfo('confusion')">ⓘ</span>
+                </h3>
                 <div id="confusionMatrixContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.85em;"></div>
             </div>
 
             <!-- Blocchi Cognitivi -->
             <div class="box-panel" style="flex: 1; display:flex; flex-direction:column; padding: 5px;">
-                <h3 style="font-size: 0.85em; margin-bottom:2px;">🧱 Blocchi Cognitivi</h3>
+                <h3 style="font-size: 0.85em; margin-bottom:2px; display:flex; align-items:center; justify-content:center; gap:5px;">
+                    🧱 Blocchi Cognitivi
+                    <span class="info-icon" onclick="window.showStatInfo('blocks')">ⓘ</span>
+                </h3>
                 <div id="cognitiveBlocksContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.85em; display:flex; flex-direction:column; gap:6px;"></div>
             </div>
         </div>
 
-        <div style="display: flex; gap: 8px; width: 100%; flex-shrink: 0; min-height: 200px;">
-            <!-- Bigrammi Sbagliati -->
+        <div style="display: flex; gap: 8px; width: 100%; flex-shrink: 0; min-height: 200px; margin-bottom: 8px;">
+            <!-- Bigrammi Sbagliati (Coppie) -->
             <div class="box-panel" style="flex: 1; display:flex; flex-direction:column; padding: 5px;">
-                <h3 style="font-size: 0.85em; margin-bottom:2px;">🔗 Coppie</h3>
+                <h3 style="font-size: 0.85em; margin-bottom:2px; display:flex; align-items:center; justify-content:center; gap:5px;">
+                    🔗 Coppie
+                    <span class="info-icon" onclick="window.showStatInfo('ngrams')">ⓘ</span>
+                </h3>
                 <div style="display:flex; align-items:center; justify-content:center; gap:4px; margin-bottom:5px;">
                     <small style="font-size:0.65em;">Soglia:</small>
                     <input type="number" id="bigramThresholdInput" value="3" min="1" max="50" style="width:40px; padding:2px; font-size:0.8em; height:22px;">
                 </div>
                 <div id="bigramErrorsContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.85em;"></div>
+            </div>
+
+            <!-- Trigrammi Sbagliati (Triple) -->
+            <div class="box-panel" style="flex: 1; display:flex; flex-direction:column; padding: 5px;">
+                <h3 style="font-size: 0.85em; margin-bottom:2px; display:flex; align-items:center; justify-content:center; gap:5px;">
+                    🔗 Triple
+                    <span class="info-icon" onclick="window.showStatInfo('ngrams')">ⓘ</span>
+                </h3>
+                <div style="display:flex; align-items:center; justify-content:center; gap:4px; margin-bottom:5px;">
+                    <small style="font-size:0.65em;">Soglia:</small>
+                    <input type="number" id="trigramThresholdInput" value="2" min="1" max="50" style="width:40px; padding:2px; font-size:0.8em; height:22px;">
+                </div>
+                <div id="trigramErrorsContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.85em;"></div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; width: 100%; flex-shrink: 0; min-height: 200px; margin-bottom: 8px;">
+            <!-- Quadrigrammi Sbagliati (Quadruple) -->
+            <div class="box-panel" style="flex: 1; display:flex; flex-direction:column; padding: 5px;">
+                <h3 style="font-size: 0.85em; margin-bottom:2px; display:flex; align-items:center; justify-content:center; gap:5px;">
+                    🔗 Quadruple
+                    <span class="info-icon" onclick="window.showStatInfo('ngrams')">ⓘ</span>
+                </h3>
+                <div style="display:flex; align-items:center; justify-content:center; gap:4px; margin-bottom:5px;">
+                    <small style="font-size:0.65em;">Soglia:</small>
+                    <input type="number" id="quadgramThresholdInput" value="2" min="1" max="50" style="width:40px; padding:2px; font-size:0.8em; height:22px;">
+                </div>
+                <div id="quadgramErrorsContainer" style="flex-grow:1; overflow-y:auto; font-size: 0.85em;"></div>
             </div>
 
             <!-- Parole Ricorrenti -->
@@ -638,10 +690,12 @@
             </div>
         </div>
 
-        <div class="box-panel" style="margin-top:8px; flex-shrink:0; display:flex; flex-direction:column; gap:6px;">
-            <button id="btnCreateErrorDict" class="btn-success" style="font-size:0.85em; padding:10px;">🛠️ Allenamento Parole Critiche</button>
-            <button id="btnResetErrorStats" class="btn-danger" style="font-size:0.85em; padding:10px;">🗑️ Reset Dati Analitici</button>
-        </div>
+    </div>
+
+    <!-- BOTTONI AZIONE STATISTICHE (FISSI) -->
+    <div id="statsActionButtons" style="display:none; position:absolute; bottom:60px; left:10px; right:10px; gap:8px; z-index:1000; background:var(--bg-color); padding:10px; border-top:1px solid var(--hint-color); border-radius:12px 12px 0 0; box-shadow:0 -5px 15px rgba(0,0,0,0.1);">
+        <button id="btnCreateErrorDict" class="btn-success" style="flex:1.5; font-size:0.85em; padding:12px; margin:0;">🛠️ Allenamento Parole Critiche</button>
+        <button id="btnResetErrorStats" class="btn-danger" style="flex:1; font-size:0.85em; padding:12px; margin:0;">🗑️ Reset</button>
     </div>
 
     <!-- SEZIONE 2.5: FEEDBACK E VALUTAZIONI -->
@@ -2154,6 +2208,16 @@
             </div>
 
             <button onclick="document.getElementById('gameRatingModal').style.display='none'" class="btn-link" style="color: var(--hint-color); text-decoration: none; font-size: 0.8em;">Non ora, grazie</button>
+        </div>
+    </div>
+    <!-- MODAL: INFO STATISTICHE (TOOLTIP) -->
+    <div id="statInfoModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 11000; justify-content: center; align-items: center;" onclick="this.style.display='none'">
+        <div class="box-panel" style="background: var(--bg-color); border: 2px solid var(--link-color); width: 85%; max-width: 400px; padding: 20px;" onclick="event.stopPropagation()">
+            <h3 id="statInfoTitle" style="color: var(--link-color); margin-bottom: 10px;">Informazione</h3>
+            <div id="statInfoText" style="font-size: 0.9em; line-height: 1.4; text-align: left; color: var(--text-color);">
+                <!-- Testo dinamico -->
+            </div>
+            <button onclick="document.getElementById('statInfoModal').style.display='none'" class="btn-secondary" style="margin-top: 20px;">Ho Capito</button>
         </div>
     </div>
 </body>
