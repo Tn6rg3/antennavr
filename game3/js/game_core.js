@@ -1315,6 +1315,11 @@ window.finishGame = function() {
 
     // --- NUOVO: REPORT ALLENAMENTO MIRATO ---
     if (window.currentMode === 'target_training' && window.targetTrainingContext) {
+        // Salviamo lo storico per l'andamento nel profilo
+        if (typeof window.trackTargetedTrainingSession === 'function') {
+            window.trackTargetedTrainingSession(matchDetailsArray);
+        }
+
         setTimeout(() => {
             window.generateTargetTrainingReport();
         }, 2000); // Ritardo per permettere di vedere la classifica o la fine partita

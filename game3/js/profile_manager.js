@@ -327,6 +327,9 @@ window.loadAdvancedStats = function() {
         // 0. GRAFICO TREND
         window.renderAccuracyTrend(stats.accuracyTrend || {});
 
+        // 0b. MIGLIORAMENTO MIRATO
+        window.renderTargetedImprovement(stats);
+
         // A. DIAGNOSTICA LUNGHEZZA
         const lengthCont = document.getElementById('lengthStatsContainer');
         if (lengthCont) {
@@ -620,6 +623,10 @@ window.showStatInfo = function(type) {
         ngrams: {
             t: "Analisi Sequenze (N-Grammi)",
             m: "Le coppie, triple e quadruple mostrano sequenze di caratteri in cui il tuo ritmo di ricezione si spezza. Spesso l'errore non è sulla lettera, ma sul 'legame' tra esse."
+        },
+        targeted: {
+            t: "Focus Miglioramento Mirato",
+            m: "Confronta i risultati delle tue sessioni di Allenamento Mirato. Mostra se la tua precisione sui caratteri critici sta aumentando rispetto alle partite passate."
         }
     };
 
@@ -1086,6 +1093,10 @@ window.showStatInfo = function(type) {
         ngrams: {
             t: "Analisi Sequenze (N-Grammi)",
             m: "Le coppie, triple e quadruple mostrano sequenze di caratteri in cui il tuo ritmo di ricezione si spezza. Spesso l'errore non è sulla lettera, ma sul 'legame' tra esse."
+        },
+        targeted: {
+            t: "Focus Miglioramento Mirato",
+            m: "Confronta i risultati delle tue sessioni di Allenamento Mirato. Mostra se la tua precisione sui caratteri critici sta aumentando rispetto alle partite passate."
         }
     };
 
@@ -1114,12 +1125,12 @@ window.renderAccuracyTrend = function(trendData) {
     ctx.scale(dpr, dpr);
 
     const entries = Object.entries(trendData).sort((a,b) => a[0].localeCompare(b[0])).slice(-30);
-    if (entries.length < 2) {
+    if (entries.length < 1) {
         ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = "#999";
         ctx.font = "12px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Gioca più partite per vedere il grafico", width/2, height/2);
+        ctx.fillText("Gioca una partita per vedere il grafico", width/2, height/2);
         return;
     }
 
@@ -1151,12 +1162,21 @@ window.renderAccuracyTrend = function(trendData) {
     ctx.lineCap = "round";
     ctx.beginPath();
 
-    points.forEach((p, i) => {
-        const x = padding + (chartW / (points.length - 1)) * i;
-        const y = padding + chartH - (chartH * (p / 100));
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
+    if (points.length === 1) {
+        // Se c'è un solo punto, disegnamo una linea tratteggiata orizzontale
+        ctx.setLineDash([5, 5]);
+        const y = padding + chartH - (chartH * (points[0] / 100));
+        ctx.moveTo(padding, y); ctx.lineTo(width - padding, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    } else {
+        points.forEach((p, i) => {
+            const x = padding + (chartW / (points.length - 1)) * i;
+            const y = padding + chartH - (chartH * (p / 100));
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    }
 
     // Area sfumata
     ctx.lineTo(padding + chartW, padding + chartH);
@@ -1177,6 +1197,90 @@ window.renderAccuracyTrend = function(trendData) {
         ctx.lineWidth = 2;
         ctx.stroke();
     });
+};
+
+/**
+ * TRACCIAMENTO SESSIONE MIRATA (CHIAMATA DA GAME_CORE)
+ */
+window.trackTargetedTrainingSession = function(matchDetails) {
+    if (!matchDetails || matchDetails.length === 0) return;
+
+    let charStats = {};
+    matchDetails.forEach(m => {
+        const real = m.real.toUpperCase();
+        const typed = m.typed.toUpperCase();
+        for (let i = 0; i < real.length; i++) {
+            const c = real[i];
+            if (!charStats[c]) charStats[c] = { attempts: 0, errors: 0 };
+            charStats[c].attempts++;
+            if (real[i] !== typed[i]) charStats[c].errors++;
+        }
+    });
+
+    const sessionAccuracy = matchDetails.filter(m => m.points > 0).length / matchDetails.length;
+
+    db.ref(`users/${myId}/stats/targetedHistory`).push({
+        ts: firebase.database.ServerValue.TIMESTAMP,
+        accuracy: sessionAccuracy,
+        charStats: charStats
+    });
+};
+
+/**
+ * RENDERING MIGLIORAMENTO MIRATO
+ */
+window.renderTargetedImprovement = function(stats) {
+    const panel = document.getElementById('targetedImprovementPanel');
+    const content = document.getElementById('targetedImprovementContent');
+    if (!panel || !content) return;
+
+    const history = stats.targetedHistory || {};
+    const sessions = Object.values(history).sort((a,b) => a.ts - b.ts);
+
+    if (sessions.length < 2) {
+        panel.style.display = 'none';
+        return;
+    }
+
+    panel.style.display = 'flex';
+    const last = sessions[sessions.length - 1];
+    const prev = sessions[sessions.length - 2];
+
+    const diff = (last.accuracy - prev.accuracy) * 100;
+    const color = diff >= 0 ? "#4caf50" : "#d32f2f";
+    const arrow = diff >= 0 ? "▲" : "▼";
+
+    let html = `
+        <div style="font-size:1.2em; font-weight:bold; color:${color}; margin-bottom:10px;">
+            ${arrow} ${Math.abs(Math.round(diff))}% <small>rispetto a ultima sessione</small>
+        </div>
+        <div style="text-align:left; border-top:1px solid rgba(0,0,0,0.05); padding-top:10px;">
+            <b style="font-size:0.8em; color:var(--hint-color); text-transform:uppercase;">Top Progressi Caratteri:</b>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:5px;">
+    `;
+
+    // Calcoliamo miglioramento sui singoli caratteri
+    let charDiffs = [];
+    Object.keys(last.charStats).forEach(c => {
+        if (prev.charStats[c]) {
+            const lastAcc = (last.charStats[c].attempts - last.charStats[c].errors) / last.charStats[c].attempts;
+            const prevAcc = (prev.charStats[c].attempts - prev.charStats[c].errors) / prev.charStats[c].attempts;
+            const d = (lastAcc - prevAcc) * 100;
+            if (Math.abs(d) > 1) charDiffs.push({ char: c, diff: d });
+        }
+    });
+
+    charDiffs.sort((a,b) => b.diff - a.diff).slice(0, 5).forEach(cd => {
+        const cColor = cd.diff > 0 ? "#4caf50" : "#d32f2f";
+        html += `<span style="background:rgba(0,0,0,0.03); padding:4px 8px; border-radius:4px; font-size:0.9em;">
+            <b>${cd.char}</b>: <span style="color:${cColor}; font-weight:bold;">${cd.diff > 0 ? '+' : ''}${Math.round(cd.diff)}%</span>
+        </span>`;
+    });
+
+    if (charDiffs.length === 0) html += `<small style="color:var(--hint-color);">Dati insufficienti per il dettaglio caratteri.</small>`;
+
+    html += `</div></div>`;
+    content.innerHTML = html;
 };
 
 /**
