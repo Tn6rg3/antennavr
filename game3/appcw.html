@@ -23,6 +23,32 @@
 </head>
 <body>
 
+<script>
+    // BOOTSTRAP WATCHDOG: Rileva se l'app non si carica entro 20 secondi
+    // (Protegge da errori di rete o bug bloccanti nei file JavaScript)
+    window.appIsReady = false;
+    window.bootstrapTimer = setTimeout(function() {
+        if (!window.appIsReady) {
+            console.error("Bootstrap: Caricamento troppo lungo!");
+            var statusText = document.getElementById('initStatusText');
+            if (statusText) {
+                statusText.innerHTML = "Rete lenta o aggiornamento in corso...<br><small>Stiamo tentando di avvisare il bot.</small>";
+            }
+
+            // Tentativo di notifica via GAS (indipendente da altri file JS)
+            try {
+                var tg = window.Telegram.WebApp;
+                var userId = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
+                if (userId) {
+                    var errorMsg = "⚠️ <b>L'app sta impiegando troppo tempo a caricarsi.</b>\nPossibile problema di rete o aggiornamento. Riprova tra poco! 📻";
+                    var url = "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec?action=notify&targetId=" + userId + "&text=" + encodeURIComponent(errorMsg);
+                    fetch(url, { mode: 'no-cors' });
+                }
+            } catch(e) {}
+        }
+    }, 20000);
+</script>
+
 <!-- BANNER AGGIORNAMENTO -->
 <div id="updateBanner" style="display:none; position:fixed; top:0; left:0; width:100%; background:#ff9800; color:white; text-align:center; padding:10px; z-index:9999; font-weight:bold; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
     🚀 Nuova Versione Disponibile!
@@ -152,6 +178,19 @@
 <div id="loadingScreen" class="screen active-screen">
     <h2 style="margin-top: 40px;">Caricamento... 📻</h2>
     <p id="initStatusText">Verifica credenziali in corso...</p>
+</div>
+
+<!-- SCHERMATA MANUTENZIONE -->
+<div id="maintenanceScreen" class="screen">
+    <div class="screen-content" style="justify-content: center; text-align: center; padding: 30px;">
+        <span style="font-size: 5em; margin-bottom: 20px;">🛠️</span>
+        <h2 style="color: var(--champ-color);">Manutenzione in corso</h2>
+        <p style="font-size: 1.1em; line-height: 1.5; margin-bottom: 20px;">
+            Stiamo aggiornando i server di <b>Sfida Telegrafia</b> per offrirti un'esperienza migliore.
+        </p>
+        <p style="font-size: 0.9em; color: var(--hint-color);">Riprova tra qualche minuto. Grazie per la pazienza! 📻</p>
+        <button onclick="window.location.reload()" class="btn-secondary" style="margin-top: 20px;">RICARICA 🔄</button>
+    </div>
 </div>
 
 <!-- SCHERMATA ERRORE ESTERNO A TELEGRAM -->
