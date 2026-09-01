@@ -2207,6 +2207,15 @@
     })();
 </script>
 
+    <!-- MODAL: REPORT ALLENAMENTO MIRATO (Riepilogo Blocchi Cognitivi) -->
+    <div id="targetTrainingReportModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 10500; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 40px rgba(0,0,0,0.6); max-height: 90vh; overflow-y: auto;">
+        <h3 style="color: var(--champ-color); margin-bottom: 15px; text-align: center;">🎯 Risultati Allenamento Mirato</h3>
+        <div id="targetTrainingReportContent" style="margin-bottom: 20px;">
+            <!-- Caricato via JS -->
+        </div>
+        <button onclick="document.getElementById('targetTrainingReportModal').style.display='none'; goBackToMenu();" class="btn-champ" style="width: 100%;">OTTIMO, TORNA AL MENU ✅</button>
+    </div>
+
     <!-- MODAL VALUTAZIONE GIOCO (LIKE/DISLIKE) -->
     <div id="gameRatingModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; justify-content: center; align-items: center;">
         <div class="box-panel" style="background: var(--bg-color); border: 2px solid var(--link-color); width: 85%; max-width: 350px; text-align: center; padding: 25px;">
