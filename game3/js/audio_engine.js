@@ -82,10 +82,14 @@ window.startRemoteTone = function(freq, delaySec = 0) {
     initPersistentOscillators();
     if (!window.preGainRemote) return;
     const f = freq || window.currentTone || 600;
-    const startTime = window.audioCtx.currentTime + delaySec;
-    window.preOscRemote.frequency.setValueAtTime(f, startTime);
+    const now = window.audioCtx.currentTime;
+    const startTime = now + delaySec;
+
+    // Puliamo eventuali schedulazioni precedenti per evitare conflitti e click
     window.preGainRemote.gain.cancelScheduledValues(startTime);
     window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, startTime);
+
+    window.preOscRemote.frequency.setValueAtTime(f, startTime);
     window.preGainRemote.gain.linearRampToValueAtTime(0.5, startTime + 0.005);
 
     setTimeout(() => {
@@ -96,10 +100,13 @@ window.startRemoteTone = function(freq, delaySec = 0) {
 
 window.stopRemoteTone = function(delaySec = 0) {
     if (!window.preGainRemote) return;
-    const stopTime = window.audioCtx.currentTime + delaySec;
+    const now = window.audioCtx.currentTime;
+    const stopTime = now + delaySec;
+
     window.preGainRemote.gain.cancelScheduledValues(stopTime);
     window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, stopTime);
-    window.preGainRemote.gain.linearRampToValueAtTime(0, stopTime + 0.005);
+    // Rampa di chiusura leggermente più lunga (10ms) per eliminare i click sui relay lenti
+    window.preGainRemote.gain.linearRampToValueAtTime(0, stopTime + 0.010);
 
     setTimeout(() => {
         const indicator = document.getElementById('qsoRxIndicator');
