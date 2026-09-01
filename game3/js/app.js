@@ -14,11 +14,27 @@ window.Telegram.WebApp.expand();
 
 window.tg = window.Telegram.WebApp;
 const tg = window.tg;
-window.tgUser = tg.initDataUnsafe?.user;
+
+// --- GESTIONE DATI UTENTE (Supporto Browser Esterno) ---
+// Recuperiamo initData sia dalla WebApp che dai parametri URL (per browser esterno)
+const urlParams = new URLSearchParams(window.location.search);
+window.tgInitData = tg.initData || urlParams.get('initData') || "";
+
+// Se siamo in un browser esterno, decodifichiamo i dati utente se possibile
+let userFromUrl = null;
+try {
+    if (urlParams.get('initData')) {
+        const decoded = decodeURIComponent(urlParams.get('initData'));
+        const userMatch = decoded.match(/user=([^&]+)/);
+        if (userMatch) userFromUrl = JSON.parse(decodeURIComponent(userMatch[1]));
+    }
+} catch(e) { console.warn("Init: Errore parsing user da URL", e); }
+
+window.tgUser = tg.initDataUnsafe?.user || userFromUrl;
 const tgUser = window.tgUser;
 window.tgUsername = tgUser?.username || "";
 const tgUsername = window.tgUsername;
-const startParam = tg.initDataUnsafe?.start_param;
+const startParam = tg.initDataUnsafe?.start_param || urlParams.get('startapp');
 
 // --- GESTIONE SCHERMO RESIZE E TASTIERA MOBILE ---
 if (typeof tg.disableVerticalSwipes === 'function') {
@@ -523,7 +539,7 @@ async function validateIdentity() {
     }
 
     try {
-        const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(tg.initData);
+        const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(window.tgInitData);
 
         const response = await fetch(url, {
             method: 'GET',
@@ -1704,6 +1720,28 @@ if (els.muteGlobalChatBtn) {
 // --- CREAZIONE STANZA ---
 if (els.createRoomBtn) {
     els.createRoomBtn.onclick = () => {
+        const gType = els.gameTypeInput.value, gMode = els.gameModeInput.value;
+        const isSpeak = (gType === 'single' && gMode === 'standard') && document.getElementById('speakModeCheckbox')?.checked;
+
+        // --- FIX: REDIREZIONE BROWSER ESTERNO PER TTS SU MOBILE ---
+        // Alcuni browser interni di Telegram bloccano la sintesi vocale.
+        // Se l'utente è su mobile e usa "Ascolto", proponiamo l'apertura esterna.
+        const isMobile = tg.platform === 'android' || tg.platform === 'ios';
+        const isInternal = !window.location.search.includes('initData'); // Se non c'è initData nell'URL, siamo dentro TG
+
+        if (isSpeak && isMobile && isInternal) {
+            if (confirm(currentLang === 'it'
+                ? "🚀 Per una migliore esperienza audio in modalità Ascolto, si consiglia di aprire il gioco nel browser esterno. Vuoi passare al browser di sistema?"
+                : "🚀 For a better audio experience in Listening mode, it's recommended to open the game in an external browser. Do you want to switch to the system browser?")) {
+
+                // Costruiamo l'URL esterno includendo initData per mantenere l'autenticazione
+                const currentUrl = window.location.origin + window.location.pathname;
+                const externalUrl = currentUrl + "?initData=" + encodeURIComponent(tg.initData);
+                tg.openLink(externalUrl);
+                return; // Interrompiamo l'avvio qui, l'utente continuerà di là
+            }
+        }
+
         // --- SBLOCCO TTS MOBILE (IMPERCETTIBILE) ---
         if (('speechSynthesis' in window)) {
             const unlock = new SpeechSynthesisUtterance(" ");
@@ -1711,7 +1749,6 @@ if (els.createRoomBtn) {
             window.speechSynthesis.speak(unlock);
         }
 
-        const gType = els.gameTypeInput.value, gMode = els.gameModeInput.value;
         if (gType === 'tournament') { window.showScreen('teamsScreen'); return; }
         if (gMode === 'custom' && window.customDictionary.length === 0) return showToast("Carica un file!");
 
