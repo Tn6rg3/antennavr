@@ -1774,7 +1774,7 @@ if (els.createRoomBtn) {
         const isFixed = window.isSinglePlayer && els.fixedSpeedCheckbox?.checked;
         const isEasy = window.isSinglePlayer && els.easyModeCheckbox?.checked;
         const allowSpectators = window.isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
-        const isSpeak = window.isSinglePlayer && document.getElementById('speakModeCheckbox')?.checked;
+        // isSpeak è già stato dichiarato sopra per la logica di redirezione
         const vRate = parseFloat(document.getElementById('voiceRateSelect')?.value) || 1.0;
 
         let cSpace = (window.isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
