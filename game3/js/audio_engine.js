@@ -81,16 +81,19 @@ window.stopTone = function() {
 window.startRemoteTone = function(freq, delaySec = 0) {
     initPersistentOscillators();
     if (!window.preGainRemote) return;
+
+    // Evitiamo di far ripartire la rampa se il tono è già attivo (previene click da eventi duplicati)
+    if (window.qsoState.remoteIsOn && Math.abs(window.preOscRemote.frequency.value - freq) < 1) return;
+    window.qsoState.remoteIsOn = true;
+
     const f = freq || window.currentTone || 600;
     const now = window.audioCtx.currentTime;
     const startTime = now + delaySec;
 
-    // Puliamo eventuali schedulazioni precedenti per evitare conflitti e click
     window.preGainRemote.gain.cancelScheduledValues(startTime);
-    window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, startTime);
-
     window.preOscRemote.frequency.setValueAtTime(f, startTime);
-    window.preGainRemote.gain.linearRampToValueAtTime(0.5, startTime + 0.005);
+    // setTargetAtTime crea una rampa esponenziale naturale e senza click
+    window.preGainRemote.gain.setTargetAtTime(0.5, startTime, 0.003);
 
     setTimeout(() => {
         const indicator = document.getElementById('qsoRxIndicator');
@@ -99,14 +102,15 @@ window.startRemoteTone = function(freq, delaySec = 0) {
 };
 
 window.stopRemoteTone = function(delaySec = 0) {
-    if (!window.preGainRemote) return;
+    if (!window.preGainRemote || !window.qsoState.remoteIsOn) return;
+    window.qsoState.remoteIsOn = false;
+
     const now = window.audioCtx.currentTime;
     const stopTime = now + delaySec;
 
     window.preGainRemote.gain.cancelScheduledValues(stopTime);
-    window.preGainRemote.gain.setValueAtTime(window.preGainRemote.gain.value, stopTime);
-    // Rampa di chiusura leggermente più lunga (10ms) per eliminare i click sui relay lenti
-    window.preGainRemote.gain.linearRampToValueAtTime(0, stopTime + 0.010);
+    // Chiusura esponenziale ultra-dolce (costante di tempo 3ms)
+    window.preGainRemote.gain.setTargetAtTime(0, stopTime, 0.003);
 
     setTimeout(() => {
         const indicator = document.getElementById('qsoRxIndicator');
