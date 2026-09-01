@@ -127,15 +127,38 @@ window.listenForQsoPartner = function() {
                 const connection = window.qsoState.peer.connect(players[pId].peerId, { reliable: false, metadata: { name: window.myName, pNow: performance.now() } });
                 window.setupQsoDataChannel(connection);
 
-                // ASCOLTO RELAY OTTIMIZZATO
+                // --- ASCOLTO RELAY CON RICOSTRUZIONE RITMO ---
                 const partnerRelayRef = db.ref(`rooms/${window.roomCode}/qso_relay/${partnerId}`);
+
+                // Stato per il buffer di questo partner
+                const relayBuffer = {
+                    baseTime: 0, // Tempo di riferimento locale
+                    remoteBaseTime: 0, // Primo timestamp ricevuto
+                    bufferDelay: 0.3 // 300ms di buffer per assorbire il jitter
+                };
+
                 partnerRelayRef.on('child_added', rSnap => {
                     const data = rSnap.val();
                     if (!data || data.ts < window.qsoState.relayStartTime) return;
+
+                    // Inizializziamo il riferimento temporale al primo pacchetto
+                    if (relayBuffer.remoteBaseTime === 0) {
+                        relayBuffer.remoteBaseTime = data.ts;
+                        relayBuffer.baseTime = (window.audioCtx?.currentTime || 0) + relayBuffer.bufferDelay;
+                    }
+
+                    // Calcoliamo quando deve suonare questo evento rispetto all'inizio
+                    const offset = (data.ts - relayBuffer.remoteBaseTime) / 1000;
+                    const scheduledTime = relayBuffer.baseTime + offset;
+
+                    // Calcoliamo il ritardo rispetto ad ADESSO
+                    const now = window.audioCtx?.currentTime || 0;
+                    const delaySec = Math.max(0, scheduledTime - now);
+
                     if (data.s === 1) {
-                        if (typeof window.startRemoteTone === 'function') window.startRemoteTone(data.f);
+                        if (typeof window.startRemoteTone === 'function') window.startRemoteTone(data.f, delaySec);
                     } else if (data.s === 0) {
-                        if (typeof window.stopRemoteTone === 'function') window.stopRemoteTone();
+                        if (typeof window.stopRemoteTone === 'function') window.stopRemoteTone(delaySec);
                     }
                     rSnap.ref.remove();
                 });
