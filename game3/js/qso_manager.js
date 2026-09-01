@@ -65,27 +65,53 @@ window.startQsoMode = function() {
     const myPeerId = "CWGAME_" + window.myId;
     if (window.qsoState.peer) window.qsoState.peer.destroy();
 
-    window.qsoState.peer = new Peer(myPeerId, {
-        config: {
-            'iceServers': [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun.cloudflare.com:3478' },
-                { urls: 'stun:stun.services.mozilla.com' }
-            ]
-        }
-    });
+    // --- LOGICA BRIDGE DEDICATO (RASPBERRY) ---
+    window.updateQsoStatus("RICERCA BRIDGE...", "#3498db");
 
-    window.qsoState.peer.on('open', (id) => {
-        window.updateQsoStatus("ATTESA P2P...", "#f39c12");
-        if (window.roomCode) {
-            db.ref(`rooms/${window.roomCode}/players/${window.myId}/peerId`).set(id);
-            window.listenForQsoPartner();
-        }
-    });
+    db.ref('appConfig/qsoServerUrl').once('value').then(snap => {
+        const customServerUrl = snap.val();
+        let peerConfig = {
+            config: {
+                'iceServers': [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun.cloudflare.com:3478' },
+                    { urls: 'stun:stun.services.mozilla.com' }
+                ]
+            }
+        };
 
-    window.qsoState.peer.on('connection', (incoming) => window.setupQsoDataChannel(incoming));
-    window.qsoState.peer.on('error', () => window.activateQsoRelayMode());
+        if (customServerUrl) {
+            console.log("🔗 Collegamento al Bridge dedicato su Raspberry:", customServerUrl);
+            // Estraiamo host, porta e path dall'URL (es: http://ip:9000/qso)
+            try {
+                const url = new URL(customServerUrl);
+                peerConfig.host = url.hostname;
+                peerConfig.port = url.port || 80;
+                peerConfig.path = url.pathname;
+                peerConfig.secure = url.protocol === 'https:';
+                window.updateQsoStatus("BRIDGE RASPBERRY ATTIVO", "#2ecc71");
+            } catch (e) {
+                console.error("Errore parsing customServerUrl, uso server standard", e);
+            }
+        }
+
+        window.qsoState.peer = new Peer(myPeerId, peerConfig);
+
+        window.qsoState.peer.on('open', (id) => {
+            if (!customServerUrl) window.updateQsoStatus("ATTESA P2P (Standard)...", "#f39c12");
+            if (window.roomCode) {
+                db.ref(`rooms/${window.roomCode}/players/${window.myId}/peerId`).set(id);
+                window.listenForQsoPartner();
+            }
+        });
+
+        window.qsoState.peer.on('connection', (incoming) => window.setupQsoDataChannel(incoming));
+        window.qsoState.peer.on('error', (err) => {
+            console.warn("Errore Peer:", err);
+            window.activateQsoRelayMode();
+        });
+    });
 
     // Sincronizzazione Relay Globale
     if (window.roomCode) {
