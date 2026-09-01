@@ -324,8 +324,8 @@ window.loadAdvancedStats = function() {
     db.ref(`users/${myId}/stats`).once('value').then(snap => {
         const stats = snap.val() || {};
 
-        // 0. GRAFICO TREND
-        window.renderAccuracyTrend(stats.accuracyTrend || {});
+        // 0. GRAFICO TREND (Sessioni)
+        window.renderAccuracyTrend(stats.accuracySessions || {});
 
         // 0b. MIGLIORAMENTO MIRATO
         window.renderTargetedImprovement(stats);
@@ -796,12 +796,6 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
         const isWordError = (real !== typed);
         const len = real.length;
 
-        // Accuratezza Trend (Giornaliera)
-        statsBase.child(`accuracyTrend/${today}`).transaction(data => {
-            if (!data) return { total: 1, sum: (isWordError ? 0 : 1) };
-            return { total: data.total + 1, sum: data.sum + (isWordError ? 0 : 1) };
-        });
-
         statsBase.child(`lengthStats/${len}/total`).set(firebase.database.ServerValue.increment(1));
 
         for (let char of real) {
@@ -1124,7 +1118,7 @@ window.renderAccuracyTrend = function(trendData) {
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
 
-    const entries = Object.entries(trendData).sort((a,b) => a[0].localeCompare(b[0])).slice(-30);
+    const entries = Object.entries(trendData).sort((a,b) => a[1].ts - b[1].ts).slice(-50);
     if (entries.length < 1) {
         ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = "#999";
@@ -1134,7 +1128,7 @@ window.renderAccuracyTrend = function(trendData) {
         return;
     }
 
-    const points = entries.map(e => (e[1].sum / e[1].total) * 100);
+    const points = entries.map(e => e[1].acc);
     const padding = 25;
     const chartW = width - padding * 2;
     const chartH = height - padding * 2;
@@ -1196,6 +1190,37 @@ window.renderAccuracyTrend = function(trendData) {
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = 2;
         ctx.stroke();
+    });
+};
+
+/**
+ * TRACCIAMENTO ACCURATEZZA SESSIONE (Chiamata da game_core.js a fine partita)
+ */
+window.trackSessionAccuracy = function(matchDetails) {
+    if (!myId || !matchDetails || matchDetails.length === 0) return;
+
+    const correctCount = matchDetails.filter(m => m.points > 0).length;
+    const accuracy = Math.round((correctCount / matchDetails.length) * 100);
+
+    const sessionsRef = db.ref(`users/${myId}/stats/accuracySessions`);
+
+    // Aggiungiamo la nuova sessione
+    sessionsRef.push({
+        ts: firebase.database.ServerValue.TIMESTAMP,
+        acc: accuracy
+    }).then(() => {
+        // Pulizia: manteniamo solo le ultime 50 sessioni nel DB
+        sessionsRef.once('value', snap => {
+            if (snap.numChildren() > 60) { // Margine di 10 per non cancellare ad ogni partita
+                let count = 0;
+                const total = snap.numChildren();
+                const toDelete = total - 50;
+                snap.forEach(child => {
+                    if (count < toDelete) child.ref.remove();
+                    count++;
+                });
+            }
+        });
     });
 };
 

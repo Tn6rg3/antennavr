@@ -1222,6 +1222,12 @@ window.finishGame = function() {
 
     if (matchDetailsArray.length > 0) {
         db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: window.currentMode, score: totalScore, wpm: peakWpm, type: window.isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
+
+        // --- TRACCIAMENTO ACCURATEZZA GLOBALE PER GRAFICO ---
+        if (typeof window.trackSessionAccuracy === 'function') {
+            window.trackSessionAccuracy(matchDetailsArray);
+        }
+
         if (typeof window.updateActivity === 'function') window.updateActivity(totalScore > 0);
 
         // --- ASSEGNAZIONE XP FINALE (RPG) ---
