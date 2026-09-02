@@ -393,30 +393,6 @@ window.showStudentDetailedStats = function(uid, name) {
         if (heatmap) heatmap.innerHTML = '<p style="color:red; text-align:center;">Errore caricamento dati.</p>';
     });
 };
-                const tr = document.getElementById('tutorStudentTrend');
-                if (tr && count > 0) {
-                    const avgA = Math.round(totalAcc / count);
-                    const avgW = Math.round(totalWpm / count);
-                    tr.innerHTML = `
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:10px;">
-                            <div class="box-panel" style="margin:0; padding:10px; text-align:center; border-color:${avgA >= 85 ? '#4caf50' : '#ff9800'};">
-                                <small style="display:block; color:var(--hint-color); text-transform:uppercase; font-size:0.7em;">Accuratezza Media</small>
-                                <b style="font-size:1.3em; color:${avgA >= 85 ? '#4caf50' : '#ff9800'}">${avgA}%</b>
-                            </div>
-                            <div class="box-panel" style="margin:0; padding:10px; text-align:center; border-color:var(--link-color);">
-                                <small style="display:block; color:var(--hint-color); text-transform:uppercase; font-size:0.7em;">Velocità Media</small>
-                                <b style="font-size:1.3em; color:var(--link-color);">${avgW} WPM</b>
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-        }
-    }).catch(err => {
-        console.error("Tutor Stats Error:", err);
-        if (heatmap) heatmap.innerHTML = '<p style="color:red; text-align:center;">Errore caricamento dati.</p>';
-    });
-};
 
 /**
  * CHAT RADIO-AULA: Gestione messaggi classe/tutor
