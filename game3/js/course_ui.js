@@ -4,39 +4,45 @@
  * RENDERIZZAZIONE PRINCIPALE DEL TAB CORSO
  */
 window.renderCourseTabView = function() {
-    const activeView = document.getElementById('courseTabActiveView');
-    const initialPrompt = document.getElementById('courseTabInitialPrompt');
-    const wizardContainer = document.getElementById('courseWizardContainer');
+    try {
+        const activeView = document.getElementById('courseTabActiveView');
+        const initialPrompt = document.getElementById('courseTabInitialPrompt');
+        const wizardContainer = document.getElementById('courseWizardContainer');
 
-    if (activeView) activeView.style.display = 'none';
-    if (initialPrompt) initialPrompt.style.display = 'none';
-    if (wizardContainer) wizardContainer.style.display = 'none';
+        if (activeView) activeView.style.display = 'none';
+        if (initialPrompt) initialPrompt.style.display = 'none';
+        if (wizardContainer) wizardContainer.style.display = 'none';
 
-    if (window.courseData && window.courseData.active_plan === true) {
-        if (activeView) activeView.style.display = 'flex';
+        if (window.courseData && window.courseData.active_plan === true) {
+            if (activeView) activeView.style.display = 'flex';
 
-        // Gestione Vista in base al Ruolo
-        const isTutor = window.courseData.role === 'tutor';
-        const trainingControls = document.getElementById('courseTrainingControls');
-        const tutorPanel = document.getElementById('courseTutorPanel');
+            // Di default mostriamo subito la dashboard principale
+            if (typeof window.switchCourseSubTab === 'function') {
+                window.switchCourseSubTab('dash');
+            }
 
-        // Mostriamo SEMPRE la pagina generale del corso (controlli, dashboard, esercizio)
-        if (trainingControls) trainingControls.style.display = 'flex';
-        if (tutorPanel) {
-            tutorPanel.style.display = isTutor ? 'block' : 'none';
-            if (isTutor) window.renderTutorPanel();
+            // Gestione Vista in base al Ruolo
+            const isTutor = window.courseData.role === 'tutor';
+            const trainingControls = document.getElementById('courseTrainingControls');
+            const tutorPanel = document.getElementById('courseTutorPanel');
+
+            // Mostriamo SEMPRE la pagina generale del corso (controlli, dashboard, esercizio)
+            if (trainingControls) trainingControls.style.display = 'flex';
+            if (tutorPanel) {
+                tutorPanel.style.display = isTutor ? 'block' : 'none';
+                if (isTutor && typeof window.renderTutorPanel === 'function') window.renderTutorPanel();
+            }
+
+            if (typeof window.renderCourseTabDashboard === 'function') window.renderCourseTabDashboard();
+            if (typeof window.populateCourseSettingsInputs === 'function') window.populateCourseSettingsInputs();
+            if (typeof window.renderTutorSelectionList === 'function') window.renderTutorSelectionList();
+            if (typeof window.initCourseChat === 'function') window.initCourseChat();
+            if (typeof window.initTutorCourseChatNotification === 'function') window.initTutorCourseChatNotification();
+        } else {
+            if (initialPrompt) initialPrompt.style.display = 'block';
         }
-
-        window.renderCourseTabDashboard();
-        window.populateCourseSettingsInputs();
-        window.renderTutorSelectionList(); // Popola select in settings e wizard
-        window.initCourseChat();
-        window.initTutorCourseChatNotification(); // Aggiorna listener notifiche
-
-        // Di default mostriamo la dashboard
-        window.switchCourseSubTab('dash');
-    } else {
-        if (initialPrompt) initialPrompt.style.display = 'block';
+    } catch (err) {
+        console.error("Course UI Error in renderCourseTabView:", err);
     }
 };
 
@@ -739,13 +745,17 @@ window.populateCourseSettingsInputs = function() {
 };
 
 window.renderCourseTabDashboard = function() {
+    if (!window.courseData) return;
+    if (!window.courseData.progress) window.courseData.progress = { current_lesson: 2, char_stats: {} };
+    if (!window.courseData.settings) window.courseData.settings = { days_per_week: 3, start_wpm: 15, farnsworth_wpm: 12 };
+
     // 1. Heatmap
     const heatmap = document.getElementById('courseTabHeatmap');
     const lessonInfo = document.getElementById('courseTabLessonInfo');
     if (heatmap) {
         heatmap.innerHTML = '';
         const stats = window.courseData.progress.char_stats || {};
-        const lesson = window.courseData.progress.current_lesson;
+        const lesson = window.courseData.progress.current_lesson || 2;
         window.KOCH_SEQUENCE.forEach((char, idx) => {
             const box = document.createElement('div');
             box.style.cssText = "width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:0.75em; font-weight:bold; border-radius:4px; border:1px solid rgba(255,255,255,0.1); cursor:pointer;";
@@ -759,7 +769,9 @@ window.renderCourseTabDashboard = function() {
             heatmap.appendChild(box);
         });
         if (lessonInfo) lessonInfo.textContent = `Caratteri attivi (${lesson}): ${window.KOCH_SEQUENCE.slice(0, lesson).join(", ")}`;
-        window.renderAdvancedCourseStats(window.KOCH_SEQUENCE[0]);
+        if (typeof window.renderAdvancedCourseStats === 'function') {
+            window.renderAdvancedCourseStats(window.KOCH_SEQUENCE[0]);
+        }
     }
 
     // 2. Piano Settimanale
@@ -767,11 +779,15 @@ window.renderCourseTabDashboard = function() {
     if (planList) {
         planList.innerHTML = '';
         const days = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-        if (!window.courseData.weekly_schedule) window.generateWeeklySchedule();
-        window.courseData.weekly_schedule.forEach((dayData, idx) => {
+        if (!window.courseData.weekly_schedule && typeof window.generateWeeklySchedule === 'function') {
+            window.generateWeeklySchedule();
+        }
+        const schedule = Array.isArray(window.courseData.weekly_schedule) ? window.courseData.weekly_schedule : [];
+        schedule.forEach((dayData, idx) => {
+            if (!dayData) return;
             const dayDiv = document.createElement('div');
             dayDiv.style.cssText = "display:flex; flex-direction:column; gap:4px; padding:8px; background:var(--sec-bg-color); border-radius:8px;";
-            dayDiv.innerHTML = `<b style="font-size:0.85em;">${days[idx]}</b>`;
+            dayDiv.innerHTML = `<b style="font-size:0.85em;">${days[idx] || 'Giorno'}</b>`;
             (dayData.sessions || []).forEach(session => {
                 const div = document.createElement('div');
                 div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:4px 8px; background:rgba(255,255,255,0.03); border-radius:6px; font-size:0.8em;";
@@ -787,7 +803,8 @@ window.renderCourseTabDashboard = function() {
     const startBtn = document.getElementById('btnTabStartCourseSession');
     if (startBtn) {
         const todayIdx = (new Date().getDay() + 6) % 7;
-        const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
+        const schedule = Array.isArray(window.courseData.weekly_schedule) ? window.courseData.weekly_schedule : [];
+        const dayData = schedule[todayIdx] || null;
         const done = dayData ? dayData.sessions.every(s => s.completed || s.type === 'REST') : true;
         startBtn.textContent = done ? "INIZIA SESSIONE EXTRA 🧪" : "AVVIA SESSIONE ODIERNA 🚀";
         startBtn.className = done ? "btn-secondary" : "btn-success";
