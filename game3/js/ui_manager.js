@@ -151,7 +151,8 @@ window.checkGameTypeUI = function() {
     if (containers.wordLen) containers.wordLen.style.display = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection') ? 'block' : 'none';
 
     // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE ---
-    const isSpeakAvailable = isSingle && selectedMode === 'standard';
+    const isWordMode = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection');
+    const isSpeakAvailable = isSingle && isWordMode;
     if (containers.speak) containers.speak.style.display = isSpeakAvailable ? 'flex' : 'none';
     if (containers.voiceInput) {
         const isSpeakActive = document.getElementById('speakModeCheckbox')?.checked;
