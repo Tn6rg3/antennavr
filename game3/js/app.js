@@ -162,6 +162,7 @@ const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space";
 const STORAGE_PREF_FIXED = "cwgame_pref_fixed";
 const STORAGE_PREF_EASY = "cwgame_pref_easy";
 const STORAGE_PREF_SPECTATE = "cwgame_pref_spectate";
+const STORAGE_PREF_VOICE_INPUT = "cwgame_pref_voice_input";
 const STORAGE_PUSH_NOTIFS_KEY = "cwgame_push_notifs";
 const STORAGE_CHAT_CW_ENABLED = "cwgame_chat_cw_enabled";
 const STORAGE_CHAT_CW_WPM = "cwgame_chat_cw_wpm";
@@ -656,6 +657,7 @@ function initGame() {
     if (els.fixedSpeedCheckbox) els.fixedSpeedCheckbox.checked = localStorage.getItem(STORAGE_PREF_FIXED) === 'true';
     if (els.easyModeCheckbox) els.easyModeCheckbox.checked = localStorage.getItem(STORAGE_PREF_EASY) === 'true';
     if (els.allowSpectatorsCheckbox) els.allowSpectatorsCheckbox.checked = localStorage.getItem(STORAGE_PREF_SPECTATE) === 'true';
+    if (document.getElementById('voiceInputCheckbox')) document.getElementById('voiceInputCheckbox').checked = localStorage.getItem(STORAGE_PREF_VOICE_INPUT) === 'true';
 
     // SALVATAGGIO AUTOMATICO DELLE PREFERENZE AL CAMBIO
     const savePref = (key, val) => localStorage.setItem(key, val);
@@ -668,6 +670,7 @@ function initGame() {
     els.fixedSpeedCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_FIXED, e.target.checked));
     els.easyModeCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_EASY, e.target.checked));
     els.allowSpectatorsCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_SPECTATE, e.target.checked));
+    document.getElementById('voiceInputCheckbox')?.addEventListener('change', (e) => savePref(STORAGE_PREF_VOICE_INPUT, e.target.checked));
 
     isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
     chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;
@@ -1848,6 +1851,7 @@ if (els.createRoomBtn) {
                 fixedSpeed: !!isFixed,
                 easyMode: !!isEasy,
                 speakMode: !!isSpeak,
+                voiceInputMode: !!document.getElementById('voiceInputCheckbox')?.checked,
                 voiceRate: vRate,
                 allowSpectators: !!allowSpectators,
                 charSpaceWpm: cSpace,

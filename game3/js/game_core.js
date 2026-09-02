@@ -462,6 +462,7 @@ window.listenToRoomInBackground = function() {
             window.isEasyMode = !!rData.easyMode;
             window.isAllowSpectators = !!rData.allowSpectators;
             window.isSpeakMode = !!rData.speakMode; // NUOVO
+    window.isVoiceInputMode = !!rData.voiceInputMode; // NUOVO
             window.voiceRate = rData.voiceRate || 1.0; // NUOVO
             window.charSpaceWpm = rData.charSpaceWpm || 0;
             window.wordSpaceMult = rData.wordSpaceMult || 1.0;
@@ -1082,7 +1083,16 @@ window.playNextWord = function() {
         easyHint.style.display = 'none';
     }
 
-    if (typeof playMorseAudio === 'function') playMorseAudio(currentWord, activeWpm);
+    if (typeof playMorseAudio === 'function') {
+        playMorseAudio(currentWord, activeWpm).then(() => {
+            // Se la risposta vocale è attiva, avviamo il riconoscimento dopo l'audio
+            if (window.isSinglePlayer && window.isVoiceInputMode) {
+                if (typeof window.startVoiceInput === 'function') {
+                    window.startVoiceInput();
+                }
+            }
+        });
+    }
     lastWordStartTime = Date.now();
 
     if (roomCode) {
@@ -1750,6 +1760,7 @@ if (els.permanentGameInput) {
 
 window.handleWordSubmission = function(userWord) {
     if (!userWord) return;
+    if (typeof window.stopVoiceInput === 'function') window.stopVoiceInput();
 
     const easyHint = document.getElementById('easyModeHint');
     if (easyHint) easyHint.style.display = 'none';

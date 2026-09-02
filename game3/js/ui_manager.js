@@ -125,6 +125,7 @@ window.checkGameTypeUI = function() {
         custom: document.getElementById('customDictControl'),
         spectator: document.getElementById('spectatorContainer'),
         speak: document.getElementById('speakModeContainer'),
+        voiceInput: document.getElementById('voiceInputContainer'),
         voiceRate: document.getElementById('voiceRateDiv'),
         arcadeBtn: document.getElementById('startArcadeBtn'),
         btn: document.getElementById('createRoomBtn'),
@@ -133,6 +134,9 @@ window.checkGameTypeUI = function() {
         wordsPerGroup: document.getElementById('wordsPerGroupContainer'),
         wordLen: document.getElementById('wordLengthContainer'),
         koch: document.getElementById('setupKochLevelContainer'),
+        speak: document.getElementById('speakModeContainer'),
+        voiceInput: document.getElementById('voiceInputContainer'),
+        voiceRate: document.getElementById('voiceRateDiv'),
         keyer: document.getElementById('mainMenuKeyerConfig')
     };
 
@@ -146,9 +150,14 @@ window.checkGameTypeUI = function() {
     if (containers.wordsPerGroup) containers.wordsPerGroup.style.display = (selectedMode === 'standard_plus') ? 'block' : 'none';
     if (containers.wordLen) containers.wordLen.style.display = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection') ? 'block' : 'none';
 
-    // --- LOGICA TRASMISSIONE ---
-    if (containers.koch) containers.koch.style.display = isTx ? 'block' : 'none';
-    if (containers.keyer) containers.keyer.style.display = isTx ? 'block' : 'none';
+    // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE ---
+    const isSpeakAvailable = isSingle && selectedMode === 'standard';
+    if (containers.speak) containers.speak.style.display = isSpeakAvailable ? 'flex' : 'none';
+    if (containers.voiceInput) {
+        const isSpeakActive = document.getElementById('speakModeCheckbox')?.checked;
+        containers.voiceInput.style.display = (isSpeakAvailable && isSpeakActive) ? 'flex' : 'none';
+    }
+    if (containers.voiceRate) containers.voiceRate.style.display = isSpeakAvailable ? 'flex' : 'none';
 
     if (isTx && containers.koch) {
         const kInput = document.getElementById('setupKochLevelInput');
@@ -220,10 +229,7 @@ window.checkGameTypeUI = function() {
     if (containers.custom) containers.custom.style.display = (isSingle && selectedMode === 'custom') ? 'flex' : 'none';
     if (containers.spectator) containers.spectator.style.display = isSingle ? 'flex' : 'none';
 
-    // --- NUOVA LOGICA ASCOLTO (TTS) ---
-    const isSpeakAvailable = isSingle && selectedMode === 'standard';
     if (containers.speak) {
-        containers.speak.style.display = isSpeakAvailable ? 'flex' : 'none';
         // Listener per sblocco voce su mobile al tocco della checkbox
         const chk = document.getElementById('speakModeCheckbox');
         if (chk && !chk.dataset.listenerAdded) {
@@ -235,10 +241,13 @@ window.checkGameTypeUI = function() {
                     unlock.volume = 0.001;
                     window.speechSynthesis.speak(unlock);
                 }
+                // Mostra/Nascondi Risposta Vocale al volo
+                if (containers.voiceInput) {
+                    containers.voiceInput.style.display = (isSpeakAvailable && chk.checked) ? 'flex' : 'none';
+                }
             });
         }
     }
-    if (containers.voiceRate) containers.voiceRate.style.display = isSpeakAvailable ? 'flex' : 'none';
 
     if (containers.arcadeBtn) {
         containers.arcadeBtn.style.display = isArcadeType ? 'block' : 'none';
@@ -302,6 +311,7 @@ window.setLanguage = function(lang) {
         txt_wpm_label: t.wpm,
         txt_words_label: t.words, txt_tone_label: t.tone,
         txt_word_len_label: t.word_len, txt_word_len_any: t.word_len_any,
+        txt_voice_answer: t.voice_answer,
         txt_fixed_speed: t.fixed, txt_easy_mode: t.easy,
         txt_room_timeout: t.timeout, txt_challenge_board_title: t.challenge_board, txt_no_challenges: t.no_challenges,
         txt_online_users_title: t.online_users, txt_global_chat_btn: t.global_chat, txt_you_are_alone: t.you_are_alone,
