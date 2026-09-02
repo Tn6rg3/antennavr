@@ -878,11 +878,16 @@
             <div id="courseTutorPanel" class="box-panel" style="display:none; background:rgba(103, 58, 183, 0.1); border-color:#673ab7; padding:15px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h3 style="color:#9575cd; margin:0; font-size:1em;">🎓 Pannello Tutor</h3>
-                    <button id="btnTabExitTutor" class="btn-danger" style="width:auto; margin:0; padding:4px 8px; font-size:0.7em;">ABANDONA RUOLO</button>
+                    <div style="display:flex; gap:5px; align-items:center;">
+                        <button id="btnToggleTutorPanel" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi</button>
+                        <button id="btnTabExitTutor" class="btn-danger" style="width:auto; margin:0; padding:4px 8px; font-size:0.7em;">ABBANDONA RUOLO</button>
+                    </div>
                 </div>
-                <p style="font-size:0.8em; margin-bottom:10px;">Analizza i progressi dei corsisti:</p>
-                <div id="tutorStudentList" style="display:flex; flex-direction:column; gap:8px; max-height:250px; overflow-y:auto;">
-                    <p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Caricamento corsisti...</p>
+                <div id="tutorPanelContent" style="display:flex; flex-direction:column; gap:5px;">
+                    <p style="font-size:0.8em; margin-bottom:10px;">Analizza i progressi dei corsisti:</p>
+                    <div id="tutorStudentList" style="display:flex; flex-direction:column; gap:8px; max-height:250px; overflow-y:auto;">
+                        <p style="font-size:0.75em; color:var(--hint-color); text-align:center;">Caricamento corsisti...</p>
+                    </div>
                 </div>
             </div>
 
@@ -912,9 +917,9 @@
 
                 <!-- PRESENTAZIONE CORSO (ACCORDION) -->
                 <div id="coursePresentationPanel" class="box-panel" style="padding: 10px; border-color: var(--link-color);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.toggleVisibility('coursePresentationContent', 'btnTogglePresentation')">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
                         <b style="color:var(--link-color); font-size:0.9em;">📘 Presentazione Corso</b>
-                        <button id="btnTogglePresentation" class="btn-link" style="width:auto; margin-top:0; padding:5px;">Mostra</button>
+                        <button id="btnTogglePresentation" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Mostra</button>
                     </div>
                     <div id="coursePresentationContent" style="display:none; margin-top:10px; font-size:0.8em; line-height:1.4; text-align:left; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
                         <p>Benvenuto nel Corso Professionale CW. Ecco come funziona:</p>
