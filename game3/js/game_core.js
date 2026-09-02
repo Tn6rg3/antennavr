@@ -1086,8 +1086,8 @@ window.playNextWord = function() {
 
     if (typeof playMorseAudio === 'function') {
         playMorseAudio(currentWord, activeWpm).then(() => {
-            // Se la risposta vocale è attiva, avviamo il riconoscimento dopo l'audio
-            if (window.isSinglePlayer && window.isVoiceInputMode) {
+            // Se la risposta vocale è attiva (solo in Singolo, Parole Comuni e con Ascolto attivo), avviamo il riconoscimento dopo l'audio
+            if (window.isSinglePlayer && window.currentMode === 'standard' && window.isSpeakMode && window.isVoiceInputMode) {
                 if (typeof window.startVoiceInput === 'function') {
                     window.startVoiceInput();
                 }

@@ -148,16 +148,21 @@ window.checkGameTypeUI = function() {
     if (containers.wordLen) containers.wordLen.style.display = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection') ? 'block' : 'none';
 
     // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE ---
-    const isWordMode = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection');
-    const isSpeakAvailable = isSingle && isWordMode;
+    const isSpeakAvailable = isSingle && (selectedMode === 'standard');
 
     if (containers.speak) containers.speak.style.display = isSpeakAvailable ? 'flex' : 'none';
     if (containers.voiceRate) containers.voiceRate.style.display = isSpeakAvailable ? 'flex' : 'none';
 
     const chk = document.getElementById('speakModeCheckbox');
+    const voiceChk = document.getElementById('voiceInputCheckbox');
+
     if (containers.voiceInput) {
         const isSpeakActive = chk?.checked;
-        containers.voiceInput.style.display = (isSpeakAvailable && isSpeakActive) ? 'flex' : 'none';
+        const isVoiceAvailable = isSpeakAvailable && isSpeakActive;
+        containers.voiceInput.style.display = isVoiceAvailable ? 'flex' : 'none';
+        if (!isVoiceAvailable && voiceChk) {
+            voiceChk.checked = false;
+        }
     }
 
     // Listener per sblocco voce su mobile al tocco della checkbox
@@ -172,11 +177,13 @@ window.checkGameTypeUI = function() {
             }
             // Mostra/Nascondi Risposta Vocale al volo
             if (containers.voiceInput) {
-                // Ricalcoliamo la disponibilità per sicurezza
                 const currentMode = document.getElementById('gameModeInput')?.value;
                 const currentType = document.getElementById('gameTypeInput')?.value;
-                const available = (currentType === 'single') && (currentMode === 'standard' || currentMode === 'standard_plus' || currentMode === 'perfection');
-                containers.voiceInput.style.display = (available && chk.checked) ? 'flex' : 'none';
+                const available = (currentType === 'single') && (currentMode === 'standard') && chk.checked;
+                containers.voiceInput.style.display = available ? 'flex' : 'none';
+                if (!available && voiceChk) {
+                    voiceChk.checked = false;
+                }
             }
         });
     }

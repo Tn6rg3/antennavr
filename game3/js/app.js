@@ -1851,7 +1851,7 @@ if (els.createRoomBtn) {
                 fixedSpeed: !!isFixed,
                 easyMode: !!isEasy,
                 speakMode: !!isSpeak,
-                voiceInputMode: !!document.getElementById('voiceInputCheckbox')?.checked,
+                voiceInputMode: !!(isSpeak && document.getElementById('voiceInputCheckbox')?.checked),
                 voiceRate: vRate,
                 allowSpectators: !!allowSpectators,
                 charSpaceWpm: cSpace,
