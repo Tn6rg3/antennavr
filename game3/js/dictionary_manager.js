@@ -50,12 +50,19 @@ window.getDailyWords = function(num) {
 };
 
 window.getGameWords = function(num, mode, options = {}) {
+    window.updateDictionary();
+
+    if (!window.masterDictionary || window.masterDictionary.length === 0) {
+        window.masterDictionary = (typeof window.FALLBACK_WORDS_IT !== 'undefined') ? window.FALLBACK_WORDS_IT.map(w => w.toLowerCase()) : ["radio", "morse", "telegrafia"];
+    }
+
     if (mode === 'daily_challenge') return window.getDailyWords(num);
+
     if (window.GAME_MODES && window.GAME_MODES[mode] && typeof window.GAME_MODES[mode].generateWords === 'function') {
         return window.GAME_MODES[mode].generateWords(num, { master: window.masterDictionary, custom: window.customDictionary }, options);
     }
-    // Se siamo in modalità standard ma c'è un dizionario personalizzato carico, usalo
-    if (mode === 'standard' && window.customDictionary && window.customDictionary.length > 0) {
+
+    if (mode === 'custom' && window.customDictionary && window.customDictionary.length > 0) {
         let list = window.customDictionary;
         const targetLen = parseInt(options?.wordLength) || 0;
         if (targetLen > 0) {
@@ -64,6 +71,7 @@ window.getGameWords = function(num, mode, options = {}) {
         }
         return fisherYatesShuffle(list).slice(0, num).map(w => w.toUpperCase());
     }
+
     return fisherYatesShuffle(window.masterDictionary).slice(0, num).map(w => w.toUpperCase());
 };
 

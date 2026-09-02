@@ -238,6 +238,9 @@ window.showRoomEventModal = function(title, message) {
 window.setLanguage = function(lang) {
     currentLang = lang;
     localStorage.setItem('gameLang', lang);
+    if (typeof window.updateDictionary === 'function') {
+        window.updateDictionary();
+    }
     const t = i18n[lang] || i18n.it;
 
     const langBtn = document.getElementById('langBtn');

@@ -24,8 +24,9 @@ window.GAME_MODES = {
         fixedSpeedAllowed: true,
         spacingConfigurable: true,
         generateWords: function(num, dicts, options) {
-            let list = (dicts && dicts.custom && dicts.custom.length > 0) ? dicts.custom : (dicts?.master || []);
-            if (list.length === 0) list = ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
+            let list = (dicts && Array.isArray(dicts.master) && dicts.master.length > 0)
+                ? dicts.master
+                : ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
 
             const targetLen = parseInt(options?.wordLength) || 0;
             if (targetLen > 0) {
@@ -49,8 +50,9 @@ window.GAME_MODES = {
         fixedSpeedAllowed: true,
         spacingConfigurable: true,
         generateWords: function(num, dicts, options) {
-            let list = (dicts && dicts.custom && dicts.custom.length > 0) ? dicts.custom : (dicts?.master || []);
-            if (list.length === 0) list = ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
+            let list = (dicts && Array.isArray(dicts.master) && dicts.master.length > 0)
+                ? dicts.master
+                : ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
 
             const targetLen = parseInt(options?.wordLength) || 0;
             if (targetLen > 0) {
@@ -65,7 +67,7 @@ window.GAME_MODES = {
 
             // Se il dizionario è piccolo, lo duplichiamo per coprire la richiesta
             let source = [...shuffled];
-            while (source.length < totalNeeded) source = source.concat(fisherYatesShuffle(master));
+            while (source.length < totalNeeded) source = source.concat(fisherYatesShuffle(list));
 
             let groups = [];
             for (let i = 0; i < num; i++) {
@@ -182,8 +184,9 @@ window.GAME_MODES = {
         fixedSpeedAllowed: false,
         spacingConfigurable: true,
         generateWords: function(num, dicts, options) {
-            let list = (dicts && dicts.custom && dicts.custom.length > 0) ? dicts.custom : (dicts?.master || []);
-            if (list.length === 0) list = ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
+            let list = (dicts && Array.isArray(dicts.master) && dicts.master.length > 0)
+                ? dicts.master
+                : ["RADIO", "MORSE", "TELEGRAFIA", "SEGNALE", "ANTENNA"];
 
             const targetLen = parseInt(options?.wordLength) || 0;
             if (targetLen > 0) {
