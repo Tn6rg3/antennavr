@@ -921,14 +921,62 @@
                         <b style="color:var(--link-color); font-size:0.9em;">📘 Presentazione Corso</b>
                         <button id="btnTogglePresentation" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Mostra</button>
                     </div>
-                    <div id="coursePresentationContent" style="display:none; margin-top:10px; font-size:0.8em; line-height:1.4; text-align:left; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
-                        <p>Benvenuto nel Corso Professionale CW. Ecco come funziona:</p>
-                        <ul style="padding-left:15px; margin-bottom:10px;">
-                            <li><b>Metodo Koch:</b> Imparerai un carattere alla volta solo dopo aver raggiunto il 90% di precisione.</li>
-                            <li><b>Piano 30/20/50:</b> Le sessioni variano tra Consolidamento, Studio e Resistenza.</li>
-                            <li><b>Allenamento Extra:</b> Disponibile dopo aver finito il piano giornaliero (non sblocca nuovi caratteri).</li>
-                            <li><b>Richiami:</b> La costanza è fondamentale. 3 giorni saltati portano all'espulsione automatica.</li>
-                        </ul>
+                    <div id="coursePresentationContent" style="display:none; margin-top:10px; font-size:0.8em; line-height:1.5; text-align:left; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px; display:flex; flex-direction:column; gap:12px;">
+
+                        <!-- INTRODUZIONE -->
+                        <div style="background:rgba(33, 150, 243, 0.08); padding:10px; border-radius:8px; border-left:4px solid var(--link-color);">
+                            <b style="color:var(--link-color); font-size:0.95em;">🎯 Obiettivo del Corso & Metodo Koch</b>
+                            <p style="margin:5px 0 0 0;">Il corso adotta il <b>Metodo Koch</b> professionale per l'apprendimento del Codice Morse. Ascolterai i caratteri fin dal primo giorno alla velocità reale impostata (WPM), senza mai contare punti e linee: l'obiettivo è associare il <i>suono globale</i> del carattere al tasto corrispondente nella memoria muscolare.</p>
+                        </div>
+
+                        <!-- PASSO PASSO -->
+                        <div>
+                            <b style="color:var(--champ-color); font-size:0.9em; display:block; margin-bottom:6px;">🚀 Come si Svolge l'Addestramento (Passo dopo Passo)</b>
+                            <ol style="padding-left:18px; margin:0; display:flex; flex-direction:column; gap:6px;">
+                                <li><b>Avvio Sessione:</b> All'apertura del corso (o cliccando su <i>"Avvia Sessione Odierna"</i>), il sistema carica l'allenamento previsto dal tuo piano settimanale.</li>
+                                <li><b>Riscaldamento Acustico:</b> Nella modale iniziale puoi ascoltare i nuovi caratteri prima di iniziare per rinfrescare l'orecchio.</li>
+                                <li><b>Esecuzione Esercizio:</b> Durante la prova riceverai gruppi da 5 caratteri trasmessi con la spaziatura Farnsworth impostata. Digiti i caratteri nel campo di testo. Durante la pausa programmata puoi fare un respiro prima del blocco successivo.</li>
+                                <li><b>Report & Debriefing:</b> A fine sessione visualizzerai l'accuratezza %, i caratteri su cui concentrare lo studio e i punti XP guadagnati.</li>
+                            </ol>
+                        </div>
+
+                        <!-- TIPOLOGIE SESSIONE -->
+                        <div>
+                            <b style="color:#9c27b0; font-size:0.9em; display:block; margin-bottom:6px;">📊 Le 3 Tipologie di Sessione</b>
+                            <ul style="padding-left:18px; margin:0; display:flex; flex-direction:column; gap:4px;">
+                                <li>🟢 <b style="color:#4caf50;">Base (Z2):</b> Sessione di consolidamento ad andatura costante sui caratteri già acquisiti.</li>
+                                <li>🟡 <b style="color:#ff9800;">Lavoro (WORK):</b> Sessione intensiva in cui i nuovi caratteri sbloccati o più sbagliati vengono riproposti con frequenza maggiore.</li>
+                                <li>🟣 <b style="color:#9c27b0;">Lungo (LONG):</b> Maratona di resistenza su tutti i caratteri della lezione per allenare la tenuta sotto sforzo.</li>
+                            </ul>
+                        </div>
+
+                        <!-- PROMOZIONE E RETROVERSIONE -->
+                        <div>
+                            <b style="color:#4caf50; font-size:0.9em; display:block; margin-bottom:6px;">📈 Promozione e Retrocessione</b>
+                            <ul style="padding-left:18px; margin:0; display:flex; flex-direction:column; gap:4px;">
+                                <li>🚀 <b>Promozione (Nuovo Carattere):</b> Viene calcolata la media delle ultime <b>6 sessioni</b>. Se la media raggiunge il <b>90% di accuratezza</b>, passi automaticamente alla lezione successiva sbloccando un nuovo carattere!</li>
+                                <li>⚠️ <b>Retroversione:</b> Se la tua precisione recente scende sotto il <b>75%</b>, il corso ti retrocede alla lezione precedente per permetterti di consolidare prima di proseguire.</li>
+                            </ul>
+                        </div>
+
+                        <!-- TUTOR E CHAT -->
+                        <div>
+                            <b style="color:#673ab7; font-size:0.9em; display:block; margin-bottom:6px;">🎓 Tutor, Aule e Radio-Chat</b>
+                            <p style="margin:0;">Puoi scegliere un <b>Tutor</b> che analizzerà le tue statistiche, ti assisterà nelle difficoltà e potrà osservare le tue sessioni in tempo reale (badge <span style="background:#f44336; color:white; padding:1px 4px; border-radius:3px; font-size:0.75em;">LIVE 🔴</span>). Usa la <b>Chat dell'Aula</b> per scambiare suggerimenti con il tutor e i tuoi compagni.</p>
+                        </div>
+
+                        <!-- RICHIAMI E COSTANZA -->
+                        <div style="background:rgba(244, 67, 54, 0.08); padding:8px 10px; border-radius:8px; border-left:4px solid #f44336;">
+                            <b style="color:#f44336; font-size:0.9em;">⚠️ Regola della Costanza & Richiami</b>
+                            <p style="margin:4px 0 0 0;">La telegrafia richiede regolarità. Saltare una giornata di allenamento programmata assegna un <b>Richiamo Formale</b>. Accumulare <b>3 richiami</b> comporta l'<b>espulsione automatica dal corso per inattività</b> (il tuo account di gioco rimarrà intatto). Facendo 2 giorni di presenza consecutivi viene rimosso 1 richiamo.</p>
+                        </div>
+
+                        <!-- EXTRA -->
+                        <div>
+                            <b style="color:var(--link-color); font-size:0.85em;">🧪 Allenamento Extra:</b>
+                            <span> Una volta completata la sessione del giorno, puoi svolgere sessioni extra illimitate per accumulare XP e fare pratica senza rischiare retrocessioni.</span>
+                        </div>
+
                     </div>
                 </div>
 
