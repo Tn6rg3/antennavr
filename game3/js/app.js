@@ -155,6 +155,7 @@ const STORAGE_CUSTOM_DICT_KEY = "cwgame_custom_dict";
 const STORAGE_CHAT_MUTED_KEY = "cwgame_chat_muted";
 const STORAGE_PREF_WPM = "cwgame_pref_wpm";
 const STORAGE_PREF_WORDS = "cwgame_pref_words";
+const STORAGE_PREF_WORD_LEN = "cwgame_pref_word_len";
 const STORAGE_PREF_TONE = "cwgame_pref_tone";
 const STORAGE_PREF_CHAR_SPACE = "cwgame_pref_char_space";
 const STORAGE_PREF_WORD_SPACE = "cwgame_pref_word_space";
@@ -646,6 +647,7 @@ function initGame() {
     isGlobalChatMuted = localStorage.getItem(STORAGE_CHAT_MUTED_KEY) === 'true';
     if (els.startWpmInput) els.startWpmInput.value = localStorage.getItem(STORAGE_PREF_WPM) || 20;
     if (els.wordCountInput) els.wordCountInput.value = localStorage.getItem(STORAGE_PREF_WORDS) || 10;
+    if (document.getElementById('wordLengthInput')) document.getElementById('wordLengthInput').value = localStorage.getItem(STORAGE_PREF_WORD_LEN) || 0;
     if (els.toneInput) els.toneInput.value = localStorage.getItem(STORAGE_PREF_TONE) || 600;
 
     // RIPRISTINO IMPOSTAZIONI AGGIUNTIVE
@@ -659,6 +661,7 @@ function initGame() {
     const savePref = (key, val) => localStorage.setItem(key, val);
     els.startWpmInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_WPM, e.target.value));
     els.wordCountInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORDS, e.target.value));
+    document.getElementById('wordLengthInput')?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORD_LEN, e.target.value));
     els.toneInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_TONE, e.target.value));
     els.charSpaceInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_CHAR_SPACE, e.target.value));
     els.wordSpaceSelect?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORD_SPACE, e.target.value));
@@ -1359,17 +1362,33 @@ window.loadAdminBugs = function() {
 
 window.openBugReply = function(bugKey, userId, originalMsg) {
     if (!userId) return alert("Impossibile rispondere: ID utente mancante.");
-    const replyText = prompt(`Invia feedback per: "${originalMsg.substring(0, 30)}..."\n\nScrivi la tua risposta (es: Risolto, Grazie, ecc.):`);
+    const replyText = prompt(`Invia feedback per: "${originalMsg.substring(0, 30)}..."\n\nScrivi la tua risposta:`);
     if (!replyText || replyText.trim() === "") return;
 
-    db.ref(`users/${userId}/bugFeedback`).push({
+    const feedbackData = {
         reply: replyText.trim(),
         originalMsg: originalMsg,
         ts: firebase.database.ServerValue.TIMESTAMP,
         date: new Date().toLocaleString('it-IT')
-    }).then(() => {
-        showToast("Risposta inviata!");
-    }).catch(e => alert("Errore invio: " + e.message));
+    };
+
+    const performUpload = (attempts = 0) => {
+        db.ref(`users/${userId}/bugFeedback`).push(feedbackData).then(() => {
+            showToast("Risposta inviata!");
+            // Se inviato, rimuoviamo il bug dalla lista admin
+            db.ref(`bugReports/${bugKey}`).remove().catch(() => {});
+        }).catch(e => {
+            console.error(`Errore invio bugFeedback (Tentativo ${attempts}):`, e);
+            if (attempts < 1) {
+                console.log("Riprovo l'invio tra 1 secondo...");
+                setTimeout(() => performUpload(attempts + 1), 1000);
+            } else {
+                alert("Errore permessi Firebase: " + e.message + "\n\nSuggerimento: Se il messaggio è molto lungo, prova a dividerlo in due invii.");
+            }
+        });
+    };
+
+    performUpload();
 };
 
 window.checkBugFeedback = function() {
@@ -1764,6 +1783,7 @@ if (els.createRoomBtn) {
         window.isSinglePlayer = (gType === 'single');
         window.currentWpm = window.baseWpm = (window.currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
         window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
+        window.requestedWordLength = parseInt(document.getElementById('wordLengthInput')?.value) || 0;
         window.currentTone = parseInt(els.toneInput?.value) || 600;
 
         window.wordsPerGroup = (window.currentMode === 'standard_plus') ? (parseInt(document.getElementById('wordsPerGroupInput')?.value) || 2) : 1;
@@ -1796,6 +1816,7 @@ if (els.createRoomBtn) {
 
             window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode, {
                 groupSize: window.wordsPerGroup,
+                wordLength: window.requestedWordLength,
                 stats: stats
             });
 
@@ -1823,6 +1844,7 @@ if (els.createRoomBtn) {
                 wpm: window.currentWpm,
                 tone: window.currentTone,
                 wordCount: window.requestedWordCount,
+                wordLength: window.requestedWordLength,
                 fixedSpeed: !!isFixed,
                 easyMode: !!isEasy,
                 speakMode: !!isSpeak,

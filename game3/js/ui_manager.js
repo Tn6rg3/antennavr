@@ -131,6 +131,7 @@ window.checkGameTypeUI = function() {
         startWpm: document.getElementById('startWpmInput'),
         wordCount: document.getElementById('wordCountInput'),
         wordsPerGroup: document.getElementById('wordsPerGroupContainer'),
+        wordLen: document.getElementById('wordLengthContainer'),
         koch: document.getElementById('setupKochLevelContainer'),
         keyer: document.getElementById('mainMenuKeyerConfig')
     };
@@ -143,6 +144,7 @@ window.checkGameTypeUI = function() {
     if (containers.custom) containers.custom.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
     if (containers.spectator) containers.spectator.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
     if (containers.wordsPerGroup) containers.wordsPerGroup.style.display = (selectedMode === 'standard_plus') ? 'block' : 'none';
+    if (containers.wordLen) containers.wordLen.style.display = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection') ? 'block' : 'none';
 
     // --- LOGICA TRASMISSIONE ---
     if (containers.koch) containers.koch.style.display = isTx ? 'block' : 'none';
@@ -298,7 +300,9 @@ window.setLanguage = function(lang) {
         txt_opt_std: t.opt_std, txt_opt_call: t.opt_call, txt_opt_pp: t.opt_pp,
         txt_opt_qso: t.opt_qso,
         txt_wpm_label: t.wpm,
-        txt_words_label: t.words, txt_tone_label: t.tone, txt_fixed_speed: t.fixed, txt_easy_mode: t.easy,
+        txt_words_label: t.words, txt_tone_label: t.tone,
+        txt_word_len_label: t.word_len, txt_word_len_any: t.word_len_any,
+        txt_fixed_speed: t.fixed, txt_easy_mode: t.easy,
         txt_room_timeout: t.timeout, txt_challenge_board_title: t.challenge_board, txt_no_challenges: t.no_challenges,
         txt_online_users_title: t.online_users, txt_global_chat_btn: t.global_chat, txt_you_are_alone: t.you_are_alone,
         chatTitle: t.chat_title, clearChatBtn: t.chat_clear, closeChatBtn: t.chat_close, sendChatBtn: t.chat_send,

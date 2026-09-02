@@ -4,7 +4,7 @@ window.i18n = {
     it: {
         hello: "Ciao", lb: "Classifica", profile: "Profilo", activity: "Attività", conn_secure: "Connessione sicura in corso...",
         free_challenge: "⚡ Sfida Libera", play_solo: "Gioca da Solo o Sfida un Amico",
-        game_type: "Tipo di Gioco:", mode: "Modalità:", wpm: "WPM:", words: "Parole:", tone: "Tono:", timeout: "Scadenza Stanza (min):",
+        game_type: "Tipo di Gioco:", mode: "Modalità:", wpm: "WPM:", words: "Parole:", tone: "Tono:", word_len: "Lungh.", word_len_any: "Qualsiasi", timeout: "Scadenza Stanza (min):",
         opt_multi: "Multiplayer (con Lobby)", opt_single: "Singleplayer (Immediata)",
         opt_coop: "Collaborativo (Co-op) ⚔️", opt_trn: "Torneo 🏆", opt_tx: "Trasmissione 🎙️",
         opt_std: "Parole Comuni", opt_call: "Nominativi (CW Freak)", opt_pp: "Ping Pong",
@@ -39,7 +39,7 @@ window.i18n = {
     en: {
         hello: "Hello", lb: "Leaderboard", profile: "Profile", activity: "Activity", conn_secure: "Secure connection in progress...",
         free_challenge: "⚡ Free Challenge", play_solo: "Play Solo or Challenge a Friend",
-        game_type: "Game Type:", mode: "Mode:", wpm: "WPM:", words: "Words:", tone: "Tone:", timeout: "Room Timeout (min):",
+        game_type: "Game Type:", mode: "Mode:", wpm: "WPM:", words: "Words:", tone: "Tone:", word_len: "Len.", word_len_any: "Any", timeout: "Room Timeout (min):",
         opt_multi: "Multiplayer (Lobby)", opt_single: "Singleplayer (Immediate)",
         opt_coop: "Collaborative (Co-op) ⚔️", opt_trn: "Tournament 🏆", opt_tx: "Transmission 🎙️",
         opt_std: "Common Words", opt_call: "Callsigns (CW Freak)", opt_pp: "Ping Pong",

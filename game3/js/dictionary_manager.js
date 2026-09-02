@@ -56,7 +56,13 @@ window.getGameWords = function(num, mode, options = {}) {
     }
     // Se siamo in modalità standard ma c'è un dizionario personalizzato carico, usalo
     if (mode === 'standard' && window.customDictionary && window.customDictionary.length > 0) {
-        return fisherYatesShuffle(window.customDictionary).slice(0, num).map(w => w.toUpperCase());
+        let list = window.customDictionary;
+        const targetLen = parseInt(options?.wordLength) || 0;
+        if (targetLen > 0) {
+            const filtered = list.filter(w => w.length === targetLen);
+            if (filtered.length > 0) list = filtered;
+        }
+        return fisherYatesShuffle(list).slice(0, num).map(w => w.toUpperCase());
     }
     return fisherYatesShuffle(window.masterDictionary).slice(0, num).map(w => w.toUpperCase());
 };
