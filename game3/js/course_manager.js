@@ -727,6 +727,33 @@ window.checkWeeklyReview = function() {
     }
 };
 
+window.lastGlobalInactivityCheck = 0;
+
+window.checkAllInactiveStudents = function() {
+    if (!db || !window.myId) return;
+    const now = Date.now();
+    // Eseguiamo il controllo globale al massimo una volta ogni 10 minuti per client
+    if (now - window.lastGlobalInactivityCheck < 600000) return;
+    window.lastGlobalInactivityCheck = now;
+
+    db.ref('courseActiveEnrollments').once('value').then(snap => {
+        const enrollments = snap.val() || {};
+        const uids = Object.keys(enrollments);
+
+        uids.forEach(async (uid) => {
+            try {
+                const userSnap = await db.ref(`users/${uid}/course`).once('value');
+                const cData = userSnap.val();
+                if (cData && typeof window.checkStudentAutomaticExpulsion === 'function') {
+                    window.checkStudentAutomaticExpulsion(uid, cData);
+                }
+            } catch (e) {
+                console.error("Course: Error checking global inactivity for " + uid, e);
+            }
+        });
+    });
+};
+
 window.listenToCourseEnrollment = function() {
     const activeRef = db.ref('courseActiveEnrollments');
     activeRef.on('value', snap => {
@@ -743,6 +770,11 @@ window.listenToCourseEnrollment = function() {
                 badge.style.display = 'none';
                 badge.classList.remove('badge-active');
             }
+        }
+
+        // Controllo globale inattivi per tutti i corsisti attivi (con o senza tutor)
+        if (typeof window.checkAllInactiveStudents === 'function') {
+            window.checkAllInactiveStudents();
         }
     });
 };
