@@ -1607,7 +1607,14 @@ if (els.sendChatBtn) {
 
         window.lastChatSentTs = now;
         const rc = window.roomCode;
-        const ctx = window.activeChatContext;
+        let ctx = window.activeChatContext;
+
+        // Forza contesto stanza se siamo in modalità gioco/qso attiva
+        const activeScreen = document.querySelector('.screen.active-screen')?.id;
+        if ((activeScreen === 'qsoArea' || activeScreen === 'gameArea' || activeScreen === 'lobbyScreen') && rc) {
+            ctx = 'room';
+        }
+
         let ref = (ctx === 'room' && rc) ? db.ref(`rooms/${rc}/chat`).push() : db.ref('globalChat').push();
         ref.set({
             name: myName,

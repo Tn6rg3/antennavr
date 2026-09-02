@@ -124,38 +124,50 @@ window.listenForQsoPartner = function() {
     db.ref(`rooms/${window.roomCode}/players`).on('value', snap => {
         const players = snap.val() || {};
         for (let pId in players) {
-            if (pId !== window.myId && players[pId].peerId && !window.qsoState.conn) {
-                const partnerId = pId;
-                const connection = window.qsoState.peer.connect(players[pId].peerId, { reliable: false, metadata: { name: window.myName, pNow: performance.now() } });
-                window.setupQsoDataChannel(connection);
+            if (pId !== window.myId) {
+                const partnerName = players[pId].name || "Operatore";
+                const nameEl = document.getElementById('qsoPartnerName');
 
-                // --- ASCOLTO RELAY CON RICOSTRUZIONE RITMO ---
-                const partnerRelayRef = db.ref(`rooms/${window.roomCode}/qso_relay/${partnerId}`);
+                // Aggiorniamo subito il nome nella UI se siamo ancora in ricerca
+                if (nameEl && nameEl.textContent.includes("Ricerca")) {
+                    nameEl.textContent = "Partner: " + partnerName;
+                }
 
-                // Stato per il buffer di questo partner
-                const relayBuffer = {
-                    baseTime: 0, // Tempo di riferimento locale
-                    remoteBaseTime: 0, // Primo timestamp ricevuto
-                    bufferDelay: 0.3 // 300ms di buffer per assorbire il jitter
-                };
+                if (players[pId].peerId && !window.qsoState.conn) {
+                    const partnerId = pId;
+                    const connection = window.qsoState.peer.connect(players[pId].peerId, { reliable: false, metadata: { name: window.myName, pNow: performance.now() } });
+                    window.setupQsoDataChannel(connection);
 
-                partnerRelayRef.on('child_added', rSnap => {
-                    const data = rSnap.val();
-                    if (!data || data.ts < window.qsoState.relayStartTime) return;
+                    // --- ASCOLTO RELAY CON RICOSTRUZIONE RITMO ---
+                    const partnerRelayRef = db.ref(`rooms/${window.roomCode}/qso_relay/${partnerId}`);
 
-                    // Inizializziamo il riferimento temporale al primo pacchetto
-                    if (relayBuffer.remoteBaseTime === 0) {
-                        relayBuffer.remoteBaseTime = data.ts;
-                        relayBuffer.baseTime = (window.audioCtx?.currentTime || 0) + relayBuffer.bufferDelay;
-                    }
+                    // Stato per il buffer di questo partner
+                    const relayBuffer = {
+                        baseTime: 0, // Tempo di riferimento locale
+                        remoteBaseTime: 0, // Primo timestamp ricevuto
+                        bufferDelay: 0.3 // 300ms di buffer per assorbire il jitter
+                    };
 
-                    // Calcoliamo quando deve suonare questo evento rispetto all'inizio
-                    const offset = (data.ts - relayBuffer.remoteBaseTime) / 1000;
-                    const scheduledTime = relayBuffer.baseTime + offset;
+                    partnerRelayRef.on('child_added', rSnap => {
+                        const data = rSnap.val();
+                        if (!data || data.ts < window.qsoState.relayStartTime) return;
 
-                    // Calcoliamo il ritardo rispetto ad ADESSO
-                    const now = window.audioCtx?.currentTime || 0;
-                    const delaySec = Math.max(0, scheduledTime - now);
+                        // Forza aggiornamento nome se arriva il relay
+                        if (nameEl) nameEl.textContent = "Partner: " + partnerName;
+
+                        // Inizializziamo il riferimento temporale al primo pacchetto
+                        if (relayBuffer.remoteBaseTime === 0) {
+                            relayBuffer.remoteBaseTime = data.ts;
+                            relayBuffer.baseTime = (window.audioCtx?.currentTime || 0) + relayBuffer.bufferDelay;
+                        }
+
+                        // Calcoliamo quando deve suonare questo evento rispetto all'inizio
+                        const offset = (data.ts - relayBuffer.remoteBaseTime) / 1000;
+                        const scheduledTime = relayBuffer.baseTime + offset;
+
+                        // Calcoliamo il ritardo rispetto ad ADESSO
+                        const now = window.audioCtx?.currentTime || 0;
+                        const delaySec = Math.max(0, scheduledTime - now);
 
                     if (data.s === 1) {
                         if (typeof window.startRemoteTone === 'function') window.startRemoteTone(data.f, delaySec);
@@ -174,7 +186,11 @@ window.setupQsoDataChannel = function(c) {
     c.on('open', () => {
         window.updateQsoStatus("CONNESSO ✅", "#2ecc71");
         const b = document.getElementById('btnForceQsoRelay'); if (b) b.style.display = 'none';
-        document.getElementById('qsoPartnerName').textContent = "Partner: " + (c.metadata?.name || "Operatore");
+
+        const partnerName = c.metadata?.name || "Operatore";
+        const nameEl = document.getElementById('qsoPartnerName');
+        if (nameEl) nameEl.textContent = "Partner: " + partnerName;
+
         window.qsoState.conn.send({ type: 'SYNC', pNow: performance.now() });
 
         if (window.qsoState.hbInterval) clearInterval(window.qsoState.hbInterval);
