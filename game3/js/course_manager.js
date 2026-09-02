@@ -244,6 +244,7 @@ window.checkCourseInactivity = function() {
     if (!window.courseData || window.courseData.active_plan !== true) return;
 
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString().split('T')[0];
 
     if (window.courseData.progress.last_inactivity_check === todayStr) return;
@@ -255,34 +256,55 @@ window.checkCourseInactivity = function() {
         return;
     }
 
-    const lastDate = new Date(lastSession);
-    const diffDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
-
-    if (diffDays >= 2) {
-        // Calcoliamo l'indice di ieri (0:Dom, 1:Lun...)
-        const yesterdayIdx = (today.getDay() + 6) % 7;
-        const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[yesterdayIdx] : null;
-
-        if (dayData && dayData.sessions.some(s => s.type !== 'REST')) {
-            window.courseData.progress.reminders_count = (window.courseData.progress.reminders_count || 0) + 1;
-            window.courseData.progress.consecutive_days = 0;
-
-            if (window.courseData.progress.reminders_count >= 3) {
-                alert("OPERATORE LICENZIATO PER INATTIVITÀ.\nHai accumulato 3 richiami formali senza riprendere l'addestramento. Il tuo piano è stato revocato.");
-                window.updateGlobalEnrollmentRecord(false);
-                window.courseData = window.getDefaultCourseData();
-                window.saveCourseState();
-                window.renderCourseTabView();
-                return;
-            } else {
-                const msg = window.COURSE_REMINDERS[Math.floor(Math.random() * window.COURSE_REMINDERS.length)];
-                window.showCourseReminderModal(window.courseData.progress.reminders_count, msg);
-            }
-        }
+    const isExpelled = window.checkStudentAutomaticExpulsion(window.myId, window.courseData);
+    if (isExpelled) {
+        alert("OPERATORE ESPULSO DAL CORSO PER INATTIVITÀ.\n\nNon ti sei collegato dall'ultima lezione (" + lastSession + "). Il tuo piano di studi è stato revocato automaticamente.");
+        window.updateGlobalEnrollmentRecord(false);
+        window.courseData = window.getDefaultCourseData();
+        window.saveCourseState();
+        if (typeof window.renderCourseTabView === 'function') window.renderCourseTabView();
+        return;
     }
 
     window.courseData.progress.last_inactivity_check = todayStr;
     window.saveCourseState();
+};
+
+window.checkStudentAutomaticExpulsion = function(uid, cData) {
+    if (!uid || !cData || cData.active_plan !== true || !db) return false;
+    const lastSession = cData.progress && cData.progress.last_session_date;
+    if (!lastSession) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const lastDate = new Date(lastSession);
+    lastDate.setHours(0, 0, 0, 0);
+
+    let missedTrainingDays = 0;
+    let tempDate = new Date(lastDate);
+    tempDate.setDate(tempDate.getDate() + 1);
+
+    while (tempDate < today) {
+        const dayIdx = (tempDate.getDay() + 6) % 7;
+        const dayData = cData.weekly_schedule ? cData.weekly_schedule[dayIdx] : null;
+        if (dayData && dayData.sessions.some(s => s.type !== 'REST')) {
+            missedTrainingDays++;
+        }
+        tempDate.setDate(tempDate.getDate() + 1);
+    }
+
+    const currentReminders = (cData.progress && cData.progress.reminders_count || 0) + missedTrainingDays;
+    if (currentReminders >= 3) {
+        console.log("Course: Expelling inactive user " + uid + " due to " + currentReminders + " missed reminders.");
+        db.ref("users/" + uid + "/course").update({
+            active_plan: false,
+            "progress/reminders_count": currentReminders,
+            expelled_reason: "Inattività"
+        });
+        db.ref("courseActiveEnrollments/" + uid).remove();
+        return true;
+    }
+    return false;
 };
 
 window.showCourseReminderModal = function(count, message) {

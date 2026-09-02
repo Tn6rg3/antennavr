@@ -112,6 +112,12 @@ window.renderTutorPanel = function() {
             const userDataSnap = await db.ref(`users/${uid}/course`).once('value');
             const cData = userDataSnap.val() || {};
 
+            // Controllo ed espulsione automatica in background per gli studenti inattivi
+            if (typeof window.checkStudentAutomaticExpulsion === 'function' && window.checkStudentAutomaticExpulsion(uid, cData)) {
+                console.log(`Course Tutor Panel: Auto-expelled inactive student ${uid}`);
+                continue;
+            }
+
             // FILTRO AULA: Mostra solo corsisti assegnati a questo tutor
             if (cData.tutor_id !== window.myId) continue;
             foundAny = true;
@@ -763,59 +769,127 @@ window.toggleCoursePresentation = function() {
  * GESTIONE SESSIONE DI GIOCO (START / FINISH)
  */
 window.finishCourseSession = function() {
-    const p = window.courseData.progress, s = p.char_stats || {}, st = p.char_stats_by_type || { Z2: {}, WORK: {}, LONG: {} };
-    const lesson = p.current_lesson, active = window.KOCH_SEQUENCE.slice(0, lesson), type = window.courseData.current_day_session.type;
-    let attempts = 0, errors = 0, worst = [];
+    const p = window.courseData.progress;
+    const type = window.courseData.current_day_session?.type || 'LONG';
+    const isExtra = !!window.courseData.current_day_session?.isExtra;
 
-    active.forEach(c => {
-        const dbC = window.firebaseEscape(c), sc = s[dbC] || { attempts: 0, errors: 0 };
-        attempts += sc.attempts; errors += sc.errors;
-        if (!st[type]) st[type] = {}; if (!st[type][dbC]) st[type][dbC] = { attempts: 0, errors: 0 };
-        if (sc.attempts > 0 && (sc.errors/sc.attempts) > 0.15) worst.push(c);
-    });
+    // 1. CALCOLO ACCURATEZZA REALE DELLA SESSIONE CORRENTE (Dai dettagli partita)
+    let sessionAttempts = 0;
+    let sessionCorrect = 0;
+    let worstMap = {};
 
-    const acc = attempts > 0 ? (attempts - errors) / attempts : 1.0;
+    if (window.matchDetailsArray && window.matchDetailsArray.length > 0) {
+        window.matchDetailsArray.forEach(detail => {
+            const real = detail.real || "";
+            const typed = detail.typed || "";
+            for (let i = 0; i < real.length; i++) {
+                sessionAttempts++;
+                if (real[i] === typed[i]) {
+                    sessionCorrect++;
+                } else {
+                    worstMap[real[i]] = (worstMap[real[i]] || 0) + 1;
+                }
+            }
+        });
+    }
+
+    const acc = sessionAttempts > 0 ? (sessionCorrect / sessionAttempts) : 1.0;
+    const worstChars = Object.keys(worstMap).sort((a, b) => worstMap[b] - worstMap[a]);
+
+    // 2. CALCOLO XP BASATO SULLA SESSIONE CORRENTE
     const xp = Math.round((type === 'WORK' ? 100 : type === 'LONG' ? 200 : 50) * acc);
-
     p.total_xp = (p.total_xp || 0) + xp;
     if (typeof window.addXP === 'function') window.addXP(xp, `Course ${type}`);
     if (type === 'Z2') p.last_z2_accuracy = acc;
 
+    // 3. REGISTRAZIONE COMPLETAMENTO
     window.courseData.current_day_session.completed = true;
-    const todayIdx = (new Date().getDay() + 6) % 7, dayData = window.courseData.weekly_schedule[todayIdx];
-    if (dayData) { const sess = dayData.sessions.find(s => s.type === type && !s.completed); if (sess) sess.completed = true; }
+    const todayIdx = (new Date().getDay() + 6) % 7;
+    const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
+    if (dayData) {
+        const sess = dayData.sessions.find(s => s.type === type && !s.completed);
+        if (sess) sess.completed = true;
+    }
 
-    let canAdv = true;
-    active.forEach(c => { const sc = s[window.firebaseEscape(c)] || { attempts: 0, errors: 0 }; if (sc.attempts < 50 || (sc.attempts - sc.errors)/sc.attempts < 0.9) canAdv = false; });
+    // 4. REGISTRO CRONOLOGIA LEZIONE (Per avanzamento / retrocessione)
+    if (!p.lesson_history) p.lesson_history = [];
+    if (!isExtra) {
+        p.lesson_history.push(acc);
+    }
 
     let msg = "";
-    if (window.courseData.current_day_session.isExtra) msg = "\n\n✨ Allenamento Extra completato!";
-    else if (canAdv && lesson < window.KOCH_SEQUENCE.length) { p.current_lesson++; msg = `\n\n🚀 NUOVO CARATTERE: ${window.KOCH_SEQUENCE[p.current_lesson-1]}!`; }
+    if (isExtra) {
+        msg = "\n\n✨ Allenamento Extra completato!";
+    } else if (p.lesson_history.length >= 6) {
+        // Valutazione su almeno 6 sessioni
+        const recent6 = p.lesson_history.slice(-6);
+        const avgAcc6 = recent6.reduce((sum, v) => sum + v, 0) / recent6.length;
 
+        if (avgAcc6 >= 0.90 && p.current_lesson < window.KOCH_SEQUENCE.length) {
+            // PROMOZIONE
+            p.current_lesson++;
+            p.lesson_history = []; // Reset per la nuova lezione
+            msg = `\n\n🚀 PROMOSSO! Media ultime 6 sessioni: ${Math.round(avgAcc6 * 100)}%.\nNUOVO CARATTERE SBLOCCATO: ${window.KOCH_SEQUENCE[p.current_lesson - 1]}!`;
+        }
+    }
+
+    // CONTROLLO RETROCESSIOINE (Se la media delle ultime sessioni scende sotto il 75%)
+    if (!isExtra && !msg && p.current_lesson > 2 && p.lesson_history.length >= 3) {
+        const recent = p.lesson_history.slice(-6);
+        const avgRecent = recent.reduce((sum, v) => sum + v, 0) / recent.length;
+
+        if (avgRecent < 0.75) {
+            p.current_lesson--;
+            p.lesson_history = []; // Reset per la lezione precedente
+            msg = `\n\n⚠️ RETROCESSO ALLA LEZIONE ${p.current_lesson}!\nDifficoltà riscontrata sui nuovi caratteri (Media: ${Math.round(avgRecent * 100)}%). Ripassiamo la lezione precedente per consolidare!`;
+        }
+    }
+
+    // 5. GIORNI CONSECUTIVI E RICHIAMI
     const today = new Date().toISOString().split('T')[0];
     if (p.last_session_date) {
-        const diff = Math.floor((new Date(today) - new Date(p.last_session_date))/(1000*60*60*24));
-        if (diff === 1) p.consecutive_days = (p.consecutive_days || 0) + 1; else if (diff > 1) p.consecutive_days = 1;
-    } else p.consecutive_days = 1;
+        const diff = Math.floor((new Date(today) - new Date(p.last_session_date)) / (1000 * 60 * 60 * 24));
+        if (diff === 1) p.consecutive_days = (p.consecutive_days || 0) + 1;
+        else if (diff > 1) p.consecutive_days = 1;
+    } else {
+        p.consecutive_days = 1;
+    }
 
-    if (p.consecutive_days % 2 === 0 && p.reminders_count > 0) { p.reminders_count--; showToast("Richiamo rimosso!"); }
+    if (p.consecutive_days % 2 === 0 && p.reminders_count > 0) {
+        p.reminders_count--;
+        if (typeof showToast === 'function') showToast("Richiamo rimosso!");
+    }
 
     p.last_session_date = today;
-    window.courseData.current_day_session = null; // PULIZIA SESSIONE COMPLETATA PER PERMETTERE NUOVI EXTRA
+    window.courseData.current_day_session = null;
     window.saveCourseState();
-    db.ref(`courseActiveEnrollments/${window.myId}`).update({ roomCode: null });
+    if (db && window.myId) {
+        db.ref(`courseActiveEnrollments/${window.myId}`).update({ roomCode: null });
+    }
 
-    const m = document.getElementById('courseResultsModal'), a = document.getElementById('courseResultsAccuracy'), ms = document.getElementById('courseResultsMessage'), f = document.getElementById('courseResultsFocus');
+    // 6. MOSTRA RISULTATI
+    const m = document.getElementById('courseResultsModal'),
+          a = document.getElementById('courseResultsAccuracy'),
+          ms = document.getElementById('courseResultsMessage'),
+          f = document.getElementById('courseResultsFocus');
+
     if (m && a && ms && f) {
-        a.textContent = `Accuratezza: ${Math.round(acc*100)}%`;
+        a.textContent = `Accuratezza Sessione: ${Math.round(acc * 100)}%`;
         a.style.color = acc >= 0.9 ? '#4caf50' : acc >= 0.7 ? '#ff9800' : '#d32f2f';
-        ms.innerHTML = `"${window.getCourseDebriefing(acc, worst.slice(0,3))}"${msg ? '<div style="margin-top:10px; color:var(--link-color); font-weight:bold;">'+msg+'</div>' : ''}`;
-        f.textContent = worst.length > 0 ? "⚠️ Focus: " + worst.slice(0,5).join(", ") : "Ottima sessione!";
+        ms.innerHTML = `"${window.getCourseDebriefing(acc, worstChars.slice(0, 3))}"${msg ? '<div style="margin-top:10px; color:var(--link-color); font-weight:bold;">' + msg + '</div>' : ''}`;
+        f.textContent = worstChars.length > 0 ? "⚠️ Focus errore: " + worstChars.slice(0, 5).join(", ") : "Ottima sessione!";
         m.style.display = 'flex';
-        document.getElementById('btnCloseCourseResults').onclick = () => { m.style.display = 'none'; window.showProfileScreen(); window.switchProfileTab('course'); };
+        const closeBtn = document.getElementById('btnCloseCourseResults');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                m.style.display = 'none';
+                if (typeof window.showProfileScreen === 'function') window.showProfileScreen();
+                if (typeof window.switchProfileTab === 'function') window.switchProfileTab('course');
+            };
+        }
     } else {
-        alert(`Sessione completata! Accuratezza: ${Math.round(acc*100)}%`);
-        window.finishGame();
+        alert(`Sessione completata! Accuratezza: ${Math.round(acc * 100)}%` + msg);
+        if (typeof window.finishGame === 'function') window.finishGame();
     }
 };
 

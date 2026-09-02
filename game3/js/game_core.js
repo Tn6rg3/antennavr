@@ -1777,14 +1777,28 @@ window.handleWordSubmission = function(userWord) {
 
         if (window.courseData) {
             if (!window.courseData.progress.char_stats) window.courseData.progress.char_stats = {};
+            if (!window.courseData.progress.char_stats_by_type) window.courseData.progress.char_stats_by_type = { Z2: {}, WORK: {}, LONG: {} };
+
             const sessionType = window.courseData.current_day_session?.type || 'LONG';
-            for (let i=0; i<currentWord.length; i++) {
+            if (!window.courseData.progress.char_stats_by_type[sessionType]) {
+                window.courseData.progress.char_stats_by_type[sessionType] = {};
+            }
+
+            for (let i = 0; i < currentWord.length; i++) {
                 let c = currentWord[i];
                 if (!c) continue;
                 let dbChar = (typeof firebaseEscape === 'function') ? firebaseEscape(c) : c.replace(/\./g, '_dot_');
+
+                // Statistiche generali
                 if (!window.courseData.progress.char_stats[dbChar]) window.courseData.progress.char_stats[dbChar] = { attempts: 0, errors: 0 };
                 window.courseData.progress.char_stats[dbChar].attempts++;
                 if (userWord[i] !== currentWord[i]) window.courseData.progress.char_stats[dbChar].errors++;
+
+                // Statistiche divise per tipologia (Z2 / WORK / LONG)
+                let typeStats = window.courseData.progress.char_stats_by_type[sessionType];
+                if (!typeStats[dbChar]) typeStats[dbChar] = { attempts: 0, errors: 0 };
+                typeStats[dbChar].attempts++;
+                if (userWord[i] !== currentWord[i]) typeStats[dbChar].errors++;
             }
             window.saveCourseState();
         }
