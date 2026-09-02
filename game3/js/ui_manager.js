@@ -134,9 +134,6 @@ window.checkGameTypeUI = function() {
         wordsPerGroup: document.getElementById('wordsPerGroupContainer'),
         wordLen: document.getElementById('wordLengthContainer'),
         koch: document.getElementById('setupKochLevelContainer'),
-        speak: document.getElementById('speakModeContainer'),
-        voiceInput: document.getElementById('voiceInputContainer'),
-        voiceRate: document.getElementById('voiceRateDiv'),
         keyer: document.getElementById('mainMenuKeyerConfig')
     };
 
@@ -153,101 +150,38 @@ window.checkGameTypeUI = function() {
     // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE ---
     const isWordMode = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection');
     const isSpeakAvailable = isSingle && isWordMode;
+
     if (containers.speak) containers.speak.style.display = isSpeakAvailable ? 'flex' : 'none';
-    if (containers.voiceInput) {
-        const isSpeakActive = document.getElementById('speakModeCheckbox')?.checked;
-        containers.voiceInput.style.display = (isSpeakAvailable && isSpeakActive) ? 'flex' : 'none';
-    }
     if (containers.voiceRate) containers.voiceRate.style.display = isSpeakAvailable ? 'flex' : 'none';
 
+    const chk = document.getElementById('speakModeCheckbox');
+    if (containers.voiceInput) {
+        const isSpeakActive = chk?.checked;
+        containers.voiceInput.style.display = (isSpeakAvailable && isSpeakActive) ? 'flex' : 'none';
+    }
+
+    // Listener per sblocco voce su mobile al tocco della checkbox
+    if (chk && !chk.dataset.listenerAdded) {
+        chk.dataset.listenerAdded = "true";
+        chk.addEventListener('change', () => {
+            if (chk.checked && ('speechSynthesis' in window)) {
+                console.log("TTS: Unlocking audio on checkbox toggle...");
+                const unlock = new SpeechSynthesisUtterance(" ");
+                unlock.volume = 0.001;
+                window.speechSynthesis.speak(unlock);
+            }
+            // Mostra/Nascondi Risposta Vocale al volo
+            if (containers.voiceInput) {
+                // Ricalcoliamo la disponibilità per sicurezza
+                const currentMode = document.getElementById('gameModeInput')?.value;
+                const currentType = document.getElementById('gameTypeInput')?.value;
+                const available = (currentType === 'single') && (currentMode === 'standard' || currentMode === 'standard_plus' || currentMode === 'perfection');
+                containers.voiceInput.style.display = (available && chk.checked) ? 'flex' : 'none';
+            }
+        });
+    }
+
     if (isTx && containers.koch) {
-        const kInput = document.getElementById('setupKochLevelInput');
-        if (kInput && kInput.options.length === 0) {
-            const koch = ["K","M","R","S","U","A","P","T","L","O","W","I",".","N","J","E","F","0","Y",",","V","G","5","/","Q","9","2","H","3","8","B","?","4","7","C","1","D","6","X","="];
-            koch.forEach((char, idx) => {
-                const opt = document.createElement('option');
-                opt.value = idx + 2;
-                opt.textContent = `Lezione ${idx + 2} (${char})`;
-                kInput.appendChild(opt);
-            });
-            if (window.courseData?.progress?.current_lesson) kInput.value = window.courseData.progress.current_lesson;
-        }
-    }
-
-    if (isArcadeType) {
-        if (containers.startWpm) {
-            containers.startWpm.disabled = true;
-            containers.startWpm.value = 20;
-        }
-        if (containers.wordCount) containers.wordCount.disabled = true;
-    } else if (modeCfg) {
-        if (containers.fixed) containers.fixed.style.display = (isSingle && modeCfg.fixedSpeedAllowed) ? 'flex' : 'none';
-        if (containers.easy) containers.easy.style.display = isSingle ? 'flex' : 'none';
-        if (containers.spacing) containers.spacing.style.display = (isSingle && modeCfg.spacingConfigurable) ? 'flex' : 'none';
-
-        if (containers.startWpm) {
-            containers.startWpm.disabled = (modeCfg.wpmConfigurable === false);
-
-            if (selectedMode === 'target_training') {
-                // Per l'allenamento mirato, cerchiamo il WPM critico in tempo reale
-                db.ref(`users/${myId}/stats/errorsByWpm`).once('value', snap => {
-                    const errorsByWpm = snap.val() || {};
-                    const wpmEntries = Object.entries(errorsByWpm);
-                    if (wpmEntries.length > 0) {
-                        let maxErrors = -1, autoWpm = 20;
-                        wpmEntries.forEach(([w, chars]) => {
-                            const total = Object.values(chars).reduce((a, b) => a + b, 0);
-                            if (total > maxErrors) { maxErrors = total; autoWpm = parseInt(w); }
-                        });
-                        containers.startWpm.value = autoWpm;
-                    } else {
-                        containers.startWpm.value = localStorage.getItem('cwgame_pref_wpm') || 20;
-                    }
-                });
-            } else if (modeCfg.wpmConfigurable === false && modeCfg.defaultWpm) {
-                containers.startWpm.value = modeCfg.defaultWpm;
-            } else {
-                // RIPRISTINO PREFERENZA UTENTE se la modalità lo permette
-                const savedWpm = localStorage.getItem('cwgame_pref_wpm') || 20;
-                containers.startWpm.value = savedWpm;
-            }
-        }
-        if (containers.wordCount) {
-            containers.wordCount.disabled = (modeCfg.wordCountConfigurable === false);
-            if (modeCfg.wordCountConfigurable === false && modeCfg.defaultWordCount) {
-                containers.wordCount.value = modeCfg.defaultWordCount;
-            } else {
-                const savedWords = localStorage.getItem('cwgame_pref_words') || 10;
-                containers.wordCount.value = savedWords;
-            }
-        }
-    } else {
-        if (containers.fixed) containers.fixed.style.display = 'none';
-        if (containers.easy) containers.easy.style.display = isSingle ? 'flex' : 'none';
-        if (containers.spacing) containers.spacing.style.display = 'none';
-    }
-
-    if (containers.custom) containers.custom.style.display = (isSingle && selectedMode === 'custom') ? 'flex' : 'none';
-    if (containers.spectator) containers.spectator.style.display = isSingle ? 'flex' : 'none';
-
-    if (containers.speak) {
-        // Listener per sblocco voce su mobile al tocco della checkbox
-        const chk = document.getElementById('speakModeCheckbox');
-        if (chk && !chk.dataset.listenerAdded) {
-            chk.dataset.listenerAdded = "true";
-            chk.addEventListener('change', () => {
-                if (chk.checked && ('speechSynthesis' in window)) {
-                    console.log("TTS: Unlocking audio on checkbox toggle...");
-                    const unlock = new SpeechSynthesisUtterance(" ");
-                    unlock.volume = 0.001;
-                    window.speechSynthesis.speak(unlock);
-                }
-                // Mostra/Nascondi Risposta Vocale al volo
-                if (containers.voiceInput) {
-                    containers.voiceInput.style.display = (isSpeakAvailable && chk.checked) ? 'flex' : 'none';
-                }
-            });
-        }
     }
 
     if (containers.arcadeBtn) {
