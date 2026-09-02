@@ -183,31 +183,56 @@ window.renderTutorPanel = function() {
 window.showStudentDetailedStats = function(uid, name) {
     const modal = document.getElementById('tutorStudentStatsModal');
     if (!modal) return;
-    document.getElementById('tutorStudentStatsTitle').textContent = `Statistiche: ${name}`;
+    document.getElementById('tutorStudentStatsTitle').textContent = `Dati Corsista: ${name}`;
     modal.style.display = 'flex';
 
     // Reset dettagli precedenti per pulizia UI
+    const progCont = document.getElementById('tutorStudentProgramContent');
     const charArea = document.getElementById('tutorCharDetailArea');
     const sessArea = document.getElementById('tutorSessionDetailArea');
     const heatmap = document.getElementById('tutorStudentHeatmap');
     const historyCont = document.getElementById('tutorStudentHistory');
     const trendCont = document.getElementById('tutorStudentTrend');
 
+    if (progCont) progCont.innerHTML = '<p style="text-align:center; grid-column:span 2; color:var(--hint-color);">Caricamento...</p>';
     if (charArea) charArea.style.display = 'none';
     if (sessArea) sessArea.style.display = 'none';
     if (heatmap) heatmap.innerHTML = '<p style="text-align:center; padding:10px;">Caricamento...</p>';
     if (historyCont) historyCont.innerHTML = '';
     if (trendCont) trendCont.innerHTML = '';
 
-    // Carichiamo i nodi separatamente per efficienza
+    // Carichiamo l'intero nodo del corso e lo storico utente
     Promise.all([
-        db.ref(`users/${uid}/course/progress`).once('value'),
-        db.ref(`users/${uid}/history`).orderByChild('mode').equalTo('course').limitToLast(15).once('value')
-    ]).then(([progSnap, histSnap]) => {
-        const p = progSnap.val() || {};
-        const historyData = histSnap.val() || {};
+        db.ref(`users/${uid}/course`).once('value'),
+        db.ref(`users/${uid}/history`).once('value'),
+        db.ref(`users/${uid}/course/history`).once('value')
+    ]).then(([courseSnap, histSnap, courseHistSnap]) => {
+        const courseData = courseSnap.val() || {};
+        const p = courseData.progress || {};
+        const settings = courseData.settings || {};
 
-        // 1. HEATMAP INTERATTIVA
+        // 1. PROGRAMMA E CONFIGURAZIONE CORSISTA
+        if (progCont) {
+            const currentLesson = p.current_lesson || 2;
+            const currentLessonChar = window.KOCH_SEQUENCE[currentLesson - 1] || '';
+            const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson).join(', ');
+
+            progCont.innerHTML = `
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; grid-column:span 2;">
+                    Lezione Attuale: <b style="color:var(--link-color);">Lezione ${currentLesson}</b> (Sbloccato fino a '${currentLessonChar}')<br>
+                    <small style="color:var(--hint-color);">Caratteri: ${activeChars}</small>
+                </div>
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Frequenza: <b>${settings.days_per_week || 3} gg/sett.</b></div>
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Velocità: <b>${settings.start_wpm || 15} WPM</b> (Farns: ${settings.farnsworth_wpm || 12})</div>
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Spazio Gruppi: <b>${settings.group_spacing || '3.0'}x</b></div>
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Piano Elite: <b style="color:${courseData.elite_mode ? '#9c27b0' : 'var(--hint-color)'}">${courseData.elite_mode ? 'Attivo ⚡' : 'Disattivato'}</b></div>
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; grid-column:span 2;">Minuti Sessioni: <b>Z2: ${settings.minutes_z2 || 10}m | WORK: ${settings.minutes_work || 7}m | LONG: ${settings.minutes_long || 17}m</b></div>
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Richiami Formali: <b style="color:${(p.reminders_count || 0) > 0 ? '#f44336' : '#4caf50'};">${p.reminders_count || 0} / 3</b></div>
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Giorni Consecutivi: <b>${p.consecutive_days || 0} gg</b></div>
+            `;
+        }
+
+        // 2. HEATMAP INTERATTIVA
         const hm = document.getElementById('tutorStudentHeatmap');
         if (hm) {
             hm.innerHTML = '';
@@ -242,7 +267,7 @@ window.showStudentDetailedStats = function(uid, name) {
                         <div class="stat-box" style="background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">Tentativi: <b>${s.attempts}</b></div>
                         <div class="stat-box" style="background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">Errori: <b style="color:#f44336;">${s.errors}</b></div>
                         <div class="stat-box" style="background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">Precisione: <b style="color:${accuracy > 80 ? '#4caf50' : '#ff9800'}">${accuracy}%</b></div>
-                        <div class="stat-box" style="background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">Morse: <b style="letter-spacing:2px; color:var(--link-color);">${window.morseDict[char] || '--'}</b></div>
+                        <div class="stat-box" style="background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">Morse: <b style="letter-spacing:2px; color:var(--link-color);">${window.morseDict ? window.morseDict[char] : '--'}</b></div>
                     `;
                     detailArea.scrollIntoView({ behavior: 'smooth' });
                 };
@@ -250,36 +275,56 @@ window.showStudentDetailedStats = function(uid, name) {
             });
         }
 
-        // 2. STORIA SESSIONI CON DRILL-DOWN
+        // 3. UNIONE STORICO SESSIONI
+        const rawHist1 = histSnap.val() || {};
+        const rawHist2 = courseHistSnap.val() || {};
+
+        let combinedHistory = [
+            ...Object.values(rawHist1).filter(h => h && h.mode === 'course'),
+            ...Object.values(rawHist2).filter(h => h)
+        ];
+
+        // Rimuoviamo eventuali duplicati basati sul timestamp
+        const seenTs = new Set();
+        combinedHistory = combinedHistory.filter(h => {
+            if (!h || !h.date) return false;
+            if (seenTs.has(h.date)) return false;
+            seenTs.add(h.date);
+            return true;
+        }).sort((a,b) => (b.date || 0) - (a.date || 0));
+
+        // 4. RENDERING STORIA SESSIONI E DRILL-DOWN
         const hs = document.getElementById('tutorStudentHistory');
         if (hs) {
             hs.innerHTML = '';
-            const history = Object.values(historyData).sort((a,b) => (b.date || 0) - (a.date || 0));
 
-            if (history.length === 0) {
-                hs.innerHTML = '<p style="text-align:center; opacity:0.5; padding:10px;">Nessuna sessione registrata.</p>';
+            if (combinedHistory.length === 0) {
+                hs.innerHTML = '<p style="text-align:center; opacity:0.5; padding:10px;">Nessuna sessione registrata finora.</p>';
             } else {
                 let totalAcc = 0, totalWpm = 0, count = 0;
 
-                history.forEach(h => {
+                combinedHistory.forEach(h => {
                     const details = h.details || [];
-                    let sessAcc = 0;
-                    if (details.length > 0) {
+                    let sessAcc = h.accuracy || 0;
+
+                    if (!sessAcc && details.length > 0) {
                         const correct = details.filter(d => d.points > 0).length;
                         sessAcc = Math.round((correct / details.length) * 100);
-                        totalAcc += sessAcc;
-                        totalWpm += (h.wpm || 20);
-                        count++;
                     }
+
+                    totalAcc += sessAcc;
+                    totalWpm += (h.wpm || 20);
+                    count++;
 
                     const div = document.createElement('div');
                     div.style.cssText = "padding:8px; background:rgba(255,255,255,0.05); border-radius:6px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; border:1px solid rgba(255,255,255,0.05);";
 
                     const dateStr = h.date ? new Date(h.date).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : 'Data ignota';
+                    const typeLabel = h.sessionType ? ` [${h.sessionType}]` : '';
 
                     div.innerHTML = `
                         <div style="display:flex; flex-direction:column;">
-                            <span style="font-weight:bold; font-size:0.9em;">${dateStr}</span>
+                            <span style="font-weight:bold; font-size:0.9em;">${dateStr}${typeLabel}</span>
                             <small style="color:var(--hint-color);">${h.score || 0} XP | ${h.wpm || 20} WPM</small>
                         </div>
                         <div style="text-align:right; display:flex; align-items:center; gap:8px;">
@@ -294,10 +339,10 @@ window.showStudentDetailedStats = function(uid, name) {
                         if (!detailArea || !detailContent) return;
 
                         detailArea.style.display = 'block';
-                        document.getElementById('tutorSessionDetailTitle').textContent = `Dettaglio del ${new Date(h.date).toLocaleDateString()}`;
+                        document.getElementById('tutorSessionDetailTitle').textContent = `Dettaglio Sessione del ${new Date(h.date).toLocaleDateString()}`;
 
                         if (details.length === 0) {
-                            detailContent.innerHTML = '<p style="text-align:center; opacity:0.5; padding:20px;">Dati di dettaglio non disponibili.</p>';
+                            detailContent.innerHTML = '<p style="text-align:center; opacity:0.5; padding:20px;">Dati di dettaglio non disponibili per questa sessione.</p>';
                         } else {
                             let html = '<table style="width:100%; border-collapse:collapse; font-size:0.95em; color:var(--text-color);">';
                             html += '<thead style="border-bottom:1px solid rgba(255,255,255,0.1); color:var(--hint-color);"><tr><th style="text-align:left; padding:4px;">Target</th><th style="text-align:left; padding:4px;">Input</th><th style="padding:4px;">Esito</th></tr></thead><tbody>';
@@ -317,7 +362,31 @@ window.showStudentDetailedStats = function(uid, name) {
                     hs.appendChild(div);
                 });
 
-                // 3. TREND E ANALISI
+                // 5. TREND E ANALISI
+                const tr = document.getElementById('tutorStudentTrend');
+                if (tr && count > 0) {
+                    const avgA = Math.round(totalAcc / count);
+                    const avgW = Math.round(totalWpm / count);
+                    tr.innerHTML = `
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:10px;">
+                            <div class="box-panel" style="margin:0; padding:10px; text-align:center; border-color:${avgA >= 85 ? '#4caf50' : '#ff9800'};">
+                                <small style="display:block; color:var(--hint-color); text-transform:uppercase; font-size:0.7em;">Accuratezza Media</small>
+                                <b style="font-size:1.3em; color:${avgA >= 85 ? '#4caf50' : '#ff9800'}">${avgA}%</b>
+                            </div>
+                            <div class="box-panel" style="margin:0; padding:10px; text-align:center; border-color:var(--link-color);">
+                                <small style="display:block; color:var(--hint-color); text-transform:uppercase; font-size:0.7em;">Velocità Media</small>
+                                <b style="font-size:1.3em; color:var(--link-color);">${avgW} WPM</b>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        }
+    }).catch(err => {
+        console.error("Tutor Stats Error:", err);
+        if (heatmap) heatmap.innerHTML = '<p style="color:red; text-align:center;">Errore caricamento dati.</p>';
+    });
+};
                 const tr = document.getElementById('tutorStudentTrend');
                 if (tr && count > 0) {
                     const avgA = Math.round(totalAcc / count);
@@ -864,7 +933,20 @@ window.finishCourseSession = function() {
     p.last_session_date = today;
     window.courseData.current_day_session = null;
     window.saveCourseState();
+
+    // Salva lo storico della sessione per la consultazione del Tutor e delle statistiche
     if (db && window.myId) {
+        const histEntry = {
+            date: firebase.database.ServerValue.TIMESTAMP,
+            mode: 'course',
+            sessionType: type,
+            score: xp,
+            wpm: currentWpm || 20,
+            accuracy: Math.round(acc * 100),
+            details: window.matchDetailsArray || []
+        };
+        db.ref(`users/${window.myId}/history`).push(histEntry);
+        db.ref(`users/${window.myId}/course/history`).push(histEntry);
         db.ref(`courseActiveEnrollments/${window.myId}`).update({ roomCode: null });
     }
 
