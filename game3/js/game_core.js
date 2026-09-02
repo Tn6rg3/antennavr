@@ -231,7 +231,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
     if (listeners.pingPong && roomCode) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
     if (roomCode) { db.ref(`rooms/${roomCode}/coop_state`).off(); }
 
-    window.window.isCoopMode = false;
+    window.isCoopMode = false;
     if (els.coopArea) els.coopArea.style.display = 'none';
     if (els.tableWrapper) els.tableWrapper.style.display = 'block';
 
@@ -529,6 +529,7 @@ window.joinRoomLogic = function(isReconnect = false) {
                     els.lobbyTitleText.textContent = "Lobby Incontro Torneo 🥊";
                 } else {
                     const m = rData.mode || 'standard';
+                    window.currentMode = m; // Sincronizzazione fondamentale per Guest
                     const modeCfg = window.GAME_MODES[m];
                     const modeTitle = modeCfg ? (currentLang === 'it' ? modeCfg.titleIt : modeCfg.titleEn) : "Stanza Libera";
                     els.lobbyTitleText.textContent = "Lobby " + modeTitle;
@@ -803,7 +804,7 @@ window.startCountdownSequence = function() {
                         if (currentStatus === 'playing' || hasAbandoned) {
                             if (currentPCount === 1 && players[myId]) {
                                 // --- FIX CO-OP: Se siamo in collaborazione, la partita NON termina se resta solo 1 giocatore ---
-                                if (window.currentMode === 'conquest' || window.window.isCoopMode) {
+                                if (window.currentMode === 'conquest' || window.isCoopMode) {
                                     showToast(currentLang === 'it' ? "Il tuo compagno ha abbandonato. Continua la missione da solo! ⚔️" : "Your teammate left. Continue the mission alone! ⚔️");
                                     return;
                                 }
@@ -921,11 +922,11 @@ window.startCountdownSequence = function() {
                 const mode = window.currentMode || 'standard';
                 console.log("Countdown finished. Final Mode:", mode);
 
-                window.window.isCoopMode = (mode === 'conquest');
-                if (els.coopArea) els.coopArea.style.display = window.window.isCoopMode ? 'flex' : 'none';
-                if (els.tableWrapper) els.tableWrapper.style.display = window.window.isCoopMode ? 'none' : 'block';
+                window.isCoopMode = (mode === 'conquest');
+                if (els.coopArea) els.coopArea.style.display = window.isCoopMode ? 'flex' : 'none';
+                if (els.tableWrapper) els.tableWrapper.style.display = window.isCoopMode ? 'none' : 'block';
 
-                if (mode === 'conquest' || window.window.isCoopMode) {
+                if (mode === 'conquest' || window.isCoopMode) {
                     if (typeof window.startCoopSequence === 'function') { window.startCoopSequence(); return; }
                 } else if (mode === 'course') {
                     if (typeof window.startCourseSessionSequence === 'function') { window.startCourseSessionSequence(); return; }
@@ -960,9 +961,9 @@ window.resumeGameSequence = function() {
     gameRunning = true;
     isRejoining = false;
 
-    window.window.isCoopMode = (window.currentMode === 'conquest');
-    if (els.coopArea) els.coopArea.style.display = window.window.isCoopMode ? 'flex' : 'none';
-    if (els.tableWrapper) els.tableWrapper.style.display = window.window.isCoopMode ? 'none' : 'block';
+    window.isCoopMode = (window.currentMode === 'conquest');
+    if (els.coopArea) els.coopArea.style.display = window.isCoopMode ? 'flex' : 'none';
+    if (els.tableWrapper) els.tableWrapper.style.display = window.isCoopMode ? 'none' : 'block';
 
     if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
     if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: ${totalScore}`;
@@ -980,7 +981,7 @@ window.resumeGameSequence = function() {
     }
 
     const mode = window.currentMode;
-    if (mode === 'conquest' || window.window.isCoopMode) {
+    if (mode === 'conquest' || window.isCoopMode) {
         if (typeof window.startCoopSequence === 'function') window.startCoopSequence();
         return;
     } else if (mode === 'quiz') {

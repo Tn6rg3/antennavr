@@ -226,7 +226,7 @@ let isCourseMode = false, courseSessionTimer = null, coursePauseInterval = null;
 window.courseData = null;
 
 // STATO CO-OP
-window.window.isCoopMode = false, coopActiveFreqIndex = 0;
+window.isCoopMode = false, coopActiveFreqIndex = 0;
 let coopTimerInterval = null, coopDecayInterval = null;
 window.perfectionQueue = []; // Coda per la modalità Perfezione
 window.isPerfectionRetry = false; // Flag per sapere se la parola attuale è un recupero
