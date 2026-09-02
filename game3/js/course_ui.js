@@ -20,7 +20,8 @@ window.renderCourseTabView = function() {
         const trainingControls = document.getElementById('courseTrainingControls');
         const tutorPanel = document.getElementById('courseTutorPanel');
 
-        if (trainingControls) trainingControls.style.display = isTutor ? 'none' : 'flex';
+        // Mostriamo SEMPRE la pagina generale del corso (controlli, dashboard, esercizio)
+        if (trainingControls) trainingControls.style.display = 'flex';
         if (tutorPanel) {
             tutorPanel.style.display = isTutor ? 'block' : 'none';
             if (isTutor) window.renderTutorPanel();
@@ -924,8 +925,10 @@ window.actualStartCourseGame = function() {
  * EVENT LISTENERS UI
  */
 window.attachCourseUIListeners = function() {
-    // Accordion / Toggle
+    // Accordion / Toggle per tutti i pannelli
     const pairs = [
+        { b: 'btnToggleTutorPanel', c: 'tutorPanelContent' },
+        { b: 'btnTogglePresentation', c: 'coursePresentationContent' },
         { b: 'btnToggleCourseChat', c: 'courseChatContent' },
         { b: 'btnToggleCourseSettings', c: 'courseTabSettingsContent' },
         { b: 'btnToggleCourseHeatmap', c: 'courseTabHeatmapContent' },
