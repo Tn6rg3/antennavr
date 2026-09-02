@@ -124,13 +124,20 @@ window.listenForQsoPartner = function() {
     db.ref(`rooms/${window.roomCode}/players`).on('value', snap => {
         const players = snap.val() || {};
         for (let pId in players) {
-            if (pId !== window.myId && players[pId].peerId && !window.qsoState.conn) {
+            if (pId !== window.myId) {
                 const partnerId = pId;
-                const connection = window.qsoState.peer.connect(players[pId].peerId, { reliable: false, metadata: { name: window.myName, pNow: performance.now() } });
-                window.setupQsoDataChannel(connection);
+                const partnerName = players[pId].name || "Operatore";
 
-                // --- ASCOLTO RELAY CON RICOSTRUZIONE RITMO ---
-                const partnerRelayRef = db.ref(`rooms/${window.roomCode}/qso_relay/${partnerId}`);
+                // Aggiorniamo il nome partner in UI appena lo troviamo (utile anche in Relay)
+                const partnerEl = document.getElementById('qsoPartnerName');
+                if (partnerEl) partnerEl.textContent = "Partner: " + partnerName;
+
+                if (players[pId].peerId && !window.qsoState.conn) {
+                    const connection = window.qsoState.peer.connect(players[pId].peerId, { reliable: false, metadata: { name: window.myName, pNow: performance.now() } });
+                    window.setupQsoDataChannel(connection, partnerName);
+
+                    // --- ASCOLTO RELAY CON RICOSTRUZIONE RITMO ---
+                    const partnerRelayRef = db.ref(`rooms/${window.roomCode}/qso_relay/${partnerId}`);
 
                 // Stato per il buffer di questo partner
                 const relayBuffer = {
@@ -169,12 +176,19 @@ window.listenForQsoPartner = function() {
     });
 };
 
-window.setupQsoDataChannel = function(c) {
+window.setupQsoDataChannel = function(c, partnerName) {
     window.qsoState.conn = c;
-    c.on('open', () => {
+
+    const onOpen = () => {
         window.updateQsoStatus("CONNESSO ✅", "#2ecc71");
         const b = document.getElementById('btnForceQsoRelay'); if (b) b.style.display = 'none';
-        document.getElementById('qsoPartnerName').textContent = "Partner: " + (c.metadata?.name || "Operatore");
+
+        // Se abbiamo un nome partner passato (da initiator) lo usiamo,
+        // altrimenti proviamo i metadata (da receiver)
+        const nameToShow = partnerName || c.metadata?.name || "Operatore";
+        const partnerEl = document.getElementById('qsoPartnerName');
+        if (partnerEl) partnerEl.textContent = "Partner: " + nameToShow;
+
         window.qsoState.conn.send({ type: 'SYNC', pNow: performance.now() });
 
         if (window.qsoState.hbInterval) clearInterval(window.qsoState.hbInterval);
@@ -186,7 +200,10 @@ window.setupQsoDataChannel = function(c) {
                 });
             }
         }, 300);
-    });
+    };
+
+    if (c.open) onOpen();
+    else c.on('open', onOpen);
 
     c.on('data', d => {
         const now = performance.now();

@@ -122,7 +122,7 @@ window.showScreen = function(screenId) {
             listeners.activeChat['chatMessages'].ref.off('value', listeners.activeChat['chatMessages'].callback);
             delete listeners.activeChat['chatMessages'];
         }
-        if (screenId === 'lobbyScreen' || screenId === 'gameArea') {
+        if (['lobbyScreen', 'gameArea', 'qsoArea', 'quizArea', 'brScreen'].includes(screenId)) {
             window.activeChatContext = 'room';
             if (typeof window.listenToChat === 'function') window.listenToChat();
         } else {
