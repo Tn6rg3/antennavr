@@ -142,7 +142,7 @@ window.checkGameTypeUI = function() {
     if (containers.fixed) containers.fixed.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
     if (containers.easy) containers.easy.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
     if (containers.spacing) containers.spacing.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
-    if (containers.custom) containers.custom.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
+    if (containers.custom) containers.custom.style.display = (selectedMode === 'custom') ? 'flex' : 'none';
     if (containers.spectator) containers.spectator.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
     if (containers.wordsPerGroup) containers.wordsPerGroup.style.display = (selectedMode === 'standard_plus') ? 'block' : 'none';
     if (containers.wordLen) containers.wordLen.style.display = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection') ? 'block' : 'none';
