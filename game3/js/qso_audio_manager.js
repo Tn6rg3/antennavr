@@ -17,12 +17,27 @@ window.initQsoAudioModule = function() {
     };
 };
 
+window.configureQsoServerUrl = function() {
+    const current = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url') || "";
+    const url = prompt("⚙️ Configurazione Server QSO (Google Apps Script):\nInserisci o incolla l'URL della Web App:", current);
+    if (url && url.trim().startsWith("http")) {
+        const cleanUrl = url.trim();
+        localStorage.setItem('cwgame_qso_audio_url', cleanUrl);
+        window.qsoAudioServerUrl = cleanUrl;
+        showToast("URL Server QSO Salvato! 💾");
+        return cleanUrl;
+    } else if (url !== null) {
+        showToast("⚠️ URL non valido (deve iniziare con http/https).");
+    }
+    return null;
+};
+
 window.searchQsoAudioFiles = async function() {
-    const serverUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
+    let serverUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
 
     if (!serverUrl) {
-        showToast("⚠️ Server QSO non configurato. Effettua il login iniziale.");
-        return;
+        serverUrl = window.configureQsoServerUrl();
+        if (!serverUrl) return;
     }
 
     const callsign = (document.getElementById('qsoSearchCallsign')?.value || "").trim();

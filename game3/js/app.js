@@ -540,7 +540,14 @@ async function validateIdentity() {
         if (!response.ok) return false;
 
         const result = await response.json();
-        return result.status === 'ok';
+        if (result.status === 'ok') {
+            if (result.qsoAudioServerUrl) {
+                localStorage.setItem('cwgame_qso_audio_url', result.qsoAudioServerUrl);
+                window.qsoAudioServerUrl = result.qsoAudioServerUrl;
+            }
+            return true;
+        }
+        return false;
     } catch (err) {
         console.error("Validation: Request failed", err);
         return false;
