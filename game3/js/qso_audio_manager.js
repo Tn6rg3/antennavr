@@ -17,27 +17,41 @@ window.initQsoAudioModule = function() {
     };
 };
 
-window.configureQsoServerUrl = function() {
-    const current = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url') || "";
-    const url = prompt("⚙️ Configurazione Server QSO (Google Apps Script):\nInserisci o incolla l'URL della Web App:", current);
-    if (url && url.trim().startsWith("http")) {
-        const cleanUrl = url.trim();
-        localStorage.setItem('cwgame_qso_audio_url', cleanUrl);
-        window.qsoAudioServerUrl = cleanUrl;
-        showToast("URL Server QSO Salvato! 💾");
-        return cleanUrl;
-    } else if (url !== null) {
-        showToast("⚠️ URL non valido (deve iniziare con http/https).");
+window.getQsoServerUrlAutomatic = async function() {
+    let serverUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
+    if (serverUrl && serverUrl.startsWith('http')) return serverUrl;
+
+    if (typeof VALIDATION_SERVER_URL !== 'undefined' && VALIDATION_SERVER_URL && VALIDATION_SERVER_URL.startsWith('http')) {
+        try {
+            const resp = await fetch(VALIDATION_SERVER_URL + "?action=get_config");
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data && data.qsoAudioServerUrl) {
+                    localStorage.setItem('cwgame_qso_audio_url', data.qsoAudioServerUrl);
+                    window.qsoAudioServerUrl = data.qsoAudioServerUrl;
+                    return data.qsoAudioServerUrl;
+                }
+            }
+        } catch(e) {
+            console.warn("Auto QSO Config fetch failed", e);
+        }
     }
-    return null;
+    return serverUrl;
 };
 
 window.searchQsoAudioFiles = async function() {
-    let serverUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
+    const resultsContainer = document.getElementById('qsoSearchResultsContainer');
+    const loadMoreBtn = document.getElementById('btnQsoLoadMore');
+    const statusText = document.getElementById('qsoSearchStatusText');
+
+    if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; padding:20px; color:var(--link-color);">🔍 Connessione al server dei QSO...</p>';
+
+    const serverUrl = await window.getQsoServerUrlAutomatic();
 
     if (!serverUrl) {
-        serverUrl = window.configureQsoServerUrl();
-        if (!serverUrl) return;
+        showToast("⚠️ Impossibile ricavare l'URL del server QSO dal sistema.");
+        if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; color:#f44336; padding:20px;">Server QSO non raggiungibile.</p>';
+        return;
     }
 
     const callsign = (document.getElementById('qsoSearchCallsign')?.value || "").trim();
