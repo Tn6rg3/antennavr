@@ -87,16 +87,16 @@ window.watchSpecificRoom = function(code, targetName) {
             const liveWpm = audioData.wordWpm || audioData.wpm || 20;
 
             if (els.permanentGameInput) {
-                els.permanentGameInput.placeholder = `📻 Segnale in arrivo: ${audioData.word} (${liveWpm} WPM)...`;
+                els.permanentGameInput.placeholder = `📻 Segnale in arrivo (${liveWpm} WPM)...`;
             }
 
             if (els.wpmDisplay) {
-                els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm} | Target: ${audioData.word}`;
+                els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm}`;
             }
 
-            // Se non c'è ancora un'attività recente in tabella, mostriamo il segnale in ascolto
+            // Se non c'è ancora un'attività recente in tabella, mostriamo l'avviso di ricezione SENZA rivelare la parola
             if (els.tableBody && els.tableBody.children.length === 0) {
-                els.tableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--link-color); padding:20px;">🎧 In ascolto segnale: <b>${audioData.word}</b>...</td></tr>`;
+                els.tableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--link-color); padding:20px;">🎧 Ricezione segnale in corso...</td></tr>`;
             }
 
             // Evitiamo di riprodurre la stessa parola più volte (controllo ts o wordId)
