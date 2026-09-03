@@ -1245,14 +1245,25 @@ window.finishGame = function() {
     }
 
     if (matchDetailsArray.length > 0) {
-        db.ref(`users/${myId}/history`).push().set({ date: firebase.database.ServerValue.TIMESTAMP, mode: window.currentMode, score: totalScore, wpm: peakWpm, type: window.isSinglePlayer ? 'single' : 'multi', wordCount: requestedWordCount, details: matchDetailsArray });
+        db.ref(`users/${myId}/history`).push().set({
+            date: firebase.database.ServerValue.TIMESTAMP,
+            mode: window.currentMode,
+            score: totalScore,
+            wpm: peakWpm,
+            type: window.isSinglePlayer ? 'single' : 'multi',
+            isAutoAdvance: !!window.isAutoAdvance,
+            wordCount: requestedWordCount,
+            details: matchDetailsArray
+        });
 
-        // --- TRACCIAMENTO ACCURATEZZA GLOBALE PER GRAFICO ---
-        if (typeof window.trackSessionAccuracy === 'function') {
+        // --- TRACCIAMENTO ACCURATEZZA GLOBALE PER GRAFICO (Escluso se Avanzamento Auto è attivo) ---
+        if (!window.isAutoAdvance && typeof window.trackSessionAccuracy === 'function') {
             window.trackSessionAccuracy(matchDetailsArray);
         }
 
-        if (typeof window.updateActivity === 'function') window.updateActivity(totalScore > 0);
+        if (!window.isAutoAdvance && typeof window.updateActivity === 'function') {
+            window.updateActivity(totalScore > 0);
+        }
 
         // --- ASSEGNAZIONE XP FINALE (RPG) ---
         if (typeof window.addXP === 'function') {
@@ -1955,8 +1966,8 @@ window.handleWordSubmission = function(userWord) {
         }
     }
 
-    // --- NUOVO TRACCIAMENTO STATISTICO AVANZATO ---
-    if (typeof window.trackAdvancedErrors === 'function') {
+    // --- TRACCIAMENTO STATISTICO AVANZATO (Escluso se Avanzamento Auto è attivo) ---
+    if (!window.isAutoAdvance && typeof window.trackAdvancedErrors === 'function') {
         window.trackAdvancedErrors(currentWord, userWord, activeWpmForThisWord);
     }
 
@@ -1972,11 +1983,22 @@ window.handleWordSubmission = function(userWord) {
         }
     }
 
-    // Avanzamento WPM e Missioni
+    // Avanzamento WPM e Missioni (Escluso se Avanzamento Auto è attivo)
     if (levDist === 0 && !usedReplay) {
         if (!window.isPerfectionRetry) {
             if (!isFixedSpeed && window.currentMode !== 'chars') {
                 currentWpm += 2;
+                if (currentWpm > peakWpm) peakWpm = currentWpm;
+            }
+            // AGGIORNAMENTO STREAK E MISSIONI
+            window.currentStreak++;
+            if (!window.isAutoAdvance && typeof window.updateMissionProgress === 'function') {
+                window.updateMissionProgress('count', 1);
+                window.updateMissionProgress('wpm_min', activeWpmForThisWord);
+                window.updateMissionProgress('streak', window.currentStreak);
+            }
+        }
+    } else {
                 if (currentWpm > peakWpm) peakWpm = currentWpm;
             }
             // AGGIORNAMENTO STREAK E MISSIONI
