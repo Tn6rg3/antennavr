@@ -18,22 +18,24 @@ const tg = window.tg;
 // --- GESTIONE DATI UTENTE (Supporto Browser Esterno) ---
 // Recuperiamo initData sia dalla WebApp che dai parametri URL (per browser esterno)
 const urlParams = new URLSearchParams(window.location.search);
-window.tgInitData = tg.initData || urlParams.get('initData') || "";
 
-// Se siamo in un browser esterno, decodifichiamo i dati utente se possibile
+// TELEGRAM DESKTOP PC FIX: Telegram Desktop usa 'tgWebAppData' nella query string dell'iframe
+const rawInitData = tg.initData || urlParams.get('initData') || urlParams.get('tgWebAppData') || "";
+window.tgInitData = rawInitData;
+
 let userFromUrl = null;
 try {
-    if (urlParams.get('initData')) {
-        const decoded = decodeURIComponent(urlParams.get('initData'));
+    if (rawInitData) {
+        const decoded = decodeURIComponent(rawInitData);
         const userMatch = decoded.match(/user=([^&]+)/);
         if (userMatch) userFromUrl = JSON.parse(decodeURIComponent(userMatch[1]));
     }
 } catch(e) { console.warn("Init: Errore parsing user da URL", e); }
 
 window.tgUser = tg.initDataUnsafe?.user || userFromUrl;
-const tgUser = window.tgUser;
+let tgUser = window.tgUser;
 window.tgUsername = tgUser?.username || "";
-const tgUsername = window.tgUsername;
+let tgUsername = window.tgUsername;
 const startParam = tg.initDataUnsafe?.start_param || urlParams.get('startapp');
 
 // --- GESTIONE SCHERMO RESIZE E TASTIERA MOBILE ---
@@ -473,11 +475,19 @@ if(document.getElementById('gameTypeInput')) document.getElementById('gameTypeIn
 // --- STARTUP ---
 // --- STARTUP ---
 async function startApp() {
-    if (!tgUser) {
+    if (!window.tgUser) {
+        window.tgUser = tg.initDataUnsafe?.user;
+    }
+    const currentTgUser = window.tgUser;
+
+    if (!currentTgUser) {
         if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
         if (els.errorScreen) els.errorScreen.classList.add('active-screen');
         return;
     }
+
+    myName = currentTgUser.first_name || "Operatore";
+    myId = currentTgUser.id ? currentTgUser.id.toString() : "";
 
     // 1. Fase di Verifica Identità (Backend Google Apps Script)
     const statusText = document.getElementById('initStatusText');
@@ -507,8 +517,8 @@ async function startApp() {
     }
 
     // 2. Proseguiamo con l'avvio normale
-    myName = tgUser.first_name;
-    myId = tgUser.id.toString();
+    myName = currentTgUser.first_name || "Operatore";
+    myId = currentTgUser.id ? currentTgUser.id.toString() : "";
 
     // --- TELEGRAM TTS FIX: Svegliamo il motore vocale ---
     const synth = window.speechSynthesis || window.webkitSpeechSynthesis;
