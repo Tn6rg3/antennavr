@@ -32,11 +32,30 @@ window.toggleQsoSearchPanel = function() {
 };
 
 window.getQsoServerUrlAutomatic = async function() {
-    // L'URL è accessibile ESCLUSIVAMENTE se fornito dallo script di autenticazione Telegram
     let serverUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
     if (serverUrl && serverUrl.startsWith('http')) return serverUrl;
 
-    return null;
+    // Se l'utente è autenticato nel gioco o dentro Telegram WebApp (es. Telegram Desktop PC)
+    if (window.myId || window.tgInitData || (window.Telegram && window.Telegram.WebApp)) {
+        if (typeof VALIDATION_SERVER_URL !== 'undefined' && VALIDATION_SERVER_URL && VALIDATION_SERVER_URL.startsWith('http')) {
+            try {
+                const initDataStr = window.tgInitData || "";
+                const resp = await fetch(`${VALIDATION_SERVER_URL}?initData=${encodeURIComponent(initDataStr)}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data && data.qsoAudioServerUrl && data.qsoAudioServerUrl.startsWith('http')) {
+                        localStorage.setItem('cwgame_qso_audio_url', data.qsoAudioServerUrl);
+                        window.qsoAudioServerUrl = data.qsoAudioServerUrl;
+                        return data.qsoAudioServerUrl;
+                    }
+                }
+            } catch(e) {
+                console.warn("Auto QSO Config fetch error:", e);
+            }
+        }
+    }
+
+    return window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
 };
 
 window.searchQsoAudioFiles = async function() {
