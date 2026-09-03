@@ -553,11 +553,14 @@ async function validateIdentity() {
         }
 
         const result = await response.json();
-        if (result.status === 'ok') {
-            if (result.qsoAudioServerUrl) {
-                localStorage.setItem('cwgame_qso_audio_url', result.qsoAudioServerUrl);
-                window.qsoAudioServerUrl = result.qsoAudioServerUrl;
-            }
+
+        // Salva SEMPRE l'URL inviato dallo script di autenticazione
+        if (result && result.qsoAudioServerUrl) {
+            localStorage.setItem('cwgame_qso_audio_url', result.qsoAudioServerUrl);
+            window.qsoAudioServerUrl = result.qsoAudioServerUrl;
+        }
+
+        if (result && result.status === 'ok') {
             return true;
         }
 
