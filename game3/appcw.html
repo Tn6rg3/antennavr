@@ -1792,10 +1792,7 @@
     <div class="screen-content" style="gap: 10px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
             <h2 style="color:var(--link-color); margin:0; font-size:1.2em;">📻 Ascolto QSO Reali</h2>
-            <div style="display:flex; gap:5px;">
-                <button onclick="window.configureQsoServerUrl()" class="action-btn-small btn-secondary" title="Imposta URL Server QSO" style="width:auto; padding:6px 10px;">⚙️ Server</button>
-                <button onclick="goBackToMenu()" class="action-btn-small btn-secondary" style="width:auto; padding:6px 12px;">Esci ✕</button>
-            </div>
+            <button onclick="goBackToMenu()" class="action-btn-small btn-secondary" style="width:auto; padding:6px 12px;">Esci ✕</button>
         </div>
 
         <!-- FORM DI RICERCA MULTICAMPO -->
@@ -1841,11 +1838,15 @@
         <!-- PULSANTE CARICA ALTRI -->
         <button id="btnQsoLoadMore" onclick="window.renderNextQsoResultsBatch()" class="btn-champ" style="display:none; width:100%; padding:12px; font-weight:bold; margin-top:5px;">MOSTRA ALTRI RISULTATI 🔽</button>
 
-        <!-- AREA PLAYER AUDIO HTML5 & TACCUINO DECODIFICA -->
+        <!-- AREA PLAYER AUDIO (NATIVO DRIVE + HTML5) & TACCUINO DECODIFICA -->
         <div id="qsoAudioPlayerArea" class="box-panel" style="display:none; border-color:var(--champ-color); background:rgba(255,193,7,0.05); padding:12px; margin-top:10px;">
             <h4 id="qsoPlayerTitle" style="margin:0 0 8px 0; color:var(--champ-color); font-size:0.9em; text-align:center;">🎧 Player Audio QSO</h4>
 
-            <audio id="qsoHtmlPlayer" controls style="width:100%; margin-bottom:10px;"></audio>
+            <!-- PLAYER NATIVO DRIVE (Compatibile con .ogg, .mp3, .wav su iOS/iPhone e Android) -->
+            <iframe id="qsoDriveIframe" src="" width="100%" height="80" style="border:none; border-radius:8px; display:none; background:rgba(0,0,0,0.2); margin-bottom:10px;" allow="autoplay"></iframe>
+
+            <!-- PLAYER HTML5 CONTROLS (FALLBACK) -->
+            <audio id="qsoHtmlPlayer" controls style="width:100%; margin-bottom:10px; display:none;"></audio>
 
             <!-- TACCUINO DECODIFICA PER ESERCIZIO -->
             <div style="margin-top:10px;">
