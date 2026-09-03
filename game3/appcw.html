@@ -38,11 +38,11 @@
             // Tentativo di notifica via GAS (indipendente da altri file JS)
             try {
                 var tg = window.Telegram.WebApp;
-                var userId = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
+                var userId = (tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user.id : window.myId;
                 if (userId) {
                     var errorMsg = "⚠️ <b>L'app sta impiegando troppo tempo a caricarsi.</b>\nPossibile problema di rete o aggiornamento. Riprova tra poco! 📻";
                     var url = "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec?action=notify&targetId=" + userId + "&text=" + encodeURIComponent(errorMsg);
-                    fetch(url, { mode: 'no-cors' });
+                    fetch(url, { method: 'GET', redirect: 'follow' }).catch(function(e){ console.warn("Watchdog notify error", e); });
                 }
             } catch(e) {}
         }
