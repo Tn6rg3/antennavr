@@ -26,7 +26,7 @@ window.getQsoServerUrlAutomatic = async function() {
             const resp = await fetch(VALIDATION_SERVER_URL + "?action=get_config");
             if (resp.ok) {
                 const data = await resp.json();
-                if (data && data.qsoAudioServerUrl) {
+                if (data && data.qsoAudioServerUrl && data.qsoAudioServerUrl.startsWith('http')) {
                     localStorage.setItem('cwgame_qso_audio_url', data.qsoAudioServerUrl);
                     window.qsoAudioServerUrl = data.qsoAudioServerUrl;
                     return data.qsoAudioServerUrl;
@@ -36,7 +36,34 @@ window.getQsoServerUrlAutomatic = async function() {
             console.warn("Auto QSO Config fetch failed", e);
         }
     }
+
+    // Fallback automatico: Chiede l'URL una sola volta se non ancora rilevato automaticamente
+    if (!serverUrl) {
+        const inputUrl = prompt("⚙️ Configurazione Server QSO:\nNon è stato rilevato automaticamente l'URL del server QSO.\nIncolla l'URL della tua Web App Google Apps Script:");
+        if (inputUrl && inputUrl.trim().startsWith("http")) {
+            serverUrl = inputUrl.trim();
+            localStorage.setItem('cwgame_qso_audio_url', serverUrl);
+            window.qsoAudioServerUrl = serverUrl;
+            showToast("URL Server QSO salvato! 💾");
+        }
+    }
+
     return serverUrl;
+};
+
+window.configureQsoServerUrl = function() {
+    const current = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url') || "";
+    const url = prompt("⚙️ Configurazione Server QSO (Google Apps Script):\nModifica o incolla l'URL della Web App:", current);
+    if (url && url.trim().startsWith("http")) {
+        const cleanUrl = url.trim();
+        localStorage.setItem('cwgame_qso_audio_url', cleanUrl);
+        window.qsoAudioServerUrl = cleanUrl;
+        showToast("URL Server QSO aggiornato! 💾");
+        return cleanUrl;
+    } else if (url !== null) {
+        showToast("⚠️ URL non valido.");
+    }
+    return null;
 };
 
 window.searchQsoAudioFiles = async function() {
