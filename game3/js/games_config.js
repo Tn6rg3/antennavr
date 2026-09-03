@@ -372,6 +372,19 @@ window.GAME_MODES = {
         fixedSpeedAllowed: false,
         spacingConfigurable: false,
         generateWords: function(num, dicts) { return []; }
+    },
+    "qso_audio_search": {
+        id: "qso_audio_search",
+        titleIt: "Ascolto QSO Reali",
+        titleEn: "Listen Real QSOs",
+        icon: "🎧",
+        defaultWpm: 20,
+        defaultWordCount: 0,
+        wpmConfigurable: false,
+        wordCountConfigurable: false,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: false,
+        generateWords: function(num, dicts) { return []; }
     }
 };
 

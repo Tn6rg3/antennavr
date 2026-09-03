@@ -26,8 +26,8 @@ window.populateGameModesUI = function() {
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
         } else if (isTx) {
-            // Mostriamo solo Standard, Gruppi e TX Reale (re-interpretati come Singolo, Gruppi Tx e Ricezione Audio)
-            if (mode.id !== 'standard' && mode.id !== 'groups_tx' && mode.id !== 'real_tx') return;
+            // Mostriamo Standard, Gruppi, Ricezione Audio e Ascolto QSO Reali
+            if (mode.id !== 'standard' && mode.id !== 'groups_tx' && mode.id !== 'real_tx' && mode.id !== 'qso_audio_search') return;
         } else {
             if (typeInput.value === 'arcade' && mode.id !== 'arcade' && mode.id !== 'la_torre') return;
             if (typeInput.value === 'tournament') return; // Gestito da optgroup
@@ -42,6 +42,7 @@ window.populateGameModesUI = function() {
             if (mode.id === 'standard') opt.textContent = lang === 'it' ? "Esercizio Singolo (Koch)" : "Single Exercise (Koch)";
             else if (mode.id === 'groups_tx') opt.textContent = lang === 'it' ? "Trasmissione Gruppi" : "Groups Transmission";
             else if (mode.id === 'real_tx') opt.textContent = lang === 'it' ? "Ricezione Audio (Tasto Reale)" : "Audio Reception (Real Key)";
+            else if (mode.id === 'qso_audio_search') opt.textContent = lang === 'it' ? "Ascolto QSO Reali 🎧" : "Listen Real QSOs 🎧";
             else return;
         } else {
             opt.textContent = lang === 'it' ? mode.titleIt : mode.titleEn;
@@ -53,7 +54,7 @@ window.populateGameModesUI = function() {
     // Ripristiniamo il valore se ancora valido, altrimenti standard
     if (window.GAME_MODES && window.GAME_MODES[currentVal]) {
         if (isSingle && currentVal === 'pingpong') select.value = 'standard';
-        else if (isTx && currentVal !== 'standard' && currentVal !== 'groups_tx' && currentVal !== 'real_tx') select.value = 'standard';
+        else if (isTx && currentVal !== 'standard' && currentVal !== 'groups_tx' && currentVal !== 'real_tx' && currentVal !== 'qso_audio_search') select.value = 'standard';
         else select.value = currentVal;
     } else {
         select.value = 'standard';
