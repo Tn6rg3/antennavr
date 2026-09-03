@@ -1092,6 +1092,19 @@ window.playNextWord = function() {
                     window.startVoiceInput();
                 }
             }
+
+            // --- GESTIONE AVANZAMENTO AUTOMATICO (⏱️) ---
+            if (window.isAutoAdvance && gameRunning) {
+                if (window.autoAdvanceTimer) clearTimeout(window.autoAdvanceTimer);
+                const delayMs = (parseInt(window.autoAdvanceDelaySec) || 5) * 1000;
+                window.autoAdvanceTimer = setTimeout(() => {
+                    if (gameRunning && inputActive) {
+                        console.log("Auto-Advance: Tempo di attesa scaduto, passaggio alla parola successiva...");
+                        if (typeof window.stopVoiceInput === 'function') window.stopVoiceInput();
+                        window.handleWordSubmission("");
+                    }
+                }, delayMs);
+            }
         });
     }
     lastWordStartTime = Date.now();
@@ -1760,13 +1773,17 @@ if (els.permanentGameInput) {
 }
 
 window.handleWordSubmission = function(userWord) {
-    if (!userWord) return;
+    if (window.autoAdvanceTimer) {
+        clearTimeout(window.autoAdvanceTimer);
+        window.autoAdvanceTimer = null;
+    }
+
     if (typeof window.stopVoiceInput === 'function') window.stopVoiceInput();
 
     const easyHint = document.getElementById('easyModeHint');
     if (easyHint) easyHint.style.display = 'none';
 
-    userWord = userWord.substring(0, 50).trim().toUpperCase();
+    userWord = (userWord || "").substring(0, 50).trim().toUpperCase();
 
     // 1. MODALITÀ CORSO
     if (isCourseMode) {

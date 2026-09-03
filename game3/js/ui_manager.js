@@ -127,6 +127,7 @@ window.checkGameTypeUI = function() {
         spectator: document.getElementById('spectatorContainer'),
         speak: document.getElementById('speakModeContainer'),
         voiceInput: document.getElementById('voiceInputContainer'),
+        autoAdvance: document.getElementById('autoAdvanceContainer'),
         voiceRate: document.getElementById('voiceRateDiv'),
         arcadeBtn: document.getElementById('startArcadeBtn'),
         btn: document.getElementById('createRoomBtn'),
@@ -148,7 +149,7 @@ window.checkGameTypeUI = function() {
     if (containers.wordsPerGroup) containers.wordsPerGroup.style.display = (selectedMode === 'standard_plus') ? 'block' : 'none';
     if (containers.wordLen) containers.wordLen.style.display = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection') ? 'block' : 'none';
 
-    // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE ---
+    // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE + AVANZAMENTO AUTO ---
     const isSpeakAvailable = isSingle && (selectedMode === 'standard');
 
     if (containers.speak) containers.speak.style.display = isSpeakAvailable ? 'flex' : 'none';
@@ -156,13 +157,23 @@ window.checkGameTypeUI = function() {
 
     const chk = document.getElementById('speakModeCheckbox');
     const voiceChk = document.getElementById('voiceInputCheckbox');
+    const autoAdvChk = document.getElementById('autoAdvanceCheckbox');
+
+    const isSpeakActive = chk?.checked;
 
     if (containers.voiceInput) {
-        const isSpeakActive = chk?.checked;
         const isVoiceAvailable = isSpeakAvailable && isSpeakActive;
         containers.voiceInput.style.display = isVoiceAvailable ? 'flex' : 'none';
         if (!isVoiceAvailable && voiceChk) {
             voiceChk.checked = false;
+        }
+    }
+
+    if (containers.autoAdvance) {
+        const isAutoAdvAvailable = isSpeakAvailable && isSpeakActive;
+        containers.autoAdvance.style.display = isAutoAdvAvailable ? 'flex' : 'none';
+        if (!isAutoAdvAvailable && autoAdvChk) {
+            autoAdvChk.checked = false;
         }
     }
 

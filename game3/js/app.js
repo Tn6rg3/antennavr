@@ -312,7 +312,8 @@ function clearAllTimers() {
         brTimerInterval, brCheckInterval,
         coopTimerInterval, coopDecayInterval,
         courseSessionTimer, coursePauseInterval,
-        arcadeNextBrickTimeout, nextWordTimeout
+        arcadeNextBrickTimeout, nextWordTimeout,
+        window.autoAdvanceTimer
     ];
     timers.forEach(t => { if(t) { clearInterval(t); clearTimeout(t); } });
 
@@ -322,6 +323,7 @@ function clearAllTimers() {
     courseSessionTimer = coursePauseInterval = null;
     arcadeNextBrickTimeout = null;
     nextWordTimeout = null;
+    window.autoAdvanceTimer = null;
 }
 
 /**
@@ -688,7 +690,9 @@ function initGame() {
     if (els.fixedSpeedCheckbox) els.fixedSpeedCheckbox.checked = localStorage.getItem(STORAGE_PREF_FIXED) === 'true';
     if (els.easyModeCheckbox) els.easyModeCheckbox.checked = localStorage.getItem(STORAGE_PREF_EASY) === 'true';
     if (els.allowSpectatorsCheckbox) els.allowSpectatorsCheckbox.checked = localStorage.getItem(STORAGE_PREF_SPECTATE) === 'true';
-    if (document.getElementById('voiceInputCheckbox')) document.getElementById('voiceInputCheckbox').checked = localStorage.getItem(STORAGE_PREF_VOICE_INPUT) === 'true';
+    if (document.getElementById('voiceInputCheckbox')) document.getElementById('voiceInputCheckbox').checked = localStorage.getItem('cwgame_pref_voice_input') === 'true';
+    if (document.getElementById('autoAdvanceCheckbox')) document.getElementById('autoAdvanceCheckbox').checked = localStorage.getItem('cwgame_pref_auto_advance') === 'true';
+    if (document.getElementById('autoAdvanceDelaySelect')) document.getElementById('autoAdvanceDelaySelect').value = localStorage.getItem('cwgame_pref_auto_advance_delay') || "5";
 
     // SALVATAGGIO AUTOMATICO DELLE PREFERENZE AL CAMBIO
     const savePref = (key, val) => localStorage.setItem(key, val);
@@ -701,7 +705,9 @@ function initGame() {
     els.fixedSpeedCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_FIXED, e.target.checked));
     els.easyModeCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_EASY, e.target.checked));
     els.allowSpectatorsCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_SPECTATE, e.target.checked));
-    document.getElementById('voiceInputCheckbox')?.addEventListener('change', (e) => savePref(STORAGE_PREF_VOICE_INPUT, e.target.checked));
+    document.getElementById('voiceInputCheckbox')?.addEventListener('change', (e) => savePref('cwgame_pref_voice_input', e.target.checked));
+    document.getElementById('autoAdvanceCheckbox')?.addEventListener('change', (e) => savePref('cwgame_pref_auto_advance', e.target.checked));
+    document.getElementById('autoAdvanceDelaySelect')?.addEventListener('change', (e) => savePref('cwgame_pref_auto_advance_delay', e.target.value));
 
     isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
     chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;
@@ -1835,8 +1841,10 @@ if (els.createRoomBtn) {
         const isFixed = window.isSinglePlayer && els.fixedSpeedCheckbox?.checked;
         const isEasy = window.isSinglePlayer && els.easyModeCheckbox?.checked;
         const allowSpectators = window.isSinglePlayer && els.allowSpectatorsCheckbox?.checked;
-        // isSpeak è già stato dichiarato sopra per la logica di redirezione
         const vRate = parseFloat(document.getElementById('voiceRateSelect')?.value) || 1.0;
+
+        window.isAutoAdvance = window.isSinglePlayer && window.currentMode === 'standard' && els.speakModeCheckbox?.checked === true && document.getElementById('autoAdvanceCheckbox')?.checked === true;
+        window.autoAdvanceDelaySec = parseInt(document.getElementById('autoAdvanceDelaySelect')?.value) || 5;
 
         let cSpace = (window.isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
         let wSpace = window.isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
