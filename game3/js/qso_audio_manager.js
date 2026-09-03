@@ -18,51 +18,10 @@ window.initQsoAudioModule = function() {
 };
 
 window.getQsoServerUrlAutomatic = async function() {
+    // L'URL è accessibile ESCLUSIVAMENTE se fornito dallo script di autenticazione Telegram
     let serverUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
     if (serverUrl && serverUrl.startsWith('http')) return serverUrl;
 
-    if (typeof VALIDATION_SERVER_URL !== 'undefined' && VALIDATION_SERVER_URL && VALIDATION_SERVER_URL.startsWith('http')) {
-        try {
-            const resp = await fetch(VALIDATION_SERVER_URL + "?action=get_config");
-            if (resp.ok) {
-                const data = await resp.json();
-                if (data && data.qsoAudioServerUrl && data.qsoAudioServerUrl.startsWith('http')) {
-                    localStorage.setItem('cwgame_qso_audio_url', data.qsoAudioServerUrl);
-                    window.qsoAudioServerUrl = data.qsoAudioServerUrl;
-                    return data.qsoAudioServerUrl;
-                }
-            }
-        } catch(e) {
-            console.warn("Auto QSO Config fetch failed", e);
-        }
-    }
-
-    // Fallback automatico: Chiede l'URL una sola volta se non ancora rilevato automaticamente
-    if (!serverUrl) {
-        const inputUrl = prompt("⚙️ Configurazione Server QSO:\nNon è stato rilevato automaticamente l'URL del server QSO.\nIncolla l'URL della tua Web App Google Apps Script:");
-        if (inputUrl && inputUrl.trim().startsWith("http")) {
-            serverUrl = inputUrl.trim();
-            localStorage.setItem('cwgame_qso_audio_url', serverUrl);
-            window.qsoAudioServerUrl = serverUrl;
-            showToast("URL Server QSO salvato! 💾");
-        }
-    }
-
-    return serverUrl;
-};
-
-window.configureQsoServerUrl = function() {
-    const current = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url') || "";
-    const url = prompt("⚙️ Configurazione Server QSO (Google Apps Script):\nModifica o incolla l'URL della Web App:", current);
-    if (url && url.trim().startsWith("http")) {
-        const cleanUrl = url.trim();
-        localStorage.setItem('cwgame_qso_audio_url', cleanUrl);
-        window.qsoAudioServerUrl = cleanUrl;
-        showToast("URL Server QSO aggiornato! 💾");
-        return cleanUrl;
-    } else if (url !== null) {
-        showToast("⚠️ URL non valido.");
-    }
     return null;
 };
 
@@ -76,8 +35,10 @@ window.searchQsoAudioFiles = async function() {
     const serverUrl = await window.getQsoServerUrlAutomatic();
 
     if (!serverUrl) {
-        showToast("⚠️ Impossibile ricavare l'URL del server QSO dal sistema.");
-        if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; color:#f44336; padding:20px;">Server QSO non raggiungibile.</p>';
+        showToast("⚠️ Autenticazione Telegram richiesta per l'archivio QSO.");
+        if (resultsContainer) {
+            resultsContainer.innerHTML = '<p style="text-align:center; color:#ff9800; padding:20px;">⚠️ Accesso riservato agli utenti autenticati tramite Telegram.</p>';
+        }
         return;
     }
 
@@ -233,10 +194,11 @@ window.createQsoResultCard = function(item, index) {
 
 window.playQsoAudioItem = function(item, title) {
     const playerArea = document.getElementById('qsoAudioPlayerArea');
+    const iframeEl = document.getElementById('qsoDriveIframe');
     const audioEl = document.getElementById('qsoHtmlPlayer');
     const titleEl = document.getElementById('qsoPlayerTitle');
 
-    if (!playerArea || !audioEl) return;
+    if (!playerArea) return;
 
     playerArea.style.display = 'block';
     if (titleEl) titleEl.textContent = "🎧 " + title;
@@ -247,28 +209,22 @@ window.playQsoAudioItem = function(item, title) {
         if (m) fileId = m[0];
     }
 
-    // Usa l'URL diretto CDN di Google Drive per la massima compatibilità browser
-    let streamUrl = item.streamUrl;
     if (fileId && !fileId.startsWith('row_')) {
-        streamUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
-    }
-
-    audioEl.src = streamUrl;
-    audioEl.onerror = () => {
-        console.warn("Primary CDN stream failed, fallback to uc download URL...");
-        if (fileId) {
-            audioEl.src = `https://docs.google.com/uc?export=download&id=${fileId}`;
+        // Player 1: Google Drive Embedded Preview (Decodifica sia .ogg/opus di Telegram sia .mp3/.wav su iOS/Chrome/Safari)
+        if (iframeEl) {
+            iframeEl.src = `https://drive.google.com/file/d/${fileId}/preview`;
+            iframeEl.style.display = 'block';
         }
-    };
-
-    audioEl.load();
-
-    const playPromise = audioEl.play();
-    if (playPromise !== undefined) {
-        playPromise.catch(err => {
-            console.warn("Audio Play Error:", err);
-            showToast("⚠️ Premere il tasto PLAY ▶️ sul lettore in basso per l'ascolto.");
-        });
+        if (audioEl) audioEl.style.display = 'none';
+    } else {
+        // Player 2: Fallback HTML5 audio element per URL diretti
+        if (iframeEl) iframeEl.style.display = 'none';
+        if (audioEl) {
+            audioEl.style.display = 'block';
+            audioEl.src = item.streamUrl;
+            audioEl.load();
+            audioEl.play().catch(err => console.warn("HTML5 Audio Play Error:", err));
+        }
     }
 
     playerArea.scrollIntoView({ behavior: 'smooth' });
@@ -285,13 +241,15 @@ window.resetQsoSearchForm = function() {
     const loadMoreBtn = document.getElementById('btnQsoLoadMore');
     const statusText = document.getElementById('qsoSearchStatusText');
     const playerArea = document.getElementById('qsoAudioPlayerArea');
+    const iframeEl = document.getElementById('qsoDriveIframe');
     const audioEl = document.getElementById('qsoHtmlPlayer');
 
     if (resultsContainer) resultsContainer.innerHTML = '';
     if (loadMoreBtn) loadMoreBtn.style.display = 'none';
     if (statusText) statusText.textContent = '';
     if (playerArea) playerArea.style.display = 'none';
-    if (audioEl) { audioEl.pause(); audioEl.src = ''; }
+    if (iframeEl) { iframeEl.style.display = 'none'; iframeEl.src = ''; }
+    if (audioEl) { audioEl.style.display = 'none'; audioEl.pause(); audioEl.src = ''; }
 
     window.qsoAudioState = {
         allResults: [],
