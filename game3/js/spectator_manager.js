@@ -84,17 +84,25 @@ window.watchSpecificRoom = function(code, targetName) {
     const onAudioChange = db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
         const audioData = snap.val();
         if (audioData && audioData.word) {
-            // Se non c'è ancora un'attività recente in tabella, mostriamo che siamo in attesa
-            if (els.tableBody && els.tableBody.innerHTML === "") {
-                els.tableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--link-color); padding:20px;">🎧 In attesa di ricezione segnali...</td></tr>`;
+            const liveWpm = audioData.wordWpm || audioData.wpm || 20;
+
+            if (els.permanentGameInput) {
+                els.permanentGameInput.placeholder = `📻 Segnale in arrivo: ${audioData.word} (${liveWpm} WPM)...`;
+            }
+
+            if (els.wpmDisplay) {
+                els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm} | Target: ${audioData.word}`;
+            }
+
+            // Se non c'è ancora un'attività recente in tabella, mostriamo il segnale in ascolto
+            if (els.tableBody && els.tableBody.children.length === 0) {
+                els.tableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--link-color); padding:20px;">🎧 In ascolto segnale: <b>${audioData.word}</b>...</td></tr>`;
             }
 
             // Evitiamo di riprodurre la stessa parola più volte (controllo ts o wordId)
             const msgTs = audioData.ts || 0;
             if (msgTs > (window.lastSpectatorAudioTs || 0)) {
                 window.lastSpectatorAudioTs = msgTs;
-                const liveWpm = audioData.wordWpm || audioData.wpm || 20;
-                if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm}`;
                 if (typeof playMorseAudio === 'function') playMorseAudio(audioData.word, liveWpm, true);
             }
         }
@@ -111,7 +119,13 @@ window.watchSpecificRoom = function(code, targetName) {
 };
 
 window.appendSpectatorRow = function(row) {
-    if (!els.tableBody) return;
+    if (!els.tableBody || !row) return;
+
+    // Rimuoviamo eventuale riga "In ascolto segnale..." / "In attesa..."
+    const waitingCell = els.tableBody.querySelector('td[colspan="3"]');
+    if (waitingCell && waitingCell.parentElement) {
+        waitingCell.parentElement.remove();
+    }
 
     // Evitiamo duplicati (controllo base se la parola reale è l'ultima inserita)
     const rows = els.tableBody.querySelectorAll('tr');
@@ -133,11 +147,15 @@ window.appendSpectatorRow = function(row) {
     const tdPoints = document.createElement('td');
     tdPoints.style.color = row.points > 0 ? "#4caf50" : "#d32f2f";
     tdPoints.style.fontWeight = "bold";
-    tdPoints.textContent = row.points;
+    tdPoints.textContent = row.points > 0 ? "OK" : "ERR";
 
     tr.appendChild(tdTyped);
     tr.appendChild(tdReal);
     tr.appendChild(tdPoints);
+    els.tableBody.appendChild(tr);
+
+    if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
+};
     els.tableBody.appendChild(tr);
 
     if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;

@@ -1813,8 +1813,18 @@ window.handleWordSubmission = function(userWord) {
         tdPoints.style.color = isCorrect ? "#4caf50" : "#d32f2f";
         tdPoints.style.fontWeight = "bold";
 
-        matchDetailsArray.push({ real: currentWord, typed: userWord, points: isCorrect ? 1 : 0, wpm: currentWpm });
-        if (roomCode) db.ref(`rooms/${roomCode}/players/${myId}`).update({ wordIndex: wordIndex + 1, matchDetails: matchDetailsArray });
+        const lastEntry = { real: currentWord, typed: userWord, points: isCorrect ? 1 : 0, wpm: currentWpm };
+        matchDetailsArray.push(lastEntry);
+        if (roomCode) {
+            db.ref(`rooms/${roomCode}/players/${myId}`).update({
+                score: window.courseData?.progress?.total_xp || 0,
+                wpm: currentWpm,
+                wordIndex: wordIndex + 1,
+                matchDetails: matchDetailsArray,
+                lastUpdate: lastEntry
+            });
+            db.ref(`rooms/${roomCode}/players/${myId}/matchDetailsFull`).set(matchDetailsArray);
+        }
 
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
         if (els.tableBody) {
