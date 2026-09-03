@@ -187,15 +187,9 @@ window.checkGameTypeUI = function() {
                 unlock.volume = 0.001;
                 window.speechSynthesis.speak(unlock);
             }
-            // Mostra/Nascondi Risposta Vocale al volo
-            if (containers.voiceInput) {
-                const currentMode = document.getElementById('gameModeInput')?.value;
-                const currentType = document.getElementById('gameTypeInput')?.value;
-                const available = (currentType === 'single') && (currentMode === 'standard') && chk.checked;
-                containers.voiceInput.style.display = available ? 'flex' : 'none';
-                if (!available && voiceChk) {
-                    voiceChk.checked = false;
-                }
+            // Aggiorna istantaneamente la visualizzazione di Risposta Vocale e Avanzamento Auto
+            if (typeof window.checkGameTypeUI === 'function') {
+                window.checkGameTypeUI();
             }
         });
     }
