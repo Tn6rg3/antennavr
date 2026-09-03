@@ -18,17 +18,18 @@ window.populateGameModesUI = function() {
     Object.values(window.GAME_MODES || {}).forEach(mode => {
         // --- LOGICA FILTRI ---
         if (isSingle) {
-            // QSO non è ammesso in Solo
-            if (mode.id === 'qso' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx') return;
+            // QSO e modalità Tx/Rx non sono ammesse in Solo
+            if (mode.id === 'qso' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search') return;
         } else if (isMulti) {
             // Modalità ammesse in Multi
-            if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx') return;
+            if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search') return;
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
         } else if (isTx) {
-            // Mostriamo Standard, Gruppi, Ricezione Audio e Ascolto QSO Reali
+            // Mostriamo SOLTANTO Standard, Gruppi, Ricezione Audio e Ascolto QSO Reali
             if (mode.id !== 'standard' && mode.id !== 'groups_tx' && mode.id !== 'real_tx' && mode.id !== 'qso_audio_search') return;
         } else {
+            if (mode.id === 'qso_audio_search' || mode.id === 'groups_tx' || mode.id === 'real_tx') return;
             if (typeInput.value === 'arcade' && mode.id !== 'arcade' && mode.id !== 'la_torre') return;
             if (typeInput.value === 'tournament') return; // Gestito da optgroup
         }
