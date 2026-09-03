@@ -2,7 +2,7 @@
 
 window.qsoAudioState = {
     allResults: [],
-    displayedCount: 0,
+    currentPage: 1,
     pageSize: 5,
     currentAudioUrl: null
 };
@@ -11,10 +11,24 @@ window.initQsoAudioModule = function() {
     console.log("QSO Audio: Module Initialized");
     window.qsoAudioState = {
         allResults: [],
-        displayedCount: 0,
+        currentPage: 1,
         pageSize: 5,
         currentAudioUrl: null
     };
+};
+
+window.toggleQsoSearchPanel = function() {
+    const content = document.getElementById('qsoSearchFormContent');
+    const btn = document.getElementById('btnToggleQsoSearch');
+    if (!content || !btn) return;
+
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        btn.textContent = 'Nascondi ▲';
+    } else {
+        content.style.display = 'none';
+        btn.textContent = 'Mostra ▼';
+    }
 };
 
 window.getQsoServerUrlAutomatic = async function() {
@@ -27,17 +41,18 @@ window.getQsoServerUrlAutomatic = async function() {
 
 window.searchQsoAudioFiles = async function() {
     const resultsContainer = document.getElementById('qsoSearchResultsContainer');
-    const loadMoreBtn = document.getElementById('btnQsoLoadMore');
+    const paginationControls = document.getElementById('qsoPaginationControls');
     const statusText = document.getElementById('qsoSearchStatusText');
 
-    if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; padding:20px; color:var(--link-color);">🔍 Connessione al server dei QSO...</p>';
+    if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; padding:15px; color:var(--link-color);">🔍 Connessione al server dei QSO...</p>';
+    if (paginationControls) paginationControls.style.display = 'none';
 
     const serverUrl = await window.getQsoServerUrlAutomatic();
 
     if (!serverUrl) {
         showToast("⚠️ Autenticazione Telegram richiesta per l'archivio QSO.");
         if (resultsContainer) {
-            resultsContainer.innerHTML = '<p style="text-align:center; color:#ff9800; padding:20px;">⚠️ Accesso riservato agli utenti autenticati tramite Telegram.</p>';
+            resultsContainer.innerHTML = '<p style="text-align:center; color:#ff9800; padding:15px;">⚠️ Accesso riservato agli utenti autenticati tramite Telegram.</p>';
         }
         return;
     }
@@ -48,8 +63,7 @@ window.searchQsoAudioFiles = async function() {
     const date = (document.getElementById('qsoSearchDate')?.value || "").trim();
     const tag = (document.getElementById('qsoSearchTag')?.value || "").trim();
 
-    if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; padding:20px; color:var(--link-color);">🔍 Ricerca in corso su Google Drive...</p>';
-    if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+    if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; padding:15px; color:var(--link-color);">🔍 Ricerca in corso su Google Drive...</p>';
     if (statusText) statusText.textContent = "Ricerca in corso...";
 
     // Costruiamo i parametri per la richiesta HTTP
@@ -87,52 +101,68 @@ window.searchQsoAudioFiles = async function() {
 
         if (data.status === 'success') {
             window.qsoAudioState.allResults = data.results || [];
-            window.qsoAudioState.displayedCount = 0;
+            window.qsoAudioState.currentPage = 1;
 
             if (resultsContainer) resultsContainer.innerHTML = '';
 
             if (window.qsoAudioState.allResults.length === 0) {
-                if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; padding:20px; opacity:0.6;">Nessun QSO trovato con questi criteri.</p>';
+                if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; padding:15px; opacity:0.6;">Nessun QSO trovato con questi criteri.</p>';
                 if (statusText) statusText.textContent = "0 risultati trovati.";
                 return;
             }
 
-            if (statusText) statusText.textContent = `Trovati ${window.qsoAudioState.allResults.length} QSO. Mostrati i primi ${Math.min(5, window.qsoAudioState.allResults.length)}:`;
+            // Richiudiamo il pannello di ricerca per dare massimo spazio ai risultati
+            const content = document.getElementById('qsoSearchFormContent');
+            const btn = document.getElementById('btnToggleQsoSearch');
+            if (content && btn) {
+                content.style.display = 'none';
+                btn.textContent = 'Mostra ▼';
+            }
 
-            // Rendering dei primi 5 risultati
-            window.renderNextQsoResultsBatch();
+            // Rendering della prima pagina (5 risultati)
+            window.renderQsoPage(1);
         } else {
             showToast("Errore ricerca: " + (data.message || "Errore sconosciuto"));
-            if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; color:#f44336; padding:20px;">Errore durante la ricerca.</p>';
+            if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; color:#f44336; padding:15px;">Errore durante la ricerca.</p>';
         }
     } catch(err) {
         console.error("QSO Search Error:", err);
         showToast("⚠️ Errore CORS o permessi Google Script.");
         if (resultsContainer) {
             resultsContainer.innerHTML = `
-                <div class="box-panel" style="border-color:#f44336; padding:12px; font-size:0.85em; text-align:left;">
+                <div class="box-panel" style="border-color:#f44336; padding:10px; font-size:0.8em; text-align:left;">
                     <b style="color:#f44336;">⚠️ Errore di Accesso al Server Google Script</b><br><br>
-                    La chiamata da <code>tn6rg3.github.io</code> è stata bloccata. Verifica nello script Google:<br>
-                    1. Clicca su <b>Distribuisci ➔ Gestisci distribuzioni</b><br>
-                    2. Clicca sull'icona della matita ✏️ in alto a destra e seleziona <b>"Nuova versione"</b><br>
-                    3. Verifica che <b>Chi ha accesso</b> sia impostato su <b>"Chiunque"</b> (Anyone)<br>
-                    4. Verifica che l'ID della cartella Google Drive nel codice sia corretto.
+                    La chiamata è stata bloccata. Verifica nello script Google:<br>
+                    1. <b>Distribuisci ➔ Gestisci distribuzioni</b><br>
+                    2. Modifica ➔ <b>Versione: Nuova versione</b><br>
+                    3. Verifica <b>Chi ha accesso ➔ Chiunque</b> (Anyone)
                 </div>
             `;
         }
     }
 };
 
-window.renderNextQsoResultsBatch = function() {
+window.renderQsoPage = function(pageNumber) {
     const resultsContainer = document.getElementById('qsoSearchResultsContainer');
-    const loadMoreBtn = document.getElementById('btnQsoLoadMore');
+    const paginationControls = document.getElementById('qsoPaginationControls');
     const statusText = document.getElementById('qsoSearchStatusText');
+    const prevBtn = document.getElementById('btnQsoPrevPage');
+    const nextBtn = document.getElementById('btnQsoNextPage');
+    const indicator = document.getElementById('qsoPageIndicator');
 
     if (!resultsContainer) return;
 
     const all = window.qsoAudioState.allResults;
-    const startIndex = window.qsoAudioState.displayedCount;
-    const endIndex = Math.min(startIndex + window.qsoAudioState.pageSize, all.length);
+    const pageSize = window.qsoAudioState.pageSize;
+    const totalPages = Math.ceil(all.length / pageSize) || 1;
+
+    let page = Math.max(1, Math.min(pageNumber, totalPages));
+    window.qsoAudioState.currentPage = page;
+
+    resultsContainer.innerHTML = '';
+
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, all.length);
 
     for (let i = startIndex; i < endIndex; i++) {
         const item = all[i];
@@ -140,28 +170,32 @@ window.renderNextQsoResultsBatch = function() {
         resultsContainer.appendChild(card);
     }
 
-    window.qsoAudioState.displayedCount = endIndex;
-
     if (statusText) {
-        statusText.textContent = `Mostrati ${window.qsoAudioState.displayedCount} di ${all.length} QSO trovati.`;
+        statusText.textContent = `Trovati ${all.length} QSO (Mostrando ${startIndex + 1}-${endIndex}):`;
     }
 
-    // Gestione visibilità del pulsante "Mostra Altri"
-    if (loadMoreBtn) {
-        if (window.qsoAudioState.displayedCount < all.length) {
-            const remaining = all.length - window.qsoAudioState.displayedCount;
-            loadMoreBtn.textContent = `MOSTRA ALTRI RISULTATI (${Math.min(5, remaining)}) 🔽`;
-            loadMoreBtn.style.display = 'block';
+    // Paginazione con frecce (⬅️ | Pagina X di Y | ➡️)
+    if (paginationControls) {
+        if (totalPages > 1) {
+            paginationControls.style.display = 'flex';
+            if (indicator) indicator.textContent = `Pagina ${page} di ${totalPages}`;
+            if (prevBtn) prevBtn.disabled = (page <= 1);
+            if (nextBtn) nextBtn.disabled = (page >= totalPages);
         } else {
-            loadMoreBtn.style.display = 'none';
+            paginationControls.style.display = 'none';
         }
     }
+};
+
+window.changeQsoPage = function(delta) {
+    const newPage = window.qsoAudioState.currentPage + delta;
+    window.renderQsoPage(newPage);
 };
 
 window.createQsoResultCard = function(item, index) {
     const card = document.createElement('div');
     card.className = 'box-panel';
-    card.style.cssText = "padding:12px; margin-bottom:10px; border-color:var(--link-color); background:rgba(33, 150, 243, 0.05); display:flex; flex-direction:column; gap:8px;";
+    card.style.cssText = "padding:8px 10px; margin-bottom:4px; border-color:var(--link-color); background:rgba(33, 150, 243, 0.05); display:flex; justify-content:space-between; align-items:center; font-size:0.85em; gap:6px;";
 
     const filename = item.filename || "QSO Audio";
     const cleanName = filename.replace(/\.[^/.]+$/, "");
@@ -175,13 +209,11 @@ window.createQsoResultCard = function(item, index) {
     const driveDirectLink = fileId ? `https://drive.google.com/file/d/${fileId}/view` : item.streamUrl;
 
     card.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
-            <b style="color:var(--link-color); font-size:0.95em;">#${index} - 📻 ${cleanName}</b>
+        <div style="display:flex; flex-direction:column; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:68%;">
+            <b style="color:var(--link-color); font-size:0.9em; overflow:hidden; text-overflow:ellipsis;">#${index} - 📻 ${cleanName}</b>
+            <a href="${driveDirectLink}" target="_blank" style="color:var(--hint-color); text-decoration:underline; font-size:0.75em; margin-top:2px;">🌐 Apri su Drive</a>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8em; color:var(--hint-color); flex-wrap:wrap; gap:6px;">
-            <a href="${driveDirectLink}" target="_blank" style="color:var(--hint-color); text-decoration:underline;">🌐 Apri su Drive</a>
-            <button class="action-btn-small btn-success" style="width:auto; padding:6px 14px; font-weight:bold;">▶️ ASCOLTA QSO</button>
-        </div>
+        <button class="action-btn-small btn-success" style="width:auto; padding:5px 10px; font-weight:bold; font-size:0.8em; flex-shrink:0;">▶️ ASCOLTA</button>
     `;
 
     const playBtn = card.querySelector('button');
@@ -210,14 +242,12 @@ window.playQsoAudioItem = function(item, title) {
     }
 
     if (fileId && !fileId.startsWith('row_')) {
-        // Player 1: Google Drive Embedded Preview (Decodifica sia .ogg/opus di Telegram sia .mp3/.wav su iOS/Chrome/Safari)
         if (iframeEl) {
             iframeEl.src = `https://drive.google.com/file/d/${fileId}/preview`;
             iframeEl.style.display = 'block';
         }
         if (audioEl) audioEl.style.display = 'none';
     } else {
-        // Player 2: Fallback HTML5 audio element per URL diretti
         if (iframeEl) iframeEl.style.display = 'none';
         if (audioEl) {
             audioEl.style.display = 'block';
@@ -230,6 +260,16 @@ window.playQsoAudioItem = function(item, title) {
     playerArea.scrollIntoView({ behavior: 'smooth' });
 };
 
+window.closeQsoPlayer = function() {
+    const playerArea = document.getElementById('qsoAudioPlayerArea');
+    const iframeEl = document.getElementById('qsoDriveIframe');
+    const audioEl = document.getElementById('qsoHtmlPlayer');
+
+    if (playerArea) playerArea.style.display = 'none';
+    if (iframeEl) { iframeEl.style.display = 'none'; iframeEl.src = ''; }
+    if (audioEl) { audioEl.style.display = 'none'; audioEl.pause(); audioEl.src = ''; }
+};
+
 window.resetQsoSearchForm = function() {
     const inputs = ['qsoSearchCallsign', 'qsoSearchQrg', 'qsoSearchWpm', 'qsoSearchDate', 'qsoSearchTag'];
     inputs.forEach(id => {
@@ -238,22 +278,18 @@ window.resetQsoSearchForm = function() {
     });
 
     const resultsContainer = document.getElementById('qsoSearchResultsContainer');
-    const loadMoreBtn = document.getElementById('btnQsoLoadMore');
+    const paginationControls = document.getElementById('qsoPaginationControls');
     const statusText = document.getElementById('qsoSearchStatusText');
-    const playerArea = document.getElementById('qsoAudioPlayerArea');
-    const iframeEl = document.getElementById('qsoDriveIframe');
-    const audioEl = document.getElementById('qsoHtmlPlayer');
 
     if (resultsContainer) resultsContainer.innerHTML = '';
-    if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+    if (paginationControls) paginationControls.style.display = 'none';
     if (statusText) statusText.textContent = '';
-    if (playerArea) playerArea.style.display = 'none';
-    if (iframeEl) { iframeEl.style.display = 'none'; iframeEl.src = ''; }
-    if (audioEl) { audioEl.style.display = 'none'; audioEl.pause(); audioEl.src = ''; }
+
+    window.closeQsoPlayer();
 
     window.qsoAudioState = {
         allResults: [],
-        displayedCount: 0,
+        currentPage: 1,
         pageSize: 5,
         currentAudioUrl: null
     };
