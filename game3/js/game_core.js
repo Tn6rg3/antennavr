@@ -1999,17 +1999,6 @@ window.handleWordSubmission = function(userWord) {
             }
         }
     } else {
-                if (currentWpm > peakWpm) peakWpm = currentWpm;
-            }
-            // AGGIORNAMENTO STREAK E MISSIONI
-            window.currentStreak++;
-            if (typeof window.updateMissionProgress === 'function') {
-                window.updateMissionProgress('count', 1);
-                window.updateMissionProgress('wpm_min', activeWpmForThisWord);
-                window.updateMissionProgress('streak', window.currentStreak);
-            }
-        }
-    } else {
         // RESET STREAK IN CASO DI ERRORE O REPLAY
         window.currentStreak = 0;
         if (!isFixedSpeed && window.currentMode !== 'chars') {
