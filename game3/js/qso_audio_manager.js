@@ -53,20 +53,6 @@ window.getQsoServerUrlAutomatic = async function() {
 
     return window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
 };
-                    if (data && data.qsoAudioServerUrl && data.qsoAudioServerUrl.startsWith('http')) {
-                        localStorage.setItem('cwgame_qso_audio_url', data.qsoAudioServerUrl);
-                        window.qsoAudioServerUrl = data.qsoAudioServerUrl;
-                        return data.qsoAudioServerUrl;
-                    }
-                }
-            } catch(e) {
-                console.warn("Auto QSO Config fetch error:", e);
-            }
-        }
-    }
-
-    return window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
-};
 
 window.searchQsoAudioFiles = async function() {
     const resultsContainer = document.getElementById('qsoSearchResultsContainer');
