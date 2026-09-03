@@ -102,8 +102,25 @@ window.searchQsoAudioFiles = async function() {
     });
 
     try {
-        const response = await fetch(`${serverUrl}?${queryParams.toString()}`);
-        if (!response.ok) throw new Error("Errore risposta server Google Script");
+        let cleanServerUrl = serverUrl.trim();
+        if (cleanServerUrl.includes('/edit')) {
+            cleanServerUrl = cleanServerUrl.split('/edit')[0] + '/exec';
+        }
+        if (cleanServerUrl.endsWith('/dev')) {
+            cleanServerUrl = cleanServerUrl.slice(0, -4) + '/exec';
+        }
+
+        const separator = cleanServerUrl.includes('?') ? '&' : '?';
+        const fullUrl = `${cleanServerUrl}${separator}${queryParams.toString()}`;
+        console.log("QSO Search Requesting URL:", fullUrl);
+
+        const response = await fetch(fullUrl, {
+            method: 'GET',
+            mode: 'cors',
+            redirect: 'follow'
+        });
+
+        if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
 
         const data = await response.json();
 
@@ -129,8 +146,19 @@ window.searchQsoAudioFiles = async function() {
         }
     } catch(err) {
         console.error("QSO Search Error:", err);
-        showToast("Impossibile contattare il server dei QSO.");
-        if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; color:#f44336; padding:20px;">Connessione fallita.</p>';
+        showToast("⚠️ Errore CORS o permessi Google Script.");
+        if (resultsContainer) {
+            resultsContainer.innerHTML = `
+                <div class="box-panel" style="border-color:#f44336; padding:12px; font-size:0.85em; text-align:left;">
+                    <b style="color:#f44336;">⚠️ Errore di Accesso al Server Google Script</b><br><br>
+                    La chiamata da <code>tn6rg3.github.io</code> è stata bloccata. Verifica nello script Google:<br>
+                    1. Clicca su <b>Distribuisci ➔ Gestisci distribuzioni</b><br>
+                    2. Clicca sull'icona della matita ✏️ in alto a destra e seleziona <b>"Nuova versione"</b><br>
+                    3. Verifica che <b>Chi ha accesso</b> sia impostato su <b>"Chiunque"</b> (Anyone)<br>
+                    4. Verifica che l'ID della cartella Google Drive nel codice sia corretto.
+                </div>
+            `;
+        }
     }
 };
 
@@ -174,18 +202,24 @@ window.createQsoResultCard = function(item, index) {
     card.className = 'box-panel';
     card.style.cssText = "padding:12px; margin-bottom:10px; border-color:var(--link-color); background:rgba(33, 150, 243, 0.05); display:flex; flex-direction:column; gap:8px;";
 
-    // Parsing del nome del file per estrazione metadati leggibili
-    // Formato tipo: 20260822-9k4lsr tt5tkw-45 wpm-qrq-paddle-7030 khz.mp3
     const filename = item.filename || "QSO Audio";
-    const cleanName = filename.replace(/\.[^/.]+$/, ""); // Rimuove estensione
+    const cleanName = filename.replace(/\.[^/.]+$/, "");
+
+    let fileId = item.id;
+    if (!fileId || fileId.startsWith('row_')) {
+        const m = (item.streamUrl || "").match(/[-\w]{25,}/);
+        if (m) fileId = m[0];
+    }
+
+    const driveDirectLink = fileId ? `https://drive.google.com/file/d/${fileId}/view` : item.streamUrl;
 
     card.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
             <b style="color:var(--link-color); font-size:0.95em;">#${index} - 📻 ${cleanName}</b>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8em; color:var(--hint-color);">
-            <span>📁 MP3 Drive</span>
-            <button class="action-btn-small btn-success" style="width:auto; padding:6px 12px; font-weight:bold;">▶️ ASCOLTA QSO</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8em; color:var(--hint-color); flex-wrap:wrap; gap:6px;">
+            <a href="${driveDirectLink}" target="_blank" style="color:var(--hint-color); text-decoration:underline;">🌐 Apri su Drive</a>
+            <button class="action-btn-small btn-success" style="width:auto; padding:6px 14px; font-weight:bold;">▶️ ASCOLTA QSO</button>
         </div>
     `;
 
@@ -205,16 +239,37 @@ window.playQsoAudioItem = function(item, title) {
     if (!playerArea || !audioEl) return;
 
     playerArea.style.display = 'block';
-    if (titleEl) titleEl.textContent = title;
+    if (titleEl) titleEl.textContent = "🎧 " + title;
 
-    audioEl.src = item.streamUrl;
+    let fileId = item.id;
+    if (!fileId || fileId.startsWith('row_')) {
+        const m = (item.streamUrl || "").match(/[-\w]{25,}/);
+        if (m) fileId = m[0];
+    }
+
+    // Usa l'URL diretto CDN di Google Drive per la massima compatibilità browser
+    let streamUrl = item.streamUrl;
+    if (fileId && !fileId.startsWith('row_')) {
+        streamUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+    }
+
+    audioEl.src = streamUrl;
+    audioEl.onerror = () => {
+        console.warn("Primary CDN stream failed, fallback to uc download URL...");
+        if (fileId) {
+            audioEl.src = `https://docs.google.com/uc?export=download&id=${fileId}`;
+        }
+    };
+
     audioEl.load();
 
-    // Forza riproduzione
-    audioEl.play().catch(err => {
-        console.warn("Audio Play Error:", err);
-        showToast("Premi Play per avviare l'ascolto.");
-    });
+    const playPromise = audioEl.play();
+    if (playPromise !== undefined) {
+        playPromise.catch(err => {
+            console.warn("Audio Play Error:", err);
+            showToast("⚠️ Premere il tasto PLAY ▶️ sul lettore in basso per l'ascolto.");
+        });
+    }
 
     playerArea.scrollIntoView({ behavior: 'smooth' });
 };
