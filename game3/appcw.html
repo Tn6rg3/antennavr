@@ -936,7 +936,7 @@
                                 <li><b>Avvio Sessione:</b> All'apertura del corso (o cliccando su <i>"Avvia Sessione Odierna"</i>), il sistema carica l'allenamento previsto dal tuo piano settimanale.</li>
                                 <li><b>Riscaldamento Acustico:</b> Nella modale iniziale puoi ascoltare i nuovi caratteri prima di iniziare per rinfrescare l'orecchio.</li>
                                 <li><b>Esecuzione Esercizio:</b> Durante la prova riceverai gruppi da 5 caratteri trasmessi con la spaziatura Farnsworth impostata. Digiti i caratteri nel campo di testo. Durante la pausa programmata puoi fare un respiro prima del blocco successivo.</li>
-                                <li><b>Report & Debriefing:</b> A fine sessione visualizzerai l'accuratezza %, i caratteri su cui concentrare lo studio e i punti XP guadagnati.</li>
+                                <li><b>Resoconto & Report Finale:</b> A fine sessione la modale ti mostra sia la precisione della singola prova sia la <b>Media Attuale della Lezione</b> (es. <i>87% / 90% Target</i>), indicando la distanza esatta dall'obiettivo.</li>
                             </ol>
                         </div>
 
@@ -945,18 +945,25 @@
                             <b style="color:#9c27b0; font-size:0.9em; display:block; margin-bottom:6px;">📊 Le 3 Tipologie di Sessione</b>
                             <ul style="padding-left:18px; margin:0; display:flex; flex-direction:column; gap:4px;">
                                 <li>🟢 <b style="color:#4caf50;">Base (Z2):</b> Sessione di consolidamento ad andatura costante sui caratteri già acquisiti.</li>
-                                <li>🟡 <b style="color:#ff9800;">Lavoro (WORK):</b> Sessione intensiva in cui i nuovi caratteri sbloccati o più sbagliati vengono riproposti con frequenza maggiore.</li>
+                                <li>🟡 <b style="color:#ff9800;">Lavoro (WORK):</b> Sessione intensiva in cui i nuovi caratteri sbloccati o più sbagliati vengono riproposti con frequenza triplicata.</li>
                                 <li>🟣 <b style="color:#9c27b0;">Lungo (LONG):</b> Maratona di resistenza su tutti i caratteri della lezione per allenare la tenuta sotto sforzo.</li>
                             </ul>
                         </div>
 
-                        <!-- PROMOZIONE E RETROVERSIONE -->
+                        <!-- PROMOZIONE E MANTENIMENTO -->
                         <div>
-                            <b style="color:#4caf50; font-size:0.9em; display:block; margin-bottom:6px;">📈 Promozione e Retrocessione</b>
+                            <b style="color:#4caf50; font-size:0.9em; display:block; margin-bottom:6px;">📈 Scadenza Settimanale e Promozione</b>
                             <ul style="padding-left:18px; margin:0; display:flex; flex-direction:column; gap:4px;">
-                                <li>🚀 <b>Promozione (Nuovo Carattere):</b> Viene calcolata la media delle ultime <b>6 sessioni</b>. Se la media raggiunge il <b>90% di accuratezza</b>, passi automaticamente alla lezione successiva sbloccando un nuovo carattere!</li>
-                                <li>⚠️ <b>Retroversione:</b> Se la tua precisione recente scende sotto il <b>75%</b>, il corso ti retrocede alla lezione precedente per permetterti di consolidare prima di proseguire.</li>
+                                <li>🚀 <b>Promozione Automatica:</b> Al completamento della settimana (dopo la sessione LONG o dopo almeno 3-6 sessioni), se la media della lezione è $\ge 90\%$, vieni automaticamente promosso alla lezione successiva sbloccando un nuovo carattere Koch!</li>
+                                <li>📚 <b>Mantenimento:</b> Se la media è inferiore al 90%, il livello viene mantenuto per la settimana successiva senza penalità ingiuste, permettendoti di consolidare i caratteri difficili.</li>
+                                <li>⚙️ <b>Override Manuale:</b> Nelle Impostazioni puoi modificare manualmente la Lezione dal menu a tendina in qualsiasi momento per avanzare o ripassare a tua scelta.</li>
                             </ul>
+                        </div>
+
+                        <!-- EXTRA -->
+                        <div style="background:rgba(76, 175, 80, 0.08); padding:8px 10px; border-radius:8px; border-left:4px solid #4caf50;">
+                            <b style="color:#4caf50; font-size:0.9em;">🧪 Allenamenti Extra (Sempre Disponibili)</b>
+                            <p style="margin:4px 0 0 0;">Puoi svolgere sessioni Extra in qualsiasi momento (anche nei giorni di riposo). Se la sessione Extra dura <b>almeno 5 minuti</b>, i suoi risultati vengono registrati per <b>alzare la media della lezione</b> e spingerti verso il target del 90%!</p>
                         </div>
 
                         <!-- TUTOR E CHAT -->
@@ -967,14 +974,8 @@
 
                         <!-- RICHIAMI E COSTANZA -->
                         <div style="background:rgba(244, 67, 54, 0.08); padding:8px 10px; border-radius:8px; border-left:4px solid #f44336;">
-                            <b style="color:#f44336; font-size:0.9em;">⚠️ Regola della Costanza & Richiami</b>
-                            <p style="margin:4px 0 0 0;">La telegrafia richiede regolarità. Saltare una giornata di allenamento programmata assegna un <b>Richiamo Formale</b>. Accumulare <b>3 richiami</b> comporta l'<b>espulsione automatica dal corso per inattività</b> (il tuo account di gioco rimarrà intatto). Facendo 2 giorni di presenza consecutivi viene rimosso 1 richiamo.</p>
-                        </div>
-
-                        <!-- EXTRA -->
-                        <div>
-                            <b style="color:var(--link-color); font-size:0.85em;">🧪 Allenamento Extra:</b>
-                            <span> Una volta completata la sessione del giorno, puoi svolgere sessioni extra illimitate per accumulare XP e fare pratica senza rischiare retrocessioni.</span>
+                            <b style="color:#f44336; font-size:0.9em;">⚠️ Regola della Costanza & Espulsione Automatica</b>
+                            <p style="margin:4px 0 0 0;">La telegrafia richiede regolarità. Saltare una giornata di allenamento programmata assegna un <b>Richiamo Formale</b>. Accumulare <b>3 richiami</b> comporta l'<b>espulsione automatica dal corso per inattività</b> (avviene anche in background per tutti i corsisti con o senza tutor; l'account di gioco generale rimane comunque intatto). Facendo 2 giorni di presenza consecutivi viene rimosso 1 richiamo.</p>
                         </div>
 
                     </div>
