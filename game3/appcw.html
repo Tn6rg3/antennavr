@@ -1789,71 +1789,87 @@
 
 <!-- SCHERMATA ASCOLTO QSO REALI (RICERCA & PLAYER) -->
 <div id="qsoAudioScreen" class="screen">
-    <div class="screen-content" style="gap: 10px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-            <h2 style="color:var(--link-color); margin:0; font-size:1.2em;">📻 Ascolto QSO Reali</h2>
-            <button onclick="goBackToMenu()" class="action-btn-small btn-secondary" style="width:auto; padding:6px 12px;">Esci ✕</button>
+    <div class="screen-content" style="gap: 8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+            <h2 style="color:var(--link-color); margin:0; font-size:1.1em;">📻 Ascolto QSO Reali</h2>
         </div>
 
-        <!-- FORM DI RICERCA MULTICAMPO -->
-        <div class="box-panel" style="padding: 12px; border-color: var(--link-color);">
-            <h4 style="margin: 0 0 10px 0; font-size: 0.9em; color: var(--link-color);">🔍 Cerca QSO nell'Archivio:</h4>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
-                <div>
-                    <label style="font-size:0.75em; display:block; color:var(--hint-color);">Nominativo/i:</label>
-                    <input type="text" id="qsoSearchCallsign" placeholder="es: 9K4LSR" style="width:100%; padding:6px; font-size:0.85em; box-sizing:border-box;">
-                </div>
-                <div>
-                    <label style="font-size:0.75em; display:block; color:var(--hint-color);">Frequenza / QRG:</label>
-                    <input type="text" id="qsoSearchQrg" placeholder="es: 7030 o 7MHz" style="width:100%; padding:6px; font-size:0.85em; box-sizing:border-box;">
-                </div>
-                <div>
-                    <label style="font-size:0.75em; display:block; color:var(--hint-color);">Velocità WPM:</label>
-                    <input type="number" id="qsoSearchWpm" placeholder="es: 45" style="width:100%; padding:6px; font-size:0.85em; box-sizing:border-box;">
-                </div>
-                <div>
-                    <label style="font-size:0.75em; display:block; color:var(--hint-color);">Data (YYYYMMDD):</label>
-                    <input type="text" id="qsoSearchDate" placeholder="es: 20260822" style="width:100%; padding:6px; font-size:0.85em; box-sizing:border-box;">
-                </div>
+        <!-- FORM DI RICERCA MULTICAMPO (ACCORDION COLLAPSIBLE) -->
+        <div id="qsoSearchPanel" class="box-panel" style="padding: 10px; border-color: var(--link-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <b style="color:var(--link-color); font-size:0.85em;">🔍 Cerca QSO nell'Archivio</b>
+                <button id="btnToggleQsoSearch" onclick="window.toggleQsoSearchPanel()" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi ▲</button>
             </div>
 
-            <div style="margin-bottom: 10px;">
-                <label style="font-size:0.75em; display:block; color:var(--hint-color);">Note / Tag (es: paddle, qrq, bug):</label>
-                <input type="text" id="qsoSearchTag" placeholder="es: paddle" style="width:100%; padding:6px; font-size:0.85em; box-sizing:border-box;">
-            </div>
+            <div id="qsoSearchFormContent" style="display:block; margin-top:10px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                    <div>
+                        <label style="font-size:0.7em; display:block; color:var(--hint-color);">Nominativo/i:</label>
+                        <input type="text" id="qsoSearchCallsign" placeholder="es: 9K4LSR" style="width:100%; padding:5px; font-size:0.8em; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.7em; display:block; color:var(--hint-color);">Frequenza / QRG:</label>
+                        <input type="text" id="qsoSearchQrg" placeholder="es: 7030 o 7MHz" style="width:100%; padding:5px; font-size:0.8em; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.7em; display:block; color:var(--hint-color);">Velocità WPM:</label>
+                        <input type="number" id="qsoSearchWpm" placeholder="es: 45" style="width:100%; padding:5px; font-size:0.8em; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.7em; display:block; color:var(--hint-color);">Data (YYYYMMDD):</label>
+                        <input type="text" id="qsoSearchDate" placeholder="es: 20260822" style="width:100%; padding:5px; font-size:0.8em; box-sizing:border-box;">
+                    </div>
+                </div>
 
-            <div style="display: flex; gap: 8px;">
-                <button onclick="window.searchQsoAudioFiles()" class="btn-success" style="flex:2; margin:0; padding:10px;">CERCA 🔍</button>
-                <button onclick="window.resetQsoSearchForm()" class="btn-secondary" style="flex:1; margin:0; padding:10px;">RESET 🔄</button>
+                <div style="margin-bottom: 8px;">
+                    <label style="font-size:0.7em; display:block; color:var(--hint-color);">Note / Tag (es: paddle, qrq, bug):</label>
+                    <input type="text" id="qsoSearchTag" placeholder="es: paddle" style="width:100%; padding:5px; font-size:0.8em; box-sizing:border-box;">
+                </div>
+
+                <div style="display: flex; gap: 6px;">
+                    <button onclick="window.searchQsoAudioFiles()" class="btn-success" style="flex:2; margin:0; padding:8px; font-size:0.85em;">CERCA 🔍</button>
+                    <button onclick="window.resetQsoSearchForm()" class="btn-secondary" style="flex:1; margin:0; padding:8px; font-size:0.85em;">RESET 🔄</button>
+                </div>
             </div>
         </div>
 
-        <!-- STATO RISULTATI -->
-        <div id="qsoSearchStatusText" style="font-size:0.8em; color:var(--hint-color); text-align:center;"></div>
+        <!-- STATO RICERCA -->
+        <div id="qsoSearchStatusText" style="font-size:0.75em; color:var(--hint-color); text-align:center;"></div>
 
-        <!-- CONTENITORE RISULTATI (5 ALLA VOLTA) -->
-        <div id="qsoSearchResultsContainer" style="display:flex; flex-direction:column; gap:8px;"></div>
+        <!-- CONTENITORE RISULTATI (COMPATTI - 5 PER PAGINA) -->
+        <div id="qsoSearchResultsContainer" style="display:flex; flex-direction:column; gap:6px;"></div>
 
-        <!-- PULSANTE CARICA ALTRI -->
-        <button id="btnQsoLoadMore" onclick="window.renderNextQsoResultsBatch()" class="btn-champ" style="display:none; width:100%; padding:12px; font-weight:bold; margin-top:5px;">MOSTRA ALTRI RISULTATI 🔽</button>
+        <!-- CONTROLLI PAGINAZIONE FRECCE (⬅️ Precedenti | Pagina X di Y | Successivi ➡️) -->
+        <div id="qsoPaginationControls" style="display:none; justify-content:space-between; align-items:center; margin-top:4px; padding:4px 0;">
+            <button id="btnQsoPrevPage" onclick="window.changeQsoPage(-1)" class="action-btn-small btn-secondary" style="width:auto; padding:6px 12px; font-weight:bold;">⬅️ Precedenti</button>
+            <span id="qsoPageIndicator" style="font-size:0.8em; font-weight:bold; color:var(--link-color);">Pagina 1 di 1</span>
+            <button id="btnQsoNextPage" onclick="window.changeQsoPage(1)" class="action-btn-small btn-secondary" style="width:auto; padding:6px 12px; font-weight:bold;">Successivi ➡️</button>
+        </div>
 
-        <!-- AREA PLAYER AUDIO (NATIVO DRIVE + HTML5) & TACCUINO DECODIFICA -->
-        <div id="qsoAudioPlayerArea" class="box-panel" style="display:none; border-color:var(--champ-color); background:rgba(255,193,7,0.05); padding:12px; margin-top:10px;">
-            <h4 id="qsoPlayerTitle" style="margin:0 0 8px 0; color:var(--champ-color); font-size:0.9em; text-align:center;">🎧 Player Audio QSO</h4>
+        <!-- AREA PLAYER AUDIO & TACCUINO DECODIFICA -->
+        <div id="qsoAudioPlayerArea" class="box-panel" style="display:none; border-color:var(--champ-color); background:rgba(255,193,7,0.05); padding:10px; margin-top:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <b id="qsoPlayerTitle" style="color:var(--champ-color); font-size:0.85em;">🎧 Player Audio QSO</b>
+                <button onclick="window.closeQsoPlayer()" class="action-btn-small btn-secondary" style="width:auto; padding:2px 6px;">✕</button>
+            </div>
 
             <!-- PLAYER NATIVO DRIVE (Compatibile con .ogg, .mp3, .wav su iOS/iPhone e Android) -->
-            <iframe id="qsoDriveIframe" src="" width="100%" height="80" style="border:none; border-radius:8px; display:none; background:rgba(0,0,0,0.2); margin-bottom:10px;" allow="autoplay"></iframe>
+            <iframe id="qsoDriveIframe" src="" width="100%" height="70" style="border:none; border-radius:6px; display:none; background:rgba(0,0,0,0.2); margin-bottom:8px;" allow="autoplay"></iframe>
 
             <!-- PLAYER HTML5 CONTROLS (FALLBACK) -->
-            <audio id="qsoHtmlPlayer" controls style="width:100%; margin-bottom:10px; display:none;"></audio>
+            <audio id="qsoHtmlPlayer" controls style="width:100%; margin-bottom:8px; display:none;"></audio>
 
             <!-- TACCUINO DECODIFICA PER ESERCIZIO -->
-            <div style="margin-top:10px;">
-                <label style="font-size:0.8em; font-weight:bold; color:var(--link-color); display:block; margin-bottom:4px;">📝 Taccuino di Decodifica:</label>
-                <textarea id="qsoDecodificaNotepad" rows="3" placeholder="Digita qui ciò che decodifichi dall'audio..." style="width:100%; padding:8px; font-size:0.9em; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:var(--bg-color); color:var(--text-color); box-sizing:border-box; font-family:'Courier New', Courier, monospace;"></textarea>
+            <div style="margin-top:6px;">
+                <label style="font-size:0.75em; font-weight:bold; color:var(--link-color); display:block; margin-bottom:2px;">📝 Taccuino di Decodifica:</label>
+                <textarea id="qsoDecodificaNotepad" rows="2" placeholder="Digita qui ciò che decodifichi dall'audio..." style="width:100%; padding:6px; font-size:0.85em; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:var(--bg-color); color:var(--text-color); box-sizing:border-box; font-family:'Courier New', Courier, monospace;"></textarea>
             </div>
         </div>
+    </div>
+
+    <!-- BOTTONE TORNA AL MENU PRINCIPALE IN BASSO FISSO -->
+    <div class="fixed-bottom-btns">
+        <button onclick="goBackToMenu()" class="btn-secondary" style="width:100%; font-size:0.9em; padding:10px;">TORNA AL MENU PRINCIPALE 🏠</button>
     </div>
 </div>
 
