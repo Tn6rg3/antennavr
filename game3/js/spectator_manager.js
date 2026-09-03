@@ -156,10 +156,6 @@ window.appendSpectatorRow = function(row) {
 
     if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
 };
-    els.tableBody.appendChild(tr);
-
-    if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
-};
 
 window.stopWatchingCleanly = function() {
     if (typeof window.currentSpectatorCleanup === 'function') {

@@ -60,10 +60,6 @@ window.searchQsoAudioFiles = async function() {
     const date = (document.getElementById('qsoSearchDate')?.value || "").trim();
     const tag = (document.getElementById('qsoSearchTag')?.value || "").trim();
 
-    const resultsContainer = document.getElementById('qsoSearchResultsContainer');
-    const loadMoreBtn = document.getElementById('btnQsoLoadMore');
-    const statusText = document.getElementById('qsoSearchStatusText');
-
     if (resultsContainer) resultsContainer.innerHTML = '<p style="text-align:center; padding:20px; color:var(--link-color);">🔍 Ricerca in corso su Google Drive...</p>';
     if (loadMoreBtn) loadMoreBtn.style.display = 'none';
     if (statusText) statusText.textContent = "Ricerca in corso...";
