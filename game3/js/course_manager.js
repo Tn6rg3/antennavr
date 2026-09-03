@@ -546,6 +546,8 @@ window.preGenerateCourseGroups = function() {
 };
 
 window.startCourseSessionSequence = function() {
+    isCourseMode = true;
+    window.isCourseMode = true;
     window.showScreen('gameArea');
     if (els.permanentGameInput) {
         els.permanentGameInput.value = "";
@@ -820,7 +822,10 @@ window.showCourseSessionModal = function(session, isExtra = false) {
         const charStr = activeChars.join(", ");
 
         if (isExtra) {
-            text.innerHTML = `Hai completato gli allenamenti programmati per oggi! 🏆<br><br>Vuoi fare una sessione di <b>Allenamento Extra</b> sui caratteri sbloccati?`;
+            text.innerHTML = `🏆 <b>Allenamento Extra 🧪</b><br><br>Vuoi svolgere una sessione di allenamento aggiuntiva sui caratteri sbloccati?<br><br>
+            <div style="background:rgba(33, 150, 243, 0.1); padding:8px 10px; border-radius:6px; border-left:3px solid var(--link-color); font-size:0.85em; text-align:left;">
+                💡 <b>Nota:</b> Affinché la sessione Extra incida sulla tua <b>media della lezione</b> per alzare la percentuale di correttezza, deve durare <b>almeno 5 minuti</b>!
+            </div>`;
         } else {
             const typeCfg = window.COURSE_TYPES[session.type];
             const typeLabel = currentLang === 'it' ? typeCfg.labelIt : typeCfg.labelEn;

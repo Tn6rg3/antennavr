@@ -833,10 +833,11 @@ window.toggleCoursePresentation = function() {
  */
 window.finishCourseSession = function() {
     const p = window.courseData.progress;
-    const type = window.courseData.current_day_session?.type || 'LONG';
-    const isExtra = !!window.courseData.current_day_session?.isExtra;
+    const session = window.courseData.current_day_session || {};
+    const type = session.type || 'LONG';
+    const isExtra = !!session.isExtra;
 
-    // 1. CALCOLO ACCURATEZZA REALE DELLA SESSIONE CORRENTE (Dai dettagli partita)
+    // 1. CALCOLO ACCURATEZZA REALE DELLA SESSIONE CORRENTE
     let sessionAttempts = 0;
     let sessionCorrect = 0;
     let worstMap = {};
@@ -866,7 +867,7 @@ window.finishCourseSession = function() {
     if (type === 'Z2') p.last_z2_accuracy = acc;
 
     // 3. REGISTRAZIONE COMPLETAMENTO
-    window.courseData.current_day_session.completed = true;
+    session.completed = true;
     const todayIdx = (new Date().getDay() + 6) % 7;
     const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
     if (dayData) {
@@ -874,41 +875,47 @@ window.finishCourseSession = function() {
         if (sess) sess.completed = true;
     }
 
-    // 4. REGISTRO CRONOLOGIA LEZIONE (Per avanzamento / retrocessione)
+    // 4. DURATA E REGISTRAZIONE NELLA MEDIA LEZIONE (p.lesson_history)
+    const elapsedSec = (session.total_seconds || 0) - (session.remaining_seconds || 0);
+    const isValidExtra = isExtra && (elapsedSec >= 300 || session.total_seconds >= 300);
+
     if (!p.lesson_history) p.lesson_history = [];
-    if (!isExtra) {
+
+    let extraNote = "";
+    if (isExtra) {
+        if (isValidExtra || sessionAttempts >= 20) {
+            p.lesson_history.push(acc);
+            extraNote = "\n\n✨ Allenamento Extra registrato! (Incide sulla media della lezione).";
+        } else {
+            extraNote = "\n\n⚠️ Sessione Extra troppo breve (< 5 min): XP assegnati ma non incide sulla media della lezione.";
+        }
+    } else {
         p.lesson_history.push(acc);
     }
 
-    let msg = "";
-    if (isExtra) {
-        msg = "\n\n✨ Allenamento Extra completato!";
-    } else if (p.lesson_history.length >= 6) {
-        // Valutazione su almeno 6 sessioni
-        const recent6 = p.lesson_history.slice(-6);
-        const avgAcc6 = recent6.reduce((sum, v) => sum + v, 0) / recent6.length;
+    // MEDIA ATTUALE DELLA LEZIONE
+    const currentLessonAvg = (p.lesson_history.length > 0)
+        ? (p.lesson_history.reduce((a, b) => a + b, 0) / p.lesson_history.length)
+        : acc;
+    const avgPct = Math.round(currentLessonAvg * 100);
 
-        if (avgAcc6 >= 0.90 && p.current_lesson < window.KOCH_SEQUENCE.length) {
+    let msg = "";
+
+    // 5. IL VERDETTO (Promozione Automatica o Mantenimento)
+    if (!isExtra && p.lesson_history.length >= 3) {
+        if (avgPct >= 90 && p.current_lesson < window.KOCH_SEQUENCE.length) {
             // PROMOZIONE
             p.current_lesson++;
             p.lesson_history = []; // Reset per la nuova lezione
-            msg = `\n\n🚀 PROMOSSO! Media ultime 6 sessioni: ${Math.round(avgAcc6 * 100)}%.\nNUOVO CARATTERE SBLOCCATO: ${window.KOCH_SEQUENCE[p.current_lesson - 1]}!`;
+            msg = `\n\n🚀 PROMOSSO ALLA LEZIONE ${p.current_lesson}!\nMedia lezione: ${avgPct}% (>=90%).\nNUOVO CARATTERE SBLOCCATO: '${window.KOCH_SEQUENCE[p.current_lesson - 1]}'!`;
+        } else if (type === 'LONG' && avgPct < 90) {
+            // VERDETTO SETTIMANALE: Mantenimento per consolidamento
+            msg = `\n\n📚 MANTENIMENTO LEZIONE ${p.current_lesson}.\nMedia lezione: ${avgPct}% (<90%). Continuiamo sulla Lezione ${p.current_lesson} per consolidare!`;
+            p.lesson_history = [];
         }
     }
 
-    // CONTROLLO RETROCESSIOINE (Se la media delle ultime sessioni scende sotto il 75%)
-    if (!isExtra && !msg && p.current_lesson > 2 && p.lesson_history.length >= 3) {
-        const recent = p.lesson_history.slice(-6);
-        const avgRecent = recent.reduce((sum, v) => sum + v, 0) / recent.length;
-
-        if (avgRecent < 0.75) {
-            p.current_lesson--;
-            p.lesson_history = []; // Reset per la lezione precedente
-            msg = `\n\n⚠️ RETROCESSO ALLA LEZIONE ${p.current_lesson}!\nDifficoltà riscontrata sui nuovi caratteri (Media: ${Math.round(avgRecent * 100)}%). Ripassiamo la lezione precedente per consolidare!`;
-        }
-    }
-
-    // 5. GIORNI CONSECUTIVI E RICHIAMI
+    // 6. GIORNI CONSECUTIVI E RICHIAMI
     const today = new Date().toISOString().split('T')[0];
     if (p.last_session_date) {
         const diff = Math.floor((new Date(today) - new Date(p.last_session_date)) / (1000 * 60 * 60 * 24));
@@ -943,7 +950,7 @@ window.finishCourseSession = function() {
         db.ref(`courseActiveEnrollments/${window.myId}`).update({ roomCode: null });
     }
 
-    // 6. MOSTRA RISULTATI
+    // 7. MOSTRA RISULTATI E RESOCONTO
     const m = document.getElementById('courseResultsModal'),
           a = document.getElementById('courseResultsAccuracy'),
           ms = document.getElementById('courseResultsMessage'),
@@ -952,7 +959,16 @@ window.finishCourseSession = function() {
     if (m && a && ms && f) {
         a.textContent = `Accuratezza Sessione: ${Math.round(acc * 100)}%`;
         a.style.color = acc >= 0.9 ? '#4caf50' : acc >= 0.7 ? '#ff9800' : '#d32f2f';
-        ms.innerHTML = `"${window.getCourseDebriefing(acc, worstChars.slice(0, 3))}"${msg ? '<div style="margin-top:10px; color:var(--link-color); font-weight:bold;">' + msg + '</div>' : ''}`;
+
+        let avgStatus = "";
+        if (avgPct >= 90) {
+            avgStatus = `<div style="margin-top:8px; color:#4caf50; font-weight:bold; font-size:0.9em;">📊 Media Attuale Lezione ${p.current_lesson}: ${avgPct}% / 90% (In fascia promozione! 🚀)</div>`;
+        } else {
+            const missing = 90 - avgPct;
+            avgStatus = `<div style="margin-top:8px; color:#ff9800; font-weight:bold; font-size:0.9em;">📊 Media Attuale Lezione ${p.current_lesson}: ${avgPct}% / 90% (Mancano +${missing}% per la promozione)</div>`;
+        }
+
+        ms.innerHTML = `"${window.getCourseDebriefing(acc, worstChars.slice(0, 3))}"${avgStatus}${extraNote ? '<div style="margin-top:6px; color:var(--link-color); font-size:0.85em;">' + extraNote + '</div>' : ''}${msg ? '<div style="margin-top:10px; color:var(--link-color); font-weight:bold;">' + msg + '</div>' : ''}`;
         f.textContent = worstChars.length > 0 ? "⚠️ Focus errore: " + worstChars.slice(0, 5).join(", ") : "Ottima sessione!";
         m.style.display = 'flex';
         const closeBtn = document.getElementById('btnCloseCourseResults');
@@ -964,20 +980,21 @@ window.finishCourseSession = function() {
             };
         }
     } else {
-        alert(`Sessione completata! Accuratezza: ${Math.round(acc * 100)}%` + msg);
+        alert(`Sessione completata! Accuratezza: ${Math.round(acc * 100)}% | Media Lezione: ${avgPct}%` + msg);
         if (typeof window.finishGame === 'function') window.finishGame();
     }
 };
 
 window.actualStartCourseGame = function() {
-    if (!window.courseData.current_day_session) return;
+    if (!window.courseData || !window.courseData.current_day_session) return;
     const modal = document.getElementById('courseSessionModal');
     if (modal) modal.style.display = 'none';
 
-    currentMode = 'course';
+    window.currentMode = 'course';
+    window.isCourseMode = true;
     window.isSinglePlayer = true;
-    currentWpm = parseInt(window.courseData.settings.start_wpm);
-    roomCode = "COURSE_" + window.myId;
+    window.currentWpm = parseInt(window.courseData.settings?.start_wpm) || 15;
+    window.roomCode = "COURSE_" + window.myId;
 
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1024,7 +1041,13 @@ window.attachCourseUIListeners = function() {
     if (els.btnTabSavePlan) {
         els.btnTabSavePlan.onclick = () => {
             const z = parseInt(els.courseTabMinZ2.value) || 10;
-            window.courseData.progress.current_lesson = parseInt(els.courseTabLessonInput.value) || 2;
+            const newLesson = parseInt(els.courseTabLessonInput.value) || 2;
+
+            if (window.courseData.progress.current_lesson !== newLesson) {
+                window.courseData.progress.current_lesson = newLesson;
+                window.courseData.progress.lesson_history = []; // Reset history for manually selected lesson
+            }
+
             window.courseData.elite_mode = els.courseTabEliteInput?.checked === true;
             window.courseData.settings = {
                 ...window.courseData.settings,
@@ -1065,14 +1088,37 @@ window.attachCourseUIListeners = function() {
     // Avvio Sessione
     if (els.btnTabStartCourseSession) {
         els.btnTabStartCourseSession.onclick = () => {
-             const todayIdx = (new Date().getDay() + 6) % 7, dayData = window.courseData.weekly_schedule[todayIdx];
-             let sess = dayData ? dayData.sessions.find(s => !s.completed) : null, extra = false;
-             if (!sess || (dayData && dayData.sessions[0].type === 'REST')) { sess = { type: 'Z2', completed: false }; extra = true; }
-             if (!extra && dayData.sessions.filter(s => !s.completed).length > 1) if (!confirm(`Iniziare sessione ${sess.elite ? "ELITE" : "STANDARD"}?`)) return;
-             const dur = (sess.type==='Z2' ? window.courseData.settings.minutes_z2 : sess.type==='WORK' ? window.courseData.settings.minutes_work : window.courseData.settings.minutes_long);
-             window.courseData.current_day_session = { type: sess.type, total_seconds: dur*60, remaining_seconds: dur*60, completed: false, date: new Date().toISOString().split('T')[0], isExtra: extra };
-             window.saveCourseState(); if (extra) els.btnTabStartCourseSession.textContent = "INIZIA EXTRA";
-             if (typeof window.showCourseSessionModal === 'function') window.showCourseSessionModal(window.courseData.current_day_session, extra); else window.actualStartCourseGame();
+             const todayIdx = (new Date().getDay() + 6) % 7;
+             const schedule = Array.isArray(window.courseData.weekly_schedule) ? window.courseData.weekly_schedule : [];
+             const dayData = schedule[todayIdx] || null;
+             let sess = dayData ? dayData.sessions.find(s => !s.completed && s.type !== 'REST') : null;
+             let extra = false;
+             if (!sess || (dayData && dayData.sessions.every(s => s.completed || s.type === 'REST'))) {
+                 sess = { type: 'Z2', completed: false };
+                 extra = true;
+             }
+             if (!extra && dayData.sessions.filter(s => !s.completed).length > 1) {
+                 if (!confirm(`Iniziare sessione ${sess.elite ? "ELITE" : "STANDARD"}?`)) return;
+             }
+             let dur = (sess.type === 'Z2' ? window.courseData.settings.minutes_z2 : sess.type === 'WORK' ? window.courseData.settings.minutes_work : window.courseData.settings.minutes_long);
+             if (extra) {
+                 dur = Math.max(5, parseInt(dur) || 5); // Almeno 5 minuti per Extra
+             }
+             window.courseData.current_day_session = {
+                 type: sess.type,
+                 total_seconds: dur * 60,
+                 remaining_seconds: dur * 60,
+                 completed: false,
+                 date: new Date().toISOString().split('T')[0],
+                 isExtra: extra
+             };
+             window.saveCourseState();
+             if (extra && els.btnTabStartCourseSession) els.btnTabStartCourseSession.textContent = "INIZIA EXTRA 🧪";
+             if (typeof window.showCourseSessionModal === 'function') {
+                 window.showCourseSessionModal(window.courseData.current_day_session, extra);
+             } else {
+                 window.actualStartCourseGame();
+             }
         };
     }
     if (els.btnPlayCourseNow) els.btnPlayCourseNow.onclick = () => { if (els.courseSessionModal) els.courseSessionModal.style.display = 'none'; window.actualStartCourseGame(); };
