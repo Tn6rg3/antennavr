@@ -1615,6 +1615,48 @@ if (els.btnDeclineDaily) els.btnDeclineDaily.onclick = () => {
     if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none';
 };
 
+window.reopenDailyChallenge = function() {
+    if (!db || !window.myId) {
+        showToast("⚠️ Connessione in corso, riprova tra poco.");
+        return;
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    db.ref(`users/${window.myId}/history`).once('value').then(snap => {
+        const history = snap.val() || {};
+        let playedAndScoredToday = false;
+
+        Object.values(history).forEach(m => {
+            if (m && m.mode === 'daily_challenge' && m.date) {
+                const mDate = new Date(m.date).toISOString().split('T')[0];
+                if (mDate === today) playedAndScoredToday = true;
+            }
+        });
+
+        if (playedAndScoredToday) {
+            alert("🏆 Hai già completato la Sfida Giornaliera di oggi!\nI record della Sfida Giornaliera si calcolano su una singola prova al giorno.");
+            return;
+        }
+
+        // Resettiamo il flag di rifiuto/annullamento accidentale
+        localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
+        db.ref(`users/${window.myId}/daily_attempt`).remove().then(() => {
+            showToast("📅 Sfida Giornaliera riattivata! Preparati...");
+            const modal = document.getElementById('dailyChallengeModal');
+            if (modal) {
+                modal.style.display = 'flex';
+            }
+        });
+    }).catch(err => {
+        console.error("Reopen Daily Challenge Error:", err);
+        localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
+        db.ref(`users/${window.myId}/daily_attempt`).remove();
+        const modal = document.getElementById('dailyChallengeModal');
+        if (modal) modal.style.display = 'flex';
+    });
+};
+
 // --- CONDIVISIONE ---
 window.shareAppToFriends = function() {
     const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`)}&text=${encodeURIComponent("📻 Unisciti a me su Sfida Telegrafia!")}`;
