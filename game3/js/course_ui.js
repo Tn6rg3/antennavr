@@ -155,12 +155,13 @@ window.renderTutorPanel = function() {
                 ? `<span class="live-badge" style="background:#f44336; color:white; padding:1px 6px; border-radius:4px; font-size:0.7em; cursor:pointer; animation:pulse 1s infinite; display:flex; align-items:center; gap:3px;" onclick="window.watchSpecificRoom('${enroll.roomCode}', '${enroll.name || 'Corsista'}')">LIVE 🔴</span>`
                 : '';
 
+            const safeName = (enroll.name || 'Corsista').replace(/'/g, "\\'");
             row.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <b style="color:#b39ddb;">👤 ${enroll.name || 'Anonimo'}</b>
                     <div style="display:flex; gap:5px; align-items:center;">
                         ${inactivityLabel}
-                        <span style="color:${p.reminders_count > 0 ? '#f44336' : '#4caf50'}">⚠️ ${p.reminders_count || 0}</span>
+                        <span onclick="event.stopPropagation(); window.removeStudentPenalty('${uid}', '${safeName}')" style="color:${p.reminders_count > 0 ? '#f44336' : '#4caf50'}; cursor:pointer; font-weight:bold; padding:2px 6px; background:rgba(255,255,255,0.05); border-radius:4px;" title="Clicca per rimuovere 1 richiamo">⚠️ ${p.reminders_count || 0} / 3 ➖</span>
                         ${liveBadgeHtml}
                     </div>
                 </div>
@@ -181,6 +182,37 @@ window.renderTutorPanel = function() {
     if (!window.listeners) window.listeners = {};
     window.listeners.tutorPanelRef = ref;
     window.listeners.tutorPanelCallback = callback;
+};
+
+/**
+ * RIMOZIONE PENALITÀ / RICHIAMI DA PARTE DEL TUTOR
+ */
+window.removeStudentPenalty = function(uid, studentName) {
+    if (!db || !uid) return;
+
+    db.ref(`users/${uid}/course/progress/reminders_count`).once('value', snap => {
+        const count = snap.val() || 0;
+        if (count <= 0) {
+            showToast("Lo studente non ha richiami formali da rimuovere.");
+            return;
+        }
+
+        if (confirm(`Rimuovere 1 richiamo formale a ${studentName}?\n(Richiami attuali: ${count}/3)`)) {
+            const newCount = Math.max(0, count - 1);
+            db.ref(`users/${uid}/course/progress/reminders_count`).set(newCount).then(() => {
+                showToast(`Richiamo rimosso per ${studentName}! (${newCount}/3)`);
+                if (typeof window.showStudentDetailedStats === 'function') {
+                    const modal = document.getElementById('tutorStudentStatsModal');
+                    if (modal && modal.style.display !== 'none') {
+                        window.showStudentDetailedStats(uid, studentName);
+                    }
+                }
+                if (typeof window.renderTutorPanel === 'function') {
+                    window.renderTutorPanel();
+                }
+            });
+        }
+    });
 };
 
 /**
@@ -222,6 +254,7 @@ window.showStudentDetailedStats = function(uid, name) {
             const currentLesson = p.current_lesson || 2;
             const currentLessonChar = window.KOCH_SEQUENCE[currentLesson - 1] || '';
             const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson).join(', ');
+            const safeName = (name || 'Corsista').replace(/'/g, "\\'");
 
             progCont.innerHTML = `
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; grid-column:span 2;">
@@ -233,7 +266,10 @@ window.showStudentDetailedStats = function(uid, name) {
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Spazio Gruppi: <b>${settings.group_spacing || '3.0'}x</b></div>
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Piano Elite: <b style="color:${courseData.elite_mode ? '#9c27b0' : 'var(--hint-color)'}">${courseData.elite_mode ? 'Attivo ⚡' : 'Disattivato'}</b></div>
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; grid-column:span 2;">Minuti Sessioni: <b>Z2: ${settings.minutes_z2 || 10}m | WORK: ${settings.minutes_work || 7}m | LONG: ${settings.minutes_long || 17}m</b></div>
-                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Richiami Formali: <b style="color:${(p.reminders_count || 0) > 0 ? '#f44336' : '#4caf50'};">${p.reminders_count || 0} / 3</b></div>
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                    <span>Richiami: <b style="color:${(p.reminders_count || 0) > 0 ? '#f44336' : '#4caf50'};">${p.reminders_count || 0} / 3</b></span>
+                    ${(p.reminders_count || 0) > 0 ? `<button onclick="window.removeStudentPenalty('${uid}', '${safeName}')" class="action-btn-small btn-secondary" style="padding:2px 6px; font-size:0.75em;" title="Rimuovi 1 richiamo">➖ Rimuovi 1</button>` : ''}
+                </div>
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Giorni Consecutivi: <b>${p.consecutive_days || 0} gg</b></div>
             `;
         }
