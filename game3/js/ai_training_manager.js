@@ -228,10 +228,9 @@ window.loadSelectedAiQSO = async function() {
                     showToast("✓ Spezzone pronto! Usa ▶️ Riproduci per ascoltare la parte estratta.");
                     return;
                 } else {
-                    const msg = data ? (data.message || JSON.stringify(data)) : "Risposta server vuota";
-                    console.warn("⚠️ Proxy Returned Error Message:", msg);
+                    console.warn("⚠️ Proxy did not return Base64 audio payload:", data);
                     if (statusElem) {
-                        statusElem.textContent = "⚠️ " + msg;
+                        statusElem.textContent = "⚠️ Pubblica una 'Nuova versione' su Google Apps Script per abilitare 'proxy_audio'.";
                         statusElem.style.color = "#ff9800";
                     }
                     return;
