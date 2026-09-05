@@ -425,7 +425,7 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
         const absVal = Math.abs(samples[i]);
         if (absVal > maxAbs) maxAbs = absVal;
     }
-    if (maxAbs < 0.005) return "";
+    if (maxAbs < 0.001) return "";
 
     const normSamples = new Float32Array(samples.length);
     for (let i = 0; i < samples.length; i++) {
@@ -451,7 +451,8 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
     }
 
     const avgEnergy = totalEnergySum / Math.max(1, numFrames);
-    const threshold = avgEnergy + (maxEnergy - avgEnergy) * 0.35;
+    // Soglia resa più sensibile (0.15) per catturare segnali deboli con rumore
+    const threshold = avgEnergy + (maxEnergy - avgEnergy) * 0.15;
 
     const pulses = [];
     let isTone = energies[0] > threshold;
