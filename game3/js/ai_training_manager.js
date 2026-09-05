@@ -166,11 +166,18 @@ window.loadSelectedAiQSO = async function() {
     if (userBox && window.aiTrainingState.editingPairIndex < 0) userBox.value = '';
     if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
 
-    // 1. SCARICAMENTO BINARIO DIRETTAMENTE DA GOOGLE DRIVE CDN
+    // Preparazione dello streaming HTML5 temporizzato
+    const audioEl = document.getElementById('aiAudioHtmlEl');
+    if (audioEl && fileId) {
+        audioEl.src = `https://docs.google.com/uc?export=download&id=${fileId}`;
+        audioEl.load();
+    }
+
+    // 1. SCARICAMENTO BINARIO DIRETTAMENTE DA GOOGLE DRIVE UC STREAM
     if (fileId) {
-        const cdnUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+        const cdnUrl = `https://docs.google.com/uc?export=download&id=${fileId}`;
         try {
-            console.log("AI Audio Fetching via Direct Google CDN:", cdnUrl);
+            console.log("AI Audio Fetching via Google Drive UC Stream:", cdnUrl);
             const resp = await fetch(cdnUrl);
             if (resp.ok) {
                 const arrayBuf = await resp.arrayBuffer();
@@ -190,7 +197,7 @@ window.loadSelectedAiQSO = async function() {
                 return;
             }
         } catch (e) {
-            console.warn("Direct CDN fetch warning, trying Proxy fallback...", e);
+            console.warn("Direct Drive UC fetch warning, trying Proxy fallback...", e);
         }
     }
 
@@ -342,23 +349,45 @@ window.nextAiSegment = function() {
 };
 
 window.playCurrentAiSegment = function() {
-    const buf = window.aiTrainingState.currentAudioBuffer;
-    if (!buf) return;
-
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-
-    if (window.aiTrainingState.currentSourceNode) {
-        try { window.aiTrainingState.currentSourceNode.stop(); } catch(e){}
-    }
-
     const winLen = window.aiTrainingState.currentWindowDuration;
     const start = window.aiTrainingState.currentWindowStart;
+    const buf = window.aiTrainingState.currentAudioBuffer;
 
-    window.aiTrainingState.currentSourceNode = audioCtx.createBufferSource();
-    window.aiTrainingState.currentSourceNode.buffer = buf;
-    window.aiTrainingState.currentSourceNode.connect(audioCtx.destination);
-    window.aiTrainingState.currentSourceNode.start(0, start, winLen);
+    // 1. RIPRODUZIONE DI PRECISIONE VIA WEBAUDIO BUFFER
+    if (buf) {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        if (window.aiTrainingState.currentSourceNode) {
+            try { window.aiTrainingState.currentSourceNode.stop(); } catch(e){}
+        }
+
+        window.aiTrainingState.currentSourceNode = audioCtx.createBufferSource();
+        window.aiTrainingState.currentSourceNode.buffer = buf;
+        window.aiTrainingState.currentSourceNode.connect(audioCtx.destination);
+        window.aiTrainingState.currentSourceNode.start(0, start, winLen);
+        showToast(`▶️ Riproduzione spezzone estratto (${winLen}s)...`);
+        return;
+    }
+
+    // 2. FALLBACK STREAMING HTML5 CON TIMER DI PRECISIONE TEMPORIZZATO
+    const audioEl = document.getElementById('aiAudioHtmlEl');
+    if (audioEl && audioEl.src) {
+        if (window.aiAudioTimer) clearTimeout(window.aiAudioTimer);
+
+        audioEl.currentTime = start;
+        audioEl.play().then(() => {
+            showToast(`▶️ Riproduzione spezzone estratto (${winLen}s)...`);
+            window.aiAudioTimer = setTimeout(() => {
+                audioEl.pause();
+            }, winLen * 1000);
+        }).catch(err => {
+            console.warn("HTML5 Audio play warning:", err);
+            showToast("⚠️ Attendi il caricamento dello spezzone audio...");
+        });
+    } else {
+        showToast("⚠️ Audio in fase di scaricamento, attendi un istante.");
+    }
 };
 
 window.drawAiPlaceholderCanvas = function() {
