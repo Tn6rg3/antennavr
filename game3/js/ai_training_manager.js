@@ -151,7 +151,7 @@ window.loadSelectedAiQSO = async function() {
     window.aiTrainingState.currentWindowStart = 0;
 
     if (statusElem) {
-        statusElem.textContent = `⏳ Caricamento audio QSO #${idx + 1}...`;
+        statusElem.textContent = `⏳ Scaricamento audio QSO #${idx + 1}...`;
         statusElem.style.color = "var(--link-color)";
     }
 
@@ -166,7 +166,7 @@ window.loadSelectedAiQSO = async function() {
     if (userBox && window.aiTrainingState.editingPairIndex < 0) userBox.value = '';
     if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
 
-    // 1. SCARICAMENTO BINARIO PER FORMA D'ONDA & TAGLIO DI PRECISIONE SPEZZONI (10s-60s)
+    // 1. SCARICAMENTO BINARIO DIRETTAMENTE DA GOOGLE DRIVE CDN
     if (fileId) {
         const cdnUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
         try {
@@ -181,11 +181,12 @@ window.loadSelectedAiQSO = async function() {
                 window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(arrayBuf);
 
                 if (statusElem) {
-                    statusElem.textContent = `✓ Audio Caricato! Usa i tasti '▶️ Riproduci (${window.aiTrainingState.currentWindowDuration}s)' per l'ascolto dello spezzone.`;
+                    statusElem.textContent = `✓ Audio Scaricato! Usa '▶️ Riproduci (${window.aiTrainingState.currentWindowDuration}s)' per l'ascolto dello spezzone.`;
                     statusElem.style.color = "#4caf50";
                 }
 
                 window.updateAiSegmentDisplay();
+                showToast(`✓ Spezzone da ${window.aiTrainingState.currentWindowDuration}s pronto! Premi ▶️ Riproduci per l'ascolto.`);
                 return;
             }
         } catch (e) {
@@ -193,7 +194,7 @@ window.loadSelectedAiQSO = async function() {
         }
     }
 
-    // 2. FALLBACK VIA PROXY APPS SCRIPT
+    // 2. FALLBACK SCARICAMENTO VIA PROXY APPS SCRIPT BOT #2
     const addestraServerUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
     if (fileId && addestraServerUrl) {
         try {
@@ -223,11 +224,12 @@ window.loadSelectedAiQSO = async function() {
                     window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
 
                     if (statusElem) {
-                        statusElem.textContent = `✓ Audio Caricato! Usa i tasti '▶️ Riproduci (${window.aiTrainingState.currentWindowDuration}s)' per l'ascolto dello spezzone.`;
+                        statusElem.textContent = `✓ Audio Scaricato! Usa '▶️ Riproduci (${window.aiTrainingState.currentWindowDuration}s)' per l'ascolto dello spezzone.`;
                         statusElem.style.color = "#4caf50";
                     }
 
                     window.updateAiSegmentDisplay();
+                    showToast(`✓ Spezzone da ${window.aiTrainingState.currentWindowDuration}s pronto! Premi ▶️ Riproduci per l'ascolto.`);
                     return;
                 }
             }
@@ -237,8 +239,8 @@ window.loadSelectedAiQSO = async function() {
     }
 
     if (statusElem) {
-        statusElem.textContent = "⚠️ Impossibile caricare l'audio. Verifica permessi Google Drive.";
-        statusElem.style.color = "#f44336";
+        statusElem.textContent = "⚠️ Impossibile scaricare l'audio. Carica il file dal PC col tasto '📁 Carica Audio Locale'.";
+        statusElem.style.color = "#ff9800";
     }
 };
 
