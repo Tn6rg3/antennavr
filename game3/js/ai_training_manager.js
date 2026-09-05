@@ -403,19 +403,46 @@ window.drawAiSegmentWaveform = function() {
     ctx.stroke();
 };
 
-// Resample audio segment to 16kHz for ONNX / DSP inference
-async function resampleAudioBufferTo16k(audioBuffer, startTime, durationSec) {
+// Resample audio segment to 16kHz with Mono Stereo Mix-Down
+function resampleAudioBufferTo16k(audioBuffer, startTime, durationSec) {
+    if (!audioBuffer) return new Float32Array(0);
+
+    const srcSr = audioBuffer.sampleRate;
     const targetSr = 16000;
-    const numSamples = Math.floor(targetSr * durationSec);
-    const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, numSamples, targetSr);
 
-    const source = offlineCtx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(offlineCtx.destination);
-    source.start(0, startTime, durationSec);
+    const numChannels = audioBuffer.numberOfChannels;
+    const startSample = Math.floor(startTime * srcSr);
+    const endSample = Math.min(audioBuffer.length, Math.floor((startTime + durationSec) * srcSr));
+    const srcLength = endSample - startSample;
 
-    const resampledBuffer = await offlineCtx.startRendering();
-    return resampledBuffer.getChannelData(0);
+    if (srcLength <= 0) return new Float32Array(0);
+
+    // Unione di tutti i canali audio (Mono Mix-Down per non perdere i canali L/R)
+    const monoSamples = new Float32Array(srcLength);
+    for (let c = 0; c < numChannels; c++) {
+        const chanData = audioBuffer.getChannelData(c);
+        for (let i = 0; i < srcLength; i++) {
+            monoSamples[i] += (chanData[startSample + i] || 0) / numChannels;
+        }
+    }
+
+    // Resampling Lineare Istantaneo a 16000Hz (Zero WebAudio Bugs)
+    const targetLength = Math.floor(durationSec * targetSr);
+    const resampled = new Float32Array(targetLength);
+    const ratio = srcLength / targetLength;
+
+    for (let i = 0; i < targetLength; i++) {
+        const srcIdx = i * ratio;
+        const index0 = Math.floor(srcIdx);
+        const index1 = Math.min(srcLength - 1, index0 + 1);
+        const frac = srcIdx - index0;
+
+        const val0 = monoSamples[index0] || 0;
+        const val1 = monoSamples[index1] || 0;
+        resampled[i] = val0 + frac * (val1 - val0);
+    }
+
+    return resampled;
 }
 
 // DSP Envelope Decoder
@@ -427,7 +454,7 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
         const absVal = Math.abs(samples[i]);
         if (absVal > maxAbs) maxAbs = absVal;
     }
-    if (maxAbs < 0.001) return "";
+    if (maxAbs < 0.0001) return "";
 
     const normSamples = new Float32Array(samples.length);
     for (let i = 0; i < samples.length; i++) {
@@ -438,7 +465,7 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
     const numFrames = Math.floor(normSamples.length / frameSize);
     const energies = new Float32Array(numFrames);
 
-    let maxEnergy = 0.0, totalEnergySum = 0.0;
+    let maxEnergy = 0.0, sumEnergy = 0.0, minEnergy = Infinity;
     for (let f = 0; f < numFrames; f++) {
         let sum = 0.0;
         const start = f * frameSize;
@@ -448,13 +475,13 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
         }
         const rms = Math.sqrt(sum / frameSize);
         energies[f] = rms;
-        totalEnergySum += rms;
+        sumEnergy += rms;
         if (rms > maxEnergy) maxEnergy = rms;
+        if (rms < minEnergy) minEnergy = rms;
     }
 
-    const avgEnergy = totalEnergySum / Math.max(1, numFrames);
-    // Soglia resa più sensibile (0.15) per catturare segnali deboli con rumore
-    const threshold = avgEnergy + (maxEnergy - avgEnergy) * 0.15;
+    const avgEnergy = sumEnergy / Math.max(1, numFrames);
+    const threshold = minEnergy + (maxEnergy - minEnergy) * 0.15;
 
     const pulses = [];
     let isTone = energies[0] > threshold;
@@ -465,7 +492,7 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
         if (active === isTone) {
             count++;
         } else {
-            if (isTone && (count < 3 || count > 180)) {
+            if (isTone && (count < 2 || count > 200)) {
                 pulses.push({ tone: false, durationFrames: count });
             } else {
                 pulses.push({ tone: isTone, durationFrames: count });
@@ -474,13 +501,13 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
             count = 1;
         }
     }
-    pulses.push({ tone: isTone && count <= 180, durationFrames: count });
+    pulses.push({ tone: isTone && count <= 200, durationFrames: count });
 
-    const validTones = pulses.filter(p => p.tone && p.durationFrames >= 3 && p.durationFrames <= 180);
+    const validTones = pulses.filter(p => p.tone && p.durationFrames >= 2 && p.durationFrames <= 200);
     if (validTones.length === 0) return "";
 
     const toneDurations = validTones.map(p => p.durationFrames).sort((a, b) => a - b);
-    const ditFrames = Math.max(3, toneDurations[Math.floor(toneDurations.length * 0.25)] || 5);
+    const ditFrames = Math.max(2, toneDurations[Math.floor(toneDurations.length * 0.20)] || 4);
 
     let morseCode = "", decodedText = "";
     const reverseMap = {
@@ -495,17 +522,17 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
     };
 
     for (let p of pulses) {
-        if (p.tone && p.durationFrames >= 3) {
-            if (p.durationFrames >= ditFrames * 2.2) morseCode += "-";
+        if (p.tone && p.durationFrames >= 2) {
+            if (p.durationFrames >= ditFrames * 2.1) morseCode += "-";
             else morseCode += ".";
         } else if (!p.tone) {
-            if (p.durationFrames >= ditFrames * 5.0) {
+            if (p.durationFrames >= ditFrames * 4.5) {
                 if (morseCode) {
                     const char = reverseMap[morseCode] || "";
                     if (char) decodedText += char + " ";
                     morseCode = "";
                 }
-            } else if (p.durationFrames >= ditFrames * 1.8) {
+            } else if (p.durationFrames >= ditFrames * 1.5) {
                 if (morseCode) {
                     const char = reverseMap[morseCode] || "";
                     if (char) decodedText += char;
