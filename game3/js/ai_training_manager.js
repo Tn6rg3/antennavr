@@ -154,17 +154,21 @@ window.loadSelectedAiQSO = async function() {
         if (m) fileId = m[0];
     }
 
-    const serverUrl = await window.getQsoServerUrlAutomatic();
+    // URL di Bot #2 per l'addestramento ed il proxy audio
+    const addestraServerUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url') || "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
 
     // 1. TENTATIVO VIA PROXY BASE64 GOOGLE APPS SCRIPT (Senza blocchi CORS/403)
-    if (fileId && serverUrl) {
+    if (fileId && addestraServerUrl) {
         try {
-            let cleanUrl = serverUrl.trim();
+            let cleanUrl = addestraServerUrl.trim();
             if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
             if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
 
-            const proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}`;
-            console.log("AI Audio Fetching via Proxy:", proxyUrl);
+            const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
+            const uid = window.myId || "";
+
+            const proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}&token=${encodeURIComponent(token)}&uid=${encodeURIComponent(uid)}`;
+            console.log("AI Audio Fetching via Bot #2 Proxy:", proxyUrl);
 
             const resp = await fetch(proxyUrl);
             if (resp.ok) {
