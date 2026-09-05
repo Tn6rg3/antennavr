@@ -141,7 +141,6 @@ window.loadQsoListFromGameSheet = async function() {
 window.loadSelectedAiQSO = async function() {
     const select = document.getElementById('aiQsoSelect');
     const statusElem = document.getElementById('aiAudioLoadStatus');
-    const iframeEl = document.getElementById('aiDriveIframe');
 
     if (!select) return;
 
@@ -162,18 +161,12 @@ window.loadSelectedAiQSO = async function() {
         if (m) fileId = m[0];
     }
 
-    // 1. CARICAMENTO NATIVO GOOGLE DRIVE PLAYER (Sempre ascoltabile e funzionante al 100%)
-    if (fileId && iframeEl) {
-        iframeEl.src = `https://drive.google.com/file/d/${fileId}/preview`;
-        iframeEl.style.display = 'block';
-    }
-
     const userBox = document.getElementById('aiUserCorrectionText');
     const aiBox = document.getElementById('aiPredictionText');
     if (userBox && window.aiTrainingState.editingPairIndex < 0) userBox.value = '';
     if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
 
-    // 2. SCARICAMENTO BINARIO PER FORMA D'ONDA & INFERENZA SPEZZONI (10s-60s)
+    // 1. SCARICAMENTO BINARIO PER FORMA D'ONDA & TAGLIO DI PRECISIONE SPEZZONI (10s-60s)
     if (fileId) {
         const cdnUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
         try {
@@ -188,7 +181,7 @@ window.loadSelectedAiQSO = async function() {
                 window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(arrayBuf);
 
                 if (statusElem) {
-                    statusElem.textContent = `✓ Audio Caricato! Durata: ${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s`;
+                    statusElem.textContent = `✓ Audio Caricato! Usa i tasti '▶️ Riproduci (${window.aiTrainingState.currentWindowDuration}s)' per l'ascolto dello spezzone.`;
                     statusElem.style.color = "#4caf50";
                 }
 
@@ -200,7 +193,7 @@ window.loadSelectedAiQSO = async function() {
         }
     }
 
-    // Fallback via Proxy Apps Script
+    // 2. FALLBACK VIA PROXY APPS SCRIPT
     const addestraServerUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
     if (fileId && addestraServerUrl) {
         try {
@@ -217,8 +210,6 @@ window.loadSelectedAiQSO = async function() {
             const resp = await fetch(proxyUrl);
             if (resp.ok) {
                 const data = await resp.json();
-                console.log("AI Audio Proxy Response:", data);
-
                 if (data && data.status === 'success' && data.base64) {
                     const binaryStr = atob(data.base64);
                     const bytes = new Uint8Array(binaryStr.length);
@@ -232,18 +223,11 @@ window.loadSelectedAiQSO = async function() {
                     window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
 
                     if (statusElem) {
-                        statusElem.textContent = `✓ Audio Caricato! Durata: ${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s`;
+                        statusElem.textContent = `✓ Audio Caricato! Usa i tasti '▶️ Riproduci (${window.aiTrainingState.currentWindowDuration}s)' per l'ascolto dello spezzone.`;
                         statusElem.style.color = "#4caf50";
                     }
 
                     window.updateAiSegmentDisplay();
-                    return;
-                } else if (data && data.message) {
-                    console.warn("AI Audio Proxy Error:", data.message);
-                    if (statusElem) {
-                        statusElem.textContent = "🎧 Player Nativo Google Drive Attivo (Usa il lettore sopra per l'ascolto)";
-                        statusElem.style.color = "var(--link-color)";
-                    }
                     return;
                 }
             }
@@ -253,8 +237,8 @@ window.loadSelectedAiQSO = async function() {
     }
 
     if (statusElem) {
-        statusElem.textContent = "🎧 Player Nativo Attivo (Usa il lettore Google Drive integrato per l'ascolto)";
-        statusElem.style.color = "var(--link-color)";
+        statusElem.textContent = "⚠️ Impossibile caricare l'audio. Verifica permessi Google Drive.";
+        statusElem.style.color = "#f44336";
     }
 };
 
