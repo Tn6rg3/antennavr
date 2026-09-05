@@ -137,20 +137,6 @@ window.loadQsoListFromGameSheet = async function() {
     if (status) status.textContent = "⚠️ Nessun QSO trovato nel Foglio. Carica file locale col tasto '📁 Carica Audio Locale'.";
     select.innerHTML = '<option value="">0 QSO trovati</option>';
 };
-            // Selezioniamo in automatico l'ultimo QSO registrato (il più recente)
-            select.selectedIndex = data.results.length - 1;
-            window.loadSelectedAiQSO();
-        } else {
-            console.warn("AI QSO List Load Failed:", data);
-            if (status) status.textContent = "⚠️ " + (data ? (data.message || "Impossibile caricare QSO dal server.") : "Risposta server non valida");
-            select.innerHTML = '<option value="">Errore caricamento</option>';
-        }
-    } catch(e) {
-        console.error("AI Training: Error loading QSO list:", e);
-        if (status) status.textContent = "⚠️ Errore connessione: " + e.message;
-        select.innerHTML = '<option value="">Errore connessione</option>';
-    }
-};
 
 window.loadSelectedAiQSO = async function() {
     const select = document.getElementById('aiQsoSelect');
