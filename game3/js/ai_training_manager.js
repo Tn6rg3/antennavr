@@ -93,11 +93,18 @@ window.loadQsoListFromGameSheet = async function() {
     if (status) status.textContent = "⏳ Lettura elenco QSO dal server...";
 
     try {
-        const resp = await fetch(`${addestraServerUrl}?action=search&q=`);
+        const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
+        const uid = window.myId || "";
+
+        const fetchUrl = `${addestraServerUrl}?action=search&q=&token=${encodeURIComponent(token)}&uid=${encodeURIComponent(uid)}`;
+        console.log("AI QSO List Fetching from:", fetchUrl);
+
+        const resp = await fetch(fetchUrl);
         if (!resp.ok) throw new Error("HTTP Error " + resp.status);
         const data = await resp.json();
+        console.log("AI QSO List Data:", data);
 
-        if (data.status === 'success' && Array.isArray(data.results)) {
+        if (data && data.status === 'success' && Array.isArray(data.results)) {
             window.aiTrainingState.qsoList = data.results;
             select.innerHTML = '';
 
@@ -118,11 +125,15 @@ window.loadQsoListFromGameSheet = async function() {
             if (status) status.textContent = `Caricati ${data.results.length} QSO dal Foglio Google.`;
             select.selectedIndex = 0;
             window.loadSelectedAiQSO();
+        } else {
+            console.warn("AI QSO List Load Failed:", data);
+            if (status) status.textContent = "⚠️ " + (data ? (data.message || "Impossibile caricare QSO dal server.") : "Risposta server non valida");
+            select.innerHTML = '<option value="">Errore caricamento</option>';
         }
     } catch(e) {
         console.error("AI Training: Error loading QSO list:", e);
-        if (status) status.textContent = "⚠️ Impossibile caricare QSO dal server.";
-        select.innerHTML = '<option value="">Errore caricamento</option>';
+        if (status) status.textContent = "⚠️ Errore connessione: " + e.message;
+        select.innerHTML = '<option value="">Errore connessione</option>';
     }
 };
 
