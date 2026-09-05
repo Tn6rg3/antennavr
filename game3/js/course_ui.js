@@ -143,33 +143,64 @@ window.renderTutorPanel = function() {
                 inactivityLabel = `<span style="color:var(--hint-color); font-size:0.8em;">MAI ALLENATO</span>`;
             }
 
+            const studentName = enroll.name || 'Corsista';
+
             const row = document.createElement('div');
             row.style.cssText = "padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid #673ab7; font-size:0.8em; display:flex; flex-direction:column; gap:5px; cursor:pointer;";
 
             row.onclick = (e) => {
-                if (e.target.closest('.live-badge')) return;
-                window.showStudentDetailedStats(uid, enroll.name || 'Corsista');
+                if (e.target.closest('.live-badge') || e.target.closest('.penalty-btn')) return;
+                window.showStudentDetailedStats(uid, studentName);
             };
 
-            const liveBadgeHtml = enroll.roomCode
-                ? `<span class="live-badge" style="background:#f44336; color:white; padding:1px 6px; border-radius:4px; font-size:0.7em; cursor:pointer; animation:pulse 1s infinite; display:flex; align-items:center; gap:3px;" onclick="window.watchSpecificRoom('${enroll.roomCode}', '${enroll.name || 'Corsista'}')">LIVE 🔴</span>`
-                : '';
+            const topDiv = document.createElement('div');
+            topDiv.style.cssText = "display:flex; justify-content:space-between; align-items:center;";
 
-            const safeName = (enroll.name || 'Corsista').replace(/'/g, "\\'");
-            row.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <b style="color:#b39ddb;">👤 ${enroll.name || 'Anonimo'}</b>
-                    <div style="display:flex; gap:5px; align-items:center;">
-                        ${inactivityLabel}
-                        <span onclick="event.stopPropagation(); window.removeStudentPenalty('${uid}', '${safeName}')" style="color:${p.reminders_count > 0 ? '#f44336' : '#4caf50'}; cursor:pointer; font-weight:bold; padding:2px 6px; background:rgba(255,255,255,0.05); border-radius:4px;" title="Clicca per rimuovere 1 richiamo">⚠️ ${p.reminders_count || 0} / 3 ➖</span>
-                        ${liveBadgeHtml}
-                    </div>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; font-size:0.9em; color:var(--hint-color);">
-                    <span>Lez: ${lesson}</span><span>Acc: ${accuracy}%</span>
-                    <span>XP: ${p.total_xp || 0}</span><span>Ultima: ${lastSess || '---'}</span>
-                </div>
-            `;
+            const nameB = document.createElement('b');
+            nameB.style.color = "#b39ddb";
+            nameB.textContent = `👤 ${studentName}`;
+
+            const rightDiv = document.createElement('div');
+            rightDiv.style.cssText = "display:flex; gap:5px; align-items:center;";
+
+            if (inactivityLabel) {
+                const inactSpan = document.createElement('span');
+                inactSpan.innerHTML = inactivityLabel;
+                rightDiv.appendChild(inactSpan);
+            }
+
+            const penaltySpan = document.createElement('span');
+            penaltySpan.className = 'penalty-btn';
+            penaltySpan.style.cssText = `color:${p.reminders_count > 0 ? '#f44336' : '#4caf50'}; cursor:pointer; font-weight:bold; padding:2px 6px; background:rgba(255,255,255,0.05); border-radius:4px;`;
+            penaltySpan.title = "Clicca per rimuovere 1 richiamo";
+            penaltySpan.textContent = `⚠️ ${p.reminders_count || 0} / 3 ➖`;
+            penaltySpan.onclick = (e) => {
+                e.stopPropagation();
+                window.removeStudentPenalty(uid, studentName);
+            };
+            rightDiv.appendChild(penaltySpan);
+
+            if (enroll.roomCode) {
+                const liveBadge = document.createElement('span');
+                liveBadge.className = 'live-badge';
+                liveBadge.style.cssText = "background:#f44336; color:white; padding:1px 6px; border-radius:4px; font-size:0.7em; cursor:pointer; animation:pulse 1s infinite; display:flex; align-items:center; gap:3px;";
+                liveBadge.textContent = "LIVE 🔴";
+                liveBadge.onclick = (e) => {
+                    e.stopPropagation();
+                    window.watchSpecificRoom(enroll.roomCode, studentName);
+                };
+                rightDiv.appendChild(liveBadge);
+            }
+
+            topDiv.appendChild(nameB);
+            topDiv.appendChild(rightDiv);
+
+            const gridDiv = document.createElement('div');
+            gridDiv.style.cssText = "display:grid; grid-template-columns: 1fr 1fr; gap:5px; font-size:0.9em; color:var(--hint-color);";
+            gridDiv.innerHTML = `<span>Lez: ${lesson}</span><span>Acc: ${accuracy}%</span><span>XP: ${p.total_xp || 0}</span><span>Ultima: ${lastSess || '---'}</span>`;
+
+            row.appendChild(topDiv);
+            row.appendChild(gridDiv);
             list.appendChild(row);
         }
 
@@ -254,7 +285,7 @@ window.showStudentDetailedStats = function(uid, name) {
             const currentLesson = p.current_lesson || 2;
             const currentLessonChar = window.KOCH_SEQUENCE[currentLesson - 1] || '';
             const activeChars = window.KOCH_SEQUENCE.slice(0, currentLesson).join(', ');
-            const safeName = (name || 'Corsista').replace(/'/g, "\\'");
+            const studentName = name || 'Corsista';
 
             progCont.innerHTML = `
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; grid-column:span 2;">
@@ -266,12 +297,24 @@ window.showStudentDetailedStats = function(uid, name) {
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Spazio Gruppi: <b>${settings.group_spacing || '3.0'}x</b></div>
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Piano Elite: <b style="color:${courseData.elite_mode ? '#9c27b0' : 'var(--hint-color)'}">${courseData.elite_mode ? 'Attivo ⚡' : 'Disattivato'}</b></div>
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; grid-column:span 2;">Minuti Sessioni: <b>Z2: ${settings.minutes_z2 || 10}m | WORK: ${settings.minutes_work || 7}m | LONG: ${settings.minutes_long || 17}m</b></div>
-                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                <div id="progContPenaltyBox" style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
                     <span>Richiami: <b style="color:${(p.reminders_count || 0) > 0 ? '#f44336' : '#4caf50'};">${p.reminders_count || 0} / 3</b></span>
-                    ${(p.reminders_count || 0) > 0 ? `<button onclick="window.removeStudentPenalty('${uid}', '${safeName}')" class="action-btn-small btn-secondary" style="padding:2px 6px; font-size:0.75em;" title="Rimuovi 1 richiamo">➖ Rimuovi 1</button>` : ''}
                 </div>
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Giorni Consecutivi: <b>${p.consecutive_days || 0} gg</b></div>
             `;
+
+            if ((p.reminders_count || 0) > 0) {
+                const penaltyBox = document.getElementById('progContPenaltyBox');
+                if (penaltyBox) {
+                    const btnRemove = document.createElement('button');
+                    btnRemove.className = "action-btn-small btn-secondary";
+                    btnRemove.style.cssText = "padding:2px 6px; font-size:0.75em;";
+                    btnRemove.title = "Rimuovi 1 richiamo";
+                    btnRemove.textContent = "➖ Rimuovi 1";
+                    btnRemove.onclick = () => window.removeStudentPenalty(uid, studentName);
+                    penaltyBox.appendChild(btnRemove);
+                }
+            }
         }
 
         // 2. HEATMAP INTERATTIVA
