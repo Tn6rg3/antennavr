@@ -258,12 +258,6 @@ window.loadSelectedAiQSO = async function() {
     }
 };
 
-    if (statusElem) {
-        statusElem.textContent = "⚠️ Impossibile scaricare l'audio. Verifica la condivisione della cartella Drive ('Chiunque abbia il link').";
-        statusElem.style.color = "#f44336";
-    }
-};
-
 window.changeAiWindowDuration = function() {
     const sel = document.getElementById('aiWindowDurationSelect');
     if (sel) {
