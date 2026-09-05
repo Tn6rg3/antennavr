@@ -11,8 +11,9 @@
 
     <title>Sfida Telegrafia</title>
 
-    <!-- Script essenziali (Telegram e Firebase) -->
+    <!-- Script essenziali (Telegram, ONNX e Firebase) -->
     <script src="https://telegram.org/js/telegram-web-app.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" crossorigin="anonymous"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js" crossorigin="anonymous"></script>
@@ -521,7 +522,7 @@
             <h3 style="color:var(--link-color); margin-bottom:8px; font-size:0.95em;">🎯 Missioni Giornaliere</h3>
             <div id="missionsContainer">
                 <p style="text-align:center; color:var(--hint-color); font-size:0.8em;">Caricamento missioni...</p>
-            </div>
+s            </div>
         </div>
 
         <!-- RIATTIVAZIONE SFIDA GIORNALIERA -->
@@ -1897,6 +1898,130 @@
     </div>
 </div>
 
+<!-- SCHERMATA ADDESTRA IA & STUDIO DECODIFICA -->
+<div id="aiTrainingScreen" class="screen">
+    <div class="screen-content" style="gap: 8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+            <h2 style="color:var(--champ-color); margin:0; font-size:1.1em;">🤖 Addestra IA (Morse Studio)</h2>
+        </div>
+
+        <!-- SCHEDE OPERATIVE -->
+        <div style="display:flex; gap:4px; width:100%;">
+            <button id="btnAiTabRefinement" class="tab-btn active-tab" onclick="window.switchAiTab('refinement')" style="flex:1; font-size:0.8em; padding:8px 2px;">🔍 Refinement (10s-60s)</button>
+            <button id="btnAiTabRealtime" class="tab-btn" onclick="window.switchAiTab('realtime')" style="flex:1; font-size:0.8em; padding:8px 2px;">🎙️ Real-Time & Waterfall</button>
+        </div>
+
+        <!-- TAB 1: REFINEMENT & ANNOTAZIONE -->
+        <div id="aiRefinementTab" style="display:block;">
+            <div class="box-panel" style="padding:10px; border-color:var(--link-color); margin-bottom:8px;">
+                <b style="color:var(--link-color); font-size:0.85em; display:block; margin-bottom:6px;">1. Seleziona Registrazione QSO:</b>
+                <select id="aiQsoSelect" onchange="window.loadSelectedAiQSO()" style="width:100%; padding:6px; font-size:0.8em; box-sizing:border-box; margin-bottom:6px;"></select>
+                <div id="aiQsoStatusText" style="font-size:0.75em; color:var(--hint-color); text-align:center;"></div>
+            </div>
+
+            <!-- ESTRATTORE FINESTRA AUDIO -->
+            <div class="box-panel" style="padding:10px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <b style="font-size:0.85em;">2. Finestra Segmento:</b>
+                    <label style="font-size:0.8em; color:var(--link-color);">
+                        ⏱️ Durata:
+                        <select id="aiWindowDurationSelect" onchange="window.changeAiWindowDuration()" style="padding:2px 6px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid var(--link-color); border-radius:4px;">
+                            <option value="10" selected>10 Secondi</option>
+                            <option value="15">15 Secondi</option>
+                            <option value="20">20 Secondi</option>
+                            <option value="30">30 Secondi</option>
+                            <option value="45">45 Secondi</option>
+                            <option value="60">60 Secondi (1 Min)</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:8px;">
+                    <button id="btnAiPrevSegment" onclick="window.prevAiSegment()" class="action-btn-small btn-secondary" style="flex:1; padding:8px;">◄◄ -10s</button>
+                    <button id="btnAiPlaySegment" onclick="window.playCurrentAiSegment()" class="action-btn-small btn-success" style="flex:1.5; padding:8px; font-weight:bold;">▶️ Riproduci</button>
+                    <button id="btnAiNextSegment" onclick="window.nextAiSegment()" class="action-btn-small btn-secondary" style="flex:1; padding:8px;">+10s ►►</button>
+                </div>
+
+                <div style="text-align:center; font-size:0.8em; color:var(--link-color); margin-bottom:6px;">
+                    Posizione: <b id="aiTimePosDisplay">00:00 - 00:10</b>
+                </div>
+                <div id="aiAudioLoadStatus" style="font-size:0.75em; text-align:center; margin-bottom:6px;"></div>
+
+                <!-- WAVEFORM CANVAS -->
+                <div style="width:100%; height:70px; background:#0a0f14; border-radius:6px; overflow:hidden;">
+                    <canvas id="aiSegmentCanvas" width="400" height="70" style="width:100%; height:100%; display:block;"></canvas>
+                </div>
+            </div>
+
+            <!-- ANALISI IA & VERIFICA UMANA -->
+            <div class="box-panel" style="padding:10px; border-color:var(--champ-color); margin-bottom:8px;">
+                <button onclick="window.runInferenceOnSegment()" class="btn-champ" style="width:100%; padding:10px; font-weight:bold; font-size:0.9em; margin-bottom:8px;">⚡ ESEGUI ANALISI IA SUL SEGMENTO</button>
+
+                <!-- TEXTBOX 1: PREDIZIONE IA -->
+                <div style="margin-bottom:8px;">
+                    <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">🤖 TEXTBOX 1 - Predizione IA / DSP:</label>
+                    <input type="text" id="aiPredictionText" readonly placeholder="In attesa dell'analisi..." style="width:100%; padding:6px; font-size:0.85em; font-family:monospace; background:rgba(0,0,0,0.3); color:#4caf50; border:1px solid rgba(255,255,255,0.1); box-sizing:border-box;">
+                </div>
+
+                <!-- TEXTBOX 1B: RICOSTRUZIONE DIZIONARIO -->
+                <div style="margin-bottom:8px;">
+                    <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">💡 Ricostruzione da Dizionario Radio:</label>
+                    <div style="display:flex; gap:6px;">
+                        <input type="text" id="aiDictionaryCorrectedText" readonly style="flex:1; padding:6px; font-size:0.85em; font-family:monospace; background:rgba(0,0,0,0.3); color:var(--link-color); border:1px solid rgba(255,255,255,0.1); box-sizing:border-box;">
+                        <button onclick="window.applyAiDictionaryCorrection()" class="action-btn-small btn-secondary" style="width:auto; padding:6px 10px;">✨ Usa</button>
+                    </div>
+                </div>
+
+                <!-- TEXTBOX 2: CORREZIONE UMANA -->
+                <div style="margin-bottom:8px;">
+                    <label style="font-size:0.75em; color:var(--champ-color); font-weight:bold; display:block; margin-bottom:2px;">✏️ TEXTBOX 2 - Testo Corretto dall'Operatore:</label>
+                    <textarea id="aiUserCorrectionText" rows="2" placeholder="Ascolta l'audio e scrivi qui il testo corretto..." style="width:100%; padding:6px; font-size:0.85em; font-family:monospace; border-radius:4px; border:1px solid var(--champ-color); background:var(--bg-color); color:var(--text-color); box-sizing:border-box;"></textarea>
+                </div>
+
+                <button onclick="window.saveVerifiedAiPair()" class="btn-success" style="width:100%; padding:10px; font-weight:bold; font-size:0.9em; margin:0;">💾 SALVA & SINCRONIZZA SU FOGLIO ADDESTRA</button>
+            </div>
+
+            <!-- TABELLA SEGMENTI VERIFICATI -->
+            <div class="box-panel" style="padding:10px;">
+                <b style="font-size:0.8em; color:var(--link-color);">📋 Segmenti Verificati (<span id="aiSavedCount">0</span>)</b>
+                <div style="max-height:150px; overflow-y:auto; margin-top:6px;">
+                    <table id="aiVerifiedTable" style="width:100%; border-collapse:collapse; font-size:0.75em; text-align:left;">
+                        <thead>
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.1); color:var(--hint-color);">
+                                <th>#</th><th>QSO</th><th>Pos</th><th>IA</th><th>Testo Reale</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: REAL-TIME WATERFALL -->
+        <div id="aiRealtimeTab" style="display:none;">
+            <div class="box-panel" style="padding:10px; text-align:center;">
+                <b style="color:var(--champ-color); font-size:0.9em; display:block; margin-bottom:8px;">🎙️ Decodifica in Tempo Reale & Cascata Frequenziale</b>
+                <button id="btnStartAiMic" onclick="window.toggleAiMicrophone()" class="btn-success" style="width:100%; padding:10px; font-weight:bold; margin-bottom:8px;">🎙️ Avvia Microfono Live</button>
+                <div id="aiLiveStatus" style="font-size:0.8em; color:var(--hint-color); margin-bottom:8px;">Inattivo</div>
+
+                <div style="width:100%; height:120px; background:#000; border-radius:6px; overflow:hidden; margin-bottom:8px;">
+                    <canvas id="aiWaterfallCanvas" width="400" height="120" style="width:100%; height:100%; display:block;"></canvas>
+                </div>
+
+                <div style="text-align:left;">
+                    <label style="font-size:0.75em; color:var(--link-color); font-weight:bold; display:block; margin-bottom:4px;">📡 Testo Decodificato in Diretta:</label>
+                    <div id="aiLiveOutputBox" style="background:#0a0f14; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:8px; font-family:monospace; font-size:0.85em; color:#00ff66; min-height:80px; max-height:120px; overflow-y:auto; white-space:pre-wrap; word-break:break-word;">In attesa del segnale audio...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTONE TORNA AL MENU PRINCIPALE IN BASSO FISSO -->
+    <div class="fixed-bottom-btns">
+        <button onclick="goBackToMenu()" class="btn-secondary" style="width:100%; font-size:0.9em; padding:10px;">TORNA AL MENU PRINCIPALE 🏠</button>
+    </div>
+</div>
+
 <!-- AREA QSO P2P (SENZA DECODER) -->
 <div id="qsoArea" class="screen" style="overflow-y: auto; display: none; flex-direction: column;">
     <div class="header-stats" style="background: #2c3e50; border-bottom: 2px solid #ff9800; flex-shrink: 0; display:flex; justify-content:space-between; align-items:center; padding: 8px 15px; position: sticky; top: 0; z-index: 10;">
@@ -2383,6 +2508,7 @@
             "js/tone_test_manager.js",
             "js/qso_manager.js",
             "js/qso_audio_manager.js",
+            "js/ai_training_manager.js",
             "js/rating_manager.js",
             "js/game_core.js"
         ];
