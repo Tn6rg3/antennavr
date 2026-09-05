@@ -190,22 +190,34 @@ window.loadSelectedAiQSO = async function() {
             if (uid) proxyUrl += `&uid=${encodeURIComponent(uid)}`;
             if (token) proxyUrl += `&token=${encodeURIComponent(token)}`;
 
-            console.log("AI Audio Fetching via Bot #2 Proxy:", proxyUrl);
+            console.log("🚀 Starting AI Audio Download via Bot #2 Proxy for File ID:", fileId);
+            console.log("🔗 Proxy URL:", proxyUrl);
 
             const resp = await fetch(proxyUrl);
+            console.log("📡 Proxy HTTP Response Status:", resp.status);
+
             if (resp.ok) {
-                const data = await resp.json();
+                const text = await resp.text();
+                console.log("📦 Raw Proxy Response Length:", text.length, "bytes");
+
+                let data = null;
+                try { data = JSON.parse(text); } catch(e) { console.warn("Proxy JSON error:", e, text.slice(0, 200)); }
+
                 if (data && data.status === 'success' && data.base64) {
+                    console.log("✓ Received Base64 Audio Payload! Length:", data.base64.length, "chars");
+
                     const binaryStr = atob(data.base64);
                     const bytes = new Uint8Array(binaryStr.length);
                     for (let i = 0; i < binaryStr.length; i++) {
                         bytes[i] = binaryStr.charCodeAt(i);
                     }
+                    console.log("🔊 Converted to Binary ArrayBuffer! Byte Length:", bytes.byteLength, "bytes");
 
                     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
                     window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+                    console.log("🎉 WebAudio Buffer Decoded Successfully! Duration:", window.aiTrainingState.currentAudioBuffer.duration, "seconds");
 
                     if (statusElem) {
                         statusElem.textContent = `✓ Spezzone Estratto ed Elaborato! (${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s) Premi ▶️ Riproduci per l'ascolto.`;
@@ -215,6 +227,13 @@ window.loadSelectedAiQSO = async function() {
                     window.updateAiSegmentDisplay();
                     showToast("✓ Spezzone pronto! Usa ▶️ Riproduci per ascoltare la parte estratta.");
                     return;
+                } else if (data && data.message) {
+                    console.warn("Proxy Server Message:", data.message);
+                    if (statusElem) {
+                        statusElem.textContent = "⚠️ " + data.message;
+                        statusElem.style.color = "#ff9800";
+                    }
+                    return;
                 }
             }
         } catch(e) {
@@ -223,8 +242,8 @@ window.loadSelectedAiQSO = async function() {
     }
 
     if (statusElem) {
-        statusElem.textContent = "🎧 Player Streaming Pronto (Usa ▶️ Riproduci per l'ascolto a tempo)";
-        statusElem.style.color = "var(--link-color)";
+        statusElem.textContent = "⚠️ Impossibile scaricare l'audio. Carica il file col tasto '📁 Carica Audio Locale'.";
+        statusElem.style.color = "#ff9800";
     }
 };
 
