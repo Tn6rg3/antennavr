@@ -85,8 +85,8 @@ window.switchAiTab = function(tabId) {
 
 window.loadQsoListFromGameSheet = async function() {
     const serverUrls = [
-        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec",
-        "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec"
+        "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec",
+        "https://script.google.com/macros/s/AKfycbxyWIV1a0Zp6YxzGn_v8_KUPAFS9CX3BX-bqm5SAMvnfWkEEXT8wyLinGlcuudh1pYs/exec"
     ];
     const select = document.getElementById('aiQsoSelect');
     const status = document.getElementById('aiQsoStatusText');
@@ -176,7 +176,7 @@ window.loadSelectedAiQSO = async function() {
     }
 
     // SCARICAMENTO DIRETTO ED ESCLUSIVO VIA PROXY GOOGLE APPS SCRIPT (Senza blocchi CORS / 403)
-    const addestraServerUrl = window.aiActiveAddestraUrl || "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec";
+    const addestraServerUrl = window.aiActiveAddestraUrl || "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
     if (fileId && addestraServerUrl) {
         try {
             let cleanUrl = addestraServerUrl.trim();
@@ -553,21 +553,23 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
         } else if (!p.tone) {
             if (p.durationFrames >= ditFrames * 3.5) {
                 if (morseCode) {
-                    const char = reverseMap[morseCode] || `[${morseCode}]`;
-                    decodedText += char + " ";
+                    const char = reverseMap[morseCode] || "";
+                    if (char) decodedText += char + " ";
                     morseCode = "";
                 }
             } else if (p.durationFrames >= ditFrames * 1.2) {
                 if (morseCode) {
-                    const char = reverseMap[morseCode] || `[${morseCode}]`;
-                    decodedText += char;
+                    const char = reverseMap[morseCode] || "";
+                    if (char) decodedText += char;
                     morseCode = "";
                 }
             }
         }
     }
     if (morseCode) {
-        const char = reverseMap[morseCode] || `[${morseCode}]`;
+        const char = reverseMap[morseCode] || "";
+        if (char) decodedText += char;
+    }
         decodedText += char;
     }
 
@@ -729,7 +731,7 @@ window.saveVerifiedAiPair = function() {
 
 window.syncPairToGoogleCloudSheet = function(pair) {
     if (!pair || !pair.userCorrection) return;
-    const appsScriptUrl = window.aiActiveAddestraUrl || "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec";
+    const appsScriptUrl = window.aiActiveAddestraUrl || "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.myId || "";
