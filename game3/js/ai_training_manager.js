@@ -148,10 +148,40 @@ window.loadSelectedAiQSO = async function() {
         if (m) fileId = m[0];
     }
 
-    // URL dedicato dello script Bot #2 (ADDESTRA & Proxy Audio)
-    const addestraServerUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
+    // 1. TENTATIVO VIA CDN DIRETTO GOOGLE DRIVE (Velocissimo, senza limiti di dimensione)
+    if (fileId) {
+        const cdnUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+        try {
+            console.log("AI Audio Fetching via Direct Google CDN:", cdnUrl);
+            const resp = await fetch(cdnUrl);
+            if (resp.ok) {
+                const arrayBuf = await resp.arrayBuffer();
 
-    // 1. TENTATIVO VIA PROXY BASE64 GOOGLE APPS SCRIPT (Senza blocchi CORS/403)
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+                window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+
+                if (statusElem) {
+                    statusElem.textContent = `✓ Audio Caricato! Durata: ${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s`;
+                    statusElem.style.color = "#4caf50";
+                }
+
+                const userBox = document.getElementById('aiUserCorrectionText');
+                const aiBox = document.getElementById('aiPredictionText');
+                if (userBox && window.aiTrainingState.editingPairIndex < 0) userBox.value = '';
+                if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
+
+                window.updateAiSegmentDisplay();
+                return;
+            }
+        } catch (e) {
+            console.warn("Direct CDN Fetch Warning, trying Proxy fallback...", e);
+        }
+    }
+
+    // 2. FALLBACK VIA PROXY GOOGLE APPS SCRIPT
+    const addestraServerUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
     if (fileId && addestraServerUrl) {
         try {
             let cleanUrl = addestraServerUrl.trim();
@@ -167,8 +197,6 @@ window.loadSelectedAiQSO = async function() {
             const resp = await fetch(proxyUrl);
             if (resp.ok) {
                 const data = await resp.json();
-                console.log("AI Audio Proxy Response:", data);
-
                 if (data && data.status === 'success' && data.base64) {
                     const binaryStr = atob(data.base64);
                     const bytes = new Uint8Array(binaryStr.length);
@@ -193,19 +221,18 @@ window.loadSelectedAiQSO = async function() {
 
                     window.updateAiSegmentDisplay();
                     return;
-                } else if (data && data.message) {
-                    console.warn("AI Audio Proxy Error:", data.message);
-                    if (statusElem) {
-                        statusElem.textContent = "⚠️ Errore Google Drive: " + data.message;
-                        statusElem.style.color = "#f44336";
-                    }
-                    return;
                 }
             }
         } catch(e) {
             console.warn("AI Audio Proxy Fetch Warning:", e);
         }
     }
+
+    if (statusElem) {
+        statusElem.textContent = "⚠️ Impossibile scaricare l'audio. Verifica la condivisione della cartella Drive ('Chiunque abbia il link').";
+        statusElem.style.color = "#f44336";
+    }
+};
 
     // 2. FALLBACK DIRETTO STREAM URL
     const streamUrl = fileId ? `https://docs.google.com/uc?export=download&id=${fileId}` : item.streamUrl;
