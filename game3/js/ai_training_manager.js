@@ -51,8 +51,9 @@ window.initAiTrainingModule = async function() {
     // Inizializza modello ONNX se la libreria ort è presente
     if (typeof ort !== 'undefined' && !window.aiTrainingState.ortSession) {
         try {
-            console.log("Loading ONNX Model (addestra/morse_model.onnx)...");
-            window.aiTrainingState.ortSession = await ort.InferenceSession.create('addestra/morse_model.onnx', { executionProviders: ['wasm', 'webgl'] });
+            const modelUrl = new URL('addestra/morse_model.onnx', window.location.href).href;
+            console.log("Loading ONNX Model from:", modelUrl);
+            window.aiTrainingState.ortSession = await ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm', 'webgl'] });
             console.log("ONNX Model loaded successfully!");
         } catch (e) {
             console.warn("ONNX Model not loaded yet or ONNX Web not supported, using DSP fallback.", e);
@@ -153,6 +154,53 @@ window.loadSelectedAiQSO = async function() {
         if (m) fileId = m[0];
     }
 
+    const serverUrl = await window.getQsoServerUrlAutomatic();
+
+    // 1. TENTATIVO VIA PROXY BASE64 GOOGLE APPS SCRIPT (Senza blocchi CORS/403)
+    if (fileId && serverUrl) {
+        try {
+            let cleanUrl = serverUrl.trim();
+            if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
+            if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
+
+            const proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}`;
+            console.log("AI Audio Fetching via Proxy:", proxyUrl);
+
+            const resp = await fetch(proxyUrl);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data && data.status === 'success' && data.base64) {
+                    const binaryStr = atob(data.base64);
+                    const bytes = new Uint8Array(binaryStr.length);
+                    for (let i = 0; i < binaryStr.length; i++) {
+                        bytes[i] = binaryStr.charCodeAt(i);
+                    }
+
+                    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+                    window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+
+                    if (statusElem) {
+                        statusElem.textContent = `✓ Audio Caricato! Durata: ${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s`;
+                        statusElem.style.color = "#4caf50";
+                    }
+
+                    const userBox = document.getElementById('aiUserCorrectionText');
+                    const aiBox = document.getElementById('aiPredictionText');
+                    if (userBox && window.aiTrainingState.editingPairIndex < 0) userBox.value = '';
+                    if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
+
+                    window.updateAiSegmentDisplay();
+                    return;
+                }
+            }
+        } catch(e) {
+            console.warn("AI Audio Proxy Fetch Warning:", e);
+        }
+    }
+
+    // 2. FALLBACK DIRETTO STREAM URL
     const streamUrl = fileId ? `https://docs.google.com/uc?export=download&id=${fileId}` : item.streamUrl;
 
     try {
@@ -179,7 +227,7 @@ window.loadSelectedAiQSO = async function() {
     } catch(e) {
         console.warn("AI Audio Load Warning:", e);
         if (statusElem) {
-            statusElem.textContent = "⚠️ Errore caricamento audio. Verifica condivisione Drive.";
+            statusElem.textContent = "⚠️ Impossibile scaricare l'audio. Verifica permessi Google Drive o aggiorna Apps Script.";
             statusElem.style.color = "#f44336";
         }
     }
