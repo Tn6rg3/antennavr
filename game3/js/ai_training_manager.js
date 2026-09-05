@@ -175,7 +175,7 @@ window.loadSelectedAiQSO = async function() {
         audioEl.load();
     }
 
-    // 1. SCARICAMENTO DIRETTO VIA PROXY APPS SCRIPT (Senza blocchi CORS / 403)
+    // SCARICAMENTO DIRETTO ED ESCLUSIVO VIA PROXY GOOGLE APPS SCRIPT (Senza blocchi CORS / 403)
     const addestraServerUrl = window.aiActiveAddestraUrl || "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
     if (fileId && addestraServerUrl) {
         try {
@@ -220,32 +220,6 @@ window.loadSelectedAiQSO = async function() {
         } catch(e) {
             console.warn("AI Audio Proxy Fetch Warning:", e);
         }
-    }
-
-    // 2. FALLBACK SCARICAMENTO BINARIO VIA CORS-PROXY
-    try {
-        const corsProxyUrl = `https://corsproxy.io/?${encodeURIComponent(driveUrl)}`;
-        console.log("AI Audio Fetching via CORS Proxy:", corsProxyUrl);
-        const resp = await fetch(corsProxyUrl);
-        if (resp.ok) {
-            const arrayBuf = await resp.arrayBuffer();
-
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-            if (audioCtx.state === 'suspended') await audioCtx.resume();
-
-            window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(arrayBuf);
-
-            if (statusElem) {
-                statusElem.textContent = `✓ Spezzone Estratto ed Elaborato! (${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s) Premi ▶️ Riproduci per l'ascolto.`;
-                statusElem.style.color = "#4caf50";
-            }
-
-            window.updateAiSegmentDisplay();
-            showToast("✓ Spezzone pronto! Usa ▶️ Riproduci per ascoltare la parte estratta.");
-            return;
-        }
-    } catch (e) {
-        console.warn("CORS Proxy Fetch Warning:", e);
     }
 
     if (statusElem) {
