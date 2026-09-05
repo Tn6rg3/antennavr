@@ -242,6 +242,43 @@ window.loadSelectedAiQSO = async function() {
     }
 };
 
+window.handleAiLocalAudioUpload = async function(event) {
+    const file = event.target.files ? event.target.files[0] : null;
+    const statusElem = document.getElementById('aiAudioLoadStatus');
+
+    if (!file) return;
+
+    if (statusElem) {
+        statusElem.textContent = `⏳ Lettura file locale: ${file.name}...`;
+        statusElem.style.color = "var(--link-color)";
+    }
+
+    try {
+        const arrayBuf = await file.arrayBuffer();
+
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+        window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+        window.aiTrainingState.currentWindowStart = 0;
+        window.aiTrainingState.currentLocalFileName = file.name;
+
+        if (statusElem) {
+            statusElem.textContent = `✓ File Audio Locale Caricato: ${file.name} (${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s)`;
+            statusElem.style.color = "#4caf50";
+        }
+
+        window.updateAiSegmentDisplay();
+        showToast("File audio locale pronto per l'analisi e il taglio 10s-60s!");
+    } catch(e) {
+        console.error("AI Local Audio Upload Error:", e);
+        if (statusElem) {
+            statusElem.textContent = "⚠️ Errore decodifica file audio locale.";
+            statusElem.style.color = "#f44336";
+        }
+    }
+};
+
 window.changeAiWindowDuration = function() {
     const sel = document.getElementById('aiWindowDurationSelect');
     if (sel) {
