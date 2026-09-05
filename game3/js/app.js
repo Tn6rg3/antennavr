@@ -556,10 +556,15 @@ async function validateIdentity() {
 
         const result = await response.json();
 
-        // Salva SEMPRE l'URL inviato dallo script di autenticazione
+        // Salva SEMPRE l'URL e il Token Dinamico inviati dallo script di autenticazione
         if (result && result.qsoAudioServerUrl) {
             localStorage.setItem('cwgame_qso_audio_url', result.qsoAudioServerUrl);
             window.qsoAudioServerUrl = result.qsoAudioServerUrl;
+        }
+
+        if (result && result.aiAuthToken) {
+            localStorage.setItem('cwgame_ai_auth_token', result.aiAuthToken);
+            window.aiAuthToken = result.aiAuthToken;
         }
 
         if (result && result.status === 'ok') {
@@ -1874,6 +1879,11 @@ if (els.createRoomBtn) {
             if (gMode === 'qso_audio_search') {
                 window.showScreen('qsoAudioScreen');
                 if (typeof window.initQsoAudioModule === 'function') window.initQsoAudioModule();
+                return;
+            }
+            if (gMode === 'addestra_ia') {
+                window.showScreen('aiTrainingScreen');
+                if (typeof window.initAiTrainingModule === 'function') window.initAiTrainingModule();
                 return;
             }
             window.startTransmissionFree(gMode);

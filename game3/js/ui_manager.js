@@ -19,17 +19,17 @@ window.populateGameModesUI = function() {
         // --- LOGICA FILTRI ---
         if (isSingle) {
             // QSO e modalità Tx/Rx non sono ammesse in Solo
-            if (mode.id === 'qso' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search') return;
+            if (mode.id === 'qso' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search' || mode.id === 'addestra_ia') return;
         } else if (isMulti) {
             // Modalità ammesse in Multi
-            if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search') return;
+            if (mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search' || mode.id === 'addestra_ia') return;
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
         } else if (isTx) {
-            // Mostriamo SOLTANTO Standard, Gruppi, Ricezione Audio e Ascolto QSO Reali
-            if (mode.id !== 'standard' && mode.id !== 'groups_tx' && mode.id !== 'real_tx' && mode.id !== 'qso_audio_search') return;
+            // Mostriamo Standard, Gruppi, Ricezione Audio, Ascolto QSO Reali e Addestra IA
+            if (mode.id !== 'standard' && mode.id !== 'groups_tx' && mode.id !== 'real_tx' && mode.id !== 'qso_audio_search' && mode.id !== 'addestra_ia') return;
         } else {
-            if (mode.id === 'qso_audio_search' || mode.id === 'groups_tx' || mode.id === 'real_tx') return;
+            if (mode.id === 'qso_audio_search' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'addestra_ia') return;
             if (typeInput.value === 'arcade' && mode.id !== 'arcade' && mode.id !== 'la_torre') return;
             if (typeInput.value === 'tournament') return; // Gestito da optgroup
         }
@@ -44,6 +44,7 @@ window.populateGameModesUI = function() {
             else if (mode.id === 'groups_tx') opt.textContent = lang === 'it' ? "Trasmissione Gruppi" : "Groups Transmission";
             else if (mode.id === 'real_tx') opt.textContent = lang === 'it' ? "Ricezione Audio (Tasto Reale)" : "Audio Reception (Real Key)";
             else if (mode.id === 'qso_audio_search') opt.textContent = lang === 'it' ? "Ascolto QSO Reali 🎧" : "Listen Real QSOs 🎧";
+            else if (mode.id === 'addestra_ia') opt.textContent = lang === 'it' ? "Addestra IA 🤖" : "Train AI 🤖";
             else return;
         } else {
             opt.textContent = lang === 'it' ? mode.titleIt : mode.titleEn;
@@ -55,7 +56,7 @@ window.populateGameModesUI = function() {
     // Ripristiniamo il valore se ancora valido, altrimenti standard
     if (window.GAME_MODES && window.GAME_MODES[currentVal]) {
         if (isSingle && currentVal === 'pingpong') select.value = 'standard';
-        else if (isTx && currentVal !== 'standard' && currentVal !== 'groups_tx' && currentVal !== 'real_tx' && currentVal !== 'qso_audio_search') select.value = 'standard';
+        else if (isTx && currentVal !== 'standard' && currentVal !== 'groups_tx' && currentVal !== 'real_tx' && currentVal !== 'qso_audio_search' && currentVal !== 'addestra_ia') select.value = 'standard';
         else select.value = currentVal;
     } else {
         select.value = 'standard';

@@ -385,6 +385,19 @@ window.GAME_MODES = {
         fixedSpeedAllowed: false,
         spacingConfigurable: false,
         generateWords: function(num, dicts) { return []; }
+    },
+    "addestra_ia": {
+        id: "addestra_ia",
+        titleIt: "Addestra IA",
+        titleEn: "Train AI",
+        icon: "🤖",
+        defaultWpm: 20,
+        defaultWordCount: 0,
+        wpmConfigurable: false,
+        wordCountConfigurable: false,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: false,
+        generateWords: function(num, dicts) { return []; }
     }
 };
 
