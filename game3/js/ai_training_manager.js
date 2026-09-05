@@ -84,7 +84,7 @@ window.switchAiTab = function(tabId) {
 };
 
 window.loadQsoListFromGameSheet = async function() {
-    const addestraServerUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
+    const addestraServerUrl = "https://script.google.com/macros/s/AKfycbxyWIV1a0Zp6YxzGn_v8_KUPAFS9CX3BX-bqm5SAMvnfWkEEXT8wyLinGlcuudh1pYs/exec";
     const select = document.getElementById('aiQsoSelect');
     const status = document.getElementById('aiQsoStatusText');
 
@@ -195,7 +195,7 @@ window.loadSelectedAiQSO = async function() {
     }
 
     // 2. FALLBACK SCARICAMENTO VIA PROXY APPS SCRIPT BOT #2
-    const addestraServerUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
+    const addestraServerUrl = "https://script.google.com/macros/s/AKfycbxyWIV1a0Zp6YxzGn_v8_KUPAFS9CX3BX-bqm5SAMvnfWkEEXT8wyLinGlcuudh1pYs/exec";
     if (fileId && addestraServerUrl) {
         try {
             let cleanUrl = addestraServerUrl.trim();
