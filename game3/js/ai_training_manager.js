@@ -558,9 +558,10 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
         decodedText += char;
     }
 
-    const res = decodedText.replace(/^[():;=.,\s]+|[():;=.,\s]+$/g, "").trim();
-    if (res === ":" || res === "." || res === "," || res === "(" || res === ")") return "";
-    return res;
+    let cleanRes = decodedText.replace(/^[():;=.,\s]+|[():;=.,\s]+$/g, "").trim();
+    cleanRes = cleanRes.replace(/\b\.\b/g, "").replace(/\s+/g, " ").trim();
+    if (cleanRes === ":" || cleanRes === "." || cleanRes === "," || cleanRes === "(" || cleanRes === ")") return "";
+    return cleanRes;
 }
 
 window.runInferenceOnSegment = async function() {
@@ -624,7 +625,9 @@ window.runInferenceOnSegment = async function() {
 
         const dspResult = decodeMorseDSP(audio16k, 16000);
         const rawText = aiResult.trim() || dspResult.trim();
-        const cleanText = rawText.replace(/^[():;=.,\s]+|[():;=.,\s]+$/g, "").trim();
+        let cleanText = rawText.replace(/^[():;=.,\s]+|[():;=.,\s]+$/g, "").trim();
+        cleanText = cleanText.replace(/\b\.\b/g, "").replace(/\s+/g, " ").trim();
+
         const finalOutput = (cleanText === ":" || cleanText === "." || cleanText === "," || cleanText === "=" || cleanText === "(" || cleanText === ")") ? "" : cleanText;
 
         if (aiBox) aiBox.value = finalOutput || "NESSUN SEGNALE DETETTATO";
