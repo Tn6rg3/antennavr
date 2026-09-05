@@ -570,8 +570,6 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
         const char = reverseMap[morseCode] || "";
         if (char) decodedText += char;
     }
-        decodedText += char;
-    }
 
     let cleanRes = decodedText.replace(/^[():;=.,\s]+|[():;=.,\s]+$/g, "").trim();
     cleanRes = cleanRes.replace(/\b\.\b/g, "").replace(/\s+/g, " ").trim();
