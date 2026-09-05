@@ -151,7 +151,7 @@ window.loadSelectedAiQSO = async function() {
     window.aiTrainingState.currentWindowStart = 0;
 
     if (statusElem) {
-        statusElem.textContent = `⏳ Scaricamento audio QSO #${idx + 1}...`;
+        statusElem.textContent = `⏳ Scaricamento automatico audio QSO #${idx + 1}...`;
         statusElem.style.color = "var(--link-color)";
     }
 
@@ -181,12 +181,12 @@ window.loadSelectedAiQSO = async function() {
                 window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(arrayBuf);
 
                 if (statusElem) {
-                    statusElem.textContent = `✓ Audio Scaricato! Usa '▶️ Riproduci (${window.aiTrainingState.currentWindowDuration}s)' per l'ascolto dello spezzone.`;
+                    statusElem.textContent = `✓ Spezzone Estratto ed Elaborato! (${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s) Premi ▶️ Riproduci per l'ascolto.`;
                     statusElem.style.color = "#4caf50";
                 }
 
                 window.updateAiSegmentDisplay();
-                showToast(`✓ Spezzone da ${window.aiTrainingState.currentWindowDuration}s pronto! Premi ▶️ Riproduci per l'ascolto.`);
+                showToast("✓ Spezzone pronto! Usa ▶️ Riproduci per ascoltare la parte estratta.");
                 return;
             }
         } catch (e) {
@@ -224,12 +224,12 @@ window.loadSelectedAiQSO = async function() {
                     window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
 
                     if (statusElem) {
-                        statusElem.textContent = `✓ Audio Scaricato! Usa '▶️ Riproduci (${window.aiTrainingState.currentWindowDuration}s)' per l'ascolto dello spezzone.`;
+                        statusElem.textContent = `✓ Spezzone Estratto ed Elaborato! (${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s) Premi ▶️ Riproduci per l'ascolto.`;
                         statusElem.style.color = "#4caf50";
                     }
 
                     window.updateAiSegmentDisplay();
-                    showToast(`✓ Spezzone da ${window.aiTrainingState.currentWindowDuration}s pronto! Premi ▶️ Riproduci per l'ascolto.`);
+                    showToast("✓ Spezzone pronto! Usa ▶️ Riproduci per ascoltare la parte estratta.");
                     return;
                 }
             }
@@ -523,31 +523,31 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
 
     for (let p of pulses) {
         if (p.tone && p.durationFrames >= 2) {
-            if (p.durationFrames >= ditFrames * 2.1) morseCode += "-";
+            if (p.durationFrames >= ditFrames * 2.0) morseCode += "-";
             else morseCode += ".";
         } else if (!p.tone) {
-            if (p.durationFrames >= ditFrames * 4.5) {
+            if (p.durationFrames >= ditFrames * 3.5) {
                 if (morseCode) {
-                    const char = reverseMap[morseCode] || "";
-                    if (char) decodedText += char + " ";
+                    const char = reverseMap[morseCode] || `[${morseCode}]`;
+                    decodedText += char + " ";
                     morseCode = "";
                 }
-            } else if (p.durationFrames >= ditFrames * 1.5) {
+            } else if (p.durationFrames >= ditFrames * 1.2) {
                 if (morseCode) {
-                    const char = reverseMap[morseCode] || "";
-                    if (char) decodedText += char;
+                    const char = reverseMap[morseCode] || `[${morseCode}]`;
+                    decodedText += char;
                     morseCode = "";
                 }
             }
         }
     }
     if (morseCode) {
-        const char = reverseMap[morseCode] || "";
-        if (char) decodedText += char;
+        const char = reverseMap[morseCode] || `[${morseCode}]`;
+        decodedText += char;
     }
 
-    const res = decodedText.trim();
-    if (res === ":" || res === "." || res === ",") return "";
+    const res = decodedText.replace(/^[():;=.,\s]+|[():;=.,\s]+$/g, "").trim();
+    if (res === ":" || res === "." || res === "," || res === "(" || res === ")") return "";
     return res;
 }
 
@@ -600,7 +600,7 @@ window.runInferenceOnSegment = async function() {
                     }
                     if (maxIdx !== 0 && maxIdx !== lastIdx) {
                         const char = AI_VOCAB[maxIdx] || '';
-                        if (char !== ':' && char !== ';' && char !== '=') aiResult += char;
+                        if (char !== ':' && char !== ';' && char !== '=' && char !== '(' && char !== ')') aiResult += char;
                     }
                     lastIdx = maxIdx;
                 }
@@ -612,7 +612,8 @@ window.runInferenceOnSegment = async function() {
 
         const dspResult = decodeMorseDSP(audio16k, 16000);
         const rawText = aiResult.trim() || dspResult.trim();
-        const finalOutput = (rawText === ":" || rawText === "." || rawText === "," || rawText === "=") ? "" : rawText;
+        const cleanText = rawText.replace(/^[():;=.,\s]+|[():;=.,\s]+$/g, "").trim();
+        const finalOutput = (cleanText === ":" || cleanText === "." || cleanText === "," || cleanText === "=" || cleanText === "(" || cleanText === ")") ? "" : cleanText;
 
         if (aiBox) aiBox.value = finalOutput || "NESSUN SEGNALE DETETTATO";
 
