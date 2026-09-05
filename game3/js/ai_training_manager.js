@@ -123,7 +123,8 @@ window.loadQsoListFromGameSheet = async function() {
             });
 
             if (status) status.textContent = `Caricati ${data.results.length} QSO dal Foglio Google.`;
-            select.selectedIndex = 0;
+            // Selezioniamo in automatico l'ultimo QSO registrato (il più recente)
+            select.selectedIndex = data.results.length - 1;
             window.loadSelectedAiQSO();
         } else {
             console.warn("AI QSO List Load Failed:", data);
@@ -140,6 +141,8 @@ window.loadQsoListFromGameSheet = async function() {
 window.loadSelectedAiQSO = async function() {
     const select = document.getElementById('aiQsoSelect');
     const statusElem = document.getElementById('aiAudioLoadStatus');
+    const iframeEl = document.getElementById('aiDriveIframe');
+
     if (!select) return;
 
     const idx = parseInt(select.value);
@@ -149,7 +152,7 @@ window.loadSelectedAiQSO = async function() {
     window.aiTrainingState.currentWindowStart = 0;
 
     if (statusElem) {
-        statusElem.textContent = `⏳ Scaricamento audio QSO #${idx + 1}...`;
+        statusElem.textContent = `⏳ Caricamento audio QSO #${idx + 1}...`;
         statusElem.style.color = "var(--link-color)";
     }
 
@@ -159,7 +162,18 @@ window.loadSelectedAiQSO = async function() {
         if (m) fileId = m[0];
     }
 
-    // 1. TENTATIVO VIA CDN DIRETTO GOOGLE DRIVE (Velocissimo, senza limiti di dimensione)
+    // 1. CARICAMENTO NATIVO GOOGLE DRIVE PLAYER (Sempre ascoltabile e funzionante al 100%)
+    if (fileId && iframeEl) {
+        iframeEl.src = `https://drive.google.com/file/d/${fileId}/preview`;
+        iframeEl.style.display = 'block';
+    }
+
+    const userBox = document.getElementById('aiUserCorrectionText');
+    const aiBox = document.getElementById('aiPredictionText');
+    if (userBox && window.aiTrainingState.editingPairIndex < 0) userBox.value = '';
+    if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
+
+    // 2. SCARICAMENTO BINARIO PER FORMA D'ONDA & INFERENZA SPEZZONI (10s-60s)
     if (fileId) {
         const cdnUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
         try {
@@ -178,20 +192,15 @@ window.loadSelectedAiQSO = async function() {
                     statusElem.style.color = "#4caf50";
                 }
 
-                const userBox = document.getElementById('aiUserCorrectionText');
-                const aiBox = document.getElementById('aiPredictionText');
-                if (userBox && window.aiTrainingState.editingPairIndex < 0) userBox.value = '';
-                if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
-
                 window.updateAiSegmentDisplay();
                 return;
             }
         } catch (e) {
-            console.warn("Direct CDN Fetch Warning, trying Proxy fallback...", e);
+            console.warn("Direct CDN fetch warning, trying Proxy fallback...", e);
         }
     }
 
-    // 2. FALLBACK VIA PROXY GOOGLE APPS SCRIPT
+    // Fallback via Proxy Apps Script
     const addestraServerUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
     if (fileId && addestraServerUrl) {
         try {
@@ -208,6 +217,8 @@ window.loadSelectedAiQSO = async function() {
             const resp = await fetch(proxyUrl);
             if (resp.ok) {
                 const data = await resp.json();
+                console.log("AI Audio Proxy Response:", data);
+
                 if (data && data.status === 'success' && data.base64) {
                     const binaryStr = atob(data.base64);
                     const bytes = new Uint8Array(binaryStr.length);
@@ -225,12 +236,14 @@ window.loadSelectedAiQSO = async function() {
                         statusElem.style.color = "#4caf50";
                     }
 
-                    const userBox = document.getElementById('aiUserCorrectionText');
-                    const aiBox = document.getElementById('aiPredictionText');
-                    if (userBox && window.aiTrainingState.editingPairIndex < 0) userBox.value = '';
-                    if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
-
                     window.updateAiSegmentDisplay();
+                    return;
+                } else if (data && data.message) {
+                    console.warn("AI Audio Proxy Error:", data.message);
+                    if (statusElem) {
+                        statusElem.textContent = "🎧 Player Nativo Google Drive Attivo (Usa il lettore sopra per l'ascolto)";
+                        statusElem.style.color = "var(--link-color)";
+                    }
                     return;
                 }
             }
@@ -238,6 +251,12 @@ window.loadSelectedAiQSO = async function() {
             console.warn("AI Audio Proxy Fetch Warning:", e);
         }
     }
+
+    if (statusElem) {
+        statusElem.textContent = "🎧 Player Nativo Attivo (Usa il lettore Google Drive integrato per l'ascolto)";
+        statusElem.style.color = "var(--link-color)";
+    }
+};
 
     if (statusElem) {
         statusElem.textContent = "⚠️ Impossibile scaricare l'audio. Verifica la condivisione della cartella Drive ('Chiunque abbia il link').";
@@ -636,7 +655,7 @@ window.saveVerifiedAiPair = function() {
 
 window.syncPairToGoogleCloudSheet = function(pair) {
     if (!pair || !pair.userCorrection) return;
-    const appsScriptUrl = "https://script.google.com/macros/s/AKfycbxyWIV1a0Zp6YxzGn_v8_KUPAFS9CX3BX-bqm5SAMvnfWkEEXT8wyLinGlcuudh1pYs/exec";
+    const appsScriptUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.myId || "";
