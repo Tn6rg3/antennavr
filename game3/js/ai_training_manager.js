@@ -84,7 +84,10 @@ window.switchAiTab = function(tabId) {
 };
 
 window.loadQsoListFromGameSheet = async function() {
-    const addestraServerUrl = "https://script.google.com/macros/s/AKfycbxyWIV1a0Zp6YxzGn_v8_KUPAFS9CX3BX-bqm5SAMvnfWkEEXT8wyLinGlcuudh1pYs/exec";
+    const serverUrls = [
+        "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec",
+        "https://script.google.com/macros/s/AKfycbxyWIV1a0Zp6YxzGn_v8_KUPAFS9CX3BX-bqm5SAMvnfWkEEXT8wyLinGlcuudh1pYs/exec"
+    ];
     const select = document.getElementById('aiQsoSelect');
     const status = document.getElementById('aiQsoStatusText');
 
@@ -92,37 +95,48 @@ window.loadQsoListFromGameSheet = async function() {
     select.innerHTML = '<option value="">Caricamento QSO dal Foglio Google...</option>';
     if (status) status.textContent = "⏳ Lettura elenco QSO dal server...";
 
-    try {
-        const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
-        const uid = window.myId || "";
+    const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
+    const uid = window.myId || "";
 
-        const fetchUrl = `${addestraServerUrl}?action=search&q=&token=${encodeURIComponent(token)}&uid=${encodeURIComponent(uid)}`;
-        console.log("AI QSO List Fetching from:", fetchUrl);
+    for (let url of serverUrls) {
+        try {
+            let fetchUrl = `${url}?action=search&q=`;
+            if (uid) fetchUrl += `&uid=${encodeURIComponent(uid)}`;
+            if (token) fetchUrl += `&token=${encodeURIComponent(token)}`;
 
-        const resp = await fetch(fetchUrl);
-        if (!resp.ok) throw new Error("HTTP Error " + resp.status);
-        const data = await resp.json();
-        console.log("AI QSO List Data:", data);
+            console.log("AI QSO List Fetching from:", fetchUrl);
+            const resp = await fetch(fetchUrl);
+            if (!resp.ok) continue;
 
-        if (data && data.status === 'success' && Array.isArray(data.results)) {
-            window.aiTrainingState.qsoList = data.results;
-            select.innerHTML = '';
+            const data = await resp.json();
+            console.log("AI QSO List Data from", url, ":", data);
 
-            if (data.results.length === 0) {
-                select.innerHTML = '<option value="">Nessun QSO trovato nel Foglio</option>';
-                if (status) status.textContent = "0 QSO trovati.";
+            if (data && data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
+                window.aiTrainingState.qsoList = data.results;
+                window.aiActiveAddestraUrl = url; // Memorizziamo lo script attivo con i dati
+
+                select.innerHTML = '';
+                data.results.forEach((item, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = idx;
+                    const clean = (item.filename || "QSO").replace(/\.[^/.]+$/, "");
+                    opt.textContent = `[QSO #${idx + 1}] ${clean}`;
+                    select.appendChild(opt);
+                });
+
+                if (status) status.textContent = `Caricati ${data.results.length} QSO dal Foglio Google.`;
+                select.selectedIndex = data.results.length - 1;
+                window.loadSelectedAiQSO();
                 return;
             }
+        } catch(e) {
+            console.warn("AI QSO List Fetch Error for", url, ":", e);
+        }
+    }
 
-            data.results.forEach((item, idx) => {
-                const opt = document.createElement('option');
-                opt.value = idx;
-                const clean = (item.filename || "QSO").replace(/\.[^/.]+$/, "");
-                opt.textContent = `[QSO #${idx + 1}] ${clean}`;
-                select.appendChild(opt);
-            });
-
-            if (status) status.textContent = `Caricati ${data.results.length} QSO dal Foglio Google.`;
+    if (status) status.textContent = "⚠️ Nessun QSO trovato nel Foglio. Carica file locale col tasto '📁 Carica Audio Locale'.";
+    select.innerHTML = '<option value="">0 QSO trovati</option>';
+};
             // Selezioniamo in automatico l'ultimo QSO registrato (il più recente)
             select.selectedIndex = data.results.length - 1;
             window.loadSelectedAiQSO();
@@ -195,7 +209,7 @@ window.loadSelectedAiQSO = async function() {
     }
 
     // 2. FALLBACK SCARICAMENTO VIA PROXY APPS SCRIPT BOT #2
-    const addestraServerUrl = "https://script.google.com/macros/s/AKfycbxyWIV1a0Zp6YxzGn_v8_KUPAFS9CX3BX-bqm5SAMvnfWkEEXT8wyLinGlcuudh1pYs/exec";
+    const addestraServerUrl = window.aiActiveAddestraUrl || "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
     if (fileId && addestraServerUrl) {
         try {
             let cleanUrl = addestraServerUrl.trim();
@@ -205,7 +219,10 @@ window.loadSelectedAiQSO = async function() {
             const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
             const uid = window.myId || "";
 
-            const proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}&token=${encodeURIComponent(token)}&uid=${encodeURIComponent(uid)}`;
+            let proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}`;
+            if (uid) proxyUrl += `&uid=${encodeURIComponent(uid)}`;
+            if (token) proxyUrl += `&token=${encodeURIComponent(token)}`;
+
             console.log("AI Audio Fetching via Bot #2 Proxy:", proxyUrl);
 
             const resp = await fetch(proxyUrl);
@@ -701,20 +718,21 @@ window.saveVerifiedAiPair = function() {
 
 window.syncPairToGoogleCloudSheet = function(pair) {
     if (!pair || !pair.userCorrection) return;
-    const appsScriptUrl = "https://script.google.com/macros/s/AKfycbxyWIV1a0Zp6YxzGn_v8_KUPAFS9CX3BX-bqm5SAMvnfWkEEXT8wyLinGlcuudh1pYs/exec";
+    const appsScriptUrl = window.aiActiveAddestraUrl || "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.myId || "";
 
     const params = new URLSearchParams({
         action: "save_approved",
-        uid: uid,
-        token: token,
         filename: pair.filename || "QSO_Clip",
         time_pos: pair.timePos || "00:00 - 00:10",
         transcript: pair.userCorrection || "",
         ai_prediction: pair.aiPrediction || ""
     });
+
+    if (uid) params.append("uid", uid);
+    if (token) params.append("token", token);
 
     fetch(`${appsScriptUrl}?${params.toString()}`)
         .then(r => r.json())
