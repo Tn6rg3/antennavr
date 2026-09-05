@@ -701,7 +701,7 @@ window.saveVerifiedAiPair = function() {
 
 window.syncPairToGoogleCloudSheet = function(pair) {
     if (!pair || !pair.userCorrection) return;
-    const appsScriptUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
+    const appsScriptUrl = "https://script.google.com/macros/s/AKfycbxyWIV1a0Zp6YxzGn_v8_KUPAFS9CX3BX-bqm5SAMvnfWkEEXT8wyLinGlcuudh1pYs/exec";
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.myId || "";
