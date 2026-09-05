@@ -245,39 +245,6 @@ window.loadSelectedAiQSO = async function() {
     }
 };
 
-    // 2. FALLBACK DIRETTO STREAM URL
-    const streamUrl = fileId ? `https://docs.google.com/uc?export=download&id=${fileId}` : item.streamUrl;
-
-    try {
-        const resp = await fetch(streamUrl);
-        if (!resp.ok) throw new Error("HTTP " + resp.status);
-        const arrayBuf = await resp.arrayBuffer();
-
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-        if (audioCtx.state === 'suspended') await audioCtx.resume();
-
-        window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(arrayBuf);
-
-        if (statusElem) {
-            statusElem.textContent = `✓ Audio Caricato! Durata: ${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s`;
-            statusElem.style.color = "#4caf50";
-        }
-
-        const userBox = document.getElementById('aiUserCorrectionText');
-        const aiBox = document.getElementById('aiPredictionText');
-        if (userBox && window.aiTrainingState.editingPairIndex < 0) userBox.value = '';
-        if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
-
-        window.updateAiSegmentDisplay();
-    } catch(e) {
-        console.warn("AI Audio Load Warning:", e);
-        if (statusElem) {
-            statusElem.textContent = "⚠️ Impossibile scaricare l'audio. Verifica permessi Google Drive o aggiorna Apps Script.";
-            statusElem.style.color = "#f44336";
-        }
-    }
-};
-
 window.changeAiWindowDuration = function() {
     const sel = document.getElementById('aiWindowDurationSelect');
     if (sel) {
