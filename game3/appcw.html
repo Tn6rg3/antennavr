@@ -1916,7 +1916,13 @@ s            </div>
             <div class="box-panel" style="padding:10px; border-color:var(--link-color); margin-bottom:8px;">
                 <b style="color:var(--link-color); font-size:0.85em; display:block; margin-bottom:6px;">1. Seleziona Registrazione QSO:</b>
                 <select id="aiQsoSelect" onchange="window.loadSelectedAiQSO()" style="width:100%; padding:6px; font-size:0.8em; box-sizing:border-box; margin-bottom:6px;"></select>
-                <div id="aiQsoStatusText" style="font-size:0.75em; color:var(--hint-color); text-align:center;"></div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <span style="font-size:0.75em; color:var(--hint-color);">Oppure carica file da PC/Telefono:</span>
+                    <input type="file" id="aiLocalFileInput" accept="audio/*" style="display:none;" onchange="window.handleAiLocalAudioUpload(event)">
+                    <button onclick="document.getElementById('aiLocalFileInput').click()" class="action-btn-small btn-secondary" style="width:auto; padding:4px 10px; font-size:0.8em;">📁 Carica Audio Locale</button>
+                </div>
+                <div id="aiQsoStatusText" style="font-size:0.75em; color:var(--hint-color); text-align:center; margin-top:4px;"></div>
             </div>
 
             <!-- ESTRATTORE FINESTRA AUDIO -->
