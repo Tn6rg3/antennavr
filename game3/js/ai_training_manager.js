@@ -84,7 +84,7 @@ window.switchAiTab = function(tabId) {
 };
 
 window.loadQsoListFromGameSheet = async function() {
-    const serverUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
+    const addestraServerUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
     const select = document.getElementById('aiQsoSelect');
     const status = document.getElementById('aiQsoStatusText');
 
@@ -92,14 +92,8 @@ window.loadQsoListFromGameSheet = async function() {
     select.innerHTML = '<option value="">Caricamento QSO dal Foglio Google...</option>';
     if (status) status.textContent = "⏳ Lettura elenco QSO dal server...";
 
-    if (!serverUrl) {
-        if (status) status.textContent = "⚠️ Server QSO non configurato.";
-        select.innerHTML = '<option value="">Server non configurato</option>';
-        return;
-    }
-
     try {
-        const resp = await fetch(`${serverUrl}?action=search&q=`);
+        const resp = await fetch(`${addestraServerUrl}?action=search&q=`);
         if (!resp.ok) throw new Error("HTTP Error " + resp.status);
         const data = await resp.json();
 
@@ -154,8 +148,8 @@ window.loadSelectedAiQSO = async function() {
         if (m) fileId = m[0];
     }
 
-    // URL di Bot #2 per l'addestramento ed il proxy audio
-    const addestraServerUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url') || "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
+    // URL dedicato dello script Bot #2 (ADDESTRA & Proxy Audio)
+    const addestraServerUrl = "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec";
 
     // 1. TENTATIVO VIA PROXY BASE64 GOOGLE APPS SCRIPT (Senza blocchi CORS/403)
     if (fileId && addestraServerUrl) {
