@@ -167,6 +167,8 @@ window.loadSelectedAiQSO = async function() {
             const resp = await fetch(proxyUrl);
             if (resp.ok) {
                 const data = await resp.json();
+                console.log("AI Audio Proxy Response:", data);
+
                 if (data && data.status === 'success' && data.base64) {
                     const binaryStr = atob(data.base64);
                     const bytes = new Uint8Array(binaryStr.length);
@@ -190,6 +192,13 @@ window.loadSelectedAiQSO = async function() {
                     if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
 
                     window.updateAiSegmentDisplay();
+                    return;
+                } else if (data && data.message) {
+                    console.warn("AI Audio Proxy Error:", data.message);
+                    if (statusElem) {
+                        statusElem.textContent = "⚠️ Errore Google Drive: " + data.message;
+                        statusElem.style.color = "#f44336";
+                    }
                     return;
                 }
             }
