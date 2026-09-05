@@ -227,10 +227,11 @@ window.loadSelectedAiQSO = async function() {
                     window.updateAiSegmentDisplay();
                     showToast("✓ Spezzone pronto! Usa ▶️ Riproduci per ascoltare la parte estratta.");
                     return;
-                } else if (data && data.message) {
-                    console.warn("Proxy Server Message:", data.message);
+                } else {
+                    const msg = data ? (data.message || JSON.stringify(data)) : "Risposta server vuota";
+                    console.warn("⚠️ Proxy Returned Error Message:", msg);
                     if (statusElem) {
-                        statusElem.textContent = "⚠️ " + data.message;
+                        statusElem.textContent = "⚠️ " + msg;
                         statusElem.style.color = "#ff9800";
                     }
                     return;
