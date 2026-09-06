@@ -1326,41 +1326,68 @@ window.setupBugSystem = function() {
         btnResetUserDaily.onclick = async () => {
             const inputVal = (document.getElementById('adminResetUserInput')?.value || "").trim();
             if (!inputVal) {
-                alert("Inserisci l'ID Telegram o lo Username (@mario) dell'utente da sbloccare.");
+                alert("Inserisci lo Username (@mario) o l'Alias dell'utente da sbloccare.");
                 return;
             }
 
-            let targetId = inputVal;
+            const cleanVal = inputVal.replace('@', '').trim().toLowerCase();
             const today = new Date().toISOString().split('T')[0];
+            let targetId = null;
+            let targetName = inputVal;
 
             try {
-                // Se l'Admin inserisce uno username (es. @mario o mario), cerchiamo l'ID Telegram associato
-                if (inputVal.includes('@') || isNaN(inputVal)) {
-                    const cleanUsername = inputVal.replace('@', '').trim().toLowerCase();
-                    const presenceSnap = await db.ref('presence').once('value');
-                    const presenceData = presenceSnap.val() || {};
-                    for (const [id, userObj] of Object.entries(presenceData)) {
-                        if (userObj && userObj.username && userObj.username.toLowerCase() === cleanUsername) {
+                // 1. Cerca nei dati di presenza (presence) per Username o Alias / Nome
+                const presenceSnap = await db.ref('presence').once('value');
+                const presenceData = presenceSnap.val() || {};
+
+                for (const [id, userObj] of Object.entries(presenceData)) {
+                    if (!userObj) continue;
+                    const uName = (userObj.username || "").toLowerCase();
+                    const aliasName = (userObj.name || "").toLowerCase();
+
+                    if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
+                        targetId = id;
+                        targetName = userObj.name || userObj.username || id;
+                        break;
+                    }
+                }
+
+                // 2. Se non trovato in presence, cerca direttamente nel nodo users
+                if (!targetId) {
+                    const usersSnap = await db.ref('users').once('value');
+                    const usersData = usersSnap.val() || {};
+                    for (const [id, userObj] of Object.entries(usersData)) {
+                        if (!userObj) continue;
+                        const uName = (userObj.username || "").toLowerCase();
+                        const aliasName = (userObj.name || userObj.alias || "").toLowerCase();
+
+                        if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
                             targetId = id;
+                            targetName = userObj.name || userObj.alias || userObj.username || id;
                             break;
                         }
                     }
                 }
 
-                if (!targetId || isNaN(targetId)) {
-                    alert(`Impossibile trovare l'ID Telegram per '${inputVal}'. Inserisci direttamente l'ID numerico dell'utente.`);
+                // 3. Fallback se ha inserito direttamente l'ID numerico
+                if (!targetId && !isNaN(inputVal)) {
+                    targetId = inputVal;
+                }
+
+                if (!targetId) {
+                    alert(`Impossibile trovare l'utente per Username/Alias '${inputVal}'. Verifica la scrittura e riprova.`);
                     return;
                 }
 
-                if (!confirm(`Sbloccare la Sfida Giornaliera di oggi per l'utente ID ${targetId}?`)) return;
+                if (!confirm(`Sbloccare la Sfida Giornaliera di oggi per '${targetName}'?`)) return;
 
                 await Promise.all([
                     db.ref(`users/${targetId}/daily_attempt`).remove(),
                     db.ref(`leaderboard/daily_challenge/${today}/${targetId}`).remove()
                 ]);
 
-                showToast(`✓ Sfida Giornaliera sbloccata per ID ${targetId}!`);
-                alert(`✓ Sfida Giornaliera di oggi sbloccata con successo per l'utente Telegram ID ${targetId}!`);
+                showToast(`✓ Sfida Giornaliera sbloccata per '${targetName}'!`);
+                alert(`✓ Sfida Giornaliera di oggi sbloccata con successo per '${targetName}'!`);
                 if (document.getElementById('adminResetUserInput')) {
                     document.getElementById('adminResetUserInput').value = '';
                 }
