@@ -25,6 +25,27 @@
 <body>
 
 <script>
+    // FUNZIONE GLOBALE SALVATAGGIO CONFIGURAZIONE FIREBASE
+    window.saveFirebaseConfigUrl = function(key, newUrl) {
+        if (!key || !newUrl) return;
+        var cleanUrl = newUrl.trim();
+        var trySave = function() {
+            if (typeof firebase !== 'undefined' && firebase.database) {
+                firebase.database().ref('config/' + key).set(cleanUrl).then(function() {
+                    if (key === 'addestra_script_url') window.aiActiveAddestraUrl = cleanUrl;
+                    if (key === 'validation_server_url') window.VALIDATION_SERVER_URL = cleanUrl;
+                    if (key === 'qso_audio_server_url') window.qsoAudioServerUrl = cleanUrl;
+                    alert("🔒 Config '" + key + "' salvato con successo su Firebase!");
+                }).catch(function(err) {
+                    alert("Errore salvataggio Firebase: " + err.message);
+                });
+            } else {
+                setTimeout(trySave, 500);
+            }
+        };
+        trySave();
+    };
+
     // BOOTSTRAP WATCHDOG: Rileva se l'app non si carica entro 20 secondi
     // (Protegge da errori di rete o bug bloccanti nei file JavaScript)
     window.appIsReady = false;
