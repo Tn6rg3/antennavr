@@ -7,7 +7,7 @@ window.aiTrainingState = {
     currentAudioBuffer: null,
     currentSourceNode: null,
     currentWindowStart: 0,
-    currentWindowDuration: 10, // Default 10s (variabile 10s - 60s)
+    currentWindowDuration: 20, // Default 20s (variabile 20s - 60s)
     editingPairIndex: -1,
     isMicActive: false,
     micStream: null,
@@ -130,15 +130,140 @@ window.saveFirebaseConfigUrl = function(key, newUrl) {
     }
 };
 
-window.loadQsoListFromGameSheet = async function() {
-    const fbUrl = await window.fetchAddestraUrlFromFirebase();
-    const serverUrls = fbUrl ? [fbUrl] : [];
-    const select = document.getElementById('aiQsoSelect');
+const CACHE_QSO_LIST_KEY = "cwgame_cached_qso_list";
+
+window.extractDateFromFilename = function(filename) {
+    if (!filename) return "Altro";
+    const m1 = filename.match(/\b(20\d{2})[-_]?(\d{2})[-_]?(\d{2})\b/);
+    if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
+    const m2 = filename.match(/\b(\d{2})[-_]?(\d{2})[-_]?(20\d{2})\b/);
+    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+    return "Altro";
+};
+
+window.renderQsoListWithDateFilter = function(qsoList) {
+    const qsoSelect = document.getElementById('aiQsoSelect');
+    const dateSelect = document.getElementById('aiDateSelect');
     const status = document.getElementById('aiQsoStatusText');
 
-    if (!select) return;
-    select.innerHTML = '<option value="">Caricamento QSO dal Foglio Google...</option>';
-    if (status) status.textContent = "⏳ Lettura elenco QSO dal server...";
+    if (!qsoSelect) return;
+
+    window.aiTrainingState.qsoList = qsoList || [];
+    const fullList = window.aiTrainingState.qsoList;
+
+    const dateMap = {};
+    const yearMap = {};
+
+    fullList.forEach((item, idx) => {
+        const d = window.extractDateFromFilename(item.filename);
+        if (!dateMap[d]) dateMap[d] = [];
+        dateMap[d].push({ item, originalIdx: idx });
+
+        const year = d.split('-')[0];
+        if (year && year.length === 4 && !isNaN(year)) {
+            if (!yearMap[year]) yearMap[year] = 0;
+            yearMap[year]++;
+        }
+    });
+
+    const dates = Object.keys(dateMap).sort().reverse();
+    const years = Object.keys(yearMap).sort().reverse();
+
+    if (dateSelect) {
+        const currentSelectedDate = dateSelect.value;
+        dateSelect.innerHTML = `<option value="">Tutte le Date (${fullList.length} QSO)</option>`;
+
+        // Sezione Filtro per Anno
+        if (years.length > 0) {
+            const optGrpYears = document.createElement('optgroup');
+            optGrpYears.label = "─── PER ANNO ───";
+            years.forEach(yr => {
+                const opt = document.createElement('option');
+                opt.value = `YEAR:${yr}`;
+                opt.textContent = `📅 Anno ${yr} (${yearMap[yr]} QSO)`;
+                if (`YEAR:${yr}` === currentSelectedDate) opt.selected = true;
+                optGrpYears.appendChild(opt);
+            });
+            dateSelect.appendChild(optGrpYears);
+        }
+
+        // Sezione Filtro per Data Specifica
+        if (dates.length > 0) {
+            const optGrpDates = document.createElement('optgroup');
+            optGrpDates.label = "─── PER DATA SPECIFICA ───";
+            dates.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = `${d} (${dateMap[d].length} QSO)`;
+                if (d === currentSelectedDate) opt.selected = true;
+                optGrpDates.appendChild(opt);
+            });
+            dateSelect.appendChild(optGrpDates);
+        }
+    }
+
+    window.filterQsoListByDate();
+    if (status) status.textContent = `Caricati ${fullList.length} QSO dal Foglio Google.`;
+};
+
+window.filterQsoListByDate = function() {
+    const qsoSelect = document.getElementById('aiQsoSelect');
+    const dateSelect = document.getElementById('aiDateSelect');
+    if (!qsoSelect) return;
+
+    const selectedFilter = dateSelect ? dateSelect.value : "";
+    const fullList = window.aiTrainingState.qsoList || [];
+
+    qsoSelect.innerHTML = '';
+
+    fullList.forEach((item, originalIdx) => {
+        const itemDate = window.extractDateFromFilename(item.filename);
+        let match = false;
+
+        if (!selectedFilter) {
+            match = true;
+        } else if (selectedFilter.startsWith("YEAR:")) {
+            const yr = selectedFilter.replace("YEAR:", "");
+            match = itemDate.startsWith(yr);
+        } else {
+            match = (itemDate === selectedFilter);
+        }
+
+        if (match) {
+            const opt = document.createElement('option');
+            opt.value = originalIdx;
+            const clean = (item.filename || "QSO").replace(/\.[^/.]+$/, "");
+            opt.textContent = `[QSO #${originalIdx + 1}] ${clean}`;
+            qsoSelect.appendChild(opt);
+        }
+    });
+
+    if (qsoSelect.options.length > 0) {
+        qsoSelect.selectedIndex = 0;
+        window.loadSelectedAiQSO();
+    } else {
+        qsoSelect.innerHTML = '<option value="">Nessun QSO per questa data/anno</option>';
+    }
+};
+
+window.loadQsoListFromGameSheet = async function() {
+    // 1. CARICAMENTO ISTANTANEO DA CACHE LOCALSTORAGE (Se già presente)
+    const cached = localStorage.getItem(CACHE_QSO_LIST_KEY);
+    if (cached) {
+        try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                console.log("⚡ Instant loaded QSO list from localStorage cache:", parsed.length, "items");
+                window.renderQsoListWithDateFilter(parsed);
+            }
+        } catch(e) {}
+    }
+
+    const fbUrl = await window.fetchAddestraUrlFromFirebase();
+    const serverUrls = fbUrl ? [fbUrl] : [];
+    const status = document.getElementById('aiQsoStatusText');
+
+    if (status && !cached) status.textContent = "⏳ Lettura elenco QSO dal server...";
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.myId || "";
@@ -154,24 +279,9 @@ window.loadQsoListFromGameSheet = async function() {
             if (!resp.ok) continue;
 
             const data = await resp.json();
-            console.log("AI QSO List Data from", url, ":", data);
-
             if (data && data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
-                window.aiTrainingState.qsoList = data.results;
-                window.aiActiveAddestraUrl = url; // Memorizziamo lo script attivo con i dati
-
-                select.innerHTML = '';
-                data.results.forEach((item, idx) => {
-                    const opt = document.createElement('option');
-                    opt.value = idx;
-                    const clean = (item.filename || "QSO").replace(/\.[^/.]+$/, "");
-                    opt.textContent = `[QSO #${idx + 1}] ${clean}`;
-                    select.appendChild(opt);
-                });
-
-                if (status) status.textContent = `Caricati ${data.results.length} QSO dal Foglio Google.`;
-                select.selectedIndex = data.results.length - 1;
-                window.loadSelectedAiQSO();
+                localStorage.setItem(CACHE_QSO_LIST_KEY, JSON.stringify(data.results));
+                window.renderQsoListWithDateFilter(data.results);
                 return;
             }
         } catch(e) {
@@ -179,8 +289,7 @@ window.loadQsoListFromGameSheet = async function() {
         }
     }
 
-    if (status) status.textContent = "⚠️ Nessun QSO trovato nel Foglio. Carica file locale col tasto '📁 Carica Audio Locale'.";
-    select.innerHTML = '<option value="">0 QSO trovati</option>';
+    if (!cached && status) status.textContent = "⚠️ Nessun QSO trovato nel Foglio. Carica file locale col tasto '📁 Carica Audio Locale'.";
 };
 
 window.loadSelectedAiQSO = async function() {
@@ -350,7 +459,7 @@ window.handleAiLocalAudioUpload = async function(event) {
 window.changeAiWindowDuration = function() {
     const sel = document.getElementById('aiWindowDurationSelect');
     if (sel) {
-        window.aiTrainingState.currentWindowDuration = parseInt(sel.value) || 10;
+        window.aiTrainingState.currentWindowDuration = parseInt(sel.value) || 20;
     }
 
     const dur = window.aiTrainingState.currentWindowDuration;
@@ -384,6 +493,14 @@ window.updateAiSegmentDisplay = function() {
     if (disp) disp.textContent = `${fmt(start)} - ${fmt(end)}`;
 
     window.drawAiSegmentWaveform();
+
+    // ANALISI IA AUTOMATICA AL CAMBIO DI SEGMENTO
+    if (window.aiTrainingState.autoInferenceTimeout) clearTimeout(window.aiTrainingState.autoInferenceTimeout);
+    window.aiTrainingState.autoInferenceTimeout = setTimeout(() => {
+        if (typeof window.runInferenceOnSegment === 'function') {
+            window.runInferenceOnSegment();
+        }
+    }, 250);
 };
 
 window.prevAiSegment = function() {

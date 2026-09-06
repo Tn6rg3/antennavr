@@ -1386,6 +1386,15 @@ window.setupBugSystem = function() {
                     db.ref(`leaderboard/daily_challenge/${today}/${targetId}`).remove()
                 ]);
 
+                // Pulizia dello storico di oggi per sbloccare completamente il pop-up all'avvio
+                const hSnap = await db.ref(`users/${targetId}/history`).orderByChild('mode').equalTo('daily_challenge').once('value');
+                hSnap.forEach(s => {
+                    const val = s.val();
+                    if (val && val.date && new Date(val.date).toISOString().split('T')[0] === today) {
+                        s.ref.remove();
+                    }
+                });
+
                 showToast(`✓ Sfida Giornaliera sbloccata per '${targetName}'!`);
                 alert(`✓ Sfida Giornaliera di oggi sbloccata con successo per '${targetName}'!`);
                 if (document.getElementById('adminResetUserInput')) {
