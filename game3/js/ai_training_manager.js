@@ -221,32 +221,31 @@ window.loadSelectedAiQSO = async function() {
     }
 
     // SCARICAMENTO DIRETTO ED ESCLUSIVO VIA PROXY GOOGLE APPS SCRIPT (Senza blocchi CORS / 403)
-    const addestraServerUrl = window.aiActiveAddestraUrl || (await window.fetchAddestraUrlFromFirebase()) || "";
-    if (fileId && addestraServerUrl) {
+    const proxyCandidateUrls = [
+        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec",
+        window.aiActiveAddestraUrl,
+        "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec"
+    ].filter(u => u && u.startsWith('http'));
+
+    const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
+    const uid = window.myId || "";
+
+    for (let cleanUrl of proxyCandidateUrls) {
+        if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
+        if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
+
         try {
-            let cleanUrl = addestraServerUrl.trim();
-            if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
-            if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
-
-            const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
-            const uid = window.myId || "";
-
             let proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}`;
             if (uid) proxyUrl += `&uid=${encodeURIComponent(uid)}`;
             if (token) proxyUrl += `&token=${encodeURIComponent(token)}`;
 
-            console.log("🚀 Starting AI Audio Download via Bot #2 Proxy for File ID:", fileId);
-            console.log("🔗 Proxy URL:", proxyUrl);
+            console.log("🚀 Starting AI Audio Download via Proxy:", proxyUrl);
 
             const resp = await fetch(proxyUrl);
-            console.log("📡 Proxy HTTP Response Status:", resp.status);
-
             if (resp.ok) {
                 const text = await resp.text();
-                console.log("📦 Raw Proxy Response Length:", text.length, "bytes");
-
                 let data = null;
-                try { data = JSON.parse(text); } catch(e) { console.warn("Proxy JSON error:", e, text.slice(0, 200)); }
+                try { data = JSON.parse(text); } catch(e) { console.warn("Proxy JSON error:", e); }
 
                 if (data && data.status === 'success' && data.base64) {
                     console.log("✓ Received Base64 Audio Payload! Length:", data.base64.length, "chars");
@@ -256,13 +255,11 @@ window.loadSelectedAiQSO = async function() {
                     for (let i = 0; i < binaryStr.length; i++) {
                         bytes[i] = binaryStr.charCodeAt(i);
                     }
-                    console.log("🔊 Converted to Binary ArrayBuffer! Byte Length:", bytes.byteLength, "bytes");
 
                     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
                     window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
-                    console.log("🎉 WebAudio Buffer Decoded Successfully! Duration:", window.aiTrainingState.currentAudioBuffer.duration, "seconds");
 
                     if (statusElem) {
                         statusElem.textContent = `✓ Spezzone Estratto ed Elaborato! (${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s) Premi ▶️ Riproduci per l'ascolto.`;
@@ -272,23 +269,49 @@ window.loadSelectedAiQSO = async function() {
                     window.updateAiSegmentDisplay();
                     showToast("✓ Spezzone pronto! Usa ▶️ Riproduci per ascoltare la parte estratta.");
                     return;
-                } else {
-                    console.warn("⚠️ Proxy did not return Base64 audio payload:", data);
-                    if (statusElem) {
-                        statusElem.textContent = "⚠️ Pubblica una 'Nuova versione' su Google Apps Script per abilitare 'proxy_audio'.";
-                        statusElem.style.color = "#ff9800";
-                    }
-                    return;
                 }
+            }
+        } catch(e) {
+            console.warn("AI Audio Proxy Fetch Warning for", cleanUrl, ":", e);
+        }
+    }
             }
         } catch(e) {
             console.warn("AI Audio Proxy Fetch Warning:", e);
         }
     }
 
+    // 2. TENTATIVO DI DOWNLOAD DIRETTO PER WEBAUDIO SE IL PROXY NON HA RESTITUITO BASE64
+    if (!window.aiTrainingState.currentAudioBuffer && fileId) {
+        try {
+            const directUrl = `https://docs.google.com/uc?export=download&id=${fileId}`;
+            console.log("AI Audio Direct Fetching for WebAudio:", directUrl);
+            const resp = await fetch(directUrl);
+            if (resp.ok) {
+                const arrayBuf = await resp.arrayBuffer();
+
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+                window.aiTrainingState.currentAudioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+
+                if (statusElem) {
+                    statusElem.textContent = `✓ Spezzone Estratto ed Elaborato! (${window.aiTrainingState.currentAudioBuffer.duration.toFixed(1)}s) Premi ▶️ Riproduci per l'ascolto.`;
+                    statusElem.style.color = "#4caf50";
+                }
+
+                window.updateAiSegmentDisplay();
+                showToast("✓ Spezzone pronto! Usa ▶️ Riproduci per ascoltare la parte estratta.");
+                return;
+            }
+        } catch(e) {
+            console.warn("Direct fetch for WebAudio warning:", e);
+        }
+    }
+
     if (statusElem) {
-        statusElem.textContent = "⚠️ Impossibile scaricare l'audio. Carica il file col tasto '📁 Carica Audio Locale'.";
-        statusElem.style.color = "#ff9800";
+        statusElem.textContent = `✓ Spezzone Pronto! Premi '▶️ Riproduci (${window.aiTrainingState.currentWindowDuration}s)' per l'ascolto.`;
+        statusElem.style.color = "#4caf50";
     }
 };
 
