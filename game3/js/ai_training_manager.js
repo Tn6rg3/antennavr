@@ -275,11 +275,6 @@ window.loadSelectedAiQSO = async function() {
             console.warn("AI Audio Proxy Fetch Warning for", cleanUrl, ":", e);
         }
     }
-            }
-        } catch(e) {
-            console.warn("AI Audio Proxy Fetch Warning:", e);
-        }
-    }
 
     // 2. TENTATIVO DI DOWNLOAD DIRETTO PER WEBAUDIO SE IL PROXY NON HA RESTITUITO BASE64
     if (!window.aiTrainingState.currentAudioBuffer && fileId) {
