@@ -542,6 +542,31 @@ window.nextAiSegment = function() {
     }
 };
 
+window.stopCurrentAiAudio = function() {
+    if (window.aiTrainingState.currentSourceNode) {
+        try {
+            window.aiTrainingState.currentSourceNode.stop();
+            window.aiTrainingState.currentSourceNode.disconnect();
+            window.aiTrainingState.currentSourceNode = null;
+        } catch(e) {}
+    }
+
+    const audioEl = document.getElementById('aiAudioHtmlEl');
+    if (audioEl) {
+        try {
+            audioEl.pause();
+            audioEl.currentTime = window.aiTrainingState.currentWindowStart || 0;
+        } catch(e) {}
+    }
+
+    if (window.aiAudioTimer) {
+        clearTimeout(window.aiAudioTimer);
+        window.aiAudioTimer = null;
+    }
+
+    showToast("⏹️ Riproduzione audio fermata.");
+};
+
 window.playCurrentAiSegment = function() {
     const winLen = window.aiTrainingState.currentWindowDuration;
     const start = window.aiTrainingState.currentWindowStart;
