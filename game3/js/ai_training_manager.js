@@ -268,49 +268,64 @@ window.filterQsoListByDate = function() {
 };
 
 window.loadQsoListFromGameSheet = async function() {
+    let cachedCount = 0;
     // 1. CARICAMENTO ISTANTANEO DA CACHE LOCALSTORAGE (Se già presente)
     const cached = localStorage.getItem(CACHE_QSO_LIST_KEY);
     if (cached) {
         try {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                console.log("⚡ Instant loaded QSO list from localStorage cache:", parsed.length, "items");
+                cachedCount = parsed.length;
+                console.log("⚡ Instant loaded QSO list from localStorage cache:", cachedCount, "items");
                 window.renderQsoListWithDateFilter(parsed);
             }
         } catch(e) {}
     }
 
     const fbUrl = await window.fetchAddestraUrlFromFirebase();
-    const serverUrls = fbUrl ? [fbUrl] : [];
+    const serverUrls = [fbUrl, window.qsoAudioServerUrl].filter(u => u && u.startsWith('http'));
     const status = document.getElementById('aiQsoStatusText');
 
-    if (status && !cached) status.textContent = "⏳ Lettura elenco QSO dal server...";
+    if (status && cachedCount === 0) status.textContent = "⏳ Scansione elenco QSO dal server Google...";
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.myId || "";
 
     for (let url of serverUrls) {
         try {
-            let fetchUrl = `${url}?action=search&q=`;
+            let fetchUrl = `${url}${url.includes('?') ? '&' : '?'}action=search&q=&limit=10000`;
             if (uid) fetchUrl += `&uid=${encodeURIComponent(uid)}`;
             if (token) fetchUrl += `&token=${encodeURIComponent(token)}`;
 
-            console.log("AI QSO List Fetching from:", fetchUrl);
+            console.log("🔍 Background Scanning QSO List from:", fetchUrl);
             const resp = await fetch(fetchUrl);
             if (!resp.ok) continue;
 
             const data = await resp.json();
+            console.log("📡 Scanned QSO Data length:", data?.results?.length);
+
             if (data && data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
-                localStorage.setItem(CACHE_QSO_LIST_KEY, JSON.stringify(data.results));
-                window.renderQsoListWithDateFilter(data.results);
+                const liveCount = data.results.length;
+
+                // SE TROVA DIFFERENZE (Numero di file cambiato o cache assente): Riscarica e aggiorna!
+                if (liveCount !== cachedCount) {
+                    console.log(`🔄 Trovate ${liveCount} registrazioni sul server (Cache ne aveva ${cachedCount}). Aggiornamento in corso...`);
+                    localStorage.setItem(CACHE_QSO_LIST_KEY, JSON.stringify(data.results));
+                    window.renderQsoListWithDateFilter(data.results);
+                    if (status) status.textContent = `✓ Elenco aggiornato: ${liveCount} QSO dal Foglio Google.`;
+                    showToast(`🔄 Elenco QSO aggiornato! Trovate ${liveCount} registrazioni nel Foglio Google.`);
+                } else {
+                    console.log(`✓ Elenco QSO allineato (${liveCount} file). Nessuna modifica.`);
+                    if (status) status.textContent = `✓ Elenco allineato: ${liveCount} QSO dal Foglio Google.`;
+                }
                 return;
             }
         } catch(e) {
-            console.warn("AI QSO List Fetch Error for", url, ":", e);
+            console.warn("AI QSO List Background Scan Error for", url, ":", e);
         }
     }
 
-    if (!cached && status) status.textContent = "⚠️ Nessun QSO trovato nel Foglio. Carica file locale col tasto '📁 Carica Audio Locale'.";
+    if (cachedCount === 0 && status) status.textContent = "⚠️ Nessun QSO trovato nel Foglio. Carica file locale col tasto '📁 Carica Audio Locale'.";
 };
 
 window.loadSelectedAiQSO = async function() {
