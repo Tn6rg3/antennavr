@@ -1321,6 +1321,56 @@ window.setupBugSystem = function() {
         };
     }
 
+    const btnResetUserDaily = document.getElementById('btnAdminResetUserDaily');
+    if (btnResetUserDaily) {
+        btnResetUserDaily.onclick = async () => {
+            const inputVal = (document.getElementById('adminResetUserInput')?.value || "").trim();
+            if (!inputVal) {
+                alert("Inserisci l'ID Telegram o lo Username (@mario) dell'utente da sbloccare.");
+                return;
+            }
+
+            let targetId = inputVal;
+            const today = new Date().toISOString().split('T')[0];
+
+            try {
+                // Se l'Admin inserisce uno username (es. @mario o mario), cerchiamo l'ID Telegram associato
+                if (inputVal.includes('@') || isNaN(inputVal)) {
+                    const cleanUsername = inputVal.replace('@', '').trim().toLowerCase();
+                    const presenceSnap = await db.ref('presence').once('value');
+                    const presenceData = presenceSnap.val() || {};
+                    for (const [id, userObj] of Object.entries(presenceData)) {
+                        if (userObj && userObj.username && userObj.username.toLowerCase() === cleanUsername) {
+                            targetId = id;
+                            break;
+                        }
+                    }
+                }
+
+                if (!targetId || isNaN(targetId)) {
+                    alert(`Impossibile trovare l'ID Telegram per '${inputVal}'. Inserisci direttamente l'ID numerico dell'utente.`);
+                    return;
+                }
+
+                if (!confirm(`Sbloccare la Sfida Giornaliera di oggi per l'utente ID ${targetId}?`)) return;
+
+                await Promise.all([
+                    db.ref(`users/${targetId}/daily_attempt`).remove(),
+                    db.ref(`leaderboard/daily_challenge/${today}/${targetId}`).remove()
+                ]);
+
+                showToast(`✓ Sfida Giornaliera sbloccata per ID ${targetId}!`);
+                alert(`✓ Sfida Giornaliera di oggi sbloccata con successo per l'utente Telegram ID ${targetId}!`);
+                if (document.getElementById('adminResetUserInput')) {
+                    document.getElementById('adminResetUserInput').value = '';
+                }
+            } catch(err) {
+                console.error("Admin Reset Daily Error:", err);
+                alert("Errore sblocco admin: " + err.message);
+            }
+        };
+    }
+
     // --- FUNZIONE ADMIN: RESET SFIDA GIORNALIERA UTENTE SPECIFICO ---
     window.adminResetDailyForUser = async function(targetUserId) {
         if (!targetUserId) {
