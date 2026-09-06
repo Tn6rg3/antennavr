@@ -35,6 +35,27 @@ window.getQsoServerUrlAutomatic = async function() {
     let serverUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
     if (serverUrl && serverUrl.startsWith('http')) return serverUrl;
 
+    // 1. Recupero dinamico da Firebase Config
+    if (typeof firebase !== 'undefined' && firebase.database) {
+        try {
+            const snap = await firebase.database().ref('config/qso_audio_server_url').once('value');
+            if (snap.exists() && snap.val()) {
+                window.qsoAudioServerUrl = snap.val().trim();
+                localStorage.setItem('cwgame_qso_audio_url', window.qsoAudioServerUrl);
+                return window.qsoAudioServerUrl;
+            }
+            // Fallback su addestra_script_url se condiviso
+            const addSnap = await firebase.database().ref('config/addestra_script_url').once('value');
+            if (addSnap.exists() && addSnap.val()) {
+                window.qsoAudioServerUrl = addSnap.val().trim();
+                localStorage.setItem('cwgame_qso_audio_url', window.qsoAudioServerUrl);
+                return window.qsoAudioServerUrl;
+            }
+        } catch(e) {
+            console.warn("QSO Firebase Config Fetch Warning:", e);
+        }
+    }
+
     if (typeof VALIDATION_SERVER_URL !== 'undefined' && VALIDATION_SERVER_URL && VALIDATION_SERVER_URL.startsWith('http')) {
         try {
             const resp = await fetch(`${VALIDATION_SERVER_URL}?action=get_config`);
@@ -51,7 +72,7 @@ window.getQsoServerUrlAutomatic = async function() {
         }
     }
 
-    return window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
+    return window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url') || window.aiActiveAddestraUrl;
 };
 
 window.searchQsoAudioFiles = async function() {

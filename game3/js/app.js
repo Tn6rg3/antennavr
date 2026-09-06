@@ -6,8 +6,8 @@ const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
 const APP_VERSION = "20260807.223";
 
-// URL della Web App di Google Apps Script per la validazione identità
-const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+// URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
+let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
 
 // --- FUNZIONE DI SALVATAGGIO CONFIGURAZIONE DINAMICA FIREBASE ---
 window.saveFirebaseConfigUrl = function(key, newUrl) {
