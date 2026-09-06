@@ -89,8 +89,37 @@ window.switchAiTab = function(tabId) {
     }
 };
 
+window.fetchAddestraUrlFromFirebase = async function() {
+    if (window.aiActiveAddestraUrl) return window.aiActiveAddestraUrl;
+    try {
+        if (typeof firebase !== 'undefined' && firebase.database) {
+            const snap = await firebase.database().ref('config/addestra_script_url').once('value');
+            if (snap.exists() && snap.val()) {
+                window.aiActiveAddestraUrl = snap.val().trim();
+                console.log("🔒 Loaded Apps Script URL dynamically from Firebase Config:", window.aiActiveAddestraUrl);
+                return window.aiActiveAddestraUrl;
+            }
+        }
+    } catch(e) {
+        console.warn("Firebase Config Fetch Warning:", e);
+    }
+    return window.aiActiveAddestraUrl || "";
+};
+
+window.saveFirebaseConfigUrl = function(key, newUrl) {
+    if (!key || !newUrl) return;
+    if (typeof firebase !== 'undefined' && firebase.database) {
+        firebase.database().ref(`config/${key}`).set(newUrl.trim()).then(() => {
+            if (key === 'addestra_script_url') window.aiActiveAddestraUrl = newUrl.trim();
+            if (typeof showToast === 'function') showToast(`🔒 Config '${key}' salvato su Firebase!`);
+            console.log(`✓ Firebase Config '${key}' updated:`, newUrl);
+        });
+    }
+};
+
 window.loadQsoListFromGameSheet = async function() {
-    const serverUrls = [
+    const fbUrl = await window.fetchAddestraUrlFromFirebase();
+    const serverUrls = fbUrl ? [fbUrl] : [
         "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec",
         "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec"
     ];
