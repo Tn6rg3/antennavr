@@ -133,12 +133,20 @@ window.saveFirebaseConfigUrl = function(key, newUrl) {
 const CACHE_QSO_LIST_KEY = "cwgame_cached_qso_list";
 
 window.extractDateFromFilename = function(filename) {
-    if (!filename) return "Altro";
-    const m1 = filename.match(/\b(20\d{2})[-_]?(\d{2})[-_]?(\d{2})\b/);
+    if (!filename) return "Senza Data";
+    const m1 = filename.match(/\b(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/);
     if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
-    const m2 = filename.match(/\b(\d{2})[-_]?(\d{2})[-_]?(20\d{2})\b/);
-    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
-    return "Altro";
+
+    const m2 = filename.match(/\b(20\d{2})[-_](0[1-9]|1[0-2])[-_](0[1-9]|[12]\d|3[01])\b/);
+    if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
+
+    const m3 = filename.match(/\b(0[1-9]|[12]\d|3[01])[-_](0[1-9]|1[0-2])[-_](20\d{2})\b/);
+    if (m3) return `${m3[3]}-${m3[2]}-${m3[1]}`;
+
+    const m4 = filename.match(/\b(20\d{2})\b/);
+    if (m4) return `${m4[1]}-01-01`;
+
+    return "Senza Data";
 };
 
 window.renderQsoListWithDateFilter = function(qsoList) {
@@ -156,8 +164,8 @@ window.renderQsoListWithDateFilter = function(qsoList) {
 
     fullList.forEach((item, idx) => {
         const d = window.extractDateFromFilename(item.filename);
-        if (!dateMap[d]) dateMap[d] = [];
-        dateMap[d].push({ item, originalIdx: idx });
+        if (!dateMap[d]) dateMap[d] = 0;
+        dateMap[d]++;
 
         const year = d.split('-')[0];
         if (year && year.length === 4 && !isNaN(year)) {
@@ -170,8 +178,7 @@ window.renderQsoListWithDateFilter = function(qsoList) {
     const years = Object.keys(yearMap).sort().reverse();
 
     if (dateSelect) {
-        const currentSelectedDate = dateSelect.value;
-        dateSelect.innerHTML = `<option value="">Tutte le Date (${fullList.length} QSO)</option>`;
+        dateSelect.innerHTML = `<option value="" selected>Tutte le Date (${fullList.length} QSO)</option>`;
 
         // Sezione Filtro per Anno
         if (years.length > 0) {
@@ -181,7 +188,6 @@ window.renderQsoListWithDateFilter = function(qsoList) {
                 const opt = document.createElement('option');
                 opt.value = `YEAR:${yr}`;
                 opt.textContent = `📅 Anno ${yr} (${yearMap[yr]} QSO)`;
-                if (`YEAR:${yr}` === currentSelectedDate) opt.selected = true;
                 optGrpYears.appendChild(opt);
             });
             dateSelect.appendChild(optGrpYears);
@@ -192,17 +198,32 @@ window.renderQsoListWithDateFilter = function(qsoList) {
             const optGrpDates = document.createElement('optgroup');
             optGrpDates.label = "─── PER DATA SPECIFICA ───";
             dates.forEach(d => {
-                const opt = document.createElement('option');
-                opt.value = d;
-                opt.textContent = `${d} (${dateMap[d].length} QSO)`;
-                if (d === currentSelectedDate) opt.selected = true;
-                optGrpDates.appendChild(opt);
+                if (d !== "Senza Data") {
+                    const opt = document.createElement('option');
+                    opt.value = d;
+                    opt.textContent = `${d} (${dateMap[d]} QSO)`;
+                    optGrpDates.appendChild(opt);
+                }
             });
             dateSelect.appendChild(optGrpDates);
         }
     }
 
-    window.filterQsoListByDate();
+    // DI DEFAULT MOSTRA L'INTERO ELENCO AL 100%
+    qsoSelect.innerHTML = '';
+    fullList.forEach((item, originalIdx) => {
+        const opt = document.createElement('option');
+        opt.value = originalIdx;
+        const clean = (item.filename || "QSO").replace(/\.[^/.]+$/, "");
+        opt.textContent = `[QSO #${originalIdx + 1}] ${clean}`;
+        qsoSelect.appendChild(opt);
+    });
+
+    if (qsoSelect.options.length > 0) {
+        qsoSelect.selectedIndex = qsoSelect.options.length - 1;
+        window.loadSelectedAiQSO();
+    }
+
     if (status) status.textContent = `Caricati ${fullList.length} QSO dal Foglio Google.`;
 };
 
