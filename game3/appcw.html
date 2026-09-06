@@ -1943,7 +1943,18 @@ s            </div>
         <div id="aiRefinementTab" style="display:block;">
             <div class="box-panel" style="padding:10px; border-color:var(--link-color); margin-bottom:8px;">
                 <b style="color:var(--link-color); font-size:0.85em; display:block; margin-bottom:6px;">1. Seleziona Registrazione QSO:</b>
-                <select id="aiQsoSelect" onchange="window.loadSelectedAiQSO()" style="width:100%; padding:6px; font-size:0.8em; box-sizing:border-box; margin-bottom:6px;"></select>
+                <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:6px;">
+                    <div>
+                        <span style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">📅 Filtra per Data QSO:</span>
+                        <select id="aiDateSelect" onchange="window.filterQsoListByDate()" style="width:100%; padding:6px; font-size:0.8em; box-sizing:border-box; border-radius:4px; border:1px solid var(--link-color); background:var(--sec-bg-color); color:var(--text-color);">
+                            <option value="">Tutte le Date</option>
+                        </select>
+                    </div>
+                    <div>
+                        <span style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">🎙️ File Audio QSO:</span>
+                        <select id="aiQsoSelect" onchange="window.loadSelectedAiQSO()" style="width:100%; padding:6px; font-size:0.8em; box-sizing:border-box; border-radius:4px; border:1px solid var(--link-color); background:var(--sec-bg-color); color:var(--text-color);"></select>
+                    </div>
+                </div>
 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.05);">
                     <span style="font-size:0.75em; color:var(--hint-color);">Oppure carica file da PC/Telefono:</span>
@@ -1960,9 +1971,7 @@ s            </div>
                     <label style="font-size:0.8em; color:var(--link-color);">
                         ⏱️ Durata:
                         <select id="aiWindowDurationSelect" onchange="window.changeAiWindowDuration()" style="padding:2px 6px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid var(--link-color); border-radius:4px;">
-                            <option value="10" selected>10 Secondi</option>
-                            <option value="15">15 Secondi</option>
-                            <option value="20">20 Secondi</option>
+                            <option value="20" selected>20 Secondi</option>
                             <option value="30">30 Secondi</option>
                             <option value="45">45 Secondi</option>
                             <option value="60">60 Secondi (1 Min)</option>
@@ -1971,13 +1980,13 @@ s            </div>
                 </div>
 
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:8px;">
-                    <button id="btnAiPrevSegment" onclick="window.prevAiSegment()" class="action-btn-small btn-secondary" style="flex:1; padding:8px;">◄◄ -10s</button>
-                    <button id="btnAiPlaySegment" onclick="window.playCurrentAiSegment()" class="action-btn-small btn-success" style="flex:1.5; padding:8px; font-weight:bold;">▶️ Riproduci</button>
-                    <button id="btnAiNextSegment" onclick="window.nextAiSegment()" class="action-btn-small btn-secondary" style="flex:1; padding:8px;">+10s ►►</button>
+                    <button id="btnAiPrevSegment" onclick="window.prevAiSegment()" class="action-btn-small btn-secondary" style="flex:1; padding:8px;">◄◄ -20s</button>
+                    <button id="btnAiPlaySegment" onclick="window.playCurrentAiSegment()" class="action-btn-small btn-success" style="flex:1.5; padding:8px; font-weight:bold;">▶️ Riproduci (20s)</button>
+                    <button id="btnAiNextSegment" onclick="window.nextAiSegment()" class="action-btn-small btn-secondary" style="flex:1; padding:8px;">+20s ►►</button>
                 </div>
 
                 <div style="text-align:center; font-size:0.8em; color:var(--link-color); margin-bottom:6px;">
-                    Posizione: <b id="aiTimePosDisplay">00:00 - 00:10</b>
+                    Posizione: <b id="aiTimePosDisplay">00:00 - 00:20</b>
                 </div>
                 <div id="aiAudioLoadStatus" style="font-size:0.75em; text-align:center; margin-bottom:6px;"></div>
 
@@ -1991,21 +2000,10 @@ s            </div>
 
             <!-- ANALISI IA & VERIFICA UMANA -->
             <div class="box-panel" style="padding:10px; border-color:var(--champ-color); margin-bottom:8px;">
-                <button onclick="window.runInferenceOnSegment()" class="btn-champ" style="width:100%; padding:10px; font-weight:bold; font-size:0.9em; margin-bottom:8px;">⚡ ESEGUI ANALISI IA SUL SEGMENTO</button>
-
-                <!-- TEXTBOX 1: PREDIZIONE IA -->
+                <!-- TEXTBOX 1: PREDIZIONE IA (AUTOMATICA) -->
                 <div style="margin-bottom:8px;">
-                    <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">🤖 TEXTBOX 1 - Predizione IA / DSP:</label>
-                    <input type="text" id="aiPredictionText" readonly placeholder="In attesa dell'analisi..." style="width:100%; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid var(--champ-color); border-radius:6px; box-sizing:border-box;">
-                </div>
-
-                <!-- TEXTBOX 1B: RICOSTRUZIONE DIZIONARIO -->
-                <div style="margin-bottom:8px;">
-                    <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">💡 Ricostruzione da Dizionario Radio:</label>
-                    <div style="display:flex; gap:6px;">
-                        <input type="text" id="aiDictionaryCorrectedText" readonly style="flex:1; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid var(--link-color); border-radius:6px; box-sizing:border-box;">
-                        <button onclick="window.applyAiDictionaryCorrection()" class="action-btn-small btn-secondary" style="width:auto; padding:6px 12px; font-weight:bold;">✨ Usa</button>
-                    </div>
+                    <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">🤖 TEXTBOX 1 - Decodifica IA / DSP Automatica:</label>
+                    <input type="text" id="aiPredictionText" readonly placeholder="Analisi in corso..." style="width:100%; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid var(--champ-color); border-radius:6px; box-sizing:border-box;">
                 </div>
 
                 <!-- TEXTBOX 2: CORREZIONE UMANA -->
