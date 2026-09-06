@@ -582,10 +582,33 @@ window.stopCurrentAiAudio = function() {
     showToast("⏹️ Riproduzione audio fermata.");
 };
 
-window.playCurrentAiSegment = function() {
+window.changeAiPlaybackRate = function() {
+    const sel = document.getElementById('aiPlaybackRateSelect');
+    if (sel) {
+        window.aiTrainingState.playbackRate = parseFloat(sel.value) || 1.0;
+    }
+    const rate = window.aiTrainingState.playbackRate || 1.0;
+    if (window.aiTrainingState.currentSourceNode) {
+        try {
+            window.aiTrainingState.currentSourceNode.playbackRate.value = rate;
+        } catch(e) {}
+    }
+    const audioEl = document.getElementById('aiAudioHtmlEl');
+    if (audioEl) {
+        try { audioEl.playbackRate = rate; } catch(e) {}
+    }
+    showToast(`🐌 Velocità audio impostata a ${rate}x`);
+};
+
+window.playCurrentAiSegment = function(offsetSec = 0) {
     const winLen = window.aiTrainingState.currentWindowDuration;
-    const start = window.aiTrainingState.currentWindowStart;
+    const baseStart = window.aiTrainingState.currentWindowStart;
+    const start = baseStart + offsetSec;
+    const playDuration = Math.max(0.5, winLen - offsetSec);
     const buf = window.aiTrainingState.currentAudioBuffer;
+    const rate = window.aiTrainingState.playbackRate || 1.0;
+
+    window.aiTrainingState.playheadRatio = offsetSec / winLen;
 
     // 1. RIPRODUZIONE DI PRECISIONE VIA WEBAUDIO BUFFER
     if (buf) {
@@ -598,9 +621,11 @@ window.playCurrentAiSegment = function() {
 
         window.aiTrainingState.currentSourceNode = audioCtx.createBufferSource();
         window.aiTrainingState.currentSourceNode.buffer = buf;
+        window.aiTrainingState.currentSourceNode.playbackRate.value = rate;
         window.aiTrainingState.currentSourceNode.connect(audioCtx.destination);
-        window.aiTrainingState.currentSourceNode.start(0, start, winLen);
-        showToast(`▶️ Riproduzione spezzone estratto (${winLen}s)...`);
+        window.aiTrainingState.currentSourceNode.start(0, start, playDuration / rate);
+        showToast(`▶️ Riproduzione (${rate}x, da +${offsetSec.toFixed(1)}s)...`);
+        window.drawAiSegmentWaveform();
         return;
     }
 
@@ -610,11 +635,13 @@ window.playCurrentAiSegment = function() {
         if (window.aiAudioTimer) clearTimeout(window.aiAudioTimer);
 
         audioEl.currentTime = start;
+        audioEl.playbackRate = rate;
         audioEl.play().then(() => {
-            showToast(`▶️ Riproduzione spezzone estratto (${winLen}s)...`);
+            showToast(`▶️ Riproduzione (${rate}x, da +${offsetSec.toFixed(1)}s)...`);
             window.aiAudioTimer = setTimeout(() => {
                 audioEl.pause();
-            }, winLen * 1000);
+            }, (playDuration / rate) * 1000);
+            window.drawAiSegmentWaveform();
         }).catch(err => {
             console.warn("HTML5 Audio play warning:", err);
             showToast("⚠️ Attendi il caricamento dello spezzone audio...");
@@ -640,6 +667,8 @@ window.drawAiSegmentWaveform = function() {
     const buf = window.aiTrainingState.currentAudioBuffer;
     if (!canvas || !buf) return;
 
+    window.setupAiCanvasInteractiveEvents();
+
     const ctx = canvas.getContext('2d');
     const width = canvas.width;
     const height = canvas.height;
@@ -654,6 +683,7 @@ window.drawAiSegmentWaveform = function() {
     const endIdx = Math.min(data.length, Math.floor((window.aiTrainingState.currentWindowStart + winLen) * sr));
     const step = Math.ceil((endIdx - startIdx) / width);
 
+    // Forma d'onda Verde
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = '#00ff66';
     ctx.beginPath();
@@ -667,6 +697,57 @@ window.drawAiSegmentWaveform = function() {
         else ctx.lineTo(i, y);
     }
     ctx.stroke();
+
+    // BARRA MOBILE / CURSORE DI SCORRIMENTO TEMPO
+    const ratio = window.aiTrainingState.playheadRatio || 0;
+    if (ratio >= 0 && ratio <= 1) {
+        const playheadX = ratio * width;
+
+        ctx.strokeStyle = '#ff9800';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(playheadX, 0);
+        ctx.lineTo(playheadX, height);
+        ctx.stroke();
+
+        const offsetSec = (ratio * winLen).toFixed(1);
+        ctx.fillStyle = '#ff9800';
+        ctx.fillRect(Math.min(width - 45, Math.max(0, playheadX - 20)), 2, 45, 14);
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText(`+${offsetSec}s`, Math.min(width - 40, Math.max(5, playheadX - 16)), 13);
+    }
+};
+
+window.setupAiCanvasInteractiveEvents = function() {
+    const canvas = document.getElementById('aiSegmentCanvas');
+    if (!canvas || canvas.dataset.eventsBound) return;
+    canvas.dataset.eventsBound = "true";
+
+    const handleCanvasSeek = (e) => {
+        if (e.cancelable) e.preventDefault();
+
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clickX = Math.max(0, Math.min(canvas.width, (clientX - rect.left) * (canvas.width / rect.width)));
+
+        const ratio = clickX / canvas.width;
+        const winLen = window.aiTrainingState.currentWindowDuration;
+        const offsetSec = ratio * winLen;
+
+        window.aiTrainingState.playheadRatio = ratio;
+        window.drawAiSegmentWaveform();
+        window.playCurrentAiSegment(offsetSec);
+    };
+
+    canvas.addEventListener('click', handleCanvasSeek, { passive: false });
+    let isDragging = false;
+    canvas.addEventListener('mousedown', (e) => { isDragging = true; handleCanvasSeek(e); }, { passive: false });
+    canvas.addEventListener('mousemove', (e) => { if (isDragging) handleCanvasSeek(e); }, { passive: false });
+    canvas.addEventListener('mouseup', () => { isDragging = false; });
+    canvas.addEventListener('touchstart', (e) => { isDragging = true; handleCanvasSeek(e); }, { passive: false });
+    canvas.addEventListener('touchmove', (e) => { if (isDragging) handleCanvasSeek(e); }, { passive: false });
+    canvas.addEventListener('touchend', () => { isDragging = false; });
 };
 
 // Resample audio segment to 16kHz with Mono Stereo Mix-Down
