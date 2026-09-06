@@ -578,8 +578,6 @@ window.stopCurrentAiAudio = function() {
         clearTimeout(window.aiAudioTimer);
         window.aiAudioTimer = null;
     }
-
-    showToast("⏹️ Riproduzione audio fermata.");
 };
 
 window.changeAiPlaybackRate = function() {
@@ -597,7 +595,6 @@ window.changeAiPlaybackRate = function() {
     if (audioEl) {
         try { audioEl.playbackRate = rate; } catch(e) {}
     }
-    showToast(`🐌 Velocità audio impostata a ${rate}x`);
 };
 
 window.playCurrentAiSegment = function(offsetSec = 0) {
@@ -624,7 +621,6 @@ window.playCurrentAiSegment = function(offsetSec = 0) {
         window.aiTrainingState.currentSourceNode.playbackRate.value = rate;
         window.aiTrainingState.currentSourceNode.connect(audioCtx.destination);
         window.aiTrainingState.currentSourceNode.start(0, start, playDuration / rate);
-        showToast(`▶️ Riproduzione (${rate}x, da +${offsetSec.toFixed(1)}s)...`);
         window.drawAiSegmentWaveform();
         return;
     }
@@ -637,17 +633,13 @@ window.playCurrentAiSegment = function(offsetSec = 0) {
         audioEl.currentTime = start;
         audioEl.playbackRate = rate;
         audioEl.play().then(() => {
-            showToast(`▶️ Riproduzione (${rate}x, da +${offsetSec.toFixed(1)}s)...`);
             window.aiAudioTimer = setTimeout(() => {
                 audioEl.pause();
             }, (playDuration / rate) * 1000);
             window.drawAiSegmentWaveform();
         }).catch(err => {
             console.warn("HTML5 Audio play warning:", err);
-            showToast("⚠️ Attendi il caricamento dello spezzone audio...");
         });
-    } else {
-        showToast("⚠️ Audio in fase di scaricamento, attendi un istante.");
     }
 };
 
