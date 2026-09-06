@@ -1049,9 +1049,20 @@ window.playNextWord = function() {
             window.isPerfectionRetry = false;
         }
     } else if (window.currentMode === 'daily_challenge') {
-        // SFIDA GIORNALIERA INFINITA PERFETTA: Se stiamo finendo le parole nel mazzo, ne generiamo altre 20
-        if (wordIndex >= gameWords.length - 2) {
-            gameWords = window.getDailyWords(gameWords.length + 20);
+        // SFIDA GIORNALIERA: Le prime 20 parole sono garantite per tutti.
+        // Oltre la 20ª parola, prosegue SOLO per chi ha fatto ZERO errori!
+        if (wordIndex >= 20) {
+            const hasErrors = matchDetailsArray.some(m => !m.correct || m.usedReplay);
+            if (hasErrors) {
+                return window.finishGame();
+            } else {
+                if (wordIndex === 20 && matchDetailsArray.length === 20) {
+                    showToast("🌟 PERFETTO! ZERO ERRORI! La Sfida Giornaliera prosegue oltre la 20ª parola!");
+                }
+                if (wordIndex >= gameWords.length - 2) {
+                    gameWords = window.getDailyWords(gameWords.length + 20);
+                }
+            }
         }
     } else {
         if (wordIndex >= requestedWordCount) return window.finishGame();
@@ -1976,11 +1987,11 @@ window.handleWordSubmission = function(userWord) {
         window.trackAdvancedErrors(currentWord, userWord, activeWpmForThisWord);
     }
 
-    // Gestione Errori e Morte Improvvisa
+    // Gestione Errori e Coda Perfezione
     if (levDist > 0 || usedReplay) {
-        if (window.currentMode === 'daily_challenge') {
-            // SFIDA GIORNALIERA: Primo errore o replay -> La sfida termina immediatamente!
-            showToast("❌ Primo errore commesso! La Sfida Giornaliera si conclude qui.");
+        if (window.currentMode === 'daily_challenge' && wordIndex >= 20) {
+            // SFIDA GIORNALIERA OLTRE LA 20ª PAROLA: Primo errore oltre la parola 20 -> La sfida termina subito!
+            showToast(`❌ Primo errore oltre la 20ª parola! La tua Sfida Giornaliera si conclude qui.`);
             if (nextWordTimeout) clearTimeout(nextWordTimeout);
             setTimeout(() => {
                 window.finishGame();
