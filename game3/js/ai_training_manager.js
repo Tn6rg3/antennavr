@@ -689,7 +689,10 @@ window.runInferenceOnSegment = async function() {
                     }
                     if (maxIdx !== 0 && maxIdx !== lastIdx) {
                         const char = AI_VOCAB[maxIdx] || '';
-                        if (char !== ':' && char !== ';' && char !== '=' && char !== '(' && char !== ')') aiResult += char;
+                        // Consente unicamente lettere, numeri, prosegni e punteggiatura radio valida (escludendo '*')
+                        if (/[A-Z0-9\/\-\.a-z]/.test(char) || char === ' ' || char.startsWith('<')) {
+                            aiResult += char;
+                        }
                     }
                     lastIdx = maxIdx;
                 }
@@ -701,10 +704,10 @@ window.runInferenceOnSegment = async function() {
 
         const dspResult = decodeMorseDSP(audio16k, 16000);
         const rawText = aiResult.trim() || dspResult.trim();
-        let cleanText = rawText.replace(/^[():;=.,\s]+|[():;=.,\s]+$/g, "").trim();
-        cleanText = cleanText.replace(/\b\.\b/g, "").replace(/\s+/g, " ").trim();
+        let cleanText = rawText.replace(/[*():;=.,\s]+$/g, "").replace(/^[*():;=.,\s]+/g, "").trim();
+        cleanText = cleanText.replace(/\*/g, "").replace(/\b\.\b/g, "").replace(/\s+/g, " ").trim();
 
-        const finalOutput = (cleanText === ":" || cleanText === "." || cleanText === "," || cleanText === "=" || cleanText === "(" || cleanText === ")") ? "" : cleanText;
+        const finalOutput = (cleanText === ":" || cleanText === "." || cleanText === "," || cleanText === "=" || cleanText === "(" || cleanText === ")" || cleanText === "*") ? "" : cleanText;
 
         if (aiBox) aiBox.value = finalOutput || "NESSUN SEGNALE DETETTATO";
 
