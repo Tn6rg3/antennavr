@@ -1048,6 +1048,11 @@ window.playNextWord = function() {
         } else {
             window.isPerfectionRetry = false;
         }
+    } else if (window.currentMode === 'daily_challenge') {
+        // SFIDA GIORNALIERA INFINITA PERFETTA: Se stiamo finendo le parole nel mazzo, ne generiamo altre 20
+        if (wordIndex >= gameWords.length - 2) {
+            gameWords = window.getDailyWords(gameWords.length + 20);
+        }
     } else {
         if (wordIndex >= requestedWordCount) return window.finishGame();
     }
@@ -1971,8 +1976,17 @@ window.handleWordSubmission = function(userWord) {
         window.trackAdvancedErrors(currentWord, userWord, activeWpmForThisWord);
     }
 
-    // Gestione Errori e Coda Perfezione
+    // Gestione Errori e Morte Improvvisa
     if (levDist > 0 || usedReplay) {
+        if (window.currentMode === 'daily_challenge') {
+            // SFIDA GIORNALIERA: Primo errore o replay -> La sfida termina immediatamente!
+            showToast("❌ Primo errore commesso! La Sfida Giornaliera si conclude qui.");
+            if (nextWordTimeout) clearTimeout(nextWordTimeout);
+            setTimeout(() => {
+                window.finishGame();
+            }, 1200);
+            return;
+        }
         if (window.currentMode === 'perfection') {
             // Aggiungiamo alla coda memorizzando QUANDO è stata aggiunta per il cooldown
             window.perfectionQueue.push({

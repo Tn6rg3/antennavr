@@ -46,7 +46,13 @@ window.getDailyWords = function(num) {
         const j = Math.floor(prng() * (i + 1));
         [dict[i], dict[j]] = [dict[j], dict[i]];
     }
-    return dict.slice(0, num).map(w => w.toUpperCase());
+    const result = [];
+    while (result.length < num) {
+        for (let i = 0; i < dict.length && result.length < num; i++) {
+            result.push(dict[i].toUpperCase());
+        }
+    }
+    return result;
 };
 
 window.getGameWords = function(num, mode, options = {}) {
