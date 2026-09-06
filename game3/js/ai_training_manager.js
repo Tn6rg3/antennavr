@@ -91,11 +91,21 @@ window.switchAiTab = function(tabId) {
 
 window.fetchAddestraUrlFromFirebase = async function() {
     if (window.aiActiveAddestraUrl) return window.aiActiveAddestraUrl;
+    if (window.qsoAudioServerUrl && window.qsoAudioServerUrl.startsWith('http')) {
+        window.aiActiveAddestraUrl = window.qsoAudioServerUrl;
+        return window.aiActiveAddestraUrl;
+    }
     try {
         if (typeof firebase !== 'undefined' && firebase.database) {
-            let snap = await firebase.database().ref('config/addestra_script_url').once('value');
+            let snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
             if (!snap.exists() || !snap.val()) {
-                snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
+                snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
+            }
+            if (!snap.exists() || !snap.val()) {
+                snap = await firebase.database().ref('config/addestra_script_url').once('value');
+            }
+            if (!snap.exists() || !snap.val()) {
+                snap = await firebase.database().ref('config/qso_audio_server_url').once('value');
             }
             if (snap.exists() && snap.val()) {
                 window.aiActiveAddestraUrl = snap.val().trim();
