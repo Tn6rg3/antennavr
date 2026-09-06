@@ -501,7 +501,9 @@ async function startApp() {
     }
     const currentTgUser = window.tgUser;
 
-    if (!currentTgUser) {
+    // BLOCCO RIGIDO ESTERNO: Accesso vietato al 100% se aperti fuori da Telegram
+    if (!currentTgUser || !currentTgUser.id || !window.tgInitData) {
+        console.warn("Security: External access blocked (No Telegram User).");
         if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
         if (els.errorScreen) els.errorScreen.classList.add('active-screen');
         return;
@@ -553,14 +555,43 @@ async function startApp() {
     initGame();
 }
 
+window.fetchValidationUrlFromFirebase = async function() {
+    if (window.VALIDATION_SERVER_URL && window.VALIDATION_SERVER_URL.startsWith('http')) {
+        return window.VALIDATION_SERVER_URL;
+    }
+    try {
+        if (typeof db !== 'undefined' && db) {
+            let snap = await db.ref('appConfig/validation_server_url').once('value');
+            if (!snap.exists() || !snap.val()) {
+                snap = await db.ref('config/validation_server_url').once('value');
+            }
+            if (snap.exists() && snap.val()) {
+                window.VALIDATION_SERVER_URL = snap.val().trim();
+                console.log("🔒 Loaded Validation Apps Script URL from Firebase:", window.VALIDATION_SERVER_URL);
+                return window.VALIDATION_SERVER_URL;
+            }
+        }
+    } catch(e) {
+        console.warn("Validation Config Fetch Warning:", e);
+    }
+    return window.VALIDATION_SERVER_URL || "";
+};
+
 async function validateIdentity() {
-    if (!VALIDATION_SERVER_URL || !VALIDATION_SERVER_URL.startsWith("http")) {
-        console.warn("Security: Validation URL not set, skipping.");
-        return true;
+    // BLOCCO RIGIDO ESTERNO: Se manca initData, blocca l'accesso immediatamente
+    if (!window.tgInitData || window.tgInitData.trim() === "") {
+        console.warn("Security: Missing tgInitData, validation failed.");
+        return false;
+    }
+
+    const valUrl = await window.fetchValidationUrlFromFirebase();
+    if (!valUrl || !valUrl.startsWith("http")) {
+        // Se l'URL di validazione non è impostato in Firebase, si richiede comunque un utente Telegram valido
+        return !!(window.tgUser && window.tgUser.id);
     }
 
     try {
-        const url = VALIDATION_SERVER_URL + "?initData=" + encodeURIComponent(window.tgInitData || "");
+        const url = valUrl + "?initData=" + encodeURIComponent(window.tgInitData || "");
 
         const response = await fetch(url, {
             method: 'GET',
@@ -1290,7 +1321,28 @@ window.setupBugSystem = function() {
         };
     }
 
-    // --- TASTO DEV: RESET SFIDA GIORNALIERA ---
+    // --- FUNZIONE ADMIN: RESET SFIDA GIORNALIERA UTENTE SPECIFICO ---
+    window.adminResetDailyForUser = async function(targetUserId) {
+        if (!targetUserId) {
+            targetUserId = prompt("Inserisci l'ID Telegram dell'utente a cui sbloccare la Sfida Giornaliera:");
+        }
+        if (!targetUserId) return;
+
+        const today = new Date().toISOString().split('T')[0];
+        try {
+            await Promise.all([
+                db.ref(`users/${targetUserId}/daily_attempt`).remove(),
+                db.ref(`leaderboard/daily_challenge/${today}/${targetUserId}`).remove()
+            ]);
+            if (typeof showToast === 'function') showToast(`🔄 Sfida Giornaliera sbloccata per l'utente ${targetUserId}!`);
+            alert(`✓ Sfida Giornaliera di oggi sbloccata con successo per l'utente Telegram ID ${targetUserId}!`);
+        } catch(err) {
+            console.error("Admin Reset Daily Error:", err);
+            alert("Errore sblocco admin: " + err.message);
+        }
+    };
+
+    // --- TASTO DEV: RESET SFIDA GIORNALIERA PERSONALE ---
     if (els.btnDevResetDaily) {
         els.btnDevResetDaily.onclick = async () => {
             if (!confirm("Sei lo Sviluppatore. Vuoi resettare la tua sfida di oggi?")) return;
@@ -1637,6 +1689,28 @@ if (els.btnDeclineDaily) els.btnDeclineDaily.onclick = () => {
     localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
     db.ref(`users/${myId}/daily_attempt`).set(today); // Sincronizziamo il rifiuto
     if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none';
+};
+
+window.allowReplayDailyChallenge = function() {
+    localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
+
+    const resetAndOpenModal = () => {
+        showToast("🔄 Sfida Giornaliera riattivata! Buona fortuna...");
+        if (els.leaderboardScreen) els.leaderboardScreen.classList.remove('active-screen');
+        const modal = document.getElementById('dailyChallengeModal');
+        if (modal) modal.style.display = 'flex';
+    };
+
+    if (typeof db !== 'undefined' && db && window.myId) {
+        db.ref(`users/${window.myId}/daily_attempt`).remove()
+            .then(resetAndOpenModal)
+            .catch(err => {
+                console.warn("Replay Daily Attempt Remove Error:", err);
+                resetAndOpenModal();
+            });
+    } else {
+        resetAndOpenModal();
+    }
 };
 
 window.reopenDailyChallenge = function() {

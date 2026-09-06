@@ -94,6 +94,7 @@ window.showLeaderboardTab = function(modeValue) {
             els.btnShareDaily.style.display = 'block';
         }
         window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
+        window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
     } else if (modeValue === 'trn_global') {
         if (els.trnSubTabs) els.trnSubTabs.style.display = 'flex';
         window.fetchAndRenderGlobalLeaderboard('tournaments', null);
