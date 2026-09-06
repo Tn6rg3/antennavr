@@ -134,16 +134,22 @@ const CACHE_QSO_LIST_KEY = "cwgame_cached_qso_list";
 
 window.extractDateFromFilename = function(filename) {
     if (!filename) return "Senza Data";
-    const m1 = filename.match(/\b(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/);
+    const str = String(filename);
+
+    // 1. Cerca sequenza 8 cifre YYYYMMDD senza vincolo rigido di \b (es. 20260831 o 20230813)
+    const m1 = str.match(/(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/);
     if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
 
-    const m2 = filename.match(/\b(20\d{2})[-_](0[1-9]|1[0-2])[-_](0[1-9]|[12]\d|3[01])\b/);
+    // 2. Cerca YYYY-MM-DD o YYYY_MM_DD
+    const m2 = str.match(/(20\d{2})[-_\.](0[1-9]|1[0-2])[-_\.](0[1-9]|[12]\d|3[01])/);
     if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
 
-    const m3 = filename.match(/\b(0[1-9]|[12]\d|3[01])[-_](0[1-9]|1[0-2])[-_](20\d{2})\b/);
+    // 3. Cerca DD-MM-YYYY o DD_MM_YYYY
+    const m3 = str.match(/(0[1-9]|[12]\d|3[01])[-_\.](0[1-9]|1[0-2])[-_\.](20\d{2})/);
     if (m3) return `${m3[3]}-${m3[2]}-${m3[1]}`;
 
-    const m4 = filename.match(/\b(20\d{2})\b/);
+    // 4. Cerca semplicemente qualsiasi anno a 4 cifre 20XX (es. 2026, 2025, 2024, 2023)
+    const m4 = str.match(/(20\d{2})/);
     if (m4) return `${m4[1]}-01-01`;
 
     return "Senza Data";
@@ -163,11 +169,18 @@ window.renderQsoListWithDateFilter = function(qsoList) {
     const yearMap = {};
 
     fullList.forEach((item, idx) => {
-        const d = window.extractDateFromFilename(item.filename);
+        const fname = String(item.filename || "");
+        const d = window.extractDateFromFilename(fname);
         if (!dateMap[d]) dateMap[d] = 0;
         dateMap[d]++;
 
-        const year = d.split('-')[0];
+        // Estrazione Anno (es. 2026, 2025, 2024...)
+        let year = d.split('-')[0];
+        if (!year || year === "Senza Data") {
+            const yrMatch = fname.match(/(20\d{2})/);
+            if (yrMatch) year = yrMatch[1];
+        }
+
         if (year && year.length === 4 && !isNaN(year)) {
             if (!yearMap[year]) yearMap[year] = 0;
             yearMap[year]++;
@@ -238,14 +251,15 @@ window.filterQsoListByDate = function() {
     qsoSelect.innerHTML = '';
 
     fullList.forEach((item, originalIdx) => {
-        const itemDate = window.extractDateFromFilename(item.filename);
+        const fname = String(item.filename || "");
+        const itemDate = window.extractDateFromFilename(fname);
         let match = false;
 
         if (!selectedFilter) {
             match = true;
         } else if (selectedFilter.startsWith("YEAR:")) {
             const yr = selectedFilter.replace("YEAR:", "");
-            match = itemDate.startsWith(yr);
+            match = itemDate.startsWith(yr) || fname.includes(yr);
         } else {
             match = (itemDate === selectedFilter);
         }
