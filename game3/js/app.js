@@ -9,6 +9,25 @@ const APP_VERSION = "20260807.223";
 // URL della Web App di Google Apps Script per la validazione identità
 const VALIDATION_SERVER_URL = "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
 
+// --- FUNZIONE DI SALVATAGGIO CONFIGURAZIONE DINAMICA FIREBASE ---
+window.saveFirebaseConfigUrl = function(key, newUrl) {
+    if (!key || !newUrl) return;
+    const cleanUrl = newUrl.trim();
+    if (typeof db !== 'undefined' && db) {
+        db.ref(`config/${key}`).set(cleanUrl).then(() => {
+            if (key === 'addestra_script_url') window.aiActiveAddestraUrl = cleanUrl;
+            if (key === 'validation_server_url') window.VALIDATION_SERVER_URL = cleanUrl;
+            if (typeof showToast === 'function') showToast(`🔒 Config '${key}' salvato su Firebase!`);
+            console.log(`✓ Firebase Config '${key}' updated:`, cleanUrl);
+        }).catch(err => {
+            console.error("Firebase Config Save Error:", err);
+            alert("Errore salvataggio Firebase: " + err.message);
+        });
+    } else {
+        alert("⚠️ Connessione Firebase in fase di inizializzazione, riprova tra un istante.");
+    }
+};
+
 window.Telegram.WebApp.ready();
 window.Telegram.WebApp.expand();
 
