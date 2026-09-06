@@ -1966,15 +1966,23 @@ s            </div>
 
             <!-- ESTRATTORE FINESTRA AUDIO -->
             <div class="box-panel" style="padding:10px; margin-bottom:8px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <b style="font-size:0.85em;">2. Finestra Segmento:</b>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;">
                     <label style="font-size:0.8em; color:var(--link-color);">
                         ⏱️ Durata:
                         <select id="aiWindowDurationSelect" onchange="window.changeAiWindowDuration()" style="padding:2px 6px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid var(--link-color); border-radius:4px;">
-                            <option value="20" selected>20 Secondi</option>
-                            <option value="30">30 Secondi</option>
-                            <option value="45">45 Secondi</option>
-                            <option value="60">60 Secondi (1 Min)</option>
+                            <option value="20" selected>20s</option>
+                            <option value="30">30s</option>
+                            <option value="45">45s</option>
+                            <option value="60">60s (1m)</option>
+                        </select>
+                    </label>
+                    <label style="font-size:0.8em; color:#ff9800;">
+                        🐌 Velocità:
+                        <select id="aiPlaybackRateSelect" onchange="window.changeAiPlaybackRate()" style="padding:2px 6px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid #ff9800; border-radius:4px;">
+                            <option value="0.5">0.5x (Lento)</option>
+                            <option value="0.75">0.75x</option>
+                            <option value="1.0" selected>1.0x (Normale)</option>
+                            <option value="1.25">1.25x</option>
                         </select>
                     </label>
                 </div>
