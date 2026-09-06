@@ -32,22 +32,24 @@ window.toggleQsoSearchPanel = function() {
 };
 
 window.getQsoServerUrlAutomatic = async function() {
-    let serverUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
+    let serverUrl = window.qsoAudioServerUrl || window.aiActiveAddestraUrl || localStorage.getItem('cwgame_qso_audio_url');
     if (serverUrl && serverUrl.startsWith('http')) return serverUrl;
 
-    // 1. Recupero dinamico da Firebase Config
+    // 1. Recupero dinamico da Firebase Config (Controlla sia appConfig che config)
     if (typeof firebase !== 'undefined' && firebase.database) {
         try {
-            const snap = await firebase.database().ref('config/qso_audio_server_url').once('value');
+            let snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
+            if (!snap.exists() || !snap.val()) {
+                snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
+            }
+            if (!snap.exists() || !snap.val()) {
+                snap = await firebase.database().ref('config/qso_audio_server_url').once('value');
+            }
+            if (!snap.exists() || !snap.val()) {
+                snap = await firebase.database().ref('config/addestra_script_url').once('value');
+            }
             if (snap.exists() && snap.val()) {
                 window.qsoAudioServerUrl = snap.val().trim();
-                localStorage.setItem('cwgame_qso_audio_url', window.qsoAudioServerUrl);
-                return window.qsoAudioServerUrl;
-            }
-            // Fallback su addestra_script_url se condiviso
-            const addSnap = await firebase.database().ref('config/addestra_script_url').once('value');
-            if (addSnap.exists() && addSnap.val()) {
-                window.qsoAudioServerUrl = addSnap.val().trim();
                 localStorage.setItem('cwgame_qso_audio_url', window.qsoAudioServerUrl);
                 return window.qsoAudioServerUrl;
             }
