@@ -221,10 +221,10 @@ window.loadSelectedAiQSO = async function() {
     }
 
     // SCARICAMENTO DIRETTO ED ESCLUSIVO VIA PROXY GOOGLE APPS SCRIPT (Senza blocchi CORS / 403)
+    const activeUrl = window.aiActiveAddestraUrl || (await window.fetchAddestraUrlFromFirebase());
     const proxyCandidateUrls = [
-        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec",
-        window.aiActiveAddestraUrl,
-        "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec"
+        activeUrl,
+        window.qsoAudioServerUrl
     ].filter(u => u && u.startsWith('http'));
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
