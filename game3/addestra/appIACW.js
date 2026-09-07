@@ -157,10 +157,10 @@ async function fetchAppsScriptUrlFromFirebase() {
 
             if (firebase.database) {
                 const [snap1, snap2, snap3, snap4] = await Promise.all([
-                    firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null),
                     firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
-                    firebase.database().ref('config/addestra_script_url').once('value').catch(() => null),
-                    firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null)
+                    firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null),
+                    firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null),
+                    firebase.database().ref('config/addestra_script_url').once('value').catch(() => null)
                 ]);
 
                 const foundUrls = [
