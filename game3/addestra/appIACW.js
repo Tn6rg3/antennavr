@@ -40,16 +40,22 @@ async function initONNXModel() {
 
 async function loadFullProjectDictionary() {
     try {
-        const resp = await fetch('/dictionary');
-        if (resp.ok) {
-            const fullDict = await resp.json();
-            if (Array.isArray(fullDict) && fullDict.length > 0) {
-                ITALIAN_RADIO_DICTIONARY = fullDict;
-                logDebug(`💡 Caricato dizionario esteso: ${fullDict.length} parole caricate nel vocabolario!`);
-            }
+        const resp1 = await fetch('../parole.txt');
+        if (resp1.ok) {
+            const text1 = await resp1.text();
+            const words1 = text1.split(/\r?\n/).map(w => w.trim().toUpperCase()).filter(w => w.length > 0);
+            ITALIAN_RADIO_DICTIONARY = [...new Set([...ITALIAN_RADIO_DICTIONARY, ...words1])];
+            logDebug(`💡 Caricato dizionario parole.txt (${words1.length} parole)!`);
+        }
+        const resp2 = await fetch('../words.txt');
+        if (resp2.ok) {
+            const text2 = await resp2.text();
+            const words2 = text2.split(/\r?\n/).map(w => w.trim().toUpperCase()).filter(w => w.length > 0);
+            ITALIAN_RADIO_DICTIONARY = [...new Set([...ITALIAN_RADIO_DICTIONARY, ...words2])];
+            logDebug(`💡 Caricato dizionario words.txt (${words2.length} parole)!`);
         }
     } catch(e) {
-        console.warn("Could not load dictionary API from server:", e);
+        console.warn("Could not load dictionary files:", e);
     }
 }
 
@@ -94,20 +100,33 @@ function checkTelegramAuthAndLock() {
 async function fetchAppsScriptUrlFromFirebase() {
     if (activeAppsScriptUrl && activeAppsScriptUrl.startsWith('http')) return activeAppsScriptUrl;
 
-    const firebaseEndpoints = [
-        "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app/appConfig/addestra_script_url.json",
-        "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app/appConfig/qso_audio_server_url.json",
-        "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app/config/addestra_script_url.json"
-    ];
+    try {
+        if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+            firebase.initializeApp({
+                databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app"
+            });
+        }
 
-    for (let ep of firebaseEndpoints) {
-        try {
-            const resp = await fetch(ep);
-            if (resp.ok) {
-                const url = await resp.json();
-                if (url && typeof url === 'string' && url.startsWith('http')) {
-                    activeAppsScriptUrl = url.trim();
-                    console.log("🔒 Loaded Apps Script URL dynamically from Firebase Config:", activeAppsScriptUrl);
+        if (typeof firebase !== 'undefined' && firebase.database) {
+            let snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
+            if (!snap.exists() || !snap.val()) {
+                snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
+            }
+            if (!snap.exists() || !snap.val()) {
+                snap = await firebase.database().ref('config/addestra_script_url').once('value');
+            }
+            if (snap.exists() && snap.val()) {
+                activeAppsScriptUrl = snap.val().trim();
+                console.log("🔒 Loaded Apps Script URL dynamically from Firebase Database:", activeAppsScriptUrl);
+                return activeAppsScriptUrl;
+            }
+        }
+    } catch(e) {
+        console.warn("Firebase Fetch Error:", e);
+    }
+
+    return activeAppsScriptUrl || "";
+}
                     return activeAppsScriptUrl;
                 }
             }
