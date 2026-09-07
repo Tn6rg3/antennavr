@@ -1,3 +1,7 @@
+// CW AI Studio Standalone Version
+const APP_IACW_VERSION = "2026.09.07 - V3.2 (IACW)";
+console.log(`🚀 CW AI Studio (IACW) Version: ${APP_IACW_VERSION}`);
+
 // Morse Vocabulary matching PyTorch morse_table.py
 const VOCAB = ['<BLANK>', ' ', '"', '$', '&', "'", '(', ')', '+', ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '=', '?', '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '_', '!', '<AR>', '<BT>', '<KN>', '<SK>', '<VA>', '<AS>', '<SOS>', '<HH>'];
 
@@ -136,7 +140,7 @@ async function fetchAppsScriptUrlFromFirebase() {
             }
         }
     } catch(e) {
-        console.warn("Firebase Fetch Error:", e);
+        // Silently handled: falls back to active script URL
     }
 
     return activeAppsScriptUrl || "";
