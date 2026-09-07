@@ -930,45 +930,50 @@ async function loadSelectedQSO() {
         localStorage.getItem('cwgame_qso_audio_url')
     ].filter(u => u && u.startsWith('http'));
 
+    const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
+    const uid = window.tgUser?.id || window.myId || "";
+
     for (let cleanUrl of proxyCandidateUrls) {
-        if (fileId && cleanUrl) {
-            if (statusElem) { statusElem.innerText = `⏳ Scaricamento audio QSO (#${idx + 1}/${qsoList.length})...`; statusElem.style.color = "#00bcd4"; }
-            try {
-                let formattedUrl = cleanUrl.trim();
-                if (formattedUrl.includes('/edit')) formattedUrl = formattedUrl.split('/edit')[0] + '/exec';
-                if (formattedUrl.endsWith('/dev')) formattedUrl = formattedUrl.slice(0, -4) + '/exec';
-                if (formattedUrl.includes('?')) formattedUrl = formattedUrl.split('?')[0];
+        if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
+        if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
 
-                let proxyUrl = `${formattedUrl}?action=proxy_audio&id=${encodeURIComponent(fileId)}`;
-                if (window.tgUser?.id) proxyUrl += `&uid=${encodeURIComponent(window.tgUser.id)}`;
+        try {
+            let proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}`;
+            if (uid) proxyUrl += `&uid=${encodeURIComponent(uid)}`;
+            if (token) proxyUrl += `&token=${encodeURIComponent(token)}`;
 
-                logDebug(`🚀 Starting AI Audio Download via Proxy: ${proxyUrl}`);
+            console.log("🚀 Starting AI Audio Download via Proxy:", proxyUrl);
 
-                const resp = await fetch(proxyUrl);
-                if (resp.ok) {
-                    const text = await resp.text();
-                    let data = null;
-                    try { data = JSON.parse(text); } catch(e) {}
+            const resp = await fetch(proxyUrl);
+            if (resp.ok) {
+                const text = await resp.text();
+                let data = null;
+                try { data = JSON.parse(text); } catch(e) { console.warn("Proxy JSON error:", e); }
 
-                    if (data && data.status === 'success' && data.base64) {
-                        logDebug(`✓ Received Base64 Audio Payload! Length: ${data.base64.length} chars`);
+                if (data && data.status === 'success' && data.base64) {
+                    console.log("✓ Received Base64 Audio Payload! Length:", data.base64.length, "chars");
 
-                        const binaryStr = atob(data.base64);
-                        const bytes = new Uint8Array(binaryStr.length);
-                        for (let i = 0; i < binaryStr.length; i++) {
-                            bytes[i] = binaryStr.charCodeAt(i);
-                        }
-                        const ctx = getAudioContext();
-                        currentAudioBuffer = await ctx.decodeAudioData(bytes.buffer);
-                        logDebug(`✓ Audio Apps Script scaricato e decodificato! Durata: ${currentAudioBuffer.duration.toFixed(1)}s`);
-                        if (statusElem) { statusElem.innerText = `✓ Audio Google Drive Caricato! Durata: ${currentAudioBuffer.duration.toFixed(1)}s`; statusElem.style.color = "#00ff66"; }
-                        updateSegmentDisplay();
-                        return;
+                    const binaryStr = atob(data.base64);
+                    const bytes = new Uint8Array(binaryStr.length);
+                    for (let i = 0; i < binaryStr.length; i++) {
+                        bytes[i] = binaryStr.charCodeAt(i);
                     }
+
+                    const ctx = getAudioContext();
+                    currentAudioBuffer = await ctx.decodeAudioData(bytes.buffer);
+
+                    if (statusElem) {
+                        statusElem.innerText = `✓ Spezzone Estratto ed Elaborato! (${currentAudioBuffer.duration.toFixed(1)}s) Premi ▶️ Riproduci per l'ascolto.`;
+                        statusElem.style.color = "#4caf50";
+                    }
+
+                    updateSegmentDisplay();
+                    logDebug(`✓ Spezzone pronto! Usa ▶️ Riproduci per ascoltare la parte estratta.`);
+                    return;
                 }
-            } catch(e) {
-                logDebug(`⚠️ Errore scaricamento audio proxy Apps Script: ${e.message}`);
             }
+        } catch(e) {
+            console.warn("AI Audio Proxy Fetch Warning for", cleanUrl, ":", e);
         }
     }
 
