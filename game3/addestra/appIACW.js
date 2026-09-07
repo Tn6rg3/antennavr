@@ -293,7 +293,12 @@ async function autoFetchQsoListFromAppsScript() {
     }
 
     const scriptUrl = await fetchAppsScriptUrlFromFirebase();
-    if (!scriptUrl) return;
+    const fallbackScriptUrls = [
+        "https://script.google.com/macros/s/AKfycbxAPRxGRb_I4qoByBd5KjjE67z5yETgSrMwNT2Ivq7buJEH75V_NEOZilfb6oKWP5fK/exec",
+        "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec"
+    ];
+
+    const targetUrls = (scriptUrl && scriptUrl.startsWith('http')) ? [scriptUrl, ...fallbackScriptUrls] : fallbackScriptUrls;
 
     const status = document.getElementById('sheetStatus');
     if (status && cachedCount === 0) {
@@ -301,33 +306,38 @@ async function autoFetchQsoListFromAppsScript() {
         status.style.backgroundColor = "#00bcd4";
     }
 
-    try {
-        const fetchUrl = `${scriptUrl}?action=search&q=&limit=10000&uid=${window.tgUser?.id || ""}`;
-        logDebug(`🔍 Background Scanning QSO list from Apps Script: ${fetchUrl}`);
-        const resp = await fetch(fetchUrl);
-        if (!resp.ok) return;
+    for (let url of targetUrls) {
+        try {
+            const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}action=search&q=&limit=10000&uid=${window.tgUser?.id || ""}`;
+            logDebug(`🔍 Background Scanning QSO list from Apps Script: ${fetchUrl}`);
+            const resp = await fetch(fetchUrl);
+            if (!resp.ok) continue;
 
-        const data = await resp.json();
-        if (data && data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
-            const liveCount = data.results.length;
-            const mappedResults = data.results.map(r => ({
-                id: r.id,
-                filename: r.filename,
-                streamUrl: r.streamUrl,
-                transcript: r.filename
-            }));
+            const data = await resp.json();
+            if (data && data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
+                const liveCount = data.results.length;
+                const mappedResults = data.results.map(r => ({
+                    id: r.id,
+                    filename: r.filename,
+                    streamUrl: r.streamUrl,
+                    transcript: r.filename
+                }));
 
-            if (liveCount !== cachedCount) {
-                console.log(`🔄 Trovati ${liveCount} QSO sul server (Cache ne aveva ${cachedCount}). Aggiornamento in corso...`);
-                localStorage.setItem(CACHE_ADDESTRA_QSO_KEY, JSON.stringify(mappedResults));
-                renderQsoListWithDateFilter(mappedResults);
-            } else {
-                console.log(`✓ Elenco QSO allineato (${liveCount} file).`);
+                activeAppsScriptUrl = url;
+
+                if (liveCount !== cachedCount) {
+                    console.log(`🔄 Trovati ${liveCount} QSO sul server (Cache ne aveva ${cachedCount}). Aggiornamento in corso...`);
+                    localStorage.setItem(CACHE_ADDESTRA_QSO_KEY, JSON.stringify(mappedResults));
+                    renderQsoListWithDateFilter(mappedResults);
+                } else {
+                    console.log(`✓ Elenco QSO allineato (${liveCount} file).`);
+                }
+                logDebug(`✓ Caricati ${liveCount} QSO da Google Apps Script!`);
+                return;
             }
-            logDebug(`✓ Caricati ${liveCount} QSO da Google Apps Script!`);
+        } catch(e) {
+            console.warn("Auto fetch QSO list error for", url, ":", e);
         }
-    } catch(e) {
-        console.warn("Auto fetch QSO list error:", e);
     }
 }
 
@@ -785,23 +795,27 @@ function handleLocalAudioFilesUpload(event) {
     const selectGroup = document.getElementById('localAudioSelectGroup');
     const select = document.getElementById('localAudioSelect');
 
-    select.innerHTML = '';
-    localAudioFilesList.forEach((file, idx) => {
-        localAudioFilesMap[file.name] = file;
-        const baseName = file.name.replace(/^.*[\\\/]/, '');
-        localAudioFilesMap[baseName] = file;
+    if (select) {
+        select.innerHTML = '';
+        localAudioFilesList.forEach((file, idx) => {
+            localAudioFilesMap[file.name] = file;
+            const baseName = file.name.replace(/^.*[\\\/]/, '');
+            localAudioFilesMap[baseName] = file;
 
-        const opt = document.createElement('option');
-        opt.value = idx;
-        opt.innerText = `[File #${idx + 1}] ${file.name}`;
-        select.appendChild(opt);
-    });
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.innerText = `[File #${idx + 1}] ${file.name}`;
+            select.appendChild(opt);
+        });
+    }
 
     if (selectGroup) selectGroup.style.display = 'block';
 
-    const badge = document.getElementById('audioStatus');
-    badge.innerText = `Caricati ${files.length} file audio dal PC`;
-    badge.style.backgroundColor = '#1b5e20';
+    const badge = document.getElementById('audioStatus') || document.getElementById('sheetStatus');
+    if (badge) {
+        badge.innerText = `Caricati ${files.length} file audio dal PC`;
+        badge.style.backgroundColor = '#1b5e20';
+    }
 
     loadSelectedLocalAudio();
 }
