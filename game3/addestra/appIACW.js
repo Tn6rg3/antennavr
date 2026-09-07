@@ -1329,7 +1329,7 @@ function toggleRawOnlyMode(event) {
     logDebug(`🔤 Modalità 'Solo Caratteri Grezzi' ${isRawOnlyMode ? 'ATTIVATA' : 'DISATTIVATA'}`);
 }
 
-const ITALIAN_RADIO_DICTIONARY = [
+let ITALIAN_RADIO_DICTIONARY = [
     "CIAO", "BUONGIORNO", "BUONASERA", "BUONANOTTE", "GRAZIE", "MOLTO", "BENE", "BENISSIMO",
     "ROMA", "MILANO", "TORINO", "NAPOLI", "FIRENZE", "BOLOGNA", "GENOVA", "PALERMO", "VENEZIA",
     "CQ", "DE", "QSO", "QTH", "QSL", "QRM", "QRN", "QSB", "QRT", "QRZ", "QSY", "RST", "WATTS",
