@@ -101,6 +101,19 @@ function checkTelegramAuthAndLock() {
     return true;
 }
 
+function sanitizeAllowedGoogleUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return "";
+    let clean = rawUrl.trim();
+    try {
+        const parsed = new URL(clean);
+        const host = parsed.hostname.toLowerCase();
+        if (parsed.protocol === "https:" && (host.endsWith(".google.com") || host.endsWith(".googleapis.com") || host.endsWith(".googleusercontent.com") || host.endsWith(".firebasedatabase.app"))) {
+            return parsed.href;
+        }
+    } catch(e) {}
+    return "";
+}
+
 async function fetchAppsScriptUrlFromFirebase() {
     if (activeAppsScriptUrl && activeAppsScriptUrl.startsWith('http')) return activeAppsScriptUrl;
 
@@ -308,7 +321,10 @@ async function autoFetchQsoListFromAppsScript() {
 
     for (let url of targetUrls) {
         try {
-            const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}action=search&q=&limit=10000&uid=${window.tgUser?.id || ""}`;
+            const rawFetchUrl = `${url}${url.includes('?') ? '&' : '?'}action=search&q=&limit=10000&uid=${window.tgUser?.id || ""}`;
+            const fetchUrl = sanitizeAllowedGoogleUrl(rawFetchUrl);
+            if (!fetchUrl) continue;
+
             logDebug(`🔍 Background Scanning QSO list from Apps Script: ${fetchUrl}`);
             const resp = await fetch(fetchUrl);
             if (!resp.ok) continue;
@@ -882,7 +898,10 @@ async function loadSelectedQSO() {
                 if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
                 if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
 
-                const proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}&uid=${window.tgUser?.id || ""}`;
+                const rawProxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}&uid=${window.tgUser?.id || ""}`;
+                const proxyUrl = sanitizeAllowedGoogleUrl(rawProxyUrl);
+                if (!proxyUrl) continue;
+
                 logDebug(`Invio richiesta proxy audio ad Apps Script: "${proxyUrl}"`);
                 const resp = await fetch(proxyUrl);
                 if (resp.ok) {
@@ -1596,7 +1615,11 @@ async function syncPairToGoogleCloudSheet(pair) {
     });
 
     try {
-        const resp = await fetch(`${scriptUrl}?${params.toString()}`);
+        const rawSyncUrl = `${scriptUrl}?${params.toString()}`;
+        const syncUrl = sanitizeAllowedGoogleUrl(rawSyncUrl);
+        if (!syncUrl) return;
+
+        const resp = await fetch(syncUrl);
         const res = await resp.json();
         console.log("✓ Sincronizzato con il Foglio Google ADDESTRA in Cloud:", res);
     } catch(err) {
