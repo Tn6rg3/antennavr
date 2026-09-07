@@ -464,6 +464,10 @@ function initMasterTimeline() {
     const handlePointerUp = () => {
         if (activeDraggingMarker) {
             activeDraggingMarker = null;
+            // ANALISI IA AUTOMATICA AL RILASCIO DEI MARCATORI A-B
+            if (typeof runInferenceOnSegment === 'function') {
+                setTimeout(runInferenceOnSegment, 200);
+            }
         }
     };
 
@@ -653,11 +657,6 @@ function playRegionAB() {
     currentSourceNode.connect(ctx.destination);
     currentSourceNode.start(0, markerA, markerB - markerA);
     logDebug(`▶️ Riproduzione tratto A-B (${currentPlaybackSpeed}x): ${markerA.toFixed(2)}s -> ${markerB.toFixed(2)}s`);
-
-    // Esegue l'analisi IA/DSP solo all'avvio della riproduzione Play
-    if (typeof runInferenceOnSegment === 'function') {
-        runInferenceOnSegment();
-    }
 }
 
 function initSegmentCanvasClick() {
