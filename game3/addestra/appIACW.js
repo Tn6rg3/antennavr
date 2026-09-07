@@ -909,11 +909,10 @@ async function loadSelectedQSO() {
         if (m) fileId = m[0];
     }
 
-    const activeScriptUrl = await fetchAppsScriptUrlFromFirebase();
+    const activeUrl = activeAppsScriptUrl || (await fetchAppsScriptUrlFromFirebase());
     const proxyCandidateUrls = [
-        activeScriptUrl,
-        "https://script.google.com/macros/s/AKfycbxAPRxGRb_I4qoByBd5KjjE67z5yETgSrMwNT2Ivq7buJEH75V_NEOZilfb6oKWP5fK/exec",
-        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec"
+        activeUrl,
+        window.qsoAudioServerUrl
     ].filter(u => u && u.startsWith('http'));
 
     for (let scriptUrl of proxyCandidateUrls) {
