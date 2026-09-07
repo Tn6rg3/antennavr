@@ -97,15 +97,15 @@ window.fetchAddestraUrlFromFirebase = async function() {
     }
     try {
         if (typeof firebase !== 'undefined' && firebase.database) {
-            let snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
+            let snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
             if (!snap.exists() || !snap.val()) {
-                snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
-            }
-            if (!snap.exists() || !snap.val()) {
-                snap = await firebase.database().ref('config/addestra_script_url').once('value');
+                snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
             }
             if (!snap.exists() || !snap.val()) {
                 snap = await firebase.database().ref('config/qso_audio_server_url').once('value');
+            }
+            if (!snap.exists() || !snap.val()) {
+                snap = await firebase.database().ref('config/addestra_script_url').once('value');
             }
             if (snap.exists() && snap.val()) {
                 window.aiActiveAddestraUrl = snap.val().trim();
@@ -371,13 +371,15 @@ window.loadSelectedAiQSO = async function() {
     const activeUrl = window.aiActiveAddestraUrl || (await window.fetchAddestraUrlFromFirebase());
     const proxyCandidateUrls = [
         activeUrl,
-        window.qsoAudioServerUrl
-    ].filter(u => u && u.startsWith('http'));
+        window.qsoAudioServerUrl,
+        localStorage.getItem('cwgame_qso_audio_url')
+    ].filter(u => u && typeof u === 'string' && u.startsWith('http'));
+    const uniqueProxyUrls = [...new Set(proxyCandidateUrls)];
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.myId || "";
 
-    for (let cleanUrl of proxyCandidateUrls) {
+    for (let cleanUrl of uniqueProxyUrls) {
         if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
         if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
 
@@ -959,6 +961,11 @@ window.runInferenceOnSegment = async function() {
         const rawText = aiResult.trim() || dspResult.trim();
         let cleanText = rawText.replace(/[*():;=.,\s]+$/g, "").replace(/^[*():;=.,\s]+/g, "").trim();
         cleanText = cleanText.replace(/\*/g, "").replace(/\b\.\b/g, "").replace(/\s+/g, " ").trim();
+
+        // Se la stringa è composta unicamente da trattini e punti (es. "--.-..-----"), scarta la portante continua
+        if (/^[.\-\s]+$/.test(cleanText)) {
+            cleanText = "";
+        }
 
         const finalOutput = (cleanText === ":" || cleanText === "." || cleanText === "," || cleanText === "=" || cleanText === "(" || cleanText === ")" || cleanText === "*") ? "" : cleanText;
 
