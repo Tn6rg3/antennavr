@@ -157,10 +157,10 @@ async function fetchAppsScriptUrlFromFirebase() {
 
             if (firebase.database) {
                 const [snap1, snap2, snap3, snap4] = await Promise.all([
-                    firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
                     firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null),
-                    firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null),
-                    firebase.database().ref('config/addestra_script_url').once('value').catch(() => null)
+                    firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
+                    firebase.database().ref('config/addestra_script_url').once('value').catch(() => null),
+                    firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null)
                 ]);
 
                 const foundUrls = [
@@ -171,8 +171,8 @@ async function fetchAppsScriptUrlFromFirebase() {
                 ].filter(u => u && typeof u === 'string' && u.trim().startsWith('http')).map(u => u.trim());
 
                 if (foundUrls.length > 0) {
-                    activeAppsScriptUrl = foundUrls[0];
                     window.allAppsScriptUrls = [...new Set(foundUrls)];
+                    activeAppsScriptUrl = window.allAppsScriptUrls[0];
                     console.log("🔒 Loaded fresh Apps Script URLs dynamically from Firebase Database:", window.allAppsScriptUrls);
                     return activeAppsScriptUrl;
                 }
@@ -464,10 +464,6 @@ function initMasterTimeline() {
     const handlePointerUp = () => {
         if (activeDraggingMarker) {
             activeDraggingMarker = null;
-            // ANALISI IA AUTOMATICA AL RILASCIO DEI MARCATORI A-B
-            if (typeof runInferenceOnSegment === 'function') {
-                setTimeout(runInferenceOnSegment, 200);
-            }
         }
     };
 
@@ -657,6 +653,11 @@ function playRegionAB() {
     currentSourceNode.connect(ctx.destination);
     currentSourceNode.start(0, markerA, markerB - markerA);
     logDebug(`▶️ Riproduzione tratto A-B (${currentPlaybackSpeed}x): ${markerA.toFixed(2)}s -> ${markerB.toFixed(2)}s`);
+
+    // Esegue l'analisi IA/DSP solo all'avvio della riproduzione Play
+    if (typeof runInferenceOnSegment === 'function') {
+        runInferenceOnSegment();
+    }
 }
 
 function initSegmentCanvasClick() {
@@ -963,8 +964,6 @@ async function loadSelectedQSO() {
     const activeUrl = activeAppsScriptUrl || (await fetchAppsScriptUrlFromFirebase());
     const proxyCandidateUrls = [
         activeUrl,
-        "https://script.google.com/macros/s/AKfycbxAPRxGRb_I4qoByBd5KjjE67z5yETgSrMwNT2Ivq7buJEH75V_NEOZilfb6oKWP5fK/exec",
-        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec",
         ...(window.allAppsScriptUrls || []),
         window.qsoAudioServerUrl,
         localStorage.getItem('cwgame_qso_audio_url')
