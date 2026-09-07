@@ -855,8 +855,10 @@ async function loadSelectedQSO() {
     logDebug(`▶️ Selezionato QSO #${idx + 1}: Sorgente = "${item.filename}"`);
 
     if (editingPairIndex < 0) {
-        document.getElementById('userCorrectionText').value = item.transcript || '';
-        document.getElementById('aiPredictionText').value = 'Premi "Esegui Analisi IA" per decodificare...';
+        const userBox = document.getElementById('userCorrectionText');
+        const aiBox = document.getElementById('aiPredictionText');
+        if (userBox) userBox.value = item.transcript || '';
+        if (aiBox) aiBox.value = 'In attesa dell\'analisi automatica...';
     }
 
     const statusElem = document.getElementById('audioLoadStatus');
@@ -870,13 +872,20 @@ async function loadSelectedQSO() {
     }
 
     const activeScriptUrl = await fetchAppsScriptUrlFromFirebase();
-    const proxyCandidateUrls = [activeScriptUrl].filter(u => u && u.startsWith('http'));
+    const proxyCandidateUrls = [
+        activeScriptUrl,
+        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec"
+    ].filter(u => u && u.startsWith('http'));
 
     for (let scriptUrl of proxyCandidateUrls) {
         if (fileId && scriptUrl) {
             if (statusElem) { statusElem.innerText = `⏳ Scaricamento audio QSO (#${idx + 1}/${qsoList.length})...`; statusElem.style.color = "#00bcd4"; }
             try {
-                const proxyUrl = `${scriptUrl}?action=proxy_audio&id=${fileId}&uid=${window.tgUser?.id || ""}`;
+                let cleanUrl = scriptUrl.trim();
+                if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
+                if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
+
+                const proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}&uid=${window.tgUser?.id || ""}`;
                 logDebug(`Invio richiesta proxy audio ad Apps Script: "${proxyUrl}"`);
                 const resp = await fetch(proxyUrl);
                 if (resp.ok) {
@@ -904,25 +913,8 @@ async function loadSelectedQSO() {
         }
     }
 
-    // 1B. Direct Google Drive UC Stream Fallback
-    if (fileId) {
-        try {
-            const directUrl = `https://docs.google.com/uc?export=download&id=${fileId}`;
-            logDebug(`Tentativo download diretto Google Drive: ${directUrl}`);
-            const resp = await fetch(directUrl);
-            if (resp.ok) {
-                const arrayBuf = await resp.arrayBuffer();
-                const ctx = getAudioContext();
-                currentAudioBuffer = await ctx.decodeAudioData(arrayBuf);
-                logDebug(`✓ Audio caricato da download diretto Google Drive!`);
-                if (statusElem) { statusElem.innerText = `✓ Audio Google Drive Caricato! Durata: ${currentAudioBuffer.duration.toFixed(1)}s`; statusElem.style.color = "#00ff66"; }
-                updateSegmentDisplay();
-                return;
-            }
-        } catch(e) {
-            logDebug(`⚠️ Errore download diretto Google Drive: ${e.message}`);
-        }
-    }
+    if (statusElem) { statusElem.innerText = "🎧 Player Pronto (Usa ▶️ Riproduci per l'ascolto)"; statusElem.style.color = "#00bcd4"; }
+}
 
     if (localAudioFilesList.length > 0) {
         const localSelect = document.getElementById('localAudioSelect');
