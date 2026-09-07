@@ -101,24 +101,32 @@ function checkTelegramAuthAndLock() {
     return true;
 }
 
-function sanitizeAllowedGoogleUrl(rawUrl, paramsObj = null) {
-    if (!rawUrl || typeof rawUrl !== 'string') return "";
+const ALLOWED_FETCH_HOSTS = ["script.google.com", "docs.google.com", "telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app"];
+
+async function safeFetch(rawUrl, paramsObj = null) {
+    if (!rawUrl || typeof rawUrl !== 'string') return Promise.reject("Invalid URL");
     let clean = rawUrl.trim();
+    let parsed;
     try {
-        const parsed = new URL(clean);
-        const host = parsed.hostname.toLowerCase();
-        if (parsed.protocol === "https:" && (host.endsWith(".google.com") || host.endsWith(".googleapis.com") || host.endsWith(".googleusercontent.com") || host.endsWith(".firebasedatabase.app"))) {
-            if (paramsObj) {
-                Object.keys(paramsObj).forEach(k => {
-                    if (paramsObj[k] !== undefined && paramsObj[k] !== null) {
-                        parsed.searchParams.set(k, paramsObj[k]);
-                    }
-                });
+        parsed = new URL(clean);
+    } catch(e) {
+        return Promise.reject("URL format error");
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    if (parsed.protocol !== "https:" || !ALLOWED_FETCH_HOSTS.some(h => host === h || host.endsWith("." + h) || host.endsWith(".google.com") || host.endsWith(".googleapis.com"))) {
+        return Promise.reject("Host not allowed: " + host);
+    }
+
+    if (paramsObj) {
+        Object.keys(paramsObj).forEach(k => {
+            if (paramsObj[k] !== undefined && paramsObj[k] !== null) {
+                parsed.searchParams.set(k, paramsObj[k]);
             }
-            return parsed.toString();
-        }
-    } catch(e) {}
-    return "";
+        });
+    }
+
+    return fetch(parsed.toString());
 }
 
 async function fetchAppsScriptUrlFromFirebase() {
@@ -328,16 +336,12 @@ async function autoFetchQsoListFromAppsScript() {
 
     for (let url of targetUrls) {
         try {
-            const fetchUrl = sanitizeAllowedGoogleUrl(url, {
+            const resp = await safeFetch(url, {
                 action: "search",
                 q: "",
                 limit: "10000",
                 uid: window.tgUser?.id || ""
             });
-            if (!fetchUrl) continue;
-
-            logDebug(`🔍 Background Scanning QSO list from Apps Script: ${fetchUrl}`);
-            const resp = await fetch(fetchUrl);
             if (!resp.ok) continue;
 
             const data = await resp.json();
@@ -906,7 +910,11 @@ async function loadSelectedQSO() {
     }
 
     const activeScriptUrl = await fetchAppsScriptUrlFromFirebase();
-    const proxyCandidateUrls = [activeScriptUrl].filter(u => u && u.startsWith('http'));
+    const proxyCandidateUrls = [
+        activeScriptUrl,
+        "https://script.google.com/macros/s/AKfycbxAPRxGRb_I4qoByBd5KjjE67z5yETgSrMwNT2Ivq7buJEH75V_NEOZilfb6oKWP5fK/exec",
+        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec"
+    ].filter(u => u && u.startsWith('http'));
 
     for (let scriptUrl of proxyCandidateUrls) {
         if (fileId && scriptUrl) {
@@ -916,15 +924,12 @@ async function loadSelectedQSO() {
                 if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
                 if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
 
-                const proxyUrl = sanitizeAllowedGoogleUrl(cleanUrl, {
+                logDebug(`Invio richiesta proxy audio ad Apps Script: "${cleanUrl}"`);
+                const resp = await safeFetch(cleanUrl, {
                     action: "proxy_audio",
                     id: fileId,
                     uid: window.tgUser?.id || ""
                 });
-                if (!proxyUrl) continue;
-
-                logDebug(`Invio richiesta proxy audio ad Apps Script: "${proxyUrl}"`);
-                const resp = await fetch(proxyUrl);
                 if (resp.ok) {
                     const text = await resp.text();
                     let data = null;
@@ -1627,7 +1632,7 @@ async function syncPairToGoogleCloudSheet(pair) {
     if (!scriptUrl) return;
 
     try {
-        const syncUrl = sanitizeAllowedGoogleUrl(scriptUrl, {
+        const resp = await safeFetch(scriptUrl, {
             action: "save_approved",
             filename: pair.filename || "QSO_Clip",
             time_pos: pair.timePos || "00:00 - 00:10",
@@ -1635,9 +1640,6 @@ async function syncPairToGoogleCloudSheet(pair) {
             ai_prediction: pair.aiPrediction || "",
             uid: window.tgUser?.id || ""
         });
-        if (!syncUrl) return;
-
-        const resp = await fetch(syncUrl);
         const res = await resp.json();
         console.log("✓ Sincronizzato con il Foglio Google ADDESTRA in Cloud:", res);
     } catch(err) {
