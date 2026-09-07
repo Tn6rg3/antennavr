@@ -117,41 +117,189 @@ async function fetchAppsScriptUrlFromFirebase() {
     return activeAppsScriptUrl || "";
 }
 
+const CACHE_ADDESTRA_QSO_KEY = "cw_addestra_qso_list_cache";
+
+function extractDateFromFilename(filename) {
+    if (!filename) return "Senza Data";
+    const str = String(filename).trim();
+
+    // MATCH RIGIDO 8 CIFRE: YYYYMMDD (4 cifre anno 2010-2030, 2 cifre mese 01-12, 2 cifre giorno 01-31)
+    const m1 = str.match(/(?:^|[^0-9])(20[123]\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?:[^0-9]|$)/);
+    if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
+
+    // MATCH YYYY-MM-DD o YYYY_MM_DD
+    const m2 = str.match(/(?:^|[^0-9])(20[123]\d)[-_](0[1-9]|1[0-2])[-_](0[1-9]|[12]\d|3[01])(?:[^0-9]|$)/);
+    if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
+
+    return "Senza Data";
+}
+
+function renderQsoListWithDateFilter(list) {
+    const qsoSelect = document.getElementById('qsoSelect');
+    const dateSelect = document.getElementById('aiDateSelect');
+    const status = document.getElementById('sheetStatus');
+
+    if (!qsoSelect) return;
+
+    qsoList = list || [];
+    const dateMap = {};
+    const yearMap = {};
+
+    qsoList.forEach((item, idx) => {
+        const fname = String(item.filename || "");
+        const d = extractDateFromFilename(fname);
+        if (d !== "Senza Data") {
+            if (!dateMap[d]) dateMap[d] = 0;
+            dateMap[d]++;
+
+            const year = d.split('-')[0];
+            if (year && year.length === 4) {
+                if (!yearMap[year]) yearMap[year] = 0;
+                yearMap[year]++;
+            }
+        }
+    });
+
+    const dates = Object.keys(dateMap).sort().reverse();
+    const years = Object.keys(yearMap).sort().reverse();
+
+    if (dateSelect) {
+        dateSelect.innerHTML = `<option value="" selected>Tutte le Date (${qsoList.length} QSO)</option>`;
+
+        if (years.length > 0) {
+            const optGrpYears = document.createElement('optgroup');
+            optGrpYears.label = "─── PER ANNO ───";
+            years.forEach(yr => {
+                const opt = document.createElement('option');
+                opt.value = `YEAR:${yr}`;
+                opt.textContent = `📅 Anno ${yr} (${yearMap[yr]} QSO)`;
+                optGrpYears.appendChild(opt);
+            });
+            dateSelect.appendChild(optGrpYears);
+        }
+
+        if (dates.length > 0) {
+            const optGrpDates = document.createElement('optgroup');
+            optGrpDates.label = "─── PER DATA SPECIFICA ───";
+            dates.forEach(d => {
+                if (d !== "Senza Data") {
+                    const opt = document.createElement('option');
+                    opt.value = d;
+                    opt.textContent = `${d} (${dateMap[d]} QSO)`;
+                    optGrpDates.appendChild(opt);
+                }
+            });
+            dateSelect.appendChild(optGrpDates);
+        }
+    }
+
+    // Default: 100% full list
+    qsoSelect.innerHTML = '';
+    qsoList.forEach((item, originalIdx) => {
+        const opt = document.createElement('option');
+        opt.value = originalIdx;
+        const clean = (item.filename || "QSO").replace(/\.[^/.]+$/, "");
+        opt.innerText = `[QSO #${originalIdx + 1}] ${clean}`;
+        qsoSelect.appendChild(opt);
+    });
+
+    if (status) {
+        status.innerText = `✓ Caricati ${qsoList.length} QSO dal Foglio Google!`;
+        status.style.backgroundColor = "#1b5e20";
+    }
+
+    if (qsoSelect.options.length > 0) {
+        qsoSelect.selectedIndex = qsoSelect.options.length - 1;
+        loadSelectedQSO();
+    }
+}
+
+function filterQsoListByDate() {
+    const qsoSelect = document.getElementById('qsoSelect');
+    const dateSelect = document.getElementById('aiDateSelect');
+    if (!qsoSelect) return;
+
+    const selectedFilter = dateSelect ? dateSelect.value : "";
+    qsoSelect.innerHTML = '';
+
+    qsoList.forEach((item, originalIdx) => {
+        const fname = String(item.filename || "");
+        const itemDate = extractDateFromFilename(fname);
+        let match = false;
+
+        if (!selectedFilter) {
+            match = true;
+        } else if (selectedFilter.startsWith("YEAR:")) {
+            const yr = selectedFilter.replace("YEAR:", "");
+            match = itemDate.startsWith(yr);
+        } else {
+            match = (itemDate === selectedFilter);
+        }
+
+        if (match) {
+            const opt = document.createElement('option');
+            opt.value = originalIdx;
+            const clean = (item.filename || "QSO").replace(/\.[^/.]+$/, "");
+            opt.innerText = `[QSO #${originalIdx + 1}] ${clean}`;
+            qsoSelect.appendChild(opt);
+        }
+    });
+
+    if (qsoSelect.options.length > 0) {
+        qsoSelect.selectedIndex = 0;
+        loadSelectedQSO();
+    } else {
+        qsoSelect.innerHTML = '<option value="">Nessun QSO per questa data/anno</option>';
+    }
+}
+
 async function autoFetchQsoListFromAppsScript() {
+    let cachedCount = 0;
+    const cached = localStorage.getItem(CACHE_ADDESTRA_QSO_KEY);
+    if (cached) {
+        try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                cachedCount = parsed.length;
+                console.log("⚡ Instant loaded QSO list from localStorage cache:", cachedCount, "items");
+                renderQsoListWithDateFilter(parsed);
+            }
+        } catch(e) {}
+    }
+
     const scriptUrl = await fetchAppsScriptUrlFromFirebase();
     if (!scriptUrl) return;
 
+    const status = document.getElementById('sheetStatus');
+    if (status && cachedCount === 0) {
+        status.innerText = "⏳ Scansione elenco QSO dal server Google...";
+        status.style.backgroundColor = "#00bcd4";
+    }
+
     try {
         const fetchUrl = `${scriptUrl}?action=search&q=&limit=10000&uid=${window.tgUser?.id || ""}`;
-        logDebug(`🔍 Auto-fetching QSO list from Apps Script: ${fetchUrl}`);
+        logDebug(`🔍 Background Scanning QSO list from Apps Script: ${fetchUrl}`);
         const resp = await fetch(fetchUrl);
         if (!resp.ok) return;
 
         const data = await resp.json();
         if (data && data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
-            qsoList = data.results.map(r => ({
+            const liveCount = data.results.length;
+            const mappedResults = data.results.map(r => ({
                 id: r.id,
                 filename: r.filename,
                 streamUrl: r.streamUrl,
                 transcript: r.filename
             }));
 
-            const select = document.getElementById('qsoSelect');
-            if (select) {
-                select.innerHTML = '';
-                qsoList.forEach((item, idx) => {
-                    const opt = document.createElement('option');
-                    opt.value = idx;
-                    const clean = (item.filename || "QSO").replace(/\.[^/.]+$/, "");
-                    opt.innerText = `[QSO #${idx + 1}] ${clean}`;
-                    select.appendChild(opt);
-                });
-                if (qsoList.length > 0) {
-                    select.selectedIndex = 0;
-                    loadSelectedQSO();
-                }
+            if (liveCount !== cachedCount) {
+                console.log(`🔄 Trovati ${liveCount} QSO sul server (Cache ne aveva ${cachedCount}). Aggiornamento in corso...`);
+                localStorage.setItem(CACHE_ADDESTRA_QSO_KEY, JSON.stringify(mappedResults));
+                renderQsoListWithDateFilter(mappedResults);
+            } else {
+                console.log(`✓ Elenco QSO allineato (${liveCount} file).`);
             }
-            logDebug(`✓ Caricati ${qsoList.length} QSO da Google Apps Script!`);
+            logDebug(`✓ Caricati ${liveCount} QSO da Google Apps Script!`);
         }
     } catch(e) {
         console.warn("Auto fetch QSO list error:", e);

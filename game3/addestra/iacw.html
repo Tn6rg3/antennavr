@@ -75,31 +75,26 @@
                     </div>
                 </div>
             </div>
-            <div class="card grid-3">
-                <div>
-                    <h2>1A. File CSV Locale</h2>
-                    <div class="file-drop-area">
-                        <input type="file" id="csvFileInput" accept=".csv" onchange="handleCSVUpload(event)">
-                        <p>📄 Carica file CSV <label for="csvFileInput" class="btn-link">Sfoglia...</label></p>
-                        <span id="csvStatus" class="status-badge">Nessun CSV locale</span>
+            <div class="card">
+                <h2 style="color:#00bcd4; margin-bottom:12px;">1. Seleziona Registrazione QSO dal Foglio Google</h2>
+                <div style="display:grid; grid-template-columns: 1fr 2fr; gap:12px; margin-bottom:12px;">
+                    <div>
+                        <label for="aiDateSelect" style="display:block; font-size:0.85rem; color:#8e9bb0; margin-bottom:4px;">📅 Filtra per Anno / Data QSO:</label>
+                        <select id="aiDateSelect" onchange="filterQsoListByDate()" style="width:100%; padding:8px; font-size:0.9rem; background:#121820; color:#e0e6ed; border:1px solid #00bcd4; border-radius:6px; box-sizing:border-box;">
+                            <option value="">Tutte le Date</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="qsoSelect" style="display:block; font-size:0.85rem; color:#00ff66; font-weight:bold; margin-bottom:4px;">🎙️ File Audio QSO Registrato:</label>
+                        <select id="qsoSelect" onchange="loadSelectedQSO()" style="width:100%; padding:8px; font-size:0.9rem; background:#121820; color:#e0e6ed; border:1px solid #00ff66; border-radius:6px; box-sizing:border-box;"></select>
                     </div>
                 </div>
 
-                <div>
-                    <h2>1B. Link Foglio Google</h2>
-                    <div class="file-drop-area" style="padding:15px;">
-                        <input type="text" id="googleSheetUrlInput" placeholder="https://docs.google.com/spreadsheets/d/..." style="margin-bottom:8px; font-size:0.85rem;">
-                        <button class="btn btn-primary full-width" onclick="loadGoogleSheetData()">📊 Importa da Foglio Google</button>
-                        <span id="sheetStatus" class="status-badge">Incolla link al Foglio</span>
-                    </div>
-                </div>
-
-                <div>
-                    <h2>2. File Audio PC (Opzionale)</h2>
-                    <div class="file-drop-area">
-                        <input type="file" id="localAudioFilesInput" accept="audio/*" multiple onchange="handleLocalAudioFilesUpload(event)">
-                        <p>🎵 Seleziona file dal PC <label for="localAudioFilesInput" class="btn-link">Sfoglia...</label></p>
-                        <span id="audioStatus" class="status-badge">0 file audio caricati</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+                    <span id="sheetStatus" class="status-badge" style="background:#00bcd4;">⏳ Caricamento elenco QSO da Google...</span>
+                    <div>
+                        <input type="file" id="localAudioFilesInput" accept="audio/*" multiple style="display:none;" onchange="handleLocalAudioFilesUpload(event)">
+                        <button onclick="document.getElementById('localAudioFilesInput').click()" class="btn btn-secondary" style="padding:4px 12px; font-size:0.8rem;">📁 Opzionale: Carica Audio Locale da PC</button>
                     </div>
                 </div>
             </div>
