@@ -157,14 +157,17 @@ async function fetchAppsScriptUrlFromFirebase() {
 
             if (firebase.database) {
                 const [snap1, snap2, snap3, snap4] = await Promise.all([
-                    firebase.database().ref('appConfig/qso_audio_server_url').once('value'),
-                    firebase.database().ref('appConfig/addestra_script_url').once('value'),
-                    firebase.database().ref('config/qso_audio_server_url').once('value'),
-                    firebase.database().ref('config/addestra_script_url').once('value')
+                    firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
+                    firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null),
+                    firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null),
+                    firebase.database().ref('config/addestra_script_url').once('value').catch(() => null)
                 ]);
 
                 const foundUrls = [
-                    snap1.val(), snap2.val(), snap3.val(), snap4.val()
+                    snap1 ? snap1.val() : null,
+                    snap2 ? snap2.val() : null,
+                    snap3 ? snap3.val() : null,
+                    snap4 ? snap4.val() : null
                 ].filter(u => u && typeof u === 'string' && u.trim().startsWith('http')).map(u => u.trim());
 
                 if (foundUrls.length > 0) {
@@ -176,7 +179,7 @@ async function fetchAppsScriptUrlFromFirebase() {
             }
         }
     } catch(e) {
-        console.warn("Firebase Fetch Error:", e);
+        // Silently handled
     }
 
     return activeAppsScriptUrl || "";
@@ -925,8 +928,10 @@ async function loadSelectedQSO() {
 
     const activeUrl = activeAppsScriptUrl || (await fetchAppsScriptUrlFromFirebase());
     const proxyCandidateUrls = [
-        ...(window.allAppsScriptUrls || []),
         activeUrl,
+        "https://script.google.com/macros/s/AKfycbxAPRxGRb_I4qoByBd5KjjE67z5yETgSrMwNT2Ivq7buJEH75V_NEOZilfb6oKWP5fK/exec",
+        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec",
+        ...(window.allAppsScriptUrls || []),
         window.qsoAudioServerUrl,
         localStorage.getItem('cwgame_qso_audio_url')
     ].filter(u => u && typeof u === 'string' && u.startsWith('http'));
@@ -935,7 +940,7 @@ async function loadSelectedQSO() {
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.tgUser?.id || window.myId || "";
 
-    for (let cleanUrl of proxyCandidateUrls) {
+    for (let cleanUrl of uniqueProxyUrls) {
         if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
         if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
 
