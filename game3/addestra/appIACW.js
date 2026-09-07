@@ -101,30 +101,38 @@ async function fetchAppsScriptUrlFromFirebase() {
     if (activeAppsScriptUrl && activeAppsScriptUrl.startsWith('http')) return activeAppsScriptUrl;
 
     try {
-        if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-            firebase.initializeApp({
-                databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app"
-            });
-        }
-
-        if (typeof firebase !== 'undefined' && firebase.auth && !firebase.auth().currentUser) {
-            try {
-                await firebase.auth().signInAnonymously();
-            } catch(e) {}
-        }
-
-        if (typeof firebase !== 'undefined' && firebase.database) {
-            let snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
-            if (!snap.exists() || !snap.val()) {
-                snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
+        if (typeof firebase !== 'undefined') {
+            if (!firebase.apps.length) {
+                firebase.initializeApp({
+                    apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
+                    authDomain: "telegrafiabot.firebaseapp.com",
+                    databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
+                    projectId: "telegrafiabot",
+                    storageBucket: "telegrafiabot.firebasestorage.app",
+                    messagingSenderId: "575790683327",
+                    appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
+                });
             }
-            if (!snap.exists() || !snap.val()) {
-                snap = await firebase.database().ref('config/addestra_script_url').once('value');
+
+            if (firebase.auth && !firebase.auth().currentUser) {
+                try {
+                    await firebase.auth().signInAnonymously();
+                } catch(e) {}
             }
-            if (snap.exists() && snap.val()) {
-                activeAppsScriptUrl = snap.val().trim();
-                console.log("🔒 Loaded Apps Script URL dynamically from Firebase Database:", activeAppsScriptUrl);
-                return activeAppsScriptUrl;
+
+            if (firebase.database) {
+                let snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
+                if (!snap.exists() || !snap.val()) {
+                    snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
+                }
+                if (!snap.exists() || !snap.val()) {
+                    snap = await firebase.database().ref('config/addestra_script_url').once('value');
+                }
+                if (snap.exists() && snap.val()) {
+                    activeAppsScriptUrl = snap.val().trim();
+                    console.log("🔒 Loaded Apps Script URL dynamically from Firebase Database:", activeAppsScriptUrl);
+                    return activeAppsScriptUrl;
+                }
             }
         }
     } catch(e) {
