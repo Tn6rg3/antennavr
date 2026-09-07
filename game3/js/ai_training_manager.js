@@ -90,26 +90,29 @@ window.switchAiTab = function(tabId) {
 };
 
 window.fetchAddestraUrlFromFirebase = async function() {
-    if (window.aiActiveAddestraUrl) return window.aiActiveAddestraUrl;
-    if (window.qsoAudioServerUrl && window.qsoAudioServerUrl.startsWith('http')) {
-        window.aiActiveAddestraUrl = window.qsoAudioServerUrl;
+    if (window.aiActiveAddestraUrl && Array.isArray(window.aiAllFirebaseUrls) && window.aiAllFirebaseUrls.length > 0) {
         return window.aiActiveAddestraUrl;
     }
     try {
         if (typeof firebase !== 'undefined' && firebase.database) {
-            let snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
-            if (!snap.exists() || !snap.val()) {
-                snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
-            }
-            if (!snap.exists() || !snap.val()) {
-                snap = await firebase.database().ref('config/qso_audio_server_url').once('value');
-            }
-            if (!snap.exists() || !snap.val()) {
-                snap = await firebase.database().ref('config/addestra_script_url').once('value');
-            }
-            if (snap.exists() && snap.val()) {
-                window.aiActiveAddestraUrl = snap.val().trim();
-                console.log("🔒 Loaded Apps Script URL dynamically from Firebase Config:", window.aiActiveAddestraUrl);
+            const [snap1, snap2, snap3, snap4] = await Promise.all([
+                firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
+                firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null),
+                firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null),
+                firebase.database().ref('config/addestra_script_url').once('value').catch(() => null)
+            ]);
+
+            const foundUrls = [
+                snap1 ? snap1.val() : null,
+                snap2 ? snap2.val() : null,
+                snap3 ? snap3.val() : null,
+                snap4 ? snap4.val() : null
+            ].filter(u => u && typeof u === 'string' && u.trim().startsWith('http')).map(u => u.trim());
+
+            if (foundUrls.length > 0) {
+                window.aiAllFirebaseUrls = [...new Set(foundUrls)];
+                window.aiActiveAddestraUrl = window.aiAllFirebaseUrls[0];
+                console.log("🔒 Loaded fresh Apps Script URLs dynamically from Firebase Config:", window.aiAllFirebaseUrls);
                 return window.aiActiveAddestraUrl;
             }
         }
@@ -370,6 +373,7 @@ window.loadSelectedAiQSO = async function() {
     // SCARICAMENTO DIRETTO ED ESCLUSIVO VIA PROXY GOOGLE APPS SCRIPT (Senza blocchi CORS / 403)
     const activeUrl = window.aiActiveAddestraUrl || (await window.fetchAddestraUrlFromFirebase());
     const proxyCandidateUrls = [
+        ...(window.aiAllFirebaseUrls || []),
         activeUrl,
         window.qsoAudioServerUrl,
         localStorage.getItem('cwgame_qso_audio_url')
