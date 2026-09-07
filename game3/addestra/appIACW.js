@@ -297,12 +297,8 @@ async function autoFetchQsoListFromAppsScript() {
     }
 
     const scriptUrl = await fetchAppsScriptUrlFromFirebase();
-    const fallbackScriptUrls = [
-        "https://script.google.com/macros/s/AKfycbxAPRxGRb_I4qoByBd5KjjE67z5yETgSrMwNT2Ivq7buJEH75V_NEOZilfb6oKWP5fK/exec",
-        "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec"
-    ];
-
-    const targetUrls = (scriptUrl && scriptUrl.startsWith('http')) ? [scriptUrl, ...fallbackScriptUrls] : fallbackScriptUrls;
+    if (!scriptUrl) return;
+    const targetUrls = [scriptUrl];
 
     const status = document.getElementById('sheetStatus');
     if (status && cachedCount === 0) {
@@ -874,11 +870,7 @@ async function loadSelectedQSO() {
     }
 
     const activeScriptUrl = await fetchAppsScriptUrlFromFirebase();
-    const proxyCandidateUrls = [
-        activeScriptUrl,
-        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec",
-        "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec"
-    ].filter(u => u && u.startsWith('http'));
+    const proxyCandidateUrls = [activeScriptUrl].filter(u => u && u.startsWith('http'));
 
     for (let scriptUrl of proxyCandidateUrls) {
         if (fileId && scriptUrl) {
