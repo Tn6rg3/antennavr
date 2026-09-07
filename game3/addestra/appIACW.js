@@ -872,10 +872,7 @@ async function loadSelectedQSO() {
     }
 
     const activeScriptUrl = await fetchAppsScriptUrlFromFirebase();
-    const proxyCandidateUrls = [
-        activeScriptUrl,
-        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec"
-    ].filter(u => u && u.startsWith('http'));
+    const proxyCandidateUrls = [activeScriptUrl].filter(u => u && u.startsWith('http'));
 
     for (let scriptUrl of proxyCandidateUrls) {
         if (fileId && scriptUrl) {
