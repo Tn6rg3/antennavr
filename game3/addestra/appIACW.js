@@ -132,6 +132,11 @@ async function safeFetch(rawUrl, paramsObj = null) {
 
 async function fetchAppsScriptUrlFromFirebase() {
     if (activeAppsScriptUrl && activeAppsScriptUrl.startsWith('http')) return activeAppsScriptUrl;
+    const localQsoUrl = localStorage.getItem('cwgame_qso_audio_url');
+    if (localQsoUrl && localQsoUrl.startsWith('http')) {
+        activeAppsScriptUrl = localQsoUrl;
+        return activeAppsScriptUrl;
+    }
 
     try {
         if (typeof firebase !== 'undefined') {
@@ -154,23 +159,25 @@ async function fetchAppsScriptUrlFromFirebase() {
             }
 
             if (firebase.database) {
-                let snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
+                let snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
                 if (!snap.exists() || !snap.val()) {
-                    snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
+                    snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
+                }
+                if (!snap.exists() || !snap.val()) {
+                    snap = await firebase.database().ref('config/qso_audio_server_url').once('value');
                 }
                 if (!snap.exists() || !snap.val()) {
                     snap = await firebase.database().ref('config/addestra_script_url').once('value');
                 }
                 if (snap.exists() && snap.val()) {
                     activeAppsScriptUrl = snap.val().trim();
+                    localStorage.setItem('cwgame_qso_audio_url', activeAppsScriptUrl);
                     console.log("🔒 Loaded Apps Script URL dynamically from Firebase Database:", activeAppsScriptUrl);
                     return activeAppsScriptUrl;
                 }
             }
         }
-    } catch(e) {
-        // Silently handled: falls back to active script URL
-    }
+    } catch(e) {}
 
     return activeAppsScriptUrl || "";
 }
