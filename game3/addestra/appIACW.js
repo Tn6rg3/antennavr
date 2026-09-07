@@ -127,14 +127,6 @@ async function fetchAppsScriptUrlFromFirebase() {
 
     return activeAppsScriptUrl || "";
 }
-                    return activeAppsScriptUrl;
-                }
-            }
-        } catch(e) {}
-    }
-
-    return activeAppsScriptUrl || "";
-}
 
 const CACHE_ADDESTRA_QSO_KEY = "cw_addestra_qso_list_cache";
 
