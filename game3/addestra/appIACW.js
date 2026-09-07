@@ -101,37 +101,10 @@ function checkTelegramAuthAndLock() {
     return true;
 }
 
-const ALLOWED_FETCH_HOSTS = ["script.google.com", "docs.google.com", "script.googleusercontent.com", "googleusercontent.com", "telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app"];
-
-async function safeFetch(rawUrl, paramsObj = null) {
-    if (!rawUrl) return Promise.reject("Invalid URL");
-    let parsed;
-    try {
-        parsed = new URL(String(rawUrl).trim());
-    } catch(e) {
-        return Promise.reject("URL format error");
-    }
-
-    const host = parsed.hostname.toLowerCase();
-    const isAllowed = ALLOWED_FETCH_HOSTS.some(h => host === h || host.endsWith("." + h) || host.endsWith(".google.com") || host.endsWith(".googleapis.com"));
-    if (parsed.protocol !== "https:" || !isAllowed) {
-        return Promise.reject("Host not allowed: " + host);
-    }
-
-    if (paramsObj) {
-        Object.keys(paramsObj).forEach(k => {
-            if (paramsObj[k] !== undefined && paramsObj[k] !== null) {
-                parsed.searchParams.set(k, String(paramsObj[k]));
-            }
-        });
-    }
-
-    const req = new Request(parsed.href, { method: 'GET' });
-    return fetch(req);
-}
-
 async function fetchAppsScriptUrlFromFirebase() {
-    if (activeAppsScriptUrl && activeAppsScriptUrl.startsWith('http') && Array.isArray(window.allAppsScriptUrls) && window.allAppsScriptUrls.length > 0) {
+    if (activeAppsScriptUrl && activeAppsScriptUrl.startsWith('http')) return activeAppsScriptUrl;
+    if (window.qsoAudioServerUrl && window.qsoAudioServerUrl.startsWith('http')) {
+        activeAppsScriptUrl = window.qsoAudioServerUrl;
         return activeAppsScriptUrl;
     }
 
@@ -156,30 +129,26 @@ async function fetchAppsScriptUrlFromFirebase() {
             }
 
             if (firebase.database) {
-                const [snap1, snap2, snap3, snap4] = await Promise.all([
-                    firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
-                    firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null),
-                    firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null),
-                    firebase.database().ref('config/addestra_script_url').once('value').catch(() => null)
-                ]);
+                let snap = await firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null);
+                if (!snap || !snap.exists() || !snap.val()) {
+                    snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null);
+                }
+                if (!snap || !snap.exists() || !snap.val()) {
+                    snap = await firebase.database().ref('config/addestra_script_url').once('value').catch(() => null);
+                }
+                if (!snap || !snap.exists() || !snap.val()) {
+                    snap = await firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null);
+                }
 
-                const foundUrls = [
-                    snap1 ? snap1.val() : null,
-                    snap2 ? snap2.val() : null,
-                    snap3 ? snap3.val() : null,
-                    snap4 ? snap4.val() : null
-                ].filter(u => u && typeof u === 'string' && u.trim().startsWith('http')).map(u => u.trim());
-
-                if (foundUrls.length > 0) {
-                    window.allAppsScriptUrls = [...new Set(foundUrls)];
-                    activeAppsScriptUrl = window.allAppsScriptUrls[0];
-                    console.log("🔒 Loaded fresh Apps Script URLs dynamically from Firebase Database:", window.allAppsScriptUrls);
+                if (snap && snap.exists() && snap.val()) {
+                    activeAppsScriptUrl = snap.val().trim();
+                    console.log("🔒 Loaded Apps Script URL dynamically from Firebase Config:", activeAppsScriptUrl);
                     return activeAppsScriptUrl;
                 }
             }
         }
     } catch(e) {
-        // Silently handled
+        console.warn("Firebase Config Fetch Warning:", e);
     }
 
     return activeAppsScriptUrl || "";
@@ -961,19 +930,17 @@ async function loadSelectedQSO() {
         audioEl.load();
     }
 
+    // SCARICAMENTO DIRETTO ED ESCLUSIVO VIA PROXY GOOGLE APPS SCRIPT (Senza blocchi CORS / 403)
     const activeUrl = activeAppsScriptUrl || (await fetchAppsScriptUrlFromFirebase());
     const proxyCandidateUrls = [
         activeUrl,
-        ...(window.allAppsScriptUrls || []),
-        window.qsoAudioServerUrl,
-        localStorage.getItem('cwgame_qso_audio_url')
-    ].filter(u => u && typeof u === 'string' && u.startsWith('http'));
-    const uniqueProxyUrls = [...new Set(proxyCandidateUrls)];
+        window.qsoAudioServerUrl
+    ].filter(u => u && u.startsWith('http'));
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.tgUser?.id || window.myId || "";
 
-    for (let cleanUrl of uniqueProxyUrls) {
+    for (let cleanUrl of proxyCandidateUrls) {
         if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
         if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
 
