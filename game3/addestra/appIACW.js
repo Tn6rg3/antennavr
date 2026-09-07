@@ -101,7 +101,7 @@ function checkTelegramAuthAndLock() {
     return true;
 }
 
-const ALLOWED_FETCH_HOSTS = ["script.google.com", "docs.google.com", "telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app"];
+const ALLOWED_FETCH_HOSTS = ["script.google.com", "docs.google.com", "script.googleusercontent.com", "googleusercontent.com", "telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app"];
 
 async function safeFetch(rawUrl, paramsObj = null) {
     if (!rawUrl) return Promise.reject("Invalid URL");
