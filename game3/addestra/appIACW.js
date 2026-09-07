@@ -67,8 +67,6 @@ async function loadFullProjectDictionary() {
 // TELEGRAM AUTHENTICATION & FIREBASE APPS SCRIPT INTEGRATION
 // ============================================================================
 let activeAppsScriptUrl = "";
-let qsoAudioServerUrl = "";
-let validationServerUrl = "";
 
 function checkTelegramAuthAndLock() {
     const tg = window.Telegram?.WebApp;
@@ -158,23 +156,24 @@ async function fetchAppsScriptUrlFromFirebase() {
             }
 
             if (firebase.database) {
-                const [addestraSnap, audioSnap, validationSnap] = await Promise.all([
-                    firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null),
+                const [snap1, snap2, snap3, snap4] = await Promise.all([
                     firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
-                    firebase.database().ref('appConfig/validation_server_url').once('value').catch(() => null)
+                    firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null),
+                    firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null),
+                    firebase.database().ref('config/addestra_script_url').once('value').catch(() => null)
                 ]);
 
-                const getUrl = (snap) => (snap && typeof snap.val() === 'string' && snap.val().trim().startsWith('http')) ? snap.val().trim() : null;
+                const foundUrls = [
+                    snap1 ? snap1.val() : null,
+                    snap2 ? snap2.val() : null,
+                    snap3 ? snap3.val() : null,
+                    snap4 ? snap4.val() : null
+                ].filter(u => u && typeof u === 'string' && u.trim().startsWith('http')).map(u => u.trim());
 
-                activeAppsScriptUrl = getUrl(addestraSnap) || activeAppsScriptUrl;
-                qsoAudioServerUrl = getUrl(audioSnap) || qsoAudioServerUrl;
-                validationServerUrl = getUrl(validationSnap) || validationServerUrl;
-
-                const foundUrls = [activeAppsScriptUrl, qsoAudioServerUrl, validationServerUrl].filter(Boolean);
-                
                 if (foundUrls.length > 0) {
+                    activeAppsScriptUrl = foundUrls[0];
                     window.allAppsScriptUrls = [...new Set(foundUrls)];
-                    console.log("🔒 Loaded fresh Apps Script URLs dynamically from Firebase Database (appConfig):", window.allAppsScriptUrls);
+                    console.log("🔒 Loaded fresh Apps Script URLs dynamically from Firebase Database:", window.allAppsScriptUrls);
                     return activeAppsScriptUrl;
                 }
             }
@@ -409,25 +408,26 @@ let activeDraggingMarker = null;
 
 function initMasterTimeline() {
     const canvas = document.getElementById('masterTimelineCanvas');
-    if (!canvas) return;
+    if (!canvas || canvas.dataset.timelineBound) return;
+    canvas.dataset.timelineBound = "true";
 
     if (currentAudioBuffer) {
         markerB = Math.min(currentAudioBuffer.duration, markerA + currentWindowDuration);
     }
 
-    canvas.addEventListener('mousedown', (e) => {
+    const handlePointerDown = (clientX, clientY) => {
         if (!currentAudioBuffer) return;
         const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
+        const clickX = Math.max(0, Math.min(canvas.width, (clientX - rect.left) * (canvas.width / rect.width)));
         const clickRatio = clickX / canvas.width;
         const duration = currentAudioBuffer.duration;
         const visibleDuration = duration / timelineZoomFactor;
         const clickTime = timelineScrollOffset + (clickRatio * visibleDuration);
 
-        const tol = visibleDuration * 0.03;
-        if (Math.abs(clickTime - markerA) < tol) {
+        const tol = visibleDuration * 0.05;
+        if (Math.abs(clickTime - markerA) <= tol) {
             activeDraggingMarker = 'A';
-        } else if (Math.abs(clickTime - markerB) < tol) {
+        } else if (Math.abs(clickTime - markerB) <= tol) {
             activeDraggingMarker = 'B';
         } else {
             activeDraggingMarker = 'regionStart';
@@ -435,12 +435,12 @@ function initMasterTimeline() {
             markerB = Math.min(duration, markerA + currentWindowDuration);
         }
         updateMasterTimelineDisplay();
-    });
+    };
 
-    canvas.addEventListener('mousemove', (e) => {
+    const handlePointerMove = (clientX, clientY) => {
         if (!activeDraggingMarker || !currentAudioBuffer) return;
         const rect = canvas.getBoundingClientRect();
-        const moveX = Math.max(0, Math.min(canvas.width, e.clientX - rect.left));
+        const moveX = Math.max(0, Math.min(canvas.width, (clientX - rect.left) * (canvas.width / rect.width)));
         const moveRatio = moveX / canvas.width;
         const duration = currentAudioBuffer.duration;
         const visibleDuration = duration / timelineZoomFactor;
@@ -457,12 +457,32 @@ function initMasterTimeline() {
         }
 
         current10sStart = markerA;
-        currentWindowDuration = markerB - markerA;
+        currentWindowDuration = Math.max(0.2, markerB - markerA);
         updateMasterTimelineDisplay();
-    });
+    };
 
-    canvas.addEventListener('mouseup', () => { activeDraggingMarker = null; });
-    canvas.addEventListener('mouseleave', () => { activeDraggingMarker = null; });
+    const handlePointerUp = () => {
+        if (activeDraggingMarker) {
+            activeDraggingMarker = null;
+            // ANALISI IA AUTOMATICA AL RILASCIO DEI MARCATORI A-B
+            if (typeof runInferenceOnSegment === 'function') {
+                setTimeout(runInferenceOnSegment, 200);
+            }
+        }
+    };
+
+    canvas.addEventListener('mousedown', (e) => handlePointerDown(e.clientX, e.clientY));
+    canvas.addEventListener('mousemove', (e) => handlePointerMove(e.clientX, e.clientY));
+    canvas.addEventListener('mouseup', handlePointerUp);
+    canvas.addEventListener('mouseleave', handlePointerUp);
+
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches[0]) handlePointerDown(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+        if (e.touches && e.touches[0]) handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    canvas.addEventListener('touchend', handlePointerUp);
 }
 
 function updateMasterTimelineDisplay() {
@@ -543,6 +563,19 @@ function updateMasterTimelineDisplay() {
     ctx.moveTo(xB, 0);
     ctx.lineTo(xB, height);
     ctx.stroke();
+
+    // FLAG MANIGLIA PUNTI A & B (STILE SOFTWARE EDITING MUSICALE / DAW)
+    ctx.fillStyle = '#00ff66';
+    ctx.fillRect(Math.max(0, xA - 18), 0, 36, 18);
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('[A 📍]', Math.max(2, xA - 14), 13);
+
+    ctx.fillStyle = '#ff9800';
+    ctx.fillRect(Math.min(width - 36, xB - 18), 0, 36, 18);
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('[B 📍]', Math.min(width - 32, xB - 14), 13);
 
     const formatPrecise = (sec) => {
         const m = Math.floor(sec / 60);
@@ -929,8 +962,9 @@ async function loadSelectedQSO() {
 
     const activeUrl = activeAppsScriptUrl || (await fetchAppsScriptUrlFromFirebase());
     const proxyCandidateUrls = [
-        qsoAudioServerUrl,
         activeUrl,
+        "https://script.google.com/macros/s/AKfycbxAPRxGRb_I4qoByBd5KjjE67z5yETgSrMwNT2Ivq7buJEH75V_NEOZilfb6oKWP5fK/exec",
+        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec",
         ...(window.allAppsScriptUrls || []),
         window.qsoAudioServerUrl,
         localStorage.getItem('cwgame_qso_audio_url')
