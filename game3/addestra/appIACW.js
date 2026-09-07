@@ -101,14 +101,21 @@ function checkTelegramAuthAndLock() {
     return true;
 }
 
-function sanitizeAllowedGoogleUrl(rawUrl) {
+function sanitizeAllowedGoogleUrl(rawUrl, paramsObj = null) {
     if (!rawUrl || typeof rawUrl !== 'string') return "";
     let clean = rawUrl.trim();
     try {
         const parsed = new URL(clean);
         const host = parsed.hostname.toLowerCase();
         if (parsed.protocol === "https:" && (host.endsWith(".google.com") || host.endsWith(".googleapis.com") || host.endsWith(".googleusercontent.com") || host.endsWith(".firebasedatabase.app"))) {
-            return parsed.href;
+            if (paramsObj) {
+                Object.keys(paramsObj).forEach(k => {
+                    if (paramsObj[k] !== undefined && paramsObj[k] !== null) {
+                        parsed.searchParams.set(k, paramsObj[k]);
+                    }
+                });
+            }
+            return parsed.toString();
         }
     } catch(e) {}
     return "";
@@ -321,8 +328,12 @@ async function autoFetchQsoListFromAppsScript() {
 
     for (let url of targetUrls) {
         try {
-            const rawFetchUrl = `${url}${url.includes('?') ? '&' : '?'}action=search&q=&limit=10000&uid=${window.tgUser?.id || ""}`;
-            const fetchUrl = sanitizeAllowedGoogleUrl(rawFetchUrl);
+            const fetchUrl = sanitizeAllowedGoogleUrl(url, {
+                action: "search",
+                q: "",
+                limit: "10000",
+                uid: window.tgUser?.id || ""
+            });
             if (!fetchUrl) continue;
 
             logDebug(`🔍 Background Scanning QSO list from Apps Script: ${fetchUrl}`);
@@ -905,8 +916,11 @@ async function loadSelectedQSO() {
                 if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
                 if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
 
-                const rawProxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}&uid=${window.tgUser?.id || ""}`;
-                const proxyUrl = sanitizeAllowedGoogleUrl(rawProxyUrl);
+                const proxyUrl = sanitizeAllowedGoogleUrl(cleanUrl, {
+                    action: "proxy_audio",
+                    id: fileId,
+                    uid: window.tgUser?.id || ""
+                });
                 if (!proxyUrl) continue;
 
                 logDebug(`Invio richiesta proxy audio ad Apps Script: "${proxyUrl}"`);
@@ -1612,18 +1626,15 @@ async function syncPairToGoogleCloudSheet(pair) {
     const scriptUrl = await fetchAppsScriptUrlFromFirebase();
     if (!scriptUrl) return;
 
-    const params = new URLSearchParams({
-        action: "save_approved",
-        filename: pair.filename || "QSO_Clip",
-        time_pos: pair.timePos || "00:00 - 00:10",
-        transcript: pair.userCorrection || "",
-        ai_prediction: pair.aiPrediction || "",
-        uid: window.tgUser?.id || ""
-    });
-
     try {
-        const rawSyncUrl = `${scriptUrl}?${params.toString()}`;
-        const syncUrl = sanitizeAllowedGoogleUrl(rawSyncUrl);
+        const syncUrl = sanitizeAllowedGoogleUrl(scriptUrl, {
+            action: "save_approved",
+            filename: pair.filename || "QSO_Clip",
+            time_pos: pair.timePos || "00:00 - 00:10",
+            transcript: pair.userCorrection || "",
+            ai_prediction: pair.aiPrediction || "",
+            uid: window.tgUser?.id || ""
+        });
         if (!syncUrl) return;
 
         const resp = await fetch(syncUrl);
