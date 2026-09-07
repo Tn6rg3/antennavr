@@ -104,29 +104,30 @@ function checkTelegramAuthAndLock() {
 const ALLOWED_FETCH_HOSTS = ["script.google.com", "docs.google.com", "telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app"];
 
 async function safeFetch(rawUrl, paramsObj = null) {
-    if (!rawUrl || typeof rawUrl !== 'string') return Promise.reject("Invalid URL");
-    let clean = rawUrl.trim();
+    if (!rawUrl) return Promise.reject("Invalid URL");
     let parsed;
     try {
-        parsed = new URL(clean);
+        parsed = new URL(String(rawUrl).trim());
     } catch(e) {
         return Promise.reject("URL format error");
     }
 
     const host = parsed.hostname.toLowerCase();
-    if (parsed.protocol !== "https:" || !ALLOWED_FETCH_HOSTS.some(h => host === h || host.endsWith("." + h) || host.endsWith(".google.com") || host.endsWith(".googleapis.com"))) {
+    const isAllowed = ALLOWED_FETCH_HOSTS.some(h => host === h || host.endsWith("." + h) || host.endsWith(".google.com") || host.endsWith(".googleapis.com"));
+    if (parsed.protocol !== "https:" || !isAllowed) {
         return Promise.reject("Host not allowed: " + host);
     }
 
     if (paramsObj) {
         Object.keys(paramsObj).forEach(k => {
             if (paramsObj[k] !== undefined && paramsObj[k] !== null) {
-                parsed.searchParams.set(k, paramsObj[k]);
+                parsed.searchParams.set(k, String(paramsObj[k]));
             }
         });
     }
 
-    return fetch(parsed.toString());
+    const req = new Request(parsed.href, { method: 'GET' });
+    return fetch(req);
 }
 
 async function fetchAppsScriptUrlFromFirebase() {
