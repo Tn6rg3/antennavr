@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CW AI Morse Decoder & Refinement Studio</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js" crossorigin="anonymous"></script>
+    <!-- Firebase Realtime Database SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" crossorigin="anonymous"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js" crossorigin="anonymous"></script>
+    <!-- ONNX Runtime Web for Browser Inference -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body>
+    <!-- FULL-SCREEN TELEGRAM ACCESS LOCK OVERLAY -->
+    <div id="telegramAccessOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:#030712; color:#ffffff; z-index:99999; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px; box-sizing:border-box;">
+        <span style="font-size:4rem; margin-bottom:15px;">🛑</span>
+        <h1 style="color:#ef4444; margin-bottom:10px; font-size:1.8rem;">Accesso Riservato a Telegram</h1>
+        <p style="font-size:1.1rem; color:#9ca3af; max-width:500px; line-height:1.6; margin-bottom:20px;">
+            Questa applicazione studio è accessibile <b>esclusivamente</b> aprendo la Mini App direttamente dal Bot ufficiale di Telegram.
+        </p>
+        <div style="background:#111827; border:1px solid #374151; padding:15px 25px; border-radius:10px; color:#10b981; font-weight:bold; font-size:0.95rem;">
+            🤖 Apri il Bot in Telegram per accedere
+        </div>
+    </div>
+    <div class="container">
+        <header>
+            <h1>📻 CW AI Decoder & Human-in-the-Loop Studio</h1>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab-btn active" onclick="switchTab('refinement-tab')">🔍 Annotazione & Refinement (QSO / Audio)</button>
+            <button class="tab-btn" onclick="switchTab('realtime-tab')">🎙️ Decodifica Real-Time & File Audio</button>
+        </nav>
+
+        <!-- TAB 1: Human-in-the-Loop Refinement (CSV / 10s Audio) -->
+        <section id="refinement-tab" class="tab-content active">
+            <!-- MASTER FULL-WIDTH AUDIO TIMELINE & A-B WORKSTATION -->
+            <div class="card" style="margin-bottom:20px; background:#080d12; border:1px solid #00bcd4;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <h3 style="margin:0; color:#00bcd4;">🎧 Master Audio Timeline & Selettore Regione A-B</h3>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <button class="btn btn-secondary" style="padding:4px 10px; font-size:0.8rem;" onclick="zoomAudioTimeline(1.5)">🔍 Zoom +</button>
+                        <button class="btn btn-secondary" style="padding:4px 10px; font-size:0.8rem;" onclick="zoomAudioTimeline(0.67)">🔍 Zoom -</button>
+                        <button class="btn btn-primary" style="padding:4px 10px; font-size:0.8rem;" onclick="resetAudioZoom()">🔄 Adatta a Schermo</button>
+                    </div>
+                </div>
+
+                <!-- Full-Width Canvas spanning entire browser width -->
+                <div style="position:relative; width:100%; overflow:hidden; background:#030508; border-radius:8px; border:1px solid #1e293b;">
+                    <canvas id="masterTimelineCanvas" width="1120" height="150" style="width:100%; height:150px; display:block; cursor:crosshair;"></canvas>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:0.85rem; color:#8e9bb0;">
+                    <div>
+                        <span>📍 Punto A: <strong id="markerADisplay" style="color:#00ff66;">00:00.0</strong></span> |
+                        <span>📍 Punto B: <strong id="markerBDisplay" style="color:#ff9800;">00:00.0</strong></span> |
+                        <span>⏱️ Durata Tratto: <strong id="markerDurationDisplay" style="color:#00bcd4;">0.0s</strong></span>
+                    </div>
+                    <div>
+                        <button class="btn btn-secondary" style="padding:3px 10px; font-size:0.8rem;" onclick="setMarkerAFromCurrent()">📍 Imposta A qui</button>
+                        <button class="btn btn-secondary" style="padding:3px 10px; font-size:0.8rem;" onclick="setMarkerBFromCurrent()">📍 Imposta B qui</button>
+                        <button class="btn btn-success" style="padding:3px 12px; font-size:0.8rem;" onclick="playRegionAB()">▶️ Ascolta A-B</button>
+
+                        <select id="playbackSpeedSelect" style="padding:3px 6px; font-size:0.8rem; background:#121820; color:#e0e6ed; border:1px solid #2e3c50; border-radius:4px; margin-left:8px;" onchange="changePlaybackSpeed(event)">
+                            <option value="0.5">🐢 0.5x (Lento)</option>
+                            <option value="0.75">🐢 0.75x</option>
+                            <option value="1.0" selected>▶️ 1.0x (Normale)</option>
+                            <option value="1.25">⚡ 1.25x</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 style="color:#00bcd4; margin-bottom:12px;">1. Seleziona Registrazione QSO dal Foglio Google</h2>
+                <div style="display:grid; grid-template-columns: 1fr 2fr; gap:12px; margin-bottom:12px;">
+                    <div>
+                        <label for="aiDateSelect" style="display:block; font-size:0.85rem; color:#8e9bb0; margin-bottom:4px;">📅 Filtra per Anno / Data QSO:</label>
+                        <select id="aiDateSelect" onchange="filterQsoListByDate()" style="width:100%; padding:8px; font-size:0.9rem; background:#121820; color:#e0e6ed; border:1px solid #00bcd4; border-radius:6px; box-sizing:border-box;">
+                            <option value="">Tutte le Date</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="qsoSelect" style="display:block; font-size:0.85rem; color:#00ff66; font-weight:bold; margin-bottom:4px;">🎙️ File Audio QSO Registrato:</label>
+                        <select id="qsoSelect" onchange="loadSelectedQSO()" style="width:100%; padding:8px; font-size:0.9rem; background:#121820; color:#e0e6ed; border:1px solid #00ff66; border-radius:6px; box-sizing:border-box;"></select>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+                    <span id="sheetStatus" class="status-badge" style="background:#00bcd4;">⏳ Caricamento elenco QSO da Google...</span>
+                    <div>
+                        <input type="file" id="localAudioFilesInput" accept="audio/*" multiple style="display:none;" onchange="handleLocalAudioFilesUpload(event)">
+                        <button onclick="document.getElementById('localAudioFilesInput').click()" class="btn btn-secondary" style="padding:4px 12px; font-size:0.8rem;">📁 Opzionale: Carica Audio Locale da PC</button>
+                    </div>
+                </div>
+                <!-- GOOGLE DRIVE IFRAME STREAM PLAYER (Identico a Ascolta QSO Reali) -->
+                <iframe id="qsoDriveIframe" style="display:none; width:100%; height:80px; border:1px solid #00bcd4; border-radius:8px; margin-top:10px;" allow="autoplay"></iframe>
+            </div>
+
+            <!-- ANALISI IA & VERIFICA UMANA -->
+            <div class="card" style="padding:15px; border-color:var(--champ-color); margin-bottom:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h3 style="margin:0; color:#00bcd4;">2. Verifica & Correzione Trascrizione</h3>
+                    <label style="cursor:pointer; font-size:0.85rem; color:#00ff66; background:#0b120d; border:1px solid #1b5e20; padding:4px 10px; border-radius:12px;">
+                        <input type="checkbox" id="autoLearningToggle" style="width:auto; margin-right:5px;" onchange="toggleAutoLearning(event)">
+                        🤖 Auto-Apprendimento
+                    </label>
+                </div>
+
+                <!-- TEXTBOX 1: AI PREDICTION -->
+                <div class="form-group">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <label for="aiPredictionText" style="margin:0;">🤖 TEXTBOX 1 - Decodifica Grezza (Riconoscimento Caratteri):</label>
+                        <label style="cursor:pointer; font-size:0.8rem; color:#00bcd4;">
+                            <input type="checkbox" id="rawOnlyToggle" style="width:auto; margin-right:4px;" onchange="toggleRawOnlyMode(event)">
+                            🔤 Solo Caratteri Grezzi
+                        </label>
+                    </div>
+                    <textarea id="aiPredictionText" readonly placeholder="In attesa dell'analisi del modello IA..."></textarea>
+                </div>
+
+                <!-- TEXTBOX 1B: DICTIONARY SUGGESTION -->
+                <div class="form-group">
+                    <label for="dictionaryCorrectedText">💡 Ricostruzione Automatica (Dizionario Italiano & Radio QSO):</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="dictionaryCorrectedText" readonly style="color:#00bcd4; font-weight:bold; font-family:monospace;" placeholder="In attesa dell'analisi...">
+                        <button class="btn btn-secondary" onclick="applyDictionaryCorrection()" style="white-space:nowrap;">✨ Usa Questo</button>
+                    </div>
+                </div>
+
+                <!-- TEXTBOX 2: USER CORRECTION -->
+                <div class="form-group">
+                    <label for="userCorrectionText">✏️ TEXTBOX 2 - Testo Corretto (Revisione Umana):</label>
+                    <textarea id="userCorrectionText" placeholder="Se la predizione è errata, scrivi qui il testo Morse corretto ascoltato nel tratto A-B..."></textarea>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="savePairBtn" class="btn btn-success" onclick="saveVerifiedPair()">💾 Salva & Aggiungi al Dataset</button>
+                    <button class="btn btn-primary" onclick="syncAllPairsToGoogleSheet()" title="Sincronizza tutte le righe della tabella con la scheda ADDESTRA del Foglio Google">🌐 Sincronizza Tutto col Foglio Google</button>
+                    <button id="cancelEditBtn" class="btn btn-secondary" style="display:none; background-color:#607d8b;" onclick="cancelEditMode()">🚫 Annulla Modifica</button>
+                </div>
+                <p id="saveMessage" class="success-text"></p>
+            </div>
+
+            <!-- Saved Pairs Table -->
+            <div class="card">
+                <h3>📋 Segmenti Verificati per il Fine-Tuning (<span id="savedCount">0</span>)</h3>
+                <div class="table-wrapper">
+                    <table id="verifiedTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>File QSO</th>
+                                <th>Intervallo</th>
+                                <th>Predizione IA</th>
+                                <th>Testo Corretto (Ground Truth)</th>
+                                <th>Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Rows inserted dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: Real-Time Microphone & Audio File Live Decoder -->
+        <section id="realtime-tab" class="tab-content">
+            <div class="card">
+                <h2>🎙️ Decodifica in Tempo Reale & Cascata Frequenziale (Waterfall)</h2>
+
+                <div class="realtime-controls">
+                    <button id="startMicBtn" class="btn btn-success" onclick="toggleMicrophone()">🎙️ Avvia Microfono Live</button>
+                    <input type="file" id="audioFileInput" accept="audio/*" style="display:none" onchange="handleAudioFileUpload(event)">
+                    <button class="btn btn-primary" onclick="document.getElementById('audioFileInput').click()">📂 Carica File Audio Intero</button>
+                    <button id="pauseAudioBtn" class="btn btn-secondary" style="display:none;" onclick="togglePauseAudioFile()">⏸️ Pausa</button>
+                    <button id="stopAudioBtn" class="btn btn-accent" style="display:none; background-color:#c62828;" onclick="stopAudioFile()">⏹️ Ferma Audio</button>
+
+                    <div style="display:flex; align-items:center; gap:6px; background:#0b1219; border:1px solid #1e293b; padding:4px 10px; border-radius:8px;">
+                        <label for="inputGainSlider" style="font-size:0.8rem; color:#00bcd4; margin:0; white-space:nowrap;">🎚️ Guadagno:</label>
+                        <input type="range" id="inputGainSlider" min="0.1" max="2.0" step="0.05" value="1.0" style="width:90px;" oninput="updateInputGain(event)">
+                        <span id="inputGainVal" style="font-size:0.8rem; color:#00ff66; font-weight:bold; min-width:35px;">100%</span>
+                    </div>
+
+                    <button class="btn btn-secondary" style="font-size:0.85rem; padding:4px 10px;" onclick="toggleWaterfallHeight()">↕️ Espandi Waterfall</button>
+
+                    <span id="liveStatus" class="status-badge">Decodificatore Inattivo</span>
+                </div>
+
+                <!-- Waterfall Spectrogram Live Canvas -->
+                <div class="canvas-wrapper">
+                    <canvas id="waterfallCanvas" width="900" height="400"></canvas>
+                </div>
+
+                <!-- Live Decoded Morse Output Box -->
+                <div class="form-group mt-20">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <label style="margin:0;">📡 Testo Decodificato in Diretta (Live Morse Stream):</label>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <label style="cursor:pointer; font-size:0.85rem; color:#00bcd4;">
+                                <input type="checkbox" id="realtimeRawToggle" style="width:auto; margin-right:4px;" onchange="toggleRawOnlyMode(event)">
+                                🔤 Solo Caratteri Grezzi
+                            </label>
+                            <button class="btn btn-primary" style="padding:4px 12px; font-size:0.85rem;" onclick="finalizeAndCleanLiveText()">✨ Pulisci & Interpreta Frase</button>
+                            <button class="btn btn-secondary" style="padding:4px 10px; font-size:0.85rem;" onclick="clearLiveOutputBox()">🧹 Cancella Testo</button>
+                        </div>
+                    </div>
+                    <div id="liveOutputBox" class="live-stream-box" style="white-space: pre-wrap; word-break: break-word;">In attesa del segnale audio...</div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="appIACW.js?v=iacw_20260907_v30_0"></script>
+</body>
+</html>
