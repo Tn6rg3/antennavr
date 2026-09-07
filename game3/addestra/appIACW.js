@@ -1139,17 +1139,19 @@ function playCurrentSegment() {
 }
 
 function drawPlaceholderCanvas() {
-    const canvas = document.getElementById('segmentCanvas');
+    const canvas = document.getElementById('segmentCanvas') || document.getElementById('masterTimelineCanvas');
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#0a0f14';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#4a5568';
+    ctx.fillStyle = '#8e9bb0';
     ctx.font = '14px Segoe UI';
-    ctx.fillText('Nessun file audio selezionato', 210, 65);
+    ctx.fillText('Nessun file audio selezionato', canvas.width / 2 - 80, canvas.height / 2 + 4);
 }
 
 function drawSegmentWaveform() {
     const canvas = document.getElementById('segmentCanvas');
+    if (!canvas || !currentAudioBuffer) return;
     const ctx = canvas.getContext('2d');
     const width = canvas.width;
     const height = canvas.height;
