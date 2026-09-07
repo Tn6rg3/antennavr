@@ -922,14 +922,6 @@ async function loadSelectedQSO() {
 
     if (statusElem) { statusElem.innerText = "🎧 Player Pronto (Usa ▶️ Riproduci per l'ascolto)"; statusElem.style.color = "#00bcd4"; }
 }
-            localSelect.selectedIndex = targetIdx;
-            loadSelectedLocalAudio();
-            return;
-        }
-    }
-
-    if (statusElem) { statusElem.innerText = "⚠️ Seleziona il file audio dal PC o verifica i permessi Drive."; statusElem.style.color = "#ff9800"; }
-}
 
 // Flexible Window Duration Controls
 let currentWindowDuration = 10;
