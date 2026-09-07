@@ -873,34 +873,42 @@ async function loadSelectedQSO() {
         if (m) fileId = m[0];
     }
 
-    const scriptUrl = await fetchAppsScriptUrlFromFirebase();
-    if (fileId && scriptUrl) {
-        if (statusElem) { statusElem.innerText = `⏳ Scaricamento audio QSO (#${idx + 1}/${qsoList.length})...`; statusElem.style.color = "#00bcd4"; }
-        try {
-            const proxyUrl = `${scriptUrl}?action=proxy_audio&id=${fileId}&uid=${window.tgUser?.id || ""}`;
-            logDebug(`Invio richiesta proxy audio ad Apps Script: "${proxyUrl}"`);
-            const resp = await fetch(proxyUrl);
-            if (resp.ok) {
-                const text = await resp.text();
-                let data = null;
-                try { data = JSON.parse(text); } catch(e) {}
+    const activeScriptUrl = await fetchAppsScriptUrlFromFirebase();
+    const proxyCandidateUrls = [
+        activeScriptUrl,
+        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec",
+        "https://script.google.com/macros/s/AKfycby1j-0uP1AP39iWVW4qPDmns2HQSvRwiT3stvVCeDoJ0Kgmem2ygndbc_iZWAIn1Bro/exec"
+    ].filter(u => u && u.startsWith('http'));
 
-                if (data && data.status === 'success' && data.base64) {
-                    const binaryStr = atob(data.base64);
-                    const bytes = new Uint8Array(binaryStr.length);
-                    for (let i = 0; i < binaryStr.length; i++) {
-                        bytes[i] = binaryStr.charCodeAt(i);
+    for (let scriptUrl of proxyCandidateUrls) {
+        if (fileId && scriptUrl) {
+            if (statusElem) { statusElem.innerText = `⏳ Scaricamento audio QSO (#${idx + 1}/${qsoList.length})...`; statusElem.style.color = "#00bcd4"; }
+            try {
+                const proxyUrl = `${scriptUrl}?action=proxy_audio&id=${fileId}&uid=${window.tgUser?.id || ""}`;
+                logDebug(`Invio richiesta proxy audio ad Apps Script: "${proxyUrl}"`);
+                const resp = await fetch(proxyUrl);
+                if (resp.ok) {
+                    const text = await resp.text();
+                    let data = null;
+                    try { data = JSON.parse(text); } catch(e) {}
+
+                    if (data && data.status === 'success' && data.base64) {
+                        const binaryStr = atob(data.base64);
+                        const bytes = new Uint8Array(binaryStr.length);
+                        for (let i = 0; i < binaryStr.length; i++) {
+                            bytes[i] = binaryStr.charCodeAt(i);
+                        }
+                        const ctx = getAudioContext();
+                        currentAudioBuffer = await ctx.decodeAudioData(bytes.buffer);
+                        logDebug(`✓ Audio Apps Script scaricato e decodificato! Durata: ${currentAudioBuffer.duration.toFixed(1)}s`);
+                        if (statusElem) { statusElem.innerText = `✓ Audio Google Drive Caricato! Durata: ${currentAudioBuffer.duration.toFixed(1)}s`; statusElem.style.color = "#00ff66"; }
+                        updateSegmentDisplay();
+                        return;
                     }
-                    const ctx = getAudioContext();
-                    currentAudioBuffer = await ctx.decodeAudioData(bytes.buffer);
-                    logDebug(`✓ Audio Apps Script scaricato e decodificato! Durata: ${currentAudioBuffer.duration.toFixed(1)}s`);
-                    if (statusElem) { statusElem.innerText = `✓ Audio Google Drive Caricato! Durata: ${currentAudioBuffer.duration.toFixed(1)}s`; statusElem.style.color = "#00ff66"; }
-                    updateSegmentDisplay();
-                    return;
                 }
+            } catch(e) {
+                logDebug(`⚠️ Errore scaricamento audio proxy Apps Script: ${e.message}`);
             }
-        } catch(e) {
-            logDebug(`⚠️ Errore scaricamento audio proxy Apps Script: ${e.message}`);
         }
     }
 
