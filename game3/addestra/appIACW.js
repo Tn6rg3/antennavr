@@ -1686,12 +1686,6 @@ async function syncPairToGoogleCloudSheet(pair) {
         console.warn("Google Cloud Sheet sync warning:", err);
     }
 }
-        const res = await resp.json();
-        console.log("✓ Sincronizzato con il Foglio Google ADDESTRA in Cloud:", res);
-    } catch(err) {
-        console.warn("Google Cloud Sheet sync warning:", err);
-    }
-}
 
 async function syncAllPairsToGoogleSheet() {
     if (!savedPairs || savedPairs.length === 0) {
