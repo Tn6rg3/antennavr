@@ -67,6 +67,8 @@ async function loadFullProjectDictionary() {
 // TELEGRAM AUTHENTICATION & FIREBASE APPS SCRIPT INTEGRATION
 // ============================================================================
 let activeAppsScriptUrl = "";
+let qsoAudioServerUrl = "";
+let validationServerUrl = "";
 
 function checkTelegramAuthAndLock() {
     const tg = window.Telegram?.WebApp;
@@ -156,24 +158,23 @@ async function fetchAppsScriptUrlFromFirebase() {
             }
 
             if (firebase.database) {
-                const [snap1, snap2, snap3, snap4] = await Promise.all([
-                    firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
+                const [addestraSnap, audioSnap, validationSnap] = await Promise.all([
                     firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null),
-                    firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null),
-                    firebase.database().ref('config/addestra_script_url').once('value').catch(() => null)
+                    firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
+                    firebase.database().ref('appConfig/validation_server_url').once('value').catch(() => null)
                 ]);
 
-                const foundUrls = [
-                    snap1 ? snap1.val() : null,
-                    snap2 ? snap2.val() : null,
-                    snap3 ? snap3.val() : null,
-                    snap4 ? snap4.val() : null
-                ].filter(u => u && typeof u === 'string' && u.trim().startsWith('http')).map(u => u.trim());
+                const getUrl = (snap) => (snap && typeof snap.val() === 'string' && snap.val().trim().startsWith('http')) ? snap.val().trim() : null;
 
+                activeAppsScriptUrl = getUrl(addestraSnap) || activeAppsScriptUrl;
+                qsoAudioServerUrl = getUrl(audioSnap) || qsoAudioServerUrl;
+                validationServerUrl = getUrl(validationSnap) || validationServerUrl;
+
+                const foundUrls = [activeAppsScriptUrl, qsoAudioServerUrl, validationServerUrl].filter(Boolean);
+                
                 if (foundUrls.length > 0) {
-                    activeAppsScriptUrl = foundUrls[0];
                     window.allAppsScriptUrls = [...new Set(foundUrls)];
-                    console.log("🔒 Loaded fresh Apps Script URLs dynamically from Firebase Database:", window.allAppsScriptUrls);
+                    console.log("🔒 Loaded fresh Apps Script URLs dynamically from Firebase Database (appConfig):", window.allAppsScriptUrls);
                     return activeAppsScriptUrl;
                 }
             }
@@ -928,9 +929,8 @@ async function loadSelectedQSO() {
 
     const activeUrl = activeAppsScriptUrl || (await fetchAppsScriptUrlFromFirebase());
     const proxyCandidateUrls = [
+        qsoAudioServerUrl,
         activeUrl,
-        "https://script.google.com/macros/s/AKfycbxAPRxGRb_I4qoByBd5KjjE67z5yETgSrMwNT2Ivq7buJEH75V_NEOZilfb6oKWP5fK/exec",
-        "https://script.google.com/macros/s/AKfycbxL6meHkCoKXmTOR0IUJYPHNXLTNDgzmaf4Op5v9W3Lz1tFzzKaeAtnEEXQxxu90B1g/exec",
         ...(window.allAppsScriptUrls || []),
         window.qsoAudioServerUrl,
         localStorage.getItem('cwgame_qso_audio_url')
