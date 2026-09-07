@@ -117,6 +117,54 @@ function initFirebaseInStudio() {
     }
 }
 
+async function validateIdentityInStudio() {
+    if (!window.tgInitData || window.tgInitData.trim() === "") {
+        console.warn("Security: Missing tgInitData, validation failed.");
+        const overlay = document.getElementById('telegramAccessOverlay');
+        if (overlay) overlay.style.display = 'flex';
+        return false;
+    }
+
+    try {
+        let valUrl = "";
+        if (typeof firebase !== 'undefined' && firebase.database) {
+            let snap = await firebase.database().ref('appConfig/validation_server_url').once('value').catch(() => null);
+            if (!snap || !snap.exists() || !snap.val()) {
+                snap = await firebase.database().ref('config/validation_server_url').once('value').catch(() => null);
+            }
+            if (snap && snap.exists() && snap.val()) {
+                valUrl = snap.val().trim();
+            }
+        }
+
+        if (valUrl && valUrl.startsWith('http')) {
+            const url = valUrl + (valUrl.includes('?') ? '&' : '?') + "initData=" + encodeURIComponent(window.tgInitData || "");
+            const response = await fetch(url, { method: 'GET' });
+            if (response.ok) {
+                const result = await response.json();
+                if (result && result.status === 'blocked') {
+                    console.warn("Security: User blocked by validation server.");
+                    const overlay = document.getElementById('telegramAccessOverlay');
+                    if (overlay) overlay.style.display = 'flex';
+                    return false;
+                }
+                if (result && result.qsoAudioServerUrl) {
+                    localStorage.setItem('cwgame_qso_audio_url', result.qsoAudioServerUrl);
+                    window.qsoAudioServerUrl = result.qsoAudioServerUrl;
+                }
+                if (result && result.aiAuthToken) {
+                    window.aiAuthToken = result.aiAuthToken;
+                    localStorage.setItem('cwgame_ai_auth_token', result.aiAuthToken);
+                }
+            }
+        }
+    } catch(e) {
+        console.warn("Validation check exception:", e);
+    }
+
+    return true;
+}
+
 // Exact mirror of window.fetchAddestraUrlFromFirebase in ai_training_manager.js
 window.fetchAddestraUrlFromFirebase = async function() {
     if (window.aiActiveAddestraUrl) return window.aiActiveAddestraUrl;
@@ -1288,15 +1336,18 @@ function handleLocalAudioFilesUpload(event) {
 }
 
 // 8. DOM CONTENT LOADED INITIALIZATION
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     const isAuth = checkTelegramAuthAndLock();
+    if (!isAuth) return;
+
     initFirebaseInStudio();
+    const isVerified = await validateIdentityInStudio();
+    if (!isVerified) return;
+
     initONNXModel();
     drawPlaceholderCanvas();
     initMasterTimeline();
     loadSavedPairsFromStorage();
 
-    if (isAuth) {
-        autoFetchQsoListFromAppsScript();
-    }
+    autoFetchQsoListFromAppsScript();
 });
