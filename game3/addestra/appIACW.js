@@ -332,12 +332,19 @@ async function autoFetchQsoListFromAppsScript() {
             const data = await resp.json();
             if (data && data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
                 const liveCount = data.results.length;
-                const mappedResults = data.results.map(r => ({
-                    id: r.id,
-                    filename: r.filename,
-                    streamUrl: r.streamUrl,
-                    transcript: r.filename
-                }));
+                const mappedResults = data.results.map(r => {
+                    let realId = r.id;
+                    if (!realId || realId.startsWith('row_')) {
+                        const m = (r.streamUrl || r.filename || "").match(/[-\w]{25,}/);
+                        if (m) realId = m[0];
+                    }
+                    return {
+                        id: realId || r.id,
+                        filename: r.filename,
+                        streamUrl: r.streamUrl,
+                        transcript: r.filename
+                    };
+                });
 
                 activeAppsScriptUrl = url;
 
@@ -882,8 +889,8 @@ async function loadSelectedQSO() {
 
     // 1. SCARICAMENTO AUDIO VIA GOOGLE APPS SCRIPT PROXY
     let fileId = item.id;
-    if (!fileId) {
-        const m = (trimmedSource || "").match(/[-\w]{25,}/);
+    if (!fileId || fileId.startsWith('row_')) {
+        const m = (item.streamUrl || item.filename || trimmedSource || "").match(/[-\w]{25,}/);
         if (m) fileId = m[0];
     }
 
