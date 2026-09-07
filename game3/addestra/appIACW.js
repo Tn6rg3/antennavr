@@ -107,6 +107,12 @@ async function fetchAppsScriptUrlFromFirebase() {
             });
         }
 
+        if (typeof firebase !== 'undefined' && firebase.auth && !firebase.auth().currentUser) {
+            try {
+                await firebase.auth().signInAnonymously();
+            } catch(e) {}
+        }
+
         if (typeof firebase !== 'undefined' && firebase.database) {
             let snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
             if (!snap.exists() || !snap.val()) {
