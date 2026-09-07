@@ -910,10 +910,20 @@ async function loadSelectedQSO() {
         if (m) fileId = m[0];
     }
 
+    const driveUrl = fileId ? `https://docs.google.com/uc?export=download&id=${fileId}` : item.streamUrl;
+
+    // Preparazione dello streaming HTML5 temporizzato (Identico al gioco principale)
+    const audioEl = document.getElementById('aiAudioHtmlEl');
+    if (audioEl) {
+        audioEl.src = driveUrl;
+        audioEl.load();
+    }
+
     const activeUrl = activeAppsScriptUrl || (await fetchAppsScriptUrlFromFirebase());
     const proxyCandidateUrls = [
         activeUrl,
-        window.qsoAudioServerUrl
+        window.qsoAudioServerUrl,
+        localStorage.getItem('cwgame_qso_audio_url')
     ].filter(u => u && u.startsWith('http'));
 
     for (let scriptUrl of proxyCandidateUrls) {
@@ -1036,18 +1046,43 @@ function nextSegment() {
 }
 
 function playCurrentSegment() {
-    if (!currentAudioBuffer) return;
-    const ctx = getAudioContext();
+    const winLen = currentWindowDuration;
+    const start = current10sStart;
+    const buf = currentAudioBuffer;
+    const rate = currentPlaybackSpeed || 1.0;
 
-    if (currentSourceNode) {
-        try { currentSourceNode.stop(); } catch(e){}
+    // 1. Riproduzione di precisione WebAudio Buffer
+    if (buf) {
+        const ctx = getAudioContext();
+        if (currentSourceNode) {
+            try { currentSourceNode.stop(); } catch(e){}
+        }
+
+        currentSourceNode = ctx.createBufferSource();
+        currentSourceNode.buffer = buf;
+        currentSourceNode.playbackRate.value = rate;
+        currentSourceNode.connect(ctx.destination);
+        currentSourceNode.start(0, start, winLen / rate);
+        logDebug(`▶️ Riproduzione WebAudio (${rate}x): da ${start.toFixed(1)}s a ${(start + winLen).toFixed(1)}s`);
+        return;
     }
 
-    currentSourceNode = ctx.createBufferSource();
-    currentSourceNode.buffer = currentAudioBuffer;
-    currentSourceNode.playbackRate.value = currentPlaybackSpeed;
-    currentSourceNode.connect(ctx.destination);
-    currentSourceNode.start(0, current10sStart, currentWindowDuration);
+    // 2. Fallback Streaming HTML5 Audio temporizzato
+    const audioEl = document.getElementById('aiAudioHtmlEl');
+    if (audioEl && audioEl.src) {
+        if (window.aiAudioTimer) clearTimeout(window.aiAudioTimer);
+
+        audioEl.currentTime = start;
+        audioEl.playbackRate = rate;
+        audioEl.play().then(() => {
+            logDebug(`▶️ Riproduzione HTML5 Stream (${rate}x): da ${start.toFixed(1)}s a ${(start + winLen).toFixed(1)}s`);
+            window.aiAudioTimer = setTimeout(() => {
+                audioEl.pause();
+            }, (winLen / rate) * 1000);
+        }).catch(err => {
+            console.warn("HTML5 Audio play warning:", err);
+        });
+    }
 }
 
 function drawPlaceholderCanvas() {
