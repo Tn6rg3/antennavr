@@ -19,10 +19,10 @@ let isMicActive = false;
 let analyserNode = null;
 let liveAnimationFrame = null;
 
-// Initialize Web Audio Context
+// Initialize Web Audio Context (Native Sample Rate for 100% decodeAudioData Compatibility)
 function getAudioContext() {
     if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
