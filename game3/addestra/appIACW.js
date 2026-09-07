@@ -344,12 +344,9 @@ async function autoFetchQsoListFromAppsScript() {
 
     for (let url of targetUrls) {
         try {
-            const resp = await safeFetch(url, {
-                action: "search",
-                q: "",
-                limit: "10000",
-                uid: window.tgUser?.id || ""
-            });
+            let fetchUrl = `${url}${url.includes('?') ? '&' : '?'}action=search&q=&limit=10000&uid=${window.tgUser?.id || ""}`;
+            logDebug(`🔍 Background Scanning QSO list from Apps Script: ${fetchUrl}`);
+            const resp = await fetch(fetchUrl);
             if (!resp.ok) continue;
 
             const data = await resp.json();
@@ -933,26 +930,25 @@ async function loadSelectedQSO() {
         localStorage.getItem('cwgame_qso_audio_url')
     ].filter(u => u && u.startsWith('http'));
 
-    for (let scriptUrl of proxyCandidateUrls) {
-        if (fileId && scriptUrl) {
+    for (let cleanUrl of proxyCandidateUrls) {
+        if (fileId && cleanUrl) {
             if (statusElem) { statusElem.innerText = `⏳ Scaricamento audio QSO (#${idx + 1}/${qsoList.length})...`; statusElem.style.color = "#00bcd4"; }
             try {
-                let cleanUrl = scriptUrl.trim();
                 if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
                 if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
 
-                logDebug(`Invio richiesta proxy audio ad Apps Script: "${cleanUrl}"`);
-                const resp = await safeFetch(cleanUrl, {
-                    action: "proxy_audio",
-                    id: fileId,
-                    uid: window.tgUser?.id || ""
-                });
+                let proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}&uid=${window.tgUser?.id || ""}`;
+                logDebug(`🚀 Starting AI Audio Download via Proxy: ${proxyUrl}`);
+
+                const resp = await fetch(proxyUrl);
                 if (resp.ok) {
                     const text = await resp.text();
                     let data = null;
                     try { data = JSON.parse(text); } catch(e) {}
 
                     if (data && data.status === 'success' && data.base64) {
+                        logDebug(`✓ Received Base64 Audio Payload! Length: ${data.base64.length} chars`);
+
                         const binaryStr = atob(data.base64);
                         const bytes = new Uint8Array(binaryStr.length);
                         for (let i = 0; i < binaryStr.length; i++) {
@@ -1673,15 +1669,23 @@ async function syncPairToGoogleCloudSheet(pair) {
     const scriptUrl = await fetchAppsScriptUrlFromFirebase();
     if (!scriptUrl) return;
 
+    const params = new URLSearchParams({
+        action: "save_approved",
+        filename: pair.filename || "QSO_Clip",
+        time_pos: pair.timePos || "00:00 - 00:10",
+        transcript: pair.userCorrection || "",
+        ai_prediction: pair.aiPrediction || "",
+        uid: window.tgUser?.id || ""
+    });
+
     try {
-        const resp = await safeFetch(scriptUrl, {
-            action: "save_approved",
-            filename: pair.filename || "QSO_Clip",
-            time_pos: pair.timePos || "00:00 - 00:10",
-            transcript: pair.userCorrection || "",
-            ai_prediction: pair.aiPrediction || "",
-            uid: window.tgUser?.id || ""
-        });
+        const resp = await fetch(`${scriptUrl}?${params.toString()}`);
+        const res = await resp.json();
+        console.log("✓ Sincronizzato con il Foglio Google ADDESTRA in Cloud:", res);
+    } catch(err) {
+        console.warn("Google Cloud Sheet sync warning:", err);
+    }
+}
         const res = await resp.json();
         console.log("✓ Sincronizzato con il Foglio Google ADDESTRA in Cloud:", res);
     } catch(err) {
