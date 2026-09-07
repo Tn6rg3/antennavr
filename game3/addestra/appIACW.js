@@ -910,13 +910,18 @@ async function loadSelectedQSO() {
         }
     }
 
-    if (statusElem) { statusElem.innerText = "🎧 Player Pronto (Usa ▶️ Riproduci per l'ascolto)"; statusElem.style.color = "#00bcd4"; }
-}
-
     if (localAudioFilesList.length > 0) {
         const localSelect = document.getElementById('localAudioSelect');
         if (localSelect) {
             const targetIdx = idx < localAudioFilesList.length ? idx : 0;
+            localSelect.selectedIndex = targetIdx;
+            loadSelectedLocalAudio();
+            return;
+        }
+    }
+
+    if (statusElem) { statusElem.innerText = "🎧 Player Pronto (Usa ▶️ Riproduci per l'ascolto)"; statusElem.style.color = "#00bcd4"; }
+}
             localSelect.selectedIndex = targetIdx;
             loadSelectedLocalAudio();
             return;
