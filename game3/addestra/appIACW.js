@@ -934,10 +934,14 @@ async function loadSelectedQSO() {
         if (fileId && cleanUrl) {
             if (statusElem) { statusElem.innerText = `⏳ Scaricamento audio QSO (#${idx + 1}/${qsoList.length})...`; statusElem.style.color = "#00bcd4"; }
             try {
-                if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.split('/edit')[0] + '/exec';
-                if (cleanUrl.endsWith('/dev')) cleanUrl = cleanUrl.slice(0, -4) + '/exec';
+                let formattedUrl = cleanUrl.trim();
+                if (formattedUrl.includes('/edit')) formattedUrl = formattedUrl.split('/edit')[0] + '/exec';
+                if (formattedUrl.endsWith('/dev')) formattedUrl = formattedUrl.slice(0, -4) + '/exec';
+                if (formattedUrl.includes('?')) formattedUrl = formattedUrl.split('?')[0];
 
-                let proxyUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=proxy_audio&id=${fileId}&uid=${window.tgUser?.id || ""}`;
+                let proxyUrl = `${formattedUrl}?action=proxy_audio&id=${encodeURIComponent(fileId)}`;
+                if (window.tgUser?.id) proxyUrl += `&uid=${encodeURIComponent(window.tgUser.id)}`;
+
                 logDebug(`🚀 Starting AI Audio Download via Proxy: ${proxyUrl}`);
 
                 const resp = await fetch(proxyUrl);
