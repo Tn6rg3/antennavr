@@ -131,7 +131,9 @@ async function safeFetch(rawUrl, paramsObj = null) {
 }
 
 async function fetchAppsScriptUrlFromFirebase() {
-    if (activeAppsScriptUrl && activeAppsScriptUrl.startsWith('http')) return activeAppsScriptUrl;
+    if (activeAppsScriptUrl && activeAppsScriptUrl.startsWith('http') && Array.isArray(window.allAppsScriptUrls) && window.allAppsScriptUrls.length > 0) {
+        return activeAppsScriptUrl;
+    }
 
     try {
         if (typeof firebase !== 'undefined') {
@@ -154,24 +156,28 @@ async function fetchAppsScriptUrlFromFirebase() {
             }
 
             if (firebase.database) {
-                let snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
-                if (!snap.exists() || !snap.val()) {
-                    snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
-                }
-                if (!snap.exists() || !snap.val()) {
-                    snap = await firebase.database().ref('config/addestra_script_url').once('value');
-                }
-                if (!snap.exists() || !snap.val()) {
-                    snap = await firebase.database().ref('config/qso_audio_server_url').once('value');
-                }
-                if (snap.exists() && snap.val()) {
-                    activeAppsScriptUrl = snap.val().trim();
-                    console.log("🔒 Loaded fresh Apps Script URL directly from Firebase Database:", activeAppsScriptUrl);
+                const [snap1, snap2, snap3, snap4] = await Promise.all([
+                    firebase.database().ref('appConfig/qso_audio_server_url').once('value'),
+                    firebase.database().ref('appConfig/addestra_script_url').once('value'),
+                    firebase.database().ref('config/qso_audio_server_url').once('value'),
+                    firebase.database().ref('config/addestra_script_url').once('value')
+                ]);
+
+                const foundUrls = [
+                    snap1.val(), snap2.val(), snap3.val(), snap4.val()
+                ].filter(u => u && typeof u === 'string' && u.trim().startsWith('http')).map(u => u.trim());
+
+                if (foundUrls.length > 0) {
+                    activeAppsScriptUrl = foundUrls[0];
+                    window.allAppsScriptUrls = [...new Set(foundUrls)];
+                    console.log("🔒 Loaded fresh Apps Script URLs dynamically from Firebase Database:", window.allAppsScriptUrls);
                     return activeAppsScriptUrl;
                 }
             }
         }
-    } catch(e) {}
+    } catch(e) {
+        console.warn("Firebase Fetch Error:", e);
+    }
 
     return activeAppsScriptUrl || "";
 }
@@ -919,8 +925,12 @@ async function loadSelectedQSO() {
 
     const activeUrl = activeAppsScriptUrl || (await fetchAppsScriptUrlFromFirebase());
     const proxyCandidateUrls = [
-        activeUrl
-    ].filter(u => u && u.startsWith('http'));
+        ...(window.allAppsScriptUrls || []),
+        activeUrl,
+        window.qsoAudioServerUrl,
+        localStorage.getItem('cwgame_qso_audio_url')
+    ].filter(u => u && typeof u === 'string' && u.startsWith('http'));
+    const uniqueProxyUrls = [...new Set(proxyCandidateUrls)];
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.tgUser?.id || window.myId || "";
