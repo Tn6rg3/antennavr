@@ -1453,65 +1453,61 @@ window.correctTextWithFullDictionary = function(text) {
     const dictSet = window.aiTrainingState.combinedDictionarySet || new Set(ITALIAN_RADIO_DICTIONARY);
     const dictList = window.aiTrainingState.combinedDictionaryList || ITALIAN_RADIO_DICTIONARY;
 
-    let tokens = text.trim().toUpperCase().split(/\s+/);
+    let tokens = text.trim().toUpperCase().split(/\s+/).map(t => t.replace(/[^A-Z0-9\/\-]/g, '')).filter(t => t.length > 0);
 
     // =========================================================================
-    // FASE 1: UNIONE PAROLE E FRAMMENTI FRANTUMATI (Word Merging)
-    // es. "A N TEN NA" -> "ANTENNA", "C A M B I O" -> "CAMBIO"
+    // PASSO 1: UNIONE A 3 FRAMMENTI (es. "COL" + "LE" + "ZIONE" -> "COLLEZIONE")
     // =========================================================================
-    let mergedTokens = [];
+    let pass1Tokens = [];
     let i = 0;
     while (i < tokens.length) {
-        let currToken = tokens[i].replace(/[^A-Z0-9]/g, '');
-
-        if (currToken.length <= 4) {
-            let combined = currToken;
-            let bestJ = -1;
-
-            for (let j = i + 1; j < Math.min(tokens.length, i + 5); j++) {
-                const nextPart = tokens[j].replace(/[^A-Z0-9]/g, '');
-                combined += nextPart;
-
-                if (combined.length >= 3 && dictSet.has(combined)) {
-                    bestJ = j;
-                }
-            }
-
-            if (bestJ !== -1) {
-                let mergedWord = "";
-                for (let k = i; k <= bestJ; k++) {
-                    mergedWord += tokens[k].replace(/[^A-Z0-9]/g, '');
-                }
-                mergedTokens.push(mergedWord);
-                i = bestJ + 1;
+        if (i + 2 < tokens.length) {
+            const combined3 = tokens[i] + tokens[i + 1] + tokens[i + 2];
+            if (combined3.length >= 3 && dictSet.has(combined3)) {
+                pass1Tokens.push(combined3);
+                i += 3; // salta i 3 frammenti uniti
                 continue;
             }
         }
-
-        mergedTokens.push(tokens[i]);
+        pass1Tokens.push(tokens[i]);
         i++;
     }
 
     // =========================================================================
-    // FASE 2: SEPARAZIONE PAROLE ATTACCATE SENZA SPAZI (Word Segmentation)
-    // es. "QUESTAANTENNA" -> "QUESTA", "ANTENNA"
+    // PASSO 2: UNIONE A 2 FRAMMENTI (es. "RI" + "CORDO" -> "RICORDO")
     // =========================================================================
-    let segmentedWords = [];
-    for (let token of mergedTokens) {
-        const clean = token.replace(/[^A-Z0-9\/\-]/g, '');
-        if (clean.length >= 5 && !dictSet.has(clean) && !(/^[A-Z0-9]{3,7}$/.test(clean) && /\d/.test(clean))) {
-            const splits = window.splitAttachedWords(clean, dictSet);
-            segmentedWords.push(...splits);
+    let pass2Tokens = [];
+    let j = 0;
+    while (j < pass1Tokens.length) {
+        if (j + 1 < pass1Tokens.length) {
+            const combined2 = pass1Tokens[j] + pass1Tokens[j + 1];
+            if (combined2.length >= 3 && dictSet.has(combined2)) {
+                pass2Tokens.push(combined2);
+                j += 2; // salta i 2 frammenti uniti
+                continue;
+            }
+        }
+        pass2Tokens.push(pass1Tokens[j]);
+        j++;
+    }
+
+    // =========================================================================
+    // SEPARAZIONE PAROLE ATTACCATE SENZA SPAZI (Word Segmentation)
+    // =========================================================================
+    let segmentedTokens = [];
+    for (let tok of pass2Tokens) {
+        if (tok.length >= 5 && !dictSet.has(tok) && !(/^[A-Z0-9]{3,7}$/.test(tok) && /\d/.test(tok))) {
+            const splits = window.splitAttachedWords(tok, dictSet);
+            segmentedTokens.push(...splits);
         } else {
-            segmentedWords.push(token);
+            segmentedTokens.push(tok);
         }
     }
 
     // =========================================================================
-    // FASE 3: CORREZIONE REFUSI LETTERA PER LETTERA (Levenshtein Fuzzy Correction)
-    // es. "VNCHE" -> "ANCHE", "MNTENNA" -> "ANTENNA"
+    // PASSO 3: CORREZIONE SINGOLA (es. "TKUEL" -> "QUEL")
     // =========================================================================
-    const correctedWords = segmentedWords.map(word => {
+    const finalWords = segmentedTokens.map(word => {
         const cleanWord = word.replace(/[^A-Z0-9\/\-]/g, '');
         if (cleanWord.length <= 1) return word;
 
@@ -1538,6 +1534,17 @@ window.correctTextWithFullDictionary = function(text) {
                     : Math.abs(cleanWord.length - dictWord.length);
 
                 if (dist < minDistance && dist <= maxDistThreshold) {
+                    minDistance = dist;
+                    bestMatch = dictWord;
+                    if (dist === 1) break;
+                }
+            }
+        }
+        return bestMatch;
+    });
+
+    return finalWords.join(" ");
+};
                     minDistance = dist;
                     bestMatch = dictWord;
                     if (dist === 1) break;
