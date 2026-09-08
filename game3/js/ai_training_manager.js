@@ -1402,16 +1402,18 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
             if (p.durationFrames >= ditFrames * 2.0) morseCode += "-";
             else morseCode += ".";
         } else if (!p.tone) {
-            if (p.durationFrames >= ditFrames * 3.5) {
+            if (p.durationFrames >= ditFrames * 2.2) {
                 if (morseCode) {
                     const char = reverseMap[morseCode] || "";
                     if (char) decodedText += char + " ";
                     morseCode = "";
+                } else if (!decodedText.endsWith(" ")) {
+                    decodedText += " ";
                 }
-            } else if (p.durationFrames >= ditFrames * 1.2) {
+            } else if (p.durationFrames >= ditFrames * 1.0) {
                 if (morseCode) {
                     const char = reverseMap[morseCode] || "";
-                    if (char) decodedText += char;
+                    if (char) decodedText += char + " ";
                     morseCode = "";
                 }
             }
@@ -1419,7 +1421,7 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
     }
     if (morseCode) {
         const char = reverseMap[morseCode] || "";
-        if (char) decodedText += char;
+        if (char) decodedText += char + " ";
     }
 
     let cleanRes = decodedText.replace(/^[():;=.,\s]+|[():;=.,\s]+$/g, "").trim();
@@ -1509,7 +1511,7 @@ window.runInferenceOnSegment = async function() {
                     if (maxIdx === 0) {
                         // Token <BLANK> (silenzio/pausa tra i caratteri/parole)
                         blankFramesCount++;
-                        if (blankFramesCount >= 3) {
+                        if (blankFramesCount >= 2) {
                             if (aiResult.length > 0 && !aiResult.endsWith(' ')) {
                                 aiResult += ' ';
                             }
@@ -1518,11 +1520,15 @@ window.runInferenceOnSegment = async function() {
                         blankFramesCount = 0;
                         if (maxIdx !== lastIdx) {
                             const char = AI_VOCAB[maxIdx] || '';
-                            if (char !== '<BLANK>' && char !== '') {
+                            if (char === ' ') {
+                                if (aiResult.length > 0 && !aiResult.endsWith(' ')) {
+                                    aiResult += ' ';
+                                }
+                            } else if (char !== '<BLANK>' && char !== '') {
                                 if (char.startsWith('<') && char.endsWith('>')) {
                                     // Prosegni radio ufficiali (es. <AR>, <BT>, <SK>, <KN>)
                                     aiResult += ' ' + char + ' ';
-                                } else if (/[A-Z0-9\/\-\.=\?a-z]/.test(char) || char === ' ') {
+                                } else if (/[A-Z0-9\/\-\.=\?a-z]/.test(char)) {
                                     aiResult += char;
                                 }
                             }
