@@ -53,17 +53,22 @@ window.openStandaloneAiStudio = function() {
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const tgInitData = window.tgInitData || (window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp.initData : "");
 
-    let targetUrl = "appcw.html?mode=addestra_ia";
+    let baseUrl = window.location.href.split('?')[0].split('#')[0];
+    if (!baseUrl.endsWith('.html') && !baseUrl.endsWith('/')) {
+        baseUrl += '/appcw.html';
+    } else if (baseUrl.endsWith('/')) {
+        baseUrl += 'appcw.html';
+    }
+
+    let targetUrl = `${baseUrl}?mode=addestra_ia`;
     if (uid) targetUrl += `&uid=${encodeURIComponent(uid)}`;
     if (token) targetUrl += `&token=${encodeURIComponent(token)}`;
     if (tgInitData) targetUrl += `&initData=${encodeURIComponent(tgInitData)}`;
 
     console.log("🚀 Opening Standalone AI Studio in new browser tab:", targetUrl);
-    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openLink === 'function') {
-        const fullUrl = window.location.origin + window.location.pathname.replace(/appcw\.html$/, '') + targetUrl;
-        window.Telegram.WebApp.openLink(fullUrl);
-    } else {
-        window.open(targetUrl, '_blank');
+    const win = window.open(targetUrl, '_blank');
+    if (!win && window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openLink === 'function') {
+        window.Telegram.WebApp.openLink(targetUrl);
     }
 };
 
@@ -89,7 +94,7 @@ window.initAiTrainingModule = async function() {
     }
 
     // Se si accede via ?mode=addestra_ia, si apre direttamente la schermata aiTrainingScreen
-    if (urlParams.get('mode') === 'addestra_ia') {
+    if (urlParams.get('mode') === 'addestra_ia' || urlParams.get('screen') === 'ai_training') {
         if (typeof window.showScreen === 'function') window.showScreen('aiTrainingScreen');
         // Nasconde il pulsante "Apri in Nuova Scheda" quando siamo già nella nuova scheda browser
         setTimeout(() => {
@@ -143,6 +148,13 @@ window.fetchAddestraUrlFromFirebase = async function() {
     if (window.aiActiveAddestraUrl && Array.isArray(window.aiAllFirebaseUrls) && window.aiAllFirebaseUrls.length > 0) {
         return window.aiActiveAddestraUrl;
     }
+
+    const localStoredUrl = localStorage.getItem('cwgame_addestra_url') || localStorage.getItem('cwgame_qso_audio_url');
+    if (localStoredUrl && localStoredUrl.startsWith('http')) {
+        window.aiActiveAddestraUrl = localStoredUrl;
+        if (!window.aiAllFirebaseUrls) window.aiAllFirebaseUrls = [localStoredUrl];
+    }
+
     try {
         if (typeof firebase !== 'undefined' && firebase.database) {
             const [snap1, snap2, snap3, snap4] = await Promise.all([
@@ -162,6 +174,7 @@ window.fetchAddestraUrlFromFirebase = async function() {
             if (foundUrls.length > 0) {
                 window.aiAllFirebaseUrls = [...new Set(foundUrls)];
                 window.aiActiveAddestraUrl = window.aiAllFirebaseUrls[0];
+                localStorage.setItem('cwgame_addestra_url', window.aiActiveAddestraUrl);
                 console.log("🔒 Loaded fresh Apps Script URLs dynamically from Firebase Config:", window.aiAllFirebaseUrls);
                 return window.aiActiveAddestraUrl;
             }
@@ -169,7 +182,13 @@ window.fetchAddestraUrlFromFirebase = async function() {
     } catch(e) {
         console.warn("Firebase Config Fetch Warning:", e);
     }
-    return window.aiActiveAddestraUrl || "";
+
+    const fallbackUrl = "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+    if (!window.aiActiveAddestraUrl) {
+        window.aiActiveAddestraUrl = fallbackUrl;
+        if (!window.aiAllFirebaseUrls) window.aiAllFirebaseUrls = [fallbackUrl];
+    }
+    return window.aiActiveAddestraUrl;
 };
 
 window.saveFirebaseConfigUrl = function(key, newUrl) {
@@ -338,7 +357,18 @@ window.loadQsoListFromGameSheet = async function() {
     }
 
     const fbUrl = await window.fetchAddestraUrlFromFirebase();
-    const serverUrls = [fbUrl, window.qsoAudioServerUrl].filter(u => u && u.startsWith('http'));
+    const fallbackUrl = "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+
+    const candidateUrls = [
+        ...(window.aiAllFirebaseUrls || []),
+        fbUrl,
+        window.qsoAudioServerUrl,
+        localStorage.getItem('cwgame_addestra_url'),
+        localStorage.getItem('cwgame_qso_audio_url'),
+        fallbackUrl
+    ].filter(u => u && typeof u === 'string' && u.startsWith('http'));
+
+    const serverUrls = [...new Set(candidateUrls)];
     const status = document.getElementById('aiQsoStatusText');
 
     if (status && cachedCount === 0) status.textContent = "⏳ Scansione elenco QSO dal server Google...";
@@ -1654,3 +1684,22 @@ window.startAiLiveDecodingStream = function() {
         }
     }, 1200);
 };
+
+// Auto-launch trigger se aperto via URL ?mode=addestra_ia o in una nuova scheda
+(function autoLaunchAiModuleFromUrl() {
+    const checkAndLaunch = () => {
+        const urlParams = new URLSearchParams(window.location.search || window.location.hash.replace(/^#/, '?'));
+        if (urlParams.get('mode') === 'addestra_ia' || urlParams.get('screen') === 'ai_training') {
+            console.log("⚡ Auto-launching AI Training Studio from URL mode=addestra_ia...");
+            if (typeof window.initAiTrainingModule === 'function') {
+                window.initAiTrainingModule();
+            }
+        }
+    };
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(checkAndLaunch, 100);
+    } else {
+        window.addEventListener('DOMContentLoaded', () => setTimeout(checkAndLaunch, 100));
+    }
+})();
