@@ -1926,6 +1926,32 @@ s            </div>
     </div>
 </div>
 
+<script>
+window.openStandaloneAiStudio = window.openStandaloneAiStudio || function() {
+    var uid = window.myId || (window.tgUser ? window.tgUser.id : "");
+    var token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
+    var tgInitData = window.tgInitData || (window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp.initData : "");
+
+    var baseUrl = window.location.href.split('?')[0].split('#')[0];
+    if (!baseUrl.endsWith('.html') && !baseUrl.endsWith('/')) {
+        baseUrl += '/appcw.html';
+    } else if (baseUrl.endsWith('/')) {
+        baseUrl += 'appcw.html';
+    }
+
+    var targetUrl = baseUrl + "?mode=addestra_ia";
+    if (uid) targetUrl += "&uid=" + encodeURIComponent(uid);
+    if (token) targetUrl += "&token=" + encodeURIComponent(token);
+    if (tgInitData) targetUrl += "&initData=" + encodeURIComponent(tgInitData);
+
+    console.log("🚀 Opening Standalone AI Studio in new browser tab:", targetUrl);
+    var win = window.open(targetUrl, '_blank');
+    if (!win && window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openLink === 'function') {
+        window.Telegram.WebApp.openLink(targetUrl);
+    }
+};
+</script>
+
 <!-- SCHERMATA ADDESTRA IA & STUDIO DECODIFICA -->
 <div id="aiTrainingScreen" class="screen">
     <div class="screen-content" style="gap: 8px;">
