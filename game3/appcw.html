@@ -2086,9 +2086,19 @@ window.openStandaloneAiStudio = window.openStandaloneAiStudio || function() {
 
                 <!-- TEXTBOX 3: TESTO RICOSTRUITO DAL DIZIONARIO ESTESO -->
                 <div style="margin-bottom:8px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; flex-wrap:wrap; gap:4px;">
-                        <label style="font-size:0.75em; color:#00bcd4; font-weight:bold;">✨ TEXTBOX 3 - Testo Suggerito / Ricostruito dal Dizionario (Italiano/Inglese/Radio):</label>
-                        <button class="action-btn-small btn-secondary" style="padding:2px 8px; font-size:0.75em; border-color:#00bcd4; color:#00e5ff;" onclick="window.applyAiDictionaryCorrection()">✨ Applica Suggerimento ⬇️</button>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:4px;">
+                        <label style="font-size:0.75em; color:#00bcd4; font-weight:bold;">✨ TEXTBOX 3 - Testo Suggerito dal Dizionario:</label>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <label style="font-size:0.75em; color:#00bcd4; font-weight:bold;">
+                                📖 Lingua:
+                                <select id="aiDictLangSelect" onchange="window.changeAiDictLanguage()" style="padding:2px 4px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid #00bcd4; border-radius:4px;">
+                                    <option value="it" selected>🇮🇹 Italiano</option>
+                                    <option value="en">🇬🇧 Inglese / CW Int.</option>
+                                    <option value="all">🌐 Misto (IT + EN)</option>
+                                </select>
+                            </label>
+                            <button class="action-btn-small btn-secondary" style="padding:2px 8px; font-size:0.75em; border-color:#00bcd4; color:#00e5ff;" onclick="window.applyAiDictionaryCorrection()">✨ Applica ⬇️</button>
+                        </div>
                     </div>
                     <input type="text" id="aiDictionaryCorrectedText" readonly placeholder="Ricostruzione del senso con dizionario parole..." style="width:100%; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; background:#081822; color:#00e5ff; border:2px solid #00bcd4; border-radius:6px; box-sizing:border-box;">
                 </div>
