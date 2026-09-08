@@ -89,8 +89,15 @@ window.initAiTrainingModule = async function() {
     }
 
     // Se si accede via ?mode=addestra_ia, si apre direttamente la schermata aiTrainingScreen
-    if (urlParams.get('mode') === 'addestra_ia' && typeof window.showScreen === 'function') {
-        window.showScreen('aiTrainingScreen');
+    if (urlParams.get('mode') === 'addestra_ia') {
+        if (typeof window.showScreen === 'function') window.showScreen('aiTrainingScreen');
+        // Nasconde il pulsante "Apri in Nuova Scheda" quando siamo già nella nuova scheda browser
+        setTimeout(() => {
+            const newTabBtn = document.querySelector('button[onclick="window.openStandaloneAiStudio()"]');
+            if (newTabBtn && newTabBtn.parentElement) {
+                newTabBtn.parentElement.style.display = 'none';
+            }
+        }, 100);
     }
 
     window.aiTrainingState.savedPairs = [];
@@ -697,6 +704,11 @@ window.updateMasterTimelineDisplay = function() {
     const canvas = document.getElementById('aiMasterTimelineCanvas');
     if (!canvas) return;
     window.initMasterTimelineCanvas();
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0 && canvas.width !== Math.floor(rect.width)) {
+        canvas.width = Math.floor(rect.width);
+    }
 
     const ctx = canvas.getContext('2d');
     const width = canvas.width;
