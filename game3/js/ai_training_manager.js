@@ -1071,102 +1071,11 @@ window.playCurrentAiSegment = function(offsetSec = 0) {
 };
 
 window.drawAiPlaceholderCanvas = function() {
-    const canvas = document.getElementById('aiSegmentCanvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#0a0f14';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'var(--hint-color)';
-    ctx.font = '13px sans-serif';
-    ctx.fillText('Nessun file audio QSO caricato', canvas.width / 2 - 80, canvas.height / 2 + 4);
+    window.updateMasterTimelineDisplay();
 };
 
 window.drawAiSegmentWaveform = function() {
-    const canvas = document.getElementById('aiSegmentCanvas');
-    const buf = window.aiTrainingState.currentAudioBuffer;
-    if (!canvas || !buf) return;
-
-    window.setupAiCanvasInteractiveEvents();
-
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
-
-    ctx.fillStyle = '#0a0f14';
-    ctx.fillRect(0, 0, width, height);
-
-    const data = buf.getChannelData(0);
-    const sr = buf.sampleRate;
-    const winLen = window.aiTrainingState.currentWindowDuration;
-    const startIdx = Math.floor(window.aiTrainingState.currentWindowStart * sr);
-    const endIdx = Math.min(data.length, Math.floor((window.aiTrainingState.currentWindowStart + winLen) * sr));
-    const step = Math.ceil((endIdx - startIdx) / width);
-
-    // Forma d'onda Verde
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#00ff66';
-    ctx.beginPath();
-
-    for (let i = 0; i < width; i++) {
-        const sampleIdx = startIdx + (i * step);
-        if (sampleIdx >= endIdx) break;
-        const val = data[sampleIdx];
-        const y = (1 - val) * (height / 2);
-        if (i === 0) ctx.moveTo(i, y);
-        else ctx.lineTo(i, y);
-    }
-    ctx.stroke();
-
-    // BARRA MOBILE / CURSORE DI SCORRIMENTO TEMPO
-    const ratio = window.aiTrainingState.playheadRatio || 0;
-    if (ratio >= 0 && ratio <= 1) {
-        const playheadX = ratio * width;
-
-        ctx.strokeStyle = '#ff9800';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(playheadX, 0);
-        ctx.lineTo(playheadX, height);
-        ctx.stroke();
-
-        const offsetSec = (ratio * winLen).toFixed(1);
-        ctx.fillStyle = '#ff9800';
-        ctx.fillRect(Math.min(width - 45, Math.max(0, playheadX - 20)), 2, 45, 14);
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 10px monospace';
-        ctx.fillText(`+${offsetSec}s`, Math.min(width - 40, Math.max(5, playheadX - 16)), 13);
-    }
-};
-
-window.setupAiCanvasInteractiveEvents = function() {
-    const canvas = document.getElementById('aiSegmentCanvas');
-    if (!canvas || canvas.dataset.eventsBound) return;
-    canvas.dataset.eventsBound = "true";
-
-    const handleCanvasSeek = (e) => {
-        if (e.cancelable) e.preventDefault();
-
-        const rect = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clickX = Math.max(0, Math.min(canvas.width, (clientX - rect.left) * (canvas.width / rect.width)));
-
-        const ratio = clickX / canvas.width;
-        const winLen = window.aiTrainingState.currentWindowDuration;
-        const offsetSec = ratio * winLen;
-
-        window.aiTrainingState.playheadRatio = ratio;
-        window.drawAiSegmentWaveform();
-        window.playCurrentAiSegment(offsetSec);
-    };
-
-    canvas.addEventListener('click', handleCanvasSeek, { passive: false });
-    let isDragging = false;
-    canvas.addEventListener('mousedown', (e) => { isDragging = true; handleCanvasSeek(e); }, { passive: false });
-    canvas.addEventListener('mousemove', (e) => { if (isDragging) handleCanvasSeek(e); }, { passive: false });
-    canvas.addEventListener('mouseup', () => { isDragging = false; });
-    canvas.addEventListener('touchstart', (e) => { isDragging = true; handleCanvasSeek(e); }, { passive: false });
-    canvas.addEventListener('touchmove', (e) => { if (isDragging) handleCanvasSeek(e); }, { passive: false });
-    canvas.addEventListener('touchend', () => { isDragging = false; });
+    window.updateMasterTimelineDisplay();
 };
 
 // Resample audio segment to 16kHz with Mono Stereo Mix-Down
