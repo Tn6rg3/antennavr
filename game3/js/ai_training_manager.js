@@ -1512,7 +1512,7 @@ window.runInferenceOnSegment = async function() {
                     if (maxIdx === 0) {
                         // Token <BLANK> (silenzio/pausa tra i caratteri/parole)
                         blankFramesCount++;
-                        if (blankFramesCount >= 10) {
+                        if (blankFramesCount >= 4) {
                             if (aiResult.length > 0 && !aiResult.endsWith(' ')) {
                                 aiResult += ' ';
                             }
@@ -1696,8 +1696,9 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
 
     const extractedWords = [];
     let i = 0;
+    let unmatchedChunk = "";
 
-    // Scansione ingorda (Greedy Match & Consume con tolleranza al rumore iniziale o intermedio)
+    // Scansione ingorda con CONSERVAZIONE INTEGRALE di tutti i caratteri (Zero Perdita)
     while (i < len) {
         let matchFound = false;
 
@@ -1705,6 +1706,10 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
             const sub = cleanToken.substring(i, j);
             const matched = findMatchingWord(sub);
             if (matched) {
+                if (unmatchedChunk.length > 0) {
+                    extractedWords.push(unmatchedChunk);
+                    unmatchedChunk = "";
+                }
                 extractedWords.push(matched);
                 i = j; // avanza al punto in cui e finita la parola trovata!
                 matchFound = true;
@@ -1713,8 +1718,13 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
         }
 
         if (!matchFound) {
-            i++; // avanza di 1 carattere (scarta rumore)
+            unmatchedChunk += cleanToken[i];
+            i++;
         }
+    }
+
+    if (unmatchedChunk.length > 0) {
+        extractedWords.push(unmatchedChunk);
     }
 
     if (extractedWords.length > 0) {
