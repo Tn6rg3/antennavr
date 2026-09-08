@@ -999,13 +999,6 @@ window.drawAiPlaceholderCanvas = function() {
 window.drawAiSegmentWaveform = function() {
     window.updateMasterTimelineDisplay();
 };
-    if (!buf) return;
-    const winLen = window.aiTrainingState.currentWindowDuration;
-    if (window.aiTrainingState.currentWindowStart + winLen < buf.duration) {
-        window.aiTrainingState.currentWindowStart += winLen;
-        window.updateAiSegmentDisplay();
-    }
-};
 
 window.stopCurrentAiAudio = function() {
     if (window.aiTrainingState.currentSourceNode) {
