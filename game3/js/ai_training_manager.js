@@ -1493,6 +1493,8 @@ window.runInferenceOnSegment = async function() {
                 console.log(`🤖 CTC Decoding: T=${T} time steps, C=${C} classes, dims=[${dims ? dims.join(',') : 'unknown'}]`);
 
                 let lastIdx = -1;
+                let blankFramesCount = 0;
+
                 for (let t = 0; t < T; t++) {
                     let maxVal = -Infinity, maxIdx = 0;
                     const baseOffset = isBatchFirst ? (t * C) : (t * 1 * C);
@@ -1504,14 +1506,25 @@ window.runInferenceOnSegment = async function() {
                         }
                     }
 
-                    if (maxIdx !== 0 && maxIdx !== lastIdx) {
-                        const char = AI_VOCAB[maxIdx] || '';
-                        if (char !== '<BLANK>' && char !== '') {
-                            if (char.startsWith('<') && char.endsWith('>')) {
-                                // Prosegni radio ufficiali (es. <AR>, <BT>, <SK>, <KN>)
-                                aiResult += ' ' + char + ' ';
-                            } else if (/[A-Z0-9\/\-\.=\?a-z]/.test(char) || char === ' ') {
-                                aiResult += char;
+                    if (maxIdx === 0) {
+                        // Token <BLANK> (silenzio/pausa tra i caratteri/parole)
+                        blankFramesCount++;
+                        if (blankFramesCount >= 3) {
+                            if (aiResult.length > 0 && !aiResult.endsWith(' ')) {
+                                aiResult += ' ';
+                            }
+                        }
+                    } else {
+                        blankFramesCount = 0;
+                        if (maxIdx !== lastIdx) {
+                            const char = AI_VOCAB[maxIdx] || '';
+                            if (char !== '<BLANK>' && char !== '') {
+                                if (char.startsWith('<') && char.endsWith('>')) {
+                                    // Prosegni radio ufficiali (es. <AR>, <BT>, <SK>, <KN>)
+                                    aiResult += ' ' + char + ' ';
+                                } else if (/[A-Z0-9\/\-\.=\?a-z]/.test(char) || char === ' ') {
+                                    aiResult += char;
+                                }
                             }
                         }
                     }
@@ -1554,35 +1567,72 @@ window.runInferenceOnSegment = async function() {
     }
 };
 
+window.changeAiDictLanguage = function() {
+    const sel = document.getElementById('aiDictLangSelect');
+    if (!sel) return;
+    const lang = sel.value || 'it';
+    window.aiTrainingState.dictLanguage = lang;
+    localStorage.setItem('cwgame_dict_lang', lang);
+
+    if (typeof showToast === 'function') {
+        const labels = { it: '🇮🇹 Italiano', en: '🇬🇧 Inglese / CW', all: '🌐 Misto (IT + EN)' };
+        showToast(`📖 Dizionario impostato su: ${labels[lang] || lang}`);
+    }
+
+    if (typeof window.runInferenceOnSegment === 'function') {
+        window.runInferenceOnSegment();
+    }
+};
+
 window.loadRadioDictionaries = async function() {
     if (window.aiTrainingState.dictionaryLoaded) return;
 
     console.log("📖 Loading radio dictionaries (parole.txt, parole2.txt, words.txt)...");
-    const dictSet = new Set(ITALIAN_RADIO_DICTIONARY);
+    const italianSet = new Set(ITALIAN_RADIO_DICTIONARY);
+    const englishSet = new Set(ITALIAN_RADIO_DICTIONARY);
+    const combinedSet = new Set(ITALIAN_RADIO_DICTIONARY);
 
-    const files = ['parole.txt', 'parole2.txt', 'words.txt'];
-    for (let file of files) {
+    const loadFile = async (filename, targetSet) => {
         try {
-            const resp = await fetch(file);
+            const resp = await fetch(filename);
             if (resp.ok) {
                 const text = await resp.text();
                 const words = text.split(/[\r\n,\s]+/);
                 for (let w of words) {
                     const clean = w.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
                     if (clean.length >= 2) {
-                        dictSet.add(clean);
+                        targetSet.add(clean);
+                        combinedSet.add(clean);
                     }
                 }
             }
         } catch(e) {
-            console.warn("Dictionary fetch warning for", file, ":", e);
+            console.warn("Dictionary fetch warning for", filename, ":", e);
         }
-    }
+    };
 
-    window.aiTrainingState.combinedDictionarySet = dictSet;
-    window.aiTrainingState.combinedDictionaryList = Array.from(dictSet);
+    await Promise.all([
+        loadFile('parole.txt', italianSet),
+        loadFile('parole2.txt', italianSet),
+        loadFile('words.txt', englishSet)
+    ]);
+
+    window.aiTrainingState.italianDictSet = italianSet;
+    window.aiTrainingState.italianDictList = Array.from(italianSet);
+
+    window.aiTrainingState.englishDictSet = englishSet;
+    window.aiTrainingState.englishDictList = Array.from(englishSet);
+
+    window.aiTrainingState.combinedDictionarySet = combinedSet;
+    window.aiTrainingState.combinedDictionaryList = Array.from(combinedSet);
+
     window.aiTrainingState.dictionaryLoaded = true;
-    console.log("📖 Combined Radio Dictionary loaded:", window.aiTrainingState.combinedDictionaryList.length, "words!");
+    console.log("📖 Dictionaries loaded: IT =", italianSet.size, "EN =", englishSet.size, "Total =", combinedSet.size);
+
+    const savedLang = localStorage.getItem('cwgame_dict_lang') || 'it';
+    window.aiTrainingState.dictLanguage = savedLang;
+    const sel = document.getElementById('aiDictLangSelect');
+    if (sel) sel.value = savedLang;
 };
 
 window.splitAttachedWords = function(token, dictSet, dictList) {
@@ -1670,8 +1720,18 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
 window.correctTextWithFullDictionary = function(text) {
     if (!text || text.trim().length === 0) return "";
 
-    const dictSet = window.aiTrainingState.combinedDictionarySet || new Set(ITALIAN_RADIO_DICTIONARY);
-    const dictList = window.aiTrainingState.combinedDictionaryList || ITALIAN_RADIO_DICTIONARY;
+    const lang = window.aiTrainingState.dictLanguage || localStorage.getItem('cwgame_dict_lang') || 'it';
+
+    let dictSet = window.aiTrainingState.combinedDictionarySet || new Set(ITALIAN_RADIO_DICTIONARY);
+    let dictList = window.aiTrainingState.combinedDictionaryList || ITALIAN_RADIO_DICTIONARY;
+
+    if (lang === 'it' && window.aiTrainingState.italianDictSet) {
+        dictSet = window.aiTrainingState.italianDictSet;
+        dictList = window.aiTrainingState.italianDictList;
+    } else if (lang === 'en' && window.aiTrainingState.englishDictSet) {
+        dictSet = window.aiTrainingState.englishDictSet;
+        dictList = window.aiTrainingState.englishDictList;
+    }
 
     let tokens = text.trim().toUpperCase().split(/\s+/).map(t => t.replace(/[^A-Z0-9\/\-]/g, '')).filter(t => t.length > 0);
 
