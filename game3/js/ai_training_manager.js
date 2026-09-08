@@ -1526,28 +1526,6 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
 
     return [token];
 };
-                }
-            }
-        }
-    }
-
-    if (dp[len] !== null && dp[len].length > 1) {
-        return dp[len];
-    }
-
-    // Riserva: stacca prefisso valido da sinistra
-    for (let j = Math.min(len - 2, 12); j >= 3; j--) {
-        const prefix = cleanToken.substring(0, j);
-        const match = getFuzzyWord(prefix);
-        if (match) {
-            const rest = cleanToken.substring(j);
-            const restSplit = window.splitAttachedWords(rest, dictSet, list);
-            return [match, ...restSplit];
-        }
-    }
-
-    return [token];
-};
 
 window.correctTextWithFullDictionary = function(text) {
     if (!text || text.trim().length === 0) return "";
