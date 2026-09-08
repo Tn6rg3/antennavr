@@ -1352,10 +1352,16 @@ window.runInferenceOnSegment = async function() {
 
         if (aiBox) aiBox.value = finalOutput || "NESSUN SEGNALE DETETTATO";
 
-        // Ricostruzione da dizionario
-        const reconstructedText = finalOutput ? window.correctTextWithRadioDictionary(finalOutput) : "";
+        if (finalOutput) {
+            if (typeof window.loadRadioDictionaries === 'function' && !window.aiTrainingState.dictionaryLoaded) {
+                await window.loadRadioDictionaries();
+            }
+        }
+
+        // Ricostruzione da dizionario esteso (parole.txt, parole2.txt, words.txt)
+        const reconstructedText = finalOutput ? window.correctTextWithFullDictionary(finalOutput) : "";
         const dictBox = document.getElementById('aiDictionaryCorrectedText');
-        if (dictBox) dictBox.value = reconstructedText;
+        if (dictBox) dictBox.value = reconstructedText || "NESSUN TESTO RICOSTRUITO";
 
     } catch (e) {
         console.error("AI Analysis Error:", e);
@@ -1363,38 +1369,93 @@ window.runInferenceOnSegment = async function() {
     }
 };
 
-window.correctTextWithRadioDictionary = function(text) {
+window.loadRadioDictionaries = async function() {
+    if (window.aiTrainingState.dictionaryLoaded) return;
+
+    console.log("📖 Loading radio dictionaries (parole.txt, parole2.txt, words.txt)...");
+    const dictSet = new Set(ITALIAN_RADIO_DICTIONARY);
+
+    const files = ['parole.txt', 'parole2.txt', 'words.txt'];
+    for (let file of files) {
+        try {
+            const resp = await fetch(file);
+            if (resp.ok) {
+                const text = await resp.text();
+                const words = text.split(/[\r\n,\s]+/);
+                for (let w of words) {
+                    const clean = w.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    if (clean.length >= 2) {
+                        dictSet.add(clean);
+                    }
+                }
+            }
+        } catch(e) {
+            console.warn("Dictionary fetch warning for", file, ":", e);
+        }
+    }
+
+    window.aiTrainingState.combinedDictionarySet = dictSet;
+    window.aiTrainingState.combinedDictionaryList = Array.from(dictSet);
+    window.aiTrainingState.dictionaryLoaded = true;
+    console.log("📖 Combined Radio Dictionary loaded:", window.aiTrainingState.combinedDictionaryList.length, "words!");
+};
+
+window.correctTextWithFullDictionary = function(text) {
     if (!text || text.trim().length === 0) return "";
+
+    const dictSet = window.aiTrainingState.combinedDictionarySet || new Set(ITALIAN_RADIO_DICTIONARY);
+    const dictList = window.aiTrainingState.combinedDictionaryList || ITALIAN_RADIO_DICTIONARY;
+
     const words = text.trim().toUpperCase().split(/\s+/);
     const correctedWords = words.map(word => {
-        if (word.length <= 1) return word;
-        if (/^[I|W|K|F|G|D|EA|HB|ON|OE|M]\d[A-Z0-9]{2,5}$/.test(word) || /^\d+$/.test(word)) return word;
-        if (ITALIAN_RADIO_DICTIONARY.includes(word)) return word;
+        const cleanWord = word.replace(/[^A-Z0-9\/\-]/g, '');
+        if (cleanWord.length <= 1) return word;
+
+        // Mantiene intatti nominativi radioamatoriali (es. IZ1XXX, K1ABC) e numeri
+        if (/^[A-Z0-9]{3,7}$/.test(cleanWord) && /\d/.test(cleanWord)) return word;
+        if (/^\d+$/.test(cleanWord)) return word;
+
+        // Mantiene intatta la parola se e gia presente nel dizionario
+        if (dictSet.has(cleanWord)) return word;
 
         let bestMatch = word;
         let minDistance = Infinity;
 
-        for (let dictWord of ITALIAN_RADIO_DICTIONARY) {
-            if (Math.abs(dictWord.length - word.length) <= 2) {
-                const dist = (typeof window.getLevenshteinDistance === 'function') ? window.getLevenshteinDistance(word, dictWord) : Math.abs(word.length - dictWord.length);
-                const maxDistThreshold = word.length <= 4 ? 1 : 2;
+        const wordLen = cleanWord.length;
+        const maxDistThreshold = wordLen <= 4 ? 1 : (wordLen <= 8 ? 2 : 3);
+
+        for (let i = 0; i < dictList.length; i++) {
+            const dictWord = dictList[i];
+            const dLen = dictWord.length;
+
+            if (Math.abs(dLen - wordLen) <= maxDistThreshold) {
+                const dist = (typeof window.getLevenshteinDistance === 'function')
+                    ? window.getLevenshteinDistance(cleanWord, dictWord)
+                    : Math.abs(cleanWord.length - dictWord.length);
+
                 if (dist < minDistance && dist <= maxDistThreshold) {
                     minDistance = dist;
                     bestMatch = dictWord;
+                    if (dist === 1) break;
                 }
             }
         }
         return bestMatch;
     });
+
     return correctedWords.join(" ");
+};
+
+window.correctTextWithRadioDictionary = function(text) {
+    return window.correctTextWithFullDictionary(text);
 };
 
 window.applyAiDictionaryCorrection = function() {
     const dictBox = document.getElementById('aiDictionaryCorrectedText');
     const userBox = document.getElementById('aiUserCorrectionText');
-    if (dictBox && userBox && dictBox.value) {
+    if (dictBox && userBox && dictBox.value && dictBox.value !== "NESSUN TESTO RICOSTRUITO") {
         userBox.value = dictBox.value;
-        showToast("✨ Applicata correzione da dizionario!");
+        if (typeof showToast === 'function') showToast("✨ Applicato suggerimento dal dizionario esteso!");
     }
 };
 
