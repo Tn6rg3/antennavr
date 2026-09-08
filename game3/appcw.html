@@ -1973,74 +1973,52 @@ s            </div>
 
             <!-- MASTER AUDIO SPECTRUM TIMELINE & WORKSTATION A-B -->
             <div class="box-panel" style="padding:10px; border-color:#00bcd4; background:#080d12; margin-bottom:8px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
                     <b style="color:#00bcd4; font-size:0.85em;">🎧 Spettro Audio Traccia & Selettore Loop A-B:</b>
-                    <div style="display:flex; gap:4px;">
+                    <div style="display:flex; gap:4px; align-items:center;">
                         <button class="action-btn-small btn-secondary" style="padding:2px 8px; font-size:0.75em;" onclick="window.zoomAiAudioTimeline(1.5)">🔍 +</button>
                         <button class="action-btn-small btn-secondary" style="padding:2px 8px; font-size:0.75em;" onclick="window.zoomAiAudioTimeline(0.67)">🔍 -</button>
-                        <button class="action-btn-small btn-primary" style="padding:2px 8px; font-size:0.75em;" onclick="window.resetAiAudioZoom()">🔄 Adatta</button>
+                        <button class="action-btn-small btn-primary" style="padding:2px 10px; font-size:0.75em; font-weight:bold; background:#00bcd4; border-color:#00e5ff;" onclick="window.zoomToFitLoop()" title="Ingrandisce il loop A-B a tutto lo spettro">🔄 Adatta Loop</button>
+                        <button class="action-btn-small btn-secondary" style="padding:2px 8px; font-size:0.75em;" onclick="window.resetAiAudioZoom()" title="Ripristina la vista della traccia intera">🌐 Traccia Intera</button>
                     </div>
                 </div>
 
                 <!-- Master Timeline Canvas con supporto per Trascinamento A, B e Loop Centrale -->
-                <div style="width:100%; height:110px; background:#030508; border-radius:6px; border:1px solid #1e293b; overflow:hidden; position:relative;">
-                    <canvas id="aiMasterTimelineCanvas" width="800" height="110" style="width:100%; height:100%; display:block; cursor:crosshair;"></canvas>
+                <div style="width:100%; height:130px; background:#030508; border-radius:6px; border:1px solid #1e293b; overflow:hidden; position:relative;">
+                    <canvas id="aiMasterTimelineCanvas" width="1000" height="130" style="width:100%; height:100%; display:block; cursor:crosshair;"></canvas>
                 </div>
 
-                <!-- Indicatori e controlli del Loop A-B -->
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:0.75em; color:var(--text-color);">
+                <!-- Indicatori di stato A-B e Posizione -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:0.75em; color:var(--text-color); flex-wrap:wrap; gap:6px;">
                     <div>
                         <span>📍 A: <strong id="markerADisplay" style="color:#00ff66;">00:00.0</strong></span> |
                         <span>📍 B: <strong id="markerBDisplay" style="color:#ff9800;">00:00.0</strong></span> |
                         <span>⏱️ Loop: <strong id="markerDurationDisplay" style="color:#00bcd4;">0.0s</strong></span>
                     </div>
-                    <div style="display:flex; gap:4px;">
-                        <button class="action-btn-small btn-secondary" style="padding:3px 8px; font-size:0.75em;" onclick="window.setMarkerAFromCurrent()">📍 Imposta A</button>
-                        <button class="action-btn-small btn-secondary" style="padding:3px 8px; font-size:0.75em;" onclick="window.setMarkerBFromCurrent()">📍 Imposta B</button>
-                        <button class="action-btn-small btn-success" style="padding:3px 10px; font-size:0.75em; font-weight:bold;" onclick="window.playRegionAB()">▶️ Ascolta A-B</button>
+                    <div style="display:flex; gap:4px; align-items:center;">
+                        <button class="action-btn-small btn-secondary" style="padding:3px 8px; font-size:0.75em;" onclick="window.setMarkerAFromCurrent()">📍 Imposta A qui</button>
+                        <button class="action-btn-small btn-secondary" style="padding:3px 8px; font-size:0.75em;" onclick="window.setMarkerBFromCurrent()">📍 Imposta B qui</button>
+                        <label style="font-size:0.8em; color:#ff9800; margin-left:6px;">
+                            🐌 Velocità:
+                            <select id="aiPlaybackRateSelect" onchange="window.changeAiPlaybackRate()" style="padding:2px 4px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid #ff9800; border-radius:4px;">
+                                <option value="0.5">0.5x</option>
+                                <option value="0.75">0.75x</option>
+                                <option value="1.0" selected>1.0x</option>
+                                <option value="1.25">1.25x</option>
+                            </select>
+                        </label>
                     </div>
                 </div>
-            </div>
 
-            <!-- ESTRATTORE FINESTRA AUDIO -->
-            <div class="box-panel" style="padding:10px; margin-bottom:8px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;">
-                    <label style="font-size:0.8em; color:var(--link-color);">
-                        ⏱️ Durata:
-                        <select id="aiWindowDurationSelect" onchange="window.changeAiWindowDuration()" style="padding:2px 6px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid var(--link-color); border-radius:4px;">
-                            <option value="20" selected>20s</option>
-                            <option value="30">30s</option>
-                            <option value="45">45s</option>
-                            <option value="60">60s (1m)</option>
-                        </select>
-                    </label>
-                    <label style="font-size:0.8em; color:#ff9800;">
-                        🐌 Velocità:
-                        <select id="aiPlaybackRateSelect" onchange="window.changeAiPlaybackRate()" style="padding:2px 6px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid #ff9800; border-radius:4px;">
-                            <option value="0.5">0.5x (Lento)</option>
-                            <option value="0.75">0.75x</option>
-                            <option value="1.0" selected>1.0x (Normale)</option>
-                            <option value="1.25">1.25x</option>
-                        </select>
-                    </label>
-                </div>
-
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:8px;">
-                    <button id="btnAiPrevSegment" onclick="window.prevAiSegment()" class="action-btn-small btn-secondary" style="flex:1; padding:8px;">◄◄ -20s</button>
-                    <button id="btnAiPlaySegment" onclick="window.playCurrentAiSegment()" class="action-btn-small btn-success" style="flex:1.5; padding:8px; font-weight:bold;">▶️ Riproduci (20s)</button>
+                <!-- Controlli Riproduzione ed Esplorazione Traccia -->
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-top:8px;">
+                    <button id="btnAiPrevSegment" onclick="window.prevAiSegment()" class="action-btn-small btn-secondary" style="flex:1; padding:8px;">◄◄ -Loop</button>
+                    <button id="btnAiPlaySegment" onclick="window.playRegionAB()" class="action-btn-small btn-success" style="flex:1.8; padding:8px; font-weight:bold;">▶️ Ascolta Loop A-B</button>
                     <button id="btnAiStopSegment" onclick="window.stopCurrentAiAudio()" class="action-btn-small btn-danger" style="flex:1; padding:8px; font-weight:bold; background:#d32f2f;">⏹️ Stop</button>
-                    <button id="btnAiNextSegment" onclick="window.nextAiSegment()" class="action-btn-small btn-secondary" style="flex:1; padding:8px;">+20s ►►</button>
+                    <button id="btnAiNextSegment" onclick="window.nextAiSegment()" class="action-btn-small btn-secondary" style="flex:1; padding:8px;">+Loop ►►</button>
                 </div>
 
-                <div style="text-align:center; font-size:0.8em; color:var(--link-color); margin-bottom:6px;">
-                    Posizione: <b id="aiTimePosDisplay">00:00 - 00:20</b>
-                </div>
-                <div id="aiAudioLoadStatus" style="font-size:0.75em; text-align:center; margin-bottom:6px;"></div>
-
-                <!-- WAVEFORM CANVAS -->
-                <div style="width:100%; height:70px; background:#0a0f14; border-radius:6px; overflow:hidden;">
-                    <canvas id="aiSegmentCanvas" width="400" height="70" style="width:100%; height:100%; display:block;"></canvas>
-                </div>
+                <div id="aiAudioLoadStatus" style="font-size:0.75em; text-align:center; margin-top:6px;"></div>
                 <!-- AUDIO PLAYER HTML5 DI PRECISIONE -->
                 <audio id="aiAudioHtmlEl" preload="auto" style="display:none;"></audio>
             </div>
