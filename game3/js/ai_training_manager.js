@@ -1400,14 +1400,118 @@ window.loadRadioDictionaries = async function() {
     console.log("📖 Combined Radio Dictionary loaded:", window.aiTrainingState.combinedDictionaryList.length, "words!");
 };
 
+window.splitAttachedWords = function(token, dictSet) {
+    if (!token || token.length < 5) return [token];
+
+    const cleanToken = token.replace(/[^A-Z0-9]/g, '');
+
+    // Mantiene intatti nominativi e numeri
+    if (/^[A-Z0-9]{3,7}$/.test(cleanToken) && /\d/.test(cleanToken)) return [token];
+    if (/^\d+$/.test(cleanToken)) return [token];
+
+    // Se e gia una parola intera valida nel dizionario
+    if (dictSet.has(cleanToken)) return [token];
+
+    const len = cleanToken.length;
+    const dp = new Array(len + 1).fill(null);
+    dp[0] = [];
+
+    // Programmazione Dinamica per trovare la sequenza di parole del dizionario
+    for (let i = 0; i < len; i++) {
+        if (dp[i] === null) continue;
+
+        for (let j = i + 2; j <= Math.min(len, i + 18); j++) {
+            const sub = cleanToken.substring(i, j);
+            if (dictSet.has(sub)) {
+                if (dp[j] === null || dp[i].length + 1 < dp[j].length) {
+                    dp[j] = [...dp[i], sub];
+                }
+            }
+        }
+    }
+
+    if (dp[len] !== null && dp[len].length > 1) {
+        return dp[len];
+    }
+
+    // Algoritmo di riserva per staccare parole note da sinistra
+    for (let j = Math.min(len - 2, 14); j >= 3; j--) {
+        const prefix = cleanToken.substring(0, j);
+        if (dictSet.has(prefix)) {
+            const rest = cleanToken.substring(j);
+            const restSplit = window.splitAttachedWords(rest, dictSet);
+            return [prefix, ...restSplit];
+        }
+    }
+
+    return [token];
+};
+
 window.correctTextWithFullDictionary = function(text) {
     if (!text || text.trim().length === 0) return "";
 
     const dictSet = window.aiTrainingState.combinedDictionarySet || new Set(ITALIAN_RADIO_DICTIONARY);
     const dictList = window.aiTrainingState.combinedDictionaryList || ITALIAN_RADIO_DICTIONARY;
 
-    const words = text.trim().toUpperCase().split(/\s+/);
-    const correctedWords = words.map(word => {
+    let tokens = text.trim().toUpperCase().split(/\s+/);
+
+    // =========================================================================
+    // FASE 1: UNIONE PAROLE E FRAMMENTI FRANTUMATI (Word Merging)
+    // es. "A N TEN NA" -> "ANTENNA", "C A M B I O" -> "CAMBIO"
+    // =========================================================================
+    let mergedTokens = [];
+    let i = 0;
+    while (i < tokens.length) {
+        let currToken = tokens[i].replace(/[^A-Z0-9]/g, '');
+
+        if (currToken.length <= 4) {
+            let combined = currToken;
+            let bestJ = -1;
+
+            for (let j = i + 1; j < Math.min(tokens.length, i + 5); j++) {
+                const nextPart = tokens[j].replace(/[^A-Z0-9]/g, '');
+                combined += nextPart;
+
+                if (combined.length >= 3 && dictSet.has(combined)) {
+                    bestJ = j;
+                }
+            }
+
+            if (bestJ !== -1) {
+                let mergedWord = "";
+                for (let k = i; k <= bestJ; k++) {
+                    mergedWord += tokens[k].replace(/[^A-Z0-9]/g, '');
+                }
+                mergedTokens.push(mergedWord);
+                i = bestJ + 1;
+                continue;
+            }
+        }
+
+        mergedTokens.push(tokens[i]);
+        i++;
+    }
+
+    // =========================================================================
+    // FASE 2: SEPARAZIONE PAROLE ATTACCATE SENZA SPAZI (Word Segmentation)
+    // es. "QUESTAANTENNA" -> "QUESTA", "ANTENNA"
+    // =========================================================================
+    let segmentedWords = [];
+    for (let token of mergedTokens) {
+        const clean = token.replace(/[^A-Z0-9\/\-]/g, '');
+        if (clean.length >= 5 && !dictSet.has(clean) && !(/^[A-Z0-9]{3,7}$/.test(clean) && /\d/.test(clean))) {
+            const splits = window.splitAttachedWords(clean, dictSet);
+            segmentedWords.push(...splits);
+        } else {
+            segmentedWords.push(token);
+        }
+    }
+
+    // =========================================================================
+    // FASE 3: CORREZIONE REFUSI LETTERA PER LETTERA (Levenshtein Fuzzy Correction)
+    // es. "VNCHE" -> "ANCHE", "MNTENNA" -> "ANTENNA"
+    // =========================================================================
+    const correctedWords = segmentedWords.map(word => {
         const cleanWord = word.replace(/[^A-Z0-9\/\-]/g, '');
         if (cleanWord.length <= 1) return word;
 
@@ -1424,8 +1528,8 @@ window.correctTextWithFullDictionary = function(text) {
         const wordLen = cleanWord.length;
         const maxDistThreshold = wordLen <= 4 ? 1 : (wordLen <= 8 ? 2 : 3);
 
-        for (let i = 0; i < dictList.length; i++) {
-            const dictWord = dictList[i];
+        for (let idx = 0; idx < dictList.length; idx++) {
+            const dictWord = dictList[idx];
             const dLen = dictWord.length;
 
             if (Math.abs(dLen - wordLen) <= maxDistThreshold) {
