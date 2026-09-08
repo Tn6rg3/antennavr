@@ -1545,17 +1545,6 @@ window.correctTextWithFullDictionary = function(text) {
 
     return finalWords.join(" ");
 };
-                    minDistance = dist;
-                    bestMatch = dictWord;
-                    if (dist === 1) break;
-                }
-            }
-        }
-        return bestMatch;
-    });
-
-    return correctedWords.join(" ");
-};
 
 window.cleanAndInterpretMorseText = function(text) {
     if (!text || text.trim().length === 0) return "";
