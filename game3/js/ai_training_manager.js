@@ -1280,26 +1280,59 @@ window.runInferenceOnSegment = async function() {
                 const inputTensor = new ort.Tensor('float32', specData, [1, 1, 64, timeSteps]);
                 const results = await window.aiTrainingState.ortSession.run({ spectrogram: inputTensor });
 
-                // CTC greedy decode
+                // CTC greedy decode con analisi dinamica delle dimensioni del tensore ONNX [batch, time_steps, classes]
                 const probsData = results.log_probs.data;
                 const dims = results.log_probs.dims;
-                let lastIdx = -1;
-                for (let t = 0; t < dims[0]; t++) {
-                    let maxVal = -Infinity, maxIdx = 0;
-                    for (let c = 0; c < (dims[2] || AI_VOCAB.length); c++) {
-                        const val = probsData[t * (dims[2] || AI_VOCAB.length) + c];
-                        if (val > maxVal) { maxVal = val; maxIdx = c; }
+
+                let T = 0, C = AI_VOCAB.length;
+                let isBatchFirst = true;
+
+                if (dims && dims.length === 3) {
+                    if (dims[0] === 1) {
+                        // Shape: [1, T, C] (Batch first)
+                        T = dims[1];
+                        C = dims[2];
+                        isBatchFirst = true;
+                    } else {
+                        // Shape: [T, 1, C] (Time first)
+                        T = dims[0];
+                        C = dims[2];
+                        isBatchFirst = false;
                     }
+                } else if (dims && dims.length === 2) {
+                    // Shape: [T, C]
+                    T = dims[0];
+                    C = dims[1];
+                }
+
+                console.log(`🤖 CTC Decoding: T=${T} time steps, C=${C} classes, dims=[${dims ? dims.join(',') : 'unknown'}]`);
+
+                let lastIdx = -1;
+                for (let t = 0; t < T; t++) {
+                    let maxVal = -Infinity, maxIdx = 0;
+                    const baseOffset = isBatchFirst ? (t * C) : (t * 1 * C);
+                    for (let c = 0; c < C; c++) {
+                        const val = probsData[baseOffset + c];
+                        if (val > maxVal) {
+                            maxVal = val;
+                            maxIdx = c;
+                        }
+                    }
+
                     if (maxIdx !== 0 && maxIdx !== lastIdx) {
                         const char = AI_VOCAB[maxIdx] || '';
-                        // Consente unicamente lettere, numeri, prosegni e punteggiatura radio valida (escludendo '*')
-                        if (/[A-Z0-9\/\-\.a-z]/.test(char) || char === ' ' || char.startsWith('<')) {
-                            aiResult += char;
+                        if (char !== '<BLANK>' && char !== '') {
+                            if (char.startsWith('<') && char.endsWith('>')) {
+                                // Prosegni radio ufficiali (es. <AR>, <BT>, <SK>, <KN>)
+                                aiResult += ' ' + char + ' ';
+                            } else if (/[A-Z0-9\/\-\.=\?a-z]/.test(char) || char === ' ') {
+                                aiResult += char;
+                            }
                         }
                     }
                     lastIdx = maxIdx;
                 }
-                aiResult = aiResult.trim();
+                aiResult = aiResult.replace(/\s+/g, ' ').trim();
             } catch (err) {
                 console.warn("ONNX Inference fallback:", err);
             }
