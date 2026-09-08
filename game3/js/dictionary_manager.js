@@ -38,18 +38,38 @@ window.updateDictionary = function() {
 };
 
 window.getDailyWords = function(num) {
-    let todayStr = new Date().toISOString().split('T')[0];
-    let seed = parseInt(todayStr.replace(/-/g, ''));
-    let prng = mulberry32(seed);
-    let dict = [...window.masterDictionary];
-    for (let i = dict.length - 1; i > 0; i--) {
-        const j = Math.floor(prng() * (i + 1));
-        [dict[i], dict[j]] = [dict[j], dict[i]];
+    // 1. Data locale formattata YYYYMMDD per garantire che tutti gli utenti nello stesso giorno abbiano lo stesso seed
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const seed = parseInt(`${year}${month}${day}`);
+
+    const prng = mulberry32(seed);
+
+    // 2. Base Dizionario Fisso ed Ordinato Alfabeticamente (Indipendente dalle impostazioni lingua dell'utente)
+    let baseDict = [];
+    if (window.itDictionary && window.itDictionary.length > 0) {
+        baseDict = [...window.itDictionary];
+    } else if (typeof FALLBACK_WORDS_IT !== 'undefined' && FALLBACK_WORDS_IT.length > 0) {
+        baseDict = [...FALLBACK_WORDS_IT].map(w => w.toLowerCase());
+    } else {
+        baseDict = ["radio", "morse", "telegrafia", "antenna", "frequenza", "stazione", "segnale", "ricevitore", "trasmettitore", "manipolatore"];
     }
+
+    // Ordina alfabeticamente per garantire che l'array di partenza sia IDENTICO al 100% su tutti i client
+    baseDict.sort();
+
+    // 3. Shuffle Deterministico Fisher-Yates basato su PRNG Mulberry32
+    for (let i = baseDict.length - 1; i > 0; i--) {
+        const j = Math.floor(prng() * (i + 1));
+        [baseDict[i], baseDict[j]] = [baseDict[j], baseDict[i]];
+    }
+
     const result = [];
     while (result.length < num) {
-        for (let i = 0; i < dict.length && result.length < num; i++) {
-            result.push(dict[i].toUpperCase());
+        for (let i = 0; i < baseDict.length && result.length < num; i++) {
+            result.push(baseDict[i].toUpperCase());
         }
     }
     return result;
