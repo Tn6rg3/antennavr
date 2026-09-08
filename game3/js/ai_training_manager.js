@@ -840,10 +840,29 @@ window.zoomAiAudioTimeline = function(factor) {
     window.updateMasterTimelineDisplay();
 };
 
+window.zoomToFitLoop = function() {
+    const state = window.aiTrainingState;
+    const buf = state.currentAudioBuffer;
+    if (!buf) return;
+
+    const duration = buf.duration;
+    const markerA = state.markerA !== undefined ? state.markerA : 0;
+    const markerB = state.markerB !== undefined ? state.markerB : Math.min(duration, 10);
+    const loopSpan = Math.max(0.2, markerB - markerA);
+
+    // Imposta lo scroll offset all'inizio del loop (markerA) e la durata visibile pari a loopSpan
+    state.timelineScrollOffset = markerA;
+    state.timelineZoomFactor = duration / loopSpan;
+
+    window.updateMasterTimelineDisplay();
+    if (typeof showToast === 'function') showToast("🔍 Loop A-B ingrandito a tutto lo spettro!");
+};
+
 window.resetAiAudioZoom = function() {
     window.aiTrainingState.timelineZoomFactor = 1.0;
     window.aiTrainingState.timelineScrollOffset = 0.0;
     window.updateMasterTimelineDisplay();
+    if (typeof showToast === 'function') showToast("🌐 Vista traccia intera ripristinata.");
 };
 
 window.setMarkerAFromCurrent = function() {
@@ -891,13 +910,42 @@ window.playRegionAB = function() {
 window.prevAiSegment = function() {
     const buf = window.aiTrainingState.currentAudioBuffer;
     if (!buf) return;
-    const winLen = window.aiTrainingState.currentWindowDuration;
-    window.aiTrainingState.currentWindowStart = Math.max(0, window.aiTrainingState.currentWindowStart - winLen);
-    window.updateAiSegmentDisplay();
+    const mA = window.aiTrainingState.markerA || 0;
+    const mB = window.aiTrainingState.markerB || 10;
+    const span = Math.max(0.5, mB - mA);
+
+    window.aiTrainingState.markerA = Math.max(0, mA - span);
+    window.aiTrainingState.markerB = window.aiTrainingState.markerA + span;
+    window.aiTrainingState.currentWindowStart = window.aiTrainingState.markerA;
+
+    window.updateMasterTimelineDisplay();
+    window.playRegionAB();
 };
 
 window.nextAiSegment = function() {
     const buf = window.aiTrainingState.currentAudioBuffer;
+    if (!buf) return;
+    const mA = window.aiTrainingState.markerA || 0;
+    const mB = window.aiTrainingState.markerB || 10;
+    const span = Math.max(0.5, mB - mA);
+
+    if (mA + span < buf.duration) {
+        window.aiTrainingState.markerA = Math.min(buf.duration - span, mA + span);
+        window.aiTrainingState.markerB = window.aiTrainingState.markerA + span;
+        window.aiTrainingState.currentWindowStart = window.aiTrainingState.markerA;
+    }
+
+    window.updateMasterTimelineDisplay();
+    window.playRegionAB();
+};
+
+window.drawAiPlaceholderCanvas = function() {
+    window.updateMasterTimelineDisplay();
+};
+
+window.drawAiSegmentWaveform = function() {
+    window.updateMasterTimelineDisplay();
+};
     if (!buf) return;
     const winLen = window.aiTrainingState.currentWindowDuration;
     if (window.aiTrainingState.currentWindowStart + winLen < buf.duration) {
