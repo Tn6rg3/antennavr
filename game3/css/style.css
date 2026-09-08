@@ -47,6 +47,20 @@ html, body {
     -webkit-overflow-scrolling: touch;
 }
 
+/* SCHERMATA ADDESTRA IA: Espansione a Schermo Intero per Browser Desktop / Telegram Web */
+#aiTrainingScreen {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding-left: 15px !important;
+    padding-right: 15px !important;
+}
+
+#aiTrainingScreen .screen-content {
+    max-width: 1200px !important;
+    margin: 0 auto;
+    width: 100%;
+}
+
 .active-screen { display: flex !important; }
 
 /* Contenitore scorrevole per il contenuto centrale */
