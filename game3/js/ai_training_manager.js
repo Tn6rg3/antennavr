@@ -48,119 +48,6 @@ const ITALIAN_RADIO_DICTIONARY = [
     "RADIO", "STAZIONE", "ASCOLTO", "PROVA", "SOPRATTUTTO", "TUTTO", "PRESTO", "PROPAGAZIONE"
 ];
 
-// ==========================================
-// 🚀 INIZIO MODULO EXTRA: Mel Spectrogram JS
-// Risolve il problema del tensore di input IA
-// ==========================================
-const AudioFeatures = {
-    hzToMel: (hz) => 2595 * Math.log10(1 + hz / 700),
-    melToHz: (mel) => 700 * (Math.pow(10, mel / 2595) - 1),
-    
-    // Algoritmo FFT in-place standard (Cooley-Tukey)
-    fft: function (re, im) {
-        const N = re.length;
-        let j = 0;
-        for (let i = 1; i < N - 1; i++) {
-            let n1 = N / 2;
-            while (j >= n1) { j -= n1; n1 /= 2; }
-            j += n1;
-            if (i < j) {
-                let t = re[i]; re[i] = re[j]; re[j] = t;
-                t = im[i]; im[i] = im[j]; im[j] = t;
-            }
-        }
-        for (let i = 0; i < Math.log2(N); i++) {
-            let n1 = 1 << i;
-            let n2 = n1 << 1;
-            let a = 0;
-            for (let j = 0; j < n1; j++) {
-                let c = Math.cos(a), s = -Math.sin(a);
-                a += Math.PI / n1;
-                for (let k = j; k < N; k += n2) {
-                    let t1 = c * re[k + n1] - s * im[k + n1];
-                    let t2 = s * re[k + n1] + c * im[k + n1];
-                    re[k + n1] = re[k] - t1;
-                    im[k + n1] = im[k] - t2;
-                    re[k] += t1;
-                    im[k] += t2;
-                }
-            }
-        }
-    },
-
-    getMelFilterbank: function(sr, n_fft, n_mels) {
-        const fmin = 0;
-        const fmax = sr / 2;
-        const melMin = this.hzToMel(fmin);
-        const melMax = this.hzToMel(fmax);
-        
-        const melPoints = new Float32Array(n_mels + 2);
-        for(let i = 0; i < n_mels + 2; i++) {
-            melPoints[i] = this.melToHz(melMin + i * (melMax - melMin) / (n_mels + 1));
-        }
-        
-        const binPoints = Array.from(melPoints).map(f => Math.floor((n_fft + 1) * f / sr));
-        const filters = [];
-        
-        for(let m = 1; m <= n_mels; m++) {
-            let filter = new Float32Array((n_fft / 2) + 1);
-            for(let k = binPoints[m - 1]; k < binPoints[m]; k++) {
-                filter[k] = (k - binPoints[m - 1]) / (binPoints[m] - binPoints[m - 1]);
-            }
-            for(let k = binPoints[m]; k < binPoints[m + 1]; k++) {
-                filter[k] = (binPoints[m + 1] - k) / (binPoints[m + 1] - binPoints[m]);
-            }
-            filters.push(filter);
-        }
-        return filters;
-    },
-
-    computeLogMelSpectrogram: function(audio16k, sr=16000, n_fft=512, hop_length=160, n_mels=64) {
-        const timeSteps = Math.floor((audio16k.length - n_fft) / hop_length) + 1;
-        if (timeSteps <= 0) return { data: new Float32Array(0), timeSteps: 0 };
-        
-        const filters = this.getMelFilterbank(sr, n_fft, n_mels);
-        const specData = new Float32Array(n_mels * timeSteps);
-        
-        // Hann window pre-computata
-        const window = new Float32Array(n_fft);
-        for(let i = 0; i < n_fft; i++) window[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (n_fft - 1)));
-
-        for (let t = 0; t < timeSteps; t++) {
-            let re = new Float32Array(n_fft);
-            let im = new Float32Array(n_fft);
-            
-            let start = t * hop_length;
-            for (let i = 0; i < n_fft; i++) {
-                re[i] = (audio16k[start + i] || 0) * window[i];
-            }
-            
-            this.fft(re, im);
-            
-            // Power spectrum
-            let powerSpec = new Float32Array((n_fft / 2) + 1);
-            for (let i = 0; i <= n_fft / 2; i++) {
-                powerSpec[i] = (re[i] * re[i] + im[i] * im[i]);
-            }
-            
-            // Applica Mel filterbank
-            for (let m = 0; m < n_mels; m++) {
-                let energy = 0;
-                for (let k = 0; k <= n_fft / 2; k++) {
-                    energy += filters[m][k] * powerSpec[k];
-                }
-                // Log (con stabilizzazione) e mappatura nel tensore piatto 1D 
-                specData[m * timeSteps + t] = Math.log(energy + 1e-6);
-            }
-        }
-        return { data: specData, timeSteps: timeSteps };
-    }
-};
-// ==========================================
-// 🚀 FINE MODULO EXTRA
-// ==========================================
-
-
 window.openStandaloneAiStudio = function() {
     const uid = window.myId || (window.tgUser ? window.tgUser.id : "");
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
@@ -188,6 +75,7 @@ window.openStandaloneAiStudio = function() {
 window.initAiTrainingModule = async function() {
     console.log("AI Training: Initializing ONNX & Audio Studio...");
 
+    // 1. Verifico se nell'URL ci sono parametri di autenticazione (es. da Telegram Web o Nuova Scheda)
     const urlParams = new URLSearchParams(window.location.search || window.location.hash.replace(/^#/, '?'));
     const urlUid = urlParams.get('uid');
     const urlToken = urlParams.get('token');
@@ -197,6 +85,7 @@ window.initAiTrainingModule = async function() {
         localStorage.setItem('cwgame_ai_auth_token', urlToken);
     }
 
+    // 2. Protezione di Sicurezza: L'autenticazione deve SEMPRE avvenire
     const isAuth = !!(window.myId || window.tgUser || window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user));
     if (!isAuth) {
         showToast("⚠️ Accesso riservato agli utenti autenticati del gioco.");
@@ -204,8 +93,10 @@ window.initAiTrainingModule = async function() {
         return;
     }
 
+    // Se si accede via ?mode=addestra_ia, si apre direttamente la schermata aiTrainingScreen
     if (urlParams.get('mode') === 'addestra_ia' || urlParams.get('screen') === 'ai_training') {
         if (typeof window.showScreen === 'function') window.showScreen('aiTrainingScreen');
+        // Nasconde il pulsante "Apri in Nuova Scheda" quando siamo già nella nuova scheda browser
         setTimeout(() => {
             const newTabBtn = document.querySelector('button[onclick="window.openStandaloneAiStudio()"]');
             if (newTabBtn && newTabBtn.parentElement) {
@@ -219,6 +110,7 @@ window.initAiTrainingModule = async function() {
     window.initLayoutCustomizer();
     await window.scanAddestraFolderModels();
 
+    // Inizializza modello ONNX selezionato dal menu se la libreria ort è presente
     if (typeof ort !== 'undefined' && !window.aiTrainingState.ortSession) {
         const selectedModel = document.getElementById('aiModelSelect')?.value || 'addestra/morse_model.onnx';
         try {
@@ -242,6 +134,7 @@ window.scanAddestraFolderModels = async function() {
 
     let foundModels = [];
 
+    // 1. Scansione dinamica via GitHub API per 'game3/addestra' e 'addestra'
     try {
         const match = window.location.href.match(/https:\/\/([^.]+)\.github\.io\/([^\/]+)/i);
         if (match) {
@@ -267,6 +160,7 @@ window.scanAddestraFolderModels = async function() {
         console.warn("GitHub API scan warning:", e);
     }
 
+    // 2. Tenta la lettura dal file di indice locale addestra/models.json se presente
     if (foundModels.length === 0) {
         try {
             const resp = await fetch('addestra/models.json');
@@ -279,6 +173,7 @@ window.scanAddestraFolderModels = async function() {
         } catch(e) {}
     }
 
+    // 3. Tenta la lettura da Firebase appConfig/addestra_models se presente
     if (foundModels.length === 0 && typeof firebase !== 'undefined' && firebase.database) {
         try {
             const snap = await firebase.database().ref('appConfig/addestra_models').once('value');
@@ -288,6 +183,7 @@ window.scanAddestraFolderModels = async function() {
         } catch(e) {}
     }
 
+    // 4. Aggiunge i modelli salvati in localStorage dall'utente
     const customStored = localStorage.getItem('cwgame_custom_onnx_models');
     if (customStored) {
         try {
@@ -298,6 +194,7 @@ window.scanAddestraFolderModels = async function() {
         } catch(e) {}
     }
 
+    // Fallback con modello di base se nessun altro e stato rilevato
     if (foundModels.length === 0) {
         foundModels = ['addestra/morse_model.onnx'];
     }
@@ -496,9 +393,11 @@ window.extractDateFromFilename = function(filename) {
     if (!filename) return "Senza Data";
     const str = String(filename).trim();
 
+    // MATCH RIGIDO 8 CIFRE: YYYYMMDD (4 cifre anno 2010-2030, 2 cifre mese 01-12, 2 cifre giorno 01-31)
     const m1 = str.match(/(?:^|[^0-9])(20[123]\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?:[^0-9]|$)/);
     if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
 
+    // MATCH YYYY-MM-DD o YYYY_MM_DD
     const m2 = str.match(/(?:^|[^0-9])(20[123]\d)[-_](0[1-9]|1[0-2])[-_](0[1-9]|[12]\d|3[01])(?:[^0-9]|$)/);
     if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
 
@@ -539,6 +438,7 @@ window.renderQsoListWithDateFilter = function(qsoList) {
     if (dateSelect) {
         dateSelect.innerHTML = `<option value="" selected>Tutte le Date (${fullList.length} QSO)</option>`;
 
+        // Sezione Filtro per Anno
         if (years.length > 0) {
             const optGrpYears = document.createElement('optgroup');
             optGrpYears.label = "─── PER ANNO ───";
@@ -551,6 +451,7 @@ window.renderQsoListWithDateFilter = function(qsoList) {
             dateSelect.appendChild(optGrpYears);
         }
 
+        // Sezione Filtro per Data Specifica
         if (dates.length > 0) {
             const optGrpDates = document.createElement('optgroup');
             optGrpDates.label = "─── PER DATA SPECIFICA ───";
@@ -566,6 +467,7 @@ window.renderQsoListWithDateFilter = function(qsoList) {
         }
     }
 
+    // DI DEFAULT MOSTRA L'INTERO ELENCO AL 100%
     qsoSelect.innerHTML = '';
     fullList.forEach((item, originalIdx) => {
         const opt = document.createElement('option');
@@ -626,6 +528,7 @@ window.filterQsoListByDate = function() {
 
 window.loadQsoListFromGameSheet = async function() {
     let cachedCount = 0;
+    // 1. CARICAMENTO ISTANTANEO DA CACHE LOCALSTORAGE (Se già presente)
     const cached = localStorage.getItem(CACHE_QSO_LIST_KEY);
     if (cached) {
         try {
@@ -674,6 +577,7 @@ window.loadQsoListFromGameSheet = async function() {
             if (data && data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
                 const liveCount = data.results.length;
 
+                // SE TROVA DIFFERENZE (Numero di file cambiato o cache assente): Riscarica e aggiorna!
                 if (liveCount !== cachedCount) {
                     console.log(`🔄 Trovate ${liveCount} registrazioni sul server (Cache ne aveva ${cachedCount}). Aggiornamento in corso...`);
                     localStorage.setItem(CACHE_QSO_LIST_KEY, JSON.stringify(data.results));
@@ -724,12 +628,14 @@ window.loadSelectedAiQSO = async function() {
     if (userBox && window.aiTrainingState.editingPairIndex < 0) userBox.value = '';
     if (aiBox && window.aiTrainingState.editingPairIndex < 0) aiBox.value = 'Premi "Esegui Analisi IA" per decodificare...';
 
+    // Preparazione dello streaming HTML5 temporizzato
     const audioEl = document.getElementById('aiAudioHtmlEl');
     if (audioEl) {
         audioEl.src = driveUrl;
         audioEl.load();
     }
 
+    // SCARICAMENTO DIRETTO ED ESCLUSIVO VIA PROXY GOOGLE APPS SCRIPT (Senza blocchi CORS / 403)
     const activeUrl = window.aiActiveAddestraUrl || (await window.fetchAddestraUrlFromFirebase());
     const proxyCandidateUrls = [
         ...(window.aiAllFirebaseUrls || []),
@@ -788,6 +694,7 @@ window.loadSelectedAiQSO = async function() {
         }
     }
 
+    // 2. TENTATIVO DI DOWNLOAD DIRETTO PER WEBAUDIO SE IL PROXY NON HA RESTITUITO BASE64
     if (!window.aiTrainingState.currentAudioBuffer && fileId) {
         try {
             const directUrl = `https://docs.google.com/uc?export=download&id=${fileId}`;
@@ -904,6 +811,7 @@ window.updateAiSegmentDisplay = function() {
     window.drawAiSegmentWaveform();
     window.updateMasterTimelineDisplay();
 
+    // ANALISI IA AUTOMATICA AL CAMBIO DI SEGMENTO
     if (window.aiTrainingState.autoInferenceTimeout) clearTimeout(window.aiTrainingState.autoInferenceTimeout);
     window.aiTrainingState.autoInferenceTimeout = setTimeout(() => {
         if (typeof window.runInferenceOnSegment === 'function') {
@@ -912,6 +820,7 @@ window.updateAiSegmentDisplay = function() {
     }, 250);
 };
 
+// MASTER TIMELINE CANVAS INTERACTION & DRAGGING (Handles A, B e Loop Centrale)
 window.initMasterTimelineCanvas = function() {
     const canvas = document.getElementById('aiMasterTimelineCanvas');
     if (!canvas || canvas.dataset.timelineBound) return;
@@ -949,6 +858,7 @@ window.initMasterTimelineCanvas = function() {
             window.aiTrainingState.dragStartMarkerA = markerA;
             window.aiTrainingState.dragStartMarkerB = markerB;
         } else {
+            // Clic all'esterno: centra il loop sulla nuova posizione
             const span = Math.max(0.5, markerB - markerA);
             window.aiTrainingState.markerA = Math.max(0, Math.min(duration - span, clickTime - (span / 2)));
             window.aiTrainingState.markerB = Math.min(duration, window.aiTrainingState.markerA + span);
@@ -996,6 +906,7 @@ window.initMasterTimelineCanvas = function() {
     canvas.addEventListener('mouseup', handlePointerUp);
     canvas.addEventListener('mouseleave', handlePointerUp);
 
+    // Supporto Zoom con rotellina del mouse (Mouse Wheel Zoom)
     canvas.addEventListener('wheel', (e) => {
         if (!window.aiTrainingState.currentAudioBuffer) return;
         e.preventDefault();
@@ -1051,6 +962,7 @@ window.updateMasterTimelineDisplay = function() {
     const endIdx = Math.min(data.length, Math.floor((scroll + visibleDuration) * sr));
     const step = Math.max(1, Math.ceil((endIdx - startIdx) / width));
 
+    // Righello Temporale
     ctx.fillStyle = '#8e9bb0';
     ctx.font = '10px Segoe UI, sans-serif';
     const intervalSec = visibleDuration > 30 ? 10 : (visibleDuration > 10 ? 5 : (visibleDuration > 3 ? 1 : 0.5));
@@ -1073,6 +985,7 @@ window.updateMasterTimelineDisplay = function() {
         ctx.fillText(formatRulerTime(t), x + 3, 12);
     }
 
+    // Forma d'onda verde
     ctx.lineWidth = 1.2;
     ctx.strokeStyle = '#00ff66';
     ctx.beginPath();
@@ -1087,6 +1000,7 @@ window.updateMasterTimelineDisplay = function() {
     }
     ctx.stroke();
 
+    // Evidenziazione Tratto A-B
     const timeToX = (t) => ((t - scroll) / visibleDuration) * width;
     const xA = timeToX(markerA);
     const xB = timeToX(markerB);
@@ -1094,9 +1008,11 @@ window.updateMasterTimelineDisplay = function() {
     ctx.fillStyle = 'rgba(0, 188, 212, 0.3)';
     ctx.fillRect(xA, 0, xB - xA, height);
 
+    // Barra centrale di trascinamento loop
     ctx.fillStyle = 'rgba(0, 229, 255, 0.7)';
     ctx.fillRect(xA, 0, xB - xA, 4);
 
+    // Linee Verticali
     ctx.strokeStyle = '#00ff66';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -1111,18 +1027,21 @@ window.updateMasterTimelineDisplay = function() {
     ctx.lineTo(xB, height);
     ctx.stroke();
 
+    // Flag A
     ctx.fillStyle = '#00ff66';
     ctx.fillRect(Math.max(0, xA - 18), 0, 36, 16);
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 10px sans-serif';
     ctx.fillText('[A 📍]', Math.max(2, xA - 14), 12);
 
+    // Flag B
     ctx.fillStyle = '#ff9800';
     ctx.fillRect(Math.min(width - 36, xB - 18), 0, 36, 16);
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 10px sans-serif';
     ctx.fillText('[B 📍]', Math.min(width - 32, xB - 14), 12);
 
+    // Aggiornamento etichette HTML
     const formatPrecise = (sec) => {
         const m = Math.floor(sec / 60);
         const s = (sec % 60).toFixed(1);
@@ -1145,6 +1064,7 @@ window.zoomAiAudioTimeline = function(factor) {
 
     const buf = state.currentAudioBuffer;
     if (buf) {
+        // Mantiene la posizione centrale del loop A-B durante lo zoom ad alta risoluzione
         const duration = buf.duration;
         const centerTime = (state.markerA !== undefined && state.markerB !== undefined)
             ? (state.markerA + state.markerB) / 2
@@ -1168,6 +1088,7 @@ window.zoomToFitLoop = function() {
     const markerB = state.markerB !== undefined ? state.markerB : Math.min(duration, 10);
     const loopSpan = Math.max(0.2, markerB - markerA);
 
+    // Imposta lo scroll offset all'inizio del loop (markerA) e la durata visibile pari a loopSpan
     state.timelineScrollOffset = markerA;
     state.timelineZoomFactor = duration / loopSpan;
 
@@ -1314,6 +1235,7 @@ window.playCurrentAiSegment = function(offsetSec = 0) {
 
     window.aiTrainingState.playheadRatio = offsetSec / winLen;
 
+    // 1. RIPRODUZIONE DI PRECISIONE VIA WEBAUDIO BUFFER
     if (buf) {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
         if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -1331,6 +1253,7 @@ window.playCurrentAiSegment = function(offsetSec = 0) {
         return;
     }
 
+    // 2. FALLBACK STREAMING HTML5 CON TIMER DI PRECISIONE TEMPORIZZATO
     const audioEl = document.getElementById('aiAudioHtmlEl');
     if (audioEl && audioEl.src) {
         if (window.aiAudioTimer) clearTimeout(window.aiAudioTimer);
@@ -1348,6 +1271,15 @@ window.playCurrentAiSegment = function(offsetSec = 0) {
     }
 };
 
+window.drawAiPlaceholderCanvas = function() {
+    window.updateMasterTimelineDisplay();
+};
+
+window.drawAiSegmentWaveform = function() {
+    window.updateMasterTimelineDisplay();
+};
+
+// Resample audio segment to 16kHz with Mono Stereo Mix-Down
 function resampleAudioBufferTo16k(audioBuffer, startTime, durationSec) {
     if (!audioBuffer) return new Float32Array(0);
 
@@ -1361,6 +1293,7 @@ function resampleAudioBufferTo16k(audioBuffer, startTime, durationSec) {
 
     if (srcLength <= 0) return new Float32Array(0);
 
+    // Unione di tutti i canali audio (Mono Mix-Down per non perdere i canali L/R)
     const monoSamples = new Float32Array(srcLength);
     for (let c = 0; c < numChannels; c++) {
         const chanData = audioBuffer.getChannelData(c);
@@ -1369,6 +1302,7 @@ function resampleAudioBufferTo16k(audioBuffer, startTime, durationSec) {
         }
     }
 
+    // Resampling Lineare Istantaneo a 16000Hz (Zero WebAudio Bugs)
     const targetLength = Math.floor(durationSec * targetSr);
     const resampled = new Float32Array(targetLength);
     const ratio = srcLength / targetLength;
@@ -1387,9 +1321,7 @@ function resampleAudioBufferTo16k(audioBuffer, startTime, durationSec) {
     return resampled;
 }
 
-// ==========================================
-// 🚀 DECODIFICA DSP MIGLIORATA (AGC Adattivo)
-// ==========================================
+// DSP Envelope Decoder
 function decodeMorseDSP(samples, sampleRate = 16000) {
     if (!samples || samples.length === 0) return "";
 
@@ -1409,6 +1341,7 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
     const numFrames = Math.floor(normSamples.length / frameSize);
     const energies = new Float32Array(numFrames);
 
+    let maxEnergy = 0.0, sumEnergy = 0.0, minEnergy = Infinity;
     for (let f = 0; f < numFrames; f++) {
         let sum = 0.0;
         const start = f * frameSize;
@@ -1416,35 +1349,22 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
             const s = normSamples[start + i] || 0;
             sum += s * s;
         }
-        energies[f] = Math.sqrt(sum / frameSize); // RMS Energy
+        const rms = Math.sqrt(sum / frameSize);
+        energies[f] = rms;
+        sumEnergy += rms;
+        if (rms > maxEnergy) maxEnergy = rms;
+        if (rms < minEnergy) minEnergy = rms;
     }
 
-    // AGC ADATTIVO: Calcolo media mobile dell'energia per mitigare il fading (QSB)
-    const windowFrames = 150; // finestra di 1.5 secondi
-    const localAvg = new Float32Array(numFrames);
-    for (let f = 0; f < numFrames; f++) {
-        let startWindow = Math.max(0, f - Math.floor(windowFrames / 2));
-        let endWindow = Math.min(numFrames, f + Math.floor(windowFrames / 2));
-        let sumAvg = 0;
-        for (let i = startWindow; i < endWindow; i++) {
-            sumAvg += energies[i];
-        }
-        localAvg[f] = sumAvg / (endWindow - startWindow);
-    }
-
-    // Soglia minima assoluta per evitare di considerare il puro fruscio come segnale
-    const sortedEnergies = Float32Array.from(energies).sort();
-    const noiseFloor = sortedEnergies[Math.floor(numFrames * 0.1)] || 0.001;
+    const avgEnergy = sumEnergy / Math.max(1, numFrames);
+    const threshold = minEnergy + (maxEnergy - minEnergy) * 0.15;
 
     const pulses = [];
-    let isTone = energies[0] > Math.max(localAvg[0] * 1.5, noiseFloor * 2.5);
+    let isTone = energies[0] > threshold;
     let count = 0;
 
     for (let f = 0; f < numFrames; f++) {
-        // La soglia si adatta costantemente, ma non scende sotto il limite del rumore di fondo
-        const adaptiveThreshold = Math.max(localAvg[f] * 1.5, noiseFloor * 2.5);
-        const active = energies[f] > adaptiveThreshold;
-        
+        const active = energies[f] > threshold;
         if (active === isTone) {
             count++;
         } else {
@@ -1510,9 +1430,6 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
     return cleanRes;
 }
 
-// ==========================================
-// 🚀 INFERENZA ONNX MIGLIORATA
-// ==========================================
 window.runInferenceOnSegment = async function() {
     const aiBox = document.getElementById('aiPredictionText');
     if (aiBox) aiBox.value = "⚡ Analisi IA in corso...";
@@ -1538,72 +1455,88 @@ window.runInferenceOnSegment = async function() {
         let aiResult = "";
         if (window.aiTrainingState.ortSession) {
             try {
-                // Utilizzo del VERO Mel Spectrogram al posto dell'onda grezza!
-                const melSpec = AudioFeatures.computeLogMelSpectrogram(audio16k, 16000, 512, 160, 64);
-                
-                if (melSpec.timeSteps > 0) {
-                    const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
-                    const results = await window.aiTrainingState.ortSession.run({ spectrogram: inputTensor });
+                // computeMelSpectrogramJS
+                const timeSteps = Math.floor(audio16k.length / 160);
+                const specData = new Float32Array(64 * timeSteps);
+                for (let t = 0; t < timeSteps; t++) {
+                    for (let m = 0; m < 64; m++) {
+                        const idx = t * 160 + m * 2;
+                        specData[m * timeSteps + t] = Math.log(Math.abs(audio16k[idx] || 0) + 1e-5);
+                    }
+                }
+                const inputTensor = new ort.Tensor('float32', specData, [1, 1, 64, timeSteps]);
+                const results = await window.aiTrainingState.ortSession.run({ spectrogram: inputTensor });
 
-                    const probsData = results.log_probs.data;
-                    const dims = results.log_probs.dims;
+                // CTC greedy decode con analisi dinamica delle dimensioni del tensore ONNX [batch, time_steps, classes]
+                const probsData = results.log_probs.data;
+                const dims = results.log_probs.dims;
 
-                    let T = 0, C = AI_VOCAB.length;
-                    let isBatchFirst = true;
+                let T = 0, C = AI_VOCAB.length;
+                let isBatchFirst = true;
 
-                    if (dims && dims.length === 3) {
-                        if (dims[0] === 1) {
-                            T = dims[1]; C = dims[2]; isBatchFirst = true;
-                        } else {
-                            T = dims[0]; C = dims[2]; isBatchFirst = false;
+                if (dims && dims.length === 3) {
+                    if (dims[0] === 1) {
+                        // Shape: [1, T, C] (Batch first)
+                        T = dims[1];
+                        C = dims[2];
+                        isBatchFirst = true;
+                    } else {
+                        // Shape: [T, 1, C] (Time first)
+                        T = dims[0];
+                        C = dims[2];
+                        isBatchFirst = false;
+                    }
+                } else if (dims && dims.length === 2) {
+                    // Shape: [T, C]
+                    T = dims[0];
+                    C = dims[1];
+                }
+
+                console.log(`🤖 CTC Decoding: T=${T} time steps, C=${C} classes, dims=[${dims ? dims.join(',') : 'unknown'}]`);
+
+                let lastIdx = -1;
+                let blankFramesCount = 0;
+
+                for (let t = 0; t < T; t++) {
+                    let maxVal = -Infinity, maxIdx = 0;
+                    const baseOffset = isBatchFirst ? (t * C) : (t * 1 * C);
+                    for (let c = 0; c < C; c++) {
+                        const val = probsData[baseOffset + c];
+                        if (val > maxVal) {
+                            maxVal = val;
+                            maxIdx = c;
                         }
-                    } else if (dims && dims.length === 2) {
-                        T = dims[0]; C = dims[1];
                     }
 
-                    let lastIdx = -1;
-                    let blankFramesCount = 0;
-
-                    for (let t = 0; t < T; t++) {
-                        let maxVal = -Infinity, maxIdx = 0;
-                        const baseOffset = isBatchFirst ? (t * C) : (t * 1 * C);
-                        for (let c = 0; c < C; c++) {
-                            const val = probsData[baseOffset + c];
-                            if (val > maxVal) {
-                                maxVal = val;
-                                maxIdx = c;
+                    if (maxIdx === 0) {
+                        // Token <BLANK> (silenzio/pausa tra i caratteri/parole)
+                        blankFramesCount++;
+                        if (blankFramesCount >= 10) {
+                            if (aiResult.length > 0 && !aiResult.endsWith(' ')) {
+                                aiResult += ' ';
                             }
                         }
-
-                        if (maxIdx === 0) {
-                            // Token <BLANK> (silenzio/pausa). Tolleranza aumentata da 2 a 15 frame! (ca. 150ms)
-                            blankFramesCount++;
-                            if (blankFramesCount >= 15) { 
+                    } else {
+                        blankFramesCount = 0;
+                        if (maxIdx !== lastIdx) {
+                            const char = AI_VOCAB[maxIdx] || '';
+                            if (char === ' ') {
                                 if (aiResult.length > 0 && !aiResult.endsWith(' ')) {
                                     aiResult += ' ';
                                 }
-                            }
-                        } else {
-                            blankFramesCount = 0;
-                            if (maxIdx !== lastIdx) {
-                                const char = AI_VOCAB[maxIdx] || '';
-                                if (char === ' ') {
-                                    if (aiResult.length > 0 && !aiResult.endsWith(' ')) {
-                                        aiResult += ' ';
-                                    }
-                                } else if (char !== '<BLANK>' && char !== '') {
-                                    if (char.startsWith('<') && char.endsWith('>')) {
-                                        aiResult += ' ' + char + ' ';
-                                    } else if (/[A-Z0-9\/\-\.=\?a-z]/.test(char)) {
-                                        aiResult += char;
-                                    }
+                            } else if (char !== '<BLANK>' && char !== '') {
+                                if (char.startsWith('<') && char.endsWith('>')) {
+                                    // Prosegni radio ufficiali (es. <AR>, <BT>, <SK>, <KN>)
+                                    aiResult += ' ' + char + ' ';
+                                } else if (/[A-Z0-9\/\-\.=\?a-z]/.test(char)) {
+                                    aiResult += char;
                                 }
                             }
                         }
-                        lastIdx = maxIdx;
                     }
-                    aiResult = aiResult.replace(/\s+/g, ' ').trim();
+                    lastIdx = maxIdx;
                 }
+                aiResult = aiResult.replace(/\s+/g, ' ').trim();
             } catch (err) {
                 console.warn("ONNX Inference fallback:", err);
             }
@@ -1614,6 +1547,7 @@ window.runInferenceOnSegment = async function() {
         let cleanText = rawText.replace(/[*():;=.,\s]+$/g, "").replace(/^[*():;=.,\s]+/g, "").trim();
         cleanText = cleanText.replace(/\*/g, "").replace(/\b\.\b/g, "").replace(/\s+/g, " ").trim();
 
+        // Se la stringa è composta unicamente da trattini e punti (es. "--.-..-----"), scarta la portante continua
         if (/^[.\-\s]+$/.test(cleanText)) {
             cleanText = "";
         }
@@ -1628,6 +1562,7 @@ window.runInferenceOnSegment = async function() {
             }
         }
 
+        // Ricostruzione ed interpretazione del senso con il dizionario esteso ed il pulitore di artefatti Morse
         const reconstructedText = finalOutput ? window.cleanAndInterpretMorseText(finalOutput) : "";
         const dictBox = document.getElementById('aiDictionaryCorrectedText');
         if (dictBox) dictBox.value = reconstructedText || "NESSUN TESTO RICOSTRUITO";
@@ -1711,11 +1646,13 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
 
     const cleanToken = token.replace(/[^A-Z0-9]/g, '');
 
+    // Mantiene intatti nominativi radioamatoriali reali (es. IZ1XXX, K1ABC)
     if (/^[A-Z0-9]{3,7}$/.test(cleanToken) && /[A-Z]/.test(cleanToken) && /\d/.test(cleanToken) && cleanToken.length <= 6) {
         return [token];
     }
     if (/^\d+$/.test(cleanToken)) return [token];
 
+    // 1. SEPARAZIONE NUMERI/CIFRE EMBEDDED DENTRO LE LETTERE (es. DOERGLI80TTORA -> DOERGLI + 80 + TTORA)
     if (/\d+/.test(cleanToken) && /[A-Z]+/.test(cleanToken)) {
         const parts = cleanToken.replace(/(\d+)/g, ' $1 ').trim().split(/\s+/);
         let subRes = [];
@@ -1731,6 +1668,7 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
         return subRes;
     }
 
+    // Se e gia una parola intera valida nel dizionario
     if (dictSet.has(cleanToken)) return [token];
 
     const len = cleanToken.length;
@@ -1758,6 +1696,7 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
     const extractedWords = [];
     let i = 0;
 
+    // Scansione ingorda (Greedy Match & Consume con tolleranza al rumore iniziale o intermedio)
     while (i < len) {
         let matchFound = false;
 
@@ -1766,14 +1705,14 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
             const matched = findMatchingWord(sub);
             if (matched) {
                 extractedWords.push(matched);
-                i = j;
+                i = j; // avanza al punto in cui e finita la parola trovata!
                 matchFound = true;
                 break;
             }
         }
 
         if (!matchFound) {
-            i++;
+            i++; // avanza di 1 carattere (scarta rumore)
         }
     }
 
@@ -1802,6 +1741,9 @@ window.correctTextWithFullDictionary = function(text) {
 
     let tokens = text.trim().toUpperCase().split(/\s+/).map(t => t.replace(/[^A-Z0-9\/\-]/g, '')).filter(t => t.length > 0);
 
+    // =========================================================================
+    // PASSO 1: UNIONE A 3 FRAMMENTI (es. "COL" + "LE" + "ZIONE" -> "COLLEZIONE")
+    // =========================================================================
     let pass1Tokens = [];
     let i = 0;
     while (i < tokens.length) {
@@ -1809,7 +1751,7 @@ window.correctTextWithFullDictionary = function(text) {
             const combined3 = tokens[i] + tokens[i + 1] + tokens[i + 2];
             if (combined3.length >= 3 && dictSet.has(combined3)) {
                 pass1Tokens.push(combined3);
-                i += 3;
+                i += 3; // salta i 3 frammenti uniti
                 continue;
             }
         }
@@ -1817,6 +1759,9 @@ window.correctTextWithFullDictionary = function(text) {
         i++;
     }
 
+    // =========================================================================
+    // PASSO 2: UNIONE A 2 FRAMMENTI (es. "RI" + "CORDO" -> "RICORDO")
+    // =========================================================================
     let pass2Tokens = [];
     let j = 0;
     while (j < pass1Tokens.length) {
@@ -1824,7 +1769,7 @@ window.correctTextWithFullDictionary = function(text) {
             const combined2 = pass1Tokens[j] + pass1Tokens[j + 1];
             if (combined2.length >= 3 && dictSet.has(combined2)) {
                 pass2Tokens.push(combined2);
-                j += 2;
+                j += 2; // salta i 2 frammenti uniti
                 continue;
             }
         }
@@ -1832,6 +1777,10 @@ window.correctTextWithFullDictionary = function(text) {
         j++;
     }
 
+    // =========================================================================
+    // SEPARAZIONE PAROLE ATTACCATE SENZA SPAZI E CON NUMERI EMBEDDED (Fuzzy Word Break)
+    // es. "DOERGLI80TTORAHOAGGIUNTOVNCHEDUE" -> "PER", "GLI", "80", "ORA", "HO", "AGGIUNTO", "ANCHE", "DUE"
+    // =========================================================================
     let segmentedTokens = [];
     for (let tok of pass2Tokens) {
         if (tok.length >= 4 && !dictSet.has(tok) && !(/^[A-Z0-9]{3,7}$/.test(tok) && /[A-Z]/.test(tok) && /\d/.test(tok))) {
@@ -1842,13 +1791,18 @@ window.correctTextWithFullDictionary = function(text) {
         }
     }
 
+    // =========================================================================
+    // PASSO 3: CORREZIONE SINGOLA (es. "TKUEL" -> "QUEL")
+    // =========================================================================
     const finalWords = segmentedTokens.map(word => {
         const cleanWord = word.replace(/[^A-Z0-9\/\-]/g, '');
         if (cleanWord.length <= 1) return word;
 
+        // Mantiene intatti nominativi radioamatoriali (es. IZ1XXX, K1ABC) e numeri
         if (/^[A-Z0-9]{3,7}$/.test(cleanWord) && /\d/.test(cleanWord)) return word;
         if (/^\d+$/.test(cleanWord)) return word;
 
+        // Mantiene intatta la parola se e gia presente nel dizionario
         if (dictSet.has(cleanWord)) return word;
 
         let bestMatch = word;
@@ -1884,10 +1838,12 @@ window.cleanAndInterpretMorseText = function(text) {
 
     let raw = text.toUpperCase();
 
+    // 1. COLLAPSE RIPETIZIONI DI LETTERE LUNGHE DA RUMORE / NOTA CONTINUA (es. EEEEEEE -> E, TTTTTTT -> T)
     raw = raw.replace(/([A-Z])\1{2,}/g, '$1');
 
     let initialTokens = raw.split(/\s+/).map(t => t.replace(/[^A-Z0-9\/\-\<\>]/g, '')).filter(t => t.length > 0);
 
+    // 2. RIASSEMBLAGGIO DELLE LETTERE SINGOLE ISOLATE SEPARATE DA SPAZI (es. "C O L A R O V A" -> "COLAROVA")
     let reassembledTokens = [];
     let singleCharBuffer = [];
 
@@ -1916,26 +1872,32 @@ window.cleanAndInterpretMorseText = function(text) {
     let cleanedTokens = [];
 
     const dictSet = window.aiTrainingState.combinedDictionarySet || new Set(ITALIAN_RADIO_DICTIONARY);
-    const validSingleChars = new Set(['A', 'E', 'I', 'O', 'U', 'R', 'K']);
+    const validSingleChars = new Set(['A', 'E', 'I', 'O', 'U', 'R', 'K']); // Vocali e comandi CW validi
 
+    // 3. FILTRAGGIO O UNIONE CONSONANTI ISOLATE SENZA SENSO (es. L, T, S, B, D, F, M, P)
     for (let i = 0; i < tokens.length; i++) {
         let tok = tokens[i];
         if (!tok) continue;
 
+        // Se e una consonante singola isolata
         if (tok.length === 1 && !validSingleChars.has(tok)) {
+            // Tenta l'unione con la parola successiva se forma una parola valida nel dizionario
             if (i + 1 < tokens.length) {
                 const nextTok = tokens[i + 1].replace(/[^A-Z0-9]/g, '');
                 const combined = tok + nextTok;
                 if (dictSet.has(combined)) {
                     tokens[i + 1] = combined;
-                    continue;
+                    continue; // Unita con successo alla parola successiva!
                 }
             }
+            // Scarta la consonante singola isolata rumorosa
             continue;
         }
+
         cleanedTokens.push(tok);
     }
 
+    // 4. ESEGUE IL PIPELINE A 3 FASI (UNIONE -> SEPARAZIONE -> CORREZIONE LEVENSHTEIN)
     const textToProcess = cleanedTokens.join(" ");
     let reconstructed = window.correctTextWithFullDictionary(textToProcess);
 
@@ -1991,6 +1953,7 @@ window.saveVerifiedAiPair = function() {
     window.persistAiSavedPairs();
     window.updateAiSavedTable();
 
+    // Sincronizza direttamente col Foglio Google nella scheda 'ADDESTRA' (NON salva file audio sul telefono!)
     window.syncPairToGoogleCloudSheet(pair);
 
     showToast("💾 Segmento salvato e sincronizzato su Foglio ADDESTRA!");
@@ -2071,6 +2034,7 @@ window.deleteAiSavedPair = function(idx) {
     showToast("Segmento rimosso.");
 };
 
+// Real-Time Microphone & Waterfall Spectrogram
 window.toggleAiMicrophone = async function() {
     const btn = document.getElementById('btnStartAiMic');
     const status = document.getElementById('aiLiveStatus');
@@ -2167,8 +2131,6 @@ window.startAiLiveDecodingStream = function() {
             alignedBuffer[i] = window.aiTrainingState.liveAudioBuffer[(window.aiTrainingState.liveBufferPos + i) % window.aiTrainingState.liveAudioBuffer.length];
         }
 
-        // 🚀 LIVE ADATTIVO! Ora sfrutta il decodeMorseDSP che contiene l'AGC (Moving Average Threshold). 
-        // L'efficacia nel riconoscere le battute reali tra rumore e fading sarà nettamente superiore.
         const dspText = decodeMorseDSP(alignedBuffer, 16000);
 
         if (dspText && dspText.length > 0) {
@@ -2200,6 +2162,7 @@ window.startAiLiveDecodingStream = function() {
     }, 1200);
 };
 
+// Auto-launch trigger se aperto via URL ?mode=addestra_ia o in una nuova scheda
 (function autoLaunchAiModuleFromUrl() {
     const checkAndLaunch = () => {
         const urlParams = new URLSearchParams(window.location.search || window.location.hash.replace(/^#/, '?'));
