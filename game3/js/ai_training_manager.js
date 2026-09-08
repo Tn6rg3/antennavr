@@ -108,6 +108,7 @@ window.initAiTrainingModule = async function() {
     window.aiTrainingState.savedPairs = [];
     window.loadAiSavedPairsFromStorage();
     window.initLayoutCustomizer();
+    await window.scanAddestraFolderModels();
 
     // Inizializza modello ONNX selezionato dal menu se la libreria ort è presente
     if (typeof ort !== 'undefined' && !window.aiTrainingState.ortSession) {
@@ -125,6 +126,96 @@ window.initAiTrainingModule = async function() {
     window.drawAiPlaceholderCanvas();
     window.loadQsoListFromGameSheet();
     window.initMasterTimelineCanvas();
+};
+
+window.scanAddestraFolderModels = async function() {
+    const select = document.getElementById('aiModelSelect');
+    if (!select) return;
+
+    let foundModels = [];
+
+    // 1. Scansione dinamica via GitHub API per 'game3/addestra' e 'addestra'
+    try {
+        const match = window.location.href.match(/https:\/\/([^.]+)\.github\.io\/([^\/]+)/i);
+        if (match) {
+            const owner = match[1];
+            const repo = match[2];
+            const pathsToScan = [`game3/addestra`, `addestra`].map(p => `https://api.github.com/repos/${owner}/${repo}/contents/${p}`);
+
+            for (let apiUrl of pathsToScan) {
+                try {
+                    console.log("🔍 Scanning GitHub repository folder for ONNX models:", apiUrl);
+                    const resp = await fetch(apiUrl);
+                    if (resp.ok) {
+                        const files = await resp.json();
+                        if (Array.isArray(files)) {
+                            files.filter(f => f.name && f.name.endsWith('.onnx'))
+                                 .forEach(f => foundModels.push(`addestra/${f.name}`));
+                        }
+                    }
+                } catch(err) {}
+            }
+        }
+    } catch(e) {
+        console.warn("GitHub API scan warning:", e);
+    }
+
+    // 2. Tenta la lettura dal file di indice locale addestra/models.json se presente
+    if (foundModels.length === 0) {
+        try {
+            const resp = await fetch('addestra/models.json');
+            if (resp.ok) {
+                const list = await resp.json();
+                if (Array.isArray(list)) {
+                    foundModels = list.map(m => m.startsWith('addestra/') ? m : `addestra/${m}`);
+                }
+            }
+        } catch(e) {}
+    }
+
+    // 3. Tenta la lettura da Firebase appConfig/addestra_models se presente
+    if (foundModels.length === 0 && typeof firebase !== 'undefined' && firebase.database) {
+        try {
+            const snap = await firebase.database().ref('appConfig/addestra_models').once('value');
+            if (snap.exists() && Array.isArray(snap.val())) {
+                foundModels = snap.val().map(m => m.startsWith('addestra/') ? m : `addestra/${m}`);
+            }
+        } catch(e) {}
+    }
+
+    // 4. Aggiunge i modelli salvati in localStorage dall'utente
+    const customStored = localStorage.getItem('cwgame_custom_onnx_models');
+    if (customStored) {
+        try {
+            const customList = JSON.parse(customStored);
+            if (Array.isArray(customList)) {
+                foundModels.push(...customList);
+            }
+        } catch(e) {}
+    }
+
+    // Fallback con modello di base se nessun altro e stato rilevato
+    if (foundModels.length === 0) {
+        foundModels = ['addestra/morse_model.onnx'];
+    }
+
+    const uniqueModels = [...new Set(foundModels)];
+    const currentVal = select.value || uniqueModels[0];
+    select.innerHTML = '';
+
+    uniqueModels.forEach(modelPath => {
+        const opt = document.createElement('option');
+        opt.value = modelPath;
+        const fileName = modelPath.split('/').pop();
+        opt.textContent = fileName + (modelPath === 'addestra/morse_model.onnx' ? ' (Standard)' : '');
+        if (modelPath === currentVal) opt.selected = true;
+        select.appendChild(opt);
+    });
+
+    const customOpt = document.createElement('option');
+    customOpt.value = '__ADD_CUSTOM__';
+    customOpt.textContent = '➕ Inserisci nuovo modello .onnx...';
+    select.appendChild(customOpt);
 };
 
 window.setLayoutWidth = function(mode) {
@@ -175,21 +266,47 @@ window.changeAiModel = async function() {
     const sel = document.getElementById('aiModelSelect');
     if (!sel || !sel.value) return;
 
+    if (sel.value === '__ADD_CUSTOM__') {
+        const newName = prompt("Inserisci il nome del file .onnx caricato nella cartella 'addestra/' (es. morse_model_v2.onnx):");
+        if (newName && newName.trim().length > 0) {
+            let cleanName = newName.trim();
+            if (!cleanName.startsWith('addestra/')) cleanName = 'addestra/' + cleanName;
+            if (!cleanName.endsWith('.onnx')) cleanName += '.onnx';
+
+            let customList = [];
+            try {
+                customList = JSON.parse(localStorage.getItem('cwgame_custom_onnx_models') || '[]');
+            } catch(e){}
+            if (!customList.includes(cleanName)) {
+                customList.push(cleanName);
+                localStorage.setItem('cwgame_custom_onnx_models', JSON.stringify(customList));
+            }
+
+            await window.scanAddestraFolderModels();
+            sel.value = cleanName;
+            window.changeAiModel();
+            return;
+        } else {
+            sel.selectedIndex = 0;
+            return;
+        }
+    }
+
     const modelPath = sel.value;
-    if (typeof showToast === 'function') showToast(`⏳ Caricamento modello IA (${modelPath})...`);
+    if (typeof showToast === 'function') showToast(`⏳ Caricamento modello IA (${modelPath.split('/').pop()})...`);
 
     try {
         const modelUrl = new URL(modelPath, window.location.href).href;
         console.log("Loading selected ONNX Model from:", modelUrl);
         window.aiTrainingState.ortSession = await ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm', 'webgl'] });
         console.log("ONNX Model switched successfully to:", modelPath);
-        if (typeof showToast === 'function') showToast(`🧠 Modello IA attivo: ${modelPath}`);
+        if (typeof showToast === 'function') showToast(`🧠 Modello IA attivo: ${modelPath.split('/').pop()}`);
         if (typeof window.runInferenceOnSegment === 'function') {
             window.runInferenceOnSegment();
         }
     } catch (e) {
         console.warn("Selected ONNX Model load warning:", e);
-        if (typeof showToast === 'function') showToast(`⚠️ Modello ${modelPath} non presente in 'addestra/', uso DSP.`);
+        if (typeof showToast === 'function') showToast(`⚠️ Modello ${modelPath.split('/').pop()} non presente in 'addestra/', uso DSP.`);
     }
 };
 
