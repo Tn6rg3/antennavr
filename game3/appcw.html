@@ -2068,7 +2068,16 @@ window.openStandaloneAiStudio = window.openStandaloneAiStudio || function() {
                     <input type="text" id="aiPredictionText" readonly placeholder="Analisi in corso..." style="width:100%; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid var(--champ-color); border-radius:6px; box-sizing:border-box;">
                 </div>
 
-                <!-- TEXTBOX 2: CORREZIONE UMANA -->
+                <!-- TEXTBOX 3: TESTO RICOSTRUITO DAL DIZIONARIO ESTESO -->
+                <div style="margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; flex-wrap:wrap; gap:4px;">
+                        <label style="font-size:0.75em; color:#00bcd4; font-weight:bold;">✨ TEXTBOX 3 - Testo Suggerito / Ricostruito dal Dizionario (Italiano/Inglese/Radio):</label>
+                        <button class="action-btn-small btn-secondary" style="padding:2px 8px; font-size:0.75em; border-color:#00bcd4; color:#00e5ff;" onclick="window.applyAiDictionaryCorrection()">✨ Applica Suggerimento ⬇️</button>
+                    </div>
+                    <input type="text" id="aiDictionaryCorrectedText" readonly placeholder="Ricostruzione del senso con dizionario parole..." style="width:100%; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; background:#081822; color:#00e5ff; border:2px solid #00bcd4; border-radius:6px; box-sizing:border-box;">
+                </div>
+
+                <!-- TEXTBOX 2: CORREZIONE UMANA OPERATORE -->
                 <div style="margin-bottom:8px;">
                     <label style="font-size:0.75em; color:var(--champ-color); font-weight:bold; display:block; margin-bottom:2px;">✏️ TEXTBOX 2 - Testo Corretto dall'Operatore:</label>
                     <textarea id="aiUserCorrectionText" rows="2" placeholder="Ascolta l'audio e scrivi qui il testo corretto..." style="width:100%; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; border-radius:6px; border:2px solid var(--champ-color); background:#ffffff; color:#000000; box-sizing:border-box;"></textarea>
