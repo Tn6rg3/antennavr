@@ -1933,6 +1933,13 @@ s            </div>
             <h2 style="color:var(--champ-color); margin:0; font-size:1.1em;">🤖 Addestra IA (Morse Studio)</h2>
         </div>
 
+        <!-- PULSANTE APERTURA STUDIO A-B IN NUOVA SCHEDA BROWSER -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; gap:8px;">
+            <button onclick="window.openStandaloneAiStudio()" class="action-btn-small btn-primary" style="width:100%; padding:8px 12px; font-weight:bold; font-size:0.85em; background:linear-gradient(135deg, #00bcd4, #008ba3); border:1px solid #00e5ff; color:#fff; box-shadow:0 2px 8px rgba(0,188,212,0.4);">
+                🌐 Apri Studio A-B in Nuova Scheda Browser ↗️
+            </button>
+        </div>
+
         <!-- SCHEDE OPERATIVE -->
         <div style="display:flex; gap:4px; width:100%;">
             <button id="btnAiTabRefinement" class="tab-btn active-tab" onclick="window.switchAiTab('refinement')" style="flex:1; font-size:0.8em; padding:8px 2px;">🔍 Refinement (10s-60s)</button>
@@ -1962,6 +1969,37 @@ s            </div>
                     <button onclick="document.getElementById('aiLocalFileInput').click()" class="action-btn-small btn-secondary" style="width:auto; padding:4px 10px; font-size:0.8em;">📁 Carica Audio Locale</button>
                 </div>
                 <div id="aiQsoStatusText" style="font-size:0.75em; color:var(--hint-color); text-align:center; margin-top:4px;"></div>
+            </div>
+
+            <!-- MASTER AUDIO SPECTRUM TIMELINE & WORKSTATION A-B -->
+            <div class="box-panel" style="padding:10px; border-color:#00bcd4; background:#080d12; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <b style="color:#00bcd4; font-size:0.85em;">🎧 Spettro Audio Traccia & Selettore Loop A-B:</b>
+                    <div style="display:flex; gap:4px;">
+                        <button class="action-btn-small btn-secondary" style="padding:2px 8px; font-size:0.75em;" onclick="window.zoomAiAudioTimeline(1.5)">🔍 +</button>
+                        <button class="action-btn-small btn-secondary" style="padding:2px 8px; font-size:0.75em;" onclick="window.zoomAiAudioTimeline(0.67)">🔍 -</button>
+                        <button class="action-btn-small btn-primary" style="padding:2px 8px; font-size:0.75em;" onclick="window.resetAiAudioZoom()">🔄 Adatta</button>
+                    </div>
+                </div>
+
+                <!-- Master Timeline Canvas con supporto per Trascinamento A, B e Loop Centrale -->
+                <div style="width:100%; height:110px; background:#030508; border-radius:6px; border:1px solid #1e293b; overflow:hidden; position:relative;">
+                    <canvas id="aiMasterTimelineCanvas" width="800" height="110" style="width:100%; height:100%; display:block; cursor:crosshair;"></canvas>
+                </div>
+
+                <!-- Indicatori e controlli del Loop A-B -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:0.75em; color:var(--text-color);">
+                    <div>
+                        <span>📍 A: <strong id="markerADisplay" style="color:#00ff66;">00:00.0</strong></span> |
+                        <span>📍 B: <strong id="markerBDisplay" style="color:#ff9800;">00:00.0</strong></span> |
+                        <span>⏱️ Loop: <strong id="markerDurationDisplay" style="color:#00bcd4;">0.0s</strong></span>
+                    </div>
+                    <div style="display:flex; gap:4px;">
+                        <button class="action-btn-small btn-secondary" style="padding:3px 8px; font-size:0.75em;" onclick="window.setMarkerAFromCurrent()">📍 Imposta A</button>
+                        <button class="action-btn-small btn-secondary" style="padding:3px 8px; font-size:0.75em;" onclick="window.setMarkerBFromCurrent()">📍 Imposta B</button>
+                        <button class="action-btn-small btn-success" style="padding:3px 10px; font-size:0.75em; font-weight:bold;" onclick="window.playRegionAB()">▶️ Ascolta A-B</button>
+                    </div>
+                </div>
             </div>
 
             <!-- ESTRATTORE FINESTRA AUDIO -->
