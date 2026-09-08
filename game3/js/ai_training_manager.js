@@ -1400,14 +1400,31 @@ window.loadRadioDictionaries = async function() {
     console.log("📖 Combined Radio Dictionary loaded:", window.aiTrainingState.combinedDictionaryList.length, "words!");
 };
 
-window.splitAttachedWords = function(token, dictSet) {
-    if (!token || token.length < 5) return [token];
+window.splitAttachedWords = function(token, dictSet, dictList) {
+    if (!token || token.length < 4) return [token];
 
     const cleanToken = token.replace(/[^A-Z0-9]/g, '');
 
-    // Mantiene intatti nominativi e numeri
-    if (/^[A-Z0-9]{3,7}$/.test(cleanToken) && /\d/.test(cleanToken)) return [token];
-    if (/^\d+$/.test(cleanToken)) return [token];
+    // Mantiene intatti nominativi radioamatoriali reali (es. IZ1XXX, K1ABC)
+    if (/^[A-Z0-9]{3,7}$/.test(cleanToken) && /[A-Z]/.test(cleanToken) && /\d/.test(cleanToken) && cleanToken.length <= 6) {
+        return [token];
+    }
+
+    // 1. SEPARAZIONE NUMERI/CIFRE EMBEDDED DENTRO LE LETTERE (es. DOERGLI80TTORA -> DOERGLI + 80 + TTORA)
+    if (/\d+/.test(cleanToken) && /[A-Z]+/.test(cleanToken)) {
+        const parts = cleanToken.replace(/(\d+)/g, ' $1 ').trim().split(/\s+/);
+        let subRes = [];
+        for (let p of parts) {
+            if (/^\d+$/.test(p)) {
+                subRes.push(p);
+            } else if (p.length >= 4) {
+                subRes.push(...window.splitAttachedWords(p, dictSet, dictList));
+            } else if (p.length > 0) {
+                subRes.push(p);
+            }
+        }
+        return subRes;
+    }
 
     // Se e gia una parola intera valida nel dizionario
     if (dictSet.has(cleanToken)) return [token];
@@ -1416,15 +1433,36 @@ window.splitAttachedWords = function(token, dictSet) {
     const dp = new Array(len + 1).fill(null);
     dp[0] = [];
 
-    // Programmazione Dinamica per trovare la sequenza di parole del dizionario
+    const list = dictList || Array.from(dictSet);
+
+    const getFuzzyWord = (sub) => {
+        if (sub.length < 2) return null;
+        if (dictSet.has(sub)) return sub;
+        if (sub.length >= 4) {
+            // Tenta match con 1 refuso Levenshtein
+            for (let idx = 0; idx < list.length; idx++) {
+                const dictWord = list[idx];
+                if (Math.abs(dictWord.length - sub.length) <= 1) {
+                    const dist = (typeof window.getLevenshteinDistance === 'function')
+                        ? window.getLevenshteinDistance(sub, dictWord)
+                        : Math.abs(sub.length - dictWord.length);
+                    if (dist <= 1) return dictWord;
+                }
+            }
+        }
+        return null;
+    };
+
+    // Programmazione Dinamica con Fuzzy Matching
     for (let i = 0; i < len; i++) {
         if (dp[i] === null) continue;
 
-        for (let j = i + 2; j <= Math.min(len, i + 18); j++) {
+        for (let j = i + 2; j <= Math.min(len, i + 14); j++) {
             const sub = cleanToken.substring(i, j);
-            if (dictSet.has(sub)) {
+            const matchedWord = getFuzzyWord(sub);
+            if (matchedWord) {
                 if (dp[j] === null || dp[i].length + 1 < dp[j].length) {
-                    dp[j] = [...dp[i], sub];
+                    dp[j] = [...dp[i], matchedWord];
                 }
             }
         }
@@ -1434,13 +1472,14 @@ window.splitAttachedWords = function(token, dictSet) {
         return dp[len];
     }
 
-    // Algoritmo di riserva per staccare parole note da sinistra
-    for (let j = Math.min(len - 2, 14); j >= 3; j--) {
+    // Riserva: stacca prefisso valido da sinistra
+    for (let j = Math.min(len - 2, 12); j >= 3; j--) {
         const prefix = cleanToken.substring(0, j);
-        if (dictSet.has(prefix)) {
+        const match = getFuzzyWord(prefix);
+        if (match) {
             const rest = cleanToken.substring(j);
-            const restSplit = window.splitAttachedWords(rest, dictSet);
-            return [prefix, ...restSplit];
+            const restSplit = window.splitAttachedWords(rest, dictSet, list);
+            return [match, ...restSplit];
         }
     }
 
@@ -1492,12 +1531,13 @@ window.correctTextWithFullDictionary = function(text) {
     }
 
     // =========================================================================
-    // SEPARAZIONE PAROLE ATTACCATE SENZA SPAZI (Word Segmentation)
+    // SEPARAZIONE PAROLE ATTACCATE SENZA SPAZI E CON NUMERI EMBEDDED (Fuzzy Word Break)
+    // es. "DOERGLI80TTORAHOAGGIUNTOVNCHEDUE" -> "PER", "GLI", "80", "ORA", "HO", "AGGIUNTO", "ANCHE", "DUE"
     // =========================================================================
     let segmentedTokens = [];
     for (let tok of pass2Tokens) {
-        if (tok.length >= 5 && !dictSet.has(tok) && !(/^[A-Z0-9]{3,7}$/.test(tok) && /\d/.test(tok))) {
-            const splits = window.splitAttachedWords(tok, dictSet);
+        if (tok.length >= 4 && !dictSet.has(tok) && !(/^[A-Z0-9]{3,7}$/.test(tok) && /[A-Z]/.test(tok) && /\d/.test(tok))) {
+            const splits = window.splitAttachedWords(tok, dictSet, dictList);
             segmentedTokens.push(...splits);
         } else {
             segmentedTokens.push(tok);
