@@ -1402,18 +1402,19 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
             if (p.durationFrames >= ditFrames * 2.0) morseCode += "-";
             else morseCode += ".";
         } else if (!p.tone) {
-            if (p.durationFrames >= ditFrames * 2.2) {
+            if (p.durationFrames >= ditFrames * 3.0) {
                 if (morseCode) {
                     const char = reverseMap[morseCode] || "";
-                    if (char) decodedText += char + " ";
+                    if (char) decodedText += char;
                     morseCode = "";
-                } else if (!decodedText.endsWith(" ")) {
+                }
+                if (decodedText.length > 0 && !decodedText.endsWith(" ")) {
                     decodedText += " ";
                 }
-            } else if (p.durationFrames >= ditFrames * 1.0) {
+            } else if (p.durationFrames >= ditFrames * 1.2) {
                 if (morseCode) {
                     const char = reverseMap[morseCode] || "";
-                    if (char) decodedText += char + " ";
+                    if (char) decodedText += char;
                     morseCode = "";
                 }
             }
@@ -1421,7 +1422,7 @@ function decodeMorseDSP(samples, sampleRate = 16000) {
     }
     if (morseCode) {
         const char = reverseMap[morseCode] || "";
-        if (char) decodedText += char + " ";
+        if (char) decodedText += char;
     }
 
     let cleanRes = decodedText.replace(/^[():;=.,\s]+|[():;=.,\s]+$/g, "").trim();
