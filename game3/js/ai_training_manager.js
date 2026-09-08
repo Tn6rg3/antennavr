@@ -8,6 +8,14 @@ window.aiTrainingState = {
     currentSourceNode: null,
     currentWindowStart: 0,
     currentWindowDuration: 20, // Default 20s (variabile 20s - 60s)
+    markerA: 0.0,
+    markerB: 10.0,
+    timelineZoomFactor: 1.0,
+    timelineScrollOffset: 0.0,
+    activeDraggingMarker: null,
+    dragStartClickTime: 0,
+    dragStartMarkerA: 0,
+    dragStartMarkerB: 0,
     editingPairIndex: -1,
     isMicActive: false,
     micStream: null,
@@ -40,15 +48,49 @@ const ITALIAN_RADIO_DICTIONARY = [
     "RADIO", "STAZIONE", "ASCOLTO", "PROVA", "SOPRATTUTTO", "TUTTO", "PRESTO", "PROPAGAZIONE"
 ];
 
+window.openStandaloneAiStudio = function() {
+    const uid = window.myId || (window.tgUser ? window.tgUser.id : "");
+    const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
+    const tgInitData = window.tgInitData || (window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp.initData : "");
+
+    let targetUrl = "appcw.html?mode=addestra_ia";
+    if (uid) targetUrl += `&uid=${encodeURIComponent(uid)}`;
+    if (token) targetUrl += `&token=${encodeURIComponent(token)}`;
+    if (tgInitData) targetUrl += `&initData=${encodeURIComponent(tgInitData)}`;
+
+    console.log("🚀 Opening Standalone AI Studio in new browser tab:", targetUrl);
+    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openLink === 'function') {
+        const fullUrl = window.location.origin + window.location.pathname.replace(/appcw\.html$/, '') + targetUrl;
+        window.Telegram.WebApp.openLink(fullUrl);
+    } else {
+        window.open(targetUrl, '_blank');
+    }
+};
+
 window.initAiTrainingModule = async function() {
     console.log("AI Training: Initializing ONNX & Audio Studio...");
 
-    // Protezione di Sicurezza: Accessibile solo agli utenti autenticati nel gioco
-    const isAuth = !!(window.myId || window.tgUser || (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user));
+    // 1. Verifico se nell'URL ci sono parametri di autenticazione (es. da Telegram Web o Nuova Scheda)
+    const urlParams = new URLSearchParams(window.location.search || window.location.hash.replace(/^#/, '?'));
+    const urlUid = urlParams.get('uid');
+    const urlToken = urlParams.get('token');
+    if (urlUid) window.myId = urlUid;
+    if (urlToken) {
+        window.aiAuthToken = urlToken;
+        localStorage.setItem('cwgame_ai_auth_token', urlToken);
+    }
+
+    // 2. Protezione di Sicurezza: L'autenticazione deve SEMPRE avvenire
+    const isAuth = !!(window.myId || window.tgUser || window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user));
     if (!isAuth) {
         showToast("⚠️ Accesso riservato agli utenti autenticati del gioco.");
         if (typeof window.goBackToMenu === 'function') window.goBackToMenu();
         return;
+    }
+
+    // Se si accede via ?mode=addestra_ia, si apre direttamente la schermata aiTrainingScreen
+    if (urlParams.get('mode') === 'addestra_ia' && typeof window.showScreen === 'function') {
+        window.showScreen('aiTrainingScreen');
     }
 
     window.aiTrainingState.savedPairs = [];
@@ -68,6 +110,7 @@ window.initAiTrainingModule = async function() {
 
     window.drawAiPlaceholderCanvas();
     window.loadQsoListFromGameSheet();
+    window.initMasterTimelineCanvas();
 };
 
 window.switchAiTab = function(tabId) {
@@ -527,6 +570,13 @@ window.updateAiSegmentDisplay = function() {
     const start = window.aiTrainingState.currentWindowStart;
     const end = Math.min(dur, start + winLen);
 
+    if (window.aiTrainingState.markerA === undefined || window.aiTrainingState.markerA === 0) {
+        window.aiTrainingState.markerA = start;
+    }
+    if (window.aiTrainingState.markerB === undefined || window.aiTrainingState.markerB <= window.aiTrainingState.markerA) {
+        window.aiTrainingState.markerB = end;
+    }
+
     const fmt = (sec) => {
         const m = Math.floor(sec / 60);
         const s = Math.floor(sec % 60);
@@ -537,6 +587,7 @@ window.updateAiSegmentDisplay = function() {
     if (disp) disp.textContent = `${fmt(start)} - ${fmt(end)}`;
 
     window.drawAiSegmentWaveform();
+    window.updateMasterTimelineDisplay();
 
     // ANALISI IA AUTOMATICA AL CAMBIO DI SEGMENTO
     if (window.aiTrainingState.autoInferenceTimeout) clearTimeout(window.aiTrainingState.autoInferenceTimeout);
@@ -545,6 +596,284 @@ window.updateAiSegmentDisplay = function() {
             window.runInferenceOnSegment();
         }
     }, 250);
+};
+
+// MASTER TIMELINE CANVAS INTERACTION & DRAGGING (Handles A, B e Loop Centrale)
+window.initMasterTimelineCanvas = function() {
+    const canvas = document.getElementById('aiMasterTimelineCanvas');
+    if (!canvas || canvas.dataset.timelineBound) return;
+    canvas.dataset.timelineBound = "true";
+
+    const getCanvasTimeFromX = (clientX) => {
+        const buf = window.aiTrainingState.currentAudioBuffer;
+        if (!buf) return 0;
+        const rect = canvas.getBoundingClientRect();
+        const clickX = Math.max(0, Math.min(canvas.width, (clientX - rect.left) * (canvas.width / rect.width)));
+        const clickRatio = clickX / canvas.width;
+        const duration = buf.duration;
+        const visibleDuration = duration / (window.aiTrainingState.timelineZoomFactor || 1.0);
+        return (window.aiTrainingState.timelineScrollOffset || 0.0) + (clickRatio * visibleDuration);
+    };
+
+    const handlePointerDown = (clientX) => {
+        const buf = window.aiTrainingState.currentAudioBuffer;
+        if (!buf) return;
+        const duration = buf.duration;
+        const clickTime = getCanvasTimeFromX(clientX);
+        const visibleDuration = duration / (window.aiTrainingState.timelineZoomFactor || 1.0);
+
+        let markerA = window.aiTrainingState.markerA !== undefined ? window.aiTrainingState.markerA : 0;
+        let markerB = window.aiTrainingState.markerB !== undefined ? window.aiTrainingState.markerB : Math.min(duration, 10);
+        const tol = Math.max(0.3, visibleDuration * 0.04);
+
+        if (Math.abs(clickTime - markerA) <= tol) {
+            window.aiTrainingState.activeDraggingMarker = 'A';
+        } else if (Math.abs(clickTime - markerB) <= tol) {
+            window.aiTrainingState.activeDraggingMarker = 'B';
+        } else if (clickTime > markerA && clickTime < markerB) {
+            window.aiTrainingState.activeDraggingMarker = 'center';
+            window.aiTrainingState.dragStartClickTime = clickTime;
+            window.aiTrainingState.dragStartMarkerA = markerA;
+            window.aiTrainingState.dragStartMarkerB = markerB;
+        } else {
+            // Clic all'esterno: centra il loop sulla nuova posizione
+            const span = Math.max(0.5, markerB - markerA);
+            window.aiTrainingState.markerA = Math.max(0, Math.min(duration - span, clickTime - (span / 2)));
+            window.aiTrainingState.markerB = Math.min(duration, window.aiTrainingState.markerA + span);
+            window.aiTrainingState.activeDraggingMarker = 'center';
+            window.aiTrainingState.dragStartClickTime = clickTime;
+            window.aiTrainingState.dragStartMarkerA = window.aiTrainingState.markerA;
+            window.aiTrainingState.dragStartMarkerB = window.aiTrainingState.markerB;
+        }
+        window.updateMasterTimelineDisplay();
+    };
+
+    const handlePointerMove = (clientX) => {
+        const mode = window.aiTrainingState.activeDraggingMarker;
+        const buf = window.aiTrainingState.currentAudioBuffer;
+        if (!mode || !buf) return;
+
+        const duration = buf.duration;
+        const moveTime = getCanvasTimeFromX(clientX);
+
+        if (mode === 'A') {
+            window.aiTrainingState.markerA = Math.max(0, Math.min(window.aiTrainingState.markerB - 0.2, moveTime));
+        } else if (mode === 'B') {
+            window.aiTrainingState.markerB = Math.max(window.aiTrainingState.markerA + 0.2, Math.min(duration, moveTime));
+        } else if (mode === 'center') {
+            const delta = moveTime - window.aiTrainingState.dragStartClickTime;
+            const span = window.aiTrainingState.dragStartMarkerB - window.aiTrainingState.dragStartMarkerA;
+            window.aiTrainingState.markerA = Math.max(0, Math.min(duration - span, window.aiTrainingState.dragStartMarkerA + delta));
+            window.aiTrainingState.markerB = window.aiTrainingState.markerA + span;
+        }
+
+        window.aiTrainingState.currentWindowStart = window.aiTrainingState.markerA;
+        window.aiTrainingState.currentWindowDuration = Math.max(0.2, window.aiTrainingState.markerB - window.aiTrainingState.markerA);
+        window.updateMasterTimelineDisplay();
+    };
+
+    const handlePointerUp = () => {
+        if (window.aiTrainingState.activeDraggingMarker) {
+            window.aiTrainingState.activeDraggingMarker = null;
+            window.updateAiSegmentDisplay();
+        }
+    };
+
+    canvas.addEventListener('mousedown', (e) => handlePointerDown(e.clientX));
+    canvas.addEventListener('mousemove', (e) => handlePointerMove(e.clientX));
+    canvas.addEventListener('mouseup', handlePointerUp);
+    canvas.addEventListener('mouseleave', handlePointerUp);
+
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches[0]) handlePointerDown(e.touches[0].clientX);
+    }, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+        if (e.touches && e.touches[0]) handlePointerMove(e.touches[0].clientX);
+    }, { passive: true });
+    canvas.addEventListener('touchend', handlePointerUp);
+};
+
+window.updateMasterTimelineDisplay = function() {
+    const canvas = document.getElementById('aiMasterTimelineCanvas');
+    if (!canvas) return;
+    window.initMasterTimelineCanvas();
+
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    ctx.fillStyle = '#030508';
+    ctx.fillRect(0, 0, width, height);
+
+    const buf = window.aiTrainingState.currentAudioBuffer;
+    if (!buf) {
+        ctx.fillStyle = '#8e9bb0';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Nessuna traccia QSO caricata', width / 2 - 80, height / 2 + 4);
+        return;
+    }
+
+    const duration = buf.duration;
+    const zoom = window.aiTrainingState.timelineZoomFactor || 1.0;
+    const scroll = window.aiTrainingState.timelineScrollOffset || 0.0;
+    const visibleDuration = duration / zoom;
+
+    const markerA = window.aiTrainingState.markerA !== undefined ? window.aiTrainingState.markerA : 0;
+    const markerB = window.aiTrainingState.markerB !== undefined ? window.aiTrainingState.markerB : Math.min(duration, 10);
+
+    const data = buf.getChannelData(0);
+    const sr = buf.sampleRate;
+    const startIdx = Math.floor(scroll * sr);
+    const endIdx = Math.min(data.length, Math.floor((scroll + visibleDuration) * sr));
+    const step = Math.max(1, Math.ceil((endIdx - startIdx) / width));
+
+    // Righello Temporale
+    ctx.fillStyle = '#8e9bb0';
+    ctx.font = '10px Segoe UI, sans-serif';
+    const intervalSec = visibleDuration > 30 ? 10 : (visibleDuration > 10 ? 5 : (visibleDuration > 3 ? 1 : 0.5));
+
+    for (let t = Math.floor(scroll / intervalSec) * intervalSec; t <= scroll + visibleDuration; t += intervalSec) {
+        if (t < 0 || t > duration) continue;
+        const x = ((t - scroll) / visibleDuration) * width;
+        ctx.strokeStyle = 'rgba(142, 155, 176, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+
+        const formatRulerTime = (sec) => {
+            const m = Math.floor(sec / 60);
+            const s = (sec % 60).toFixed(1);
+            return `${m}:${s < 10 ? '0' + s : s}`;
+        };
+        ctx.fillText(formatRulerTime(t), x + 3, 12);
+    }
+
+    // Forma d'onda verde
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = '#00ff66';
+    ctx.beginPath();
+
+    for (let i = 0; i < width; i++) {
+        const sampleIdx = startIdx + (i * step);
+        if (sampleIdx >= endIdx || sampleIdx >= data.length) break;
+        const val = data[sampleIdx];
+        const y = (1 - val) * (height / 2);
+        if (i === 0) ctx.moveTo(i, y);
+        else ctx.lineTo(i, y);
+    }
+    ctx.stroke();
+
+    // Evidenziazione Tratto A-B
+    const timeToX = (t) => ((t - scroll) / visibleDuration) * width;
+    const xA = timeToX(markerA);
+    const xB = timeToX(markerB);
+
+    ctx.fillStyle = 'rgba(0, 188, 212, 0.3)';
+    ctx.fillRect(xA, 0, xB - xA, height);
+
+    // Barra centrale di trascinamento loop
+    ctx.fillStyle = 'rgba(0, 229, 255, 0.7)';
+    ctx.fillRect(xA, 0, xB - xA, 4);
+
+    // Linee Verticali
+    ctx.strokeStyle = '#00ff66';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xA, 0);
+    ctx.lineTo(xA, height);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ff9800';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xB, 0);
+    ctx.lineTo(xB, height);
+    ctx.stroke();
+
+    // Flag A
+    ctx.fillStyle = '#00ff66';
+    ctx.fillRect(Math.max(0, xA - 18), 0, 36, 16);
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillText('[A 📍]', Math.max(2, xA - 14), 12);
+
+    // Flag B
+    ctx.fillStyle = '#ff9800';
+    ctx.fillRect(Math.min(width - 36, xB - 18), 0, 36, 16);
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillText('[B 📍]', Math.min(width - 32, xB - 14), 12);
+
+    // Aggiornamento etichette HTML
+    const formatPrecise = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = (sec % 60).toFixed(1);
+        return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+    };
+
+    const dispA = document.getElementById('markerADisplay');
+    const dispB = document.getElementById('markerBDisplay');
+    const dispDur = document.getElementById('markerDurationDisplay');
+
+    if (dispA) dispA.innerText = formatPrecise(markerA);
+    if (dispB) dispB.innerText = formatPrecise(markerB);
+    if (dispDur) dispDur.innerText = `${(markerB - markerA).toFixed(1)}s`;
+};
+
+window.zoomAiAudioTimeline = function(factor) {
+    const state = window.aiTrainingState;
+    state.timelineZoomFactor = Math.max(0.5, Math.min(20, (state.timelineZoomFactor || 1.0) * factor));
+    window.updateMasterTimelineDisplay();
+};
+
+window.resetAiAudioZoom = function() {
+    window.aiTrainingState.timelineZoomFactor = 1.0;
+    window.aiTrainingState.timelineScrollOffset = 0.0;
+    window.updateMasterTimelineDisplay();
+};
+
+window.setMarkerAFromCurrent = function() {
+    const state = window.aiTrainingState;
+    if (!state.currentAudioBuffer) return;
+    state.markerA = Math.max(0, state.currentWindowStart);
+    if (state.markerB <= state.markerA) {
+        state.markerB = Math.min(state.currentAudioBuffer.duration, state.markerA + 10);
+    }
+    window.updateMasterTimelineDisplay();
+};
+
+window.setMarkerBFromCurrent = function() {
+    const state = window.aiTrainingState;
+    if (!state.currentAudioBuffer) return;
+    state.markerB = Math.min(state.currentAudioBuffer.duration, state.currentWindowStart + state.currentWindowDuration);
+    if (state.markerA >= state.markerB) {
+        state.markerA = Math.max(0, state.markerB - 10);
+    }
+    window.updateMasterTimelineDisplay();
+};
+
+window.playRegionAB = function() {
+    const state = window.aiTrainingState;
+    const buf = state.currentAudioBuffer;
+    if (!buf) return;
+
+    const start = state.markerA !== undefined ? state.markerA : 0;
+    const end = state.markerB !== undefined ? state.markerB : Math.min(buf.duration, start + 10);
+    const duration = Math.max(0.2, end - start);
+    const rate = state.playbackRate || 1.0;
+
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    window.stopCurrentAiAudio();
+
+    state.currentSourceNode = audioCtx.createBufferSource();
+    state.currentSourceNode.buffer = buf;
+    state.currentSourceNode.playbackRate.value = rate;
+    state.currentSourceNode.connect(audioCtx.destination);
+    state.currentSourceNode.start(0, start, duration / rate);
 };
 
 window.prevAiSegment = function() {
@@ -910,9 +1239,9 @@ window.runInferenceOnSegment = async function() {
     }
 
     try {
-        const winLen = window.aiTrainingState.currentWindowDuration;
-        const start = window.aiTrainingState.currentWindowStart;
-        const duration = Math.min(winLen, buf.duration - start);
+        const start = window.aiTrainingState.markerA !== undefined ? window.aiTrainingState.markerA : window.aiTrainingState.currentWindowStart;
+        const end = window.aiTrainingState.markerB !== undefined ? window.aiTrainingState.markerB : Math.min(buf.duration, start + (window.aiTrainingState.currentWindowDuration || 20));
+        const duration = Math.max(0.2, Math.min(buf.duration - start, end - start));
 
         if (duration <= 0) {
             if (aiBox) aiBox.value = "⚠️ Posizione audio non valida.";
@@ -1035,7 +1364,15 @@ window.saveVerifiedAiPair = function() {
         return;
     }
 
-    const timePos = document.getElementById('aiTimePosDisplay')?.textContent || "00:00 - 00:10";
+    const formatPrecise = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = (sec % 60).toFixed(1);
+        return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+    };
+
+    const startA = window.aiTrainingState.markerA !== undefined ? window.aiTrainingState.markerA : 0;
+    const endB = window.aiTrainingState.markerB !== undefined ? window.aiTrainingState.markerB : (startA + 10);
+    const timePos = `${formatPrecise(startA)} - ${formatPrecise(endB)}`;
 
     const pair = {
         id: window.aiTrainingState.savedPairs.length + 1,
