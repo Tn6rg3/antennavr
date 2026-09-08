@@ -2025,9 +2025,20 @@ s            </div>
 
             <!-- ANALISI IA & VERIFICA UMANA -->
             <div class="box-panel" style="padding:10px; border-color:var(--champ-color); margin-bottom:8px;">
-                <!-- TEXTBOX 1: PREDIZIONE IA (AUTOMATICA) -->
+                <!-- TEXTBOX 1: PREDIZIONE IA (AUTOMATICA) E SELETTORE MODELLO ONNX -->
                 <div style="margin-bottom:8px;">
-                    <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">🤖 TEXTBOX 1 - Decodifica IA / DSP Automatica:</label>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:4px;">
+                        <label style="font-size:0.75em; color:var(--hint-color); font-weight:bold;">🤖 TEXTBOX 1 - Decodifica IA / DSP Automatica:</label>
+                        <label style="font-size:0.75em; color:var(--champ-color); font-weight:bold;">
+                            🧠 Modello ONNX:
+                            <select id="aiModelSelect" onchange="window.changeAiModel()" style="padding:2px 6px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid var(--champ-color); border-radius:4px; margin-left:2px;">
+                                <option value="addestra/morse_model.onnx" selected>morse_model.onnx (Standard)</option>
+                                <option value="addestra/morse_model_v2.onnx">morse_model_v2.onnx</option>
+                                <option value="addestra/morse_model_v3.onnx">morse_model_v3.onnx</option>
+                                <option value="addestra/morse_model_pro.onnx">morse_model_pro.onnx</option>
+                            </select>
+                        </label>
+                    </div>
                     <input type="text" id="aiPredictionText" readonly placeholder="Analisi in corso..." style="width:100%; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid var(--champ-color); border-radius:6px; box-sizing:border-box;">
                 </div>
 
