@@ -1358,8 +1358,8 @@ window.runInferenceOnSegment = async function() {
             }
         }
 
-        // Ricostruzione da dizionario esteso (parole.txt, parole2.txt, words.txt)
-        const reconstructedText = finalOutput ? window.correctTextWithFullDictionary(finalOutput) : "";
+        // Ricostruzione ed interpretazione del senso con il dizionario esteso ed il pulitore di artefatti Morse
+        const reconstructedText = finalOutput ? window.cleanAndInterpretMorseText(finalOutput) : "";
         const dictBox = document.getElementById('aiDictionaryCorrectedText');
         if (dictBox) dictBox.value = reconstructedText || "NESSUN TESTO RICOSTRUITO";
 
@@ -1550,8 +1550,52 @@ window.correctTextWithFullDictionary = function(text) {
     return correctedWords.join(" ");
 };
 
+window.cleanAndInterpretMorseText = function(text) {
+    if (!text || text.trim().length === 0) return "";
+
+    let raw = text.toUpperCase();
+
+    // 1. COLLAPSE RIPETIZIONI DI LETTERE LUNGHE DA RUMORE / NOTA CONTINUA (es. EEEEEEE -> E, TTTTTTT -> T)
+    raw = raw.replace(/([A-Z])\1{2,}/g, '$1');
+
+    let tokens = raw.split(/\s+/);
+    let cleanedTokens = [];
+
+    const dictSet = window.aiTrainingState.combinedDictionarySet || new Set(ITALIAN_RADIO_DICTIONARY);
+    const validSingleChars = new Set(['A', 'E', 'I', 'O', 'U', 'R', 'K']); // Vocali e comandi CW validi
+
+    // 2. FILTRAGGIO O UNIONE CONSONANTI ISOLATE SENZA SENSO (es. L, T, S, B, D, F, M, P)
+    for (let i = 0; i < tokens.length; i++) {
+        let tok = tokens[i].replace(/[^A-Z0-9\/\-\<\>]/g, '');
+        if (!tok) continue;
+
+        // Se e una consonante singola isolata
+        if (tok.length === 1 && !validSingleChars.has(tok)) {
+            // Tenta l'unione con la parola successiva se forma una parola valida nel dizionario
+            if (i + 1 < tokens.length) {
+                const nextTok = tokens[i + 1].replace(/[^A-Z0-9]/g, '');
+                const combined = tok + nextTok;
+                if (dictSet.has(combined)) {
+                    tokens[i + 1] = combined;
+                    continue; // Unita con successo alla parola successiva!
+                }
+            }
+            // Scarta la consonante singola isolata rumorosa
+            continue;
+        }
+
+        cleanedTokens.push(tok);
+    }
+
+    // 3. ESEGUE IL PIPELINE A 3 FASI (UNIONE -> SEPARAZIONE -> CORREZIONE LEVENSHTEIN)
+    const textToProcess = cleanedTokens.join(" ");
+    let reconstructed = window.correctTextWithFullDictionary(textToProcess);
+
+    return reconstructed.replace(/\s+/g, " ").trim();
+};
+
 window.correctTextWithRadioDictionary = function(text) {
-    return window.correctTextWithFullDictionary(text);
+    return window.cleanAndInterpretMorseText(text);
 };
 
 window.applyAiDictionaryCorrection = function() {
