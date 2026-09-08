@@ -1679,15 +1679,16 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
         if (sub.length < 3) return null;
         if (dictSet.has(sub)) return sub;
 
-        if (sub.length >= 4) {
+        if (sub.length >= 3) {
+            const maxThreshold = sub.length <= 5 ? 2 : (sub.length <= 8 ? 3 : 4);
             for (let idx = 0; idx < list.length; idx++) {
                 const dictWord = list[idx];
                 const dLen = dictWord.length;
-                if (Math.abs(dLen - sub.length) <= (sub.length <= 5 ? 1 : 2)) {
+                if (Math.abs(dLen - sub.length) <= maxThreshold) {
                     const dist = (typeof window.getLevenshteinDistance === 'function')
                         ? window.getLevenshteinDistance(sub, dictWord)
                         : Math.abs(sub.length - dictWord.length);
-                    if (dist <= (sub.length <= 5 ? 1 : 2)) return dictWord;
+                    if (dist <= maxThreshold) return dictWord;
                 }
             }
         }
@@ -1820,7 +1821,7 @@ window.correctTextWithFullDictionary = function(text) {
         let minDistance = Infinity;
 
         const wordLen = cleanWord.length;
-        const maxDistThreshold = wordLen <= 4 ? 1 : (wordLen <= 8 ? 2 : 3);
+        const maxDistThreshold = wordLen <= 5 ? 2 : (wordLen <= 8 ? 3 : 4);
 
         for (let idx = 0; idx < dictList.length; idx++) {
             const dictWord = dictList[idx];
