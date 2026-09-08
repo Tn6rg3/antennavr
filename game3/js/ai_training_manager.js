@@ -107,6 +107,7 @@ window.initAiTrainingModule = async function() {
 
     window.aiTrainingState.savedPairs = [];
     window.loadAiSavedPairsFromStorage();
+    window.initLayoutCustomizer();
 
     // Inizializza modello ONNX selezionato dal menu se la libreria ort è presente
     if (typeof ort !== 'undefined' && !window.aiTrainingState.ortSession) {
@@ -124,6 +125,50 @@ window.initAiTrainingModule = async function() {
     window.drawAiPlaceholderCanvas();
     window.loadQsoListFromGameSheet();
     window.initMasterTimelineCanvas();
+};
+
+window.setLayoutWidth = function(mode) {
+    document.body.classList.remove('layout-mode-compact', 'layout-mode-medium', 'layout-mode-fullscreen');
+    if (mode === 'compact') {
+        document.body.classList.add('layout-mode-compact');
+    } else if (mode === 'medium') {
+        document.body.classList.add('layout-mode-medium');
+    } else {
+        document.body.classList.add('layout-mode-fullscreen');
+    }
+    localStorage.setItem('cwgame_layout_mode', mode);
+
+    setTimeout(() => {
+        if (typeof window.updateMasterTimelineDisplay === 'function') {
+            window.updateMasterTimelineDisplay();
+        }
+    }, 100);
+};
+
+window.changeLayoutScale = function(deltaPercent) {
+    let currentScale = window.aiTrainingState.layoutScalePercent || 100;
+    currentScale = Math.max(80, Math.min(160, currentScale + deltaPercent));
+    window.aiTrainingState.layoutScalePercent = currentScale;
+
+    document.body.style.zoom = `${currentScale}%`;
+    localStorage.setItem('cwgame_layout_scale', currentScale);
+
+    setTimeout(() => {
+        if (typeof window.updateMasterTimelineDisplay === 'function') {
+            window.updateMasterTimelineDisplay();
+        }
+    }, 100);
+};
+
+window.initLayoutCustomizer = function() {
+    const savedMode = localStorage.getItem('cwgame_layout_mode') || 'fullscreen';
+    window.setLayoutWidth(savedMode);
+
+    const savedScale = parseInt(localStorage.getItem('cwgame_layout_scale'));
+    if (!isNaN(savedScale) && savedScale >= 80 && savedScale <= 160) {
+        window.aiTrainingState.layoutScalePercent = savedScale;
+        document.body.style.zoom = `${savedScale}%`;
+    }
 };
 
 window.changeAiModel = async function() {
@@ -1409,6 +1454,7 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
     if (/^[A-Z0-9]{3,7}$/.test(cleanToken) && /[A-Z]/.test(cleanToken) && /\d/.test(cleanToken) && cleanToken.length <= 6) {
         return [token];
     }
+    if (/^\d+$/.test(cleanToken)) return [token];
 
     // 1. SEPARAZIONE NUMERI/CIFRE EMBEDDED DENTRO LE LETTERE (es. DOERGLI80TTORA -> DOERGLI + 80 + TTORA)
     if (/\d+/.test(cleanToken) && /[A-Z]+/.test(cleanToken)) {
@@ -1430,39 +1476,56 @@ window.splitAttachedWords = function(token, dictSet, dictList) {
     if (dictSet.has(cleanToken)) return [token];
 
     const len = cleanToken.length;
-    const dp = new Array(len + 1).fill(null);
-    dp[0] = [];
-
     const list = dictList || Array.from(dictSet);
 
-    const getFuzzyWord = (sub) => {
-        if (sub.length < 2) return null;
+    const findMatchingWord = (sub) => {
+        if (sub.length < 3) return null;
         if (dictSet.has(sub)) return sub;
+
         if (sub.length >= 4) {
-            // Tenta match con 1 refuso Levenshtein
             for (let idx = 0; idx < list.length; idx++) {
                 const dictWord = list[idx];
-                if (Math.abs(dictWord.length - sub.length) <= 1) {
+                const dLen = dictWord.length;
+                if (Math.abs(dLen - sub.length) <= (sub.length <= 5 ? 1 : 2)) {
                     const dist = (typeof window.getLevenshteinDistance === 'function')
                         ? window.getLevenshteinDistance(sub, dictWord)
                         : Math.abs(sub.length - dictWord.length);
-                    if (dist <= 1) return dictWord;
+                    if (dist <= (sub.length <= 5 ? 1 : 2)) return dictWord;
                 }
             }
         }
         return null;
     };
 
-    // Programmazione Dinamica con Fuzzy Matching
-    for (let i = 0; i < len; i++) {
-        if (dp[i] === null) continue;
+    const extractedWords = [];
+    let i = 0;
 
-        for (let j = i + 2; j <= Math.min(len, i + 14); j++) {
+    // Scansione ingorda (Greedy Match & Consume con tolleranza al rumore iniziale o intermedio)
+    while (i < len) {
+        let matchFound = false;
+
+        for (let j = Math.min(len, i + 14); j >= i + 3; j--) {
             const sub = cleanToken.substring(i, j);
-            const matchedWord = getFuzzyWord(sub);
-            if (matchedWord) {
-                if (dp[j] === null || dp[i].length + 1 < dp[j].length) {
-                    dp[j] = [...dp[i], matchedWord];
+            const matched = findMatchingWord(sub);
+            if (matched) {
+                extractedWords.push(matched);
+                i = j; // avanza al punto in cui e finita la parola trovata!
+                matchFound = true;
+                break;
+            }
+        }
+
+        if (!matchFound) {
+            i++; // avanza di 1 carattere (scarta rumore)
+        }
+    }
+
+    if (extractedWords.length > 0) {
+        return extractedWords;
+    }
+
+    return [token];
+};
                 }
             }
         }
