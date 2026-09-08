@@ -1841,15 +1841,42 @@ window.cleanAndInterpretMorseText = function(text) {
     // 1. COLLAPSE RIPETIZIONI DI LETTERE LUNGHE DA RUMORE / NOTA CONTINUA (es. EEEEEEE -> E, TTTTTTT -> T)
     raw = raw.replace(/([A-Z])\1{2,}/g, '$1');
 
-    let tokens = raw.split(/\s+/);
+    let initialTokens = raw.split(/\s+/).map(t => t.replace(/[^A-Z0-9\/\-\<\>]/g, '')).filter(t => t.length > 0);
+
+    // 2. RIASSEMBLAGGIO DELLE LETTERE SINGOLE ISOLATE SEPARATE DA SPAZI (es. "C O L A R O V A" -> "COLAROVA")
+    let reassembledTokens = [];
+    let singleCharBuffer = [];
+
+    for (let i = 0; i < initialTokens.length; i++) {
+        const tok = initialTokens[i];
+        if (tok.length === 1 && /[A-Z]/.test(tok)) {
+            singleCharBuffer.push(tok);
+        } else {
+            if (singleCharBuffer.length >= 2) {
+                reassembledTokens.push(singleCharBuffer.join(''));
+                singleCharBuffer = [];
+            } else if (singleCharBuffer.length === 1) {
+                reassembledTokens.push(singleCharBuffer[0]);
+                singleCharBuffer = [];
+            }
+            reassembledTokens.push(tok);
+        }
+    }
+    if (singleCharBuffer.length >= 2) {
+        reassembledTokens.push(singleCharBuffer.join(''));
+    } else if (singleCharBuffer.length === 1) {
+        reassembledTokens.push(singleCharBuffer[0]);
+    }
+
+    let tokens = reassembledTokens;
     let cleanedTokens = [];
 
     const dictSet = window.aiTrainingState.combinedDictionarySet || new Set(ITALIAN_RADIO_DICTIONARY);
     const validSingleChars = new Set(['A', 'E', 'I', 'O', 'U', 'R', 'K']); // Vocali e comandi CW validi
 
-    // 2. FILTRAGGIO O UNIONE CONSONANTI ISOLATE SENZA SENSO (es. L, T, S, B, D, F, M, P)
+    // 3. FILTRAGGIO O UNIONE CONSONANTI ISOLATE SENZA SENSO (es. L, T, S, B, D, F, M, P)
     for (let i = 0; i < tokens.length; i++) {
-        let tok = tokens[i].replace(/[^A-Z0-9\/\-\<\>]/g, '');
+        let tok = tokens[i];
         if (!tok) continue;
 
         // Se e una consonante singola isolata
@@ -1870,7 +1897,7 @@ window.cleanAndInterpretMorseText = function(text) {
         cleanedTokens.push(tok);
     }
 
-    // 3. ESEGUE IL PIPELINE A 3 FASI (UNIONE -> SEPARAZIONE -> CORREZIONE LEVENSHTEIN)
+    // 4. ESEGUE IL PIPELINE A 3 FASI (UNIONE -> SEPARAZIONE -> CORREZIONE LEVENSHTEIN)
     const textToProcess = cleanedTokens.join(" ");
     let reconstructed = window.correctTextWithFullDictionary(textToProcess);
 
