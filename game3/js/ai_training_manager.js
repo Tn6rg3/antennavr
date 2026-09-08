@@ -108,10 +108,11 @@ window.initAiTrainingModule = async function() {
     window.aiTrainingState.savedPairs = [];
     window.loadAiSavedPairsFromStorage();
 
-    // Inizializza modello ONNX se la libreria ort è presente
+    // Inizializza modello ONNX selezionato dal menu se la libreria ort è presente
     if (typeof ort !== 'undefined' && !window.aiTrainingState.ortSession) {
+        const selectedModel = document.getElementById('aiModelSelect')?.value || 'addestra/morse_model.onnx';
         try {
-            const modelUrl = new URL('addestra/morse_model.onnx', window.location.href).href;
+            const modelUrl = new URL(selectedModel, window.location.href).href;
             console.log("Loading ONNX Model from:", modelUrl);
             window.aiTrainingState.ortSession = await ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm', 'webgl'] });
             console.log("ONNX Model loaded successfully!");
@@ -123,6 +124,28 @@ window.initAiTrainingModule = async function() {
     window.drawAiPlaceholderCanvas();
     window.loadQsoListFromGameSheet();
     window.initMasterTimelineCanvas();
+};
+
+window.changeAiModel = async function() {
+    const sel = document.getElementById('aiModelSelect');
+    if (!sel || !sel.value) return;
+
+    const modelPath = sel.value;
+    if (typeof showToast === 'function') showToast(`⏳ Caricamento modello IA (${modelPath})...`);
+
+    try {
+        const modelUrl = new URL(modelPath, window.location.href).href;
+        console.log("Loading selected ONNX Model from:", modelUrl);
+        window.aiTrainingState.ortSession = await ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm', 'webgl'] });
+        console.log("ONNX Model switched successfully to:", modelPath);
+        if (typeof showToast === 'function') showToast(`🧠 Modello IA attivo: ${modelPath}`);
+        if (typeof window.runInferenceOnSegment === 'function') {
+            window.runInferenceOnSegment();
+        }
+    } catch (e) {
+        console.warn("Selected ONNX Model load warning:", e);
+        if (typeof showToast === 'function') showToast(`⚠️ Modello ${modelPath} non presente in 'addestra/', uso DSP.`);
+    }
 };
 
 window.switchAiTab = function(tabId) {
