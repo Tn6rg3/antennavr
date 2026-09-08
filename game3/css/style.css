@@ -93,6 +93,47 @@ body.layout-mode-fullscreen #aiTrainingScreen .screen-content {
     width: 100% !important;
 }
 
+/* INGRANDIMENTO ADATTIVO DEI CARATTERI E DELLE TEXTBOX PER TELEGRAM WEB & DESKTOP */
+#aiTrainingScreen input[type="text"],
+#aiTrainingScreen textarea {
+    font-size: 1.15rem !important;
+    padding: 10px 12px !important;
+    line-height: 1.4 !important;
+    box-sizing: border-box !important;
+}
+
+#aiTrainingScreen label,
+#aiTrainingScreen b {
+    font-size: 0.9rem !important;
+}
+
+/* MEDIA QUERY SCHERMI MEDI E DESKTOP (TELEGRAM WEB FULLSCREEN) */
+@media screen and (min-width: 650px) {
+    #aiTrainingScreen input[type="text"],
+    #aiTrainingScreen textarea {
+        font-size: 1.35rem !important;
+        padding: 12px 14px !important;
+    }
+
+    #aiTrainingScreen label,
+    #aiTrainingScreen b {
+        font-size: 1rem !important;
+    }
+}
+
+@media screen and (min-width: 1000px) {
+    #aiTrainingScreen input[type="text"],
+    #aiTrainingScreen textarea {
+        font-size: 1.55rem !important;
+        padding: 14px 16px !important;
+    }
+
+    #aiTrainingScreen label,
+    #aiTrainingScreen b {
+        font-size: 1.1rem !important;
+    }
+}
+
 .active-screen { display: flex !important; }
 
 /* Contenitore scorrevole per il contenuto centrale */
