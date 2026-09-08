@@ -789,6 +789,14 @@ window.initMasterTimelineCanvas = function() {
     canvas.addEventListener('mouseup', handlePointerUp);
     canvas.addEventListener('mouseleave', handlePointerUp);
 
+    // Supporto Zoom con rotellina del mouse (Mouse Wheel Zoom)
+    canvas.addEventListener('wheel', (e) => {
+        if (!window.aiTrainingState.currentAudioBuffer) return;
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.3 : 0.75;
+        window.zoomAiAudioTimeline(factor);
+    }, { passive: false });
+
     canvas.addEventListener('touchstart', (e) => {
         if (e.touches && e.touches[0]) handlePointerDown(e.touches[0].clientX);
     }, { passive: true });
@@ -934,7 +942,22 @@ window.updateMasterTimelineDisplay = function() {
 
 window.zoomAiAudioTimeline = function(factor) {
     const state = window.aiTrainingState;
-    state.timelineZoomFactor = Math.max(0.5, Math.min(20, (state.timelineZoomFactor || 1.0) * factor));
+    const oldZoom = state.timelineZoomFactor || 1.0;
+    const newZoom = Math.max(0.5, Math.min(500, oldZoom * factor));
+
+    const buf = state.currentAudioBuffer;
+    if (buf) {
+        // Mantiene la posizione centrale del loop A-B durante lo zoom ad alta risoluzione
+        const duration = buf.duration;
+        const centerTime = (state.markerA !== undefined && state.markerB !== undefined)
+            ? (state.markerA + state.markerB) / 2
+            : (state.timelineScrollOffset || 0) + ((duration / oldZoom) / 2);
+
+        const newVisibleDuration = duration / newZoom;
+        state.timelineScrollOffset = Math.max(0, Math.min(duration - newVisibleDuration, centerTime - (newVisibleDuration / 2)));
+    }
+
+    state.timelineZoomFactor = newZoom;
     window.updateMasterTimelineDisplay();
 };
 
