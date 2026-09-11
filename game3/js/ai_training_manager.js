@@ -349,8 +349,8 @@ window.renderBatchRows = function() {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:4px;">
                 <b style="color:#ff9800; font-size:0.85em;">Blocco #${b.id}</b>
                 <span style="font-size:0.75em; color:var(--text-color); display:inline-flex; align-items:center; gap:3px;">
-                    📍 A: <input type="number" id="batchMarkerAInput_${b.id}" value="${b.markerA.toFixed(1)}" step="0.1" min="0" onchange="window.updateBatchBlockMarkersFromInput(${b.id})" style="width:60px; padding:2px 4px; font-size:0.85em; font-weight:bold; background:var(--sec-bg-color); color:#00ff66; border:1px solid #00ff66; border-radius:4px; text-align:center;">s |
-                    📍 B: <input type="number" id="batchMarkerBInput_${b.id}" value="${b.markerB.toFixed(1)}" step="0.1" min="0" onchange="window.updateBatchBlockMarkersFromInput(${b.id})" style="width:60px; padding:2px 4px; font-size:0.85em; font-weight:bold; background:var(--sec-bg-color); color:#ff9800; border:1px solid #ff9800; border-radius:4px; text-align:center;">s |
+                    📍 A: <input type="number" id="batchMarkerAInput_${b.id}" value="${b.markerA.toFixed(1)}" step="0.1" min="0" onchange="window.updateBatchBlockMarkersFromInput(${b.id})" style="width:60px; padding:2px 4px; font-size:0.85em; font-weight:bold; background:#ffffff; color:#000000; border:2px solid #00ff66; border-radius:4px; text-align:center;">s |
+                    📍 B: <input type="number" id="batchMarkerBInput_${b.id}" value="${b.markerB.toFixed(1)}" step="0.1" min="0" onchange="window.updateBatchBlockMarkersFromInput(${b.id})" style="width:60px; padding:2px 4px; font-size:0.85em; font-weight:bold; background:#ffffff; color:#000000; border:2px solid #ff9800; border-radius:4px; text-align:center;">s |
                     ⏱️ <strong id="batchDur_${b.id}" style="color:#00bcd4;">${(b.markerB - b.markerA).toFixed(1)}s</strong>
                 </span>
             </div>
@@ -462,7 +462,7 @@ window.initBatchRowCanvasEvents = function(b) {
     };
 
     let activeDrag = null;
-    let dragClickTime = 0, startA = 0, startB = 0;
+    let startClientX = 0, startA = 0, startB = 0;
 
     const handleDown = (clientX) => {
         const buf = window.aiTrainingState.currentAudioBuffer;
@@ -470,32 +470,44 @@ window.initBatchRowCanvasEvents = function(b) {
         const clickTime = getCanvasTimeFromX(clientX);
         const tol = 1.0;
 
+        startClientX = clientX;
+        startA = b.markerA;
+        startB = b.markerB;
+
         if (Math.abs(clickTime - b.markerA) <= tol) {
             activeDrag = 'A';
         } else if (Math.abs(clickTime - b.markerB) <= tol) {
             activeDrag = 'B';
         } else if (clickTime > b.markerA && clickTime < b.markerB) {
             activeDrag = 'center';
-            dragClickTime = clickTime;
-            startA = b.markerA;
-            startB = b.markerB;
         }
     };
 
-    const handleMove = (clientX) => {
+    const handleMove = (clientX, isTouch = false) => {
         const buf = window.aiTrainingState.currentAudioBuffer;
         if (!activeDrag || !buf) return;
         const duration = buf.duration;
-        const moveTime = getCanvasTimeFromX(clientX);
+
+        const blockSpan = Math.max(0.5, startB - startA);
+        const margin = blockSpan * 0.2;
+        const viewStart = Math.max(0, startA - margin);
+        const viewEnd = Math.min(duration, startB + margin);
+        const viewSpan = viewEnd - viewStart;
+
+        const rect = canvas.getBoundingClientRect();
+        const cssWidth = rect.width || 300;
+
+        const sensitivity = isTouch ? 0.40 : 1.0;
+        const deltaPixels = clientX - startClientX;
+        const deltaSec = (deltaPixels / cssWidth) * viewSpan * sensitivity;
 
         if (activeDrag === 'A') {
-            b.markerA = Math.max(0, Math.min(b.markerB - 0.2, moveTime));
+            b.markerA = Math.max(0, Math.min(startB - 0.2, startA + deltaSec));
         } else if (activeDrag === 'B') {
-            b.markerB = Math.max(b.markerA + 0.2, Math.min(duration, moveTime));
+            b.markerB = Math.max(startA + 0.2, Math.min(duration, startB + deltaSec));
         } else if (activeDrag === 'center') {
-            const delta = moveTime - dragClickTime;
             const span = startB - startA;
-            b.markerA = Math.max(0, Math.min(duration - span, startA + delta));
+            b.markerA = Math.max(0, Math.min(duration - span, startA + deltaSec));
             b.markerB = b.markerA + span;
         }
 
@@ -518,19 +530,24 @@ window.initBatchRowCanvasEvents = function(b) {
     };
 
     canvas.addEventListener('mousedown', (e) => handleDown(e.clientX));
-    canvas.addEventListener('mousemove', (e) => handleMove(e.clientX));
+    canvas.addEventListener('mousemove', (e) => handleMove(e.clientX, false));
     canvas.addEventListener('mouseup', handleUp);
     canvas.addEventListener('mouseleave', handleUp);
 
     canvas.addEventListener('touchstart', (e) => {
-        if (e.touches && e.touches[0]) handleDown(e.touches[0].clientX);
-    }, { passive: true });
+        if (e.touches && e.touches[0]) {
+            if (e.cancelable) e.preventDefault();
+            handleDown(e.touches[0].clientX);
+        }
+    }, { passive: false });
+
     canvas.addEventListener('touchmove', (e) => {
         if (activeDrag) {
             if (e.cancelable) e.preventDefault();
         }
-        if (e.touches && e.touches[0]) handleMove(e.touches[0].clientX);
+        if (e.touches && e.touches[0]) handleMove(e.touches[0].clientX, true);
     }, { passive: false });
+
     canvas.addEventListener('touchend', handleUp);
 };
 
@@ -1272,6 +1289,8 @@ window.initMasterTimelineCanvas = function() {
         return (window.aiTrainingState.timelineScrollOffset || 0.0) + (clickRatio * visibleDuration);
     };
 
+    let startClientX = 0;
+
     const handlePointerDown = (clientX) => {
         const buf = window.aiTrainingState.currentAudioBuffer;
         if (!buf) return;
@@ -1281,7 +1300,11 @@ window.initMasterTimelineCanvas = function() {
 
         let markerA = window.aiTrainingState.markerA !== undefined ? window.aiTrainingState.markerA : 0;
         let markerB = window.aiTrainingState.markerB !== undefined ? window.aiTrainingState.markerB : Math.min(duration, 10);
-        const tol = Math.max(0.3, visibleDuration * 0.04);
+        const tol = Math.max(0.4, visibleDuration * 0.08);
+
+        startClientX = clientX;
+        window.aiTrainingState.dragStartMarkerA = markerA;
+        window.aiTrainingState.dragStartMarkerB = markerB;
 
         if (Math.abs(clickTime - markerA) <= tol) {
             window.aiTrainingState.activeDraggingMarker = 'A';
@@ -1289,38 +1312,41 @@ window.initMasterTimelineCanvas = function() {
             window.aiTrainingState.activeDraggingMarker = 'B';
         } else if (clickTime > markerA && clickTime < markerB) {
             window.aiTrainingState.activeDraggingMarker = 'center';
-            window.aiTrainingState.dragStartClickTime = clickTime;
-            window.aiTrainingState.dragStartMarkerA = markerA;
-            window.aiTrainingState.dragStartMarkerB = markerB;
         } else {
-            // Clic all'esterno: centra il loop sulla nuova posizione
             const span = Math.max(0.5, markerB - markerA);
             window.aiTrainingState.markerA = Math.max(0, Math.min(duration - span, clickTime - (span / 2)));
             window.aiTrainingState.markerB = Math.min(duration, window.aiTrainingState.markerA + span);
             window.aiTrainingState.activeDraggingMarker = 'center';
-            window.aiTrainingState.dragStartClickTime = clickTime;
             window.aiTrainingState.dragStartMarkerA = window.aiTrainingState.markerA;
             window.aiTrainingState.dragStartMarkerB = window.aiTrainingState.markerB;
         }
         window.updateMasterTimelineDisplay();
     };
 
-    const handlePointerMove = (clientX) => {
+    const handlePointerMove = (clientX, isTouch = false) => {
         const mode = window.aiTrainingState.activeDraggingMarker;
         const buf = window.aiTrainingState.currentAudioBuffer;
         if (!mode || !buf) return;
 
         const duration = buf.duration;
-        const moveTime = getCanvasTimeFromX(clientX);
+        const visibleDuration = duration / (window.aiTrainingState.timelineZoomFactor || 1.0);
+        const rect = canvas.getBoundingClientRect();
+        const cssWidth = rect.width || 300;
+
+        const sensitivity = isTouch ? 0.40 : 1.0;
+        const deltaPixels = clientX - startClientX;
+        const deltaSec = (deltaPixels / cssWidth) * visibleDuration * sensitivity;
+
+        const startA = window.aiTrainingState.dragStartMarkerA;
+        const startB = window.aiTrainingState.dragStartMarkerB;
 
         if (mode === 'A') {
-            window.aiTrainingState.markerA = Math.max(0, Math.min(window.aiTrainingState.markerB - 0.2, moveTime));
+            window.aiTrainingState.markerA = Math.max(0, Math.min(startB - 0.2, startA + deltaSec));
         } else if (mode === 'B') {
-            window.aiTrainingState.markerB = Math.max(window.aiTrainingState.markerA + 0.2, Math.min(duration, moveTime));
+            window.aiTrainingState.markerB = Math.max(startA + 0.2, Math.min(duration, startB + deltaSec));
         } else if (mode === 'center') {
-            const delta = moveTime - window.aiTrainingState.dragStartClickTime;
-            const span = window.aiTrainingState.dragStartMarkerB - window.aiTrainingState.dragStartMarkerA;
-            window.aiTrainingState.markerA = Math.max(0, Math.min(duration - span, window.aiTrainingState.dragStartMarkerA + delta));
+            const span = startB - startA;
+            window.aiTrainingState.markerA = Math.max(0, Math.min(duration - span, startA + deltaSec));
             window.aiTrainingState.markerB = window.aiTrainingState.markerA + span;
         }
 
@@ -1337,11 +1363,10 @@ window.initMasterTimelineCanvas = function() {
     };
 
     canvas.addEventListener('mousedown', (e) => handlePointerDown(e.clientX));
-    canvas.addEventListener('mousemove', (e) => handlePointerMove(e.clientX));
+    canvas.addEventListener('mousemove', (e) => handlePointerMove(e.clientX, false));
     canvas.addEventListener('mouseup', handlePointerUp);
     canvas.addEventListener('mouseleave', handlePointerUp);
 
-    // Supporto Zoom con rotellina del mouse (Mouse Wheel Zoom)
     canvas.addEventListener('wheel', (e) => {
         if (!window.aiTrainingState.currentAudioBuffer) return;
         e.preventDefault();
@@ -1350,14 +1375,19 @@ window.initMasterTimelineCanvas = function() {
     }, { passive: false });
 
     canvas.addEventListener('touchstart', (e) => {
-        if (e.touches && e.touches[0]) handlePointerDown(e.touches[0].clientX);
-    }, { passive: true });
+        if (e.touches && e.touches[0]) {
+            if (e.cancelable) e.preventDefault();
+            handlePointerDown(e.touches[0].clientX);
+        }
+    }, { passive: false });
+
     canvas.addEventListener('touchmove', (e) => {
         if (window.aiTrainingState.activeDraggingMarker) {
             if (e.cancelable) e.preventDefault();
         }
-        if (e.touches && e.touches[0]) handlePointerMove(e.touches[0].clientX);
+        if (e.touches && e.touches[0]) handlePointerMove(e.touches[0].clientX, true);
     }, { passive: false });
+
     canvas.addEventListener('touchend', handlePointerUp);
 };
 
