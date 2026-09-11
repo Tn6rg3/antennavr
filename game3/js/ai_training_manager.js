@@ -262,6 +262,444 @@ window.initLayoutCustomizer = function() {
     }
 };
 
+// =========================================================================
+// BATCH AUTO-STUDIO MULTI-BLOCCO ENGINE
+// =========================================================================
+window.toggleBatchStudio = function() {
+    const panel = document.getElementById('aiBatchStudioPanel');
+    if (!panel) return;
+
+    if (panel.style.display === 'none' || panel.style.display === '') {
+        panel.style.display = 'block';
+        if ((!window.aiTrainingState.batchBlocks || window.aiTrainingState.batchBlocks.length === 0) && window.aiTrainingState.currentAudioBuffer) {
+            window.generateBatchAudioBlocks();
+        }
+    } else {
+        panel.style.display = 'none';
+    }
+};
+
+window.generateBatchAudioBlocks = function() {
+    const buf = window.aiTrainingState.currentAudioBuffer;
+    if (!buf) {
+        if (typeof showToast === 'function') showToast("⚠️ Carica o seleziona prima un file QSO audio.");
+        return;
+    }
+
+    const countInput = document.getElementById('aiBatchCountInput');
+    const durSelect = document.getElementById('aiBatchDurationSelect');
+
+    const requestedCount = parseInt(countInput?.value) || 10;
+    const requestedDur = parseInt(durSelect?.value) || 15;
+    const totalDuration = buf.duration;
+
+    const step = Math.min(requestedDur, Math.max(2, totalDuration / requestedCount));
+
+    window.aiTrainingState.batchBlocks = [];
+
+    for (let i = 0; i < requestedCount; i++) {
+        const start = i * step;
+        if (start >= totalDuration) break;
+        const end = Math.min(totalDuration, start + requestedDur);
+
+        window.aiTrainingState.batchBlocks.push({
+            id: i + 1,
+            markerA: start,
+            markerB: end,
+            aiText: "⚡ In corso...",
+            userText: "",
+            isSent: false
+        });
+    }
+
+    const summary = document.getElementById('aiBatchSummaryText');
+    if (summary) {
+        summary.textContent = `Generati ${window.aiTrainingState.batchBlocks.length} blocchi (${requestedDur}s ciascuno).`;
+    }
+
+    window.renderBatchRows();
+    window.runBatchInferenceAll();
+};
+
+window.renderBatchRows = function() {
+    const container = document.getElementById('aiBatchRowsContainer');
+    if (!container) return;
+
+    const blocks = window.aiTrainingState.batchBlocks || [];
+    if (blocks.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color:var(--hint-color); padding:15px;">Nessun blocco generato. Premere '✂️ DIVIDI E GENERA RIGHE'.</div>`;
+        return;
+    }
+
+    const fmt = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = (sec % 60).toFixed(1);
+        return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+    };
+
+    container.innerHTML = '';
+
+    blocks.forEach(b => {
+        const rowDiv = document.createElement('div');
+        rowDiv.id = `batchRow_${b.id}`;
+        rowDiv.className = 'box-panel';
+        rowDiv.style.cssText = `padding:10px; border-color:${b.isSent ? '#d32f2f' : '#ff9800'}; background:#080d12; margin:0;`;
+
+        rowDiv.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:4px;">
+                <b style="color:#ff9800; font-size:0.85em;">Blocco #${b.id}</b>
+                <span style="font-size:0.75em; color:var(--text-color);">
+                    📍 A: <strong id="batchMarkerA_${b.id}" style="color:#00ff66;">${fmt(b.markerA)}</strong> |
+                    📍 B: <strong id="batchMarkerB_${b.id}" style="color:#ff9800;">${fmt(b.markerB)}</strong> |
+                    ⏱️ <strong id="batchDur_${b.id}" style="color:#00bcd4;">${(b.markerB - b.markerA).toFixed(1)}s</strong>
+                </span>
+            </div>
+
+            <div style="width:100%; height:70px; background:#030508; border-radius:4px; border:1px solid #1e293b; margin-bottom:6px; overflow:hidden;">
+                <canvas id="batchCanvas_${b.id}" width="800" height="70" style="width:100%; height:100%; display:block; cursor:crosshair;"></canvas>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <button onclick="window.playBatchBlock(${b.id})" class="action-btn-small btn-success" style="padding:4px 10px; font-size:0.8em; font-weight:bold;">▶️ Ascolta #${b.id}</button>
+                    <input type="text" id="batchAiText_${b.id}" readonly value="${b.aiText}" placeholder="Predizione IA..." style="flex:1; min-width:160px; padding:4px 8px; font-size:0.8em; font-family:monospace; background:#0d1822; color:#00e5ff; border:1px solid #00bcd4; border-radius:4px;">
+                    <button onclick="window.copyBatchAiToUser(${b.id})" class="action-btn-small btn-secondary" style="padding:4px 8px; font-size:0.75em;" title="Copia suggerimento IA">📋 Copia</button>
+                </div>
+
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <input type="text" id="batchUserText_${b.id}" value="${b.userText}" oninput="window.aiTrainingState.batchBlocks[${b.id-1}].userText=this.value" placeholder="Scrivi/correggi qui la trascrizione reale dell'audio..." style="flex:1; min-width:200px; padding:6px 8px; font-size:0.85em; font-family:monospace; font-weight:bold; background:#121820; color:#ffffff; border:1px solid ${b.isSent ? '#d32f2f' : '#ff9800'}; border-radius:4px;">
+                    <button id="batchSendBtn_${b.id}" onclick="window.sendBatchBlockToCloud(${b.id})" class="action-btn-small ${b.isSent ? 'btn-danger' : 'btn-success'}" style="padding:6px 12px; font-weight:bold; font-size:0.8em; background:${b.isSent ? '#d32f2f' : '#4caf50'}; border-color:${b.isSent ? '#ff5252' : '#81c784'};">
+                        ${b.isSent ? `🔴 INVIATO (#${b.id})` : `💾 INVIA FOGLIO GOOGLE`}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(rowDiv);
+        setTimeout(() => {
+            window.drawBatchRowCanvas(b);
+            window.initBatchRowCanvasEvents(b);
+        }, 50);
+    });
+};
+
+window.drawBatchRowCanvas = function(b) {
+    const canvas = document.getElementById(`batchCanvas_${b.id}`);
+    const buf = window.aiTrainingState.currentAudioBuffer;
+    if (!canvas || !buf) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0 && canvas.width !== Math.floor(rect.width)) {
+        canvas.width = Math.floor(rect.width);
+    }
+
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    ctx.fillStyle = '#030508';
+    ctx.fillRect(0, 0, width, height);
+
+    const duration = buf.duration;
+    const blockSpan = Math.max(0.5, b.markerB - b.markerA);
+    const margin = blockSpan * 0.2;
+    const viewStart = Math.max(0, b.markerA - margin);
+    const viewEnd = Math.min(duration, b.markerB + margin);
+    const viewSpan = viewEnd - viewStart;
+
+    const data = buf.getChannelData(0);
+    const sr = buf.sampleRate;
+    const startIdx = Math.floor(viewStart * sr);
+    const endIdx = Math.min(data.length, Math.floor(viewEnd * sr));
+    const step = Math.max(1, Math.ceil((endIdx - startIdx) / width));
+
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#00ff66';
+    ctx.beginPath();
+
+    for (let i = 0; i < width; i++) {
+        const sampleIdx = startIdx + (i * step);
+        if (sampleIdx >= endIdx || sampleIdx >= data.length) break;
+        const val = data[sampleIdx];
+        const y = (1 - val) * (height / 2);
+        if (i === 0) ctx.moveTo(i, y);
+        else ctx.lineTo(i, y);
+    }
+    ctx.stroke();
+
+    const timeToX = (t) => ((t - viewStart) / viewSpan) * width;
+    const xA = timeToX(b.markerA);
+    const xB = timeToX(b.markerB);
+
+    ctx.fillStyle = b.isSent ? 'rgba(211, 47, 47, 0.25)' : 'rgba(255, 152, 0, 0.25)';
+    ctx.fillRect(xA, 0, xB - xA, height);
+
+    ctx.strokeStyle = '#00ff66';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xA, 0); ctx.lineTo(xA, height); ctx.stroke();
+
+    ctx.strokeStyle = '#ff9800';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xB, 0); ctx.lineTo(xB, height); ctx.stroke();
+};
+
+window.initBatchRowCanvasEvents = function(b) {
+    const canvas = document.getElementById(`batchCanvas_${b.id}`);
+    if (!canvas || canvas.dataset.eventsBound) return;
+    canvas.dataset.eventsBound = "true";
+
+    const getCanvasTimeFromX = (clientX) => {
+        const buf = window.aiTrainingState.currentAudioBuffer;
+        if (!buf) return 0;
+        const rect = canvas.getBoundingClientRect();
+        const clickX = Math.max(0, Math.min(canvas.width, (clientX - rect.left) * (canvas.width / rect.width)));
+        const duration = buf.duration;
+        const blockSpan = Math.max(0.5, b.markerB - b.markerA);
+        const margin = blockSpan * 0.2;
+        const viewStart = Math.max(0, b.markerA - margin);
+        const viewEnd = Math.min(duration, b.markerB + margin);
+        return viewStart + ((clickX / canvas.width) * (viewEnd - viewStart));
+    };
+
+    let activeDrag = null;
+    let dragClickTime = 0, startA = 0, startB = 0;
+
+    const handleDown = (clientX) => {
+        const buf = window.aiTrainingState.currentAudioBuffer;
+        if (!buf) return;
+        const clickTime = getCanvasTimeFromX(clientX);
+        const tol = 1.0;
+
+        if (Math.abs(clickTime - b.markerA) <= tol) {
+            activeDrag = 'A';
+        } else if (Math.abs(clickTime - b.markerB) <= tol) {
+            activeDrag = 'B';
+        } else if (clickTime > b.markerA && clickTime < b.markerB) {
+            activeDrag = 'center';
+            dragClickTime = clickTime;
+            startA = b.markerA;
+            startB = b.markerB;
+        }
+    };
+
+    const handleMove = (clientX) => {
+        const buf = window.aiTrainingState.currentAudioBuffer;
+        if (!activeDrag || !buf) return;
+        const duration = buf.duration;
+        const moveTime = getCanvasTimeFromX(clientX);
+
+        if (activeDrag === 'A') {
+            b.markerA = Math.max(0, Math.min(b.markerB - 0.2, moveTime));
+        } else if (activeDrag === 'B') {
+            b.markerB = Math.max(b.markerA + 0.2, Math.min(duration, moveTime));
+        } else if (activeDrag === 'center') {
+            const delta = moveTime - dragClickTime;
+            const span = startB - startA;
+            b.markerA = Math.max(0, Math.min(duration - span, startA + delta));
+            b.markerB = b.markerA + span;
+        }
+
+        const dispA = document.getElementById(`batchMarkerA_${b.id}`);
+        const dispB = document.getElementById(`batchMarkerB_${b.id}`);
+        const dispDur = document.getElementById(`batchDur_${b.id}`);
+
+        const fmt = (sec) => {
+            const m = Math.floor(sec / 60);
+            const s = (sec % 60).toFixed(1);
+            return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+        };
+
+        if (dispA) dispA.innerText = fmt(b.markerA);
+        if (dispB) dispB.innerText = fmt(b.markerB);
+        if (dispDur) dispDur.innerText = `${(b.markerB - b.markerA).toFixed(1)}s`;
+
+        window.drawBatchRowCanvas(b);
+    };
+
+    const handleUp = () => {
+        if (activeDrag) {
+            activeDrag = null;
+            window.runBatchInferenceForBlock(b);
+        }
+    };
+
+    canvas.addEventListener('mousedown', (e) => handleDown(e.clientX));
+    canvas.addEventListener('mousemove', (e) => handleMove(e.clientX));
+    canvas.addEventListener('mouseup', handleUp);
+    canvas.addEventListener('mouseleave', handleUp);
+
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches[0]) handleDown(e.touches[0].clientX);
+    }, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+        if (e.touches && e.touches[0]) handleMove(e.touches[0].clientX);
+    }, { passive: true });
+    canvas.addEventListener('touchend', handleUp);
+};
+
+window.playBatchBlock = function(blockId) {
+    const blocks = window.aiTrainingState.batchBlocks || [];
+    const b = blocks.find(x => x.id === blockId);
+    const buf = window.aiTrainingState.currentAudioBuffer;
+    if (!b || !buf) return;
+
+    const duration = Math.max(0.2, b.markerB - b.markerA);
+    const rate = window.aiTrainingState.playbackRate || 1.0;
+
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    window.stopCurrentAiAudio();
+
+    window.aiTrainingState.currentSourceNode = audioCtx.createBufferSource();
+    window.aiTrainingState.currentSourceNode.buffer = buf;
+    window.aiTrainingState.currentSourceNode.playbackRate.value = rate;
+    window.aiTrainingState.currentSourceNode.connect(audioCtx.destination);
+    window.aiTrainingState.currentSourceNode.start(0, b.markerA, duration / rate);
+};
+
+window.copyBatchAiToUser = function(blockId) {
+    const aiInput = document.getElementById(`batchAiText_${blockId}`);
+    const userInput = document.getElementById(`batchUserText_${blockId}`);
+    if (aiInput && userInput && aiInput.value) {
+        userInput.value = aiInput.value;
+        const blocks = window.aiTrainingState.batchBlocks || [];
+        const b = blocks.find(x => x.id === blockId);
+        if (b) b.userText = aiInput.value;
+        if (typeof showToast === 'function') showToast(`✨ Copiato testo suggerito nel Blocco #${blockId}`);
+    }
+};
+
+window.runBatchInferenceForBlock = async function(b) {
+    const buf = window.aiTrainingState.currentAudioBuffer;
+    if (!buf || !b) return;
+
+    const aiInput = document.getElementById(`batchAiText_${b.id}`);
+    if (aiInput) aiInput.value = "⚡ Analisi...";
+
+    try {
+        const duration = Math.max(0.2, b.markerB - b.markerA);
+        const audio16k = await resampleAudioBufferTo16k(buf, b.markerA, duration);
+
+        let rawResult = "";
+        if (window.aiTrainingState.ortSession) {
+            const timeSteps = Math.floor(audio16k.length / 160);
+            const specData = new Float32Array(64 * timeSteps);
+            for (let t = 0; t < timeSteps; t++) {
+                for (let m = 0; m < 64; m++) {
+                    const idx = t * 160 + m * 2;
+                    specData[m * timeSteps + t] = Math.log(Math.abs(audio16k[idx] || 0) + 1e-5);
+                }
+            }
+            const inputTensor = new ort.Tensor('float32', specData, [1, 1, 64, timeSteps]);
+            const results = await window.aiTrainingState.ortSession.run({ spectrogram: inputTensor });
+
+            const probsData = results.log_probs.data;
+            const dims = results.log_probs.dims;
+            let T = dims && dims.length === 3 ? (dims[0] === 1 ? dims[1] : dims[0]) : (dims ? dims[0] : 0);
+            let C = dims && dims.length === 3 ? dims[2] : (dims ? dims[1] : AI_VOCAB.length);
+
+            let lastIdx = -1, blankCount = 0;
+            for (let t = 0; t < T; t++) {
+                let maxVal = -Infinity, maxIdx = 0;
+                for (let c = 0; c < C; c++) {
+                    const val = probsData[t * C + c];
+                    if (val > maxVal) { maxVal = val; maxIdx = c; }
+                }
+                if (maxIdx === 0) {
+                    blankCount++;
+                    if (blankCount >= 4 && rawResult.length > 0 && !rawResult.endsWith(' ')) rawResult += ' ';
+                } else {
+                    blankCount = 0;
+                    if (maxIdx !== lastIdx) {
+                        const char = AI_VOCAB[maxIdx] || '';
+                        if (char !== '<BLANK>' && char !== '') rawResult += char;
+                    }
+                }
+                lastIdx = maxIdx;
+            }
+        }
+
+        const dspResult = decodeMorseDSP(audio16k, 16000);
+        const text = rawResult.trim() || dspResult.trim();
+        const cleanText = text.replace(/[*():;=.,\s]+$/g, "").replace(/^[*():;=.,\s]+/g, "").trim();
+
+        b.aiText = cleanText || "NESSUN SEGNALE";
+
+        if (typeof window.cleanAndInterpretMorseText === 'function' && cleanText) {
+            b.aiText = window.cleanAndInterpretMorseText(cleanText);
+        }
+
+        if (aiInput) aiInput.value = b.aiText;
+    } catch(e) {
+        console.warn(`Batch Inference Error for block #${b.id}:`, e);
+        if (aiInput) aiInput.value = "ERRORE ANALISI";
+    }
+};
+
+window.runBatchInferenceAll = async function() {
+    const blocks = window.aiTrainingState.batchBlocks || [];
+    for (let b of blocks) {
+        await window.runBatchInferenceForBlock(b);
+    }
+};
+
+window.sendBatchBlockToCloud = function(blockId) {
+    const blocks = window.aiTrainingState.batchBlocks || [];
+    const b = blocks.find(x => x.id === blockId);
+    if (!b) return;
+
+    const userInput = document.getElementById(`batchUserText_${blockId}`);
+    const userText = (userInput ? userInput.value : b.userText || "").trim();
+
+    if (!userText) {
+        if (typeof showToast === 'function') showToast(`⚠️ Inserisci la trascrizione corretta per il Blocco #${blockId} prima di inviare!`);
+        return;
+    }
+
+    b.userText = userText;
+
+    const select = document.getElementById('aiQsoSelect');
+    const idx = parseInt(select ? select.value : -1);
+    const qsoItem = (idx >= 0 && window.aiTrainingState.qsoList[idx]) ? window.aiTrainingState.qsoList[idx] : null;
+    const fullQsoSource = qsoItem ? qsoItem.filename : (window.aiTrainingState.currentLocalFileName || "QSO_Clip");
+
+    const fmt = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = (sec % 60).toFixed(1);
+        return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+    };
+
+    const timePos = `${fmt(b.markerA)} - ${fmt(b.markerB)}`;
+
+    const pair = {
+        id: b.id,
+        filename: fullQsoSource,
+        timePos: timePos,
+        aiPrediction: b.aiText || "",
+        userCorrection: userText
+    };
+
+    window.syncPairToGoogleCloudSheet(pair);
+
+    b.isSent = true;
+
+    const sendBtn = document.getElementById(`batchSendBtn_${blockId}`);
+    if (sendBtn) {
+        sendBtn.className = "action-btn-small btn-danger";
+        sendBtn.style.background = "#d32f2f";
+        sendBtn.style.borderColor = "#ff5252";
+        sendBtn.innerHTML = `🔴 INVIATO (#${b.id})`;
+    }
+
+    const rowDiv = document.getElementById(`batchRow_${blockId}`);
+    if (rowDiv) rowDiv.style.borderColor = "#d32f2f";
+
+    window.drawBatchRowCanvas(b);
+
+    if (typeof showToast === 'function') showToast(`🔴 Blocco #${blockId} inviato e sincronizzato sul Foglio ADDESTRA!`);
+};
+
 window.changeAiModel = async function() {
     const sel = document.getElementById('aiModelSelect');
     if (!sel || !sel.value) return;
