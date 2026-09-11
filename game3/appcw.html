@@ -1991,10 +1991,42 @@ window.openStandaloneAiStudio = window.openStandaloneAiStudio || function() {
 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.05);">
                     <span style="font-size:0.75em; color:var(--hint-color);">Oppure carica file da PC/Telefono:</span>
-                    <input type="file" id="aiLocalFileInput" accept="audio/*" style="display:none;" onchange="window.handleAiLocalAudioUpload(event)">
-                    <button onclick="document.getElementById('aiLocalFileInput').click()" class="action-btn-small btn-secondary" style="width:auto; padding:4px 10px; font-size:0.8em;">📁 Carica Audio Locale</button>
+                    <div style="display:flex; gap:6px;">
+                        <input type="file" id="aiLocalFileInput" accept="audio/*" style="display:none;" onchange="window.handleAiLocalAudioUpload(event)">
+                        <button onclick="document.getElementById('aiLocalFileInput').click()" class="action-btn-small btn-secondary" style="width:auto; padding:4px 10px; font-size:0.8em;">📁 Carica Audio Locale</button>
+                        <button onclick="window.toggleBatchStudio()" class="action-btn-small btn-primary" style="width:auto; padding:4px 12px; font-size:0.8em; font-weight:bold; background:linear-gradient(135deg, #ff9800, #f57c00); border:1px solid #ffb74d;">⚡ BATCH AUTO-STUDIO</button>
+                    </div>
                 </div>
                 <div id="aiQsoStatusText" style="font-size:0.75em; color:var(--hint-color); text-align:center; margin-top:4px;"></div>
+            </div>
+
+            <!-- BATCH AUTO-STUDIO MULTI-BLOCCO PANEL -->
+            <div id="aiBatchStudioPanel" class="box-panel" style="display:none; padding:12px; border-color:#ff9800; background:#120c02; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+                    <b style="color:#ff9800; font-size:0.9em;">⚡ Batch Auto-Studio Multi-Blocco:</b>
+                    <span id="aiBatchSummaryText" style="font-size:0.8em; color:#ffb74d; font-weight:bold;">Scegli numero di blocchi o durata ed avvia ✂️</span>
+                </div>
+
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:6px; border:1px solid rgba(255,152,0,0.3);">
+                    <label style="font-size:0.8em; color:#ffffff;">
+                        🔢 Num. Blocchi:
+                        <input type="number" id="aiBatchCountInput" value="10" min="2" max="50" style="width:60px; padding:3px 6px; font-size:0.85em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid #ff9800; border-radius:4px; text-align:center;">
+                    </label>
+                    <label style="font-size:0.8em; color:#ffffff;">
+                        ⏱️ Durata Blocco:
+                        <select id="aiBatchDurationSelect" style="padding:3px 6px; font-size:0.85em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid #ff9800; border-radius:4px;">
+                            <option value="15" selected>15 Secondi</option>
+                            <option value="20">20 Secondi</option>
+                            <option value="30">30 Secondi</option>
+                            <option value="45">45 Secondi</option>
+                            <option value="60">60 Secondi (1m)</option>
+                        </select>
+                    </label>
+                    <button onclick="window.generateBatchAudioBlocks()" class="action-btn-small btn-success" style="padding:6px 14px; font-weight:bold; font-size:0.85em; background:#ff9800; border:1px solid #fff; color:#000;">✂️ DIVIDI E GENERA RIGHE</button>
+                </div>
+
+                <!-- CONTENITORE RIGHE DINAMICHE DEI BLOCCHI BATCH -->
+                <div id="aiBatchRowsContainer" style="display:flex; flex-direction:column; gap:10px; max-height:600px; overflow-y:auto; padding-right:4px;"></div>
             </div>
 
             <!-- MASTER AUDIO SPECTRUM TIMELINE & WORKSTATION A-B -->
