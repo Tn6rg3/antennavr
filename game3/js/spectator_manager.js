@@ -1,7 +1,12 @@
 // js/spectator_manager.js
 
 window.watchSpecificRoom = function(code, targetName) {
-    // RESET STATO LOCALE PER EVITARE INTERFERENZE (Fix parole invece di gruppi)
+    // Pulizia preventiva di eventuali sessioni spettatore precedenti
+    if (typeof window.currentSpectatorCleanup === 'function') {
+        window.currentSpectatorCleanup();
+    }
+
+    // RESET STATO LOCALE PER EVITARE INTERFERENZE CON IL SINGOLO GIOCATORE
     gameRunning = false;
     inputActive = false;
     currentMode = 'spectator';
@@ -11,7 +16,7 @@ window.watchSpecificRoom = function(code, targetName) {
     window.lastSpectatorAudioTs = 0; // RESET TIMESTAMP PER NUOVA SESSIONE
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
 
-    // Ripristino Audio Context (Necessario per iOS/iPhone Tutor)
+    // Ripristino Audio Context
     if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
 
     roomCode = code;
@@ -33,9 +38,12 @@ window.watchSpecificRoom = function(code, targetName) {
     mySpectatorRef.onDisconnect().remove();
 
     const roomRef = db.ref(`rooms/${roomCode}`);
-    let hostDetailsListener = null;
+    const liveAudioRef = db.ref(`rooms/${roomCode}/liveAudio`);
+    let lastUpdateRef = null;
 
     const onStatusChange = roomRef.on('value', snap => {
+        if (currentMode !== 'spectator') return;
+
         if (!snap.exists()) {
             showToast("⚠️ Il giocatore ha terminato o abbandonato la partita.");
             window.stopWatchingCleanly();
@@ -56,20 +64,22 @@ window.watchSpecificRoom = function(code, targetName) {
         }
 
         // --- SINCRONIZZAZIONE TABELLA (MATCH DETAILS) ---
-        // OTTIMIZZAZIONE: Carichiamo lo storico completo solo una volta all'ingresso
-        if (!hostDetailsListener && hostId) {
+        if (!lastUpdateRef && hostId) {
             console.log("Spectator: Initializing Incremental Sync for Host:", hostId);
 
-            // 1. Caricamento iniziale dei dati presenti (una sola volta)
+            // 1. Caricamento iniziale dei dati presenti
             roomRef.child(`players/${hostId}/matchDetailsFull`).once('value', initSnap => {
+                if (currentMode !== 'spectator') return;
                 if (els.tableBody) els.tableBody.innerHTML = "";
                 if (initSnap.exists()) {
                     initSnap.val().forEach(row => window.appendSpectatorRow(row));
                 }
             });
 
-            // 2. Ascolto solo dell'ULTIMO aggiornamento (Risparmio download massiccio)
-            hostDetailsListener = roomRef.child(`players/${hostId}/lastUpdate`).on('value', dSnap => {
+            // 2. Ascolto dell'ULTIMO aggiornamento
+            lastUpdateRef = roomRef.child(`players/${hostId}/lastUpdate`);
+            lastUpdateRef.on('value', dSnap => {
+                if (currentMode !== 'spectator') return;
                 const lastRow = dSnap.val();
                 if (!lastRow) return;
                 window.appendSpectatorRow(lastRow);
@@ -81,7 +91,9 @@ window.watchSpecificRoom = function(code, targetName) {
         if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${hostData.score || 0}`;
     });
 
-    const onAudioChange = db.ref(`rooms/${roomCode}/liveAudio`).on('value', snap => {
+    const onAudioChange = liveAudioRef.on('value', snap => {
+        if (currentMode !== 'spectator') return;
+
         const audioData = snap.val();
         if (audioData && audioData.word) {
             const liveWpm = audioData.wordWpm || audioData.wpm || 20;
@@ -94,12 +106,10 @@ window.watchSpecificRoom = function(code, targetName) {
                 els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${liveWpm}`;
             }
 
-            // Se non c'è ancora un'attività recente in tabella, mostriamo l'avviso di ricezione SENZA rivelare la parola
             if (els.tableBody && els.tableBody.children.length === 0) {
                 els.tableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--link-color); padding:20px;">🎧 Ricezione segnale in corso...</td></tr>`;
             }
 
-            // Evitiamo di riprodurre la stessa parola più volte (controllo ts o wordId)
             const msgTs = audioData.ts || 0;
             if (msgTs > (window.lastSpectatorAudioTs || 0)) {
                 window.lastSpectatorAudioTs = msgTs;
@@ -111,14 +121,20 @@ window.watchSpecificRoom = function(code, targetName) {
     });
 
     window.currentSpectatorCleanup = function() {
-        if (hostDetailsListener) roomRef.child('players').off();
-        roomRef.off('value');
-        db.ref(`rooms/${roomCode}/liveAudio`).off('value', onAudioChange);
-        mySpectatorRef.remove();
+        console.log("🧹 Spectator Cleanup Executed");
+        if (lastUpdateRef) {
+            try { lastUpdateRef.off(); } catch(e){}
+            lastUpdateRef = null;
+        }
+        try { roomRef.off(); } catch(e){}
+        try { liveAudioRef.off(); } catch(e){}
+        try { mySpectatorRef.remove(); } catch(e){}
+        window.currentSpectatorCleanup = null;
     };
 };
 
 window.appendSpectatorRow = function(row) {
+    if (currentMode !== 'spectator') return; // PROTEZIONE: blocca righe se l'utente e in gioco singolo!
     if (!els.tableBody || !row) return;
 
     // Rimuoviamo eventuale riga "In ascolto segnale..." / "In attesa..."
@@ -127,7 +143,6 @@ window.appendSpectatorRow = function(row) {
         waitingCell.parentElement.remove();
     }
 
-    // Evitiamo duplicati (controllo base se la parola reale è l'ultima inserita)
     const rows = els.tableBody.querySelectorAll('tr');
     if (rows.length > 0) {
         const lastRow = rows[rows.length - 1];
@@ -160,7 +175,6 @@ window.appendSpectatorRow = function(row) {
 window.stopWatchingCleanly = function() {
     if (typeof window.currentSpectatorCleanup === 'function') {
         window.currentSpectatorCleanup();
-        window.currentSpectatorCleanup = null;
     }
     setTimeout(() => {
         roomCode = "";
