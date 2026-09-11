@@ -348,9 +348,9 @@ window.renderBatchRows = function() {
         rowDiv.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:4px;">
                 <b style="color:#ff9800; font-size:0.85em;">Blocco #${b.id}</b>
-                <span style="font-size:0.75em; color:var(--text-color);">
-                    📍 A: <strong id="batchMarkerA_${b.id}" style="color:#00ff66;">${fmt(b.markerA)}</strong> |
-                    📍 B: <strong id="batchMarkerB_${b.id}" style="color:#ff9800;">${fmt(b.markerB)}</strong> |
+                <span style="font-size:0.75em; color:var(--text-color); display:inline-flex; align-items:center; gap:3px;">
+                    📍 A: <input type="number" id="batchMarkerAInput_${b.id}" value="${b.markerA.toFixed(1)}" step="0.1" min="0" onchange="window.updateBatchBlockMarkersFromInput(${b.id})" style="width:60px; padding:2px 4px; font-size:0.85em; font-weight:bold; background:var(--sec-bg-color); color:#00ff66; border:1px solid #00ff66; border-radius:4px; text-align:center;">s |
+                    📍 B: <input type="number" id="batchMarkerBInput_${b.id}" value="${b.markerB.toFixed(1)}" step="0.1" min="0" onchange="window.updateBatchBlockMarkersFromInput(${b.id})" style="width:60px; padding:2px 4px; font-size:0.85em; font-weight:bold; background:var(--sec-bg-color); color:#ff9800; border:1px solid #ff9800; border-radius:4px; text-align:center;">s |
                     ⏱️ <strong id="batchDur_${b.id}" style="color:#00bcd4;">${(b.markerB - b.markerA).toFixed(1)}s</strong>
                 </span>
             </div>
@@ -499,18 +499,12 @@ window.initBatchRowCanvasEvents = function(b) {
             b.markerB = b.markerA + span;
         }
 
-        const dispA = document.getElementById(`batchMarkerA_${b.id}`);
-        const dispB = document.getElementById(`batchMarkerB_${b.id}`);
+        const inputA = document.getElementById(`batchMarkerAInput_${b.id}`);
+        const inputB = document.getElementById(`batchMarkerBInput_${b.id}`);
         const dispDur = document.getElementById(`batchDur_${b.id}`);
 
-        const fmt = (sec) => {
-            const m = Math.floor(sec / 60);
-            const s = (sec % 60).toFixed(1);
-            return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
-        };
-
-        if (dispA) dispA.innerText = fmt(b.markerA);
-        if (dispB) dispB.innerText = fmt(b.markerB);
+        if (inputA && document.activeElement !== inputA) inputA.value = b.markerA.toFixed(1);
+        if (inputB && document.activeElement !== inputB) inputB.value = b.markerB.toFixed(1);
         if (dispDur) dispDur.innerText = `${(b.markerB - b.markerA).toFixed(1)}s`;
 
         window.drawBatchRowCanvas(b);
@@ -1479,20 +1473,81 @@ window.updateMasterTimelineDisplay = function() {
     ctx.font = 'bold 10px sans-serif';
     ctx.fillText('[B 📍]', Math.min(width - 32, xB - 14), 12);
 
-    // Aggiornamento etichette HTML
-    const formatPrecise = (sec) => {
-        const m = Math.floor(sec / 60);
-        const s = (sec % 60).toFixed(1);
-        return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
-    };
-
-    const dispA = document.getElementById('markerADisplay');
-    const dispB = document.getElementById('markerBDisplay');
+    // Aggiornamento etichette ed input HTML manuali
+    const inputA = document.getElementById('aiMarkerAInput');
+    const inputB = document.getElementById('aiMarkerBInput');
     const dispDur = document.getElementById('markerDurationDisplay');
 
-    if (dispA) dispA.innerText = formatPrecise(markerA);
-    if (dispB) dispB.innerText = formatPrecise(markerB);
+    if (inputA && document.activeElement !== inputA) inputA.value = markerA.toFixed(1);
+    if (inputB && document.activeElement !== inputB) inputB.value = markerB.toFixed(1);
     if (dispDur) dispDur.innerText = `${(markerB - markerA).toFixed(1)}s`;
+};
+
+window.updateMarkersFromManualInput = function() {
+    const inputA = document.getElementById('aiMarkerAInput');
+    const inputB = document.getElementById('aiMarkerBInput');
+    const buf = window.aiTrainingState.currentAudioBuffer;
+
+    if (!inputA || !inputB) return;
+
+    let valA = parseFloat(inputA.value);
+    let valB = parseFloat(inputB.value);
+
+    if (isNaN(valA) || valA < 0) valA = 0;
+    if (buf && valA > buf.duration) valA = Math.max(0, buf.duration - 0.5);
+
+    if (isNaN(valB) || valB <= valA) valB = valA + 10.0;
+    if (buf && valB > buf.duration) valB = buf.duration;
+
+    window.aiTrainingState.markerA = valA;
+    window.aiTrainingState.markerB = valB;
+    window.aiTrainingState.currentWindowStart = valA;
+    window.aiTrainingState.currentWindowDuration = Math.max(0.2, valB - valA);
+
+    window.updateMasterTimelineDisplay();
+
+    if (window.aiTrainingState.manualInputTimeout) clearTimeout(window.aiTrainingState.manualInputTimeout);
+    window.aiTrainingState.manualInputTimeout = setTimeout(() => {
+        if (typeof window.runInferenceOnSegment === 'function') {
+            window.runInferenceOnSegment();
+        }
+    }, 250);
+};
+
+window.updateBatchBlockMarkersFromInput = function(blockId) {
+    const blocks = window.aiTrainingState.batchBlocks || [];
+    const b = blocks.find(x => x.id === blockId);
+    if (!b) return;
+
+    const inputA = document.getElementById(`batchMarkerAInput_${blockId}`);
+    const inputB = document.getElementById(`batchMarkerBInput_${blockId}`);
+    const buf = window.aiTrainingState.currentAudioBuffer;
+
+    if (!inputA || !inputB) return;
+
+    let valA = parseFloat(inputA.value);
+    let valB = parseFloat(inputB.value);
+
+    if (isNaN(valA) || valA < 0) valA = 0;
+    if (buf && valA > buf.duration) valA = Math.max(0, buf.duration - 0.5);
+
+    if (isNaN(valB) || valB <= valA) valB = valA + 5.0;
+    if (buf && valB > buf.duration) valB = buf.duration;
+
+    b.markerA = valA;
+    b.markerB = valB;
+
+    const dispDur = document.getElementById(`batchDur_${blockId}`);
+    if (dispDur) dispDur.innerText = `${(b.markerB - b.markerA).toFixed(1)}s`;
+
+    window.drawBatchRowCanvas(b);
+
+    if (window.aiTrainingState.batchManualTimeout) clearTimeout(window.aiTrainingState.batchManualTimeout);
+    window.aiTrainingState.batchManualTimeout = setTimeout(() => {
+        if (typeof window.runBatchInferenceForBlock === 'function') {
+            window.runBatchInferenceForBlock(b);
+        }
+    }, 250);
 };
 
 window.zoomAiAudioTimeline = function(factor) {
