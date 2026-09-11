@@ -359,16 +359,16 @@ window.renderBatchRows = function() {
                 <canvas id="batchCanvas_${b.id}" width="800" height="70" style="width:100%; height:100%; display:block; cursor:crosshair;"></canvas>
             </div>
 
-            <div style="display:flex; flex-direction:column; gap:6px;">
-                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                    <button onclick="window.playBatchBlock(${b.id})" class="action-btn-small btn-success" style="padding:4px 10px; font-size:0.8em; font-weight:bold;">▶️ Ascolta #${b.id}</button>
-                    <input type="text" id="batchAiText_${b.id}" readonly value="${b.aiText}" placeholder="Predizione IA..." style="flex:1; min-width:160px; padding:4px 8px; font-size:0.85em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid #00bcd4; border-radius:4px;">
-                    <button onclick="window.copyBatchAiToUser(${b.id})" class="action-btn-small btn-secondary" style="padding:4px 8px; font-size:0.75em;" title="Copia suggerimento IA">📋 Copia</button>
+            <div style="display:flex; flex-direction:column; gap:6px; width:100%; box-sizing:border-box;">
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; width:100%; box-sizing:border-box;">
+                    <button onclick="window.playBatchBlock(${b.id})" class="action-btn-small btn-success" style="padding:6px 10px; font-size:0.8em; font-weight:bold;">▶️ Ascolta #${b.id}</button>
+                    <input type="text" id="batchAiText_${b.id}" readonly value="${b.aiText}" placeholder="Predizione IA..." style="flex:1; min-width:120px; padding:6px 8px; font-size:0.85em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid #00bcd4; border-radius:4px; box-sizing:border-box;">
+                    <button onclick="window.copyBatchAiToUser(${b.id})" class="action-btn-small btn-secondary" style="padding:6px 10px; font-size:0.75em;" title="Copia suggerimento IA">📋 Copia</button>
                 </div>
 
-                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                    <input type="text" id="batchUserText_${b.id}" value="${b.userText}" oninput="window.aiTrainingState.batchBlocks[${b.id-1}].userText=this.value" placeholder="Scrivi/correggi qui la trascrizione reale dell'audio..." style="flex:1; min-width:200px; padding:6px 8px; font-size:0.85em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid ${b.isSent ? '#d32f2f' : '#ff9800'}; border-radius:4px;">
-                    <button id="batchSendBtn_${b.id}" onclick="window.sendBatchBlockToCloud(${b.id})" class="action-btn-small ${b.isSent ? 'btn-danger' : 'btn-success'}" style="padding:6px 12px; font-weight:bold; font-size:0.8em; background:${b.isSent ? '#d32f2f' : '#4caf50'}; border-color:${b.isSent ? '#ff5252' : '#81c784'};">
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; width:100%; box-sizing:border-box;">
+                    <input type="text" id="batchUserText_${b.id}" value="${b.userText}" oninput="window.aiTrainingState.batchBlocks[${b.id-1}].userText=this.value" placeholder="Scrivi/correggi qui la trascrizione reale dell'audio..." style="flex:1; min-width:140px; padding:6px 8px; font-size:0.85em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid ${b.isSent ? '#d32f2f' : '#ff9800'}; border-radius:4px; box-sizing:border-box;">
+                    <button id="batchSendBtn_${b.id}" onclick="window.sendBatchBlockToCloud(${b.id})" class="action-btn-small ${b.isSent ? 'btn-danger' : 'btn-success'}" style="padding:6px 12px; font-weight:bold; font-size:0.8em; background:${b.isSent ? '#d32f2f' : '#4caf50'}; border-color:${b.isSent ? '#ff5252' : '#81c784'}; box-sizing:border-box; flex-shrink:0;">
                         ${b.isSent ? `🔴 INVIATO (#${b.id})` : `💾 INVIA FOGLIO GOOGLE`}
                     </button>
                 </div>
@@ -2504,26 +2504,59 @@ window.saveVerifiedAiPair = function() {
 
 window.syncPairToGoogleCloudSheet = function(pair) {
     if (!pair || !pair.userCorrection) return;
-    const appsScriptUrl = window.aiActiveAddestraUrl || "";
+    const appsScriptUrl = window.aiActiveAddestraUrl || localStorage.getItem('cwgame_addestra_url') || "";
+    if (!appsScriptUrl) {
+        console.warn("⚠️ URL Apps Script ADDESTRA non configurato.");
+        return;
+    }
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.myId || "";
 
-    const params = new URLSearchParams({
-        action: "save_approved",
-        filename: pair.filename || "QSO_Clip",
-        time_pos: pair.timePos || "00:00 - 00:10",
-        transcript: pair.userCorrection || "",
-        ai_prediction: pair.aiPrediction || ""
-    });
+    const candidateActions = ["save_approved", "save", "save_transcript", "save_pair", "addestra", "approve"];
 
-    if (uid) params.append("uid", uid);
-    if (token) params.append("token", token);
+    const sendAction = (actionIdx) => {
+        if (actionIdx >= candidateActions.length) {
+            console.error("❌ Tutti i tentativi di sinc. Google Sheet sono falliti con Azione non valida.");
+            return;
+        }
 
-    fetch(`${appsScriptUrl}?${params.toString()}`)
-        .then(r => r.json())
-        .then(res => console.log("✓ Sincronizzato con il Foglio Google ADDESTRA in Cloud:", res))
-        .catch(err => console.warn("Google Cloud Sheet sync warning:", err));
+        const act = candidateActions[actionIdx];
+        const params = new URLSearchParams({
+            action: act,
+            filename: pair.filename || "QSO_Clip",
+            time_pos: pair.timePos || "00:00 - 00:10",
+            transcript: pair.userCorrection || "",
+            ai_prediction: pair.aiPrediction || "",
+            text: pair.userCorrection || "",
+            qso_name: pair.filename || "QSO_Clip"
+        });
+
+        if (uid) params.append("uid", uid);
+        if (token) params.append("token", token);
+
+        fetch(`${appsScriptUrl}?${params.toString()}`)
+            .then(r => r.json())
+            .then(res => {
+                if (res && res.status === 'error' && res.message && res.message.includes('Azione non valida')) {
+                    console.warn(`⚠️ Action '${act}' rejected by GAS with 'Azione non valida', retrying with '${candidateActions[actionIdx + 1]}'...`);
+                    sendAction(actionIdx + 1);
+                } else {
+                    console.log(`✓ Sincronizzato con successo sul Foglio Google ADDESTRA (action=${act}):`, res);
+                    if (typeof showToast === 'function' && res && res.status === 'success') {
+                        showToast("✅ Sincronizzato con successo sul Cloud!");
+                    }
+                }
+            })
+            .catch(err => {
+                console.warn(`Google Cloud Sheet sync attempt error (${act}):`, err);
+                if (actionIdx + 1 < candidateActions.length) {
+                    sendAction(actionIdx + 1);
+                }
+            });
+    };
+
+    sendAction(0);
 };
 
 window.persistAiSavedPairs = function() {
