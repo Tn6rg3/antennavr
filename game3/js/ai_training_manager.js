@@ -362,12 +362,12 @@ window.renderBatchRows = function() {
             <div style="display:flex; flex-direction:column; gap:6px;">
                 <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                     <button onclick="window.playBatchBlock(${b.id})" class="action-btn-small btn-success" style="padding:4px 10px; font-size:0.8em; font-weight:bold;">▶️ Ascolta #${b.id}</button>
-                    <input type="text" id="batchAiText_${b.id}" readonly value="${b.aiText}" placeholder="Predizione IA..." style="flex:1; min-width:160px; padding:4px 8px; font-size:0.8em; font-family:monospace; background:#0d1822; color:#00e5ff; border:1px solid #00bcd4; border-radius:4px;">
+                    <input type="text" id="batchAiText_${b.id}" readonly value="${b.aiText}" placeholder="Predizione IA..." style="flex:1; min-width:160px; padding:4px 8px; font-size:0.85em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid #00bcd4; border-radius:4px;">
                     <button onclick="window.copyBatchAiToUser(${b.id})" class="action-btn-small btn-secondary" style="padding:4px 8px; font-size:0.75em;" title="Copia suggerimento IA">📋 Copia</button>
                 </div>
 
                 <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                    <input type="text" id="batchUserText_${b.id}" value="${b.userText}" oninput="window.aiTrainingState.batchBlocks[${b.id-1}].userText=this.value" placeholder="Scrivi/correggi qui la trascrizione reale dell'audio..." style="flex:1; min-width:200px; padding:6px 8px; font-size:0.85em; font-family:monospace; font-weight:bold; background:#121820; color:#ffffff; border:1px solid ${b.isSent ? '#d32f2f' : '#ff9800'}; border-radius:4px;">
+                    <input type="text" id="batchUserText_${b.id}" value="${b.userText}" oninput="window.aiTrainingState.batchBlocks[${b.id-1}].userText=this.value" placeholder="Scrivi/correggi qui la trascrizione reale dell'audio..." style="flex:1; min-width:200px; padding:6px 8px; font-size:0.85em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid ${b.isSent ? '#d32f2f' : '#ff9800'}; border-radius:4px;">
                     <button id="batchSendBtn_${b.id}" onclick="window.sendBatchBlockToCloud(${b.id})" class="action-btn-small ${b.isSent ? 'btn-danger' : 'btn-success'}" style="padding:6px 12px; font-weight:bold; font-size:0.8em; background:${b.isSent ? '#d32f2f' : '#4caf50'}; border-color:${b.isSent ? '#ff5252' : '#81c784'};">
                         ${b.isSent ? `🔴 INVIATO (#${b.id})` : `💾 INVIA FOGLIO GOOGLE`}
                     </button>
@@ -526,8 +526,11 @@ window.initBatchRowCanvasEvents = function(b) {
         if (e.touches && e.touches[0]) handleDown(e.touches[0].clientX);
     }, { passive: true });
     canvas.addEventListener('touchmove', (e) => {
+        if (activeDrag) {
+            if (e.cancelable) e.preventDefault();
+        }
         if (e.touches && e.touches[0]) handleMove(e.touches[0].clientX);
-    }, { passive: true });
+    }, { passive: false });
     canvas.addEventListener('touchend', handleUp);
 };
 
@@ -1350,8 +1353,11 @@ window.initMasterTimelineCanvas = function() {
         if (e.touches && e.touches[0]) handlePointerDown(e.touches[0].clientX);
     }, { passive: true });
     canvas.addEventListener('touchmove', (e) => {
+        if (window.aiTrainingState.activeDraggingMarker) {
+            if (e.cancelable) e.preventDefault();
+        }
         if (e.touches && e.touches[0]) handlePointerMove(e.touches[0].clientX);
-    }, { passive: true });
+    }, { passive: false });
     canvas.addEventListener('touchend', handlePointerUp);
 };
 
