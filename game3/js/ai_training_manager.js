@@ -786,7 +786,7 @@ window.fetchAddestraUrlFromFirebase = async function() {
         return window.aiActiveAddestraUrl;
     }
 
-    const localStoredUrl = localStorage.getItem('cwgame_addestra_url') || localStorage.getItem('cwgame_qso_audio_url');
+    const localStoredUrl = localStorage.getItem('cwgame_addestra_url');
     if (localStoredUrl && localStoredUrl.startsWith('http')) {
         window.aiActiveAddestraUrl = localStoredUrl;
         if (!window.aiAllFirebaseUrls) window.aiAllFirebaseUrls = [localStoredUrl];
@@ -794,18 +794,20 @@ window.fetchAddestraUrlFromFirebase = async function() {
 
     try {
         if (typeof firebase !== 'undefined' && firebase.database) {
-            const [snap1, snap2, snap3, snap4] = await Promise.all([
-                firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
+            const [snapAdd1, snapAdd2, snapVal, snapQso1, snapQso2] = await Promise.all([
                 firebase.database().ref('appConfig/addestra_script_url').once('value').catch(() => null),
-                firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null),
-                firebase.database().ref('config/addestra_script_url').once('value').catch(() => null)
+                firebase.database().ref('config/addestra_script_url').once('value').catch(() => null),
+                firebase.database().ref('appConfig/validation_server_url').once('value').catch(() => null),
+                firebase.database().ref('appConfig/qso_audio_server_url').once('value').catch(() => null),
+                firebase.database().ref('config/qso_audio_server_url').once('value').catch(() => null)
             ]);
 
             const foundUrls = [
-                snap1 ? snap1.val() : null,
-                snap2 ? snap2.val() : null,
-                snap3 ? snap3.val() : null,
-                snap4 ? snap4.val() : null
+                snapAdd1 ? snapAdd1.val() : null,
+                snapAdd2 ? snapAdd2.val() : null,
+                snapVal ? snapVal.val() : null,
+                snapQso1 ? snapQso1.val() : null,
+                snapQso2 ? snapQso2.val() : null
             ].filter(u => u && typeof u === 'string' && u.trim().startsWith('http')).map(u => u.trim());
 
             if (foundUrls.length > 0) {
@@ -2502,26 +2504,35 @@ window.saveVerifiedAiPair = function() {
     if (userBox) userBox.value = '';
 };
 
-window.syncPairToGoogleCloudSheet = function(pair) {
+window.syncPairToGoogleCloudSheet = async function(pair) {
     if (!pair || !pair.userCorrection) return;
-    const appsScriptUrl = window.aiActiveAddestraUrl || localStorage.getItem('cwgame_addestra_url') || "";
-    if (!appsScriptUrl) {
-        console.warn("⚠️ URL Apps Script ADDESTRA non configurato.");
-        return;
-    }
+
+    // Raccoglie tutti i possibili URL di Google Apps Script salvati o presenti in Firebase
+    const candidateUrls = [
+        window.aiActiveAddestraUrl,
+        localStorage.getItem('cwgame_addestra_url'),
+        (typeof VALIDATION_SERVER_URL !== 'undefined' ? VALIDATION_SERVER_URL : null),
+        "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec",
+        window.qsoAudioServerUrl,
+        localStorage.getItem('cwgame_qso_audio_url')
+    ].filter(u => u && typeof u === 'string' && u.trim().startsWith('http')).map(u => u.trim());
+
+    const uniqueUrls = [...new Set(candidateUrls)];
+    const candidateActions = ["save_approved", "save", "save_transcript", "save_pair", "addestra", "approve"];
 
     const token = window.aiAuthToken || localStorage.getItem('cwgame_ai_auth_token') || "";
     const uid = window.myId || "";
 
-    const candidateActions = ["save_approved", "save", "save_transcript", "save_pair", "addestra", "approve"];
-
-    const sendAction = (actionIdx) => {
-        if (actionIdx >= candidateActions.length) {
-            console.error("❌ Tutti i tentativi di sinc. Google Sheet sono falliti con Azione non valida.");
+    const trySync = async (urlIdx, actionIdx) => {
+        if (urlIdx >= uniqueUrls.length) {
+            console.error("❌ Impossibile sincronizzare sul Foglio Google: Tutti gli URL Apps Script e le azioni hanno fallito.");
+            if (typeof showToast === 'function') showToast("⚠️ Errore sincronizzazione Cloud. Verificare URL script su Firebase.");
             return;
         }
 
+        const targetUrl = uniqueUrls[urlIdx];
         const act = candidateActions[actionIdx];
+
         const params = new URLSearchParams({
             action: act,
             filename: pair.filename || "QSO_Clip",
@@ -2535,28 +2546,36 @@ window.syncPairToGoogleCloudSheet = function(pair) {
         if (uid) params.append("uid", uid);
         if (token) params.append("token", token);
 
-        fetch(`${appsScriptUrl}?${params.toString()}`)
-            .then(r => r.json())
-            .then(res => {
-                if (res && res.status === 'error' && res.message && res.message.includes('Azione non valida')) {
-                    console.warn(`⚠️ Action '${act}' rejected by GAS with 'Azione non valida', retrying with '${candidateActions[actionIdx + 1]}'...`);
-                    sendAction(actionIdx + 1);
-                } else {
-                    console.log(`✓ Sincronizzato con successo sul Foglio Google ADDESTRA (action=${act}):`, res);
-                    if (typeof showToast === 'function' && res && res.status === 'success') {
-                        showToast("✅ Sincronizzato con successo sul Cloud!");
-                    }
-                }
-            })
-            .catch(err => {
-                console.warn(`Google Cloud Sheet sync attempt error (${act}):`, err);
+        try {
+            const resp = await fetch(`${targetUrl}?${params.toString()}`);
+            const res = await resp.json();
+
+            if (res && res.status === 'error' && res.message && res.message.includes('Azione non valida')) {
+                console.warn(`⚠️ URL '${targetUrl.substring(0, 45)}...' action '${act}' rejected. Proviamo prossima azione/URL...`);
                 if (actionIdx + 1 < candidateActions.length) {
-                    sendAction(actionIdx + 1);
+                    await trySync(urlIdx, actionIdx + 1);
+                } else {
+                    await trySync(urlIdx + 1, 0); // Passa al prossimo URL Apps Script!
                 }
-            });
+            } else {
+                console.log(`✓ Sincronizzato con successo sul Foglio Google ADDESTRA (url=${targetUrl.substring(0, 40)}..., action=${act}):`, res);
+                window.aiActiveAddestraUrl = targetUrl;
+                localStorage.setItem('cwgame_addestra_url', targetUrl);
+                if (typeof showToast === 'function') {
+                    showToast("✅ Sincronizzato con successo sul Cloud ADDESTRA!");
+                }
+            }
+        } catch(err) {
+            console.warn(`Tentativo sync fallito per URL ${targetUrl.substring(0, 40)}... (${act}):`, err);
+            if (actionIdx + 1 < candidateActions.length) {
+                await trySync(urlIdx, actionIdx + 1);
+            } else {
+                await trySync(urlIdx + 1, 0);
+            }
+        }
     };
 
-    sendAction(0);
+    await trySync(0, 0);
 };
 
 window.persistAiSavedPairs = function() {
