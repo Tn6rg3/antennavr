@@ -1955,8 +1955,9 @@ window.openStandaloneAiStudio = window.openStandaloneAiStudio || function() {
 <!-- SCHERMATA ADDESTRA IA & STUDIO DECODIFICA -->
 <div id="aiTrainingScreen" class="screen">
     <div class="screen-content" style="gap: 8px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
             <h2 style="color:var(--champ-color); margin:0; font-size:1.1em;">🤖 Addestra IA (Morse Studio)</h2>
+            <button onclick="goBackToMenu()" class="action-btn-small btn-secondary" style="padding:4px 10px; font-size:0.8em; font-weight:bold; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3);">⬅️ Torna al Menu</button>
         </div>
 
         <!-- PULSANTE APERTURA STUDIO A-B IN NUOVA SCHEDA BROWSER -->
@@ -2089,26 +2090,21 @@ window.openStandaloneAiStudio = window.openStandaloneAiStudio || function() {
                 <div style="margin-bottom:8px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:4px;">
                         <label style="font-size:0.75em; color:var(--hint-color); font-weight:bold;">🤖 TEXTBOX 1 - Decodifica IA Automatica:</label>
-                        <label style="font-size:0.75em; color:var(--champ-color); font-weight:bold;">
-                            🧠 Modello ONNX:
-                            <select id="aiModelSelect" onchange="window.changeAiModel()" style="padding:2px 6px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid var(--champ-color); border-radius:4px; margin-left:2px;">
-                                <option value="addestra/morse_model.onnx" selected>morse_model.onnx (Standard)</option>
-                                <option value="addestra/morse_model_v2.onnx">morse_model_v2.onnx</option>
-                                <option value="addestra/morse_model_v3.onnx">morse_model_v3.onnx</option>
-                                <option value="addestra/morse_model_pro.onnx">morse_model_pro.onnx</option>
-                            </select>
-                        </label>
-                    </div>
-
-                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:4px; padding:4px 6px; background:rgba(0,0,0,0.2); border-radius:4px;">
-                        <label style="font-size:0.75em; color:#ff9800; font-weight:bold; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
-                            <input type="checkbox" id="aiSlowMotionToggle" onchange="window.toggleAiSlowMotion(this.checked)" checked style="accent-color:#ff9800;">
-                            🐌 Pre-analizza IA a 0.75x (Time-Stretch)
-                        </label>
-                        <label style="font-size:0.75em; color:var(--hint-color); font-weight:bold; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
-                            <input type="checkbox" id="aiEnableDspToggle" onchange="window.toggleAiDspFallback(this.checked)" style="accent-color:#00bcd4;">
-                            ⚙️ Attiva anche DSP (Fallback)
-                        </label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <label style="font-size:0.75em; color:var(--hint-color); font-weight:bold; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+                                <input type="checkbox" id="aiEnableDspToggle" onchange="window.toggleAiDspFallback(this.checked)" style="accent-color:#00bcd4;">
+                                ⚙️ Attiva anche DSP (Fallback)
+                            </label>
+                            <label style="font-size:0.75em; color:var(--champ-color); font-weight:bold;">
+                                🧠 Modello ONNX:
+                                <select id="aiModelSelect" onchange="window.changeAiModel()" style="padding:2px 6px; font-size:0.8em; background:var(--sec-bg-color); color:var(--text-color); border:1px solid var(--champ-color); border-radius:4px; margin-left:2px;">
+                                    <option value="addestra/morse_model.onnx" selected>morse_model.onnx (Standard)</option>
+                                    <option value="addestra/morse_model_v2.onnx">morse_model_v2.onnx</option>
+                                    <option value="addestra/morse_model_v3.onnx">morse_model_v3.onnx</option>
+                                    <option value="addestra/morse_model_pro.onnx">morse_model_pro.onnx</option>
+                                </select>
+                            </label>
+                        </div>
                     </div>
 
                     <input type="text" id="aiPredictionText" readonly placeholder="Analisi in corso..." style="width:100%; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid var(--champ-color); border-radius:6px; box-sizing:border-box;">
