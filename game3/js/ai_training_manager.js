@@ -1716,6 +1716,36 @@ window.drawAiSegmentWaveform = function() {
     window.updateMasterTimelineDisplay();
 };
 
+window.cleanupAiStudioState = function() {
+    console.log("🧹 Cleaning up AI Studio state, stopping audio, mic and background notifications...");
+    if (window.aiTrainingState) {
+        window.aiTrainingState.isAiStudioActive = false;
+    }
+
+    if (typeof window.stopCurrentAiAudio === 'function') {
+        window.stopCurrentAiAudio();
+    }
+
+    if (typeof window.stopAiMicrophone === 'function') {
+        window.stopAiMicrophone();
+    }
+
+    if (window.aiTrainingState) {
+        if (window.aiTrainingState.autoInferenceTimeout) {
+            clearTimeout(window.aiTrainingState.autoInferenceTimeout);
+            window.aiTrainingState.autoInferenceTimeout = null;
+        }
+        if (window.aiTrainingState.batchManualTimeout) {
+            clearTimeout(window.aiTrainingState.batchManualTimeout);
+            window.aiTrainingState.batchManualTimeout = null;
+        }
+        if (window.aiTrainingState.manualInputTimeout) {
+            clearTimeout(window.aiTrainingState.manualInputTimeout);
+            window.aiTrainingState.manualInputTimeout = null;
+        }
+    }
+};
+
 window.stopCurrentAiAudio = function() {
     if (window.aiTrainingState.currentSourceNode) {
         try {
@@ -2571,7 +2601,7 @@ window.syncPairToGoogleCloudSheet = async function(pair) {
                 console.log(`✓ Sincronizzato con successo sul Foglio Google ADDESTRA (url=${targetUrl.substring(0, 40)}..., action=${act}):`, res);
                 window.aiActiveAddestraUrl = targetUrl;
                 localStorage.setItem('cwgame_addestra_url', targetUrl);
-                if (typeof showToast === 'function') {
+                if (window.aiTrainingState.isAiStudioActive === true && typeof showToast === 'function') {
                     showToast("✅ Sincronizzato con successo sul Cloud ADDESTRA!");
                 }
             }

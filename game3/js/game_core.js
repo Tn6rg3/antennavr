@@ -21,6 +21,17 @@ window.showScreen = function(screenId) {
         window.stopAudioAnalyzer();
     }
 
+    // Sicurezza: se usciamo dalla schermata Addestra IA, interrompiamo audio, microfono e notifiche IA
+    if (screenId !== 'aiTrainingScreen') {
+        if (typeof window.cleanupAiStudioState === 'function') {
+            window.cleanupAiStudioState();
+        }
+    } else {
+        if (window.aiTrainingState) {
+            window.aiTrainingState.isAiStudioActive = true;
+        }
+    }
+
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
     }
