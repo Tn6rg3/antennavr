@@ -589,11 +589,12 @@ window.runBatchInferenceForBlock = async function(b) {
     if (!buf || !b) return;
 
     const aiInput = document.getElementById(`batchAiText_${b.id}`);
-    if (aiInput) aiInput.value = "⚡ Analisi...";
+    if (aiInput) aiInput.value = "⚡ Analisi IA...";
 
     try {
         const duration = Math.max(0.2, b.markerB - b.markerA);
-        const audio16k = await resampleAudioBufferTo16k(buf, b.markerA, duration);
+        const baseAudio = await resampleAudioBufferTo16k(buf, b.markerA, duration);
+        const audio16k = window.timeStretchAudio075(baseAudio);
 
         let rawResult = "";
         if (window.aiTrainingState.ortSession) {
@@ -634,7 +635,7 @@ window.runBatchInferenceForBlock = async function(b) {
             }
         }
 
-        const dspResult = decodeMorseDSP(audio16k, 16000);
+        const dspResult = (window.aiTrainingState.enableDspFallback || !window.aiTrainingState.ortSession) ? decodeMorseDSP(audio16k, 16000) : "";
         const text = rawResult.trim() || dspResult.trim();
         const cleanText = text.replace(/[*():;=.,\s]+$/g, "").replace(/^[*():;=.,\s]+/g, "").trim();
 
@@ -1982,7 +1983,8 @@ window.runInferenceOnSegment = async function() {
             return;
         }
 
-        const audio16k = await resampleAudioBufferTo16k(buf, start, duration);
+        const baseAudio = await resampleAudioBufferTo16k(buf, start, duration);
+        const audio16k = window.timeStretchAudio075(baseAudio);
 
         let aiResult = "";
         if (window.aiTrainingState.ortSession) {
@@ -2074,7 +2076,7 @@ window.runInferenceOnSegment = async function() {
             }
         }
 
-        const dspResult = decodeMorseDSP(audio16k, 16000);
+        const dspResult = (window.aiTrainingState.enableDspFallback || !window.aiTrainingState.ortSession) ? decodeMorseDSP(audio16k, 16000) : "";
         const rawText = aiResult.trim() || dspResult.trim();
         let cleanText = rawText.replace(/[*():;=.,\s]+$/g, "").replace(/^[*():;=.,\s]+/g, "").trim();
         cleanText = cleanText.replace(/\*/g, "").replace(/\b\.\b/g, "").replace(/\s+/g, " ").trim();
@@ -2120,6 +2122,48 @@ window.changeAiDictLanguage = function() {
     if (typeof window.runInferenceOnSegment === 'function') {
         window.runInferenceOnSegment();
     }
+};
+
+window.toggleAiSlowMotion = function(checked) {
+    window.aiTrainingState.enableSlowMotion075 = checked;
+    if (typeof showToast === 'function') {
+        showToast(checked ? "🐌 Pre-analizzatore IA Rallentato 0.75x Attivo!" : "⚡ Pre-analizzatore IA a Velocità Normale 1.0x");
+    }
+    if (typeof window.runInferenceOnSegment === 'function') {
+        window.runInferenceOnSegment();
+    }
+};
+
+window.toggleAiDspFallback = function(checked) {
+    window.aiTrainingState.enableDspFallback = checked;
+    if (typeof showToast === 'function') {
+        showToast(checked ? "⚙️ Decodificatore DSP Fallback Attivato" : "🤖 Decodifica Esclusiva IA ONNX Attiva");
+    }
+    if (typeof window.runInferenceOnSegment === 'function') {
+        window.runInferenceOnSegment();
+    }
+};
+
+window.timeStretchAudio075 = function(audio16k) {
+    if (!audio16k || audio16k.length < 160) return audio16k;
+
+    // Se l'opzione Rallentamento 0.75x e disattivata dall'utente, restituisce l'audio standard
+    if (window.aiTrainingState.enableSlowMotion075 === false) return audio16k;
+
+    // Espande la durata temporale di 1.333x (ossia rallenta a 0.75x mantenendo intatto il pitch della nota Morse)
+    const factor = 1.333333;
+    const newLength = Math.floor(audio16k.length * factor);
+    const stretched = new Float32Array(newLength);
+
+    for (let i = 0; i < newLength; i++) {
+        const origIdx = i / factor;
+        const i0 = Math.floor(origIdx);
+        const i1 = Math.min(audio16k.length - 1, i0 + 1);
+        const frac = origIdx - i0;
+        stretched[i] = audio16k[i0] * (1 - frac) + audio16k[i1] * frac;
+    }
+
+    return stretched;
 };
 
 window.loadRadioDictionaries = async function() {
