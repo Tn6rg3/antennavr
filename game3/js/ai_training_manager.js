@@ -593,8 +593,7 @@ window.runBatchInferenceForBlock = async function(b) {
 
     try {
         const duration = Math.max(0.2, b.markerB - b.markerA);
-        const baseAudio = await resampleAudioBufferTo16k(buf, b.markerA, duration);
-        const audio16k = window.timeStretchAudio075(baseAudio);
+        const audio16k = await resampleAudioBufferTo16k(buf, b.markerA, duration);
 
         let rawResult = "";
         if (window.aiTrainingState.ortSession) {
@@ -1983,8 +1982,7 @@ window.runInferenceOnSegment = async function() {
             return;
         }
 
-        const baseAudio = await resampleAudioBufferTo16k(buf, start, duration);
-        const audio16k = window.timeStretchAudio075(baseAudio);
+        const audio16k = await resampleAudioBufferTo16k(buf, start, duration);
 
         let aiResult = "";
         if (window.aiTrainingState.ortSession) {
@@ -2124,16 +2122,6 @@ window.changeAiDictLanguage = function() {
     }
 };
 
-window.toggleAiSlowMotion = function(checked) {
-    window.aiTrainingState.enableSlowMotion075 = checked;
-    if (typeof showToast === 'function') {
-        showToast(checked ? "🐌 Pre-analizzatore IA Rallentato 0.75x Attivo!" : "⚡ Pre-analizzatore IA a Velocità Normale 1.0x");
-    }
-    if (typeof window.runInferenceOnSegment === 'function') {
-        window.runInferenceOnSegment();
-    }
-};
-
 window.toggleAiDspFallback = function(checked) {
     window.aiTrainingState.enableDspFallback = checked;
     if (typeof showToast === 'function') {
@@ -2142,28 +2130,6 @@ window.toggleAiDspFallback = function(checked) {
     if (typeof window.runInferenceOnSegment === 'function') {
         window.runInferenceOnSegment();
     }
-};
-
-window.timeStretchAudio075 = function(audio16k) {
-    if (!audio16k || audio16k.length < 160) return audio16k;
-
-    // Se l'opzione Rallentamento 0.75x e disattivata dall'utente, restituisce l'audio standard
-    if (window.aiTrainingState.enableSlowMotion075 === false) return audio16k;
-
-    // Espande la durata temporale di 1.333x (ossia rallenta a 0.75x mantenendo intatto il pitch della nota Morse)
-    const factor = 1.333333;
-    const newLength = Math.floor(audio16k.length * factor);
-    const stretched = new Float32Array(newLength);
-
-    for (let i = 0; i < newLength; i++) {
-        const origIdx = i / factor;
-        const i0 = Math.floor(origIdx);
-        const i1 = Math.min(audio16k.length - 1, i0 + 1);
-        const frac = origIdx - i0;
-        stretched[i] = audio16k[i0] * (1 - frac) + audio16k[i1] * frac;
-    }
-
-    return stretched;
 };
 
 window.loadRadioDictionaries = async function() {
