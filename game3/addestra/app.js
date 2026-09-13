@@ -216,6 +216,63 @@ function changeAudioSourceDevice(event) {
     }
 }
 
+function playTestCwBeep() {
+    try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.value = 650;
+
+        const dot = 0.08;
+        const dash = 0.24;
+        let t = ctx.currentTime + 0.1;
+
+        // C (-.-.)
+        t = addBeep(gain, t, dash); t += dot;
+        t = addBeep(gain, t, dot); t += dot;
+        t = addBeep(gain, t, dash); t += dot;
+        t = addBeep(gain, t, dot); t += dash;
+
+        // Q (--.-)
+        t = addBeep(gain, t, dash); t += dot;
+        t = addBeep(gain, t, dash); t += dot;
+        t = addBeep(gain, t, dot); t += dot;
+        t = addBeep(gain, t, dash);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(ctx.currentTime + 0.1);
+        osc.stop(t + 0.2);
+
+        injectAudioBufferToDecoder(650, (t - ctx.currentTime) + 0.5);
+    } catch (e) {
+        console.warn("Test CW Beep note:", e);
+    }
+}
+
+function addBeep(gain, startTime, duration) {
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(0.4, startTime + 0.005);
+    gain.gain.setValueAtTime(0.4, startTime + duration - 0.005);
+    gain.gain.linearRampToValueAtTime(0, startTime + duration);
+    return startTime + duration;
+}
+
+function injectAudioBufferToDecoder(freq = 650, durationSec = 2.5) {
+    const sr = 16000;
+    const numSamples = Math.floor(sr * durationSec);
+    const twoPiF = 2 * Math.PI * freq;
+
+    for (let i = 0; i < numSamples; i++) {
+        const sample = Math.sin((i / sr) * twoPiF) * 0.4;
+        liveAudioBuffer[liveBufferPos] = sample;
+        liveBufferPos = (liveBufferPos + 1) % liveAudioBuffer.length;
+    }
+}
+
 function updateInputGain(event) {
     currentInputGain = parseFloat(event.target.value) || 1.0;
     const label = document.getElementById('inputGainVal');

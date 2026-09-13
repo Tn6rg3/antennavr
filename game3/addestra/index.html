@@ -65,13 +65,15 @@
                 </div>
             </div>
 
-            <!-- LIVE AUDIO SIGNAL LEVEL METER (VU METER) -->
-            <div style="background:#080e14; padding:12px 16px; border-radius:10px; border:1px solid #1e293b; margin-bottom:16px; display:flex; align-items:center; gap:15px;">
-                <label style="font-size:0.85rem; color:#00bcd4; margin:0; font-weight:bold; white-space:nowrap;">📊 Livello Segnale Audio Ingressi (VU Meter):</label>
-                <div style="flex:1; background:#060a0f; height:18px; border-radius:9px; border:1px solid #1e293b; overflow:hidden; position:relative;">
+            <!-- LIVE AUDIO SIGNAL LEVEL METER (VU METER) + TEST TONE BUTTON -->
+            <div style="background:#080e14; padding:12px 16px; border-radius:10px; border:1px solid #1e293b; margin-bottom:16px; display:flex; flex-wrap:wrap; align-items:center; gap:15px;">
+                <label style="font-size:0.85rem; color:#00bcd4; margin:0; font-weight:bold; white-space:nowrap;">📊 Livello Segnale (VU Meter):</label>
+                <div style="flex:1; min-width:150px; background:#060a0f; height:18px; border-radius:9px; border:1px solid #1e293b; overflow:hidden; position:relative;">
                     <div id="signalVuBar" style="width:0%; height:100%; background:linear-gradient(90deg, #00e676 0%, #ffeb3b 75%, #ff5252 100%); transition:width 0.05s ease;"></div>
                 </div>
-                <span id="signalVuVal" style="font-size:0.85rem; color:#00ff66; font-weight:bold; min-width:45px; text-align:right;">0%</span>
+                <span id="signalVuVal" style="font-size:0.85rem; color:#00ff66; font-weight:bold; min-width:40px; text-align:right;">0%</span>
+
+                <button class="btn btn-primary" style="padding:4px 12px; font-size:0.8rem; background-color:#0284c7; white-space:nowrap;" onclick="playTestCwBeep()">🔊 Bip Prova "CQ"</button>
             </div>
 
             <!-- Radio SDR Help Banner -->
