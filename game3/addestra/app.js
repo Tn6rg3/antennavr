@@ -291,7 +291,7 @@ function ctcGreedyDecodeJS(logitsData, dims) {
     for (let t = 0; t < T; t++) {
         let maxVal = -Infinity;
         let maxIdx = 0;
-        for (let c = 0; k < C; c++) {
+        for (let c = 0; c < C; c++) {
             const val = logitsData[t * C + c];
             if (val > maxVal) {
                 maxVal = val;
