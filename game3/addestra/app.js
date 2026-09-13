@@ -117,13 +117,27 @@ async function attachLiveStreamToDecoder(stream) {
         if (!isListening) return;
         const inputData = e.inputBuffer.getChannelData(0);
 
+        let sumSq = 0.0;
         let srcPos = 0;
         while (srcPos < inputData.length) {
             const idx = Math.floor(srcPos);
-            liveAudioBuffer[liveBufferPos] = inputData[idx] * currentInputGain;
+            const val = inputData[idx] * currentInputGain;
+            sumSq += val * val;
+            liveAudioBuffer[liveBufferPos] = val;
             liveBufferPos = (liveBufferPos + 1) % liveAudioBuffer.length;
             srcPos += resampleStep;
         }
+
+        const rms = Math.sqrt(sumSq / Math.max(1, inputData.length));
+        const volumePct = Math.min(100, Math.round(rms * 400));
+
+        const vuBar = document.getElementById('signalVuBar');
+        const vuVal = document.getElementById('signalVuVal');
+        const rmsLabel = document.getElementById('debugRmsVal');
+
+        if (vuBar) vuBar.style.width = `${volumePct}%`;
+        if (vuVal) vuVal.innerText = `${volumePct}%`;
+        if (rmsLabel) rmsLabel.innerText = `${volumePct}% (RMS: ${rms.toFixed(3)})`;
     };
 
     isListening = true;
