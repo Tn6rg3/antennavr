@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepCW IA - Decodificatore Telegrafico Morse Live</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- ONNX Runtime Web for Standalone Client-Side Browser Inference -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Main Header -->
+        <header>
+            <h1>📻 DeepCW IA - Decodificatore Telegrafico Morse Live</h1>
+            <p class="subtitle">Intelligenza Artificiale Deep Learning CRNN (Conv2D + BiGRU + CTC) per Radio HF, WebSDR, Missaggio Stereo e Microfono</p>
+        </header>
+
+        <!-- Main Decoder Card -->
+        <main class="card">
+            <!-- Controls Toolbar -->
+            <div class="controls-toolbar">
+                <!-- Action Button & Status -->
+                <div class="control-group">
+                    <button id="startListenBtn" class="btn btn-success" onclick="toggleLiveListening()">🎙️ Avvia Ascolto Live</button>
+                    <span id="liveStatusBadge" class="status-badge status-inactive">● DECODIFICATORE INATTIVO</span>
+                </div>
+
+                <!-- Microphone Gain Slider -->
+                <div class="control-group gain-control">
+                    <label for="inputGainSlider">🎚️ Volume / Guadagno:</label>
+                    <input type="range" id="inputGainSlider" min="0.1" max="3.0" step="0.05" value="1.0" oninput="updateInputGain(event)">
+                    <span id="inputGainVal" class="gain-value">100%</span>
+                </div>
+
+                <!-- Audio Input Device Selector -->
+                <div class="control-group">
+                    <label for="audioSourceSelect">🎙️ Ingresso Audio:</label>
+                    <select id="audioSourceSelect" onchange="changeAudioSourceDevice(event)">
+                        <option value="default" selected>Predefinito / Missaggio Stereo PC</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Toggles Bar (DSP Fallback, Dictionary Correction, Raw Only) -->
+            <div class="toggles-bar">
+                <label class="toggle-label">
+                    <input type="checkbox" id="dspFallbackToggle" checked onchange="toggleDspFallback(event)">
+                    ⚡ Decodificatore DSP di Emergenza
+                </label>
+
+                <label class="toggle-label">
+                    <input type="checkbox" id="dictCorrectionToggle" checked onchange="toggleDictCorrection(event)">
+                    📚 Correzione Automatica Vocabolario
+                </label>
+
+                <label class="toggle-label">
+                    <input type="checkbox" id="rawCharsToggle" onchange="toggleRawOnlyMode(event)">
+                    🔤 Solo Caratteri Grezzi
+                </label>
+
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="finalizeAndCleanLiveText()">✨ Pulisci Frase</button>
+                    <button class="btn btn-secondary" onclick="clearLiveOutputBox()">🧹 Cancella Testo</button>
+                </div>
+            </div>
+
+            <!-- Radio SDR Help Banner -->
+            <div class="help-banner">
+                💡 <strong>Decodifica la Radio dal PC (YouTube, WebSDR, SDR#, VLC):</strong> Seleziona <strong style="color:#00ff66;">"Missaggio Stereo (Stereo Mix)"</strong> dal menu <em>Ingresso Audio</em> e clicca su <strong>Avvia Ascolto Live</strong>!
+            </div>
+
+            <!-- Live Decoded Morse Output Box -->
+            <div class="output-wrapper">
+                <label class="output-label">📡 Testo Decodificato in Diretta dall'IA (Flusso Live Sincronizzato):</label>
+                <div id="liveOutputBox" class="live-stream-box">In attesa del segnale audio...</div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer>
+            <p>DeepCW IA Morse Decoder • Modello ONNX Client-Side • Esecuzione 100% Locale nel Browser (Nessun Server Richiesto)</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

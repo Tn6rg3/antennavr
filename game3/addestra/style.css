@@ -1,0 +1,224 @@
+:root {
+    --bg-color: #03070c;
+    --card-bg: #0b1219;
+    --border-color: #1e293b;
+    --primary-color: #00bcd4;
+    --success-color: #00e676;
+    --warning-color: #ff9800;
+    --danger-color: #ff5252;
+    --text-color: #e2e8f0;
+    --muted-color: #8e9bb0;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+header h1 {
+    margin: 0 0 6px 0;
+    font-size: 1.8rem;
+    color: var(--primary-color);
+}
+
+header .subtitle {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--muted-color);
+}
+
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+.controls-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    background: #080e14;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 16px;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.control-group label {
+    font-size: 0.85rem;
+    color: var(--primary-color);
+    white-space: nowrap;
+}
+
+.gain-control {
+    background: #0b1219;
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    border-radius: 8px;
+}
+
+.gain-value {
+    font-size: 0.85rem;
+    color: var(--success-color);
+    font-weight: bold;
+    min-width: 40px;
+}
+
+select {
+    padding: 8px 12px;
+    background: #0b1219;
+    color: var(--success-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    max-width: 240px;
+}
+
+.btn {
+    padding: 10px 22px;
+    font-size: 1.0rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-success {
+    background-color: #1b5e20;
+    color: #00ff66;
+    border: 1px solid #00e676;
+}
+
+.btn-success:hover {
+    background-color: #2e7d32;
+}
+
+.btn-danger {
+    background-color: #7f1d1d;
+    color: #ff8a80;
+    border: 1px solid #ff5252;
+}
+
+.btn-primary {
+    background-color: #0284c7;
+    color: #ffffff;
+}
+
+.btn-secondary {
+    background-color: #334155;
+    color: #cbd5e1;
+}
+
+.status-badge {
+    font-size: 0.85rem;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+.status-inactive {
+    background: #334155;
+    color: #94a3b8;
+}
+
+.status-active {
+    background: #1b5e20;
+    color: #00ff66;
+}
+
+.toggles-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: #060a0f;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 16px;
+}
+
+.toggle-label {
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.help-banner {
+    font-size: 0.8rem;
+    color: var(--muted-color);
+    background: #080e14;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border-left: 3px solid var(--primary-color);
+    margin-bottom: 20px;
+}
+
+.output-wrapper {
+    margin-top: 10px;
+}
+
+.output-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: var(--primary-color);
+    font-size: 0.95rem;
+}
+
+.live-stream-box {
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 240px;
+    font-size: 1.15rem;
+    line-height: 1.6;
+    background: #060a0f;
+    border: 1px solid var(--border-color);
+    padding: 20px;
+    border-radius: 10px;
+    color: #00ff66;
+    font-family: 'Consolas', 'Monaco', monospace;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.6);
+}
+
+footer {
+    margin-top: 24px;
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--muted-color);
+}
