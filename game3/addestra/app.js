@@ -35,12 +35,14 @@ let liveDecodingInterval = null;
 
 // Initialize ONNX Web Runtime Session (100% Mobile Browser Compatible)
 async function initONNXSession() {
+    const statusText = document.getElementById('modelStatusText');
     const onnxLabel = document.getElementById('debugOnnxVal');
+
     try {
         console.log("🚀 Inizializzazione Modello ONNX Client-Side...");
+        if (statusText) statusText.innerText = "⏳ Caricamento Modello ONNX in RAM (2.1 MB)...";
         if (onnxLabel) onnxLabel.innerText = "Caricamento Modello...";
 
-        // 100% Mobile Browser Compatibility (Single-Threaded WASM avoids mobile crossOriginIsolated blocks)
         ort.env.wasm.numThreads = 1;
 
         const modelCandidates = ['morse_model_int8.onnx', 'morse_model.onnx'];
@@ -48,6 +50,10 @@ async function initONNXSession() {
             try {
                 ortSession = await ort.InferenceSession.create(mPath, { executionProviders: ['wasm'] });
                 console.log(`✓ Modello ONNX caricato con successo da '${mPath}'!`);
+                if (statusText) {
+                    statusText.innerText = "✓ MODELLO IA PRONTO & ATTIVO (2.1 MB in RAM)";
+                    statusText.style.color = "#00ff66";
+                }
                 if (onnxLabel) onnxLabel.innerText = "Modello Pronto ✓";
                 break;
             } catch (err) {
@@ -55,12 +61,20 @@ async function initONNXSession() {
             }
         }
 
-        if (!ortSession && onnxLabel) {
-            onnxLabel.innerText = "Uso Fallback DSP";
+        if (!ortSession) {
+            if (statusText) {
+                statusText.innerText = "⚠️ Modello ONNX non caricato (Uso DSP Fallback)";
+                statusText.style.color = "#ff9800";
+            }
+            if (onnxLabel) onnxLabel.innerText = "Uso Fallback DSP";
         }
     } catch (e) {
         console.error("Errore inizializzazione ONNX:", e);
-        if (onnxLabel) onnxLabel.innerText = "Errore ONNX (Uso DSP)";
+        if (statusText) {
+            statusText.innerText = "⚠️ Errore Caricamento Modello (Uso DSP Fallback)";
+            statusText.style.color = "#ff5252";
+        }
+        if (onnxLabel) onnxLabel.innerText = "Errore ONNX";
     }
 }
 
