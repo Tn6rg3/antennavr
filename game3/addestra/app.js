@@ -545,6 +545,20 @@ function startLiveDecodingStream() {
 
             const audio3200 = resampleAudioBufferTo3200FromArray(alignedBuffer, 16000, 3200);
 
+            // Normalizzazione Automatica del Picco d'Ampiezza a 1.0 (Full Scale)
+            let maxPeak = 0.0;
+            for (let i = 0; i < audio3200.length; i++) {
+                const absVal = Math.abs(audio3200[i]);
+                if (absVal > maxPeak) maxPeak = absVal;
+            }
+
+            if (maxPeak > 0.002) {
+                const normScale = 1.0 / maxPeak;
+                for (let i = 0; i < audio3200.length; i++) {
+                    audio3200[i] *= normScale;
+                }
+            }
+
             let aiResult = "";
 
             if (ortSession) {
