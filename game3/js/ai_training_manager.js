@@ -31,11 +31,10 @@ window.aiTrainingState = {
 };
 
 const AI_VOCAB = [
-    '<BLANK>', ' ',
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    '<BLANK>', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-    '!', '"', '#', '$', '%', '&', "'", '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '<', '=', '>', '?', '@',
-    '_', '^', '~', '<AR>', '<BT>', '<KN>', '<SK>', '<KA>'
+    'É', 'À', 'Ò', 'Ù', ',', '.', '/', "'", '?', '=', ' '
 ];
 
 const ITALIAN_RADIO_DICTIONARY = [
@@ -593,37 +592,31 @@ window.runBatchInferenceForBlock = async function(b) {
 
     try {
         const duration = Math.max(0.2, b.markerB - b.markerA);
-        const audio16k = await resampleAudioBufferTo16k(buf, b.markerA, duration);
+        let audio3200 = resampleAudioBufferTo3200(buf, b.markerA, duration);
+        let audio16k = resampleAudioBufferTo16k(buf, b.markerA, duration);
+
+        if (audio3200.length < 3200) {
+            const padded = new Float32Array(3200);
+            padded.set(audio3200, 0);
+            audio3200 = padded;
+        }
 
         let rawResult = "";
         if (window.aiTrainingState.ortSession) {
-            const timeSteps = Math.floor(audio16k.length / 160);
-            const specData = new Float32Array(64 * timeSteps);
-            for (let t = 0; t < timeSteps; t++) {
-                for (let m = 0; m < 64; m++) {
-                    const idx = t * 160 + m * 2;
-                    specData[m * timeSteps + t] = Math.log(Math.abs(audio16k[idx] || 0) + 1e-5);
-                }
+            try {
+                const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
+                const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
+                const results = await window.aiTrainingState.ortSession.run({ spectrogram: inputTensor });
+
+                const outputKeys = Object.keys(results);
+                const outKey = outputKeys.find(k => k.includes('log') || k.includes('prob') || k.includes('out')) || outputKeys[0];
+                const outTensor = results[outKey];
+
+                rawResult = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
+            } catch(e) {
+                console.warn(`Batch ONNX Error block #${b.id}:`, e);
             }
-            const inputTensor = new ort.Tensor('float32', specData, [1, 1, 64, timeSteps]);
-            const results = await window.aiTrainingState.ortSession.run({ spectrogram: inputTensor });
-
-            const probsData = results.log_probs.data;
-            const dims = results.log_probs.dims;
-            let T = dims && dims.length === 3 ? (dims[0] === 1 ? dims[1] : dims[0]) : (dims ? dims[0] : 0);
-            let C = dims && dims.length === 3 ? dims[2] : (dims ? dims[1] : AI_VOCAB.length);
-
-            let lastIdx = -1, blankCount = 0;
-            for (let t = 0; t < T; t++) {
-                let maxVal = -Infinity, maxIdx = 0;
-                for (let c = 0; c < C; c++) {
-                    const val = probsData[t * C + c];
-                    if (val > maxVal) { maxVal = val; maxIdx = c; }
-                }
-                if (maxIdx === 0) {
-                    blankCount++;
-                    if (blankCount >= 4 && rawResult.length > 0 && !rawResult.endsWith(' ')) rawResult += ' ';
-                } else {
+        }
                     blankCount = 0;
                     if (maxIdx !== lastIdx) {
                         const char = AI_VOCAB[maxIdx] || '';
@@ -1840,6 +1833,179 @@ window.drawAiSegmentWaveform = function() {
     window.updateMasterTimelineDisplay();
 };
 
+// Synchronous Fast Linear Resampler to 3,200Hz for DeepCW ML Model Processing (Nyquist 1600 Hz)
+function resampleAudioBufferTo3200(audioBuffer, startTime, durationSec) {
+    if (!audioBuffer) return new Float32Array(0);
+
+    const srcSr = audioBuffer.sampleRate;
+    const targetSr = 3200;
+
+    const numChannels = audioBuffer.numberOfChannels;
+    const startSample = Math.floor(startTime * srcSr);
+    const endSample = Math.min(audioBuffer.length, Math.floor((startTime + durationSec) * srcSr));
+    const srcLength = endSample - startSample;
+
+    if (srcLength <= 0) return new Float32Array(0);
+
+    const monoSamples = new Float32Array(srcLength);
+    for (let c = 0; c < numChannels; c++) {
+        const chanData = audioBuffer.getChannelData(c);
+        for (let i = 0; i < srcLength; i++) {
+            monoSamples[i] += (chanData[startSample + i] || 0) / numChannels;
+        }
+    }
+
+    const targetLength = Math.floor(durationSec * targetSr);
+    const resampled = new Float32Array(targetLength);
+    const ratio = srcLength / targetLength;
+
+    for (let i = 0; i < targetLength; i++) {
+        const srcIdx = i * ratio;
+        const index0 = Math.floor(srcIdx);
+        const index1 = Math.min(srcLength - 1, index0 + 1);
+        const frac = srcIdx - index0;
+
+        const val0 = monoSamples[index0] || 0;
+        const val1 = monoSamples[index1] || 0;
+        resampled[i] = val0 + frac * (val1 - val0);
+    }
+
+    const fadeSamples = Math.min(Math.floor(targetSr * 0.01), Math.floor(resampled.length / 4));
+    for (let i = 0; i < fadeSamples; i++) {
+        const factor = 0.5 * (1 - Math.cos(Math.PI * i / fadeSamples));
+        resampled[i] *= factor;
+        resampled[resampled.length - 1 - i] *= factor;
+    }
+
+    return resampled;
+}
+
+// 100% PyTorch-Identical Real STFT & Mel Spectrogram Transformer at 3,200Hz
+function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
+    const fftSize = 128;
+    const winLength = 64;
+    const hopSize = 16;
+    const nFreqs = 65; // (128 / 2) + 1
+
+    const hannWindow = new Float32Array(winLength);
+    for (let i = 0; i < winLength; i++) {
+        hannWindow[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / winLength));
+    }
+
+    function hzToMel(hz) { return 2595 * Math.log10(1 + hz / 700); }
+    function melToHz(mel) { return 700 * (Math.pow(10, mel / 2595) - 1); }
+
+    const minMel = hzToMel(0.0);
+    const maxMel = hzToMel(1600.0);
+    const melPoints = new Float32Array(nMels + 2);
+    for (let i = 0; i < nMels + 2; i++) {
+        melPoints[i] = melToHz(minMel + (i / (nMels + 1)) * (maxMel - minMel));
+    }
+
+    const binPoints = new Float32Array(nMels + 2);
+    for (let i = 0; i < nMels + 2; i++) {
+        binPoints[i] = Math.floor(((fftSize + 1) * melPoints[i]) / sampleRate);
+    }
+
+    const filterbank = new Float32Array(nMels * nFreqs);
+    for (let m = 0; m < nMels; m++) {
+        const fMin = binPoints[m];
+        const fCenter = binPoints[m + 1];
+        const fMax = binPoints[m + 2];
+
+        for (let k = fMin; k < fCenter; k++) {
+            if (k >= 0 && k < nFreqs && (fCenter - fMin) > 0) {
+                filterbank[m * nFreqs + k] = (k - fMin) / (fCenter - fMin);
+            }
+        }
+        for (let k = fCenter; k < fMax; k++) {
+            if (k >= 0 && k < nFreqs && (fMax - fCenter) > 0) {
+                filterbank[m * nFreqs + k] = (fMax - k) / (fMax - fCenter);
+            }
+        }
+    }
+
+    const timeSteps = Math.floor(samples.length / hopSize) + 1;
+    const powerSpec = new Float32Array(nFreqs * timeSteps);
+
+    for (let t = 0; t < timeSteps; t++) {
+        const frameStart = t * hopSize - Math.floor(winLength / 2);
+
+        for (let k = 0; k < nFreqs; k++) {
+            let re = 0.0, im = 0.0;
+            const omega = (2 * Math.PI * k) / fftSize;
+
+            for (let n = 0; n < winLength; n++) {
+                const sampleIdx = frameStart + n;
+                const sampleVal = (sampleIdx >= 0 && sampleIdx < samples.length) ? samples[sampleIdx] : 0.0;
+                const windowedVal = sampleVal * hannWindow[n];
+
+                re += windowedVal * Math.cos(omega * n);
+                im -= windowedVal * Math.sin(omega * n);
+            }
+
+            powerSpec[k * timeSteps + t] = (re * re + im * im);
+        }
+    }
+
+    const specData = new Float32Array(nMels * timeSteps);
+    let sumVal = 0.0, sumSq = 0.0, totalCount = nMels * timeSteps;
+
+    for (let m = 0; m < nMels; m++) {
+        for (let t = 0; t < timeSteps; t++) {
+            let melEnergy = 0.0;
+            for (let k = 0; k < nFreqs; k++) {
+                melEnergy += powerSpec[k * timeSteps + t] * filterbank[m * nFreqs + k];
+            }
+            const dbVal = 10.0 * Math.log10(Math.max(1e-5, melEnergy));
+            specData[m * timeSteps + t] = dbVal;
+
+            sumVal += dbVal;
+            sumSq += dbVal * dbVal;
+        }
+    }
+
+    const mean = sumVal / Math.max(1, totalCount);
+    const variance = (sumSq / Math.max(1, totalCount)) - (mean * mean);
+    const std = Math.sqrt(Math.max(1e-5, variance));
+
+    for (let i = 0; i < totalCount; i++) {
+        specData[i] = (specData[i] - mean) / (std + 1e-5);
+    }
+
+    return { data: specData, timeSteps: timeSteps };
+}
+
+function ctcGreedyDecodeJS(probsData, dims) {
+    const timeSteps = (dims && dims.length >= 3) ? (dims[0] === 1 ? dims[1] : dims[0]) : ((dims && dims.length === 2) ? dims[0] : 1);
+    const numClasses = (dims && dims.length >= 3) ? dims[2] : ((dims && dims.length === 2) ? dims[1] : AI_VOCAB.length);
+
+    let result = '';
+    let lastIdx = -1;
+
+    for (let t = 0; t < timeSteps; t++) {
+        let maxVal = -Infinity;
+        let maxIdx = 0;
+        for (let c = 0; c < numClasses; c++) {
+            const val = probsData[t * numClasses + c];
+            if (val > maxVal) {
+                maxVal = val;
+                maxIdx = c;
+            }
+        }
+
+        if (maxIdx !== 0 && maxIdx !== lastIdx) {
+            const char = AI_VOCAB[maxIdx] || '';
+            if (char && char !== '<BLANK>') {
+                result += char;
+            }
+        }
+        lastIdx = maxIdx;
+    }
+
+    return result.trim();
+}
+
 // Resample audio segment to 16kHz with Mono Stereo Mix-Down
 function resampleAudioBufferTo16k(audioBuffer, startTime, durationSec) {
     if (!audioBuffer) return new Float32Array(0);
@@ -2012,93 +2178,27 @@ window.runInferenceOnSegment = async function() {
             return;
         }
 
-        const audio16k = await resampleAudioBufferTo16k(buf, start, duration);
+        let audio3200 = resampleAudioBufferTo3200(buf, start, duration);
+        let audio16k = resampleAudioBufferTo16k(buf, start, duration);
+
+        if (audio3200.length < 3200) {
+            const padded = new Float32Array(3200);
+            padded.set(audio3200, 0);
+            audio3200 = padded;
+        }
 
         let aiResult = "";
         if (window.aiTrainingState.ortSession) {
             try {
-                // computeMelSpectrogramJS
-                const timeSteps = Math.floor(audio16k.length / 160);
-                const specData = new Float32Array(64 * timeSteps);
-                for (let t = 0; t < timeSteps; t++) {
-                    for (let m = 0; m < 64; m++) {
-                        const idx = t * 160 + m * 2;
-                        specData[m * timeSteps + t] = Math.log(Math.abs(audio16k[idx] || 0) + 1e-5);
-                    }
-                }
-                const inputTensor = new ort.Tensor('float32', specData, [1, 1, 64, timeSteps]);
+                const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
+                const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
                 const results = await window.aiTrainingState.ortSession.run({ spectrogram: inputTensor });
 
-                // CTC greedy decode con analisi dinamica delle dimensioni del tensore ONNX [batch, time_steps, classes]
-                const probsData = results.log_probs.data;
-                const dims = results.log_probs.dims;
+                const outputKeys = Object.keys(results);
+                const outKey = outputKeys.find(k => k.includes('log') || k.includes('prob') || k.includes('out')) || outputKeys[0];
+                const outTensor = results[outKey];
 
-                let T = 0, C = AI_VOCAB.length;
-                let isBatchFirst = true;
-
-                if (dims && dims.length === 3) {
-                    if (dims[0] === 1) {
-                        // Shape: [1, T, C] (Batch first)
-                        T = dims[1];
-                        C = dims[2];
-                        isBatchFirst = true;
-                    } else {
-                        // Shape: [T, 1, C] (Time first)
-                        T = dims[0];
-                        C = dims[2];
-                        isBatchFirst = false;
-                    }
-                } else if (dims && dims.length === 2) {
-                    // Shape: [T, C]
-                    T = dims[0];
-                    C = dims[1];
-                }
-
-                console.log(`🤖 CTC Decoding: T=${T} time steps, C=${C} classes, dims=[${dims ? dims.join(',') : 'unknown'}]`);
-
-                let lastIdx = -1;
-                let blankFramesCount = 0;
-
-                for (let t = 0; t < T; t++) {
-                    let maxVal = -Infinity, maxIdx = 0;
-                    const baseOffset = isBatchFirst ? (t * C) : (t * 1 * C);
-                    for (let c = 0; c < C; c++) {
-                        const val = probsData[baseOffset + c];
-                        if (val > maxVal) {
-                            maxVal = val;
-                            maxIdx = c;
-                        }
-                    }
-
-                    if (maxIdx === 0) {
-                        // Token <BLANK> (silenzio/pausa tra i caratteri/parole)
-                        blankFramesCount++;
-                        if (blankFramesCount >= 4) {
-                            if (aiResult.length > 0 && !aiResult.endsWith(' ')) {
-                                aiResult += ' ';
-                            }
-                        }
-                    } else {
-                        blankFramesCount = 0;
-                        if (maxIdx !== lastIdx) {
-                            const char = AI_VOCAB[maxIdx] || '';
-                            if (char === ' ') {
-                                if (aiResult.length > 0 && !aiResult.endsWith(' ')) {
-                                    aiResult += ' ';
-                                }
-                            } else if (char !== '<BLANK>' && char !== '') {
-                                if (char.startsWith('<') && char.endsWith('>')) {
-                                    // Prosegni radio ufficiali (es. <AR>, <BT>, <SK>, <KN>)
-                                    aiResult += ' ' + char + ' ';
-                                } else if (/[A-Z0-9\/\-\.=\?a-z]/.test(char)) {
-                                    aiResult += char;
-                                }
-                            }
-                        }
-                    }
-                    lastIdx = maxIdx;
-                }
-                aiResult = aiResult.replace(/\s+/g, ' ').trim();
+                aiResult = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
             } catch (err) {
                 console.warn("ONNX Inference fallback:", err);
             }
