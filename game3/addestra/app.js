@@ -572,6 +572,12 @@ function startLiveDecodingStream() {
             const cleanAi = aiResult ? aiResult.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
             const cleanDsp = dspText ? dspText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
 
+            const onnxLabel = document.getElementById('debugOnnxVal');
+            const dspLabel = document.getElementById('debugDspVal');
+
+            if (onnxLabel) onnxLabel.innerText = cleanAi ? `'${cleanAi}'` : "<SILENZIO>";
+            if (dspLabel) dspLabel.innerText = cleanDsp ? `'${cleanDsp}'` : "<SILENZIO>";
+
             let rawOutput = cleanAi || cleanDsp;
 
             if (rawOutput && rawOutput.length > 0) {
