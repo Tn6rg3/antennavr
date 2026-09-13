@@ -1557,9 +1557,6 @@ window.updateBatchBlockMarkersFromInput = function(blockId) {
 
     window.drawBatchRowCanvas(b);
 };
-        }
-    }, 250);
-};
 
 window.zoomAiAudioTimeline = function(factor) {
     const state = window.aiTrainingState;
