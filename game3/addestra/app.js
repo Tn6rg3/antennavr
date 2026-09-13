@@ -175,6 +175,10 @@ async function attachLiveStreamToDecoder(stream) {
     };
 
     isListening = true;
+    
+    // Protezione globale contro il Garbage Collector di Chrome/Edge/Safari
+    window.__activeStreamRef = stream;
+    window.__scriptNodeRef = scriptProcessorNode;
 
     if (status) {
         status.innerText = "● DECODIFICATORE ATTIVO LIVE";
@@ -197,6 +201,9 @@ function stopLiveAudioCapture() {
         activeAudioStream.getTracks().forEach(track => track.stop());
         activeAudioStream = null;
     }
+    
+    window.__activeStreamRef = null;
+    window.__scriptNodeRef = null;
 
     if (liveDecodingInterval) clearInterval(liveDecodingInterval);
     if (scriptProcessorNode) scriptProcessorNode.disconnect();
@@ -221,11 +228,13 @@ async function toggleLiveListening() {
         stopLiveAudioCapture();
     } else {
         try {
+            // Constraints aggiornati per forzare la disattivazione dei filtri anti-rumore
             const constraints = {
                 audio: {
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false
+                    echoCancellation: { ideal: false },
+                    noiseSuppression: { ideal: false },
+                    autoGainControl: { ideal: false },
+                    channelCount: 1
                 }
             };
 
@@ -463,25 +472,17 @@ function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
     return { data: specData, timeSteps: timeSteps };
 }
 
-// CTC Greedy Decoder
+// CTC Greedy Decoder Fixato
 function ctcGreedyDecodeJS(logitsData, dims) {
     if (!dims || dims.length === 0) return "";
 
-    let T = 1;
-    let C = VOCAB.length;
+    // Calcolo dinamico robusto delle dimensioni
+    let C = dims[dims.length - 1]; // L'ultima dimensione è sempre il numero di classi
+    let T = dims.length >= 2 ? dims[dims.length - 2] : 1; // La penultima è la sequenza (time steps)
 
-    if (dims.length >= 3) {
-        // Handle both [T, B, C] and [B, T, C] layouts
-        if (dims[0] > dims[1]) {
-            T = dims[0]; // PyTorch CRNN export layout [T=188, B=1, C=49]
-            C = dims[2];
-        } else {
-            T = dims[1]; // Standard layout [B=1, T=188, C=49]
-            C = dims[2];
-        }
-    } else if (dims.length === 2) {
+    // Eccezione specifica per formato di esportazione PyTorch [T, N, C]
+    if (dims.length === 3 && dims[0] > dims[1]) {
         T = dims[0];
-        C = dims[1];
     }
 
     const argmax = new Int32Array(T);
@@ -674,6 +675,12 @@ function startLiveDecodingStream() {
     if (liveDecodingInterval) clearInterval(liveDecodingInterval);
 
     liveDecodingInterval = setInterval(async () => {
+        
+        // Heartbeat: forza il risveglio dell'audio se il browser lo sospende
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+
         if (!isListening || isProcessingInference) {
             return;
         }
