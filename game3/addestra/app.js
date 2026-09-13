@@ -33,30 +33,41 @@ const liveAudioBuffer = new Float32Array(16000 * 3); // 3-second sliding window 
 let liveBufferPos = 0;
 let liveDecodingInterval = null;
 
-// Initialize ONNX Web Runtime Session
+// Initialize ONNX Web Runtime Session (100% Mobile Browser Compatible)
 async function initONNXSession() {
+    const onnxLabel = document.getElementById('debugOnnxVal');
     try {
         console.log("🚀 Inizializzazione Modello ONNX Client-Side...");
-        ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
+        if (onnxLabel) onnxLabel.innerText = "Caricamento Modello...";
+
+        // 100% Mobile Browser Compatibility (Single-Threaded WASM avoids mobile crossOriginIsolated blocks)
+        ort.env.wasm.numThreads = 1;
 
         const modelCandidates = ['morse_model_int8.onnx', 'morse_model.onnx'];
         for (let mPath of modelCandidates) {
             try {
                 ortSession = await ort.InferenceSession.create(mPath, { executionProviders: ['wasm'] });
                 console.log(`✓ Modello ONNX caricato con successo da '${mPath}'!`);
+                if (onnxLabel) onnxLabel.innerText = "Modello Pronto ✓";
                 break;
             } catch (err) {
                 console.warn(`Avviso caricamento ${mPath}:`, err);
             }
         }
+
+        if (!ortSession && onnxLabel) {
+            onnxLabel.innerText = "Uso Fallback DSP";
+        }
     } catch (e) {
         console.error("Errore inizializzazione ONNX:", e);
+        if (onnxLabel) onnxLabel.innerText = "Errore ONNX (Uso DSP)";
     }
 }
 
 function getAudioContext() {
     if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass();
     }
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
