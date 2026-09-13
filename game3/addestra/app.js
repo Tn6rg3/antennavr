@@ -32,6 +32,7 @@ let selectedDeviceId = "default";
 const liveAudioBuffer = new Float32Array(16000 * 3); // 3-second sliding window at 16kHz
 let liveBufferPos = 0;
 let liveDecodingInterval = null;
+let resampleRemainder = 0; // Per mantenere la fase audio
 
 // Initialize ONNX Web Runtime Session
 async function initONNXSession() {
@@ -43,7 +44,9 @@ async function initONNXSession() {
         if (statusText) statusText.innerText = "⏳ Caricamento Modello ONNX in RAM (2.1 MB)...";
         if (onnxLabel) onnxLabel.innerText = "Caricamento Modello...";
 
+        // FIX: Imposta i thread e forza il percorso dei binari WebAssembly
         ort.env.wasm.numThreads = 1;
+        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
 
         const modelCandidates = ['morse_model_int8.onnx', 'morse_model.onnx'];
         for (let mPath of modelCandidates) {
@@ -89,7 +92,6 @@ function getAudioContext() {
     return audioCtx;
 }
 
-// Enumerate connected audio input devices
 async function populateAudioDevicesList() {
     const select = document.getElementById('audioSourceSelect');
     if (!select) return;
@@ -110,7 +112,7 @@ async function populateAudioDevicesList() {
     }
 }
 
-// FIX: AudioWorkletNode per evitare crash e buffer underrun
+// Implementazione AudioWorkletNode 
 async function attachLiveStreamToDecoder(stream) {
     const liveBox = document.getElementById('liveOutputBox');
     const status = document.getElementById('liveStatusBadge');
@@ -123,38 +125,36 @@ async function attachLiveStreamToDecoder(stream) {
     activeAudioStream = stream;
     const ctx = getAudioContext();
     
-    // Ancoraggio globale per prevenire il Garbage Collector
+    // Ancoraggio globale
     window.__sourceNodeRef = ctx.createMediaStreamSource(stream);
 
     liveBufferPos = 0;
+    resampleRemainder = 0;
     liveAudioBuffer.fill(0);
 
     if (liveBox && (liveBox.innerText.includes("In attesa") || liveBox.innerText.length === 0)) {
         liveBox.innerText = "";
     }
 
-    // Creazione dinamica del codice per l'AudioWorklet (Thread separato)
+    // FIX: Clonazione Float32Array nel postMessage per evitare perdita di memoria
     const workletCode = `
         class MicProcessor extends AudioWorkletProcessor {
             process(inputs, outputs, parameters) {
                 const input = inputs[0];
                 if (input && input.length > 0 && input[0].length > 0) {
-                    // Invia i dati audio al thread principale
-                    this.port.postMessage(input[0]);
+                    this.port.postMessage(new Float32Array(input[0]));
                 }
-                return true; // Mantiene il nodo in vita
+                return true;
             }
         }
         registerProcessor('mic-processor', MicProcessor);
     `;
 
     try {
-        // Caricamento del Worklet nel browser
         const blob = new Blob([workletCode], { type: 'application/javascript' });
         const workletUrl = URL.createObjectURL(blob);
         await ctx.audioWorklet.addModule(workletUrl);
 
-        // Inizializzazione del nuovo nodo
         scriptProcessorNode = new AudioWorkletNode(ctx, 'mic-processor');
         window.__sourceNodeRef.connect(scriptProcessorNode);
         scriptProcessorNode.connect(ctx.destination);
@@ -162,13 +162,13 @@ async function attachLiveStreamToDecoder(stream) {
         const nativeSr = ctx.sampleRate;
         const resampleStep = nativeSr / 16000;
 
-        // Ricezione sicura dei dati dal thread audio
         scriptProcessorNode.port.onmessage = (e) => {
             if (!isListening) return;
             const inputData = e.data;
 
             let sumSq = 0.0;
-            let srcPos = 0;
+            let srcPos = resampleRemainder;
+            
             while (srcPos < inputData.length) {
                 const idx = Math.floor(srcPos);
                 let val = inputData[idx] * currentInputGain;
@@ -180,6 +180,8 @@ async function attachLiveStreamToDecoder(stream) {
                 liveBufferPos = (liveBufferPos + 1) % liveAudioBuffer.length;
                 srcPos += resampleStep;
             }
+            
+            resampleRemainder = srcPos - inputData.length;
 
             const rms = Math.sqrt(sumSq / Math.max(1, inputData.length));
             const volumePct = Math.min(100, Math.round(rms * 400));
@@ -236,7 +238,6 @@ function stopLiveAudioCapture() {
     }
     
     window.__activeStreamRef = null;
-
     isListening = false;
 
     if (btn) {
@@ -257,7 +258,6 @@ async function toggleLiveListening() {
         stopLiveAudioCapture();
     } else {
         try {
-            // Constraints aggiornati per forzare la disattivazione dei filtri anti-rumore
             const constraints = {
                 audio: {
                     echoCancellation: { ideal: false },
@@ -301,13 +301,11 @@ function playTestCwBeep() {
         const dash = 0.24;
         let t = ctx.currentTime + 0.1;
 
-        // C (-.-.)
         t = addBeep(gain, t, dash); t += dot;
         t = addBeep(gain, t, dot); t += dot;
         t = addBeep(gain, t, dash); t += dot;
         t = addBeep(gain, t, dot); t += dash;
 
-        // Q (--.-)
         t = addBeep(gain, t, dash); t += dot;
         t = addBeep(gain, t, dash); t += dot;
         t = addBeep(gain, t, dot); t += dot;
@@ -382,7 +380,6 @@ function finalizeAndCleanLiveText() {
     liveBox.innerText = text;
 }
 
-// Fast Resampler 16kHz -> 3.2kHz for Stage 7/8/9 ONNX Model
 function resampleAudioBufferTo3200FromArray(inputData, srcSr = 16000, targetSr = 3200) {
     if (!inputData || inputData.length === 0) return new Float32Array(0);
     const ratio = srcSr / targetSr;
@@ -398,7 +395,6 @@ function resampleAudioBufferTo3200FromArray(inputData, srcSr = 16000, targetSr =
     return output;
 }
 
-// 100% PyTorch-Identical Real STFT & Mel Spectrogram Transformer at 3,200Hz
 function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
     const fftSize = 128;
     const winLength = 64;
@@ -494,7 +490,6 @@ function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
     return { data: specData, timeSteps: timeSteps };
 }
 
-// CTC Greedy Decoder Fixato per compatibilità dimensioni ONNX
 function ctcGreedyDecodeJS(logitsData, dims) {
     if (!dims || dims.length === 0) return "";
 
@@ -683,6 +678,7 @@ function extractNewStreamWords(newRawText, previousFullText) {
 
 function startLiveDecodingStream() {
     const liveBox = document.getElementById('liveOutputBox');
+    const onnxLabel = document.getElementById('debugOnnxVal');
     if (!liveBox) return;
 
     let isProcessingInference = false;
@@ -733,6 +729,7 @@ function startLiveDecodingStream() {
             if (ortSession) {
                 try {
                     const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
+                    // Prova a passare un tensore 3D o 4D in base al fallback
                     const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
 
                     const inputName = (ortSession.inputNames && ortSession.inputNames.length > 0) ? ortSession.inputNames[0] : 'spectrogram';
@@ -747,7 +744,9 @@ function startLiveDecodingStream() {
 
                     aiResult = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
                 } catch (err) {
+                    // FIX: Stampa a schermo il vero errore se ONNX rifiuta il formato del tensore
                     console.warn("Live ONNX Fallback:", err);
+                    if (onnxLabel) onnxLabel.innerText = "Err: " + err.message.substring(0, 30);
                 }
             }
 
@@ -764,10 +763,12 @@ function startLiveDecodingStream() {
             const cleanAi = (typeof aiResult === 'string') ? aiResult.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
             const cleanDsp = (typeof dspText === 'string') ? dspText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
 
-            const onnxLabel = document.getElementById('debugOnnxVal');
             const dspLabel = document.getElementById('debugDspVal');
 
-            if (onnxLabel) onnxLabel.innerText = cleanAi ? `'${cleanAi}'` : "<SILENZIO>";
+            // Se ONNX non è in errore, mostra il risultato o <SILENZIO>
+            if (onnxLabel && !onnxLabel.innerText.startsWith("Err:")) {
+                onnxLabel.innerText = cleanAi ? `'${cleanAi}'` : "<SILENZIO>";
+            }
             if (dspLabel) dspLabel.innerText = cleanDsp ? `'${cleanDsp}'` : "<SILENZIO>";
 
             let rawOutput = cleanAi || cleanDsp;
