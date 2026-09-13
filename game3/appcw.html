@@ -2107,7 +2107,10 @@ window.openStandaloneAiStudio = window.openStandaloneAiStudio || function() {
                         </div>
                     </div>
 
-                    <input type="text" id="aiPredictionText" readonly placeholder="Analisi in corso..." style="width:100%; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid var(--champ-color); border-radius:6px; box-sizing:border-box;">
+                    <input type="text" id="aiPredictionText" readonly placeholder="Premi '⚡ ESEGUI ANALISI IA' per decodificare..." style="width:100%; padding:8px; font-size:0.95em; font-family:monospace; font-weight:bold; background:#ffffff; color:#000000; border:2px solid var(--champ-color); border-radius:6px; box-sizing:border-box;">
+                    <button onclick="window.runInferenceOnSegment()" class="action-btn-small btn-primary" style="width:100%; padding:8px 12px; margin-top:6px; font-weight:bold; font-size:0.85em; background:linear-gradient(135deg, #ff9800, #f57c00); border:1px solid #ffb74d; color:#ffffff; box-shadow:0 2px 6px rgba(255,152,0,0.3);">
+                        ⚡ ESEGUI ANALISI IA
+                    </button>
                 </div>
 
                 <!-- TEXTBOX 3: TESTO RICOSTRUITO DAL DIZIONARIO ESTESO -->
