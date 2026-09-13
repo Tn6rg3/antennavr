@@ -172,14 +172,10 @@
         }
 
         async function processAudioBuffer() {
-            // FIX: Blocco di sicurezza per evitare sovrapposizioni e crash WASM
             if (!isRunning || !ortSession || isProcessingInference) return;
             isProcessingInference = true;
             
             try {
-                // Heartbeat a schermo per confermare che il loop è vivo
-                screenLog("[OK] Analisi pacchetto audio...");
-
                 const alignedBuffer = new Float32Array(liveBuffer.length);
                 for (let i = 0; i < liveBuffer.length; i++) {
                     alignedBuffer[i] = liveBuffer[(bufferPos + i) % liveBuffer.length];
@@ -189,8 +185,6 @@
                 const audio3200 = new Float32Array(Math.floor(alignedBuffer.length / ratio));
                 for (let i = 0; i < audio3200.length; i++) audio3200[i] = alignedBuffer[Math.floor(i * ratio)];
 
-                // FIX: Ripristinato Controllo Automatico Guadagno (AGC)
-                // Evita che un audio troppo basso faccia credere al modello che ci sia solo silenzio
                 let sumSq = 0.0;
                 let activeSamples = 0;
                 for (let i = 0; i < audio3200.length; i++) {
@@ -198,6 +192,9 @@
                     if (Math.abs(val) > 0.001) { sumSq += val * val; activeSamples++; }
                 }
                 const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
+                
+                screenLog(`[OK] Analisi pacchetto (RMS interno: ${rmsVal.toFixed(4)})`);
+
                 if (rmsVal > 0.001) {
                     const agcGain = Math.min(15.0, 0.25 / rmsVal);
                     for (let i = 0; i < audio3200.length; i++) {
@@ -217,6 +214,7 @@
                 const outTensor = results[outKey];
                 
                 const resultText = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
+                screenLog(`🤖 Output Grezzo IA: '${resultText}'`);
 
                 const cleanText = resultText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim();
                 
@@ -229,11 +227,9 @@
             } catch(e) {
                 screenLog("Errore Inferenza ONNX: " + e.message, true);
             } finally {
-                // Rilascia il lucchetto per la prossima iterazione
                 isProcessingInference = false;
             }
         }
-
         function computeMelSpectrogramJS(samples, sampleRate, nMels) {
             const fftSize = 128; const winLength = 64; const hopSize = 16; const nFreqs = 65;
             const hannWindow = new Float32Array(winLength);
