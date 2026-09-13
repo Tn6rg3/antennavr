@@ -65,6 +65,15 @@
                 </div>
             </div>
 
+            <!-- LIVE AUDIO SIGNAL LEVEL METER (VU METER) -->
+            <div style="background:#080e14; padding:12px 16px; border-radius:10px; border:1px solid #1e293b; margin-bottom:16px; display:flex; align-items:center; gap:15px;">
+                <label style="font-size:0.85rem; color:#00bcd4; margin:0; font-weight:bold; white-space:nowrap;">📊 Livello Segnale Audio Ingressi (VU Meter):</label>
+                <div style="flex:1; background:#060a0f; height:18px; border-radius:9px; border:1px solid #1e293b; overflow:hidden; position:relative;">
+                    <div id="signalVuBar" style="width:0%; height:100%; background:linear-gradient(90deg, #00e676 0%, #ffeb3b 75%, #ff5252 100%); transition:width 0.05s ease;"></div>
+                </div>
+                <span id="signalVuVal" style="font-size:0.85rem; color:#00ff66; font-weight:bold; min-width:45px; text-align:right;">0%</span>
+            </div>
+
             <!-- Radio SDR Help Banner -->
             <div class="help-banner">
                 💡 <strong>Decodifica la Radio dal PC (YouTube, WebSDR, SDR#, VLC):</strong> Seleziona <strong style="color:#00ff66;">"Missaggio Stereo (Stereo Mix)"</strong> dal menu <em>Ingresso Audio</em> e clicca su <strong>Avvia Ascolto Live</strong>!
@@ -74,6 +83,13 @@
             <div class="output-wrapper">
                 <label class="output-label">📡 Testo Decodificato in Diretta dall'IA (Flusso Live Sincronizzato):</label>
                 <div id="liveOutputBox" class="live-stream-box">In attesa del segnale audio...</div>
+
+                <!-- LIVE DEBUG DIAGNOSTIC STATUS BAR -->
+                <div id="liveDebugInfo" style="font-size:0.8rem; color:#8e9bb0; margin-top:10px; font-family:monospace; background:#060a0f; padding:8px 14px; border-radius:8px; border:1px solid #1e293b; display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px;">
+                    <span>📊 <strong>Segnale RMS:</strong> <span id="debugRmsVal" style="color:#00ff66;">0%</span></span>
+                    <span>🤖 <strong>ONNX Live:</strong> <span id="debugOnnxVal" style="color:#00bcd4;">In attesa...</span></span>
+                    <span>⚡ <strong>DSP Peak:</strong> <span id="debugDspVal" style="color:#ce93d8;">In attesa...</span></span>
+                </div>
             </div>
         </main>
 
