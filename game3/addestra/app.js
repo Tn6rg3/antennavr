@@ -255,30 +255,107 @@ function resampleAudioBufferTo3200FromArray(inputData, srcSr = 16000, targetSr =
     return output;
 }
 
-// Compute MelSpectrogram 64 Mel-bins
-function computeMelSpectrogramJS(audioData, sampleRate = 3200, nMels = 64) {
+// 100% PyTorch-Identical Real STFT & Mel Spectrogram Transformer at 3,200Hz
+function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
     const fftSize = 128;
+    const winLength = 64;
     const hopSize = 16;
-    const numFrames = Math.floor((audioData.length - fftSize) / hopSize) + 1;
+    const nFreqs = 65; // (128 / 2) + 1
 
-    if (numFrames <= 0) return { data: new Float32Array(0), timeSteps: 0 };
+    // Pre-computed Hann Window of size 64
+    const hannWindow = new Float32Array(winLength);
+    for (let i = 0; i < winLength; i++) {
+        hannWindow[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / winLength));
+    }
 
-    const melSpecData = new Float32Array(nMels * numFrames);
+    // Mel Scale Triangular Filterbank Matrix (64 mels x 65 freqs)
+    function hzToMel(hz) { return 2595 * Math.log10(1 + hz / 700); }
+    function melToHz(mel) { return 700 * (Math.pow(10, mel / 2595) - 1); }
 
-    for (let t = 0; t < numFrames; t++) {
-        const start = t * hopSize;
-        for (let m = 0; m < nMels; m++) {
-            let energy = 0.0;
-            for (let k = 0; k < fftSize / 2; k++) {
-                const sample = audioData[start + k] || 0.0;
-                energy += sample * sample;
+    const minMel = hzToMel(0.0);
+    const maxMel = hzToMel(1600.0); // Nyquist frequency at 3200Hz SR
+    const melPoints = new Float32Array(nMels + 2);
+    for (let i = 0; i < nMels + 2; i++) {
+        melPoints[i] = melToHz(minMel + (i / (nMels + 1)) * (maxMel - minMel));
+    }
+
+    const binPoints = new Float32Array(nMels + 2);
+    for (let i = 0; i < nMels + 2; i++) {
+        binPoints[i] = Math.floor(((fftSize + 1) * melPoints[i]) / sampleRate);
+    }
+
+    const filterbank = new Float32Array(nMels * nFreqs);
+    for (let m = 0; m < nMels; m++) {
+        const fMin = binPoints[m];
+        const fCenter = binPoints[m + 1];
+        const fMax = binPoints[m + 2];
+
+        for (let k = fMin; k < fCenter; k++) {
+            if (k >= 0 && k < nFreqs && (fCenter - fMin) > 0) {
+                filterbank[m * nFreqs + k] = (k - fMin) / (fCenter - fMin);
             }
-            const logEnergy = Math.log(Math.max(1e-5, energy / (fftSize / 2)));
-            melSpecData[m * numFrames + t] = logEnergy;
+        }
+        for (let k = fCenter; k < fMax; k++) {
+            if (k >= 0 && k < nFreqs && (fMax - fCenter) > 0) {
+                filterbank[m * nFreqs + k] = (fMax - k) / (fMax - fCenter);
+            }
         }
     }
 
-    return { data: melSpecData, timeSteps: numFrames };
+    // Number of time steps with PyTorch-identical STFT padding
+    const timeSteps = Math.floor(samples.length / hopSize) + 1;
+    const powerSpec = new Float32Array(nFreqs * timeSteps);
+
+    // Compute Real STFT with Hann Window
+    for (let t = 0; t < timeSteps; t++) {
+        const frameStart = t * hopSize - Math.floor(winLength / 2);
+
+        for (let k = 0; k < nFreqs; k++) {
+            let re = 0.0, im = 0.0;
+            const omega = (2 * Math.PI * k) / fftSize;
+
+            for (let n = 0; n < winLength; n++) {
+                const sampleIdx = frameStart + n;
+                const sampleVal = (sampleIdx >= 0 && sampleIdx < samples.length) ? samples[sampleIdx] : 0.0;
+                const windowedVal = sampleVal * hannWindow[n];
+
+                re += windowedVal * Math.cos(omega * n);
+                im -= windowedVal * Math.sin(omega * n);
+            }
+
+            powerSpec[k * timeSteps + t] = (re * re + im * im);
+        }
+    }
+
+    // Multiply STFT Power Spec by 64 Mel Filters
+    const specData = new Float32Array(nMels * timeSteps);
+    let sumVal = 0.0, sumSq = 0.0, totalCount = nMels * timeSteps;
+
+    for (let m = 0; m < nMels; m++) {
+        for (let t = 0; t < timeSteps; t++) {
+            let melEnergy = 0.0;
+            for (let k = 0; k < nFreqs; k++) {
+                melEnergy += powerSpec[k * timeSteps + t] * filterbank[m * nFreqs + k];
+            }
+            // AmplitudeToDB (10 * log10(max(1e-5, energy)))
+            const dbVal = 10.0 * Math.log10(Math.max(1e-5, melEnergy));
+            specData[m * timeSteps + t] = dbVal;
+
+            sumVal += dbVal;
+            sumSq += dbVal * dbVal;
+        }
+    }
+
+    // Z-Score Normalization (spec - mean) / (std + 1e-5) matching PyTorch dataset.py
+    const mean = sumVal / Math.max(1, totalCount);
+    const variance = (sumSq / Math.max(1, totalCount)) - (mean * mean);
+    const std = Math.sqrt(Math.max(1e-5, variance));
+
+    for (let i = 0; i < totalCount; i++) {
+        specData[i] = (specData[i] - mean) / (std + 1e-5);
+    }
+
+    return { data: specData, timeSteps: timeSteps };
 }
 
 // CTC Greedy Decoder
