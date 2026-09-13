@@ -617,15 +617,6 @@ window.runBatchInferenceForBlock = async function(b) {
                 console.warn(`Batch ONNX Error block #${b.id}:`, e);
             }
         }
-                    blankCount = 0;
-                    if (maxIdx !== lastIdx) {
-                        const char = AI_VOCAB[maxIdx] || '';
-                        if (char !== '<BLANK>' && char !== '') rawResult += char;
-                    }
-                }
-                lastIdx = maxIdx;
-            }
-        }
 
         const dspResult = (window.aiTrainingState.enableDspFallback || !window.aiTrainingState.ortSession) ? decodeMorseDSP(audio16k, 16000) : "";
         const text = rawResult.trim() || dspResult.trim();
