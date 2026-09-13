@@ -22,13 +22,13 @@
 </head>
 <body>
     <div class="container">
-        <h1>📻 Decoder Morse IA (Solo ONNX - Clone PyTorch 100%)</h1>
+        <h1>📻 Decoder Morse IA (Solo ONNX)</h1>
         
         <div class="status-box">
             <div><strong>Stato IA:</strong> <span id="model-status" style="color: #facc15;">Inizializzazione in corso...</span></div>
             <div><strong>Audio:</strong> <span id="audio-status" style="color: #94a3b8;">Inattivo</span></div>
             <div style="margin-top: 10px;">
-                Livello Segnale (VU Meter):
+                Livello Segnale:
                 <div class="vu-meter"><div class="vu-fill" id="vu-bar"></div></div>
             </div>
         </div>
@@ -38,7 +38,7 @@
             <button id="btn-stop" onclick="stopSystem()" class="danger" disabled>⏹️ Ferma</button>
         </div>
 
-        <div><strong>Testo Decodificato in Diretta dall'IA:</strong></div>
+        <div><strong>Testo Decodificato:</strong></div>
         <div class="output-box" id="output-box">In attesa...</div>
 
         <div><strong>Console Diagnostica:</strong></div>
@@ -64,7 +64,7 @@
         let isRunning = false;
         let loopInterval = null;
         let isWorkletRegistered = false; 
-        let isProcessingInference = false;
+        let isProcessingInference = false; 
         
         const SAMPLE_RATE = 16000;
         const liveBuffer = new Float32Array(SAMPLE_RATE * 3);
@@ -76,23 +76,12 @@
                 ort.env.wasm.numThreads = 1;
                 ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
                 
-                screenLog("Tentativo caricamento 'morse_model_int8.onnx'...");
-                const modelCandidates = ['morse_model_int8.onnx', 'morse_model.onnx'];
-                for (let mPath of modelCandidates) {
-                    try {
-                        ortSession = await ort.InferenceSession.create(mPath, { executionProviders: ['wasm'] });
-                        screenLog(`✓ Modello ONNX caricato con successo da '${mPath}'!`);
-                        break;
-                    } catch (e) {}
-                }
+                screenLog("Tentativo caricamento 'morse_model.onnx'...");
+                ortSession = await ort.InferenceSession.create('morse_model.onnx', { executionProviders: ['wasm'] });
                 
-                if (ortSession) {
-                    document.getElementById('model-status').innerText = "✅ Modello Prontissimo (2.1 MB in RAM)";
-                    document.getElementById('model-status').style.color = "#4ade80";
-                } else {
-                    document.getElementById('model-status').innerText = "❌ Errore Modello";
-                    document.getElementById('model-status').style.color = "#f87171";
-                }
+                document.getElementById('model-status').innerText = "✅ Modello Caricato";
+                document.getElementById('model-status').style.color = "#4ade80";
+                screenLog("ONNX caricato con successo!");
             } catch (err) {
                 document.getElementById('model-status').innerText = "❌ Fallito";
                 document.getElementById('model-status').style.color = "#f87171";
@@ -105,27 +94,20 @@
             document.getElementById('btn-start').disabled = true;
             
             try {
-                screenLog("Richiesta accesso all'ingresso audio/microfono...");
+                screenLog("Richiesta accesso al microfono...");
                 streamRef = await navigator.mediaDevices.getUserMedia({ 
                     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } 
                 });
                 
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
-                if (audioCtx.state === 'suspended') {
-                    await audioCtx.resume();
-                }
-
                 window.__globalMicSource = audioCtx.createMediaStreamSource(streamRef);
                 
                 if (!isWorkletRegistered) {
                     const workletCode = `
                         class MicReader extends AudioWorkletProcessor {
-                            process(inputs, outputs) {
+                            process(inputs) {
                                 if (inputs[0] && inputs[0][0] && inputs[0][0].length > 0) {
                                     this.port.postMessage(new Float32Array(inputs[0][0]));
-                                }
-                                if (outputs[0] && outputs[0][0]) {
-                                    outputs[0][0].fill(0); // Scrive silenzio nell'uscita per prevenire l'ibernazione del nodo
                                 }
                                 return true;
                             }
@@ -147,13 +129,13 @@
                     let sumSq = 0;
                     for (let i = 0; i < data.length; i++) {
                         let val = data[i];
-                        if (isNaN(val) || !isFinite(val)) val = 0;
+                        if (isNaN(val)) val = 0;
                         sumSq += val * val;
                         liveBuffer[bufferPos] = val;
                         bufferPos = (bufferPos + 1) % liveBuffer.length;
                     }
-                    const rms = Math.sqrt(sumSq / Math.max(1, data.length));
-                    document.getElementById('vu-bar').style.width = Math.min(100, rms * 400) + '%';
+                    const rms = Math.sqrt(sumSq / data.length);
+                    document.getElementById('vu-bar').style.width = Math.min(100, rms * 500) + '%';
                 };
 
                 isRunning = true;
@@ -163,7 +145,7 @@
                 document.getElementById('audio-status').style.color = "#4ade80";
                 document.getElementById('output-box').innerText = "";
                 
-                screenLog("Audio connesso. Inizio ciclo inferenza IA (1500 ms)...");
+                screenLog("Microfono connesso. Inizio inferenza IA...");
                 
                 if(loopInterval) clearInterval(loopInterval);
                 loopInterval = setInterval(processAudioBuffer, 1500);
@@ -203,7 +185,6 @@
                 const audio3200 = new Float32Array(Math.floor(alignedBuffer.length / ratio));
                 for (let i = 0; i < audio3200.length; i++) audio3200[i] = alignedBuffer[Math.floor(i * ratio)];
 
-                // Controllo Automatico di Guadagno Dinamico RMS (AGC)
                 let sumSq = 0.0;
                 let activeSamples = 0;
                 for (let i = 0; i < audio3200.length; i++) {
@@ -211,19 +192,20 @@
                     if (Math.abs(val) > 0.001) { sumSq += val * val; activeSamples++; }
                 }
                 const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
+                
+                screenLog(`[OK] Analisi pacchetto (RMS interno: ${rmsVal.toFixed(4)})`);
 
-                if (rmsVal > 0.002) {
-                    const agcGain = Math.min(10.0, 0.25 / rmsVal);
+                if (rmsVal > 0.001) {
+                    const agcGain = Math.min(15.0, 0.25 / rmsVal);
                     for (let i = 0; i < audio3200.length; i++) {
                         audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
                     }
                 }
 
-                // Spettrogramma Mel a 64 bande con Normalizzazione Z-Score Globale (100% PyTorch Identical)
                 const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
                 const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
+                const inputName = ortSession.inputNames[0] || 'spectrogram';
                 
-                const inputName = (ortSession.inputNames && ortSession.inputNames.length > 0) ? ortSession.inputNames[0] : 'spectrogram';
                 const feeds = {};
                 feeds[inputName] = inputTensor;
                 
@@ -238,7 +220,6 @@
                 
                 if (cleanText) {
                     const outBox = document.getElementById('output-box');
-                    if (outBox.innerText === "In attesa...") outBox.innerText = "";
                     outBox.innerText += cleanText + " ";
                     outBox.scrollTop = outBox.scrollHeight;
                 }
@@ -250,12 +231,14 @@
             }
         }
 
-        // 100% PyTorch-Identical Real STFT & Mel Spectrogram Transformer at 3,200Hz
+        // ==============================================================================
+        // CLONE 100% PYTORCH MEL SPECTROGRAM (Top_db=80.0, Padding Center=True)
+        // ==============================================================================
         function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
             const fftSize = 128;
             const winLength = 64;
             const hopSize = 16;
-            const nFreqs = 65; // (128 / 2) + 1
+            const nFreqs = 65; 
 
             const hannWindow = new Float32Array(winLength);
             for (let i = 0; i < winLength; i++) {
@@ -266,7 +249,7 @@
             function melToHz(mel) { return 700 * (Math.pow(10, mel / 2595) - 1); }
 
             const minMel = hzToMel(0.0);
-            const maxMel = hzToMel(1600.0); // Nyquist frequency at 3200Hz SR
+            const maxMel = hzToMel(1600.0); 
             const melPoints = new Float32Array(nMels + 2);
             for (let i = 0; i < nMels + 2; i++) {
                 melPoints[i] = melToHz(minMel + (i / (nMels + 1)) * (maxMel - minMel));
@@ -295,31 +278,33 @@
                 }
             }
 
-            const timeSteps = Math.floor(samples.length / hopSize) + 1;
+            const padLen = Math.floor(fftSize / 2);
+            const paddedSamples = new Float32Array(samples.length + padLen * 2);
+            paddedSamples.set(samples, padLen);
+
+            const timeSteps = Math.floor((paddedSamples.length - fftSize) / hopSize) + 1;
             const powerSpec = new Float32Array(nFreqs * timeSteps);
 
             for (let t = 0; t < timeSteps; t++) {
-                const frameStart = t * hopSize - Math.floor(winLength / 2);
+                const frameStart = t * hopSize;
 
                 for (let k = 0; k < nFreqs; k++) {
                     let re = 0.0, im = 0.0;
                     const omega = (2 * Math.PI * k) / fftSize;
 
                     for (let n = 0; n < winLength; n++) {
-                        const sampleIdx = frameStart + n;
-                        const sampleVal = (sampleIdx >= 0 && sampleIdx < samples.length) ? samples[sampleIdx] : 0.0;
+                        const sampleVal = paddedSamples[frameStart + n];
                         const windowedVal = sampleVal * hannWindow[n];
 
                         re += windowedVal * Math.cos(omega * n);
                         im -= windowedVal * Math.sin(omega * n);
                     }
-
                     powerSpec[k * timeSteps + t] = (re * re + im * im);
                 }
             }
 
             const specData = new Float32Array(nMels * timeSteps);
-            let sumVal = 0.0, sumSq = 0.0, totalCount = nMels * timeSteps;
+            let maxDb = -Infinity;
 
             for (let m = 0; m < nMels; m++) {
                 for (let t = 0; t < timeSteps; t++) {
@@ -327,73 +312,58 @@
                     for (let k = 0; k < nFreqs; k++) {
                         melEnergy += powerSpec[k * timeSteps + t] * filterbank[m * nFreqs + k];
                     }
-                    // AmplitudeToDB (10 * log10(max(1e-10, energy))) matching PyTorch torchaudio.transforms.AmplitudeToDB()
                     const dbVal = 10.0 * Math.log10(Math.max(1e-10, melEnergy));
                     specData[m * timeSteps + t] = dbVal;
-
-                    sumVal += dbVal;
-                    sumSq += dbVal * dbVal;
+                    if (dbVal > maxDb) maxDb = dbVal;
                 }
             }
 
-            // Z-Score Normalization (spec - mean) / (std + 1e-5) matching PyTorch dataset.py
-            const mean = sumVal / Math.max(1, totalCount);
-            const variance = (sumSq / Math.max(1, totalCount)) - (mean * mean);
+            let sumVal = 0.0, sumSq = 0.0;
+            const totalCount = nMels * timeSteps;
+            const threshold = maxDb - 80.0;
+
+            for (let i = 0; i < totalCount; i++) {
+                const clampedVal = Math.max(specData[i], threshold);
+                specData[i] = clampedVal;
+                sumVal += clampedVal;
+                sumSq += clampedVal * clampedVal;
+            }
+
+            const mean = sumVal / totalCount;
+            const variance = (sumSq / totalCount) - (mean * mean);
             const std = Math.sqrt(Math.max(1e-5, variance));
 
             for (let i = 0; i < totalCount; i++) {
-                specData[i] = (specData[i] - mean) / (std + 1e-5);
+                specData[i] = (specData[i] - mean) / std;
             }
 
             return { data: specData, timeSteps: timeSteps };
         }
 
-        // CTC Greedy Decoder (Layout [T, B, C] e [B, T, C])
         function ctcGreedyDecodeJS(logitsData, dims) {
             if (!dims || dims.length === 0) return "";
-            
-            let T = 1;
-            let C = VOCAB.length;
-
-            if (dims.length >= 3) {
-                if (dims[0] > dims[1]) {
-                    T = dims[0]; // PyTorch CRNN export layout [T=188, B=1, C=49]
-                    C = dims[2];
-                } else {
-                    T = dims[1]; // Standard layout [B=1, T=188, C=49]
-                    C = dims[2];
-                }
-            } else if (dims.length === 2) {
-                T = dims[0];
-                C = dims[1];
-            }
+            let C = dims[dims.length - 1]; 
+            let T = dims.length >= 2 ? dims[dims.length - 2] : 1; 
+            if (dims.length === 3 && dims[0] > dims[1]) T = dims[0];
 
             const argmax = new Int32Array(T);
             for (let t = 0; t < T; t++) {
-                let maxVal = -Infinity;
-                let maxIdx = 0;
+                let maxVal = -Infinity, maxIdx = 0;
                 for (let c = 0; c < C; c++) {
                     const val = logitsData[t * C + c];
-                    if (val > maxVal) {
-                        maxVal = val;
-                        maxIdx = c;
-                    }
+                    if (val > maxVal) { maxVal = val; maxIdx = c; }
                 }
                 argmax[t] = maxIdx;
             }
 
-            let decoded = "";
-            let prev = -1;
+            let decoded = "", prev = -1;
             for (let t = 0; t < T; t++) {
                 const idx = argmax[t];
-                if (idx !== 0 && idx !== prev) { // 0 = <BLANK>
-                    if (idx < VOCAB.length && VOCAB[idx] !== "<BLANK>" && VOCAB[idx] !== "<UNK>") {
-                        decoded += VOCAB[idx];
-                    }
+                if (idx !== 0 && idx !== prev && idx < VOCAB.length && VOCAB[idx] !== "<BLANK>" && VOCAB[idx] !== "<UNK>") {
+                    decoded += VOCAB[idx];
                 }
                 prev = idx;
             }
-
             return decoded;
         }
 
