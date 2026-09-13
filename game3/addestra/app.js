@@ -479,18 +479,22 @@ function ctcGreedyDecodeJS(logitsData, dims) {
     return decoded;
 }
 
-// DSP Emergency Morse Decoder (Goertzel Peak Detection)
+// DSP Emergency Morse Decoder (Goertzel 650Hz Bandpass Peak Detection)
 function decodeMorseDSP(audioSlice, sampleRate = 3200) {
     if (!audioSlice || audioSlice.length === 0) return "";
+
     let maxAmp = 0;
     for (let i = 0; i < audioSlice.length; i++) {
         const absA = Math.abs(audioSlice[i]);
         if (absA > maxAmp) maxAmp = absA;
     }
-    if (maxAmp < 0.02) return "";
+    if (maxAmp < 0.03) return ""; // Gate di silenzio
 
-    const threshold = maxAmp * 0.35;
-    const windowSize = Math.floor(sampleRate * 0.04); // 40ms
+    const f0 = 650.0;
+    const w0 = (2 * Math.PI * f0) / sampleRate;
+    const cosW0 = Math.cos(w0);
+
+    const windowSize = Math.floor(sampleRate * 0.035); // 35ms window
     const numWindows = Math.floor(audioSlice.length / windowSize);
 
     let morseCode = "";
@@ -498,23 +502,27 @@ function decodeMorseDSP(audioSlice, sampleRate = 3200) {
     let currentSilenceLen = 0;
 
     for (let w = 0; w < numWindows; w++) {
-        let wAmp = 0;
+        let q1 = 0.0, q2 = 0.0;
+        const start = w * windowSize;
         for (let k = 0; k < windowSize; k++) {
-            const a = Math.abs(audioSlice[w * windowSize + k]);
-            if (a > wAmp) wAmp = a;
+            const sample = audioSlice[start + k];
+            const q0 = sample + 2 * cosW0 * q1 - q2;
+            q2 = q1;
+            q1 = q0;
         }
+        const energy = Math.sqrt(Math.max(0, q1 * q1 + q2 * q2 - 2 * cosW0 * q1 * q2)) / windowSize;
 
-        if (wAmp >= threshold) {
+        if (energy > 0.08) { // Tono CW 650Hz Rilevato!
             currentToneLen++;
             if (currentSilenceLen > 0) {
-                if (currentSilenceLen >= 3 && currentSilenceLen < 7) morseCode += " ";
-                else if (currentSilenceLen >= 7) morseCode += " / ";
+                if (currentSilenceLen >= 2 && currentSilenceLen < 6) morseCode += " ";
+                else if (currentSilenceLen >= 6) morseCode += " / ";
                 currentSilenceLen = 0;
             }
         } else {
             currentSilenceLen++;
             if (currentToneLen > 0) {
-                if (currentToneLen >= 3) morseCode += "-";
+                if (currentToneLen >= 2) morseCode += "-";
                 else morseCode += ".";
                 currentToneLen = 0;
             }
@@ -522,10 +530,9 @@ function decodeMorseDSP(audioSlice, sampleRate = 3200) {
     }
 
     if (currentToneLen > 0) {
-        morseCode += currentToneLen >= 3 ? "-" : ".";
+        morseCode += currentToneLen >= 2 ? "-" : ".";
     }
 
-    // Map morse symbols to characters
     const words = morseCode.split(" / ");
     let decodedStr = "";
 
