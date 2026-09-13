@@ -374,9 +374,24 @@ function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
 
 // CTC Greedy Decoder
 function ctcGreedyDecodeJS(logitsData, dims) {
-    if (!dims || dims.length < 3) return "";
-    const T = dims[1];
-    const C = dims[2];
+    if (!dims || dims.length === 0) return "";
+
+    let T = 1;
+    let C = VOCAB.length;
+
+    if (dims.length >= 3) {
+        // Handle both [T, B, C] and [B, T, C] layouts
+        if (dims[0] > dims[1]) {
+            T = dims[0]; // PyTorch CRNN export layout [T=188, B=1, C=49]
+            C = dims[2];
+        } else {
+            T = dims[1]; // Standard layout [B=1, T=188, C=49]
+            C = dims[2];
+        }
+    } else if (dims.length === 2) {
+        T = dims[0];
+        C = dims[1];
+    }
 
     const argmax = new Int32Array(T);
     for (let t = 0; t < T; t++) {
