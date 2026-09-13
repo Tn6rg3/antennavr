@@ -32,9 +32,8 @@ let selectedDeviceId = "default";
 const liveAudioBuffer = new Float32Array(16000 * 3); // 3-second sliding window at 16kHz
 let liveBufferPos = 0;
 let liveDecodingInterval = null;
-let resampleRemainder = 0; // Per mantenere la fase audio
 
-// Initialize ONNX Web Runtime Session
+// Initialize ONNX Web Runtime Session (100% Mobile Browser Compatible)
 async function initONNXSession() {
     const statusText = document.getElementById('modelStatusText');
     const onnxLabel = document.getElementById('debugOnnxVal');
@@ -44,9 +43,7 @@ async function initONNXSession() {
         if (statusText) statusText.innerText = "⏳ Caricamento Modello ONNX in RAM (2.1 MB)...";
         if (onnxLabel) onnxLabel.innerText = "Caricamento Modello...";
 
-        // FIX: Imposta i thread e forza il percorso dei binari WebAssembly
         ort.env.wasm.numThreads = 1;
-        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
 
         const modelCandidates = ['morse_model_int8.onnx', 'morse_model.onnx'];
         for (let mPath of modelCandidates) {
@@ -92,6 +89,7 @@ function getAudioContext() {
     return audioCtx;
 }
 
+// Enumerate connected audio input devices (Microphones, Stereo Mix, Virtual Cable)
 async function populateAudioDevicesList() {
     const select = document.getElementById('audioSourceSelect');
     if (!select) return;
@@ -112,7 +110,9 @@ async function populateAudioDevicesList() {
     }
 }
 
-// Implementazione AudioWorkletNode 
+let isWorkletRegistered = false;
+let workletNode = null;
+
 async function attachLiveStreamToDecoder(stream) {
     const liveBox = document.getElementById('liveOutputBox');
     const status = document.getElementById('liveStatusBadge');
@@ -123,85 +123,106 @@ async function attachLiveStreamToDecoder(stream) {
     }
 
     activeAudioStream = stream;
+
     const ctx = getAudioContext();
-    
-    // Ancoraggio globale
-    window.__sourceNodeRef = ctx.createMediaStreamSource(stream);
+    const source = ctx.createMediaStreamSource(stream);
 
     liveBufferPos = 0;
-    resampleRemainder = 0;
     liveAudioBuffer.fill(0);
 
     if (liveBox && (liveBox.innerText.includes("In attesa") || liveBox.innerText.length === 0)) {
         liveBox.innerText = "";
     }
 
-    // FIX: Clonazione Float32Array nel postMessage per evitare perdita di memoria
-    const workletCode = `
-        class MicProcessor extends AudioWorkletProcessor {
-            process(inputs, outputs, parameters) {
-                const input = inputs[0];
-                if (input && input.length > 0 && input[0].length > 0) {
-                    this.port.postMessage(new Float32Array(input[0]));
-                }
-                return true;
-            }
+    const nativeSr = ctx.sampleRate;
+    const resampleStep = nativeSr / 16000;
+
+    const processPcmBlock = (inputData) => {
+        if (!isListening) return;
+        let sumSq = 0.0;
+        let srcPos = 0;
+        while (srcPos < inputData.length) {
+            const idx = Math.floor(srcPos);
+            let val = inputData[idx] * currentInputGain;
+            if (isNaN(val) || !isFinite(val)) val = 0;
+
+            sumSq += val * val;
+            liveAudioBuffer[liveBufferPos] = val;
+            liveBufferPos = (liveBufferPos + 1) % liveAudioBuffer.length;
+            srcPos += resampleStep;
         }
-        registerProcessor('mic-processor', MicProcessor);
-    `;
 
-    try {
-        const blob = new Blob([workletCode], { type: 'application/javascript' });
-        const workletUrl = URL.createObjectURL(blob);
-        await ctx.audioWorklet.addModule(workletUrl);
+        const rms = Math.sqrt(sumSq / Math.max(1, inputData.length));
+        const volumePct = Math.min(100, Math.round(rms * 400));
 
-        scriptProcessorNode = new AudioWorkletNode(ctx, 'mic-processor');
-        window.__sourceNodeRef.connect(scriptProcessorNode);
+        const vuBar = document.getElementById('signalVuBar');
+        const vuVal = document.getElementById('signalVuVal');
+        const rmsLabel = document.getElementById('debugRmsVal');
+
+        if (vuBar) vuBar.style.width = `${volumePct}%`;
+        if (vuVal) vuVal.innerText = `${volumePct}%`;
+        if (rmsLabel) rmsLabel.innerText = `${volumePct}% (RMS: ${rms.toFixed(3)})`;
+    };
+
+    // Modern AudioWorklet Processor (Dedicated Real-Time Audio Thread)
+    if (ctx.audioWorklet) {
+        try {
+            if (!isWorkletRegistered) {
+                const workletCode = `
+                    class MicReader extends AudioWorkletProcessor {
+                        process(inputs, outputs) {
+                            if (inputs[0] && inputs[0][0] && inputs[0][0].length > 0) {
+                                this.port.postMessage(new Float32Array(inputs[0][0]));
+                            }
+                            if (outputs[0] && outputs[0][0]) {
+                                outputs[0][0].fill(0);
+                            }
+                            return true;
+                        }
+                    }
+                    registerProcessor('mic-reader', MicReader);
+                `;
+                const blob = new Blob([workletCode], { type: 'application/javascript' });
+                await ctx.audioWorklet.addModule(URL.createObjectURL(blob));
+                isWorkletRegistered = true;
+            }
+
+            workletNode = new AudioWorkletNode(ctx, 'mic-reader');
+            source.connect(workletNode);
+            workletNode.connect(ctx.destination);
+
+            workletNode.port.onmessage = (e) => {
+                processPcmBlock(e.data);
+            };
+
+            console.log("✓ AudioWorklet Processor collegato ed attivo su thread audio dedicato!");
+        } catch (workletErr) {
+            console.warn("AudioWorklet fallback a ScriptProcessorNode:", workletErr);
+            scriptProcessorNode = ctx.createScriptProcessor(4096, 1, 1);
+            source.connect(scriptProcessorNode);
+            scriptProcessorNode.connect(ctx.destination);
+
+            scriptProcessorNode.onaudioprocess = function(e) {
+                const inputData = e.inputBuffer.getChannelData(0);
+                const outputData = e.outputBuffer.getChannelData(0);
+                processPcmBlock(inputData);
+                for (let i = 0; i < outputData.length; i++) outputData[i] = 0;
+            };
+        }
+    } else {
+        scriptProcessorNode = ctx.createScriptProcessor(4096, 1, 1);
+        source.connect(scriptProcessorNode);
         scriptProcessorNode.connect(ctx.destination);
 
-        const nativeSr = ctx.sampleRate;
-        const resampleStep = nativeSr / 16000;
-
-        scriptProcessorNode.port.onmessage = (e) => {
-            if (!isListening) return;
-            const inputData = e.data;
-
-            let sumSq = 0.0;
-            let srcPos = resampleRemainder;
-            
-            while (srcPos < inputData.length) {
-                const idx = Math.floor(srcPos);
-                let val = inputData[idx] * currentInputGain;
-
-                if (isNaN(val) || !isFinite(val)) val = 0;
-
-                sumSq += val * val;
-                liveAudioBuffer[liveBufferPos] = val;
-                liveBufferPos = (liveBufferPos + 1) % liveAudioBuffer.length;
-                srcPos += resampleStep;
-            }
-            
-            resampleRemainder = srcPos - inputData.length;
-
-            const rms = Math.sqrt(sumSq / Math.max(1, inputData.length));
-            const volumePct = Math.min(100, Math.round(rms * 400));
-
-            const vuBar = document.getElementById('signalVuBar');
-            const vuVal = document.getElementById('signalVuVal');
-            const rmsLabel = document.getElementById('debugRmsVal');
-
-            if (vuBar) vuBar.style.width = `${volumePct}%`;
-            if (vuVal) vuVal.innerText = `${volumePct}%`;
-            if (rmsLabel) rmsLabel.innerText = `${volumePct}% (RMS: ${rms.toFixed(3)})`;
+        scriptProcessorNode.onaudioprocess = function(e) {
+            const inputData = e.inputBuffer.getChannelData(0);
+            const outputData = e.outputBuffer.getChannelData(0);
+            processPcmBlock(inputData);
+            for (let i = 0; i < outputData.length; i++) outputData[i] = 0;
         };
-
-    } catch (err) {
-        console.error("Errore inizializzazione AudioWorklet:", err);
-        return;
     }
 
     isListening = true;
-    window.__activeStreamRef = stream;
 
     if (status) {
         status.innerText = "● DECODIFICATORE ATTIVO LIVE";
@@ -224,20 +245,10 @@ function stopLiveAudioCapture() {
         activeAudioStream.getTracks().forEach(track => track.stop());
         activeAudioStream = null;
     }
-    
+
     if (liveDecodingInterval) clearInterval(liveDecodingInterval);
-    
-    if (scriptProcessorNode) {
-        scriptProcessorNode.disconnect();
-        scriptProcessorNode = null;
-    }
-    
-    if (window.__sourceNodeRef) {
-        window.__sourceNodeRef.disconnect();
-        window.__sourceNodeRef = null;
-    }
-    
-    window.__activeStreamRef = null;
+    if (scriptProcessorNode) scriptProcessorNode.disconnect();
+
     isListening = false;
 
     if (btn) {
@@ -260,10 +271,9 @@ async function toggleLiveListening() {
         try {
             const constraints = {
                 audio: {
-                    echoCancellation: { ideal: false },
-                    noiseSuppression: { ideal: false },
-                    autoGainControl: { ideal: false },
-                    channelCount: 1
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
                 }
             };
 
@@ -301,11 +311,13 @@ function playTestCwBeep() {
         const dash = 0.24;
         let t = ctx.currentTime + 0.1;
 
+        // C (-.-.)
         t = addBeep(gain, t, dash); t += dot;
         t = addBeep(gain, t, dot); t += dot;
         t = addBeep(gain, t, dash); t += dot;
         t = addBeep(gain, t, dot); t += dash;
 
+        // Q (--.-)
         t = addBeep(gain, t, dash); t += dot;
         t = addBeep(gain, t, dash); t += dot;
         t = addBeep(gain, t, dot); t += dot;
@@ -380,6 +392,7 @@ function finalizeAndCleanLiveText() {
     liveBox.innerText = text;
 }
 
+// Fast Resampler 16kHz -> 3.2kHz for Stage 7/8/9 ONNX Model
 function resampleAudioBufferTo3200FromArray(inputData, srcSr = 16000, targetSr = 3200) {
     if (!inputData || inputData.length === 0) return new Float32Array(0);
     const ratio = srcSr / targetSr;
@@ -395,22 +408,25 @@ function resampleAudioBufferTo3200FromArray(inputData, srcSr = 16000, targetSr =
     return output;
 }
 
+// 100% PyTorch-Identical Real STFT & Mel Spectrogram Transformer at 3,200Hz
 function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
     const fftSize = 128;
     const winLength = 64;
     const hopSize = 16;
-    const nFreqs = 65; 
+    const nFreqs = 65; // (128 / 2) + 1
 
+    // Pre-computed Hann Window of size 64
     const hannWindow = new Float32Array(winLength);
     for (let i = 0; i < winLength; i++) {
         hannWindow[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / winLength));
     }
 
+    // Mel Scale Triangular Filterbank Matrix (64 mels x 65 freqs)
     function hzToMel(hz) { return 2595 * Math.log10(1 + hz / 700); }
     function melToHz(mel) { return 700 * (Math.pow(10, mel / 2595) - 1); }
 
     const minMel = hzToMel(0.0);
-    const maxMel = hzToMel(1600.0); 
+    const maxMel = hzToMel(1600.0); // Nyquist frequency at 3200Hz SR
     const melPoints = new Float32Array(nMels + 2);
     for (let i = 0; i < nMels + 2; i++) {
         melPoints[i] = melToHz(minMel + (i / (nMels + 1)) * (maxMel - minMel));
@@ -439,9 +455,11 @@ function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
         }
     }
 
+    // Number of time steps with PyTorch-identical STFT padding
     const timeSteps = Math.floor(samples.length / hopSize) + 1;
     const powerSpec = new Float32Array(nFreqs * timeSteps);
 
+    // Compute Real STFT with Hann Window
     for (let t = 0; t < timeSteps; t++) {
         const frameStart = t * hopSize - Math.floor(winLength / 2);
 
@@ -462,6 +480,7 @@ function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
         }
     }
 
+    // Multiply STFT Power Spec by 64 Mel Filters
     const specData = new Float32Array(nMels * timeSteps);
     let sumVal = 0.0, sumSq = 0.0, totalCount = nMels * timeSteps;
 
@@ -471,6 +490,7 @@ function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
             for (let k = 0; k < nFreqs; k++) {
                 melEnergy += powerSpec[k * timeSteps + t] * filterbank[m * nFreqs + k];
             }
+            // AmplitudeToDB (10 * log10(max(1e-10, energy))) matching PyTorch torchaudio.transforms.AmplitudeToDB()
             const dbVal = 10.0 * Math.log10(Math.max(1e-10, melEnergy));
             specData[m * timeSteps + t] = dbVal;
 
@@ -479,6 +499,7 @@ function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
         }
     }
 
+    // Z-Score Normalization (spec - mean) / (std + 1e-5) matching PyTorch dataset.py
     const mean = sumVal / Math.max(1, totalCount);
     const variance = (sumSq / Math.max(1, totalCount)) - (mean * mean);
     const std = Math.sqrt(Math.max(1e-5, variance));
@@ -490,14 +511,25 @@ function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
     return { data: specData, timeSteps: timeSteps };
 }
 
+// CTC Greedy Decoder
 function ctcGreedyDecodeJS(logitsData, dims) {
     if (!dims || dims.length === 0) return "";
 
-    let C = dims[dims.length - 1]; 
-    let T = dims.length >= 2 ? dims[dims.length - 2] : 1; 
+    let T = 1;
+    let C = VOCAB.length;
 
-    if (dims.length === 3 && dims[0] > dims[1]) {
+    if (dims.length >= 3) {
+        // Handle both [T, B, C] and [B, T, C] layouts
+        if (dims[0] > dims[1]) {
+            T = dims[0]; // PyTorch CRNN export layout [T=188, B=1, C=49]
+            C = dims[2];
+        } else {
+            T = dims[1]; // Standard layout [B=1, T=188, C=49]
+            C = dims[2];
+        }
+    } else if (dims.length === 2) {
         T = dims[0];
+        C = dims[1];
     }
 
     const argmax = new Int32Array(T);
@@ -518,7 +550,7 @@ function ctcGreedyDecodeJS(logitsData, dims) {
     let prev = -1;
     for (let t = 0; t < T; t++) {
         const idx = argmax[t];
-        if (idx !== 0 && idx !== prev) { 
+        if (idx !== 0 && idx !== prev) { // 0 = <BLANK>
             if (idx < VOCAB.length && VOCAB[idx] !== "<BLANK>" && VOCAB[idx] !== "<UNK>") {
                 decoded += VOCAB[idx];
             }
@@ -535,6 +567,7 @@ function findDominantCwPitchJS(audioSlice, sampleRate = 3200) {
     let bestFreq = 650.0;
     let maxEnergy = 0.0;
 
+    // Scan CW pitch frequencies between 400 Hz and 900 Hz in 25 Hz steps
     for (let f = 400; f <= 900; f += 25) {
         const w0 = (2 * Math.PI * f) / sampleRate;
         const cosW0 = Math.cos(w0);
@@ -557,6 +590,7 @@ function findDominantCwPitchJS(audioSlice, sampleRate = 3200) {
     return maxEnergy > 0.04 ? bestFreq : 650.0;
 }
 
+// Adaptive DSP Morse Decoder (Multi-Frequency 400Hz - 900Hz Bandpass Peak Detection)
 function decodeMorseDSP(audioSlice, sampleRate = 3200) {
     if (!audioSlice || audioSlice.length === 0) return { text: "", freq: 650 };
 
@@ -565,13 +599,14 @@ function decodeMorseDSP(audioSlice, sampleRate = 3200) {
         const absA = Math.abs(audioSlice[i]);
         if (absA > maxAmp) maxAmp = absA;
     }
-    if (maxAmp < 0.03) return { text: "", freq: 650 }; 
+    if (maxAmp < 0.03) return { text: "", freq: 650 }; // Gate di silenzio
 
+    // Automatically detect dominant CW pitch between 400 Hz and 900 Hz
     const f0 = findDominantCwPitchJS(audioSlice, sampleRate);
     const w0 = (2 * Math.PI * f0) / sampleRate;
     const cosW0 = Math.cos(w0);
 
-    const windowSize = Math.floor(sampleRate * 0.035); 
+    const windowSize = Math.floor(sampleRate * 0.035); // 35ms window
     const numWindows = Math.floor(audioSlice.length / windowSize);
 
     let morseCode = "";
@@ -589,7 +624,7 @@ function decodeMorseDSP(audioSlice, sampleRate = 3200) {
         }
         const energy = Math.sqrt(Math.max(0, q1 * q1 + q2 * q2 - 2 * cosW0 * q1 * q2)) / windowSize;
 
-        if (energy > 0.08) { 
+        if (energy > 0.08) { // Tono CW Rilevato a Frequenza Adattiva!
             currentToneLen++;
             if (currentSilenceLen > 0) {
                 if (currentSilenceLen >= 2 && currentSilenceLen < 6) morseCode += " ";
@@ -626,6 +661,7 @@ function decodeMorseDSP(audioSlice, sampleRate = 3200) {
     return { text: decodedStr.trim(), freq: Math.round(f0) };
 }
 
+// Radio/Italian Vocabulary Corrector
 function correctTextWithRadioDictionary(rawText) {
     if (!rawText) return "";
 
@@ -676,9 +712,9 @@ function extractNewStreamWords(newRawText, previousFullText) {
     return addedWords.join(" ");
 }
 
+// 1.5s Latency Sliding Window Scheduler
 function startLiveDecodingStream() {
     const liveBox = document.getElementById('liveOutputBox');
-    const onnxLabel = document.getElementById('debugOnnxVal');
     if (!liveBox) return;
 
     let isProcessingInference = false;
@@ -686,11 +722,6 @@ function startLiveDecodingStream() {
     if (liveDecodingInterval) clearInterval(liveDecodingInterval);
 
     liveDecodingInterval = setInterval(async () => {
-        
-        if (audioCtx && audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
-
         if (!isListening || isProcessingInference) {
             return;
         }
@@ -705,6 +736,7 @@ function startLiveDecodingStream() {
 
             const audio3200 = resampleAudioBufferTo3200FromArray(alignedBuffer, 16000, 3200);
 
+            // Controllo Automatico di Guadagno Dinamico RMS (AGC) per Spettrogramma Costante
             let sumSq = 0.0;
             let activeSamples = 0;
             for (let i = 0; i < audio3200.length; i++) {
@@ -717,7 +749,7 @@ function startLiveDecodingStream() {
 
             const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
             if (rmsVal > 0.002) {
-                const targetRms = 0.25; 
+                const targetRms = 0.25; // Target 25% RMS ottimale per lo Spettrogramma STFT
                 const agcGain = Math.min(10.0, targetRms / rmsVal);
                 for (let i = 0; i < audio3200.length; i++) {
                     audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
@@ -729,9 +761,9 @@ function startLiveDecodingStream() {
             if (ortSession) {
                 try {
                     const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
-                    // Prova a passare un tensore 3D o 4D in base al fallback
                     const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
 
+                    // Nome del tensore d'ingresso letto dinamicamente da ONNX Runtime
                     const inputName = (ortSession.inputNames && ortSession.inputNames.length > 0) ? ortSession.inputNames[0] : 'spectrogram';
                     const feeds = {};
                     feeds[inputName] = inputTensor;
@@ -744,17 +776,17 @@ function startLiveDecodingStream() {
 
                     aiResult = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
                 } catch (err) {
-                    // FIX: Stampa a schermo il vero errore se ONNX rifiuta il formato del tensore
                     console.warn("Live ONNX Fallback:", err);
-                    if (onnxLabel) onnxLabel.innerText = "Err: " + err.message.substring(0, 30);
                 }
             }
 
             let dspText = "";
+            let detectedFreq = 650;
             if (isDspEnabled) {
                 const dspObj = decodeMorseDSP(audio3200, 3200);
                 if (typeof dspObj === 'object' && dspObj !== null) {
                     dspText = dspObj.text || "";
+                    detectedFreq = dspObj.freq || 650;
                 } else if (typeof dspObj === 'string') {
                     dspText = dspObj;
                 }
@@ -763,12 +795,10 @@ function startLiveDecodingStream() {
             const cleanAi = (typeof aiResult === 'string') ? aiResult.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
             const cleanDsp = (typeof dspText === 'string') ? dspText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
 
+            const onnxLabel = document.getElementById('debugOnnxVal');
             const dspLabel = document.getElementById('debugDspVal');
 
-            // Se ONNX non è in errore, mostra il risultato o <SILENZIO>
-            if (onnxLabel && !onnxLabel.innerText.startsWith("Err:")) {
-                onnxLabel.innerText = cleanAi ? `'${cleanAi}'` : "<SILENZIO>";
-            }
+            if (onnxLabel) onnxLabel.innerText = cleanAi ? `'${cleanAi}'` : "<SILENZIO>";
             if (dspLabel) dspLabel.innerText = cleanDsp ? `'${cleanDsp}'` : "<SILENZIO>";
 
             let rawOutput = cleanAi || cleanDsp;
@@ -792,12 +822,13 @@ function startLiveDecodingStream() {
         } catch (e) {
             console.error("Live Stream Error:", e);
         } finally {
-            isProcessingInference = false; 
+            isProcessingInference = false; // Guaranteed unlock!
         }
 
     }, 1500);
 }
 
+// Initialize on page load
 window.addEventListener('DOMContentLoaded', () => {
     populateAudioDevicesList();
     initONNXSession();
