@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeepCW IA - Test Singolo File</title>
+    <title>DeepCW IA - Solo Modello ONNX</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 20px; }
@@ -22,13 +22,13 @@
 </head>
 <body>
     <div class="container">
-        <h1>📻 Test ONNX Morse Decoder (All-in-One)</h1>
+        <h1>📻 Decoder Morse IA (Solo ONNX)</h1>
         
         <div class="status-box">
-            <div><strong>Stato Modello ONNX:</strong> <span id="model-status" style="color: #facc15;">Inizializzazione in corso...</span></div>
+            <div><strong>Stato IA:</strong> <span id="model-status" style="color: #facc15;">Inizializzazione in corso...</span></div>
             <div><strong>Audio:</strong> <span id="audio-status" style="color: #94a3b8;">Inattivo</span></div>
             <div style="margin-top: 10px;">
-                Livello Microfono:
+                Livello Segnale:
                 <div class="vu-meter"><div class="vu-fill" id="vu-bar"></div></div>
             </div>
         </div>
@@ -38,7 +38,7 @@
             <button id="btn-stop" onclick="stopSystem()" class="danger" disabled>⏹️ Ferma</button>
         </div>
 
-        <div><strong>Risultato IA / Testo Decodificato:</strong></div>
+        <div><strong>Testo Decodificato:</strong></div>
         <div class="output-box" id="output-box">In attesa...</div>
 
         <div><strong>Console Diagnostica:</strong></div>
@@ -46,7 +46,6 @@
     </div>
 
     <script>
-        // --- LOGGER A SCHERMO (Cattura gli errori e li mostra sulla pagina) ---
         function screenLog(msg, isErr=false) {
             const box = document.getElementById('log-box');
             const time = new Date().toISOString().split('T')[1].substring(0,8);
@@ -56,21 +55,20 @@
         }
         window.onerror = function(msg, url, line) { screenLog(`${msg} (Linea: ${line})`, true); return false; };
 
-        // --- VARIABILI GLOBALI ---
         const VOCAB = ["<BLANK>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "É", "À", "Ò", "Ù", ",", ".", "/", "'", "?", "=", " ", "<UNK>"];
+        
         let ortSession = null;
         let audioCtx = null;
         let streamRef = null;
         let workletNode = null;
         let isRunning = false;
         let loopInterval = null;
+        let isWorkletRegistered = false; // FIX: Impedisce crash al riavvio
         
         const SAMPLE_RATE = 16000;
-        const TARGET_SR = 3200;
-        const liveBuffer = new Float32Array(SAMPLE_RATE * 3); // Finestra 3 secondi
+        const liveBuffer = new Float32Array(SAMPLE_RATE * 3);
         let bufferPos = 0;
 
-        // --- INIZIALIZZAZIONE ONNX ---
         async function loadONNX() {
             try {
                 screenLog("Configurazione percorsi WASM ONNX...");
@@ -78,21 +76,18 @@
                 ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
                 
                 screenLog("Tentativo caricamento 'morse_model.onnx'...");
-                // Cambia il nome qui se il tuo file si chiama diversamente!
                 ortSession = await ort.InferenceSession.create('morse_model.onnx', { executionProviders: ['wasm'] });
                 
                 document.getElementById('model-status').innerText = "✅ Modello Caricato";
                 document.getElementById('model-status').style.color = "#4ade80";
-                screenLog("ONNX caricato con successo! Nomi input: " + ortSession.inputNames.join(", "));
+                screenLog("ONNX caricato con successo!");
             } catch (err) {
                 document.getElementById('model-status').innerText = "❌ Fallito";
                 document.getElementById('model-status').style.color = "#f87171";
                 screenLog("ERRORE ONNX: " + err.message, true);
-                screenLog("Assicurati che 'morse_model.onnx' sia nella stessa cartella di questo file HTML.", true);
             }
         }
 
-        // --- SISTEMA AUDIO (AudioWorklet) ---
         async function startSystem() {
             if (isRunning) return;
             document.getElementById('btn-start').disabled = true;
@@ -106,19 +101,22 @@
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
                 window.__globalMicSource = audioCtx.createMediaStreamSource(streamRef);
                 
-                const workletCode = `
-                    class MicReader extends AudioWorkletProcessor {
-                        process(inputs) {
-                            if (inputs[0] && inputs[0][0] && inputs[0][0].length > 0) {
-                                this.port.postMessage(new Float32Array(inputs[0][0]));
+                if (!isWorkletRegistered) {
+                    const workletCode = `
+                        class MicReader extends AudioWorkletProcessor {
+                            process(inputs) {
+                                if (inputs[0] && inputs[0][0] && inputs[0][0].length > 0) {
+                                    this.port.postMessage(new Float32Array(inputs[0][0]));
+                                }
+                                return true;
                             }
-                            return true;
                         }
-                    }
-                    registerProcessor('mic-reader', MicReader);
-                `;
-                const blob = new Blob([workletCode], { type: 'application/javascript' });
-                await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
+                        registerProcessor('mic-reader', MicReader);
+                    `;
+                    const blob = new Blob([workletCode], { type: 'application/javascript' });
+                    await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
+                    isWorkletRegistered = true;
+                }
                 
                 workletNode = new AudioWorkletNode(audioCtx, 'mic-reader');
                 window.__globalMicSource.connect(workletNode);
@@ -135,7 +133,6 @@
                         liveBuffer[bufferPos] = val;
                         bufferPos = (bufferPos + 1) % liveBuffer.length;
                     }
-                    // Aggiorna VU Meter
                     const rms = Math.sqrt(sumSq / data.length);
                     document.getElementById('vu-bar').style.width = Math.min(100, rms * 500) + '%';
                 };
@@ -146,9 +143,8 @@
                 document.getElementById('audio-status').style.color = "#4ade80";
                 document.getElementById('output-box').innerText = "";
                 
-                screenLog("Microfono connesso e buffer in riempimento.");
+                screenLog("Microfono connesso. Inizio inferenza IA...");
                 
-                // Avvia il loop di decodifica ogni 1.5 secondi
                 if(loopInterval) clearInterval(loopInterval);
                 loopInterval = setInterval(processAudioBuffer, 1500);
 
@@ -173,48 +169,32 @@
             screenLog("Sistema fermato dall'utente.");
         }
 
-        // --- MOTORE IA E DSP ---
         async function processAudioBuffer() {
-            if (!isRunning) return;
+            if (!isRunning || !ortSession) return;
             
             try {
-                // Estrazione lineare del buffer circolare
                 const alignedBuffer = new Float32Array(liveBuffer.length);
                 for (let i = 0; i < liveBuffer.length; i++) {
                     alignedBuffer[i] = liveBuffer[(bufferPos + i) % liveBuffer.length];
                 }
 
-                // Resampling spartano da 16000 a 3200
                 const ratio = 16000 / 3200;
                 const audio3200 = new Float32Array(Math.floor(alignedBuffer.length / ratio));
                 for (let i = 0; i < audio3200.length; i++) audio3200[i] = alignedBuffer[Math.floor(i * ratio)];
 
-                let resultText = "";
+                const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
+                const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
+                const inputName = ortSession.inputNames[0] || 'spectrogram';
+                
+                const feeds = {};
+                feeds[inputName] = inputTensor;
+                
+                const results = await ortSession.run(feeds);
+                const outKey = Object.keys(results)[0];
+                const outTensor = results[outKey];
+                
+                const resultText = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
 
-                if (ortSession) {
-                    // Costruzione Spettrogramma (Mel)
-                    const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
-                    const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
-                    const inputName = ortSession.inputNames[0] || 'spectrogram';
-                    
-                    const feeds = {};
-                    feeds[inputName] = inputTensor;
-                    
-                    // Inferenza
-                    const results = await ortSession.run(feeds);
-                    const outKey = Object.keys(results)[0];
-                    const outTensor = results[outKey];
-                    
-                    resultText = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
-                    if(resultText) screenLog("ONNX Decodificato: " + resultText);
-                } else {
-                    // Fallback se il modello non c'è: controlla almeno se c'è rumore
-                    let maxAmp = 0;
-                    for (let i=0; i<audio3200.length; i++) if (Math.abs(audio3200[i]) > maxAmp) maxAmp = Math.abs(audio3200[i]);
-                    resultText = (maxAmp > 0.05) ? "[Rilevato Segnale Audio ma ONNX disattivo]" : "";
-                }
-
-                // Stampa a schermo il risultato
                 const cleanText = resultText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim();
                 if (cleanText) {
                     const outBox = document.getElementById('output-box');
@@ -223,11 +203,10 @@
                 }
 
             } catch(e) {
-                screenLog("Errore Runtime Loop: " + e.message, true);
+                screenLog("Errore Inferenza ONNX: " + e.message, true);
             }
         }
 
-        // --- FUNZIONI MATEMATICHE DSP (Mantenute dal tuo codice originale) ---
         function computeMelSpectrogramJS(samples, sampleRate, nMels) {
             const fftSize = 128; const winLength = 64; const hopSize = 16; const nFreqs = 65;
             const hannWindow = new Float32Array(winLength);
@@ -309,7 +288,6 @@
             return decoded;
         }
 
-        // --- Avvio al caricamento ---
         window.onload = loadONNX;
     </script>
 </body>
