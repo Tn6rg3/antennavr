@@ -1527,13 +1527,6 @@ window.updateMarkersFromManualInput = function() {
     window.aiTrainingState.currentWindowDuration = Math.max(0.2, valB - valA);
 
     window.updateMasterTimelineDisplay();
-
-    if (window.aiTrainingState.manualInputTimeout) clearTimeout(window.aiTrainingState.manualInputTimeout);
-    window.aiTrainingState.manualInputTimeout = setTimeout(() => {
-        if (typeof window.runInferenceOnSegment === 'function') {
-            window.runInferenceOnSegment();
-        }
-    }, 250);
 };
 
 window.updateBatchBlockMarkersFromInput = function(blockId) {
@@ -1563,11 +1556,7 @@ window.updateBatchBlockMarkersFromInput = function(blockId) {
     if (dispDur) dispDur.innerText = `${(b.markerB - b.markerA).toFixed(1)}s`;
 
     window.drawBatchRowCanvas(b);
-
-    if (window.aiTrainingState.batchManualTimeout) clearTimeout(window.aiTrainingState.batchManualTimeout);
-    window.aiTrainingState.batchManualTimeout = setTimeout(() => {
-        if (typeof window.runBatchInferenceForBlock === 'function') {
-            window.runBatchInferenceForBlock(b);
+};
         }
     }, 250);
 };
@@ -1980,17 +1969,38 @@ function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
 }
 
 function ctcGreedyDecodeJS(probsData, dims) {
-    const timeSteps = (dims && dims.length >= 3) ? (dims[0] === 1 ? dims[1] : dims[0]) : ((dims && dims.length === 2) ? dims[0] : 1);
-    const numClasses = (dims && dims.length >= 3) ? dims[2] : ((dims && dims.length === 2) ? dims[1] : AI_VOCAB.length);
+    if (!probsData || probsData.length === 0) return '';
 
-    let result = '';
+    let T = 0, C = AI_VOCAB.length;
+    let isBatchFirst = true;
+
+    if (dims && dims.length === 3) {
+        if (dims[0] === 1) {
+            T = dims[1];
+            C = dims[2];
+            isBatchFirst = true;
+        } else {
+            T = dims[0];
+            C = dims[2];
+            isBatchFirst = false;
+        }
+    } else if (dims && dims.length === 2) {
+        T = dims[0];
+        C = dims[1];
+    } else {
+        T = Math.floor(probsData.length / C);
+    }
+
+    let rawChars = [];
     let lastIdx = -1;
 
-    for (let t = 0; t < timeSteps; t++) {
+    for (let t = 0; t < T; t++) {
         let maxVal = -Infinity;
         let maxIdx = 0;
-        for (let c = 0; c < numClasses; c++) {
-            const val = probsData[t * numClasses + c];
+        const baseOffset = isBatchFirst ? (t * C) : (t * 1 * C);
+
+        for (let c = 0; c < C; c++) {
+            const val = probsData[baseOffset + c];
             if (val > maxVal) {
                 maxVal = val;
                 maxIdx = c;
@@ -2000,10 +2010,20 @@ function ctcGreedyDecodeJS(probsData, dims) {
         if (maxIdx !== 0 && maxIdx !== lastIdx) {
             const char = AI_VOCAB[maxIdx] || '';
             if (char && char !== '<BLANK>') {
-                result += char;
+                rawChars.push(char);
             }
         }
         lastIdx = maxIdx;
+    }
+
+    let result = rawChars.join('');
+
+    // Collasso delle lettere identiche ripetute derivanti da fluttuazioni di rumore (es. 888888 -> 8, ???? -> ?)
+    result = result.replace(/([A-Z0-9ÉÀÒÙ,\./'?=])\1+/gi, '$1');
+
+    // Se la stringa e composta esclusivamente da un unico carattere ripetuto (es. "888" o "???" o "ÉÉÉ"), scarta come artefatto
+    if (/^(.)\1*$/.test(result) && result.length >= 2) {
+        return "";
     }
 
     return result.trim();
