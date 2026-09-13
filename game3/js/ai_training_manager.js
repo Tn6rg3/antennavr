@@ -1868,6 +1868,18 @@ function resampleAudioBufferTo3200(audioBuffer, startTime, durationSec) {
         resampled[resampled.length - 1 - i] *= factor;
     }
 
+    // Normalizzazione ampiezza di picco a 0.95 (Identica al dataset PyTorch di MODELLOCWIA)
+    let maxAmp = 0.0;
+    for (let i = 0; i < resampled.length; i++) {
+        const absVal = Math.abs(resampled[i]);
+        if (absVal > maxAmp) maxAmp = absVal;
+    }
+    if (maxAmp > 0.0001) {
+        for (let i = 0; i < resampled.length; i++) {
+            resampled[i] = (resampled[i] / maxAmp) * 0.95;
+        }
+    }
+
     return resampled;
 }
 
