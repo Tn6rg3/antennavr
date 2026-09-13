@@ -63,7 +63,8 @@
         let workletNode = null;
         let isRunning = false;
         let loopInterval = null;
-        let isWorkletRegistered = false; // FIX: Impedisce crash al riavvio
+        let isWorkletRegistered = false; 
+        let isProcessingInference = false; // FIX: Evita il crash per sovrapposizione di calcolo
         
         const SAMPLE_RATE = 16000;
         const liveBuffer = new Float32Array(SAMPLE_RATE * 3);
@@ -138,6 +139,7 @@
                 };
 
                 isRunning = true;
+                isProcessingInference = false;
                 document.getElementById('btn-stop').disabled = false;
                 document.getElementById('audio-status').innerText = "🟢 Ascolto Live Attivo";
                 document.getElementById('audio-status').style.color = "#4ade80";
@@ -170,9 +172,14 @@
         }
 
         async function processAudioBuffer() {
-            if (!isRunning || !ortSession) return;
+            // FIX: Blocco di sicurezza per evitare sovrapposizioni e crash WASM
+            if (!isRunning || !ortSession || isProcessingInference) return;
+            isProcessingInference = true;
             
             try {
+                // Heartbeat a schermo per confermare che il loop è vivo
+                screenLog("[OK] Analisi pacchetto audio...");
+
                 const alignedBuffer = new Float32Array(liveBuffer.length);
                 for (let i = 0; i < liveBuffer.length; i++) {
                     alignedBuffer[i] = liveBuffer[(bufferPos + i) % liveBuffer.length];
@@ -181,6 +188,22 @@
                 const ratio = 16000 / 3200;
                 const audio3200 = new Float32Array(Math.floor(alignedBuffer.length / ratio));
                 for (let i = 0; i < audio3200.length; i++) audio3200[i] = alignedBuffer[Math.floor(i * ratio)];
+
+                // FIX: Ripristinato Controllo Automatico Guadagno (AGC)
+                // Evita che un audio troppo basso faccia credere al modello che ci sia solo silenzio
+                let sumSq = 0.0;
+                let activeSamples = 0;
+                for (let i = 0; i < audio3200.length; i++) {
+                    const val = audio3200[i];
+                    if (Math.abs(val) > 0.001) { sumSq += val * val; activeSamples++; }
+                }
+                const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
+                if (rmsVal > 0.001) {
+                    const agcGain = Math.min(15.0, 0.25 / rmsVal);
+                    for (let i = 0; i < audio3200.length; i++) {
+                        audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
+                    }
+                }
 
                 const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
                 const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
@@ -196,6 +219,7 @@
                 const resultText = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
 
                 const cleanText = resultText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim();
+                
                 if (cleanText) {
                     const outBox = document.getElementById('output-box');
                     outBox.innerText += cleanText + " ";
@@ -204,6 +228,9 @@
 
             } catch(e) {
                 screenLog("Errore Inferenza ONNX: " + e.message, true);
+            } finally {
+                // Rilascia il lucchetto per la prossima iterazione
+                isProcessingInference = false;
             }
         }
 
