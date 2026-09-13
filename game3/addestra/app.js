@@ -433,8 +433,8 @@ function computeMelSpectrogramJS(samples, sampleRate = 3200, nMels = 64) {
             for (let k = 0; k < nFreqs; k++) {
                 melEnergy += powerSpec[k * timeSteps + t] * filterbank[m * nFreqs + k];
             }
-            // AmplitudeToDB (10 * log10(max(1e-5, energy)))
-            const dbVal = 10.0 * Math.log10(Math.max(1e-5, melEnergy));
+            // AmplitudeToDB (10 * log10(max(1e-10, energy))) matching PyTorch torchaudio.transforms.AmplitudeToDB()
+            const dbVal = 10.0 * Math.log10(Math.max(1e-10, melEnergy));
             specData[m * timeSteps + t] = dbVal;
 
             sumVal += dbVal;
@@ -705,7 +705,12 @@ function startLiveDecodingStream() {
                 try {
                     const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
                     const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
-                    const feeds = { spectrogram: inputTensor };
+
+                    // Nome del tensore d'ingresso letto dinamicamente da ONNX Runtime
+                    const inputName = (ortSession.inputNames && ortSession.inputNames.length > 0) ? ortSession.inputNames[0] : 'spectrogram';
+                    const feeds = {};
+                    feeds[inputName] = inputTensor;
+
                     const results = await ortSession.run(feeds);
 
                     const outputKeys = Object.keys(results);
@@ -719,12 +724,19 @@ function startLiveDecodingStream() {
             }
 
             let dspText = "";
+            let detectedFreq = 650;
             if (isDspEnabled) {
-                dspText = decodeMorseDSP(audio3200, 3200);
+                const dspObj = decodeMorseDSP(audio3200, 3200);
+                if (typeof dspObj === 'object' && dspObj !== null) {
+                    dspText = dspObj.text || "";
+                    detectedFreq = dspObj.freq || 650;
+                } else if (typeof dspObj === 'string') {
+                    dspText = dspObj;
+                }
             }
 
-            const cleanAi = aiResult ? aiResult.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
-            const cleanDsp = dspText ? dspText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
+            const cleanAi = (typeof aiResult === 'string') ? aiResult.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
+            const cleanDsp = (typeof dspText === 'string') ? dspText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
 
             const onnxLabel = document.getElementById('debugOnnxVal');
             const dspLabel = document.getElementById('debugDspVal');
