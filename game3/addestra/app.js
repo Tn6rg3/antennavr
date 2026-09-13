@@ -479,18 +479,48 @@ function ctcGreedyDecodeJS(logitsData, dims) {
     return decoded;
 }
 
-// DSP Emergency Morse Decoder (Goertzel 650Hz Bandpass Peak Detection)
+function findDominantCwPitchJS(audioSlice, sampleRate = 3200) {
+    if (!audioSlice || audioSlice.length < 128) return 650.0;
+
+    let bestFreq = 650.0;
+    let maxEnergy = 0.0;
+
+    // Scan CW pitch frequencies between 400 Hz and 900 Hz in 25 Hz steps
+    for (let f = 400; f <= 900; f += 25) {
+        const w0 = (2 * Math.PI * f) / sampleRate;
+        const cosW0 = Math.cos(w0);
+
+        let q1 = 0.0, q2 = 0.0;
+        const N = Math.min(1024, audioSlice.length);
+        for (let k = 0; k < N; k++) {
+            const sample = audioSlice[k];
+            const q0 = sample + 2 * cosW0 * q1 - q2;
+            q2 = q1;
+            q1 = q0;
+        }
+        const energy = Math.sqrt(Math.max(0, q1 * q1 + q2 * q2 - 2 * cosW0 * q1 * q2)) / N;
+        if (energy > maxEnergy) {
+            maxEnergy = energy;
+            bestFreq = f;
+        }
+    }
+
+    return maxEnergy > 0.04 ? bestFreq : 650.0;
+}
+
+// Adaptive DSP Morse Decoder (Multi-Frequency 400Hz - 900Hz Bandpass Peak Detection)
 function decodeMorseDSP(audioSlice, sampleRate = 3200) {
-    if (!audioSlice || audioSlice.length === 0) return "";
+    if (!audioSlice || audioSlice.length === 0) return { text: "", freq: 650 };
 
     let maxAmp = 0;
     for (let i = 0; i < audioSlice.length; i++) {
         const absA = Math.abs(audioSlice[i]);
         if (absA > maxAmp) maxAmp = absA;
     }
-    if (maxAmp < 0.03) return ""; // Gate di silenzio
+    if (maxAmp < 0.03) return { text: "", freq: 650 }; // Gate di silenzio
 
-    const f0 = 650.0;
+    // Automatically detect dominant CW pitch between 400 Hz and 900 Hz
+    const f0 = findDominantCwPitchJS(audioSlice, sampleRate);
     const w0 = (2 * Math.PI * f0) / sampleRate;
     const cosW0 = Math.cos(w0);
 
@@ -512,7 +542,7 @@ function decodeMorseDSP(audioSlice, sampleRate = 3200) {
         }
         const energy = Math.sqrt(Math.max(0, q1 * q1 + q2 * q2 - 2 * cosW0 * q1 * q2)) / windowSize;
 
-        if (energy > 0.08) { // Tono CW 650Hz Rilevato!
+        if (energy > 0.08) { // Tono CW Rilevato a Frequenza Adattiva!
             currentToneLen++;
             if (currentSilenceLen > 0) {
                 if (currentSilenceLen >= 2 && currentSilenceLen < 6) morseCode += " ";
@@ -546,7 +576,7 @@ function decodeMorseDSP(audioSlice, sampleRate = 3200) {
         decodedStr += " ";
     }
 
-    return decodedStr.trim();
+    return { text: decodedStr.trim(), freq: Math.round(f0) };
 }
 
 // Radio/Italian Vocabulary Corrector
@@ -624,17 +654,23 @@ function startLiveDecodingStream() {
 
             const audio3200 = resampleAudioBufferTo3200FromArray(alignedBuffer, 16000, 3200);
 
-            // Normalizzazione Automatica del Picco d'Ampiezza a 1.0 (Full Scale)
-            let maxPeak = 0.0;
+            // Controllo Automatico di Guadagno Dinamico RMS (AGC) per Spettrogramma Costante
+            let sumSq = 0.0;
+            let activeSamples = 0;
             for (let i = 0; i < audio3200.length; i++) {
-                const absVal = Math.abs(audio3200[i]);
-                if (absVal > maxPeak) maxPeak = absVal;
+                const val = audio3200[i];
+                if (Math.abs(val) > 0.001) {
+                    sumSq += val * val;
+                    activeSamples++;
+                }
             }
 
-            if (maxPeak > 0.002) {
-                const normScale = 1.0 / maxPeak;
+            const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
+            if (rmsVal > 0.002) {
+                const targetRms = 0.25; // Target 25% RMS ottimale per lo Spettrogramma STFT
+                const agcGain = Math.min(10.0, targetRms / rmsVal);
                 for (let i = 0; i < audio3200.length; i++) {
-                    audio3200[i] *= normScale;
+                    audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
                 }
             }
 
