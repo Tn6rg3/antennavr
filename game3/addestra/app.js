@@ -141,16 +141,25 @@ async function attachLiveStreamToDecoder(stream) {
     scriptProcessorNode.onaudioprocess = function(e) {
         if (!isListening) return;
         const inputData = e.inputBuffer.getChannelData(0);
+        const outputData = e.outputBuffer.getChannelData(0);
 
         let sumSq = 0.0;
         let srcPos = 0;
         while (srcPos < inputData.length) {
             const idx = Math.floor(srcPos);
-            const val = inputData[idx] * currentInputGain;
+            let val = inputData[idx] * currentInputGain;
+
+            if (isNaN(val) || !isFinite(val)) val = 0;
+
             sumSq += val * val;
             liveAudioBuffer[liveBufferPos] = val;
             liveBufferPos = (liveBufferPos + 1) % liveAudioBuffer.length;
             srcPos += resampleStep;
+        }
+
+        // Write silence to output buffer to prevent Chrome/Edge garbage collection hibernation
+        for (let i = 0; i < outputData.length; i++) {
+            outputData[i] = 0;
         }
 
         const rms = Math.sqrt(sumSq / Math.max(1, inputData.length));
