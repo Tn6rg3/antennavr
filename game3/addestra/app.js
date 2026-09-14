@@ -66,23 +66,35 @@ function getAudioContext() {
     return audioCtx;
 }
 
+async function changeOnnxModel(event) {
+    const selectedFile = event.target.value;
+    screenLog(`🤖 Cambio Modello IA selezionato dall'utente: '${selectedFile}'...`);
+    await loadONNX(selectedFile);
+}
+
 // Load ONNX Model Session
-async function loadONNX() {
+async function loadONNX(forcedModelPath = null) {
     const statusLabel = document.getElementById('model-status');
     try {
         screenLog("Configurazione runtime WASM ONNX...");
+        if (statusLabel) {
+            statusLabel.innerText = "⏳ Caricamento in RAM...";
+            statusLabel.style.backgroundColor = "#451a03";
+            statusLabel.style.color = "#facc15";
+        }
+
         ort.env.wasm.numThreads = 1;
         ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
 
-        screenLog("Caricamento modello 'morse_model_int8.onnx' in RAM...");
-        const modelCandidates = ['morse_model_int8.onnx', 'morse_model.onnx', 'morse_model8.onnx'];
+        const modelCandidates = forcedModelPath ? [forcedModelPath] : ['morse_model_int8.onnx', 'morse_model.onnx', 'morse_model8.onnx'];
 
         for (let mPath of modelCandidates) {
             try {
+                screenLog(`Caricamento modello '${mPath}' in RAM...`);
                 ortSession = await ort.InferenceSession.create(mPath, { executionProviders: ['wasm'] });
-                screenLog(`✓ Modello ONNX caricato con successo da '${mPath}'!`);
+                screenLog(`✓ Modello ONNX '${mPath}' caricato con successo in RAM!`);
                 if (statusLabel) {
-                    statusLabel.innerText = "✅ Modello Pronto (2.1 MB in RAM)";
+                    statusLabel.innerText = `✅ Modello '${mPath}' Pronto!`;
                     statusLabel.style.backgroundColor = "#14532d";
                     statusLabel.style.color = "#4ade80";
                 }
