@@ -109,7 +109,6 @@ async function loadONNX(forcedModelPath = null) {
     }
 }
 
-// Fusione intelligente delle finestre temporali sovrapposte (Previene ripetizioni e allucinazioni)
 function handleWorkerInferResult(aiResult) {
     const liveBox = document.getElementById('output-box');
     if (!liveBox) return;
@@ -119,35 +118,38 @@ function handleWorkerInferResult(aiResult) {
 
     if (liveBox.innerText.includes("In attesa")) liveBox.innerText = "";
 
-    // Dividiamo il testo attualmente a schermo e quello nuovo in array di parole
     let currentWords = liveBox.innerText.trim().split(/\s+/).filter(w => w.length > 0);
     let newWords = newText.split(/\s+/).filter(w => w.length > 0);
 
-    if (newWords.length === 0) return;
-
-    // Cerca il punto esatto di intersezione tra la vecchia e la nuova decodifica
-    let overlapIdx = 0;
-    for (let i = 0; i < currentWords.length; i++) {
-        let match = true;
-        let k = 0;
-        for (let j = i; j < currentWords.length && k < newWords.length; j++, k++) {
-            if (currentWords[j] !== newWords[k]) {
-                match = false;
-                break;
+    let wordsToAdd = [];
+    if (currentWords.length === 0) {
+        wordsToAdd = newWords;
+    } else {
+        // Cerca l'esatta sovrapposizione tra la fine del testo attuale e l'inizio del nuovo
+        let maxOverlap = 0;
+        let checkLength = Math.min(currentWords.length, newWords.length);
+        
+        for (let i = 1; i <= checkLength; i++) {
+            let match = true;
+            for (let j = 0; j < i; j++) {
+                if (currentWords[currentWords.length - i + j] !== newWords[j]) {
+                    match = false;
+                    break;
+                }
             }
+            if (match) maxOverlap = i;
         }
-        // Se le parole combaciano fino alla fine del testo attuale, abbiamo trovato l'overlap
-        if (match && i + k === currentWords.length) {
-            overlapIdx = k;
-            break;
+
+        // Aggiunge solo le parole inedite
+        for (let i = maxOverlap; i < newWords.length; i++) {
+            wordsToAdd.push(newWords[i]);
         }
     }
 
-    // Stampa solo le parole che vanno oltre l'intersezione trovata
-    for (let i = overlapIdx; i < newWords.length; i++) {
-        liveBox.innerText += newWords[i] + " ";
+    if (wordsToAdd.length > 0) {
+        liveBox.innerText += (currentWords.length > 0 ? " " : "") + wordsToAdd.join(" ");
+        liveBox.scrollTop = liveBox.scrollHeight;
     }
-    liveBox.scrollTop = liveBox.scrollHeight;
 }
 
 // Enumerate Connected Input Devices
