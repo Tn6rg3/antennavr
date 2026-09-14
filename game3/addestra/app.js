@@ -279,25 +279,19 @@ function applyCwBandpassFilterJS(audioData, sampleRate = 3200, minFreq = 300, ma
     return filtered;
 }
 
-// Async Version-Polling Loop (Pure Non-Blocking Version Sync)
+// Async Decode Loop (Calibrato a 1200ms per 0% carico CPU e barra liquida 60 FPS)
 async function startAsyncDecodeLoop() {
     while (isRunning) {
-        if (audioBufferVersion === lastProcessedVersion || isProcessingInference) {
-            await new Promise(r => setTimeout(r, 20));
-            continue;
-        }
+        // Pausa strategica di 1200ms per lasciare la CPU libera al 90%
+        await new Promise(r => setTimeout(r, 1200));
 
-        lastProcessedVersion = audioBufferVersion;
+        if (!isRunning || isProcessingInference || !ortSession) continue;
 
         try {
             isProcessingInference = true;
 
-            // Extract ONLY active recorded samples from circular buffer (prevents unwritten zeros corruption!)
             const activeLen = Math.min(totalRecordedSamples, liveBuffer.length);
-            if (activeLen < 3200) { // Wait for at least 1 second of recorded audio
-                await new Promise(r => setTimeout(r, 50));
-                continue;
-            }
+            if (activeLen < 3200) continue; // Attendi almeno 1 secondo di audio
 
             const alignedBuffer = new Float32Array(activeLen);
             const startIdx = (bufferPos - activeLen + liveBuffer.length) % liveBuffer.length;
