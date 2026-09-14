@@ -12,6 +12,9 @@ const VOCAB = ["<BLANK>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
 async function initWorkerONNX(modelPath) {
     try {
         ort.env.wasm.numThreads = 1;
+        ort.env.wasm.simd = false;
+        ort.env.wasm.proxy = false;
+        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
         ortSession = await ort.InferenceSession.create(modelPath, { executionProviders: ['wasm'] });
         self.postMessage({ type: 'ONNX_READY', modelPath: modelPath });
     } catch (e) {
