@@ -843,10 +843,6 @@ function startLiveDecodingStream() {
                         }
                     }
                 }
-                            liveBox.scrollTop = liveBox.scrollHeight;
-                        }
-                    }
-                }
             } catch (e) {
                 console.error("Async Decode Loop Error:", e);
             } finally {
