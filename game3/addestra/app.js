@@ -34,6 +34,7 @@ const liveBuffer = new Float32Array(SAMPLE_RATE * 5); // 5-second sliding window
 let bufferPos = 0;
 let audioBufferVersion = 0;
 let lastProcessedVersion = -1;
+let cwEnvelope = 0; // Filtro anti-sfarfallio per il grafico
 
 function getAudioContext() {
     if (!audioCtx) {
@@ -56,7 +57,7 @@ async function changeOnnxModel(event) {
     }
 }
 
-// NUOVA FUNZIONE: Carica un modello ONNX locale selezionato dall'utente
+// Carica un modello ONNX locale selezionato dall'utente
 function loadCustomONNX(event) {
     const file = event.target.files[0];
     if (file) {
@@ -70,7 +71,7 @@ function loadCustomONNX(event) {
     }
 }
 
-// Load ONNX Model Session via Background WebWorker (0% UI Thread Lock)
+// Load ONNX Model Session via Background WebWorker
 async function loadONNX(forcedModelPath = null) {
     const statusLabel = document.getElementById('model-status');
     const targetModel = forcedModelPath || 'morse_model8.onnx';
@@ -108,34 +109,47 @@ async function loadONNX(forcedModelPath = null) {
     }
 }
 
-// CORREZIONE: Funzione di output del testo (Rimuove gli errori delle variabili inesistenti)
+// Fusione intelligente delle finestre temporali sovrapposte (Previene ripetizioni e allucinazioni)
 function handleWorkerInferResult(aiResult) {
     const liveBox = document.getElementById('output-box');
     if (!liveBox) return;
 
-    const cleanAi = (typeof aiResult === 'string') ? aiResult.trim() : "";
+    let newText = (typeof aiResult === 'string') ? aiResult.trim() : "";
+    if (!newText) return;
 
-    if (cleanAi && cleanAi.length > 0) {
-        const currentFullText = liveBox.innerText || "";
-        if (currentFullText.includes("In attesa del segnale")) {
-            liveBox.innerText = "";
-        }
+    if (liveBox.innerText.includes("In attesa")) liveBox.innerText = "";
 
-        const words = cleanAi.split(/\s+/);
-        const currentText = liveBox.innerText.trim();
-        // Prendi l'ultima parola già stampata a schermo per fare il confronto
-        let lastWord = currentText ? currentText.split(/\s+/).pop() : "";
+    // Dividiamo il testo attualmente a schermo e quello nuovo in array di parole
+    let currentWords = liveBox.innerText.trim().split(/\s+/).filter(w => w.length > 0);
+    let newWords = newText.split(/\s+/).filter(w => w.length > 0);
 
-        for (let w of words) {
-            // Stampa la parola solo se è valida e diversa dall'ultima appena stampata
-            if (w && w !== lastWord) {
-                liveBox.innerText += w + " ";
-                liveBox.scrollTop = liveBox.scrollHeight;
-                lastWord = w; // Aggiorna per il prossimo ciclo interno
+    if (newWords.length === 0) return;
+
+    // Cerca il punto esatto di intersezione tra la vecchia e la nuova decodifica
+    let overlapIdx = 0;
+    for (let i = 0; i < currentWords.length; i++) {
+        let match = true;
+        let k = 0;
+        for (let j = i; j < currentWords.length && k < newWords.length; j++, k++) {
+            if (currentWords[j] !== newWords[k]) {
+                match = false;
+                break;
             }
         }
+        // Se le parole combaciano fino alla fine del testo attuale, abbiamo trovato l'overlap
+        if (match && i + k === currentWords.length) {
+            overlapIdx = k;
+            break;
+        }
     }
+
+    // Stampa solo le parole che vanno oltre l'intersezione trovata
+    for (let i = overlapIdx; i < newWords.length; i++) {
+        liveBox.innerText += newWords[i] + " ";
+    }
+    liveBox.scrollTop = liveBox.scrollHeight;
 }
+
 // Enumerate Connected Input Devices
 async function populateAudioDevicesList() {
     const select = document.getElementById('audioSourceSelect');
@@ -161,10 +175,7 @@ let waterfallImageData = null;
 let lastWaterfallTime = performance.now();
 let waterfallPixelAccumulator = 0;
 
-
-let cwEnvelope = 0; // NUOVA VARIABILE GLOBALE: Filtro anti-sfarfallio per il grafico
-
-// CORREZIONE GRAFICA: Linee solide con smussamento dell'inviluppo
+// Visualizzatore Punti e Linee ad alto contrasto (Scorre da destra a sinistra)
 function drawWaterfallLoop() {
     if (!isRunning || !analyserNode) return;
 
@@ -179,7 +190,7 @@ function drawWaterfallLoop() {
             const dt = (now - lastWaterfallTime) / 1000.0;
             lastWaterfallTime = now;
 
-            // Velocità: 10 secondi visibili
+            // Velocità di scorrimento (10 secondi visibili)
             const pxPerSec = width / 10.0; 
             waterfallPixelAccumulator += dt * pxPerSec;
 
@@ -192,14 +203,14 @@ function drawWaterfallLoop() {
                 const freqData = new Uint8Array(fftBins);
                 analyserNode.getByteFrequencyData(freqData);
 
-                // 1. Sposta l'immagine a sinistra
+                // 1. Sposta l'immagine attuale del canvas verso sinistra
                 ctx.drawImage(canvas, step, 0, width - step, height, 0, 0, width - step, height);
-
-                // 2. Disegna lo sfondo nero per la nuova colonna
+                
+                // 2. Disegna la nuova colonna nera a destra
                 ctx.fillStyle = '#020617'; 
                 ctx.fillRect(width - Math.ceil(step), 0, Math.ceil(step), height);
 
-                // 3. Trova l'intensità del segnale CW (300-1100 Hz)
+                // 3. Cerca il picco massimo nell'area del tono CW (300-1100 Hz)
                 const binWidth = (audioCtx.sampleRate / 2) / fftBins;
                 let minBin = Math.floor(300 / binWidth);
                 let maxBin = Math.floor(1100 / binWidth);
@@ -210,18 +221,17 @@ function drawWaterfallLoop() {
                 }
 
                 // 4. Logica "Peak Hold" per stabilizzare la durata di punti e linee
-                if (signalPeak > 115) { // Soglia attivazione
+                if (signalPeak > 85) { 
                     cwEnvelope = 1.0; 
                 } else {
-                    cwEnvelope *= 0.65; // Rilascio rapido per eliminare lo sfarfallio
+                    cwEnvelope *= 0.55; // Rilascio rapido
                 }
 
                 // 5. Disegna se il segnale è stabile
                 if (cwEnvelope > 0.2) {
-                    ctx.fillStyle = `rgba(74, 222, 128, ${cwEnvelope})`; // Verde neon con opacità dinamica
+                    ctx.fillStyle = `rgba(74, 222, 128, ${cwEnvelope})`; // Verde neon
                     const barHeight = 80;
                     const yPos = (height - barHeight) / 2;
-                    // Math.ceil chiude i microscopici gap neri dovuti ai sub-pixel
                     ctx.fillRect(width - Math.ceil(step), yPos, Math.ceil(step), barHeight);
                 }
             }
@@ -230,7 +240,6 @@ function drawWaterfallLoop() {
 
     waterfallAnimationFrame = requestAnimationFrame(drawWaterfallLoop);
 }
-
 
 async function startSystem() {
     if (isRunning) return;
@@ -252,12 +261,12 @@ async function startSystem() {
         audioCtx = getAudioContext();
         window.__globalMicSource = audioCtx.createMediaStreamSource(streamRef);
 
-        // Analyser Node for Live Spectrogram Waterfall (Razor-Sharp High Contrast 0 Smoothing)
+        // Analyser Node for Live Spectrogram Waterfall
         analyserNode = audioCtx.createAnalyser();
         analyserNode.fftSize = 2048;
-        analyserNode.smoothingTimeConstant = 0.0; // 0.0 smoothing for razor-sharp dots/dashes
-        analyserNode.minDecibels = -90; // -90 dB noise floor to capture soft signals
-        analyserNode.maxDecibels = -10; // -10 dB ceiling for high dynamic range
+        analyserNode.smoothingTimeConstant = 0.65; // Stabilizza punti e linee
+        analyserNode.minDecibels = -90; 
+        analyserNode.maxDecibels = -10; 
         window.__globalMicSource.connect(analyserNode);
 
         if (!isWorkletRegistered) {
@@ -395,7 +404,7 @@ async function startAsyncDecodeLoop() {
             // 1. Direct Native 3200 Hz Audio Buffer
             let audio3200 = applyCwBandpassFilterJS(alignedBuffer, 3200, 300, 1100);
 
-            // 2. Controllo Automatico di Guadagno RMS (AGC) con Gate di Silenzio
+            // 2. Controllo Automatico di Guadagno RMS (AGC) con Gate di Silenzio Estremo
             let sumSq = 0.0;
             let activeSamples = 0;
             for (let i = 0; i < audio3200.length; i++) {
@@ -407,18 +416,21 @@ async function startAsyncDecodeLoop() {
             }
 
             const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
-            if (rmsVal >= 0.02) {
-                const agcGain = Math.min(10.0, 0.25 / rmsVal);
+            
+            // SOGLIA ALZATA: Ignora i fruscii. Se è sotto 0.04, azzera l'audio.
+            if (rmsVal >= 0.04) {
+                const agcGain = Math.min(4.0, 0.25 / rmsVal);
                 for (let i = 0; i < audio3200.length; i++) {
                     audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
                 }
             } else {
+                // Silenzio assoluto: forza il modello a restituire <BLANK> invece di caratteri casuali
                 for (let i = 0; i < audio3200.length; i++) {
-                    audio3200[i] *= 0.2;
+                    audio3200[i] = 0.0; 
                 }
             }
 
-            // 3. Inferenza ONNX in Thread Isolato WebWorker (0% Blocco UI)
+            // 3. Inferenza ONNX in Thread Isolato WebWorker
             if (decoderWorker) {
                 decoderWorker.postMessage({ type: 'INFER', audio3200: audio3200 });
             } else if (ortSession) {
