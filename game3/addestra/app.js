@@ -23,6 +23,7 @@ let workletNode = null;
 let isRunning = false;
 let isWorkletRegistered = false;
 let isProcessingInference = false;
+let totalRecordedSamples = 0;
 
 let currentInputGain = 1.0;
 let selectedDeviceId = "default";
@@ -80,7 +81,7 @@ async function loadONNX(forcedModelPath = null) {
         ort.env.wasm.numThreads = 1;
         ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
 
-        const modelCandidates = forcedModelPath ? [forcedModelPath] : ['morse_model8.onnx'];
+        const modelCandidates = forcedModelPath ? [forcedModelPath] : ['morse_model8.onnx', 'morse_model_int8.onnx', 'morse_model.onnx'];
 
         for (let mPath of modelCandidates) {
             try {
@@ -180,6 +181,7 @@ async function startSystem() {
         workletNode.connect(audioCtx.destination);
 
         bufferPos = 0;
+        totalRecordedSamples = 0;
         liveBuffer.fill(0);
 
         workletNode.port.onmessage = (e) => {
@@ -193,6 +195,7 @@ async function startSystem() {
                 liveBuffer[bufferPos] = val;
                 bufferPos = (bufferPos + 1) % liveBuffer.length;
             }
+            totalRecordedSamples += data.length;
             audioBufferVersion++; // Signal new audio version
             currentRmsVolume = Math.sqrt(sumSq / Math.max(1, data.length));
         };
@@ -288,9 +291,17 @@ async function startAsyncDecodeLoop() {
         try {
             isProcessingInference = true;
 
-            const alignedBuffer = new Float32Array(liveBuffer.length);
-            for (let i = 0; i < liveBuffer.length; i++) {
-                alignedBuffer[i] = liveBuffer[(bufferPos + i) % liveBuffer.length];
+            // Extract ONLY active recorded samples from circular buffer (prevents unwritten zeros corruption!)
+            const activeLen = Math.min(totalRecordedSamples, liveBuffer.length);
+            if (activeLen < 3200) { // Wait for at least 1 second of recorded audio
+                await new Promise(r => setTimeout(r, 50));
+                continue;
+            }
+
+            const alignedBuffer = new Float32Array(activeLen);
+            const startIdx = (bufferPos - activeLen + liveBuffer.length) % liveBuffer.length;
+            for (let i = 0; i < activeLen; i++) {
+                alignedBuffer[i] = liveBuffer[(startIdx + i) % liveBuffer.length];
             }
 
             // 1. Direct Native 3200 Hz Audio Buffer
