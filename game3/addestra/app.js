@@ -56,6 +56,20 @@ async function changeOnnxModel(event) {
     }
 }
 
+// NUOVA FUNZIONE: Carica un modello ONNX locale selezionato dall'utente
+function loadCustomONNX(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const objectUrl = URL.createObjectURL(file);
+        screenLog(`🤖 Caricamento modello locale: ${file.name}`);
+        const statusLabel = document.getElementById('model-status');
+        if (statusLabel) {
+            statusLabel.innerText = `⏳ Caricamento ${file.name}...`;
+        }
+        loadONNX(objectUrl);
+    }
+}
+
 // Load ONNX Model Session via Background WebWorker (0% UI Thread Lock)
 async function loadONNX(forcedModelPath = null) {
     const statusLabel = document.getElementById('model-status');
@@ -74,9 +88,9 @@ async function loadONNX(forcedModelPath = null) {
             decoderWorker.onmessage = function(e) {
                 const data = e.data;
                 if (data.type === 'ONNX_READY') {
-                    screenLog(`✓ Modello ONNX '${data.modelPath}' caricato con successo in Background Worker!`);
+                    screenLog(`✓ Modello ONNX caricato con successo in Background Worker!`);
                     if (statusLabel) {
-                        statusLabel.innerText = `✅ Modello '${data.modelPath}' Pronto!`;
+                        statusLabel.innerText = `✅ Modello Pronto!`;
                         statusLabel.style.backgroundColor = "#14532d";
                         statusLabel.style.color = "#4ade80";
                     }
@@ -94,6 +108,7 @@ async function loadONNX(forcedModelPath = null) {
     }
 }
 
+// CORREZIONE: Funzione di output del testo (Rimuove gli errori delle variabili inesistenti)
 function handleWorkerInferResult(aiResult) {
     const liveBox = document.getElementById('output-box');
     if (!liveBox) return;
@@ -105,20 +120,10 @@ function handleWorkerInferResult(aiResult) {
         if (currentFullText.includes("In attesa del segnale")) {
             liveBox.innerText = "";
         }
-
-        const words = cleanAi.split(/\s+/);
-        const currentText = liveBox ? liveBox.innerText.trim() : "";
-        const lastWord = currentText ? currentText.split(/\s+/).pop() : "";
-
-        for (let w of words) {
-            if (w && w !== lastWord) {
-                const textToAppend = (isDictEnabled && !isRawOnlyMode) ? correctTextWithRadioDictionary(w) : w;
-                if (textToAppend && textToAppend.trim()) {
-                    liveBox.innerText += textToAppend + " ";
-                    liveBox.scrollTop = liveBox.scrollHeight;
-                }
-            }
-        }
+        
+        // Aggiunge semplicemente le parole rilevate con uno spazio
+        liveBox.innerText += cleanAi + " ";
+        liveBox.scrollTop = liveBox.scrollHeight;
     }
 }
 
@@ -143,38 +148,11 @@ async function populateAudioDevicesList() {
     }
 }
 
-// Pre-computed High-Contrast Gamma Color LUT (Gamma 2.2, HSL 220->0, e04 palette)
-const COLOR_LUT = new Uint8Array(256 * 3);
-(function initColorLUT() {
-    for (let v = 0; v < 256; v++) {
-        let t = Math.pow(v / 255.0, 2.2); // Gamma 2.2 non-linear contrast curve
-        const hue = (220 * (1 - t)) / 360;
-        const sat = 1.0;
-        const light = 0.08 + 0.82 * t;
-
-        const q = light < 0.5 ? light * (1 + sat) : light + sat - light * sat;
-        const p = 2 * light - q;
-
-        const hue2rgb = (pVal, qVal, tVal) => {
-            if (tVal < 0) tVal += 1;
-            if (tVal > 1) tVal -= 1;
-            if (tVal < 1/6) return pVal + (qVal - pVal) * 6 * tVal;
-            if (tVal < 1/2) return qVal;
-            if (tVal < 2/3) return pVal + (qVal - pVal) * (2/3 - tVal) * 6;
-            return pVal;
-        };
-
-        COLOR_LUT[v * 3] = Math.min(255, Math.max(0, Math.round(hue2rgb(p, q, hue + 1/3) * 255)));
-        COLOR_LUT[v * 3 + 1] = Math.min(255, Math.max(0, Math.round(hue2rgb(p, q, hue) * 255)));
-        COLOR_LUT[v * 3 + 2] = Math.min(255, Math.max(0, Math.round(hue2rgb(p, q, hue - 1/3) * 255)));
-    }
-})();
-
 let waterfallImageData = null;
 let lastWaterfallTime = performance.now();
 let waterfallPixelAccumulator = 0;
 
-// Real-Time Time-Scaled Waterfall Spectrogram Canvas Renderer (Identical to deepcw.cc / e04)
+// RISCRITTURA: Visualizzatore Punti e Linee ad alto contrasto (Scorre da destra a sinistra)
 function drawWaterfallLoop() {
     if (!isRunning || !analyserNode) return;
 
@@ -189,68 +167,51 @@ function drawWaterfallLoop() {
             const dt = (now - lastWaterfallTime) / 1000.0;
             lastWaterfallTime = now;
 
-            // 12-second visible window scale matching deepcw.cc
-            const visibleSeconds = 12.0;
-            const pxPerSec = width / visibleSeconds; // ~70.8 pixels/sec at 850px width
+            // Velocità di scorrimento (10 secondi visibili)
+            const pxPerSec = width / 10.0; 
             waterfallPixelAccumulator += dt * pxPerSec;
 
             let step = Math.floor(waterfallPixelAccumulator);
             if (step >= 1) {
                 waterfallPixelAccumulator -= step;
-                if (step > 4) step = 4; // Cap max step per frame for smooth motion
-
-                if (!waterfallImageData || waterfallImageData.height !== height || waterfallImageData.width !== step) {
-                    waterfallImageData = ctx.createImageData(step, height);
-                }
+                if (step > 4) step = 4;
 
                 const fftBins = analyserNode.frequencyBinCount;
                 const freqData = new Uint8Array(fftBins);
                 analyserNode.getByteFrequencyData(freqData);
 
-                // 1. Fast GPU hardware shift of canvas `step` pixels to the left
+                // 1. Sposta l'immagine attuale del canvas verso sinistra
                 ctx.drawImage(canvas, step, 0, width - step, height, 0, 0, width - step, height);
 
-                // 2. Direct 1-pass TypedArray buffer fill for the `step` column on far right
-                const maxBin = Math.floor(fftBins * (1600 / (audioCtx ? audioCtx.sampleRate / 2 : 1600)));
-                const imgData = waterfallImageData.data;
+                // 2. Disegna la nuova colonna nera a destra
+                ctx.fillStyle = '#020617'; 
+                ctx.fillRect(width - step, 0, step, height);
 
-                // Auto-Contrast Boost: finds peak intensity and illuminates soft signals to full neon brightness
-                let framePeak = 0;
-                for (let y = 0; y < height; y++) {
-                    const binIdx = Math.floor(((height - y) / height) * maxBin);
-                    const val = freqData[binIdx] || 0;
-                    if (val > framePeak) framePeak = val;
+                // 3. Cerca il picco massimo nell'area del tono CW (300-1100 Hz)
+                const binWidth = (audioCtx.sampleRate / 2) / fftBins;
+                let minBin = Math.floor(300 / binWidth);
+                let maxBin = Math.floor(1100 / binWidth);
+                let signalPeak = 0;
+                
+                for (let i = minBin; i <= maxBin; i++) {
+                    if (freqData[i] > signalPeak) signalPeak = freqData[i];
                 }
 
-                const contrastBoost = framePeak > 15 ? (255.0 / framePeak) : 1.8;
-
-                for (let y = 0; y < height; y++) {
-                    const binIdx = Math.floor(((height - y) / height) * maxBin);
-                    const rawIntensity = freqData[binIdx] || 0;
-                    const scaledIntensity = Math.min(255, Math.round(rawIntensity * contrastBoost * currentSpecGain));
-                    const lutIdx = scaledIntensity * 3;
-
-                    const r = COLOR_LUT[lutIdx];
-                    const g = COLOR_LUT[lutIdx + 1];
-                    const b = COLOR_LUT[lutIdx + 2];
-
-                    for (let px = 0; px < step; px++) {
-                        const offset = (y * step + px) * 4;
-                        imgData[offset] = r;
-                        imgData[offset + 1] = g;
-                        imgData[offset + 2] = b;
-                        imgData[offset + 3] = 255;
-                    }
+                // 4. Se il segnale supera la soglia, disegna un blocco verde netto (Punto/Linea)
+                // Il valore 110 è la soglia (regolabile). Elimina il rumore di fondo.
+                if (signalPeak > 110) {
+                    ctx.fillStyle = '#4ade80'; // Verde neon
+                    const barHeight = 80; // Spessore della linea
+                    const yPos = (height - barHeight) / 2;
+                    ctx.fillRect(width - step, yPos, step, barHeight);
                 }
-
-                // 3. Single 1-pass GPU blit
-                ctx.putImageData(waterfallImageData, width - step, 0);
             }
         }
     }
 
     waterfallAnimationFrame = requestAnimationFrame(drawWaterfallLoop);
 }
+
 
 async function startSystem() {
     if (isRunning) return;
@@ -363,14 +324,6 @@ function changeAudioSourceDevice(event) {
     }
 }
 
-let currentSpecGain = 2.0;
-
-function updateSpecGain(event) {
-    currentSpecGain = parseFloat(event.target.value) || 2.0;
-    const label = document.getElementById('specGainVal');
-    if (label) label.innerText = `${currentSpecGain.toFixed(1)}x`;
-}
-
 function updateInputGain(event) {
     currentInputGain = parseFloat(event.target.value) || 1.0;
     const label = document.getElementById('inputGainVal');
@@ -410,7 +363,7 @@ async function startAsyncDecodeLoop() {
     while (isRunning) {
         await new Promise(r => setTimeout(r, 1200));
 
-        if (!isRunning || isProcessingInference || !ortSession) continue;
+        if (!isRunning || isProcessingInference) continue;
 
         try {
             isProcessingInference = true;
