@@ -29,7 +29,7 @@ let isRawOnlyMode = false;
 let currentInputGain = 1.0;
 let selectedDeviceId = "default";
 
-const liveAudioBuffer = new Float32Array(16000 * 3); // 3-second sliding window at 16kHz
+const liveAudioBuffer = new Float32Array(16000 * 5); // 5-second sliding window at 16kHz
 let liveBufferPos = 0;
 let liveDecodingInterval = null;
 
