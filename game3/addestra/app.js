@@ -3,19 +3,13 @@
 // ==============================================================================
 
 function screenLog(msg, isErr = false, isWarn = false) {
-    const box = document.getElementById('log-box');
-    if (!box) return;
-    const time = new Date().toISOString().split('T')[1].substring(0, 8);
-    let cls = '';
-    if (isErr) cls = 'err-log';
-    else if (isWarn) cls = 'warn-log';
-    box.innerHTML += `<div class="${cls}">[${time}] ${msg}</div>`;
-    box.scrollTop = box.scrollHeight;
-    if (isErr) console.error(msg); else console.log(msg);
+    if (isErr) console.error(`[DeepCW IA] ${msg}`);
+    else if (isWarn) console.warn(`[DeepCW IA] ${msg}`);
+    else console.log(`[DeepCW IA] ${msg}`);
 }
 
 window.onerror = function(msg, url, line) {
-    screenLog(`ERRORE JAVASCRIPT: ${msg} (Linea: ${line})`, true);
+    console.error(`[DeepCW IA JS ERROR] ${msg} (Linea: ${line})`);
     return false;
 };
 
@@ -339,7 +333,6 @@ async function startAsyncDecodeLoop() {
                 const outTensor = results[outKey];
 
                 const resultText = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
-                screenLog(`🤖 Output IA ONNX: '${resultText}' (RMS: ${rmsVal.toFixed(3)})`);
 
                 const cleanText = resultText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim();
 
