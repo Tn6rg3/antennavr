@@ -33,6 +33,22 @@ let isProcessingInference = false;
 let currentInputGain = 1.0;
 let selectedDeviceId = "default";
 
+let currentRmsVolume = 0.0;
+let vuMeterAnimationFrame = null;
+
+function drawVuMeterSmooth() {
+    if (!isRunning) return;
+
+    const vuBar = document.getElementById('vu-bar');
+    const vuVal = document.getElementById('vu-val');
+    const volumePct = Math.min(100, Math.round(currentRmsVolume * 400));
+
+    if (vuBar) vuBar.style.width = volumePct + '%';
+    if (vuVal) vuVal.innerText = volumePct + '%';
+
+    vuMeterAnimationFrame = requestAnimationFrame(drawVuMeterSmooth);
+}
+
 const SAMPLE_RATE = 16000;
 const liveBuffer = new Float32Array(SAMPLE_RATE * 5); // 5-second sliding window at 16kHz
 let bufferPos = 0;
@@ -172,14 +188,7 @@ async function startSystem() {
                 bufferPos = (bufferPos + 1) % liveBuffer.length;
             }
             audioBufferVersion++; // Signal new audio version
-
-            const rms = Math.sqrt(sumSq / Math.max(1, data.length));
-            const vuBar = document.getElementById('vu-bar');
-            const vuVal = document.getElementById('vu-val');
-            const volumePct = Math.min(100, Math.round(rms * 400));
-
-            if (vuBar) vuBar.style.width = volumePct + '%';
-            if (vuVal) vuVal.innerText = volumePct + '%';
+            currentRmsVolume = Math.sqrt(sumSq / Math.max(1, data.length));
         };
 
         isRunning = true;
@@ -192,6 +201,8 @@ async function startSystem() {
         if (outBox && (outBox.innerText.includes("In attesa") || outBox.innerText.length === 0)) {
             outBox.innerText = "";
         }
+
+        drawVuMeterSmooth();
 
         screenLog("Audio connesso ed attivo. Avvio loop di decodifica asincrono...");
         startAsyncDecodeLoop();
@@ -286,7 +297,7 @@ async function startAsyncDecodeLoop() {
             // 2. Filtro Passa-Banda CW (300 Hz - 1100 Hz)
             audio3200 = applyCwBandpassFilterJS(audio3200, 3200, 300, 1100);
 
-            // 3. Controllo Automatico di Guadagno RMS (AGC)
+            // 3. Controllo Automatico di Guadagno RMS (AGC) con Gate di Silenzio
             let sumSq = 0.0;
             let activeSamples = 0;
             for (let i = 0; i < audio3200.length; i++) {
@@ -298,10 +309,15 @@ async function startAsyncDecodeLoop() {
             }
 
             const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
-            if (rmsVal > 0.001) {
-                const agcGain = Math.min(25.0, 0.25 / rmsVal);
+            if (rmsVal >= 0.035) { // Se c'è un segnale CW reale sopra il rumore di fondo
+                const agcGain = Math.min(8.0, 0.25 / rmsVal);
                 for (let i = 0; i < audio3200.length; i++) {
                     audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
+                }
+            } else {
+                // Attenua il fruscio di sottofondo per mantenere l'ONNX su <BLANK>
+                for (let i = 0; i < audio3200.length; i++) {
+                    audio3200[i] *= 0.3;
                 }
             }
 
