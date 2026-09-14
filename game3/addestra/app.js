@@ -822,42 +822,27 @@ function startLiveDecodingStream() {
                     }
                 }
 
-                // 5. Decodificatore DSP Adattivo
-                let dspText = "";
-                let detectedFreq = 650;
-                if (isDspEnabled) {
-                    const dspObj = decodeMorseDSP(audio3200, 3200);
-                    if (typeof dspObj === 'object' && dspObj !== null) {
-                        dspText = dspObj.text || "";
-                        detectedFreq = dspObj.freq || 650;
-                    } else if (typeof dspObj === 'string') {
-                        dspText = dspObj;
-                    }
-                }
-
                 const cleanAi = (typeof aiResult === 'string') ? aiResult.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
-                const cleanDsp = (typeof dspText === 'string') ? dspText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
 
                 const onnxLabel = document.getElementById('debugOnnxVal');
-                const dspLabel = document.getElementById('debugDspVal');
-
                 if (onnxLabel) onnxLabel.innerText = cleanAi ? `'${cleanAi}'` : "<SILENZIO>";
-                if (dspLabel) dspLabel.innerText = cleanDsp ? `'${cleanDsp}' (${detectedFreq}Hz)` : `<SILENZIO> (${detectedFreq}Hz)`;
 
-                let rawOutput = cleanAi || cleanDsp;
-
-                if (rawOutput && rawOutput.length > 0) {
+                if (cleanAi && cleanAi.length > 0) {
                     const currentFullText = liveBox.innerText || "";
                     if (currentFullText.includes("In attesa del segnale")) {
                         liveBox.innerText = "";
                     }
 
-                    const newWordsToAppend = extractNewStreamWords(rawOutput, liveBox.innerText || "");
+                    const newWordsToAppend = extractNewStreamWords(cleanAi, liveBox.innerText || "");
 
                     if (newWordsToAppend && newWordsToAppend.trim().length > 0) {
                         const textToAppend = (isDictEnabled && !isRawOnlyMode) ? correctTextWithRadioDictionary(newWordsToAppend) : newWordsToAppend;
                         if (textToAppend && textToAppend.trim()) {
                             liveBox.innerText += textToAppend + " ";
+                            liveBox.scrollTop = liveBox.scrollHeight;
+                        }
+                    }
+                }
                             liveBox.scrollTop = liveBox.scrollHeight;
                         }
                     }

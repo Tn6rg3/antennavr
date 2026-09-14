@@ -48,13 +48,8 @@
                 </div>
             </div>
 
-            <!-- Toggles Bar (DSP Fallback, Dictionary Correction, Raw Only) -->
+            <!-- Toggles Bar (Dictionary Correction, Raw Only) -->
             <div class="toggles-bar">
-                <label class="toggle-label">
-                    <input type="checkbox" id="dspFallbackToggle" checked onchange="toggleDspFallback(event)">
-                    ⚡ Decodificatore DSP di Emergenza
-                </label>
-
                 <label class="toggle-label">
                     <input type="checkbox" id="dictCorrectionToggle" checked onchange="toggleDictCorrection(event)">
                     📚 Correzione Automatica Vocabolario
@@ -95,8 +90,7 @@
                 <!-- LIVE DEBUG DIAGNOSTIC STATUS BAR -->
                 <div id="liveDebugInfo" style="font-size:0.8rem; color:#8e9bb0; margin-top:10px; font-family:monospace; background:#060a0f; padding:8px 14px; border-radius:8px; border:1px solid #1e293b; display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px;">
                     <span>📊 <strong>Segnale RMS:</strong> <span id="debugRmsVal" style="color:#00ff66;">0%</span></span>
-                    <span>🤖 <strong>ONNX Live:</strong> <span id="debugOnnxVal" style="color:#00bcd4;">In attesa...</span></span>
-                    <span>⚡ <strong>DSP Peak:</strong> <span id="debugDspVal" style="color:#ce93d8;">In attesa...</span></span>
+                    <span>🤖 <strong>IA ONNX Live:</strong> <span id="debugOnnxVal" style="color:#00bcd4;">In attesa...</span></span>
                 </div>
             </div>
         </main>
