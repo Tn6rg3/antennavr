@@ -599,7 +599,7 @@ function decodeMorseDSP(audioSlice, sampleRate = 3200) {
         const absA = Math.abs(audioSlice[i]);
         if (absA > maxAmp) maxAmp = absA;
     }
-    if (maxAmp < 0.03) return { text: "", freq: 650 }; // Gate di silenzio
+    if (maxAmp < 0.005) return { text: "", freq: 650 }; // Gate di silenzio ad altissima sensibilità (0.005)
 
     // Automatically detect dominant CW pitch between 400 Hz and 900 Hz
     const f0 = findDominantCwPitchJS(audioSlice, sampleRate);
@@ -624,7 +624,7 @@ function decodeMorseDSP(audioSlice, sampleRate = 3200) {
         }
         const energy = Math.sqrt(Math.max(0, q1 * q1 + q2 * q2 - 2 * cosW0 * q1 * q2)) / windowSize;
 
-        if (energy > 0.08) { // Tono CW Rilevato a Frequenza Adattiva!
+        if (energy > 0.02) { // Tono CW Rilevato ad Alta Sensibilità!
             currentToneLen++;
             if (currentSilenceLen > 0) {
                 if (currentSilenceLen >= 2 && currentSilenceLen < 6) morseCode += " ";
@@ -741,16 +741,16 @@ function startLiveDecodingStream() {
             let activeSamples = 0;
             for (let i = 0; i < audio3200.length; i++) {
                 const val = audio3200[i];
-                if (Math.abs(val) > 0.001) {
+                if (Math.abs(val) > 0.0005) {
                     sumSq += val * val;
                     activeSamples++;
                 }
             }
 
             const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
-            if (rmsVal > 0.002) {
+            if (rmsVal > 0.001) {
                 const targetRms = 0.25; // Target 25% RMS ottimale per lo Spettrogramma STFT
-                const agcGain = Math.min(10.0, targetRms / rmsVal);
+                const agcGain = Math.min(25.0, targetRms / rmsVal);
                 for (let i = 0; i < audio3200.length; i++) {
                     audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
                 }
