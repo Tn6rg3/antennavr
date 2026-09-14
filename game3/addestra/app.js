@@ -227,7 +227,7 @@ function drawWaterfallLoop() {
                 for (let y = 0; y < height; y++) {
                     const binIdx = Math.floor(((height - y) / height) * maxBin);
                     const rawIntensity = freqData[binIdx] || 0;
-                    const scaledIntensity = Math.min(255, Math.round(rawIntensity * contrastBoost));
+                    const scaledIntensity = Math.min(255, Math.round(rawIntensity * contrastBoost * currentSpecGain));
                     const lutIdx = scaledIntensity * 3;
 
                     const r = COLOR_LUT[lutIdx];
@@ -361,6 +361,14 @@ function changeAudioSourceDevice(event) {
         stopSystem();
         startSystem();
     }
+}
+
+let currentSpecGain = 2.0;
+
+function updateSpecGain(event) {
+    currentSpecGain = parseFloat(event.target.value) || 2.0;
+    const label = document.getElementById('specGainVal');
+    if (label) label.innerText = `${currentSpecGain.toFixed(1)}x`;
 }
 
 function updateInputGain(event) {
