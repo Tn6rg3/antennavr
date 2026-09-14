@@ -152,6 +152,8 @@ async function attachLiveStreamToDecoder(stream) {
             srcPos += resampleStep;
         }
 
+        audioBufferVersion++; // Sincronizzazione asincrona versione del buffer
+
         const rms = Math.sqrt(sumSq / Math.max(1, inputData.length));
         const volumePct = Math.min(100, Math.round(rms * 400));
 
@@ -712,120 +714,163 @@ function extractNewStreamWords(newRawText, previousFullText) {
     return addedWords.join(" ");
 }
 
-// 1.5s Latency Sliding Window Scheduler
+let audioBufferVersion = 0;
+let lastProcessedVersion = -1;
+
+// 2-Pole Butterworth Bandpass IIR Filter (300 Hz - 1100 Hz CW Bandpass)
+function applyCwBandpassFilterJS(audioData, sampleRate = 3200, minFreq = 300, maxFreq = 1100) {
+    if (!audioData || audioData.length === 0) return audioData;
+
+    const f0 = (minFreq + maxFreq) / 2.0;
+    const bw = maxFreq - minFreq;
+    const w0 = (2 * Math.PI * f0) / sampleRate;
+    const alpha = Math.sin(w0) * Math.sinh((Math.LN2 / 2) * (bw / f0) * (w0 / Math.sin(w0)));
+
+    const b0 = alpha;
+    const b1 = 0;
+    const b2 = -alpha;
+    const a0 = 1 + alpha;
+    const a1 = -2 * Math.cos(w0);
+    const a2 = 1 - alpha;
+
+    const filtered = new Float32Array(audioData.length);
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+
+    for (let i = 0; i < audioData.length; i++) {
+        const x0 = audioData[i];
+        const y0 = (b0/a0)*x0 + (b1/a0)*x1 + (b2/a0)*x2 - (a1/a0)*y1 - (a2/a0)*y2;
+        x2 = x1; x1 = x0;
+        y2 = y1; y1 = y0;
+        filtered[i] = isNaN(y0) || !isFinite(y0) ? 0 : y0;
+    }
+
+    return filtered;
+}
+
+// Async Version-Polling Loop (Sync col buffer AudioWorklet senza timer rigidi)
 function startLiveDecodingStream() {
     const liveBox = document.getElementById('liveOutputBox');
     if (!liveBox) return;
 
     let isProcessingInference = false;
 
-    if (liveDecodingInterval) clearInterval(liveDecodingInterval);
-
-    liveDecodingInterval = setInterval(async () => {
-        if (!isListening || isProcessingInference) {
-            return;
-        }
-
-        try {
-            isProcessingInference = true;
-
-            const alignedBuffer = new Float32Array(liveAudioBuffer.length);
-            for (let i = 0; i < liveAudioBuffer.length; i++) {
-                alignedBuffer[i] = liveAudioBuffer[(liveBufferPos + i) % liveAudioBuffer.length];
+    // Direct Async Polling Loop Pattern (identical to e04/web-deep-cw-decoder)
+    const runAsyncDecodeLoop = async () => {
+        while (isListening) {
+            if (audioBufferVersion === lastProcessedVersion || isProcessingInference) {
+                await new Promise(r => setTimeout(r, 20)); // Polls every 20ms
+                continue;
             }
 
-            const audio3200 = resampleAudioBufferTo3200FromArray(alignedBuffer, 16000, 3200);
+            lastProcessedVersion = audioBufferVersion;
 
-            // Controllo Automatico di Guadagno Dinamico RMS (AGC) per Spettrogramma Costante
-            let sumSq = 0.0;
-            let activeSamples = 0;
-            for (let i = 0; i < audio3200.length; i++) {
-                const val = audio3200[i];
-                if (Math.abs(val) > 0.0005) {
-                    sumSq += val * val;
-                    activeSamples++;
+            try {
+                isProcessingInference = true;
+
+                const alignedBuffer = new Float32Array(liveAudioBuffer.length);
+                for (let i = 0; i < liveAudioBuffer.length; i++) {
+                    alignedBuffer[i] = liveAudioBuffer[(liveBufferPos + i) % liveAudioBuffer.length];
                 }
-            }
 
-            const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
-            if (rmsVal > 0.001) {
-                const targetRms = 0.25; // Target 25% RMS ottimale per lo Spettrogramma STFT
-                const agcGain = Math.min(25.0, targetRms / rmsVal);
+                // 1. Resample to 3200 Hz
+                let audio3200 = resampleAudioBufferTo3200FromArray(alignedBuffer, 16000, 3200);
+
+                // 2. Filtro Passa-Banda CW (300 Hz - 1100 Hz) per isolare la banda telegrafica
+                audio3200 = applyCwBandpassFilterJS(audio3200, 3200, 300, 1100);
+
+                // 3. Controllo Automatico di Guadagno Dinamico RMS (AGC)
+                let sumSq = 0.0;
+                let activeSamples = 0;
                 for (let i = 0; i < audio3200.length; i++) {
-                    audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
-                }
-            }
-
-            let aiResult = "";
-
-            if (ortSession) {
-                try {
-                    const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
-                    const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
-
-                    // Nome del tensore d'ingresso letto dinamicamente da ONNX Runtime
-                    const inputName = (ortSession.inputNames && ortSession.inputNames.length > 0) ? ortSession.inputNames[0] : 'spectrogram';
-                    const feeds = {};
-                    feeds[inputName] = inputTensor;
-
-                    const results = await ortSession.run(feeds);
-
-                    const outputKeys = Object.keys(results);
-                    const outKey = outputKeys.find(k => k.includes('log') || k.includes('prob') || k.includes('out')) || outputKeys[0];
-                    const outTensor = results[outKey];
-
-                    aiResult = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
-                } catch (err) {
-                    console.warn("Live ONNX Fallback:", err);
-                }
-            }
-
-            let dspText = "";
-            let detectedFreq = 650;
-            if (isDspEnabled) {
-                const dspObj = decodeMorseDSP(audio3200, 3200);
-                if (typeof dspObj === 'object' && dspObj !== null) {
-                    dspText = dspObj.text || "";
-                    detectedFreq = dspObj.freq || 650;
-                } else if (typeof dspObj === 'string') {
-                    dspText = dspObj;
-                }
-            }
-
-            const cleanAi = (typeof aiResult === 'string') ? aiResult.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
-            const cleanDsp = (typeof dspText === 'string') ? dspText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
-
-            const onnxLabel = document.getElementById('debugOnnxVal');
-            const dspLabel = document.getElementById('debugDspVal');
-
-            if (onnxLabel) onnxLabel.innerText = cleanAi ? `'${cleanAi}'` : "<SILENZIO>";
-            if (dspLabel) dspLabel.innerText = cleanDsp ? `'${cleanDsp}'` : "<SILENZIO>";
-
-            let rawOutput = cleanAi || cleanDsp;
-
-            if (rawOutput && rawOutput.length > 0) {
-                const currentFullText = liveBox.innerText || "";
-                if (currentFullText.includes("In attesa del segnale")) {
-                    liveBox.innerText = "";
-                }
-
-                const newWordsToAppend = extractNewStreamWords(rawOutput, liveBox.innerText || "");
-
-                if (newWordsToAppend && newWordsToAppend.trim().length > 0) {
-                    const textToAppend = (isDictEnabled && !isRawOnlyMode) ? correctTextWithRadioDictionary(newWordsToAppend) : newWordsToAppend;
-                    if (textToAppend && textToAppend.trim()) {
-                        liveBox.innerText += textToAppend + " ";
-                        liveBox.scrollTop = liveBox.scrollHeight;
+                    const val = audio3200[i];
+                    if (Math.abs(val) > 0.0005) {
+                        sumSq += val * val;
+                        activeSamples++;
                     }
                 }
-            }
-        } catch (e) {
-            console.error("Live Stream Error:", e);
-        } finally {
-            isProcessingInference = false; // Guaranteed unlock!
-        }
 
-    }, 1500);
+                const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
+                if (rmsVal > 0.001) {
+                    const targetRms = 0.25;
+                    const agcGain = Math.min(25.0, targetRms / rmsVal);
+                    for (let i = 0; i < audio3200.length; i++) {
+                        audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
+                    }
+                }
+
+                let aiResult = "";
+
+                // 4. Inferenza Modello ONNX
+                if (ortSession) {
+                    try {
+                        const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
+                        const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
+
+                        const inputName = (ortSession.inputNames && ortSession.inputNames.length > 0) ? ortSession.inputNames[0] : 'spectrogram';
+                        const feeds = {};
+                        feeds[inputName] = inputTensor;
+
+                        const results = await ortSession.run(feeds);
+
+                        const outputKeys = Object.keys(results);
+                        const outKey = outputKeys.find(k => k.includes('log') || k.includes('prob') || k.includes('out')) || outputKeys[0];
+                        const outTensor = results[outKey];
+
+                        aiResult = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
+                    } catch (err) {
+                        console.warn("Live ONNX Fallback:", err);
+                    }
+                }
+
+                // 5. Decodificatore DSP Adattivo
+                let dspText = "";
+                let detectedFreq = 650;
+                if (isDspEnabled) {
+                    const dspObj = decodeMorseDSP(audio3200, 3200);
+                    if (typeof dspObj === 'object' && dspObj !== null) {
+                        dspText = dspObj.text || "";
+                        detectedFreq = dspObj.freq || 650;
+                    } else if (typeof dspObj === 'string') {
+                        dspText = dspObj;
+                    }
+                }
+
+                const cleanAi = (typeof aiResult === 'string') ? aiResult.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
+                const cleanDsp = (typeof dspText === 'string') ? dspText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
+
+                const onnxLabel = document.getElementById('debugOnnxVal');
+                const dspLabel = document.getElementById('debugDspVal');
+
+                if (onnxLabel) onnxLabel.innerText = cleanAi ? `'${cleanAi}'` : "<SILENZIO>";
+                if (dspLabel) dspLabel.innerText = cleanDsp ? `'${cleanDsp}' (${detectedFreq}Hz)` : `<SILENZIO> (${detectedFreq}Hz)`;
+
+                let rawOutput = cleanAi || cleanDsp;
+
+                if (rawOutput && rawOutput.length > 0) {
+                    const currentFullText = liveBox.innerText || "";
+                    if (currentFullText.includes("In attesa del segnale")) {
+                        liveBox.innerText = "";
+                    }
+
+                    const newWordsToAppend = extractNewStreamWords(rawOutput, liveBox.innerText || "");
+
+                    if (newWordsToAppend && newWordsToAppend.trim().length > 0) {
+                        const textToAppend = (isDictEnabled && !isRawOnlyMode) ? correctTextWithRadioDictionary(newWordsToAppend) : newWordsToAppend;
+                        if (textToAppend && textToAppend.trim()) {
+                            liveBox.innerText += textToAppend + " ";
+                            liveBox.scrollTop = liveBox.scrollHeight;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Async Decode Loop Error:", e);
+            } finally {
+                isProcessingInference = false;
+            }
+        }
+    };
+
+    runAsyncDecodeLoop();
 }
 
 // Initialize on page load
