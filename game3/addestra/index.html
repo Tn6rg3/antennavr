@@ -3,104 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeepCW IA - Decodificatore Telegrafico Morse Live</title>
-    <link rel="stylesheet" href="style.css">
-    <!-- ONNX Runtime Web for Standalone Client-Side Browser Inference -->
+    <title>DeepCW IA - Decodificatore Morse ONNX</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 20px; }
+        .container { max-width: 850px; margin: 0 auto; background: #1e293b; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+        h1 { margin-top: 0; color: #38bdf8; font-size: 1.6rem; text-align: center; }
+        .subtitle { margin-top: -10px; margin-bottom: 20px; text-align: center; color: #94a3b8; font-size: 0.85rem; }
+
+        button { background: #0ea5e9; color: white; border: none; padding: 10px 20px; font-size: 1rem; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        button:hover { opacity: 0.9; }
+        button.success { background: #16a34a; }
+        button.danger { background: #ef4444; }
+        button.secondary { background: #475569; }
+        button:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+
+        .controls-card { background: #0b1120; padding: 16px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #334155; }
+        .control-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 12px; }
+        .control-row:last-child { margin-bottom: 0; }
+
+        .status-badge { font-weight: bold; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; }
+
+        .vu-meter { height: 18px; background: #020617; border-radius: 9px; overflow: hidden; border: 1px solid #334155; flex: 1; min-width: 150px; position: relative; }
+        .vu-fill { height: 100%; background: linear-gradient(90deg, #22c55e, #eab308, #ef4444); width: 0%; transition: width 0.05s ease; }
+
+        .output-box { min-height: 180px; max-height: 300px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 1.25rem; background: #020617; padding: 18px; border-radius: 8px; border: 1px solid #0ea5e9; color: #4ade80; margin-bottom: 20px; white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+
+        .log-box { font-family: 'Consolas', 'Monaco', monospace; font-size: 0.82rem; background: #000000; color: #a3e635; padding: 12px; border-radius: 8px; height: 160px; overflow-y: auto; border: 1px solid #3f6212; line-height: 1.4; }
+        .err-log { color: #f87171; }
+        .warn-log { color: #facc15; }
+
+        .help-tip { font-size: 0.8rem; color: #94a3b8; background: #0f172a; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #0ea5e9; margin-top: 10px; }
+        select { background: #020617; color: #4ade80; border: 1px solid #334155; padding: 6px 10px; border-radius: 6px; font-size: 0.85rem; }
+    </style>
 </head>
 <body>
     <div class="container">
-        <!-- Main Header -->
-        <header>
-            <h1>📻 DeepCW IA - Decodificatore Telegrafico Morse Live</h1>
-            <p class="subtitle">Intelligenza Artificiale Deep Learning CRNN (Conv2D + BiGRU + CTC) per Radio HF, WebSDR, Missaggio Stereo e Microfono</p>
-        </header>
+        <h1>📻 DeepCW IA - Decodificatore Morse ONNX</h1>
+        <div class="subtitle">Esecuzione 100% Client-Side nel Browser • Modello CRNN 2D (3.2kHz / 64 Mel-Bins)</div>
 
-        <!-- Main Decoder Card -->
-        <main class="card">
-            <!-- MODEL LOADING STATUS BADGE -->
-            <div id="modelLoadingBanner" style="background:#0c1924; border:1px solid #00bcd4; padding:10px 16px; border-radius:8px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:0.85rem; color:#00bcd4; font-weight:bold;">🤖 Stato Modello IA DeepCW:</span>
-                <span id="modelStatusText" style="font-size:0.85rem; color:#ffeb3b; font-weight:bold;">⏳ Caricamento Modello ONNX in RAM (2.1 MB)...</span>
+        <!-- Controls Card -->
+        <div class="controls-card">
+            <div class="control-row">
+                <div>
+                    <strong>Stato Modello IA:</strong>
+                    <span id="model-status" class="status-badge" style="background: #451a03; color: #facc15;">⏳ Caricamento in RAM...</span>
+                </div>
+                <div>
+                    <strong>Stato Audio:</strong>
+                    <span id="audio-status" class="status-badge" style="background: #334155; color: #94a3b8;">🔴 Inattivo</span>
+                </div>
             </div>
 
-            <!-- Controls Toolbar -->
-            <div class="controls-toolbar">
-                <!-- Action Button & Status -->
-                <div class="control-group">
-                    <button id="startListenBtn" class="btn btn-success" onclick="toggleLiveListening()">🎙️ Avvia Ascolto Live</button>
-                    <span id="liveStatusBadge" class="status-badge status-inactive">● DECODIFICATORE INATTIVO</span>
+            <div class="control-row" style="border-top: 1px solid #1e293b; padding-top: 12px;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button id="btn-start" onclick="startSystem()" class="success">🎙️ Avvia Ascolto</button>
+                    <button id="btn-stop" onclick="stopSystem()" class="danger" disabled>⏹️ Ferma</button>
+                    <button class="btn secondary" onclick="playTestCwBeep()">🔊 Bip Prova "CQ"</button>
                 </div>
 
-                <!-- Microphone Gain Slider -->
-                <div class="control-group gain-control">
-                    <label for="inputGainSlider">🎚️ Volume / Guadagno:</label>
-                    <input type="range" id="inputGainSlider" min="0.1" max="3.0" step="0.05" value="1.0" oninput="updateInputGain(event)">
-                    <span id="inputGainVal" class="gain-value">100%</span>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label for="inputGainSlider" style="font-size:0.85rem; color:#38bdf8;">🎚️ Guadagno:</label>
+                    <input type="range" id="inputGainSlider" min="0.1" max="3.0" step="0.05" value="1.0" style="width:90px;" oninput="updateInputGain(event)">
+                    <span id="inputGainVal" style="font-size:0.85rem; color:#4ade80; font-weight:bold; min-width:35px;">100%</span>
                 </div>
 
-                <!-- Audio Input Device Selector -->
-                <div class="control-group">
-                    <label for="audioSourceSelect">🎙️ Ingresso Audio:</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <label for="audioSourceSelect" style="font-size:0.85rem; color:#38bdf8;">🎙️ Ingresso:</label>
                     <select id="audioSourceSelect" onchange="changeAudioSourceDevice(event)">
-                        <option value="default" selected>Predefinito / Missaggio Stereo PC</option>
+                        <option value="default" selected>Predefinito / Missaggio Stereo</option>
                     </select>
                 </div>
             </div>
 
-            <!-- Toggles Bar (Dictionary Correction, Raw Only) -->
-            <div class="toggles-bar">
-                <label class="toggle-label">
-                    <input type="checkbox" id="dictCorrectionToggle" checked onchange="toggleDictCorrection(event)">
-                    📚 Correzione Automatica Vocabolario
-                </label>
-
-                <label class="toggle-label">
-                    <input type="checkbox" id="rawCharsToggle" onchange="toggleRawOnlyMode(event)">
-                    🔤 Solo Caratteri Grezzi
-                </label>
-
-                <div class="action-buttons">
-                    <button class="btn btn-primary" onclick="finalizeAndCleanLiveText()">✨ Pulisci Frase</button>
-                    <button class="btn btn-secondary" onclick="clearLiveOutputBox()">🧹 Cancella Testo</button>
-                </div>
+            <!-- Signal Level VU Meter -->
+            <div class="control-row" style="border-top: 1px solid #1e293b; padding-top: 10px; margin-bottom: 0;">
+                <div style="font-size:0.85rem; color:#38bdf8; font-weight:bold; white-space:nowrap;">📊 Livello Segnale:</div>
+                <div class="vu-meter"><div class="vu-fill" id="vu-bar"></div></div>
+                <span id="vu-val" style="font-size:0.85rem; color:#4ade80; font-weight:bold; min-width:40px; text-align:right;">0%</span>
             </div>
 
-            <!-- LIVE AUDIO SIGNAL LEVEL METER (VU METER) + TEST TONE BUTTON -->
-            <div style="background:#080e14; padding:12px 16px; border-radius:10px; border:1px solid #1e293b; margin-bottom:16px; display:flex; flex-wrap:wrap; align-items:center; gap:15px;">
-                <label style="font-size:0.85rem; color:#00bcd4; margin:0; font-weight:bold; white-space:nowrap;">📊 Livello Segnale (VU Meter):</label>
-                <div style="flex:1; min-width:150px; background:#060a0f; height:18px; border-radius:9px; border:1px solid #1e293b; overflow:hidden; position:relative;">
-                    <div id="signalVuBar" style="width:0%; height:100%; background:linear-gradient(90deg, #00e676 0%, #ffeb3b 75%, #ff5252 100%); transition:width 0.05s ease;"></div>
-                </div>
-                <span id="signalVuVal" style="font-size:0.85rem; color:#00ff66; font-weight:bold; min-width:40px; text-align:right;">0%</span>
-
-                <button class="btn btn-primary" style="padding:4px 12px; font-size:0.8rem; background-color:#0284c7; white-space:nowrap;" onclick="playTestCwBeep()">🔊 Bip Prova "CQ"</button>
+            <div class="help-tip">
+                💡 <strong>Decodifica la Radio del PC (YouTube, WebSDR, SDR#, VLC):</strong> Seleziona <strong style="color:#4ade80;">"Missaggio Stereo (Stereo Mix)"</strong> dal menu <em>Ingresso</em> e clicca su <strong>Avvia Ascolto</strong>!
             </div>
+        </div>
 
-            <!-- Radio SDR Help Banner -->
-            <div class="help-banner">
-                💡 <strong>Decodifica la Radio dal PC (YouTube, WebSDR, SDR#, VLC):</strong> Seleziona <strong style="color:#00ff66;">"Missaggio Stereo (Stereo Mix)"</strong> dal menu <em>Ingresso Audio</em> e clicca su <strong>Avvia Ascolto Live</strong>!
-            </div>
+        <div><strong>📡 Testo Decodificato in Diretta dall'IA:</strong></div>
+        <div class="output-box" id="output-box">In attesa del segnale audio...</div>
 
-            <!-- Live Decoded Morse Output Box -->
-            <div class="output-wrapper">
-                <label class="output-label">📡 Testo Decodificato in Diretta dall'IA (Flusso Live Sincronizzato):</label>
-                <div id="liveOutputBox" class="live-stream-box">In attesa del segnale audio...</div>
-
-                <!-- LIVE DEBUG DIAGNOSTIC STATUS BAR -->
-                <div id="liveDebugInfo" style="font-size:0.8rem; color:#8e9bb0; margin-top:10px; font-family:monospace; background:#060a0f; padding:8px 14px; border-radius:8px; border:1px solid #1e293b; display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px;">
-                    <span>📊 <strong>Segnale RMS:</strong> <span id="debugRmsVal" style="color:#00ff66;">0%</span></span>
-                    <span>🤖 <strong>IA ONNX Live:</strong> <span id="debugOnnxVal" style="color:#00bcd4;">In attesa...</span></span>
-                </div>
-            </div>
-        </main>
-
-        <!-- Footer -->
-        <footer>
-            <p>DeepCW IA Morse Decoder • Modello ONNX Client-Side • Esecuzione 100% Locale nel Browser (Nessun Server Richiesto)</p>
-        </footer>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <strong>💻 Console Diagnostica in Tempo Reale:</strong>
+            <button class="btn secondary" style="padding:2px 8px; font-size:0.75rem;" onclick="document.getElementById('log-box').innerText=''">🧹 Pulisci Console</button>
+        </div>
+        <div class="log-box" id="log-box"></div>
     </div>
 
-    <script src="app.js?v=5.0"></script>
+    <script src="app.js?v=6.0"></script>
 </body>
 </html>
