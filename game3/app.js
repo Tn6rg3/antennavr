@@ -171,8 +171,10 @@ const COLOR_LUT = new Uint8Array(256 * 3);
 })();
 
 let waterfallImageData = null;
+let lastWaterfallTime = performance.now();
+let waterfallPixelAccumulator = 0;
 
-// Real-Time Waterfall Spectrogram Canvas Renderer (100% Zero-Alloc Silky Smooth 60 FPS)
+// Real-Time Time-Scaled Waterfall Spectrogram Canvas Renderer (Identical to deepcw.cc / e04)
 function drawWaterfallLoop() {
     if (!isRunning || !analyserNode) return;
 
@@ -183,42 +185,67 @@ function drawWaterfallLoop() {
             const width = canvas.width;
             const height = canvas.height;
 
-            if (!waterfallImageData || waterfallImageData.height !== height) {
-                waterfallImageData = ctx.createImageData(2, height);
-            }
+            const now = performance.now();
+            const dt = (now - lastWaterfallTime) / 1000.0;
+            lastWaterfallTime = now;
 
-            const fftBins = analyserNode.frequencyBinCount;
-            const freqData = new Uint8Array(fftBins);
-            analyserNode.getByteFrequencyData(freqData);
+            // 12-second visible window scale matching deepcw.cc
+            const visibleSeconds = 12.0;
+            const pxPerSec = width / visibleSeconds; // ~70.8 pixels/sec at 850px width
+            waterfallPixelAccumulator += dt * pxPerSec;
 
-            // 1. Fast GPU hardware shift of canvas 2px to the left
-            ctx.drawImage(canvas, 2, 0, width - 2, height, 0, 0, width - 2, height);
+            let step = Math.floor(waterfallPixelAccumulator);
+            if (step >= 1) {
+                waterfallPixelAccumulator -= step;
+                if (step > 4) step = 4; // Cap max step per frame for smooth motion
 
-            // 2. Direct 1-pass TypedArray buffer fill for the 2px column on far right
-            const maxBin = Math.floor(fftBins * (1600 / (audioCtx ? audioCtx.sampleRate / 2 : 1600)));
-            const imgData = waterfallImageData.data;
-
-            for (let y = 0; y < height; y++) {
-                const binIdx = Math.floor(((height - y) / height) * maxBin);
-                const intensity = freqData[binIdx] || 0; // 0 to 255
-                const lutIdx = intensity * 3;
-
-                const r = COLOR_LUT[lutIdx];
-                const g = COLOR_LUT[lutIdx + 1];
-                const b = COLOR_LUT[lutIdx + 2];
-
-                // Write 2 pixels wide
-                for (let px = 0; px < 2; px++) {
-                    const offset = (y * 2 + px) * 4;
-                    imgData[offset] = r;
-                    imgData[offset + 1] = g;
-                    imgData[offset + 2] = b;
-                    imgData[offset + 3] = 255;
+                if (!waterfallImageData || waterfallImageData.height !== height || waterfallImageData.width !== step) {
+                    waterfallImageData = ctx.createImageData(step, height);
                 }
-            }
 
-            // 3. Single 1-pass GPU blit
-            ctx.putImageData(waterfallImageData, width - 2, 0);
+                const fftBins = analyserNode.frequencyBinCount;
+                const freqData = new Uint8Array(fftBins);
+                analyserNode.getByteFrequencyData(freqData);
+
+                // 1. Fast GPU hardware shift of canvas `step` pixels to the left
+                ctx.drawImage(canvas, step, 0, width - step, height, 0, 0, width - step, height);
+
+                // 2. Direct 1-pass TypedArray buffer fill for the `step` column on far right
+                const maxBin = Math.floor(fftBins * (1600 / (audioCtx ? audioCtx.sampleRate / 2 : 1600)));
+                const imgData = waterfallImageData.data;
+
+                // Auto-Contrast Boost: finds peak intensity and illuminates soft signals to full neon brightness
+                let framePeak = 0;
+                for (let y = 0; y < height; y++) {
+                    const binIdx = Math.floor(((height - y) / height) * maxBin);
+                    const val = freqData[binIdx] || 0;
+                    if (val > framePeak) framePeak = val;
+                }
+
+                const contrastBoost = framePeak > 15 ? (255.0 / framePeak) : 1.8;
+
+                for (let y = 0; y < height; y++) {
+                    const binIdx = Math.floor(((height - y) / height) * maxBin);
+                    const rawIntensity = freqData[binIdx] || 0;
+                    const scaledIntensity = Math.min(255, Math.round(rawIntensity * contrastBoost * currentSpecGain));
+                    const lutIdx = scaledIntensity * 3;
+
+                    const r = COLOR_LUT[lutIdx];
+                    const g = COLOR_LUT[lutIdx + 1];
+                    const b = COLOR_LUT[lutIdx + 2];
+
+                    for (let px = 0; px < step; px++) {
+                        const offset = (y * step + px) * 4;
+                        imgData[offset] = r;
+                        imgData[offset + 1] = g;
+                        imgData[offset + 2] = b;
+                        imgData[offset + 3] = 255;
+                    }
+                }
+
+                // 3. Single 1-pass GPU blit
+                ctx.putImageData(waterfallImageData, width - step, 0);
+            }
         }
     }
 
@@ -249,8 +276,8 @@ async function startSystem() {
         analyserNode = audioCtx.createAnalyser();
         analyserNode.fftSize = 2048;
         analyserNode.smoothingTimeConstant = 0.0; // 0.0 smoothing for razor-sharp dots/dashes
-        analyserNode.minDecibels = -70; // -70 dB noise floor cutoff
-        analyserNode.maxDecibels = -25; // -25 dB ceiling for bright CW signals
+        analyserNode.minDecibels = -90; // -90 dB noise floor to capture soft signals
+        analyserNode.maxDecibels = -10; // -10 dB ceiling for high dynamic range
         window.__globalMicSource.connect(analyserNode);
 
         if (!isWorkletRegistered) {
@@ -334,6 +361,14 @@ function changeAudioSourceDevice(event) {
         stopSystem();
         startSystem();
     }
+}
+
+let currentSpecGain = 2.0;
+
+function updateSpecGain(event) {
+    currentSpecGain = parseFloat(event.target.value) || 2.0;
+    const label = document.getElementById('specGainVal');
+    if (label) label.innerText = `${currentSpecGain.toFixed(1)}x`;
 }
 
 function updateInputGain(event) {

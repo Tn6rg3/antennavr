@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepCW IA - Decodificatore Morse ONNX con Spettrogramma Live</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0b0f19; color: #e2e8f0; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: #161e2e; padding: 24px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+        h1 { margin-top: 0; color: #38bdf8; font-size: 1.6rem; text-align: center; }
+        .subtitle { margin-top: -10px; margin-bottom: 20px; text-align: center; color: #94a3b8; font-size: 0.85rem; }
+
+        button { background: #0ea5e9; color: white; border: none; padding: 10px 22px; font-size: 1rem; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        button:hover { opacity: 0.9; }
+        button.success { background: #16a34a; }
+        button.danger { background: #ef4444; }
+        button.secondary { background: #475569; }
+        button:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+
+        .controls-card { background: #0b1120; padding: 16px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #334155; }
+        .control-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 12px; }
+        .control-row:last-child { margin-bottom: 0; }
+
+        .status-badge { font-weight: bold; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; }
+
+        .waterfall-container { position: relative; background: #020617; border: 1px solid #38bdf8; border-radius: 8px; overflow: hidden; margin-bottom: 20px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.8); }
+        canvas { display: block; width: 100%; height: 180px; background: #020617; }
+        .waterfall-overlay { position: absolute; top: 8px; right: 12px; font-size: 0.75rem; color: #38bdf8; background: rgba(2,6,23,0.8); padding: 4px 8px; border-radius: 4px; border: 1px solid #1e293b; font-family: monospace; }
+
+        .output-box { min-height: 160px; max-height: 280px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 1.3rem; background: #020617; padding: 18px; border-radius: 8px; border: 1px solid #22c55e; color: #4ade80; margin-bottom: 15px; white-space: pre-wrap; word-break: break-word; line-height: 1.6; box-shadow: inset 0 2px 8px rgba(0,0,0,0.6); }
+
+        .help-tip { font-size: 0.8rem; color: #94a3b8; background: #0f172a; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #0ea5e9; margin-top: 10px; }
+        select { background: #020617; color: #4ade80; border: 1px solid #334155; padding: 6px 10px; border-radius: 6px; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📻 DeepCW IA - Decodificatore Morse ONNX con Cascata Spettrogramma</h1>
+        <div class="subtitle">Spettrogramma Frequenziale in Tempo Reale • Rete Neurale CRNN 2D Client-Side (3.2kHz / 64 Mel-Bins)</div>
+
+        <!-- Controls Card -->
+        <div class="controls-card">
+            <div class="control-row">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <strong>Stato Modello:</strong>
+                    <span id="model-status" class="status-badge" style="background: #451a03; color: #facc15;">⏳ Caricamento in RAM...</span>
+                </div>
+
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <label for="onnxModelSelect" style="font-size:0.85rem; color:#38bdf8; font-weight:bold;">🤖 Modello IA:</label>
+                    <select id="onnxModelSelect" onchange="changeOnnxModel(event)">
+                        <option value="morse_model8.onnx" selected>Modello Stage 8 (morse_model8.onnx)</option>
+                        <option value="morse_model_int8.onnx">Modello INT8 (morse_model_int8.onnx)</option>
+                        <option value="morse_model.onnx">Modello Standard (morse_model.onnx)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <strong>Audio:</strong>
+                    <span id="audio-status" class="status-badge" style="background: #334155; color: #94a3b8;">🔴 Inattivo</span>
+                </div>
+            </div>
+
+            <div class="control-row" style="border-top: 1px solid #1e293b; padding-top: 12px;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button id="btn-start" onclick="startSystem()" class="success">🎙️ Avvia Ascolto</button>
+                    <button id="btn-stop" onclick="stopSystem()" class="danger" disabled>⏹️ Ferma</button>
+                    <button class="btn secondary" onclick="playTestCwBeep()">🔊 Bip Prova "CQ"</button>
+                </div>
+
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <label for="inputGainSlider" style="font-size:0.85rem; color:#38bdf8;">🎚️ Guadagno:</label>
+                    <input type="range" id="inputGainSlider" min="0.1" max="3.0" step="0.05" value="1.0" style="width:80px;" oninput="updateInputGain(event)">
+                    <span id="inputGainVal" style="font-size:0.85rem; color:#4ade80; font-weight:bold; min-width:35px;">100%</span>
+                </div>
+
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <label for="specGainSlider" style="font-size:0.85rem; color:#38bdf8;">✨ Sensibilità Cascata:</label>
+                    <input type="range" id="specGainSlider" min="0.5" max="5.0" step="0.1" value="2.0" style="width:80px;" oninput="updateSpecGain(event)">
+                    <span id="specGainVal" style="font-size:0.85rem; color:#4ade80; font-weight:bold; min-width:30px;">2.0x</span>
+                </div>
+
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <label for="audioSourceSelect" style="font-size:0.85rem; color:#38bdf8;">🎙️ Ingresso:</label>
+                    <select id="audioSourceSelect" onchange="changeAudioSourceDevice(event)">
+                        <option value="default" selected>Predefinito / Missaggio Stereo</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="help-tip">
+                💡 <strong>Decodifica la Radio dal PC (YouTube, WebSDR, SDR#, VLC):</strong> Seleziona <strong style="color:#4ade80;">"Missaggio Stereo (Stereo Mix)"</strong> dal menu <em>Ingresso</em> e clicca su <strong>Avvia Ascolto</strong>!
+            </div>
+        </div>
+
+        <!-- REAL-TIME WATERFALL SPECTROGRAM CANVAS -->
+        <div class="waterfall-container">
+            <canvas id="waterfallCanvas" width="850" height="180"></canvas>
+            <div class="waterfall-overlay">📊 Spettrogramma Frequenziale (0 Hz - 1600 Hz)</div>
+        </div>
+
+        <!-- LIVE TRANSCRIBED TEXT BOX -->
+        <div><strong>📡 Testo Decodificato in Diretta dall'IA:</strong></div>
+        <div class="output-box" id="output-box">In attesa del segnale audio...</div>
+    </div>
+
+    <script src="app.js?v=12.0"></script>
+</body>
+</html>
