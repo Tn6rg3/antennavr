@@ -171,8 +171,10 @@ const COLOR_LUT = new Uint8Array(256 * 3);
 })();
 
 let waterfallImageData = null;
+let lastWaterfallTime = performance.now();
+let waterfallPixelAccumulator = 0;
 
-// Real-Time Waterfall Spectrogram Canvas Renderer (100% Zero-Alloc Silky Smooth 60 FPS)
+// Real-Time Time-Scaled Waterfall Spectrogram Canvas Renderer (Identical to deepcw.cc / e04)
 function drawWaterfallLoop() {
     if (!isRunning || !analyserNode) return;
 
@@ -183,53 +185,67 @@ function drawWaterfallLoop() {
             const width = canvas.width;
             const height = canvas.height;
 
-            if (!waterfallImageData || waterfallImageData.height !== height) {
-                waterfallImageData = ctx.createImageData(2, height);
-            }
+            const now = performance.now();
+            const dt = (now - lastWaterfallTime) / 1000.0;
+            lastWaterfallTime = now;
 
-            const fftBins = analyserNode.frequencyBinCount;
-            const freqData = new Uint8Array(fftBins);
-            analyserNode.getByteFrequencyData(freqData);
+            // 12-second visible window scale matching deepcw.cc
+            const visibleSeconds = 12.0;
+            const pxPerSec = width / visibleSeconds; // ~70.8 pixels/sec at 850px width
+            waterfallPixelAccumulator += dt * pxPerSec;
 
-            // 1. Fast GPU hardware shift of canvas 2px to the left
-            ctx.drawImage(canvas, 2, 0, width - 2, height, 0, 0, width - 2, height);
+            let step = Math.floor(waterfallPixelAccumulator);
+            if (step >= 1) {
+                waterfallPixelAccumulator -= step;
+                if (step > 4) step = 4; // Cap max step per frame for smooth motion
 
-            // 2. Direct 1-pass TypedArray buffer fill with Auto-Gain Contrast Boost
-            const maxBin = Math.floor(fftBins * (1600 / (audioCtx ? audioCtx.sampleRate / 2 : 1600)));
-            const imgData = waterfallImageData.data;
-
-            // Auto-Contrast Boost: trova il picco del frame ed illumina i segnali deboli a luminosità neon!
-            let framePeak = 0;
-            for (let y = 0; y < height; y++) {
-                const binIdx = Math.floor(((height - y) / height) * maxBin);
-                const val = freqData[binIdx] || 0;
-                if (val > framePeak) framePeak = val;
-            }
-
-            const contrastBoost = framePeak > 15 ? (255.0 / framePeak) : 1.8;
-
-            for (let y = 0; y < height; y++) {
-                const binIdx = Math.floor(((height - y) / height) * maxBin);
-                const rawIntensity = freqData[binIdx] || 0;
-                const scaledIntensity = Math.min(255, Math.round(rawIntensity * contrastBoost));
-                const lutIdx = scaledIntensity * 3;
-
-                const r = COLOR_LUT[lutIdx];
-                const g = COLOR_LUT[lutIdx + 1];
-                const b = COLOR_LUT[lutIdx + 2];
-
-                // Write 2 pixels wide
-                for (let px = 0; px < 2; px++) {
-                    const offset = (y * 2 + px) * 4;
-                    imgData[offset] = r;
-                    imgData[offset + 1] = g;
-                    imgData[offset + 2] = b;
-                    imgData[offset + 3] = 255;
+                if (!waterfallImageData || waterfallImageData.height !== height || waterfallImageData.width !== step) {
+                    waterfallImageData = ctx.createImageData(step, height);
                 }
-            }
 
-            // 3. Single 1-pass GPU blit
-            ctx.putImageData(waterfallImageData, width - 2, 0);
+                const fftBins = analyserNode.frequencyBinCount;
+                const freqData = new Uint8Array(fftBins);
+                analyserNode.getByteFrequencyData(freqData);
+
+                // 1. Fast GPU hardware shift of canvas `step` pixels to the left
+                ctx.drawImage(canvas, step, 0, width - step, height, 0, 0, width - step, height);
+
+                // 2. Direct 1-pass TypedArray buffer fill for the `step` column on far right
+                const maxBin = Math.floor(fftBins * (1600 / (audioCtx ? audioCtx.sampleRate / 2 : 1600)));
+                const imgData = waterfallImageData.data;
+
+                // Auto-Contrast Boost: finds peak intensity and illuminates soft signals to full neon brightness
+                let framePeak = 0;
+                for (let y = 0; y < height; y++) {
+                    const binIdx = Math.floor(((height - y) / height) * maxBin);
+                    const val = freqData[binIdx] || 0;
+                    if (val > framePeak) framePeak = val;
+                }
+
+                const contrastBoost = framePeak > 15 ? (255.0 / framePeak) : 1.8;
+
+                for (let y = 0; y < height; y++) {
+                    const binIdx = Math.floor(((height - y) / height) * maxBin);
+                    const rawIntensity = freqData[binIdx] || 0;
+                    const scaledIntensity = Math.min(255, Math.round(rawIntensity * contrastBoost));
+                    const lutIdx = scaledIntensity * 3;
+
+                    const r = COLOR_LUT[lutIdx];
+                    const g = COLOR_LUT[lutIdx + 1];
+                    const b = COLOR_LUT[lutIdx + 2];
+
+                    for (let px = 0; px < step; px++) {
+                        const offset = (y * step + px) * 4;
+                        imgData[offset] = r;
+                        imgData[offset + 1] = g;
+                        imgData[offset + 2] = b;
+                        imgData[offset + 3] = 255;
+                    }
+                }
+
+                // 3. Single 1-pass GPU blit
+                ctx.putImageData(waterfallImageData, width - step, 0);
+            }
         }
     }
 
