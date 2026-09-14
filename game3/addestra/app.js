@@ -46,57 +46,76 @@ function getAudioContext() {
     return audioCtx;
 }
 
+let decoderWorker = null;
+
 async function changeOnnxModel(event) {
     const selectedFile = event.target.value;
     screenLog(`🤖 Cambio Modello IA selezionato dall'utente: '${selectedFile}'...`);
-    await loadONNX(selectedFile);
+    if (decoderWorker) {
+        decoderWorker.postMessage({ type: 'INIT', modelPath: selectedFile });
+    }
 }
 
-// Load ONNX Model Session with Absolute URL Fallback
+// Load ONNX Model Session via Background WebWorker (0% UI Thread Lock)
 async function loadONNX(forcedModelPath = null) {
     const statusLabel = document.getElementById('model-status');
+    const targetModel = forcedModelPath || 'morse_model8.onnx';
+
     try {
-        screenLog("Configurazione runtime WASM ONNX...");
+        screenLog("Inizializzazione Background Worker Thread...");
         if (statusLabel) {
             statusLabel.innerText = "⏳ Caricamento in RAM...";
             statusLabel.style.backgroundColor = "#451a03";
             statusLabel.style.color = "#facc15";
         }
 
-        ort.env.wasm.numThreads = 1;
-
-        const mPath = forcedModelPath || 'morse_model8.onnx';
-        screenLog(`Caricamento modello '${mPath}' in RAM...`);
-
-        try {
-            ortSession = await ort.InferenceSession.create(mPath, { executionProviders: ['wasm'] });
-        } catch (e1) {
-            screenLog(`Primo tentativo '${mPath}' non riuscito, provo con URL assoluto...`, false, true);
-            const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-            const absoluteUrl = baseUrl + mPath;
-            ortSession = await ort.InferenceSession.create(absoluteUrl, { executionProviders: ['wasm'] });
+        if (!decoderWorker) {
+            decoderWorker = new Worker('decoderWorker.js');
+            decoderWorker.onmessage = function(e) {
+                const data = e.data;
+                if (data.type === 'ONNX_READY') {
+                    screenLog(`✓ Modello ONNX '${data.modelPath}' caricato con successo in Background Worker!`);
+                    if (statusLabel) {
+                        statusLabel.innerText = `✅ Modello '${data.modelPath}' Pronto!`;
+                        statusLabel.style.backgroundColor = "#14532d";
+                        statusLabel.style.color = "#4ade80";
+                    }
+                } else if (data.type === 'INFER_RESULT') {
+                    handleWorkerInferResult(data.text);
+                } else if (data.type === 'ONNX_ERROR' || data.type === 'INFER_ERROR') {
+                    screenLog(`Avviso Worker ONNX: ${data.error}`, false, true);
+                }
+            };
         }
 
-        if (ortSession) {
-            screenLog(`✓ Modello ONNX '${mPath}' caricato con successo in RAM!`);
-            if (statusLabel) {
-                statusLabel.innerText = `✅ Modello '${mPath}' Pronto!`;
-                statusLabel.style.backgroundColor = "#14532d";
-                statusLabel.style.color = "#4ade80";
-            }
-        } else if (statusLabel) {
-            statusLabel.innerText = "❌ Errore Modello";
-            statusLabel.style.backgroundColor = "#7f1d1d";
-            statusLabel.style.color = "#f87171";
-            screenLog("ERRORE: Impossibile caricare il file ONNX!", true);
-        }
+        decoderWorker.postMessage({ type: 'INIT', modelPath: targetModel });
     } catch (err) {
-        if (statusLabel) {
-            statusLabel.innerText = "❌ Fallito (" + err.message + ")";
-            statusLabel.style.backgroundColor = "#7f1d1d";
-            statusLabel.style.color = "#f87171";
+        screenLog("Avviso attivazione WebWorker: " + err.message, false, true);
+    }
+}
+
+function handleWorkerInferResult(aiResult) {
+    const liveBox = document.getElementById('output-box');
+    if (!liveBox) return;
+
+    const cleanAi = (typeof aiResult === 'string') ? aiResult.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
+
+    if (cleanAi && cleanAi.length > 0) {
+        const currentFullText = liveBox.innerText || "";
+        if (currentFullText.includes("In attesa del segnale")) {
+            liveBox.innerText = "";
         }
-        screenLog("ERRORE CRITICO ONNX: " + err.message, true);
+
+        const words = cleanAi.split(/\s+/);
+        const currentText = liveBox ? liveBox.innerText.trim() : "";
+        const lastWord = currentText ? currentText.split(/\s+/).pop() : "";
+
+        for (let w of words) {
+            if (w && w !== lastWord) {
+                liveBox.innerText += w + " ";
+                liveBox.scrollTop = liveBox.scrollHeight;
+            }
+        }
     }
 }
 
@@ -369,35 +388,23 @@ async function startAsyncDecodeLoop() {
                 }
             }
 
-            // 3. Inferenza ONNX con Spettrogramma 100% PyTorch Identico
-            const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
-            const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
+            // 3. Inferenza ONNX in Thread Isolato WebWorker (0% Blocco UI)
+            if (decoderWorker) {
+                decoderWorker.postMessage({ type: 'INFER', audio3200: audio3200 });
+            } else if (ortSession) {
+                const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
+                const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
 
-            const inputName = (ortSession.inputNames && ortSession.inputNames.length > 0) ? ortSession.inputNames[0] : 'spectrogram';
-            const feeds = {};
-            feeds[inputName] = inputTensor;
+                const inputName = (ortSession.inputNames && ortSession.inputNames.length > 0) ? ortSession.inputNames[0] : 'spectrogram';
+                const feeds = {};
+                feeds[inputName] = inputTensor;
 
-            const results = await ortSession.run(feeds);
-            const outKey = Object.keys(results)[0];
-            const outTensor = results[outKey];
+                const results = await ortSession.run(feeds);
+                const outKey = Object.keys(results)[0];
+                const outTensor = results[outKey];
 
-            const resultText = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
-            const cleanText = resultText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim();
-
-            if (cleanText) {
-                const outBox = document.getElementById('output-box');
-                if (outBox.innerText === "In attesa del segnale audio...") outBox.innerText = "";
-
-                const words = cleanText.split(/\s+/);
-                const currentText = outBox.innerText.trim();
-                const lastWord = currentText ? currentText.split(/\s+/).pop() : "";
-
-                for (let w of words) {
-                    if (w && w !== lastWord) {
-                        outBox.innerText += w + " ";
-                        outBox.scrollTop = outBox.scrollHeight;
-                    }
-                }
+                const resultText = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
+                handleWorkerInferResult(resultText);
             }
         } catch (e) {
             console.error("Errore ciclo di decodifica:", e);
