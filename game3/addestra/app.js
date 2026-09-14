@@ -49,8 +49,8 @@ function drawVuMeterSmooth() {
     vuMeterAnimationFrame = requestAnimationFrame(drawVuMeterSmooth);
 }
 
-const SAMPLE_RATE = 16000;
-const liveBuffer = new Float32Array(SAMPLE_RATE * 5); // 5-second sliding window at 16kHz
+const SAMPLE_RATE = 3200;
+const liveBuffer = new Float32Array(SAMPLE_RATE * 5); // 5-second sliding window at 3.2kHz
 let bufferPos = 0;
 let audioBufferVersion = 0;
 let lastProcessedVersion = -1;
@@ -58,7 +58,7 @@ let lastProcessedVersion = -1;
 function getAudioContext() {
     if (!audioCtx) {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        audioCtx = new AudioContextClass();
+        audioCtx = new AudioContextClass({ sampleRate: SAMPLE_RATE });
     }
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
@@ -287,17 +287,10 @@ async function startAsyncDecodeLoop() {
                 alignedBuffer[i] = liveBuffer[(bufferPos + i) % liveBuffer.length];
             }
 
-            // 1. Resample 16000 Hz -> 3200 Hz
-            const ratio = 16000 / 3200;
-            let audio3200 = new Float32Array(Math.floor(alignedBuffer.length / ratio));
-            for (let i = 0; i < audio3200.length; i++) {
-                audio3200[i] = alignedBuffer[Math.floor(i * ratio)];
-            }
+            // 1. Direct Native 3200 Hz Audio Buffer
+            let audio3200 = applyCwBandpassFilterJS(alignedBuffer, 3200, 300, 1100);
 
-            // 2. Filtro Passa-Banda CW (300 Hz - 1100 Hz)
-            audio3200 = applyCwBandpassFilterJS(audio3200, 3200, 300, 1100);
-
-            // 3. Controllo Automatico di Guadagno RMS (AGC) con Gate di Silenzio
+            // 2. Controllo Automatico di Guadagno RMS (AGC) con Gate di Silenzio
             let sumSq = 0.0;
             let activeSamples = 0;
             for (let i = 0; i < audio3200.length; i++) {
@@ -309,15 +302,14 @@ async function startAsyncDecodeLoop() {
             }
 
             const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
-            if (rmsVal >= 0.035) { // Se c'è un segnale CW reale sopra il rumore di fondo
-                const agcGain = Math.min(8.0, 0.25 / rmsVal);
+            if (rmsVal >= 0.02) { // Se c'è un segnale CW reale sopra il rumore di fondo
+                const agcGain = Math.min(10.0, 0.25 / rmsVal);
                 for (let i = 0; i < audio3200.length; i++) {
                     audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
                 }
             } else {
-                // Attenua il fruscio di sottofondo per mantenere l'ONNX su <BLANK>
                 for (let i = 0; i < audio3200.length; i++) {
-                    audio3200[i] *= 0.3;
+                    audio3200[i] *= 0.2;
                 }
             }
 
@@ -557,7 +549,7 @@ function addBeep(gain, startTime, duration) {
 }
 
 function injectAudioBufferToDecoder(freq = 650, durationSec = 2.5) {
-    const sr = 16000;
+    const sr = 3200;
     const numSamples = Math.floor(sr * durationSec);
     const twoPiF = 2 * Math.PI * freq;
 
