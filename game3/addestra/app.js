@@ -98,7 +98,7 @@ function handleWorkerInferResult(aiResult) {
     const liveBox = document.getElementById('output-box');
     if (!liveBox) return;
 
-    const cleanAi = (typeof aiResult === 'string') ? aiResult.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim() : "";
+    const cleanAi = (typeof aiResult === 'string') ? aiResult.trim() : "";
 
     if (cleanAi && cleanAi.length > 0) {
         const currentFullText = liveBox.innerText || "";
@@ -112,8 +112,11 @@ function handleWorkerInferResult(aiResult) {
 
         for (let w of words) {
             if (w && w !== lastWord) {
-                liveBox.innerText += w + " ";
-                liveBox.scrollTop = liveBox.scrollHeight;
+                const textToAppend = (isDictEnabled && !isRawOnlyMode) ? correctTextWithRadioDictionary(w) : w;
+                if (textToAppend && textToAppend.trim()) {
+                    liveBox.innerText += textToAppend + " ";
+                    liveBox.scrollTop = liveBox.scrollHeight;
+                }
             }
         }
     }
@@ -191,14 +194,25 @@ function drawWaterfallLoop() {
             // 1. Fast GPU hardware shift of canvas 2px to the left
             ctx.drawImage(canvas, 2, 0, width - 2, height, 0, 0, width - 2, height);
 
-            // 2. Direct 1-pass TypedArray buffer fill for the 2px column on far right
+            // 2. Direct 1-pass TypedArray buffer fill with Auto-Gain Contrast Boost
             const maxBin = Math.floor(fftBins * (1600 / (audioCtx ? audioCtx.sampleRate / 2 : 1600)));
             const imgData = waterfallImageData.data;
 
+            // Auto-Contrast Boost: trova il picco del frame ed illumina i segnali deboli a luminosità neon!
+            let framePeak = 0;
             for (let y = 0; y < height; y++) {
                 const binIdx = Math.floor(((height - y) / height) * maxBin);
-                const intensity = freqData[binIdx] || 0; // 0 to 255
-                const lutIdx = intensity * 3;
+                const val = freqData[binIdx] || 0;
+                if (val > framePeak) framePeak = val;
+            }
+
+            const contrastBoost = framePeak > 15 ? (255.0 / framePeak) : 1.8;
+
+            for (let y = 0; y < height; y++) {
+                const binIdx = Math.floor(((height - y) / height) * maxBin);
+                const rawIntensity = freqData[binIdx] || 0;
+                const scaledIntensity = Math.min(255, Math.round(rawIntensity * contrastBoost));
+                const lutIdx = scaledIntensity * 3;
 
                 const r = COLOR_LUT[lutIdx];
                 const g = COLOR_LUT[lutIdx + 1];
@@ -246,8 +260,8 @@ async function startSystem() {
         analyserNode = audioCtx.createAnalyser();
         analyserNode.fftSize = 2048;
         analyserNode.smoothingTimeConstant = 0.0; // 0.0 smoothing for razor-sharp dots/dashes
-        analyserNode.minDecibels = -70; // -70 dB noise floor cutoff
-        analyserNode.maxDecibels = -25; // -25 dB ceiling for bright CW signals
+        analyserNode.minDecibels = -90; // -90 dB noise floor to capture soft signals
+        analyserNode.maxDecibels = -10; // -10 dB ceiling for high dynamic range
         window.__globalMicSource.connect(analyserNode);
 
         if (!isWorkletRegistered) {
