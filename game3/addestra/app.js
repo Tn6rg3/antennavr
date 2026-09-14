@@ -1,5 +1,5 @@
 // ==============================================================================
-// DEEPCW IA DECODER (100% Client-Side ONNX Web + AudioWorklet Thread)
+// DEEPCW IA DECODER (100% Client-Side ONNX Web + AudioWorklet + Waterfall)
 // ==============================================================================
 
 function screenLog(msg, isErr = false, isWarn = false) {
@@ -20,29 +20,14 @@ let ortSession = null;
 let audioCtx = null;
 let streamRef = null;
 let workletNode = null;
+let analyserNode = null;
 let isRunning = false;
 let isWorkletRegistered = false;
 let isProcessingInference = false;
-let totalRecordedSamples = 0;
+let waterfallAnimationFrame = null;
 
 let currentInputGain = 1.0;
 let selectedDeviceId = "default";
-
-let currentRmsVolume = 0.0;
-let vuMeterAnimationFrame = null;
-
-function drawVuMeterSmooth() {
-    if (!isRunning) return;
-
-    const vuBar = document.getElementById('vu-bar');
-    const vuVal = document.getElementById('vu-val');
-    const volumePct = Math.min(100, Math.round(currentRmsVolume * 400));
-
-    if (vuBar) vuBar.style.width = volumePct + '%';
-    if (vuVal) vuVal.innerText = volumePct + '%';
-
-    vuMeterAnimationFrame = requestAnimationFrame(drawVuMeterSmooth);
-}
 
 const SAMPLE_RATE = 3200;
 const liveBuffer = new Float32Array(SAMPLE_RATE * 5); // 5-second sliding window at 3.2kHz
@@ -114,7 +99,6 @@ async function loadONNX(forcedModelPath = null) {
         screenLog("ERRORE CRITICO ONNX: " + err.message, true);
     }
 }
-}
 
 // Enumerate Connected Input Devices
 async function populateAudioDevicesList() {
@@ -137,6 +121,55 @@ async function populateAudioDevicesList() {
     }
 }
 
+// Real-Time Waterfall Spectrogram Canvas Renderer (Right-to-Left Heatmap Scrolling)
+function drawWaterfallLoop() {
+    if (!isRunning || !analyserNode) return;
+
+    const canvas = document.getElementById('waterfallCanvas');
+    if (canvas) {
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (ctx) {
+            const width = canvas.width;
+            const height = canvas.height;
+            const fftBins = analyserNode.frequencyBinCount;
+            const freqData = new Uint8Array(fftBins);
+            analyserNode.getByteFrequencyData(freqData);
+
+            // Shift existing canvas image to the left by 2 pixels
+            ctx.drawImage(canvas, 2, 0, width - 2, height, 0, 0, width - 2, height);
+
+            // Draw new 2-pixel audio frequency spectrum column on far right (0 Hz at bottom, 1600 Hz at top)
+            const maxBin = Math.floor(fftBins * (1600 / (audioCtx ? audioCtx.sampleRate / 2 : 1600)));
+            for (let y = 0; y < height; y++) {
+                const binIdx = Math.floor(((height - y) / height) * maxBin);
+                const intensity = freqData[binIdx] || 0; // 0 to 255
+
+                // SDR Heatmap Color Palette: Dark Blue -> Cyan -> Neon Yellow -> Red
+                let r = 0, g = 0, b = 0;
+                if (intensity < 64) {
+                    b = Math.floor(intensity * 4);
+                } else if (intensity < 128) {
+                    g = Math.floor((intensity - 64) * 4);
+                    b = 255 - g;
+                } else if (intensity < 192) {
+                    r = Math.floor((intensity - 128) * 4);
+                    g = 255;
+                    b = 0;
+                } else {
+                    r = 255;
+                    g = 255 - Math.floor((intensity - 192) * 4);
+                    b = 0;
+                }
+
+                ctx.fillStyle = `rgb(${r},${g},${b})`;
+                ctx.fillRect(width - 2, y, 2, 1);
+            }
+        }
+    }
+
+    waterfallAnimationFrame = requestAnimationFrame(drawWaterfallLoop);
+}
+
 async function startSystem() {
     if (isRunning) return;
     document.getElementById('btn-start').disabled = true;
@@ -156,6 +189,12 @@ async function startSystem() {
 
         audioCtx = getAudioContext();
         window.__globalMicSource = audioCtx.createMediaStreamSource(streamRef);
+
+        // Analyser Node for Live Spectrogram Waterfall
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 1024;
+        analyserNode.smoothingTimeConstant = 0.2;
+        window.__globalMicSource.connect(analyserNode);
 
         if (!isWorkletRegistered) {
             const workletCode = `
@@ -182,23 +221,18 @@ async function startSystem() {
         workletNode.connect(audioCtx.destination);
 
         bufferPos = 0;
-        totalRecordedSamples = 0;
         liveBuffer.fill(0);
 
         workletNode.port.onmessage = (e) => {
             if (!isRunning) return;
             const data = e.data;
-            let sumSq = 0;
             for (let i = 0; i < data.length; i++) {
                 let val = data[i] * currentInputGain;
                 if (isNaN(val) || !isFinite(val)) val = 0;
-                sumSq += val * val;
                 liveBuffer[bufferPos] = val;
                 bufferPos = (bufferPos + 1) % liveBuffer.length;
             }
-            totalRecordedSamples += data.length;
-            audioBufferVersion++; // Signal new audio version
-            currentRmsVolume = Math.sqrt(sumSq / Math.max(1, data.length));
+            audioBufferVersion++;
         };
 
         isRunning = true;
@@ -212,8 +246,7 @@ async function startSystem() {
             outBox.innerText = "";
         }
 
-        drawVuMeterSmooth();
-
+        drawWaterfallLoop();
         screenLog("Audio connesso ed attivo. Avvio loop di decodifica asincrono...");
         startAsyncDecodeLoop();
 
@@ -225,7 +258,9 @@ async function startSystem() {
 
 function stopSystem() {
     isRunning = false;
+    if (waterfallAnimationFrame) cancelAnimationFrame(waterfallAnimationFrame);
     if (workletNode) workletNode.disconnect();
+    if (analyserNode) analyserNode.disconnect();
     if (window.__globalMicSource) window.__globalMicSource.disconnect();
     if (streamRef) streamRef.getTracks().forEach(t => t.stop());
 
@@ -233,9 +268,6 @@ function stopSystem() {
     document.getElementById('btn-stop').disabled = true;
     document.getElementById('audio-status').innerText = "🔴 Fermo";
     document.getElementById('audio-status').style.color = "#f87171";
-    document.getElementById('vu-bar').style.width = '0%';
-    const vuVal = document.getElementById('vu-val');
-    if (vuVal) vuVal.innerText = '0%';
     screenLog("Ascolto audio fermato dall'utente.");
 }
 
@@ -279,10 +311,11 @@ function applyCwBandpassFilterJS(audioData, sampleRate = 3200, minFreq = 300, ma
     return filtered;
 }
 
-// Async Decode Loop (Calibrato a 1200ms per 0% carico CPU e barra liquida 60 FPS)
+// Async Decode Loop (Calibrato a 1200ms per 0% carico CPU)
 async function startAsyncDecodeLoop() {
+    let lastProcessedVersion = -1;
+
     while (isRunning) {
-        // Pausa strategica di 1200ms per lasciare la CPU libera al 90%
         await new Promise(r => setTimeout(r, 1200));
 
         if (!isRunning || isProcessingInference || !ortSession) continue;
@@ -290,13 +323,9 @@ async function startAsyncDecodeLoop() {
         try {
             isProcessingInference = true;
 
-            const activeLen = Math.min(totalRecordedSamples, liveBuffer.length);
-            if (activeLen < 3200) continue; // Attendi almeno 1 secondo di audio
-
-            const alignedBuffer = new Float32Array(activeLen);
-            const startIdx = (bufferPos - activeLen + liveBuffer.length) % liveBuffer.length;
-            for (let i = 0; i < activeLen; i++) {
-                alignedBuffer[i] = liveBuffer[(startIdx + i) % liveBuffer.length];
+            const alignedBuffer = new Float32Array(liveBuffer.length);
+            for (let i = 0; i < liveBuffer.length; i++) {
+                alignedBuffer[i] = liveBuffer[(bufferPos + i) % liveBuffer.length];
             }
 
             // 1. Direct Native 3200 Hz Audio Buffer
@@ -314,7 +343,7 @@ async function startAsyncDecodeLoop() {
             }
 
             const rmsVal = Math.sqrt(sumSq / Math.max(1, activeSamples));
-            if (rmsVal >= 0.02) { // Se c'è un segnale CW reale sopra il rumore di fondo
+            if (rmsVal >= 0.02) {
                 const agcGain = Math.min(10.0, 0.25 / rmsVal);
                 for (let i = 0; i < audio3200.length; i++) {
                     audio3200[i] = Math.max(-1.0, Math.min(1.0, audio3200[i] * agcGain));
@@ -325,41 +354,38 @@ async function startAsyncDecodeLoop() {
                 }
             }
 
-            // 4. Inferenza ONNX con Spettrogramma 100% PyTorch Identico
-            if (ortSession) {
-                const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
-                const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
+            // 3. Inferenza ONNX con Spettrogramma 100% PyTorch Identico
+            const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
+            const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
 
-                const inputName = (ortSession.inputNames && ortSession.inputNames.length > 0) ? ortSession.inputNames[0] : 'spectrogram';
-                const feeds = {};
-                feeds[inputName] = inputTensor;
+            const inputName = (ortSession.inputNames && ortSession.inputNames.length > 0) ? ortSession.inputNames[0] : 'spectrogram';
+            const feeds = {};
+            feeds[inputName] = inputTensor;
 
-                const results = await ortSession.run(feeds);
-                const outKey = Object.keys(results)[0];
-                const outTensor = results[outKey];
+            const results = await ortSession.run(feeds);
+            const outKey = Object.keys(results)[0];
+            const outTensor = results[outKey];
 
-                const resultText = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
+            const resultText = ctcGreedyDecodeJS(outTensor.data, outTensor.dims);
+            const cleanText = resultText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim();
 
-                const cleanText = resultText.replace(/^[\(\):;=\.,\$\"\'-_]+/g, '').replace(/[\(\):;=\.,\$\"\'-_]+$/g, '').trim();
+            if (cleanText) {
+                const outBox = document.getElementById('output-box');
+                if (outBox.innerText === "In attesa del segnale audio...") outBox.innerText = "";
 
-                if (cleanText) {
-                    const outBox = document.getElementById('output-box');
-                    if (outBox.innerText === "In attesa del segnale audio...") outBox.innerText = "";
+                const words = cleanText.split(/\s+/);
+                const currentText = outBox.innerText.trim();
+                const lastWord = currentText ? currentText.split(/\s+/).pop() : "";
 
-                    const words = cleanText.split(/\s+/);
-                    const currentText = outBox.innerText.trim();
-                    const lastWord = currentText ? currentText.split(/\s+/).pop() : "";
-
-                    for (let w of words) {
-                        if (w && w !== lastWord) {
-                            outBox.innerText += w + " ";
-                            outBox.scrollTop = outBox.scrollHeight;
-                        }
+                for (let w of words) {
+                    if (w && w !== lastWord) {
+                        outBox.innerText += w + " ";
+                        outBox.scrollTop = outBox.scrollHeight;
                     }
                 }
             }
         } catch (e) {
-            screenLog("Errore ciclo di decodifica: " + e.message, true);
+            console.error("Errore ciclo di decodifica:", e);
         } finally {
             isProcessingInference = false;
         }
