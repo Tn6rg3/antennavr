@@ -81,7 +81,7 @@ async function loadONNX(forcedModelPath = null) {
         ort.env.wasm.numThreads = 1;
         ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
 
-        const modelCandidates = forcedModelPath ? [forcedModelPath] : ['morse_model8.onnx', 'morse_model_int8.onnx', 'morse_model.onnx'];
+        const modelCandidates = forcedModelPath ? [forcedModelPath] : ['morse_model8.onnx'];
 
         for (let mPath of modelCandidates) {
             try {
