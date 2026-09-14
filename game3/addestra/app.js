@@ -67,7 +67,7 @@ async function changeOnnxModel(event) {
     await loadONNX(selectedFile);
 }
 
-// Load ONNX Model Session
+// Load ONNX Model Session with Absolute URL Fallback
 async function loadONNX(forcedModelPath = null) {
     const statusLabel = document.getElementById('model-status');
     try {
@@ -79,40 +79,41 @@ async function loadONNX(forcedModelPath = null) {
         }
 
         ort.env.wasm.numThreads = 1;
-        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
 
-        const modelCandidates = forcedModelPath ? [forcedModelPath] : ['morse_model8.onnx'];
+        const mPath = forcedModelPath || 'morse_model8.onnx';
+        screenLog(`Caricamento modello '${mPath}' in RAM...`);
 
-        for (let mPath of modelCandidates) {
-            try {
-                screenLog(`Caricamento modello '${mPath}' in RAM...`);
-                ortSession = await ort.InferenceSession.create(mPath, { executionProviders: ['wasm'] });
-                screenLog(`✓ Modello ONNX '${mPath}' caricato con successo in RAM!`);
-                if (statusLabel) {
-                    statusLabel.innerText = `✅ Modello '${mPath}' Pronto!`;
-                    statusLabel.style.backgroundColor = "#14532d";
-                    statusLabel.style.color = "#4ade80";
-                }
-                break;
-            } catch (e) {
-                screenLog(`Tentativo caricamento '${mPath}' non riuscito, provo alternativa...`, false, true);
-            }
+        try {
+            ortSession = await ort.InferenceSession.create(mPath, { executionProviders: ['wasm'] });
+        } catch (e1) {
+            screenLog(`Primo tentativo '${mPath}' non riuscito, provo con URL assoluto...`, false, true);
+            const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+            const absoluteUrl = baseUrl + mPath;
+            ortSession = await ort.InferenceSession.create(absoluteUrl, { executionProviders: ['wasm'] });
         }
 
-        if (!ortSession && statusLabel) {
+        if (ortSession) {
+            screenLog(`✓ Modello ONNX '${mPath}' caricato con successo in RAM!`);
+            if (statusLabel) {
+                statusLabel.innerText = `✅ Modello '${mPath}' Pronto!`;
+                statusLabel.style.backgroundColor = "#14532d";
+                statusLabel.style.color = "#4ade80";
+            }
+        } else if (statusLabel) {
             statusLabel.innerText = "❌ Errore Modello";
             statusLabel.style.backgroundColor = "#7f1d1d";
             statusLabel.style.color = "#f87171";
-            screenLog("ERRORE: Impossibile trovare o caricare il file ONNX!", true);
+            screenLog("ERRORE: Impossibile caricare il file ONNX!", true);
         }
     } catch (err) {
         if (statusLabel) {
-            statusLabel.innerText = "❌ Fallito";
+            statusLabel.innerText = "❌ Fallito (" + err.message + ")";
             statusLabel.style.backgroundColor = "#7f1d1d";
             statusLabel.style.color = "#f87171";
         }
         screenLog("ERRORE CRITICO ONNX: " + err.message, true);
     }
+}
 }
 
 // Enumerate Connected Input Devices
