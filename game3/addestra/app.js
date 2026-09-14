@@ -140,6 +140,33 @@ async function populateAudioDevicesList() {
     }
 }
 
+// Pre-computed High-Contrast Gamma Color LUT (Gamma 2.2, HSL 220->0, e04 palette)
+const COLOR_LUT = new Uint8Array(256 * 3);
+(function initColorLUT() {
+    for (let v = 0; v < 256; v++) {
+        let t = Math.pow(v / 255.0, 2.2); // Gamma 2.2 non-linear contrast curve
+        const hue = (220 * (1 - t)) / 360;
+        const sat = 1.0;
+        const light = 0.08 + 0.82 * t;
+
+        const q = light < 0.5 ? light * (1 + sat) : light + sat - light * sat;
+        const p = 2 * light - q;
+
+        const hue2rgb = (pVal, qVal, tVal) => {
+            if (tVal < 0) tVal += 1;
+            if (tVal > 1) tVal -= 1;
+            if (tVal < 1/6) return pVal + (qVal - pVal) * 6 * tVal;
+            if (tVal < 1/2) return qVal;
+            if (tVal < 2/3) return pVal + (qVal - pVal) * (2/3 - tVal) * 6;
+            return pVal;
+        };
+
+        COLOR_LUT[v * 3] = Math.min(255, Math.max(0, Math.round(hue2rgb(p, q, hue + 1/3) * 255)));
+        COLOR_LUT[v * 3 + 1] = Math.min(255, Math.max(0, Math.round(hue2rgb(p, q, hue) * 255)));
+        COLOR_LUT[v * 3 + 2] = Math.min(255, Math.max(0, Math.round(hue2rgb(p, q, hue - 1/3) * 255)));
+    }
+})();
+
 let waterfallImageData = null;
 
 // Real-Time Waterfall Spectrogram Canvas Renderer (100% Zero-Alloc Silky Smooth 60 FPS)
@@ -171,20 +198,11 @@ function drawWaterfallLoop() {
             for (let y = 0; y < height; y++) {
                 const binIdx = Math.floor(((height - y) / height) * maxBin);
                 const intensity = freqData[binIdx] || 0; // 0 to 255
+                const lutIdx = intensity * 3;
 
-                let r = 0, g = 0, b = 0;
-                if (intensity < 64) {
-                    b = intensity * 4;
-                } else if (intensity < 128) {
-                    g = (intensity - 64) * 4;
-                    b = 255 - g;
-                } else if (intensity < 192) {
-                    r = (intensity - 128) * 4;
-                    g = 255;
-                } else {
-                    r = 255;
-                    g = 255 - (intensity - 192) * 4;
-                }
+                const r = COLOR_LUT[lutIdx];
+                const g = COLOR_LUT[lutIdx + 1];
+                const b = COLOR_LUT[lutIdx + 2];
 
                 // Write 2 pixels wide
                 for (let px = 0; px < 2; px++) {
@@ -224,10 +242,12 @@ async function startSystem() {
         audioCtx = getAudioContext();
         window.__globalMicSource = audioCtx.createMediaStreamSource(streamRef);
 
-        // Analyser Node for Live Spectrogram Waterfall
+        // Analyser Node for Live Spectrogram Waterfall (Razor-Sharp High Contrast 0 Smoothing)
         analyserNode = audioCtx.createAnalyser();
-        analyserNode.fftSize = 1024;
-        analyserNode.smoothingTimeConstant = 0.2;
+        analyserNode.fftSize = 2048;
+        analyserNode.smoothingTimeConstant = 0.0; // 0.0 smoothing for razor-sharp dots/dashes
+        analyserNode.minDecibels = -70; // -70 dB noise floor cutoff
+        analyserNode.maxDecibels = -25; // -25 dB ceiling for bright CW signals
         window.__globalMicSource.connect(analyserNode);
 
         if (!isWorkletRegistered) {
