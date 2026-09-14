@@ -120,13 +120,22 @@ function handleWorkerInferResult(aiResult) {
         if (currentFullText.includes("In attesa del segnale")) {
             liveBox.innerText = "";
         }
-        
-        // Aggiunge semplicemente le parole rilevate con uno spazio
-        liveBox.innerText += cleanAi + " ";
-        liveBox.scrollTop = liveBox.scrollHeight;
+
+        const words = cleanAi.split(/\s+/);
+        const currentText = liveBox.innerText.trim();
+        // Prendi l'ultima parola già stampata a schermo per fare il confronto
+        let lastWord = currentText ? currentText.split(/\s+/).pop() : "";
+
+        for (let w of words) {
+            // Stampa la parola solo se è valida e diversa dall'ultima appena stampata
+            if (w && w !== lastWord) {
+                liveBox.innerText += w + " ";
+                liveBox.scrollTop = liveBox.scrollHeight;
+                lastWord = w; // Aggiorna per il prossimo ciclo interno
+            }
+        }
     }
 }
-
 // Enumerate Connected Input Devices
 async function populateAudioDevicesList() {
     const select = document.getElementById('audioSourceSelect');
@@ -152,13 +161,16 @@ let waterfallImageData = null;
 let lastWaterfallTime = performance.now();
 let waterfallPixelAccumulator = 0;
 
-// RISCRITTURA: Visualizzatore Punti e Linee ad alto contrasto (Scorre da destra a sinistra)
+
+let cwEnvelope = 0; // NUOVA VARIABILE GLOBALE: Filtro anti-sfarfallio per il grafico
+
+// CORREZIONE GRAFICA: Linee solide con smussamento dell'inviluppo
 function drawWaterfallLoop() {
     if (!isRunning || !analyserNode) return;
 
     const canvas = document.getElementById('waterfallCanvas');
     if (canvas) {
-        const ctx = canvas.getContext('2d', { alpha: false });
+        const ctx = canvas.getContext('2d', { alpha: true });
         if (ctx) {
             const width = canvas.width;
             const height = canvas.height;
@@ -167,7 +179,7 @@ function drawWaterfallLoop() {
             const dt = (now - lastWaterfallTime) / 1000.0;
             lastWaterfallTime = now;
 
-            // Velocità di scorrimento (10 secondi visibili)
+            // Velocità: 10 secondi visibili
             const pxPerSec = width / 10.0; 
             waterfallPixelAccumulator += dt * pxPerSec;
 
@@ -180,14 +192,14 @@ function drawWaterfallLoop() {
                 const freqData = new Uint8Array(fftBins);
                 analyserNode.getByteFrequencyData(freqData);
 
-                // 1. Sposta l'immagine attuale del canvas verso sinistra
+                // 1. Sposta l'immagine a sinistra
                 ctx.drawImage(canvas, step, 0, width - step, height, 0, 0, width - step, height);
 
-                // 2. Disegna la nuova colonna nera a destra
+                // 2. Disegna lo sfondo nero per la nuova colonna
                 ctx.fillStyle = '#020617'; 
-                ctx.fillRect(width - step, 0, step, height);
+                ctx.fillRect(width - Math.ceil(step), 0, Math.ceil(step), height);
 
-                // 3. Cerca il picco massimo nell'area del tono CW (300-1100 Hz)
+                // 3. Trova l'intensità del segnale CW (300-1100 Hz)
                 const binWidth = (audioCtx.sampleRate / 2) / fftBins;
                 let minBin = Math.floor(300 / binWidth);
                 let maxBin = Math.floor(1100 / binWidth);
@@ -197,13 +209,20 @@ function drawWaterfallLoop() {
                     if (freqData[i] > signalPeak) signalPeak = freqData[i];
                 }
 
-                // 4. Se il segnale supera la soglia, disegna un blocco verde netto (Punto/Linea)
-                // Il valore 110 è la soglia (regolabile). Elimina il rumore di fondo.
-                if (signalPeak > 110) {
-                    ctx.fillStyle = '#4ade80'; // Verde neon
-                    const barHeight = 80; // Spessore della linea
+                // 4. Logica "Peak Hold" per stabilizzare la durata di punti e linee
+                if (signalPeak > 115) { // Soglia attivazione
+                    cwEnvelope = 1.0; 
+                } else {
+                    cwEnvelope *= 0.65; // Rilascio rapido per eliminare lo sfarfallio
+                }
+
+                // 5. Disegna se il segnale è stabile
+                if (cwEnvelope > 0.2) {
+                    ctx.fillStyle = `rgba(74, 222, 128, ${cwEnvelope})`; // Verde neon con opacità dinamica
+                    const barHeight = 80;
                     const yPos = (height - barHeight) / 2;
-                    ctx.fillRect(width - step, yPos, step, barHeight);
+                    // Math.ceil chiude i microscopici gap neri dovuti ai sub-pixel
+                    ctx.fillRect(width - Math.ceil(step), yPos, Math.ceil(step), barHeight);
                 }
             }
         }
