@@ -103,7 +103,7 @@
                 loadBtn.disabled = true;
                 
                 // Cerca il file onnx nella stessa cartella
-                session = await ort.InferenceSession.create('./morse_model.onnx', { executionProviders: ['wasm'] });
+                session = await ort.InferenceSession.create('./morse_model8.onnx', { executionProviders: ['wasm'] });
                 
                 log("✅ Modello caricato con successo!");
                 uploadBtn.disabled = false;
