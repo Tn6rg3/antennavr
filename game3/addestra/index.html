@@ -3,25 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Morse Live Decoder</title>
+    <title>Morse Live Decoder & Spectrogram</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script src="https://unpkg.com/meyda/dist/web/meyda.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #eee; max-width: 900px; margin: 0 auto; padding: 20px; }
-        .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        button, input { background: #3700b3; color: white; border: none; padding: 10px; cursor: pointer; border-radius: 4px; }
-        button:disabled { background: #555; cursor: not-allowed; }
-        canvas { width: 100%; height: 150px; background: #000; border-radius: 4px; margin-top: 10px; }
-        #liveText { font-size: 24px; color: #03dac6; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 50px; word-wrap: break-word; font-family: monospace;}
-        audio { width: 100%; margin-top: 10px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #eee; max-width: 900px; margin: 0 auto; padding: 20px; }
+        .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        h1 { color: #bb86fc; text-align: center; }
+        h3 { margin-top: 0; color: #03dac6; }
+        input[type="file"] { background: #3700b3; color: white; border: none; padding: 10px; cursor: pointer; border-radius: 4px; width: 100%; box-sizing: border-box; margin-top: 10px; }
+        input[type="file"]:disabled { background: #555; cursor: not-allowed; color: #888; }
+        audio { width: 100%; margin-top: 15px; outline: none; }
+        canvas { width: 100%; height: 150px; background: #000; border-radius: 4px; margin-top: 10px; border: 1px solid #333; }
+        #liveText { font-size: 24px; color: #03dac6; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 50px; word-wrap: break-word; font-family: monospace; margin-top: 10px; }
+        .log-box { background: #000; color: #0f0; font-family: monospace; padding: 10px; border-radius: 4px; height: 150px; overflow-y: auto; line-height: 1.4; font-size: 14px; }
     </style>
 </head>
 <body>
-    <h1>📻 Morse Live Decoder & Spectrogram</h1>
+    <h1>📻 Morse Live Decoder</h1>
 
     <div class="card">
-        <button id="loadBtn">1. Carica Modello ONNX</button>
-        <br><br>
+        <h3>1. Inizializzazione Modello</h3>
+        <p>Seleziona il tuo file <strong>.onnx</strong> (qualsiasi nome va bene).</p>
+        <input type="file" id="modelUpload" accept=".onnx" />
+    </div>
+
+    <div class="card">
+        <h3>2. Analisi Audio Live</h3>
+        <p>Carica il file audio lungo. La decodifica avverrà a blocchi mentre ascolti.</p>
         <input type="file" id="audioUpload" accept="audio/*" disabled />
         <audio id="player" controls></audio>
     </div>
@@ -33,16 +42,22 @@
 
     <div class="card">
         <h3>Testo Decodificato:</h3>
-        <div id="liveText"></div>
+        <div id="liveText">In attesa di avvio...</div>
+    </div>
+
+    <div class="card">
+        <h3>Log di Sistema</h3>
+        <div class="log-box" id="logBox">SISTEMA PRONTO. In attesa del file ONNX...<br></div>
     </div>
 
     <script>
         const VOCAB = ['<BLANK>', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'É', 'À', 'Ò', 'Ù', ',', '.', '/', "'", '?', '=', ' '];
+        
         let session = null;
         let audioCtx, analyser, processor;
         let isProcessing = false;
         
-        // Buffer per accumulare i campioni audio (4 secondi a 3200Hz = 12800 campioni)
+        // Accumulatore di campioni (4 secondi a 3200Hz)
         let sampleBuffer = [];
         const CHUNK_SIZE = 12800; 
 
@@ -50,66 +65,98 @@
         const liveText = document.getElementById('liveText');
         const canvas = document.getElementById('spectrogram');
         const ctx = canvas.getContext('2d');
+        const logBox = document.getElementById('logBox');
+        const audioUpload = document.getElementById('audioUpload');
+        const modelUpload = document.getElementById('modelUpload');
 
-        // Setup Canvas Spectrogram
+        // Setup Canvas per l'effetto scorrimento
         canvas.width = 800; canvas.height = 150;
         let tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
         let tempCtx = tempCanvas.getContext('2d');
 
-        document.getElementById('loadBtn').onclick = async function() {
-            this.innerText = "Caricamento...";
-            this.disabled = true;
-            try {
-                session = await ort.InferenceSession.create('./morse_model.onnx', { executionProviders: ['wasm'] });
-                this.innerText = "Modello Pronto!";
-                document.getElementById('audioUpload').disabled = false;
-            } catch(e) { alert("Errore ONNX: " + e.message); }
-        };
+        function log(msg) {
+            const time = new Date().toLocaleTimeString();
+            logBox.innerHTML += `[${time}] ${msg}<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
+            console.log(msg);
+        }
 
-        document.getElementById('audioUpload').onchange = function(e) {
+        // STEP 1: CARICA MODELLO ONNX
+        modelUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
+
+            try {
+                log(`Caricamento del modello '${file.name}' in corso...`);
+                modelUpload.disabled = true;
+                
+                const arrayBuffer = await file.arrayBuffer();
+                session = await ort.InferenceSession.create(arrayBuffer, { executionProviders: ['wasm'] });
+                
+                log(`✅ Modello caricato con successo!`);
+                audioUpload.disabled = false;
+                liveText.innerText = "";
+            } catch (err) {
+                log(`❌ ERRORE modello: ${err.message}`);
+                modelUpload.disabled = false;
+            }
+        });
+
+        // STEP 2: PREPARA L'AUDIO
+        audioUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            log(`File audio caricato: ${file.name}. Premi Play sul lettore per iniziare.`);
             player.src = URL.createObjectURL(file);
             liveText.innerText = "";
-        };
+            sampleBuffer = []; // Resetta il buffer
+        });
 
+        // Avvia l'elaborazione solo quando si preme Play
         player.onplay = () => {
-            if (!audioCtx) initAudioGraph();
+            if (!audioCtx) {
+                log("Avvio motore audio a 3200Hz...");
+                initAudioGraph();
+            }
         };
 
         function initAudioGraph() {
-            // Forza il contesto audio a 3200Hz in tempo reale
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 3200 });
-            const source = audioCtx.createMediaElementSource(player);
-            
-            analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256;
-            
-            // Crea un processore per catturare l'audio in tempo reale
-            processor = audioCtx.createScriptProcessor(4096, 1, 1);
-            
-            source.connect(analyser);
-            analyser.connect(processor);
-            processor.connect(audioCtx.destination);
-            source.connect(audioCtx.destination); // Per sentire l'audio
-
-            processor.onaudioprocess = function(e) {
-                if (player.paused) return;
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 3200 });
+                const source = audioCtx.createMediaElementSource(player);
                 
-                const inputData = e.inputBuffer.getChannelData(0);
-                // Aggiungiamo i nuovi campioni al nostro buffer
-                for(let i=0; i<inputData.length; i++) sampleBuffer.push(inputData[i]);
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256;
+                
+                processor = audioCtx.createScriptProcessor(4096, 1, 1);
+                
+                source.connect(analyser);
+                analyser.connect(processor);
+                processor.connect(audioCtx.destination);
+                source.connect(audioCtx.destination); 
 
-                // Quando abbiamo 4 secondi di audio, li mandiamo all'IA
-                if (sampleBuffer.length >= CHUNK_SIZE && !isProcessing) {
-                    const chunkToProcess = new Float32Array(sampleBuffer.slice(0, CHUNK_SIZE));
-                    sampleBuffer = sampleBuffer.slice(CHUNK_SIZE); // Mantieni il resto
-                    processChunk(chunkToProcess);
-                }
-            };
+                log(`Motore audio collegato. Frequenza operativa: ${audioCtx.sampleRate} Hz`);
 
-            drawSpectrogram();
+                processor.onaudioprocess = function(e) {
+                    if (player.paused) return;
+                    
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    for(let i=0; i < inputData.length; i++) sampleBuffer.push(inputData[i]);
+
+                    // Processa ogni volta che raggiunge i 4 secondi
+                    if (sampleBuffer.length >= CHUNK_SIZE && !isProcessing) {
+                        const chunkToProcess = new Float32Array(sampleBuffer.slice(0, CHUNK_SIZE));
+                        sampleBuffer = sampleBuffer.slice(CHUNK_SIZE);
+                        processChunk(chunkToProcess);
+                    }
+                };
+
+                drawSpectrogram();
+            } catch (err) {
+                log(`❌ ERRORE Audio API: ${err.message}`);
+            }
         }
 
         function drawSpectrogram() {
@@ -117,13 +164,11 @@
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 analyser.getByteFrequencyData(dataArray);
 
-                // Sposta l'immagine vecchia a sinistra
                 tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(tempCanvas, -2, 0); // Scorre di 2 pixel
+                ctx.drawImage(tempCanvas, -2, 0); 
 
-                // Disegna la nuova colonna di frequenze a destra
                 for (let i = 0; i < dataArray.length; i++) {
                     const value = dataArray[i];
                     ctx.fillStyle = `rgb(${value}, ${value/2}, ${value/4})`;
@@ -136,7 +181,7 @@
         async function processChunk(audioData) {
             isProcessing = true;
             try {
-                // 1. Spettrogramma Mel Math (Meyda)
+                // 1. Estrazione feature
                 Meyda.bufferSize = 128; Meyda.melBands = 64; Meyda.sampleRate = 3200;
                 let melSpec = [];
                 for (let i = 0; i < audioData.length - 128; i += 16) {
@@ -145,7 +190,7 @@
                     melSpec.push(m.map(v => 10 * Math.log10(Math.max(v, 1e-10))));
                 }
 
-                // 2. Transpose e Normalize
+                // 2. Normalizzazione
                 const numF = melSpec.length;
                 let trans = new Float32Array(64 * numF);
                 let sum = 0;
@@ -157,9 +202,13 @@
                 const std = Math.sqrt(vSum / trans.length) + 1e-5;
                 for(let i=0; i<trans.length; i++) trans[i] = (trans[i] - mean) / std;
 
-                // 3. ONNX Inference
+                // 3. Esecuzione Modello
                 const tensor = new ort.Tensor('float32', trans, [1, 1, 64, numF]);
-                const results = await session.run({ [session.inputNames[0]]: tensor });
+                const inputName = session.inputNames[0];
+                const feeds = {};
+                feeds[inputName] = tensor;
+                
+                const results = await session.run(feeds);
                 const data = results[session.outputNames[0]].data;
                 const dims = results[session.outputNames[0]].dims;
                 
@@ -174,10 +223,14 @@
                     prev = maxI;
                 }
 
-                // Aggiunge il testo decodificato a quello già presente
-                if (text) liveText.innerText += text + " ";
+                if (text) {
+                    liveText.innerText += text + " ";
+                    log(`Decodificato blocco: '${text}'`);
+                }
                 
-            } catch(e) { console.error(e); }
+            } catch(e) { 
+                log(`❌ ERRORE Elaborazione chunk: ${e.message}`); 
+            }
             isProcessing = false;
         }
     </script>
