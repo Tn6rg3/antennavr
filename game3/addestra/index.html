@@ -10,7 +10,7 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #eee; max-width: 1000px; margin: 0 auto; padding: 20px; }
         .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
         h1 { color: #bb86fc; text-align: center; font-size: 26px; }
-        h3 { margin-top: 0; color: #03dac6; }
+        h3 { margin-top: 0; color: #03dac6; display: flex; align-items: center; justify-content: space-between; }
         .dsp-title { color: #ff9800; }
         input[type="file"] { background: #3700b3; color: white; border: none; padding: 10px; cursor: pointer; border-radius: 4px; width: 100%; box-sizing: border-box; margin-top: 10px; }
         input[type="file"]:disabled { background: #555; cursor: not-allowed; color: #888; }
@@ -26,6 +26,9 @@
         .log-box { background: #000; color: #0f0; font-family: monospace; padding: 10px; border-radius: 4px; height: 100px; overflow-y: auto; line-height: 1.4; font-size: 13px; }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         
+        #led { width: 15px; height: 15px; border-radius: 50%; background-color: #555; display: inline-block; margin-left: 10px; box-shadow: 0 0 5px #000; transition: background-color 0.05s; }
+        .led-on { background-color: #ff0000 !important; box-shadow: 0 0 15px #ff0000 !important; }
+
         @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -52,9 +55,12 @@
     </div>
 
     <div class="card">
-        <h3 class="dsp-title">📡 Decodificatore Algoritmico (DSP Classico)</h3>
+        <h3 class="dsp-title">
+            <span>📡 Decodificatore Algoritmico (DSP)</span>
+            <span id="led"></span>
+        </h3>
         <div id="dspText" class="decoder-box"></div>
-        <p style="font-size: 12px; color: #aaa; margin-top:5px;">Funziona analizzando le durate dei toni (Punti e Linee). Gli asterischi (*) indicano rumore non decifrabile.</p>
+        <p style="font-size: 12px; color: #aaa; margin-top:5px;">Funziona analizzando le durate. Guarda il LED rosso: deve lampeggiare a tempo con il Morse!</p>
 
         <h3 style="margin-top: 20px;">🧠 Decodificatore Rete Neurale (IA ONNX)</h3>
         <div id="liveText" class="decoder-box"></div>
@@ -68,7 +74,6 @@
     <script>
         const VOCAB = ['<BLANK>', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'É', 'À', 'Ò', 'Ù', ',', '.', '/', "'", '?', '=', ' '];
         
-        // Dizionario standard per il DSP
         const MORSE_DICT = {
             ".-": "A", "-...": "B", "-.-.": "C", "-..": "D", ".": "E", "..-.": "F", "--.": "G", "....": "H", "..": "I", ".---": "J", "-.-": "K", ".-..": "L", "--": "M", "-.": "N", "---": "O", ".--.": "P", "--.-": "Q", ".-.": "R", "...": "S", "-": "T", "..-": "U", "...-": "V", ".--": "W", "-..-": "X", "-.--": "Y", "--..": "Z",
             ".----": "1", "..---": "2", "...--": "3", "....-": "4", ".....": "5", "-....": "6", "--...": "7", "---..": "8", "----.": "9", "-----": "0",
@@ -80,11 +85,11 @@
         let lastProcessedSample = 0;
         let isProcessing = false;
         
-        // --- VARIABILI STATO DSP ---
+        // --- VARIABILI DSP ---
         let dspIsOn = false;
         let dspFramesCount = 0;
         let dspSymbolBuffer = "";
-        let estimatedDotLen = 12; // Un punto a 20 WPM dura circa 12 frame (60ms)
+        let estimatedDotLen = 8; // Inizializzazione più bassa per adattarsi più in fretta
         let localPeakDB = -100.0;
         // ---------------------------
 
@@ -96,6 +101,7 @@
         const player = document.getElementById('player');
         const liveText = document.getElementById('liveText');
         const dspText = document.getElementById('dspText');
+        const led = document.getElementById('led');
         const canvas = document.getElementById('spectrogram');
         const ctx = canvas.getContext('2d');
         const logBox = document.getElementById('logBox');
@@ -137,7 +143,7 @@
         audioUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            log(`Estrazione audio a 3200Hz in corso...`);
+            log(`Estrazione audio a 3200Hz...`);
             audioUpload.disabled = true;
             try {
                 player.src = URL.createObjectURL(file);
@@ -170,12 +176,14 @@
         });
 
         setInterval(() => {
-            if (player.paused || !globalAudio3200) return;
+            if (player.paused || !globalAudio3200) {
+                led.classList.remove('led-on');
+                return;
+            }
             let currentSample = Math.floor(player.currentTime * 3200);
             if (Math.abs(currentSample - lastProcessedSample) > CHUNK_SIZE * 2) {
                 lastProcessedSample = currentSample; 
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                // Reset stato DSP se salti il tempo
                 dspSymbolBuffer = ""; dspIsOn = false; dspFramesCount = 0;
             }
             if (currentSample - lastProcessedSample >= CHUNK_SIZE && !isProcessing) {
@@ -185,14 +193,13 @@
             }
         }, 100); 
 
-        // FUNZIONE DECODIFICA DSP
         function decodeSymbolBuffer() {
             if (dspSymbolBuffer === "") return;
             let char = MORSE_DICT[dspSymbolBuffer];
             if (char) {
                 dspText.innerText += char;
             } else {
-                dspText.innerText += "*"; // Simbolo non riconosciuto
+                dspText.innerText += "*"; // Sconosciuto
             }
             dspSymbolBuffer = "";
         }
@@ -225,7 +232,8 @@
                     let m = Meyda.extract("melBands", frame);
                     if(!m) m = new Array(64).fill(0);
                     
-                    let frameMaxEnergy = 0;
+                    // FIX: L'energia massima del frame deve partire da un numero bassissimo, non da 0!
+                    let frameMaxEnergy = -Infinity; 
                     for (let b = 0; b < 64; b++) {
                         let db = 10 * Math.log10(Math.max(m[b], 1e-10));
                         if (db > globalPeakDB) globalPeakDB = db; 
@@ -234,38 +242,36 @@
                         if (db > frameMaxEnergy) frameMaxEnergy = db;
                     }
 
-                    // --- INIZIO LOGICA DSP CLASSICO IN TEMPO REALE ---
-                    // Tracker dell'inviluppo audio con decadimento per adattarsi al QSB (fading)
+                    // --- DSP LOGIC ---
                     if (frameMaxEnergy > localPeakDB) {
                         localPeakDB = frameMaxEnergy;
                     } else {
-                        localPeakDB -= 0.05; // Decadimento graduale
+                        localPeakDB -= 0.05; 
                     }
                     
-                    // Soglia dinamica: se l'energia è 15 decibel sotto il picco, è considerato silenzio
-                    let threshold = localPeakDB - 15.0; 
+                    let threshold = localPeakDB - 15.0; // 15 dB sotto il picco = silenzio
                     let isNowOn = (frameMaxEnergy > threshold);
                     
+                    // Gestione visiva LED
+                    if (isNowOn && !dspIsOn) led.classList.add('led-on');
+                    if (!isNowOn && dspIsOn) led.classList.remove('led-on');
+
                     if (isNowOn === dspIsOn) {
                         dspFramesCount++;
                     } else {
-                        // Cambiamento di stato (da Suono a Silenzio o viceversa)
-                        if (dspIsOn) {
-                            // Finito un Tono
-                            if (dspFramesCount > estimatedDotLen * 2.0) {
-                                dspSymbolBuffer += "-"; // È una linea
+                        if (dspIsOn) { // Fine tono
+                            if (dspFramesCount > estimatedDotLen * 2.5) {
+                                dspSymbolBuffer += "-";
                             } else {
-                                dspSymbolBuffer += "."; // È un punto
-                                // Il DSP si adatta alla velocità del telegrafista in tempo reale
-                                estimatedDotLen = (estimatedDotLen * 0.8) + (dspFramesCount * 0.2);
+                                dspSymbolBuffer += ".";
+                                estimatedDotLen = (estimatedDotLen * 0.7) + (dspFramesCount * 0.3); // Adattamento rapido
                             }
-                        } else {
-                            // Finito un Silenzio
+                        } else { // Fine silenzio
                             if (dspFramesCount > 0 && dspSymbolBuffer.length > 0) {
-                                if (dspFramesCount > estimatedDotLen * 2.0 && dspFramesCount <= estimatedDotLen * 5.0) {
-                                    decodeSymbolBuffer(); // Fine lettera
-                                } else if (dspFramesCount > estimatedDotLen * 5.0) {
-                                    decodeSymbolBuffer(); // Fine parola
+                                if (dspFramesCount > estimatedDotLen * 2.0 && dspFramesCount <= estimatedDotLen * 4.5) {
+                                    decodeSymbolBuffer(); 
+                                } else if (dspFramesCount > estimatedDotLen * 4.5) {
+                                    decodeSymbolBuffer(); 
                                     dspText.innerText += " ";
                                 }
                             }
@@ -273,16 +279,14 @@
                         dspIsOn = isNowOn;
                         dspFramesCount = 1;
                     }
-                    // --- FINE LOGICA DSP ---
                 }
 
-                // Se a fine blocco siamo in lungo silenzio, forza decodifica dell'ultimo carattere
                 if (!dspIsOn && dspFramesCount > estimatedDotLen * 2.0 && dspSymbolBuffer.length > 0) {
                     decodeSymbolBuffer();
                     dspFramesCount = 0;
                 }
 
-                // Normalizzazione AI
+                // AI Normalization
                 let sum = 0;
                 const topDB = 80.0;
                 for(let i=0; i<trans.length; i++) {
@@ -293,14 +297,14 @@
                 let vSum = 0;
                 for(let i=0; i<trans.length; i++) vSum += Math.pow(trans[i] - mean, 2);
                 let std = Math.sqrt(vSum / trans.length);
-                if (std < 15.0) std = 15.0; 
+                if (std < 10.0) std = 10.0; 
                 for(let i=0; i<trans.length; i++) {
                     trans[i] = (trans[i] - mean) / std;
                 }
 
                 updateWaterfall(trans, numFrames);
 
-                // INFERENZA ONNX
+                // AI Inference
                 const tensor = new ort.Tensor('float32', trans, [1, 1, 64, numFrames]);
                 const results = await session.run({ [session.inputNames[0]]: tensor });
                 const data = results[session.outputNames[0]].data;
