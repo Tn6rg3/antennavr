@@ -17,9 +17,9 @@
         audio { width: 100%; margin-top: 15px; outline: none; }
         
         .canvas-container { width: 100%; overflow: hidden; border: 1px solid #333; border-radius: 4px; background: #000; margin-top: 10px; }
-        canvas { width: 100%; height: 150px; image-rendering: pixelated; display: block; }
+        canvas { width: 100%; height: 180px; image-rendering: pixelated; display: block; }
         
-        .decoder-box { font-size: 24px; padding: 15px; border-radius: 4px; min-height: 60px; word-wrap: break-word; font-family: monospace; font-weight: bold; letter-spacing: 2px; line-height: 1.5; }
+        .decoder-box { font-size: 26px; padding: 15px; border-radius: 4px; min-height: 80px; word-wrap: break-word; font-family: monospace; font-weight: bold; letter-spacing: 2px; line-height: 1.5; }
         #liveText { color: #03dac6; background: #152b29; border: 1px solid #03dac6; }
         #dspText { color: #ff9800; background: #332005; border: 1px solid #ff9800; margin-top: 10px; }
         
@@ -56,13 +56,12 @@
 
     <div class="card">
         <h3 class="dsp-title">
-            <span>📡 Decodificatore Algoritmico (DSP)</span>
+            <span>📡 Decodificatore DSP Classico</span>
             <span id="led"></span>
         </h3>
         <div id="dspText" class="decoder-box"></div>
-        <p style="font-size: 12px; color: #aaa; margin-top:5px;">Funziona analizzando le durate. Guarda il LED rosso: deve lampeggiare a tempo con il Morse!</p>
 
-        <h3 style="margin-top: 20px;">🧠 Decodificatore Rete Neurale (IA ONNX)</h3>
+        <h3 style="margin-top: 20px;">🧠 Decodificatore Rete Neurale (IA)</h3>
         <div id="liveText" class="decoder-box"></div>
     </div>
 
@@ -85,16 +84,15 @@
         let lastProcessedSample = 0;
         let isProcessing = false;
         
-        // --- VARIABILI DSP ---
+        // DSP variables
         let dspIsOn = false;
         let dspFramesCount = 0;
         let dspSymbolBuffer = "";
-        let estimatedDotLen = 8; // Inizializzazione più bassa per adattarsi più in fretta
+        let estimatedDotLen = 6; 
         let localPeakDB = -100.0;
-        // ---------------------------
 
         let globalPeakDB = -100.0;
-        const CHUNK_SIZE = 11200; // 3.5 secondi
+        const CHUNK_SIZE = 11200; 
         const WATERFALL_WIDTH = 1500;
         const NUM_BANDS = 64;
 
@@ -156,7 +154,12 @@
                 
                 const bufferSource = offlineCtx.createBufferSource();
                 bufferSource.buffer = decodedAudio;
-                bufferSource.connect(offlineCtx.destination);
+                
+                // Mettiamo un leggerissimo filtro per aiutare il DSP senza distruggere i dati per l'IA
+                const gentleHP = offlineCtx.createBiquadFilter(); gentleHP.type = 'highpass'; gentleHP.frequency.value = 200;
+                bufferSource.connect(gentleHP);
+                gentleHP.connect(offlineCtx.destination);
+                
                 bufferSource.start(0);
                 
                 const resampledAudio = await offlineCtx.startRendering();
@@ -199,7 +202,7 @@
             if (char) {
                 dspText.innerText += char;
             } else {
-                dspText.innerText += "*"; // Sconosciuto
+                dspText.innerText += "*"; 
             }
             dspSymbolBuffer = "";
         }
@@ -232,45 +235,45 @@
                     let m = Meyda.extract("melBands", frame);
                     if(!m) m = new Array(64).fill(0);
                     
-                    // FIX: L'energia massima del frame deve partire da un numero bassissimo, non da 0!
                     let frameMaxEnergy = -Infinity; 
                     for (let b = 0; b < 64; b++) {
                         let db = 10 * Math.log10(Math.max(m[b], 1e-10));
                         if (db > globalPeakDB) globalPeakDB = db; 
                         trans[b * numFrames + f] = db; 
                         
-                        if (db > frameMaxEnergy) frameMaxEnergy = db;
+                        // Consideriamo solo le frequenze centrali (bande 10-50) per il volume del DSP
+                        if (b > 10 && b < 50 && db > frameMaxEnergy) frameMaxEnergy = db;
                     }
 
-                    // --- DSP LOGIC ---
+                    // --- DSP LOGIC FIXATO ---
                     if (frameMaxEnergy > localPeakDB) {
                         localPeakDB = frameMaxEnergy;
                     } else {
-                        localPeakDB -= 0.05; 
+                        localPeakDB -= 0.1; // Decadimento più veloce per seguire il fading
                     }
                     
-                    let threshold = localPeakDB - 15.0; // 15 dB sotto il picco = silenzio
+                    // SOGLIA MOLTO PIÙ DURA (-6 dB invece di -15 dB)
+                    // Il segnale deve essere fortissimo per essere considerato "ON"
+                    let threshold = localPeakDB - 6.0; 
                     let isNowOn = (frameMaxEnergy > threshold);
                     
-                    // Gestione visiva LED
                     if (isNowOn && !dspIsOn) led.classList.add('led-on');
                     if (!isNowOn && dspIsOn) led.classList.remove('led-on');
 
                     if (isNowOn === dspIsOn) {
                         dspFramesCount++;
                     } else {
-                        if (dspIsOn) { // Fine tono
-                            if (dspFramesCount > estimatedDotLen * 2.5) {
-                                dspSymbolBuffer += "-";
-                            } else {
+                        if (dspIsOn) { 
+                            if (dspFramesCount > estimatedDotLen * 2.2) dspSymbolBuffer += "-";
+                            else {
                                 dspSymbolBuffer += ".";
-                                estimatedDotLen = (estimatedDotLen * 0.7) + (dspFramesCount * 0.3); // Adattamento rapido
+                                estimatedDotLen = (estimatedDotLen * 0.8) + (dspFramesCount * 0.2); 
                             }
-                        } else { // Fine silenzio
+                        } else { 
                             if (dspFramesCount > 0 && dspSymbolBuffer.length > 0) {
-                                if (dspFramesCount > estimatedDotLen * 2.0 && dspFramesCount <= estimatedDotLen * 4.5) {
+                                if (dspFramesCount > estimatedDotLen * 2.0 && dspFramesCount <= estimatedDotLen * 5.0) {
                                     decodeSymbolBuffer(); 
-                                } else if (dspFramesCount > estimatedDotLen * 4.5) {
+                                } else if (dspFramesCount > estimatedDotLen * 5.0) {
                                     decodeSymbolBuffer(); 
                                     dspText.innerText += " ";
                                 }
@@ -286,7 +289,7 @@
                     dspFramesCount = 0;
                 }
 
-                // AI Normalization
+                // AI Normalization (Con blocco allucinazioni più forte)
                 let sum = 0;
                 const topDB = 80.0;
                 for(let i=0; i<trans.length; i++) {
@@ -297,7 +300,10 @@
                 let vSum = 0;
                 for(let i=0; i<trans.length; i++) vSum += Math.pow(trans[i] - mean, 2);
                 let std = Math.sqrt(vSum / trans.length);
-                if (std < 10.0) std = 10.0; 
+                
+                // FIX IA: Aumentato a 20.0 per tagliare i rumori di fondo durante il silenzio
+                if (std < 20.0) std = 20.0; 
+                
                 for(let i=0; i<trans.length; i++) {
                     trans[i] = (trans[i] - mean) / std;
                 }
@@ -344,7 +350,8 @@
             for (let t = 0; t < numFrames; t++) {
                 for (let m = 0; m < NUM_BANDS; m++) {
                     let val = transMatrix[m * numFrames + t];
-                    let intensity = Math.max(0, Math.min(255, (val + 1) * 85)); 
+                    // Modificato per aumentare il contrasto visivo e scurire il rumore
+                    let intensity = Math.max(0, Math.min(255, (val + 1.2) * 100)); 
                     const y = (NUM_BANDS - 1) - m; 
                     const index = (y * numFrames + t) * 4;
                     imgData.data[index + 0] = 0;          
