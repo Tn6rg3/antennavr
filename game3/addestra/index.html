@@ -48,7 +48,7 @@
     </div>
 
     <div class="card">
-        <h3>Spettrogramma a Scorrimento</h3>
+        <h3>Spettrogramma a Scorrimento (CW segnale in ROSSO)</h3>
         <div class="canvas-container">
             <canvas id="spectrogram"></canvas>
         </div>
@@ -84,15 +84,20 @@
         let lastProcessedSample = 0;
         let isProcessing = false;
         
-        // DSP variables - Accumulazione simboli Morse
+        // DSP variables - CORRETTE E ROBUSTE
         let dspIsOn = false;
         let dspFramesCount = 0;
         let dspSymbolBuffer = "";
-        let estimatedDotLen = 6;
-        let localPeakDB = -100.0;
+        let estimatedDotLen = 8; // Iniziale conservativo
         let dspAccumulatedText = "";
+        
+        // Tracking robustos per signal detection
+        let signalPeakDB = -80.0;
+        let signalRMSHistory = [];
 
         let globalPeakDB = -100.0;
+        let noiseDynamicFloor = -80.0;
+        
         const CHUNK_SIZE = 11200;
         const WATERFALL_WIDTH = 1500;
         const NUM_BANDS = 64;
@@ -155,7 +160,7 @@
                 
                 const gentleHP = offlineCtx.createBiquadFilter();
                 gentleHP.type = 'highpass';
-                gentleHP.frequency.value = 200;
+                gentleHP.frequency.value = 300; // Aumentato a 300Hz per escludere rumore basso
                 bufferSource.connect(gentleHP);
                 gentleHP.connect(offlineCtx.destination);
                 
@@ -170,7 +175,14 @@
                 dspAccumulatedText = "";
                 lastProcessedSample = 0;
                 globalPeakDB = -100.0;
+                noiseDynamicFloor = -80.0;
+                signalPeakDB = -80.0;
+                signalRMSHistory = [];
                 waterfallBuffer = [];
+                dspIsOn = false;
+                dspFramesCount = 0;
+                dspSymbolBuffer = "";
+                estimatedDotLen = 8;
                 ctx.fillStyle = "black";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             } catch (err) {
@@ -208,6 +220,9 @@
             if (char) {
                 dspAccumulatedText += char;
                 dspText.innerText = dspAccumulatedText;
+                log(`📡 DSP: "${dspSymbolBuffer}" → ${char}`);
+            } else {
+                log(`⚠️ DSP: "${dspSymbolBuffer}" non riconosciuto`);
             }
             dspSymbolBuffer = "";
         }
@@ -220,6 +235,7 @@
                 const numFrames = Math.floor((audioData.length - n_fft) / hopLength);
 
                 let trans = new Float32Array(64 * numFrames);
+                let frameRmsValues = [];
                 
                 Meyda.bufferSize = n_fft;
                 Meyda.melBands = 64;
@@ -230,13 +246,19 @@
                 let hannWindow = new Float32Array(64);
                 for(let j=0; j<64; j++) hannWindow[j] = 0.5 - 0.5 * Math.cos(2 * Math.PI * j / 63);
 
-                // Estrai mel-spectrogram
+                // ============ ESTRAI MEL-SPECTROGRAM ============
                 for (let f = 0; f < numFrames; f++) {
                     let offset = f * hopLength;
                     
                     for(let j=0; j<32; j++) frame[j] = 0;
                     for(let j=0; j<64; j++) frame[32 + j] = audioData[offset + 32 + j] * hannWindow[j];
                     for(let j=96; j<128; j++) frame[j] = 0;
+
+                    // Calcola RMS globale per DSP
+                    let rmsSum = 0;
+                    for(let j=0; j<128; j++) rmsSum += frame[j] * frame[j];
+                    let frameRms = Math.sqrt(rmsSum / 128);
+                    frameRmsValues.push(frameRms);
 
                     let m = Meyda.extract("melBands", frame);
                     if(!m) m = new Array(64).fill(0);
@@ -247,46 +269,53 @@
                         if (db > globalPeakDB) globalPeakDB = db; 
                         trans[b * numFrames + f] = db; 
                         
-                        // Consideriamo solo le frequenze centrali (bande 10-50) per il volume del DSP
-                        if (b > 10 && b < 50 && db > frameMaxEnergy) frameMaxEnergy = db;
+                        // Bande centrali (12-50) per CW detection (600-1600 Hz circa)
+                        if (b > 12 && b < 50 && db > frameMaxEnergy) frameMaxEnergy = db;
+                    }
+                    signalPeakDB = Math.max(signalPeakDB, frameMaxEnergy);
+
+                    // ============ LOGICA DSP ROBUSTA ============
+                    signalRMSHistory.push(frameRms);
+                    if(signalRMSHistory.length > 32) signalRMSHistory.shift();
+                    
+                    let meanRms = signalRMSHistory.reduce((a,b)=>a+b,0) / signalRMSHistory.length;
+                    let stdRms = Math.sqrt(signalRMSHistory.reduce((a,b)=>a+(b-meanRms)*(b-meanRms), 0) / signalRMSHistory.length);
+                    
+                    // Soglia adattiva: media + 1.5 sigma (robusto a rumore)
+                    let threshold = meanRms + stdRms * 1.5;
+                    let isNowOn = (frameRms > threshold && frameMaxEnergy > (signalPeakDB - 12));
+                    
+                    if (isNowOn && !dspIsOn) {
+                        led.classList.add('led-on');
+                    }
+                    if (!isNowOn && dspIsOn) {
+                        led.classList.remove('led-on');
                     }
 
-                    // --- LOGICA DSP MIGLIORATA ---
-                    if (frameMaxEnergy > localPeakDB) {
-                        localPeakDB = frameMaxEnergy;
-                    } else {
-                        localPeakDB -= 0.1;
-                    }
-                    
-                    let threshold = localPeakDB - 6.0; 
-                    let isNowOn = (frameMaxEnergy > threshold);
-                    
-                    if (isNowOn && !dspIsOn) led.classList.add('led-on');
-                    if (!isNowOn && dspIsOn) led.classList.remove('led-on');
-
-                    // Accumula la durata dello stato
+                    // State machine: accumula durate
                     if (isNowOn === dspIsOn) {
                         dspFramesCount++;
                     } else {
-                        // Transizione da ON a OFF o viceversa
-                        if (dspIsOn) {
-                            // Stiamo finendo un tono, decidiamo se è dit o dah
+                        if (dspIsOn && dspFramesCount >= 2) {
+                            // Fine del tono
                             if (dspFramesCount > estimatedDotLen * 2.2) {
                                 dspSymbolBuffer += "-";
                             } else {
                                 dspSymbolBuffer += ".";
-                                estimatedDotLen = (estimatedDotLen * 0.8) + (dspFramesCount * 0.2);
+                                estimatedDotLen = Math.max(3, (estimatedDotLen * 0.75) + (dspFramesCount * 0.25));
                             }
-                        } else {
-                            // Stiamo finendo uno spazio, decidiamo se è spazio tra simboli o parole
-                            if (dspFramesCount > 0 && dspSymbolBuffer.length > 0) {
-                                if (dspFramesCount > estimatedDotLen * 2.0 && dspFramesCount <= estimatedDotLen * 5.0) {
-                                    decodeSymbolBuffer();
-                                } else if (dspFramesCount > estimatedDotLen * 5.0) {
-                                    decodeSymbolBuffer();
+                        } else if (!dspIsOn && dspFramesCount >= 2 && dspSymbolBuffer.length > 0) {
+                            // Fine dello spazio
+                            if (dspFramesCount > estimatedDotLen * 3.5) {
+                                // Spazio tra parole
+                                decodeSymbolBuffer();
+                                if (dspAccumulatedText.length > 0) {
                                     dspAccumulatedText += " ";
                                     dspText.innerText = dspAccumulatedText;
                                 }
+                            } else if (dspFramesCount > estimatedDotLen * 1.2) {
+                                // Spazio tra simboli
+                                decodeSymbolBuffer();
                             }
                         }
                         dspIsOn = isNowOn;
@@ -294,12 +323,12 @@
                     }
                 }
 
-                // Finalize any remaining symbol
-                if (!dspIsOn && dspFramesCount > estimatedDotLen * 2.0 && dspSymbolBuffer.length > 0) {
+                // Finalizza simbolo rimasto
+                if (!dspIsOn && dspSymbolBuffer.length > 0 && dspFramesCount > estimatedDotLen * 1.2) {
                     decodeSymbolBuffer();
                 }
 
-                // Normalizzazione per IA (blocco allucinazioni)
+                // ============ NORMALIZZAZIONE IA ============
                 let sum = 0;
                 const topDB = 80.0;
                 for(let i=0; i<trans.length; i++) {
@@ -311,7 +340,7 @@
                 for(let i=0; i<trans.length; i++) vSum += Math.pow(trans[i] - mean, 2);
                 let std = Math.sqrt(vSum / trans.length);
                 
-                if (std < 20.0) std = 20.0;
+                if (std < 15.0) std = 15.0; // Min std per evitare overflow
                 
                 for(let i=0; i<trans.length; i++) {
                     trans[i] = (trans[i] - mean) / std;
@@ -319,7 +348,7 @@
 
                 updateWaterfall(trans, numFrames);
 
-                // AI Inference
+                // ============ AI INFERENCE ============
                 if (session) {
                     const tensor = new ort.Tensor('float32', trans, [1, 1, 64, numFrames]);
                     const results = await session.run({ [session.inputNames[0]]: tensor });
@@ -354,7 +383,7 @@
         }
 
         function updateWaterfall(transMatrix, numFrames) {
-            // Aggiungi le nuove colonne al buffer
+            // Aggiungi colonne al buffer
             for (let t = 0; t < numFrames; t++) {
                 let column = [];
                 for (let m = 0; m < 64; m++) {
@@ -363,12 +392,12 @@
                 waterfallBuffer.push(column);
             }
 
-            // Mantieni solo le ultime WATERFALL_WIDTH colonne
+            // Mantieni ultime WATERFALL_WIDTH colonne
             if (waterfallBuffer.length > WATERFALL_WIDTH) {
                 waterfallBuffer = waterfallBuffer.slice(waterfallBuffer.length - WATERFALL_WIDTH);
             }
 
-            // Disegna il waterfall
+            // Disegna waterfall con contrast MASSIMO
             const imgData = ctx.createImageData(WATERFALL_WIDTH, NUM_BANDS);
             
             for (let t = 0; t < WATERFALL_WIDTH; t++) {
@@ -379,12 +408,29 @@
                         val = waterfallBuffer[bufIdx][m];
                     }
                     
-                    let intensity = Math.max(0, Math.min(255, (val + 1.2) * 100));
+                    // CONTRAST MASSIMO: valori negativi → scuro, positivi → ROSSO INTENSO
+                    let red, green, blue;
+                    if (val < -0.5) {
+                        // Rumore basso: nero
+                        red = 0; green = 0; blue = 0;
+                    } else if (val < 0) {
+                        // Rumore medio: grigio scuro
+                        let grayVal = Math.floor((val + 0.5) * 50);
+                        red = grayVal; green = grayVal; blue = grayVal;
+                    } else if (val < 2) {
+                        // Segnale debole: giallo
+                        let intensity = Math.floor(val * 50);
+                        red = 200 + intensity; green = 180 + intensity; blue = 0;
+                    } else {
+                        // Segnale forte: ROSSO PURO
+                        red = 255; green = Math.floor(150 - val * 30); blue = 0;
+                    }
+                    
                     const y = (NUM_BANDS - 1) - m;
                     const index = (y * WATERFALL_WIDTH + t) * 4;
-                    imgData.data[index + 0] = 0;
-                    imgData.data[index + 1] = intensity;
-                    imgData.data[index + 2] = 0;
+                    imgData.data[index + 0] = red;
+                    imgData.data[index + 1] = green;
+                    imgData.data[index + 2] = blue;
                     imgData.data[index + 3] = 255;
                 }
             }
