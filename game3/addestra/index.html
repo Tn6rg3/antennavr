@@ -3,283 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Morse Code AI Decoder</title>
-    <!-- ONNX Runtime Web -->
+    <title>Morse Live Decoder</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <!-- Meyda.js per Feature Extraction Audio -->
     <script src="https://unpkg.com/meyda/dist/web/meyda.min.js"></script>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #121212;
-            color: #e0e0e0;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1 { color: #bb86fc; text-align: center; }
-        .card {
-            background-color: #1e1e1e;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            margin-bottom: 20px;
-        }
-        input[type="file"] {
-            background-color: #3700b3;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            margin-top: 10px;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        input[type="file"]:disabled { background-color: #555; cursor: not-allowed; color: #888; }
-        .log-box {
-            background-color: #000;
-            color: #0f0;
-            font-family: monospace;
-            padding: 10px;
-            border-radius: 4px;
-            height: 200px;
-            overflow-y: auto;
-            margin-top: 10px;
-            line-height: 1.4;
-        }
-        .result-box {
-            font-size: 24px;
-            font-weight: bold;
-            color: #03dac6;
-            text-align: center;
-            min-height: 40px;
-            margin-top: 20px;
-            word-wrap: break-word;
-            padding: 10px;
-            background: #2a2a2a;
-            border-radius: 4px;
-        }
-        .spinner { display: inline-block; animation: spin 1s linear infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
+        body { font-family: sans-serif; background: #121212; color: #eee; max-width: 900px; margin: 0 auto; padding: 20px; }
+        .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        button, input { background: #3700b3; color: white; border: none; padding: 10px; cursor: pointer; border-radius: 4px; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        canvas { width: 100%; height: 150px; background: #000; border-radius: 4px; margin-top: 10px; }
+        #liveText { font-size: 24px; color: #03dac6; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 50px; word-wrap: break-word; font-family: monospace;}
+        audio { width: 100%; margin-top: 10px; }
     </style>
 </head>
 <body>
-
-    <h1>📻 Decodificatore IA Morse</h1>
-
-    <div class="card">
-        <h3>1. Inizializzazione Modello</h3>
-        <p>Seleziona il tuo file <strong>.onnx</strong> dalla cartella per caricare l'IA.</p>
-        <input type="file" id="modelUpload" accept=".onnx" />
-    </div>
+    <h1>📻 Morse Live Decoder & Spectrogram</h1>
 
     <div class="card">
-        <h3>2. Analisi Audio</h3>
-        <p>Seleziona un file audio (WAV, MP3, M4A). Il processo avverrà localmente.</p>
+        <button id="loadBtn">1. Carica Modello ONNX</button>
+        <br><br>
         <input type="file" id="audioUpload" accept="audio/*" disabled />
-        <div class="result-box" id="resultText">In attesa del modello...</div>
+        <audio id="player" controls></audio>
     </div>
 
     <div class="card">
-        <h3>Terminale di Sistema</h3>
-        <div class="log-box" id="logBox">SISTEMA PRONTO. In attesa del file ONNX...<br></div>
+        <h3>Spettrogramma Live</h3>
+        <canvas id="spectrogram"></canvas>
+    </div>
+
+    <div class="card">
+        <h3>Testo Decodificato:</h3>
+        <div id="liveText"></div>
     </div>
 
     <script>
-        // Il vocabolario esatto usato dal tuo addestramento Python
         const VOCAB = ['<BLANK>', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'É', 'À', 'Ò', 'Ù', ',', '.', '/', "'", '?', '=', ' '];
-        
         let session = null;
+        let audioCtx, analyser, processor;
+        let isProcessing = false;
+        
+        // Buffer per accumulare i campioni audio (4 secondi a 3200Hz = 12800 campioni)
+        let sampleBuffer = [];
+        const CHUNK_SIZE = 12800; 
 
-        const logBox = document.getElementById('logBox');
-        const modelUpload = document.getElementById('modelUpload');
-        const audioUpload = document.getElementById('audioUpload');
-        const resultText = document.getElementById('resultText');
+        const player = document.getElementById('player');
+        const liveText = document.getElementById('liveText');
+        const canvas = document.getElementById('spectrogram');
+        const ctx = canvas.getContext('2d');
 
-        // Funzione per aggiornare il log in tempo reale e forzare il refresh della pagina
-        async function log(msg, isLoading = false) {
-            const time = new Date().toLocaleTimeString();
-            const spinHtml = isLoading ? '<span class="spinner">⏳</span> ' : '';
-            logBox.innerHTML += `[${time}] ${spinHtml}${msg}<br>`;
-            logBox.scrollTop = logBox.scrollHeight;
-            // Respira per far aggiornare l'interfaccia grafica
-            await new Promise(r => setTimeout(r, 20)); 
-            console.log(msg);
-        }
+        // Setup Canvas Spectrogram
+        canvas.width = 800; canvas.height = 150;
+        let tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
+        let tempCtx = tempCanvas.getContext('2d');
 
-        // STEP 1: CARICAMENTO MODELLO DINAMICO
-        modelUpload.addEventListener('change', async (event) => {
-            const file = event.target.files[0];
+        document.getElementById('loadBtn').onclick = async function() {
+            this.innerText = "Caricamento...";
+            this.disabled = true;
+            try {
+                session = await ort.InferenceSession.create('./morse_model.onnx', { executionProviders: ['wasm'] });
+                this.innerText = "Modello Pronto!";
+                document.getElementById('audioUpload').disabled = false;
+            } catch(e) { alert("Errore ONNX: " + e.message); }
+        };
+
+        document.getElementById('audioUpload').onchange = function(e) {
+            const file = e.target.files[0];
             if (!file) return;
+            player.src = URL.createObjectURL(file);
+            liveText.innerText = "";
+        };
 
-            try {
-                await log(`Lettura file modello '${file.name}'...`, true);
-                modelUpload.disabled = true; 
-                
-                const arrayBuffer = await file.arrayBuffer();
-                
-                await log("Inizializzazione sessione ONNX (potrebbe richiedere qualche secondo)...", true);
-                session = await ort.InferenceSession.create(arrayBuffer, { executionProviders: ['wasm'] });
-                
-                await log(`✅ Modello caricato! (Input atteso: ${session.inputNames[0]})`);
-                audioUpload.disabled = false;
-                resultText.innerText = "Modello pronto. Carica l'audio.";
-            } catch (err) {
-                await log(`❌ ERRORE caricamento modello: ${err.message}`);
-                console.error(err);
-                modelUpload.disabled = false;
-            }
-        });
+        player.onplay = () => {
+            if (!audioCtx) initAudioGraph();
+        };
 
-        // STEP 2: ELABORAZIONE AUDIO
-        audioUpload.addEventListener('change', async (event) => {
-            const file = event.target.files[0];
-            if (!file || !session) return;
-
-            resultText.innerText = "Elaborazione...";
-            audioUpload.disabled = true;
-
-            try {
-                await log(`=== AVVIO DECODIFICA: ${file.name} ===`);
-                
-                // 2.1 Lettura e decodifica browser nativa
-                await log("Decodifica traccia audio (Browser API)...", true);
-                const arrayBuffer = await file.arrayBuffer();
-                const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const decodedAudio = await tempCtx.decodeAudioData(arrayBuffer);
-                await log(`Traccia letta: durata ${decodedAudio.duration.toFixed(2)} sec, freq nativa ${decodedAudio.sampleRate} Hz`);
-                
-                // 2.2 Ricampionamento a 3200 Hz
-                await log("Conversione a 3200 Hz (OfflineAudioContext)...", true);
-                const targetSampleRate = 3200;
-                const totalSamples = Math.ceil(decodedAudio.duration * targetSampleRate);
-                const offlineCtx = new OfflineAudioContext(1, totalSamples, targetSampleRate);
-                
-                const bufferSource = offlineCtx.createBufferSource();
-                bufferSource.buffer = decodedAudio;
-                bufferSource.connect(offlineCtx.destination);
-                bufferSource.start(0);
-
-                const resampledAudio = await offlineCtx.startRendering();
-                const audioData = resampledAudio.getChannelData(0);
-                await log(`Conversione completata: generati ${audioData.length} campioni.`);
-                
-                // 2.3 Spettrogramma Mel
-                await log("Estrazione Spettrogramma Mel e Normalizzazione DB (Math heavy)...", true);
-                const melFrames = await extractMelSpectrogram(audioData);
-                await log(`Spettrogramma generato: Array[64 x ${melFrames.numFrames}]`);
-                
-                // 2.4 Esecuzione Rete Neurale
-                await log("Esecuzione Modello Neurale ONNX in corso...", true);
-                const predictedText = await runInference(melFrames);
-                
-                resultText.innerText = predictedText || "[Nessuna lettera decodificata]";
-                await log(`✅ DECODIFICA COMPLETATA: '${predictedText}'`);
-
-            } catch (err) {
-                console.error(err);
-                await log(`❌ ERRORE CRITICO: ${err.message}`);
-                resultText.innerText = "Errore CRITICO. Controlla il log.";
-            } finally {
-                audioUpload.disabled = false;
-                audioUpload.value = ''; // Resetta l'input per caricare di nuovo
-            }
-        });
-
-        // STEP 3: LOGICA MATEMATICA MEL (Asincrona per non bloccare UI)
-        async function extractMelSpectrogram(audioData) {
-            Meyda.bufferSize = 128;
-            Meyda.melBands = 64;
-            Meyda.sampleRate = 3200;
+        function initAudioGraph() {
+            // Forza il contesto audio a 3200Hz in tempo reale
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 3200 });
+            const source = audioCtx.createMediaElementSource(player);
             
-            const hopLength = 16;
-            let melSpectrogram = [];
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
             
-            for (let i = 0; i < audioData.length - Meyda.bufferSize; i += hopLength) {
-                const frame = audioData.slice(i, i + Meyda.bufferSize);
-                let mel = Meyda.extract("melBands", frame);
-                
-                if (!mel) mel = new Array(64).fill(0);
-                mel = mel.map(v => 10 * Math.log10(Math.max(v, 1e-10)));
-                melSpectrogram.push(mel);
+            // Crea un processore per catturare l'audio in tempo reale
+            processor = audioCtx.createScriptProcessor(4096, 1, 1);
+            
+            source.connect(analyser);
+            analyser.connect(processor);
+            processor.connect(audioCtx.destination);
+            source.connect(audioCtx.destination); // Per sentire l'audio
 
-                // Rilascia il thread ogni 1000 iterazioni per non freezare la pagina
-                if (melSpectrogram.length % 1000 === 0) {
-                    await new Promise(r => setTimeout(r, 5));
+            processor.onaudioprocess = function(e) {
+                if (player.paused) return;
+                
+                const inputData = e.inputBuffer.getChannelData(0);
+                // Aggiungiamo i nuovi campioni al nostro buffer
+                for(let i=0; i<inputData.length; i++) sampleBuffer.push(inputData[i]);
+
+                // Quando abbiamo 4 secondi di audio, li mandiamo all'IA
+                if (sampleBuffer.length >= CHUNK_SIZE && !isProcessing) {
+                    const chunkToProcess = new Float32Array(sampleBuffer.slice(0, CHUNK_SIZE));
+                    sampleBuffer = sampleBuffer.slice(CHUNK_SIZE); // Mantieni il resto
+                    processChunk(chunkToProcess);
                 }
-            }
+            };
 
-            const numFrames = melSpectrogram.length;
-            const numMels = 64;
-            let transposed = new Float32Array(numMels * numFrames);
-            
-            let sum = 0;
-            for (let t = 0; t < numFrames; t++) {
-                for (let m = 0; m < numMels; m++) {
-                    const val = melSpectrogram[t][m];
-                    transposed[m * numFrames + t] = val;
-                    sum += val;
-                }
-            }
-
-            const mean = sum / transposed.length;
-            let varianceSum = 0;
-            for (let i = 0; i < transposed.length; i++) {
-                varianceSum += Math.pow(transposed[i] - mean, 2);
-            }
-            const std = Math.sqrt(varianceSum / transposed.length) + 1e-5;
-
-            for (let i = 0; i < transposed.length; i++) {
-                transposed[i] = (transposed[i] - mean) / std;
-            }
-
-            return { data: transposed, numFrames: numFrames, numMels: numMels };
+            drawSpectrogram();
         }
 
-        // STEP 4: INFERENZA ONNX E DECODIFICA GREEDY
-        async function runInference(melData) {
-            const tensor = new ort.Tensor('float32', melData.data, [1, 1, melData.numMels, melData.numFrames]);
-            
-            const inputName = session.inputNames[0];
-            const feeds = {};
-            feeds[inputName] = tensor;
-            
-            const results = await session.run(feeds);
-            const outputName = session.outputNames[0];
-            const outputTensor = results[outputName];
-            
-            const data = outputTensor.data; 
-            const dims = outputTensor.dims; 
-            
-            await log(`Forma tensore di uscita: [${dims.join(', ')}]`);
+        function drawSpectrogram() {
+            if (!player.paused) {
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(dataArray);
 
-            const timeSteps = dims[0] === 1 ? dims[1] : dims[0];
-            const numClasses = dims[dims.length - 1];
-            
-            let decodedText = "";
-            let prevIdx = null;
+                // Sposta l'immagine vecchia a sinistra
+                tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(tempCanvas, -2, 0); // Scorre di 2 pixel
 
-            for (let t = 0; t < timeSteps; t++) {
-                let maxProb = -Infinity;
-                let maxIdx = 0;
-                
-                for (let c = 0; c < numClasses; c++) {
-                    const prob = data[t * numClasses + c];
-                    if (prob > maxProb) {
-                        maxProb = prob;
-                        maxIdx = c;
-                    }
+                // Disegna la nuova colonna di frequenze a destra
+                for (let i = 0; i < dataArray.length; i++) {
+                    const value = dataArray[i];
+                    ctx.fillStyle = `rgb(${value}, ${value/2}, ${value/4})`;
+                    ctx.fillRect(canvas.width - 2, canvas.height - i * (canvas.height / dataArray.length), 2, canvas.height / dataArray.length);
                 }
-
-                if (maxIdx !== 0 && maxIdx !== prevIdx) {
-                    decodedText += VOCAB[maxIdx] || '';
-                }
-                prevIdx = maxIdx;
             }
+            requestAnimationFrame(drawSpectrogram);
+        }
 
-            return decodedText;
+        async function processChunk(audioData) {
+            isProcessing = true;
+            try {
+                // 1. Spettrogramma Mel Math (Meyda)
+                Meyda.bufferSize = 128; Meyda.melBands = 64; Meyda.sampleRate = 3200;
+                let melSpec = [];
+                for (let i = 0; i < audioData.length - 128; i += 16) {
+                    let m = Meyda.extract("melBands", audioData.subarray(i, i + 128));
+                    if(!m) m = new Array(64).fill(0);
+                    melSpec.push(m.map(v => 10 * Math.log10(Math.max(v, 1e-10))));
+                }
+
+                // 2. Transpose e Normalize
+                const numF = melSpec.length;
+                let trans = new Float32Array(64 * numF);
+                let sum = 0;
+                for (let t=0; t<numF; t++) for(let m=0; m<64; m++) { trans[m*numF+t] = melSpec[t][m]; sum += melSpec[t][m]; }
+                
+                const mean = sum / trans.length;
+                let vSum = 0;
+                for(let i=0; i<trans.length; i++) vSum += Math.pow(trans[i] - mean, 2);
+                const std = Math.sqrt(vSum / trans.length) + 1e-5;
+                for(let i=0; i<trans.length; i++) trans[i] = (trans[i] - mean) / std;
+
+                // 3. ONNX Inference
+                const tensor = new ort.Tensor('float32', trans, [1, 1, 64, numF]);
+                const results = await session.run({ [session.inputNames[0]]: tensor });
+                const data = results[session.outputNames[0]].data;
+                const dims = results[session.outputNames[0]].dims;
+                
+                const tSteps = dims[0] === 1 ? dims[1] : dims[0];
+                const classes = dims[dims.length - 1];
+                
+                let text = ""; let prev = null;
+                for (let t=0; t<tSteps; t++) {
+                    let maxP = -Infinity, maxI = 0;
+                    for (let c=0; c<classes; c++) if(data[t*classes+c] > maxP) { maxP = data[t*classes+c]; maxI = c; }
+                    if (maxI !== 0 && maxI !== prev) text += VOCAB[maxI];
+                    prev = maxI;
+                }
+
+                // Aggiunge il testo decodificato a quello già presente
+                if (text) liveText.innerText += text + " ";
+                
+            } catch(e) { console.error(e); }
+            isProcessing = false;
         }
     </script>
 </body>
