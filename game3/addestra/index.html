@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Morse Pro Decoder</title>
+    <title>Morse Pro Decoder (Band-Pass Edition)</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script src="https://unpkg.com/meyda/dist/web/meyda.min.js"></script>
     <style>
@@ -14,14 +14,13 @@
         input[type="file"] { background: #3700b3; color: white; border: none; padding: 10px; cursor: pointer; border-radius: 4px; width: 100%; box-sizing: border-box; margin-top: 10px; }
         input[type="file"]:disabled { background: #555; cursor: not-allowed; color: #888; }
         audio { width: 100%; margin-top: 15px; outline: none; }
-        /* Il canvas ora mostrerà i 64 filtri Mel dell'IA */
         canvas { width: 100%; height: 200px; background: #000; border-radius: 4px; margin-top: 10px; border: 1px solid #333; image-rendering: pixelated; }
         #liveText { font-size: 24px; color: #03dac6; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 50px; word-wrap: break-word; font-family: monospace; margin-top: 10px; }
         .log-box { background: #000; color: #0f0; font-family: monospace; padding: 10px; border-radius: 4px; height: 150px; overflow-y: auto; line-height: 1.4; font-size: 14px; }
     </style>
 </head>
 <body>
-    <h1>📻 Morse Pro Decoder</h1>
+    <h1>📻 Morse Pro Decoder (Filtered)</h1>
 
     <div class="card">
         <h3>1. Inizializzazione Modello</h3>
@@ -30,15 +29,15 @@
     </div>
 
     <div class="card">
-        <h3>2. Analisi Sincronizzata</h3>
-        <p>Carica l'audio. Verrà convertito in background a 3200Hz. Premi play per decodificare.</p>
+        <h3>2. Analisi Filtrata Sincronizzata</h3>
+        <p>L'audio verrà ripulito dai disturbi tramite filtro Band-Pass (350Hz - 1200Hz).</p>
         <input type="file" id="audioUpload" accept="audio/*" disabled />
         <audio id="player" controls></audio>
     </div>
 
     <div class="card">
-        <h3>Visione Neurale (Mel Spectrogram 64-band)</h3>
-        <p style="font-size: 12px; color: #aaa; margin:0 0 5px 0;">Questo è esattamente ciò che il modello "vede" per decodificare.</p>
+        <h3>Visione Neurale (Mel Spectrogram 64-band Filtrato)</h3>
+        <p style="font-size: 12px; color: #aaa; margin:0 0 5px 0;">Il rumore di fondo è stato oscurato matematicamente. L'IA analizza i picchi luminosi.</p>
         <canvas id="spectrogram"></canvas>
     </div>
 
@@ -56,11 +55,10 @@
         const VOCAB = ['<BLANK>', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'É', 'À', 'Ò', 'Ù', ',', '.', '/', "'", '?', '=', ' '];
         
         let session = null;
-        let globalAudio3200 = null; // Conterrà l'intero file a 3200Hz
+        let globalAudio3200 = null; 
         let lastProcessedSample = 0;
         let isProcessing = false;
         
-        // Elabora blocchi da 3 secondi (9600 campioni)
         const CHUNK_SIZE = 9600; 
 
         const player = document.getElementById('player');
@@ -75,7 +73,6 @@
             const time = new Date().toLocaleTimeString();
             logBox.innerHTML += `[${time}] ${msg}<br>`;
             logBox.scrollTop = logBox.scrollHeight;
-            console.log(msg);
         }
 
         // STEP 1: CARICA MODELLO ONNX
@@ -96,19 +93,17 @@
             }
         });
 
-        // STEP 2: PRE-ELABORAZIONE AUDIO INVISIBILE
+        // STEP 2: PRE-ELABORAZIONE AUDIO CON FILTRO BAND-PASS
         audioUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
             
-            log(`Lettura file audio in corso... Attendere conversione.`);
+            log(`Lettura, filtraggio e conversione a 3200Hz in corso...`);
             audioUpload.disabled = true;
             
             try {
-                // Imposta il player visivo
                 player.src = URL.createObjectURL(file);
                 
-                // Estrae e converte offline in modo chirurgico a 3200Hz
                 const arrayBuffer = await file.arrayBuffer();
                 const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const decodedAudio = await tempCtx.decodeAudioData(arrayBuffer);
@@ -119,13 +114,27 @@
                 
                 const bufferSource = offlineCtx.createBufferSource();
                 bufferSource.buffer = decodedAudio;
-                bufferSource.connect(offlineCtx.destination);
+
+                // --- FILTRI DI PULIZIA AUDIO (Isola il Morse e rimuove i disturbi) ---
+                const highPass = offlineCtx.createBiquadFilter();
+                highPass.type = 'highpass';
+                highPass.frequency.value = 350; // Taglia il rombo atmosferico e la rete elettrica
+
+                const lowPass = offlineCtx.createBiquadFilter();
+                lowPass.type = 'lowpass';
+                lowPass.frequency.value = 1200; // Taglia il fruscio bianco e le armoniche eccessive
+
+                // Connette i nodi: Audio -> HighPass -> LowPass -> Uscita
+                bufferSource.connect(highPass);
+                highPass.connect(lowPass);
+                lowPass.connect(offlineCtx.destination);
+                
                 bufferSource.start(0);
 
                 const resampledAudio = await offlineCtx.startRendering();
-                globalAudio3200 = resampledAudio.getChannelData(0); // Vettore Float32 perfetto
+                globalAudio3200 = resampledAudio.getChannelData(0); 
                 
-                log(`✅ File convertito a 3200Hz. Puoi premere PLAY!`);
+                log(`✅ File ripulito e convertito. Premi PLAY per decodificare!`);
                 liveText.innerText = "";
                 lastProcessedSample = 0;
             } catch (err) {
@@ -135,42 +144,54 @@
             }
         });
 
-        // Loop di sincronizzazione: controlla a che punto è il player
+        // Loop di Sincronizzazione 
         setInterval(() => {
             if (player.paused || !globalAudio3200) return;
             
             let currentSample = Math.floor(player.currentTime * 3200);
             
-            // Se l'utente sposta la barra del tempo in avanti o indietro, riallineiamo il tracker
             if (Math.abs(currentSample - lastProcessedSample) > CHUNK_SIZE * 2) {
                 lastProcessedSample = currentSample;
             }
 
-            // Se sono passati CHUNK_SIZE campioni, processiamo il blocco
             if (currentSample - lastProcessedSample >= CHUNK_SIZE && !isProcessing) {
                 const chunk = globalAudio3200.slice(lastProcessedSample, lastProcessedSample + CHUNK_SIZE);
                 lastProcessedSample += CHUNK_SIZE;
                 processChunk(chunk);
             }
-        }, 300); // Controlla ogni 300ms
+        }, 100); 
 
-        // La funzione principale che fa il Mel, disegna e decodifica
         async function processChunk(audioData) {
             isProcessing = true;
             try {
-                // 1. Math Mel (Meyda)
                 Meyda.bufferSize = 128; Meyda.melBands = 64; Meyda.sampleRate = 3200;
                 let melSpec = [];
+                let globalMaxDB = -Infinity;
+
                 for (let i = 0; i < audioData.length - 128; i += 16) {
                     let m = Meyda.extract("melBands", audioData.subarray(i, i + 128));
                     if(!m) m = new Array(64).fill(0);
-                    melSpec.push(m.map(v => 10 * Math.log10(Math.max(v, 1e-10))));
+                    
+                    let mDB = m.map(v => {
+                        let db = 10 * Math.log10(Math.max(v, 1e-10));
+                        if (db > globalMaxDB) globalMaxDB = db;
+                        return db;
+                    });
+                    
+                    melSpec.push(mDB);
+
+                    if (melSpec.length % 50 === 0) await new Promise(r => setTimeout(r, 1));
                 }
 
-                // Disegna il Mel Spectrogram visivo (Esattamente cosa vede la rete)
-                drawNeuralVision(melSpec);
+                const topDB = 80.0;
+                for (let t = 0; t < melSpec.length; t++) {
+                    for (let m = 0; m < 64; m++) {
+                        melSpec[t][m] = Math.max(melSpec[t][m], globalMaxDB - topDB);
+                    }
+                }
 
-                // 2. Transpose e Normalize
+                drawNeuralVision(melSpec, globalMaxDB, topDB);
+
                 const numF = melSpec.length;
                 let trans = new Float32Array(64 * numF);
                 let sum = 0;
@@ -182,7 +203,6 @@
                 const std = Math.sqrt(vSum / trans.length) + 1e-5;
                 for(let i=0; i<trans.length; i++) trans[i] = (trans[i] - mean) / std;
 
-                // 3. ONNX Inference
                 const tensor = new ort.Tensor('float32', trans, [1, 1, 64, numF]);
                 const inputName = session.inputNames[0];
                 const feeds = {};
@@ -213,34 +233,29 @@
             isProcessing = false;
         }
 
-        // Disegna lo Spettrogramma usando i dati Mel 
-        function drawNeuralVision(melSpec) {
+        function drawNeuralVision(melSpec, maxDB, rangeDB) {
             const timeFrames = melSpec.length;
             const numBands = 64;
             
-            // Impostiamo la larghezza del canvas per ospitare i frame estratti
             canvas.width = timeFrames;
             canvas.height = numBands;
-            
             const imgData = ctx.createImageData(timeFrames, numBands);
             
             for (let t = 0; t < timeFrames; t++) {
                 for (let m = 0; m < numBands; m++) {
-                    // I valori in dB sono negativi. Scaliamo per ottenere un colore (0-255)
                     let val = melSpec[t][m];
-                    // Normalizzazione visiva per il canvas
-                    let intensity = Math.max(0, Math.min(255, (val + 60) * 4)); 
                     
-                    // Inverte la Y (le basse frequenze in basso)
+                    let normalized = (val - (maxDB - rangeDB)) / rangeDB;
+                    let intensity = Math.pow(normalized, 3) * 255; 
+                    
                     const y = (numBands - 1) - m; 
                     const x = t;
                     const index = (y * timeFrames + x) * 4;
                     
-                    // Effetto "Matrix" verde
-                    imgData.data[index + 0] = 0;          // R
-                    imgData.data[index + 1] = intensity;  // G
-                    imgData.data[index + 2] = 0;          // B
-                    imgData.data[index + 3] = 255;        // Alpha
+                    imgData.data[index + 0] = 0;          
+                    imgData.data[index + 1] = intensity;  
+                    imgData.data[index + 2] = 0;          
+                    imgData.data[index + 3] = 255;        
                 }
             }
             ctx.putImageData(imgData, 0, 0);
