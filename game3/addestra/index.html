@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Morse SDR Decoder</title>
+    <title>Morse: AI vs DSP</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script src="https://unpkg.com/meyda/dist/web/meyda.min.js"></script>
     <style>
@@ -11,42 +11,53 @@
         .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
         h1 { color: #bb86fc; text-align: center; font-size: 26px; }
         h3 { margin-top: 0; color: #03dac6; }
+        .dsp-title { color: #ff9800; }
         input[type="file"] { background: #3700b3; color: white; border: none; padding: 10px; cursor: pointer; border-radius: 4px; width: 100%; box-sizing: border-box; margin-top: 10px; }
         input[type="file"]:disabled { background: #555; cursor: not-allowed; color: #888; }
         audio { width: 100%; margin-top: 15px; outline: none; }
         
-        /* Waterfall Canvas ad alta densità */
         .canvas-container { width: 100%; overflow: hidden; border: 1px solid #333; border-radius: 4px; background: #000; margin-top: 10px; }
-        canvas { width: 100%; height: 200px; image-rendering: pixelated; display: block; }
+        canvas { width: 100%; height: 150px; image-rendering: pixelated; display: block; }
         
-        #liveText { font-size: 26px; color: #03dac6; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 80px; word-wrap: break-word; font-family: monospace; margin-top: 10px; font-weight: bold; letter-spacing: 1px; line-height: 1.5; }
+        .decoder-box { font-size: 24px; padding: 15px; border-radius: 4px; min-height: 60px; word-wrap: break-word; font-family: monospace; font-weight: bold; letter-spacing: 2px; line-height: 1.5; }
+        #liveText { color: #03dac6; background: #152b29; border: 1px solid #03dac6; }
+        #dspText { color: #ff9800; background: #332005; border: 1px solid #ff9800; margin-top: 10px; }
+        
         .log-box { background: #000; color: #0f0; font-family: monospace; padding: 10px; border-radius: 4px; height: 100px; overflow-y: auto; line-height: 1.4; font-size: 13px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        
+        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
-    <h1>📻 Morse SDR Decoder (Real-Time Waterfall)</h1>
+    <h1>📻 Morse Code: AI vs DSP</h1>
 
-    <div class="card">
-        <h3>1. Inizializza IA</h3>
-        <input type="file" id="modelUpload" accept=".onnx" />
+    <div class="grid-2">
+        <div class="card">
+            <h3>1. Inizializza IA (ONNX)</h3>
+            <input type="file" id="modelUpload" accept=".onnx" />
+        </div>
+        <div class="card">
+            <h3>2. Carica Audio</h3>
+            <input type="file" id="audioUpload" accept="audio/*" disabled />
+            <audio id="player" controls></audio>
+        </div>
     </div>
 
     <div class="card">
-        <h3>2. Carica Audio</h3>
-        <input type="file" id="audioUpload" accept="audio/*" disabled />
-        <audio id="player" controls></audio>
-    </div>
-
-    <div class="card">
-        <h3>Spettrogramma a Scorrimento (Zoom Ridotto - 7.5 secondi di contesto)</h3>
+        <h3>Spettrogramma a Scorrimento</h3>
         <div class="canvas-container">
             <canvas id="spectrogram"></canvas>
         </div>
     </div>
 
     <div class="card">
-        <h3>Testo Decodificato</h3>
-        <div id="liveText"></div>
+        <h3 class="dsp-title">📡 Decodificatore Algoritmico (DSP Classico)</h3>
+        <div id="dspText" class="decoder-box"></div>
+        <p style="font-size: 12px; color: #aaa; margin-top:5px;">Funziona analizzando le durate dei toni (Punti e Linee). Gli asterischi (*) indicano rumore non decifrabile.</p>
+
+        <h3 style="margin-top: 20px;">🧠 Decodificatore Rete Neurale (IA ONNX)</h3>
+        <div id="liveText" class="decoder-box"></div>
     </div>
 
     <div class="card">
@@ -57,36 +68,45 @@
     <script>
         const VOCAB = ['<BLANK>', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'É', 'À', 'Ò', 'Ù', ',', '.', '/', "'", '?', '=', ' '];
         
+        // Dizionario standard per il DSP
+        const MORSE_DICT = {
+            ".-": "A", "-...": "B", "-.-.": "C", "-..": "D", ".": "E", "..-.": "F", "--.": "G", "....": "H", "..": "I", ".---": "J", "-.-": "K", ".-..": "L", "--": "M", "-.": "N", "---": "O", ".--.": "P", "--.-": "Q", ".-.": "R", "...": "S", "-": "T", "..-": "U", "...-": "V", ".--": "W", "-..-": "X", "-.--": "Y", "--..": "Z",
+            ".----": "1", "..---": "2", "...--": "3", "....-": "4", ".....": "5", "-....": "6", "--...": "7", "---..": "8", "----.": "9", "-----": "0",
+            "--..--": ",", ".-.-.-": ".", "..--..": "?", "-..-.": "/", "-....-": "-", ".----.": "'"
+        };
+
         let session = null;
         let globalAudio3200 = null; 
         let lastProcessedSample = 0;
         let isProcessing = false;
         
-        // Memoria per il rumore di fondo (evita che il silenzio crei caratteri a caso)
-        let globalPeakDB = -100.0;
-        
-        // Chunk di 3.5 secondi (11200 campioni). Abbastanza lungo per decifrare parole intere.
-        const CHUNK_SIZE = 11200; 
+        // --- VARIABILI STATO DSP ---
+        let dspIsOn = false;
+        let dspFramesCount = 0;
+        let dspSymbolBuffer = "";
+        let estimatedDotLen = 12; // Un punto a 20 WPM dura circa 12 frame (60ms)
+        let localPeakDB = -100.0;
+        // ---------------------------
 
-        // Dimensione fissa del Waterfall (1500 frame = ~7.5 secondi di scorrimento visivo)
+        let globalPeakDB = -100.0;
+        const CHUNK_SIZE = 11200; // 3.5 secondi
         const WATERFALL_WIDTH = 1500;
         const NUM_BANDS = 64;
 
         const player = document.getElementById('player');
         const liveText = document.getElementById('liveText');
+        const dspText = document.getElementById('dspText');
         const canvas = document.getElementById('spectrogram');
         const ctx = canvas.getContext('2d');
         const logBox = document.getElementById('logBox');
         const audioUpload = document.getElementById('audioUpload');
         const modelUpload = document.getElementById('modelUpload');
 
-        // Inizializza il canvas
         canvas.width = WATERFALL_WIDTH;
         canvas.height = NUM_BANDS;
         ctx.fillStyle = "black";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Un canvas temporaneo fuori schermo per far scorrere l'immagine
         let offscreenCanvas = document.createElement('canvas');
         offscreenCanvas.width = WATERFALL_WIDTH;
         offscreenCanvas.height = NUM_BANDS;
@@ -98,7 +118,6 @@
             logBox.scrollTop = logBox.scrollHeight;
         }
 
-        // CARICA ONNX
         modelUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -115,39 +134,33 @@
             }
         });
 
-        // RESAMPLING
         audioUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            
             log(`Estrazione audio a 3200Hz in corso...`);
             audioUpload.disabled = true;
-            
             try {
                 player.src = URL.createObjectURL(file);
-                
                 const arrayBuffer = await file.arrayBuffer();
                 const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const decodedAudio = await tempCtx.decodeAudioData(arrayBuffer);
-                
                 const targetSampleRate = 3200;
                 const totalSamples = Math.ceil(decodedAudio.duration * targetSampleRate);
                 const offlineCtx = new OfflineAudioContext(1, totalSamples, targetSampleRate);
                 
                 const bufferSource = offlineCtx.createBufferSource();
                 bufferSource.buffer = decodedAudio;
-                
                 bufferSource.connect(offlineCtx.destination);
                 bufferSource.start(0);
                 
                 const resampledAudio = await offlineCtx.startRendering();
                 globalAudio3200 = resampledAudio.getChannelData(0); 
                 
-                log(`✅ Pronti! Premi PLAY.`);
+                log(`✅ Audio pronto. Premi PLAY.`);
                 liveText.innerText = "";
+                dspText.innerText = "";
                 lastProcessedSample = 0;
                 globalPeakDB = -100.0;
-                ctx.fillStyle = "black";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             } catch (err) {
                 log(`❌ ERRORE: ${err.message}`);
@@ -156,17 +169,15 @@
             }
         });
 
-        // IL MOTORE IN TEMPO REALE (Scatta ogni 100ms)
         setInterval(() => {
             if (player.paused || !globalAudio3200) return;
-            
             let currentSample = Math.floor(player.currentTime * 3200);
-            
             if (Math.abs(currentSample - lastProcessedSample) > CHUNK_SIZE * 2) {
                 lastProcessedSample = currentSample; 
-                ctx.fillRect(0, 0, canvas.width, canvas.height); // Pulisce il waterfall se fai un salto
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                // Reset stato DSP se salti il tempo
+                dspSymbolBuffer = ""; dspIsOn = false; dspFramesCount = 0;
             }
-
             if (currentSample - lastProcessedSample >= CHUNK_SIZE && !isProcessing) {
                 const chunk = globalAudio3200.slice(lastProcessedSample, lastProcessedSample + CHUNK_SIZE);
                 lastProcessedSample += CHUNK_SIZE;
@@ -174,13 +185,23 @@
             }
         }, 100); 
 
-        // ELABORAZIONE MATEMATICA SUPER-VELOCE
+        // FUNZIONE DECODIFICA DSP
+        function decodeSymbolBuffer() {
+            if (dspSymbolBuffer === "") return;
+            let char = MORSE_DICT[dspSymbolBuffer];
+            if (char) {
+                dspText.innerText += char;
+            } else {
+                dspText.innerText += "*"; // Simbolo non riconosciuto
+            }
+            dspSymbolBuffer = "";
+        }
+
         async function processChunk(audioData) {
             isProcessing = true;
             try {
                 const hopLength = 16;
                 const n_fft = 128;
-                // Calcola quanti pixel/frame saranno generati
                 const numFrames = Math.floor((audioData.length - n_fft) / hopLength);
 
                 let trans = new Float32Array(64 * numFrames);
@@ -194,7 +215,6 @@
                 let hannWindow = new Float32Array(64);
                 for(let j=0; j<64; j++) hannWindow[j] = 0.5 - 0.5 * Math.cos(2 * Math.PI * j / 63);
 
-                // ZERO LAG: Nessun await nel ciclo, calcola tutto istantaneamente!
                 for (let f = 0; f < numFrames; f++) {
                     let offset = f * hopLength;
                     
@@ -205,34 +225,79 @@
                     let m = Meyda.extract("melBands", frame);
                     if(!m) m = new Array(64).fill(0);
                     
+                    let frameMaxEnergy = 0;
                     for (let b = 0; b < 64; b++) {
                         let db = 10 * Math.log10(Math.max(m[b], 1e-10));
-                        if (db > globalPeakDB) globalPeakDB = db; // Aggiorna il tracker del volume
+                        if (db > globalPeakDB) globalPeakDB = db; 
                         trans[b * numFrames + f] = db; 
+                        
+                        if (db > frameMaxEnergy) frameMaxEnergy = db;
                     }
+
+                    // --- INIZIO LOGICA DSP CLASSICO IN TEMPO REALE ---
+                    // Tracker dell'inviluppo audio con decadimento per adattarsi al QSB (fading)
+                    if (frameMaxEnergy > localPeakDB) {
+                        localPeakDB = frameMaxEnergy;
+                    } else {
+                        localPeakDB -= 0.05; // Decadimento graduale
+                    }
+                    
+                    // Soglia dinamica: se l'energia è 15 decibel sotto il picco, è considerato silenzio
+                    let threshold = localPeakDB - 15.0; 
+                    let isNowOn = (frameMaxEnergy > threshold);
+                    
+                    if (isNowOn === dspIsOn) {
+                        dspFramesCount++;
+                    } else {
+                        // Cambiamento di stato (da Suono a Silenzio o viceversa)
+                        if (dspIsOn) {
+                            // Finito un Tono
+                            if (dspFramesCount > estimatedDotLen * 2.0) {
+                                dspSymbolBuffer += "-"; // È una linea
+                            } else {
+                                dspSymbolBuffer += "."; // È un punto
+                                // Il DSP si adatta alla velocità del telegrafista in tempo reale
+                                estimatedDotLen = (estimatedDotLen * 0.8) + (dspFramesCount * 0.2);
+                            }
+                        } else {
+                            // Finito un Silenzio
+                            if (dspFramesCount > 0 && dspSymbolBuffer.length > 0) {
+                                if (dspFramesCount > estimatedDotLen * 2.0 && dspFramesCount <= estimatedDotLen * 5.0) {
+                                    decodeSymbolBuffer(); // Fine lettera
+                                } else if (dspFramesCount > estimatedDotLen * 5.0) {
+                                    decodeSymbolBuffer(); // Fine parola
+                                    dspText.innerText += " ";
+                                }
+                            }
+                        }
+                        dspIsOn = isNowOn;
+                        dspFramesCount = 1;
+                    }
+                    // --- FINE LOGICA DSP ---
                 }
 
-                // Normalizzazione con blocco anti-allucinazioni
+                // Se a fine blocco siamo in lungo silenzio, forza decodifica dell'ultimo carattere
+                if (!dspIsOn && dspFramesCount > estimatedDotLen * 2.0 && dspSymbolBuffer.length > 0) {
+                    decodeSymbolBuffer();
+                    dspFramesCount = 0;
+                }
+
+                // Normalizzazione AI
                 let sum = 0;
                 const topDB = 80.0;
-                
                 for(let i=0; i<trans.length; i++) {
                     trans[i] = Math.max(trans[i], globalPeakDB - topDB);
                     sum += trans[i];
                 }
-
                 let mean = sum / trans.length;
                 let vSum = 0;
                 for(let i=0; i<trans.length; i++) vSum += Math.pow(trans[i] - mean, 2);
-                
                 let std = Math.sqrt(vSum / trans.length);
-                if (std < 15.0) std = 15.0; // Impedisce di inventare lettere nel silenzio!
-
+                if (std < 15.0) std = 15.0; 
                 for(let i=0; i<trans.length; i++) {
                     trans[i] = (trans[i] - mean) / std;
                 }
 
-                // AGGIORNA IL WATERFALL
                 updateWaterfall(trans, numFrames);
 
                 // INFERENZA ONNX
@@ -256,7 +321,6 @@
                     if (maxI !== 0 && maxI !== prev) text += VOCAB[maxI];
                     prev = maxI;
                 }
-
                 if (text.trim() !== "") {
                     liveText.innerText += text + " ";
                 }
@@ -267,38 +331,24 @@
             isProcessing = false;
         }
 
-        // FUNZIONE WATERFALL: Sposta l'immagine a sinistra e aggiunge i nuovi dati a destra
         function updateWaterfall(transMatrix, numFrames) {
-            // Salva lo stato attuale del canvas visibile sul canvas offscreen
             offscreenCtx.drawImage(canvas, 0, 0);
-            
-            // Pulisce il canvas visibile
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Ridisegna l'immagine vecchia spostata a sinistra di "numFrames" pixel
             ctx.drawImage(offscreenCanvas, -numFrames, 0);
-
-            // Crea l'immagine per il nuovo blocco di dati
             const imgData = ctx.createImageData(numFrames, NUM_BANDS);
             
             for (let t = 0; t < numFrames; t++) {
                 for (let m = 0; m < NUM_BANDS; m++) {
                     let val = transMatrix[m * numFrames + t];
-                    
-                    // Colore Matrix Green (Scurisce il rumore, esalta i segnali forti)
                     let intensity = Math.max(0, Math.min(255, (val + 1) * 85)); 
-                    
                     const y = (NUM_BANDS - 1) - m; 
                     const index = (y * numFrames + t) * 4;
-                    
                     imgData.data[index + 0] = 0;          
                     imgData.data[index + 1] = intensity;  
                     imgData.data[index + 2] = 0;          
                     imgData.data[index + 3] = 255;        
                 }
             }
-            
-            // Disegna il nuovo blocco attaccato sul lato destro del canvas
             ctx.putImageData(imgData, WATERFALL_WIDTH - numFrames, 0);
         }
     </script>
