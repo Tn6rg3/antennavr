@@ -29,6 +29,13 @@
         #led { width: 15px; height: 15px; border-radius: 50%; background-color: #555; display: inline-block; margin-left: 10px; box-shadow: 0 0 5px #000; transition: background-color 0.05s; }
         .led-on { background-color: #ff0000 !important; box-shadow: 0 0 15px #ff0000 !important; }
 
+        .control-panel { background: #252525; padding: 15px; border-radius: 6px; margin-top: 10px; border-left: 4px solid #03dac6; }
+        .control-row { display: flex; align-items: center; gap: 15px; margin-bottom: 12px; }
+        .control-row:last-child { margin-bottom: 0; }
+        .control-label { min-width: 180px; font-size: 14px; color: #aaa; }
+        input[type="range"] { flex: 1; cursor: pointer; }
+        .control-value { min-width: 50px; text-align: right; font-family: monospace; color: #03dac6; font-weight: bold; }
+
         @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -51,6 +58,24 @@
         <h3>Spettrogramma a Scorrimento (CW segnale in ROSSO)</h3>
         <div class="canvas-container">
             <canvas id="spectrogram"></canvas>
+        </div>
+        
+        <div class="control-panel">
+            <div class="control-row">
+                <label class="control-label">Contrasto Spettro:</label>
+                <input type="range" id="contrastSlider" min="0.5" max="3" step="0.1" value="1.5" />
+                <span class="control-value" id="contrastValue">1.5x</span>
+            </div>
+            <div class="control-row">
+                <label class="control-label">Soglia DSP (σ):</label>
+                <input type="range" id="thresholdSlider" min="0.5" max="3" step="0.1" value="1.5" />
+                <span class="control-value" id="thresholdValue">1.5</span>
+            </div>
+            <div class="control-row">
+                <label class="control-label">Range Frequenze:</label>
+                <input type="range" id="freqBandSlider" min="5" max="20" step="1" value="12" />
+                <span class="control-value" id="freqBandValue">12</span>
+            </div>
         </div>
     </div>
 
@@ -79,24 +104,27 @@
             "--..--": ",", ".-.-.-": ".", "..--..": "?", "-..-.": "/", "-....-": "-", ".----.": "'"
         };
 
+        // ============ PARAMETRI REGOLABILI ============
+        let displayContrast = 1.5; // Moltiplicatore contrasto
+        let dspThreshold = 1.5;    // Sigma multiplier per soglia
+        let freqBandMin = 12;      // Banda frequenza minima
+
         let session = null;
         let globalAudio3200 = null; 
         let lastProcessedSample = 0;
         let isProcessing = false;
         
-        // DSP variables - CORRETTE E ROBUSTE
+        // DSP variables
         let dspIsOn = false;
         let dspFramesCount = 0;
         let dspSymbolBuffer = "";
-        let estimatedDotLen = 8; // Iniziale conservativo
+        let estimatedDotLen = 8;
         let dspAccumulatedText = "";
         
-        // Tracking robustos per signal detection
         let signalPeakDB = -80.0;
         let signalRMSHistory = [];
 
         let globalPeakDB = -100.0;
-        let noiseDynamicFloor = -80.0;
         
         const CHUNK_SIZE = 11200;
         const WATERFALL_WIDTH = 1500;
@@ -118,6 +146,22 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         let waterfallBuffer = [];
+
+        // ============ EVENT LISTENERS SLIDERS ============
+        document.getElementById('contrastSlider').addEventListener('input', (e) => {
+            displayContrast = parseFloat(e.target.value);
+            document.getElementById('contrastValue').textContent = displayContrast.toFixed(1) + 'x';
+        });
+
+        document.getElementById('thresholdSlider').addEventListener('input', (e) => {
+            dspThreshold = parseFloat(e.target.value);
+            document.getElementById('thresholdValue').textContent = dspThreshold.toFixed(1);
+        });
+
+        document.getElementById('freqBandSlider').addEventListener('input', (e) => {
+            freqBandMin = parseInt(e.target.value);
+            document.getElementById('freqBandValue').textContent = freqBandMin;
+        });
 
         function log(msg) {
             const time = new Date().toLocaleTimeString();
@@ -160,7 +204,7 @@
                 
                 const gentleHP = offlineCtx.createBiquadFilter();
                 gentleHP.type = 'highpass';
-                gentleHP.frequency.value = 300; // Aumentato a 300Hz per escludere rumore basso
+                gentleHP.frequency.value = 300;
                 bufferSource.connect(gentleHP);
                 gentleHP.connect(offlineCtx.destination);
                 
@@ -175,7 +219,6 @@
                 dspAccumulatedText = "";
                 lastProcessedSample = 0;
                 globalPeakDB = -100.0;
-                noiseDynamicFloor = -80.0;
                 signalPeakDB = -80.0;
                 signalRMSHistory = [];
                 waterfallBuffer = [];
@@ -246,7 +289,6 @@
                 let hannWindow = new Float32Array(64);
                 for(let j=0; j<64; j++) hannWindow[j] = 0.5 - 0.5 * Math.cos(2 * Math.PI * j / 63);
 
-                // ============ ESTRAI MEL-SPECTROGRAM ============
                 for (let f = 0; f < numFrames; f++) {
                     let offset = f * hopLength;
                     
@@ -254,7 +296,6 @@
                     for(let j=0; j<64; j++) frame[32 + j] = audioData[offset + 32 + j] * hannWindow[j];
                     for(let j=96; j<128; j++) frame[j] = 0;
 
-                    // Calcola RMS globale per DSP
                     let rmsSum = 0;
                     for(let j=0; j<128; j++) rmsSum += frame[j] * frame[j];
                     let frameRms = Math.sqrt(rmsSum / 128);
@@ -269,35 +310,29 @@
                         if (db > globalPeakDB) globalPeakDB = db; 
                         trans[b * numFrames + f] = db; 
                         
-                        // Bande centrali (12-50) per CW detection (600-1600 Hz circa)
-                        if (b > 12 && b < 50 && db > frameMaxEnergy) frameMaxEnergy = db;
+                        // Usa freqBandMin regolabile
+                        if (b > freqBandMin && b < 50 && db > frameMaxEnergy) frameMaxEnergy = db;
                     }
                     signalPeakDB = Math.max(signalPeakDB, frameMaxEnergy);
 
-                    // ============ LOGICA DSP ROBUSTA ============
+                    // DSP LOGIC con soglia regolabile
                     signalRMSHistory.push(frameRms);
                     if(signalRMSHistory.length > 32) signalRMSHistory.shift();
                     
                     let meanRms = signalRMSHistory.reduce((a,b)=>a+b,0) / signalRMSHistory.length;
                     let stdRms = Math.sqrt(signalRMSHistory.reduce((a,b)=>a+(b-meanRms)*(b-meanRms), 0) / signalRMSHistory.length);
                     
-                    // Soglia adattiva: media + 1.5 sigma (robusto a rumore)
-                    let threshold = meanRms + stdRms * 1.5;
+                    // Soglia adattiva con parametro regolabile
+                    let threshold = meanRms + stdRms * dspThreshold;
                     let isNowOn = (frameRms > threshold && frameMaxEnergy > (signalPeakDB - 12));
                     
-                    if (isNowOn && !dspIsOn) {
-                        led.classList.add('led-on');
-                    }
-                    if (!isNowOn && dspIsOn) {
-                        led.classList.remove('led-on');
-                    }
+                    if (isNowOn && !dspIsOn) led.classList.add('led-on');
+                    if (!isNowOn && dspIsOn) led.classList.remove('led-on');
 
-                    // State machine: accumula durate
                     if (isNowOn === dspIsOn) {
                         dspFramesCount++;
                     } else {
                         if (dspIsOn && dspFramesCount >= 2) {
-                            // Fine del tono
                             if (dspFramesCount > estimatedDotLen * 2.2) {
                                 dspSymbolBuffer += "-";
                             } else {
@@ -305,16 +340,13 @@
                                 estimatedDotLen = Math.max(3, (estimatedDotLen * 0.75) + (dspFramesCount * 0.25));
                             }
                         } else if (!dspIsOn && dspFramesCount >= 2 && dspSymbolBuffer.length > 0) {
-                            // Fine dello spazio
                             if (dspFramesCount > estimatedDotLen * 3.5) {
-                                // Spazio tra parole
                                 decodeSymbolBuffer();
                                 if (dspAccumulatedText.length > 0) {
                                     dspAccumulatedText += " ";
                                     dspText.innerText = dspAccumulatedText;
                                 }
                             } else if (dspFramesCount > estimatedDotLen * 1.2) {
-                                // Spazio tra simboli
                                 decodeSymbolBuffer();
                             }
                         }
@@ -323,12 +355,11 @@
                     }
                 }
 
-                // Finalizza simbolo rimasto
                 if (!dspIsOn && dspSymbolBuffer.length > 0 && dspFramesCount > estimatedDotLen * 1.2) {
                     decodeSymbolBuffer();
                 }
 
-                // ============ NORMALIZZAZIONE IA ============
+                // Normalizzazione IA
                 let sum = 0;
                 const topDB = 80.0;
                 for(let i=0; i<trans.length; i++) {
@@ -340,7 +371,7 @@
                 for(let i=0; i<trans.length; i++) vSum += Math.pow(trans[i] - mean, 2);
                 let std = Math.sqrt(vSum / trans.length);
                 
-                if (std < 15.0) std = 15.0; // Min std per evitare overflow
+                if (std < 15.0) std = 15.0;
                 
                 for(let i=0; i<trans.length; i++) {
                     trans[i] = (trans[i] - mean) / std;
@@ -348,7 +379,6 @@
 
                 updateWaterfall(trans, numFrames);
 
-                // ============ AI INFERENCE ============
                 if (session) {
                     const tensor = new ort.Tensor('float32', trans, [1, 1, 64, numFrames]);
                     const results = await session.run({ [session.inputNames[0]]: tensor });
@@ -383,7 +413,6 @@
         }
 
         function updateWaterfall(transMatrix, numFrames) {
-            // Aggiungi colonne al buffer
             for (let t = 0; t < numFrames; t++) {
                 let column = [];
                 for (let m = 0; m < 64; m++) {
@@ -392,12 +421,11 @@
                 waterfallBuffer.push(column);
             }
 
-            // Mantieni ultime WATERFALL_WIDTH colonne
             if (waterfallBuffer.length > WATERFALL_WIDTH) {
                 waterfallBuffer = waterfallBuffer.slice(waterfallBuffer.length - WATERFALL_WIDTH);
             }
 
-            // Disegna waterfall con contrast MASSIMO
+            // Disegna con contrasto regolabile
             const imgData = ctx.createImageData(WATERFALL_WIDTH, NUM_BANDS);
             
             for (let t = 0; t < WATERFALL_WIDTH; t++) {
@@ -405,32 +433,27 @@
                     let val = 0;
                     if (t >= WATERFALL_WIDTH - waterfallBuffer.length) {
                         const bufIdx = t - (WATERFALL_WIDTH - waterfallBuffer.length);
-                        val = waterfallBuffer[bufIdx][m];
+                        val = waterfallBuffer[bufIdx][m] * displayContrast; // Applica contrasto
                     }
                     
-                    // CONTRAST MASSIMO: valori negativi → scuro, positivi → ROSSO INTENSO
                     let red, green, blue;
                     if (val < -0.5) {
-                        // Rumore basso: nero
                         red = 0; green = 0; blue = 0;
                     } else if (val < 0) {
-                        // Rumore medio: grigio scuro
-                        let grayVal = Math.floor((val + 0.5) * 50);
+                        let grayVal = Math.floor((val + 0.5) * 100);
                         red = grayVal; green = grayVal; blue = grayVal;
-                    } else if (val < 2) {
-                        // Segnale debole: giallo
+                    } else if (val < 1.5) {
                         let intensity = Math.floor(val * 50);
-                        red = 200 + intensity; green = 180 + intensity; blue = 0;
+                        red = 180 + intensity; green = 160 + intensity; blue = 0;
                     } else {
-                        // Segnale forte: ROSSO PURO
-                        red = 255; green = Math.floor(150 - val * 30); blue = 0;
+                        red = 255; green = Math.max(0, Math.floor(120 - val * 30)); blue = 0;
                     }
                     
                     const y = (NUM_BANDS - 1) - m;
                     const index = (y * WATERFALL_WIDTH + t) * 4;
-                    imgData.data[index + 0] = red;
-                    imgData.data[index + 1] = green;
-                    imgData.data[index + 2] = blue;
+                    imgData.data[index + 0] = Math.min(255, red);
+                    imgData.data[index + 1] = Math.min(255, green);
+                    imgData.data[index + 2] = Math.min(255, blue);
                     imgData.data[index + 3] = 255;
                 }
             }
