@@ -3,49 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Morse Pro Decoder (Pure PyTorch Edition)</title>
+    <title>Morse SDR Decoder</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script src="https://unpkg.com/meyda/dist/web/meyda.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #eee; max-width: 900px; margin: 0 auto; padding: 20px; }
-        .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        h1 { color: #bb86fc; text-align: center; font-size: 24px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #eee; max-width: 1000px; margin: 0 auto; padding: 20px; }
+        .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
+        h1 { color: #bb86fc; text-align: center; font-size: 26px; }
         h3 { margin-top: 0; color: #03dac6; }
         input[type="file"] { background: #3700b3; color: white; border: none; padding: 10px; cursor: pointer; border-radius: 4px; width: 100%; box-sizing: border-box; margin-top: 10px; }
         input[type="file"]:disabled { background: #555; cursor: not-allowed; color: #888; }
         audio { width: 100%; margin-top: 15px; outline: none; }
-        canvas { width: 100%; height: 200px; background: #000; border-radius: 4px; margin-top: 10px; border: 1px solid #333; image-rendering: pixelated; }
-        #liveText { font-size: 28px; color: #03dac6; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 50px; word-wrap: break-word; font-family: monospace; margin-top: 10px; font-weight: bold; letter-spacing: 2px; }
-        .log-box { background: #000; color: #0f0; font-family: monospace; padding: 10px; border-radius: 4px; height: 120px; overflow-y: auto; line-height: 1.4; font-size: 13px; }
+        
+        /* Waterfall Canvas ad alta densità */
+        .canvas-container { width: 100%; overflow: hidden; border: 1px solid #333; border-radius: 4px; background: #000; margin-top: 10px; }
+        canvas { width: 100%; height: 200px; image-rendering: pixelated; display: block; }
+        
+        #liveText { font-size: 26px; color: #03dac6; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 80px; word-wrap: break-word; font-family: monospace; margin-top: 10px; font-weight: bold; letter-spacing: 1px; line-height: 1.5; }
+        .log-box { background: #000; color: #0f0; font-family: monospace; padding: 10px; border-radius: 4px; height: 100px; overflow-y: auto; line-height: 1.4; font-size: 13px; }
     </style>
 </head>
 <body>
-    <h1>📻 Morse Live Decoder (Pure PyTorch)</h1>
+    <h1>📻 Morse SDR Decoder (Real-Time Waterfall)</h1>
 
     <div class="card">
-        <h3>1. Inizializzazione Modello</h3>
+        <h3>1. Inizializza IA</h3>
         <input type="file" id="modelUpload" accept=".onnx" />
     </div>
 
     <div class="card">
-        <h3>2. Analisi Audio Pura</h3>
-        <p>Zero filtri artificiali. L'audio viene mandato alla rete neurale puro, esattamente come in addestramento.</p>
+        <h3>2. Carica Audio</h3>
         <input type="file" id="audioUpload" accept="audio/*" disabled />
         <audio id="player" controls></audio>
     </div>
 
     <div class="card">
-        <h3>Visione IA (Tensore Mel-Spectrogram)</h3>
-        <canvas id="spectrogram"></canvas>
+        <h3>Spettrogramma a Scorrimento (Zoom Ridotto - 7.5 secondi di contesto)</h3>
+        <div class="canvas-container">
+            <canvas id="spectrogram"></canvas>
+        </div>
     </div>
 
     <div class="card">
-        <h3>Testo Decodificato:</h3>
+        <h3>Testo Decodificato</h3>
         <div id="liveText"></div>
     </div>
 
     <div class="card">
-        <h3>Log di Sistema</h3>
+        <h3>Log</h3>
         <div class="log-box" id="logBox">SISTEMA PRONTO. Carica il modello ONNX...<br></div>
     </div>
 
@@ -57,8 +62,15 @@
         let lastProcessedSample = 0;
         let isProcessing = false;
         
-        // Chunk di 2 secondi perfetti
-        const CHUNK_SIZE = 12800; 
+        // Memoria per il rumore di fondo (evita che il silenzio crei caratteri a caso)
+        let globalPeakDB = -100.0;
+        
+        // Chunk di 3.5 secondi (11200 campioni). Abbastanza lungo per decifrare parole intere.
+        const CHUNK_SIZE = 11200; 
+
+        // Dimensione fissa del Waterfall (1500 frame = ~7.5 secondi di scorrimento visivo)
+        const WATERFALL_WIDTH = 1500;
+        const NUM_BANDS = 64;
 
         const player = document.getElementById('player');
         const liveText = document.getElementById('liveText');
@@ -68,35 +80,47 @@
         const audioUpload = document.getElementById('audioUpload');
         const modelUpload = document.getElementById('modelUpload');
 
+        // Inizializza il canvas
+        canvas.width = WATERFALL_WIDTH;
+        canvas.height = NUM_BANDS;
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Un canvas temporaneo fuori schermo per far scorrere l'immagine
+        let offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = WATERFALL_WIDTH;
+        offscreenCanvas.height = NUM_BANDS;
+        let offscreenCtx = offscreenCanvas.getContext('2d');
+
         function log(msg) {
             const time = new Date().toLocaleTimeString();
             logBox.innerHTML += `[${time}] ${msg}<br>`;
             logBox.scrollTop = logBox.scrollHeight;
         }
 
-        // CARICA MODELLO ONNX
+        // CARICA ONNX
         modelUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
             try {
-                log(`Caricamento '${file.name}'...`);
+                log(`Caricamento IA...`);
                 modelUpload.disabled = true;
                 const arrayBuffer = await file.arrayBuffer();
                 session = await ort.InferenceSession.create(arrayBuffer, { executionProviders: ['wasm'] });
-                log(`✅ Modello caricato!`);
+                log(`✅ Rete Neurale pronta!`);
                 audioUpload.disabled = false;
             } catch (err) {
-                log(`❌ ERRORE: ${err.message}`);
+                log(`❌ ERRORE IA: ${err.message}`);
                 modelUpload.disabled = false;
             }
         });
 
-        // RESAMPLING ASSOLUTAMENTE PURO (Senza Biquad Filter)
+        // RESAMPLING
         audioUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
             
-            log(`Lettura file in puro stile PyTorch (3200Hz)...`);
+            log(`Estrazione audio a 3200Hz in corso...`);
             audioUpload.disabled = true;
             
             try {
@@ -113,30 +137,34 @@
                 const bufferSource = offlineCtx.createBufferSource();
                 bufferSource.buffer = decodedAudio;
                 
-                // Connessione diretta. Niente filtri che causano risonanze!
                 bufferSource.connect(offlineCtx.destination);
                 bufferSource.start(0);
                 
                 const resampledAudio = await offlineCtx.startRendering();
                 globalAudio3200 = resampledAudio.getChannelData(0); 
                 
-                log(`✅ Audio pronto. Premi PLAY per decodificare!`);
+                log(`✅ Pronti! Premi PLAY.`);
                 liveText.innerText = "";
                 lastProcessedSample = 0;
+                globalPeakDB = -100.0;
+                ctx.fillStyle = "black";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
             } catch (err) {
-                log(`❌ ERRORE Audio: ${err.message}`);
+                log(`❌ ERRORE: ${err.message}`);
             } finally {
                 audioUpload.disabled = false;
             }
         });
 
-        // TIMING ENGINE Sincronizzato
+        // IL MOTORE IN TEMPO REALE (Scatta ogni 100ms)
         setInterval(() => {
             if (player.paused || !globalAudio3200) return;
             
             let currentSample = Math.floor(player.currentTime * 3200);
+            
             if (Math.abs(currentSample - lastProcessedSample) > CHUNK_SIZE * 2) {
                 lastProcessedSample = currentSample; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height); // Pulisce il waterfall se fai un salto
             }
 
             if (currentSample - lastProcessedSample >= CHUNK_SIZE && !isProcessing) {
@@ -146,27 +174,27 @@
             }
         }, 100); 
 
-        // MOTORE MATEMATICO (Copia esatta di torchaudio.transforms)
+        // ELABORAZIONE MATEMATICA SUPER-VELOCE
         async function processChunk(audioData) {
             isProcessing = true;
             try {
                 const hopLength = 16;
                 const n_fft = 128;
+                // Calcola quanti pixel/frame saranno generati
                 const numFrames = Math.floor((audioData.length - n_fft) / hopLength);
 
                 let trans = new Float32Array(64 * numFrames);
-                let globalMaxDB = -Infinity;
-
+                
                 Meyda.bufferSize = n_fft;
                 Meyda.melBands = 64;
                 Meyda.sampleRate = 3200;
-                Meyda.windowingFunction = 'rect'; // Disattivato, applichiamo Hanning 64 custom
+                Meyda.windowingFunction = 'rect';
 
                 let frame = new Float32Array(n_fft);
                 let hannWindow = new Float32Array(64);
                 for(let j=0; j<64; j++) hannWindow[j] = 0.5 - 0.5 * Math.cos(2 * Math.PI * j / 63);
 
-                // ESTRAZIONE MEL (Con padding esatto PyTorch)
+                // ZERO LAG: Nessun await nel ciclo, calcola tutto istantaneamente!
                 for (let f = 0; f < numFrames; f++) {
                     let offset = f * hopLength;
                     
@@ -179,46 +207,37 @@
                     
                     for (let b = 0; b < 64; b++) {
                         let db = 10 * Math.log10(Math.max(m[b], 1e-10));
-                        if (db > globalMaxDB) globalMaxDB = db;
+                        if (db > globalPeakDB) globalPeakDB = db; // Aggiorna il tracker del volume
                         trans[b * numFrames + f] = db; 
                     }
-
-                    if (f % 100 === 0) await new Promise(r => setTimeout(r, 0));
                 }
 
-                // NORMALIZZAZIONE (AmplitudeToDB top_db=80)
+                // Normalizzazione con blocco anti-allucinazioni
                 let sum = 0;
+                const topDB = 80.0;
+                
                 for(let i=0; i<trans.length; i++) {
-                    trans[i] = Math.max(trans[i], globalMaxDB - 80.0);
+                    trans[i] = Math.max(trans[i], globalPeakDB - topDB);
                     sum += trans[i];
                 }
 
                 let mean = sum / trans.length;
                 let vSum = 0;
-                for(let i=0; i<trans.length; i++) {
-                    vSum += Math.pow(trans[i] - mean, 2);
-                }
+                for(let i=0; i<trans.length; i++) vSum += Math.pow(trans[i] - mean, 2);
                 
                 let std = Math.sqrt(vSum / trans.length);
-                
-                // SISTEMA ANTI-ALLUCINAZIONE
-                // Se c'è silenzio, la standard deviation è bassissima. Non permettiamo che scenda 
-                // troppo per evitare che il silenzio venga amplificato generando numeri casuali 8887.
-                if (std < 3.0) std = 3.0; 
+                if (std < 15.0) std = 15.0; // Impedisce di inventare lettere nel silenzio!
 
                 for(let i=0; i<trans.length; i++) {
                     trans[i] = (trans[i] - mean) / std;
                 }
 
-                // DISEGNO SPETTROGRAMMA E INFERENZA
-                drawNeuralVision(trans, numFrames);
+                // AGGIORNA IL WATERFALL
+                updateWaterfall(trans, numFrames);
 
+                // INFERENZA ONNX
                 const tensor = new ort.Tensor('float32', trans, [1, 1, 64, numFrames]);
-                const inputName = session.inputNames[0];
-                const feeds = {};
-                feeds[inputName] = tensor;
-                
-                const results = await session.run(feeds);
+                const results = await session.run({ [session.inputNames[0]]: tensor });
                 const data = results[session.outputNames[0]].data;
                 const dims = results[session.outputNames[0]].dims;
                 
@@ -238,7 +257,7 @@
                     prev = maxI;
                 }
 
-                if (text) {
+                if (text.trim() !== "") {
                     liveText.innerText += text + " ";
                 }
                 
@@ -248,22 +267,28 @@
             isProcessing = false;
         }
 
-        // DISEGNA IL TENSORE (Contrastato visivamente senza alterare i dati IA)
-        function drawNeuralVision(transMatrix, numFrames) {
-            const numBands = 64;
-            canvas.width = numFrames;
-            canvas.height = numBands;
-            const imgData = ctx.createImageData(numFrames, numBands);
+        // FUNZIONE WATERFALL: Sposta l'immagine a sinistra e aggiunge i nuovi dati a destra
+        function updateWaterfall(transMatrix, numFrames) {
+            // Salva lo stato attuale del canvas visibile sul canvas offscreen
+            offscreenCtx.drawImage(canvas, 0, 0);
+            
+            // Pulisce il canvas visibile
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Ridisegna l'immagine vecchia spostata a sinistra di "numFrames" pixel
+            ctx.drawImage(offscreenCanvas, -numFrames, 0);
+
+            // Crea l'immagine per il nuovo blocco di dati
+            const imgData = ctx.createImageData(numFrames, NUM_BANDS);
             
             for (let t = 0; t < numFrames; t++) {
-                for (let m = 0; m < numBands; m++) {
+                for (let m = 0; m < NUM_BANDS; m++) {
                     let val = transMatrix[m * numFrames + t];
                     
-                    // Solo per il disegno a schermo: scuriamo i valori negativi (rumore)
-                    let visualIntensity = Math.max(0, (val + 1.5) / 4);
-                    let intensity = Math.pow(visualIntensity, 2) * 255; 
+                    // Colore Matrix Green (Scurisce il rumore, esalta i segnali forti)
+                    let intensity = Math.max(0, Math.min(255, (val + 1) * 85)); 
                     
-                    const y = (numBands - 1) - m; 
+                    const y = (NUM_BANDS - 1) - m; 
                     const index = (y * numFrames + t) * 4;
                     
                     imgData.data[index + 0] = 0;          
@@ -272,7 +297,9 @@
                     imgData.data[index + 3] = 255;        
                 }
             }
-            ctx.putImageData(imgData, 0, 0);
+            
+            // Disegna il nuovo blocco attaccato sul lato destro del canvas
+            ctx.putImageData(imgData, WATERFALL_WIDTH - numFrames, 0);
         }
     </script>
 </body>
