@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morse Code AI Decoder</title>
+    <!-- ONNX Runtime Web -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <!-- Meyda.js per Feature Extraction Audio -->
+    <script src="https://unpkg.com/meyda/dist/web/meyda.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 { color: #bb86fc; text-align: center; }
+        .card {
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+        }
+        button, input[type="file"] {
+            background-color: #3700b3;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        .log-box {
+            background-color: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 10px;
+            border-radius: 4px;
+            height: 150px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .result-box {
+            font-size: 24px;
+            font-weight: bold;
+            color: #03dac6;
+            text-align: center;
+            min-height: 40px;
+            margin-top: 20px;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>📻 Decodificatore IA Morse</h1>
+
+    <div class="card">
+        <h3>1. Inizializzazione</h3>
+        <p>Il modello neurale deve essere caricato prima di poter decodificare.</p>
+        <button id="loadModelBtn">Carica Modello ONNX</button>
+    </div>
+
+    <div class="card">
+        <h3>2. Analisi Audio</h3>
+        <p>Seleziona un file audio (WAV, MP3, M4A). L'audio verrà convertito a 3200Hz ed elaborato offline dal tuo browser.</p>
+        <input type="file" id="audioUpload" accept="audio/*" disabled />
+        <div class="result-box" id="resultText">In attesa di decodifica...</div>
+    </div>
+
+    <div class="card">
+        <h3>Log di Sistema</h3>
+        <div class="log-box" id="logBox">SISTEMA PRONTO. In attesa del caricamento del modello...\n</div>
+    </div>
+
+    <script>
+        // Vocabolario Esatto (Indice 0 è <BLANK>)[span_4](start_span)[span_4](end_span)
+        const VOCAB = ['<BLANK>', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'É', 'À', 'Ò', 'Ù', ',', '.', '/', "'", '?', '=', ' '];
+        
+        let session = null;
+
+        const logBox = document.getElementById('logBox');
+        const loadBtn = document.getElementById('loadModelBtn');
+        const uploadBtn = document.getElementById('audioUpload');
+        const resultText = document.getElementById('resultText');
+
+        function log(msg) {
+            logBox.innerHTML += `> ${msg}<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
+            console.log(msg);
+        }
+
+        // STEP 1: CARICAMENTO MODELLO
+        loadBtn.addEventListener('click', async () => {
+            try {
+                log("Caricamento di morse_model.onnx in corso...");
+                loadBtn.disabled = true;
+                
+                // Cerca il file onnx nella stessa cartella
+                session = await ort.InferenceSession.create('./morse_model.onnx', { executionProviders: ['wasm'] });
+                
+                log("✅ Modello caricato con successo!");
+                uploadBtn.disabled = false;
+            } catch (err) {
+                log(`❌ ERRORE caricamento modello: ${err.message}`);
+                loadBtn.disabled = false;
+            }
+        });
+
+        // STEP 2: ELABORAZIONE AUDIO
+        uploadBtn.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file || !session) return;
+
+            log(`Elaborazione del file: ${file.name}`);
+            resultText.innerText = "Elaborazione in corso...";
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const decodedAudio = await tempCtx.decodeAudioData(arrayBuffer);
+
+                // Ricampionamento a 3200 Hz[span_5](start_span)[span_5](end_span)
+                const targetSampleRate = 3200;
+                const totalSamples = Math.ceil(decodedAudio.duration * targetSampleRate);
+                const offlineCtx = new OfflineAudioContext(1, totalSamples, targetSampleRate);
+                
+                const bufferSource = offlineCtx.createBufferSource();
+                bufferSource.buffer = decodedAudio;
+                bufferSource.connect(offlineCtx.destination);
+                bufferSource.start(0);
+
+                const resampledAudio = await offlineCtx.startRendering();
+                const audioData = resampledAudio.getChannelData(0);
+                
+                log(`✅ Resampling 3200Hz completato (${audioData.length} campioni).`);
+                
+                // STEP 3: ESTRAZIONE MEL SPECTROGRAM
+                log("Calcolo Spettrogramma Mel...");
+                const melFrames = extractMelSpectrogram(audioData);
+                
+                // STEP 4: INFERENZA ONNX
+                log("Decodifica IA in corso...");
+                const predictedText = await runInference(melFrames);
+                
+                resultText.innerText = predictedText;
+                log("✅ Decodifica Completata!");
+
+            } catch (err) {
+                log(`❌ ERRORE decodifica audio: ${err.message}`);
+                resultText.innerText = "Errore nella decodifica.";
+            }
+        });
+
+        // Funzione per emulare lo spettrogramma Mel di PyTorch (n_fft=128, hop=16, mels=64)[span_6](start_span)[span_6](end_span)
+        function extractMelSpectrogram(audioData) {
+            Meyda.bufferSize = 128;
+            Meyda.melBands = 64;
+            Meyda.sampleRate = 3200;
+            
+            const hopLength = 16;
+            let melSpectrogram = [];
+            
+            // Finestra scorrevole
+            for (let i = 0; i < audioData.length - Meyda.bufferSize; i += hopLength) {
+                const frame = audioData.slice(i, i + Meyda.bufferSize);
+                // Estrae le bande Mel
+                let mel = Meyda.extract("melBands", frame);
+                
+                // Converte in DB (AmpToDB) come in PyTorch[span_7](start_span)[span_7](end_span)
+                mel = mel.map(v => 10 * Math.log10(Math.max(v, 1e-10)));
+                melSpectrogram.push(mel);
+            }
+
+            // Trasposizione: da [Time][Mel] a [Mel][Time] (per ONNX)
+            const numFrames = melSpectrogram.length;
+            const numMels = 64;
+            let transposed = new Float32Array(numMels * numFrames);
+            
+            let sum = 0;
+            for (let t = 0; t < numFrames; t++) {
+                for (let m = 0; m < numMels; m++) {
+                    const val = melSpectrogram[t][m];
+                    transposed[m * numFrames + t] = val;
+                    sum += val;
+                }
+            }
+
+            // Normalizzazione: (val - mean) / std[span_8](start_span)[span_8](end_span)
+            const mean = sum / transposed.length;
+            let varianceSum = 0;
+            for (let i = 0; i < transposed.length; i++) {
+                varianceSum += Math.pow(transposed[i] - mean, 2);
+            }
+            const std = Math.sqrt(varianceSum / transposed.length) + 1e-5;
+
+            for (let i = 0; i < transposed.length; i++) {
+                transposed[i] = (transposed[i] - mean) / std;
+            }
+
+            return { data: transposed, numFrames: numFrames, numMels: numMels };
+        }
+
+        // Funzione per passare i dati ad ONNX e decodificare
+        async function runInference(melData) {
+            // Prepara il tensore: Shape [1 (Batch), 1 (Channel), 64 (Mels), Time]
+            const tensor = new ort.Tensor('float32', melData.data, [1, 1, melData.numMels, melData.numFrames]);
+            
+            // Il nome dell'input ('input' o 'x') dipende da come hai esportato il modello. 
+            // Usa 'input' di default. Modifica in base al tuo script ONNX se necessario.
+            const feeds = { input: tensor }; 
+            
+            const results = await session.run(feeds);
+            const outputTensor = results[Object.keys(results)[0]]; // Ottieni il primo output
+            const data = outputTensor.data; // Array flat
+            const dims = outputTensor.dims; // [Time, Batch, NumClasses] o [Batch, Time, NumClasses][span_9](start_span)[span_9](end_span)
+
+            // Decodifica Greedy CTC[span_10](start_span)[span_10](end_span)
+            // Assumiamo che ONNX emetta [Time, Batch, NumClasses] come in model.py.
+            const timeSteps = dims[0];
+            const numClasses = dims[2];
+            
+            let decodedText = "";
+            let prevIdx = null;
+
+            for (let t = 0; t < timeSteps; t++) {
+                let maxProb = -Infinity;
+                let maxIdx = 0;
+                
+                // Trova l'argmax per lo step temporale corrente
+                for (let c = 0; c < numClasses; c++) {
+                    const prob = data[t * numClasses + c];
+                    if (prob > maxProb) {
+                        maxProb = prob;
+                        maxIdx = c;
+                    }
+                }
+
+                // Applica logica Greedy: Ignora i token <BLANK> (0) e le ripetizioni consecutive[span_11](start_span)[span_11](end_span)
+                if (maxIdx !== 0 && maxIdx !== prevIdx) {
+                    decodedText += VOCAB[maxIdx] || '';
+                }
+                prevIdx = maxIdx;
+            }
+
+            return decodedText;
+        }
+    </script>
+</body>
+</html>
