@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Morse Pro Decoder (Perfect Sync)</title>
+    <title>Morse Pro Decoder (Surgical Filter)</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script src="https://unpkg.com/meyda/dist/web/meyda.min.js"></script>
     <style>
@@ -15,12 +15,12 @@
         input[type="file"]:disabled { background: #555; cursor: not-allowed; color: #888; }
         audio { width: 100%; margin-top: 15px; outline: none; }
         canvas { width: 100%; height: 200px; background: #000; border-radius: 4px; margin-top: 10px; border: 1px solid #333; image-rendering: pixelated; }
-        #liveText { font-size: 28px; color: #03dac6; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 50px; word-wrap: break-word; font-family: monospace; margin-top: 10px; font-weight: bold; }
+        #liveText { font-size: 28px; color: #03dac6; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 50px; word-wrap: break-word; font-family: monospace; margin-top: 10px; font-weight: bold; letter-spacing: 2px; }
         .log-box { background: #000; color: #0f0; font-family: monospace; padding: 10px; border-radius: 4px; height: 120px; overflow-y: auto; line-height: 1.4; font-size: 13px; }
     </style>
 </head>
 <body>
-    <h1>📻 Morse Live Decoder</h1>
+    <h1>📻 Morse Live Decoder (Surgical)</h1>
 
     <div class="card">
         <h3>1. Inizializzazione Modello</h3>
@@ -28,14 +28,14 @@
     </div>
 
     <div class="card">
-        <h3>2. Analisi Audio (No filtri distruttivi)</h3>
-        <p>L'audio verrà letto puro come in addestramento per non falsare le deviazioni standard.</p>
+        <h3>2. Analisi Audio (Filtro a Cascata)</h3>
+        <p>L'audio verrà filtrato per isolare la frequenza centrale e rimuovere le armoniche.</p>
         <input type="file" id="audioUpload" accept="audio/*" disabled />
         <audio id="player" controls></audio>
     </div>
 
     <div class="card">
-        <h3>Cosa "vede" la Rete Neurale (Tensore Normalizzato)</h3>
+        <h3>Visione IA (Traccia CW Isolata Chirurgicamente)</h3>
         <canvas id="spectrogram"></canvas>
     </div>
 
@@ -57,8 +57,7 @@
         let lastProcessedSample = 0;
         let isProcessing = false;
         
-        // Chunk di 2 secondi (6400 campioni a 3200Hz). Miglior compromesso prestazioni/fluibilità.
-        const CHUNK_SIZE = 6400; 
+        const CHUNK_SIZE = 6400; // 2 secondi
 
         const player = document.getElementById('player');
         const liveText = document.getElementById('liveText');
@@ -83,7 +82,7 @@
                 modelUpload.disabled = true;
                 const arrayBuffer = await file.arrayBuffer();
                 session = await ort.InferenceSession.create(arrayBuffer, { executionProviders: ['wasm'] });
-                log(`✅ Modello caricato e pronto!`);
+                log(`✅ Modello caricato!`);
                 audioUpload.disabled = false;
             } catch (err) {
                 log(`❌ ERRORE: ${err.message}`);
@@ -91,12 +90,12 @@
             }
         });
 
-        // 2. RESAMPLING PURO (Senza alterare la firma acustica)
+        // 2. FILTRAGGIO AUDIO A CASCATA DOPPIA (24dB/oct)
         audioUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
             
-            log(`Resampling a 3200Hz...`);
+            log(`Filtraggio estremo e Resampling...`);
             audioUpload.disabled = true;
             
             try {
@@ -113,14 +112,26 @@
                 const bufferSource = offlineCtx.createBufferSource();
                 bufferSource.buffer = decodedAudio;
                 
-                // Connessione diretta senza filtri passa-banda! L'IA sa come ignorare il rumore.
-                bufferSource.connect(offlineCtx.destination);
+                // Creiamo DUE filtri Passa-Basso e DUE Passa-Alto in serie
+                const hp1 = offlineCtx.createBiquadFilter(); hp1.type = 'highpass'; hp1.frequency.value = 450;
+                const lp1 = offlineCtx.createBiquadFilter(); lp1.type = 'lowpass'; lp1.frequency.value = 900;
+                
+                const hp2 = offlineCtx.createBiquadFilter(); hp2.type = 'highpass'; hp2.frequency.value = 450;
+                const lp2 = offlineCtx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 900;
+
+                // Colleghiamo tutto in cascata per demolire le armoniche audio
+                bufferSource.connect(hp1);
+                hp1.connect(lp1);
+                lp1.connect(hp2);
+                hp2.connect(lp2);
+                lp2.connect(offlineCtx.destination);
+                
                 bufferSource.start(0);
                 
                 const resampledAudio = await offlineCtx.startRendering();
                 globalAudio3200 = resampledAudio.getChannelData(0); 
                 
-                log(`✅ Audio pronto. Premi PLAY per avviare la trascrizione!`);
+                log(`✅ Traccia CW isolata. Premi PLAY per decodificare!`);
                 liveText.innerText = "";
                 lastProcessedSample = 0;
             } catch (err) {
@@ -130,13 +141,13 @@
             }
         });
 
-        // TIMING ENGINE (Gestisce la sincronia col player)
+        // TIMING ENGINE
         setInterval(() => {
             if (player.paused || !globalAudio3200) return;
             
             let currentSample = Math.floor(player.currentTime * 3200);
             if (Math.abs(currentSample - lastProcessedSample) > CHUNK_SIZE * 2) {
-                lastProcessedSample = currentSample; // Scorrimento manuale barra
+                lastProcessedSample = currentSample; 
             }
 
             if (currentSample - lastProcessedSample >= CHUNK_SIZE && !isProcessing) {
@@ -146,7 +157,7 @@
             }
         }, 100); 
 
-        // MOTORE MATEMATICO E INFERENZA
+        // MOTORE MATEMATICO
         async function processChunk(audioData) {
             isProcessing = true;
             try {
@@ -160,20 +171,15 @@
                 Meyda.bufferSize = n_fft;
                 Meyda.melBands = 64;
                 Meyda.sampleRate = 3200;
-                Meyda.windowingFunction = 'rect'; // Disattivato, lo applichiamo noi a mano
+                Meyda.windowingFunction = 'rect'; 
 
-                // Replichiamo alla lettera torchaudio con win_length=64 in n_fft=128
                 let frame = new Float32Array(n_fft);
                 let hannWindow = new Float32Array(64);
-                for(let j=0; j<64; j++) {
-                    hannWindow[j] = 0.5 - 0.5 * Math.cos(2 * Math.PI * j / 63);
-                }
+                for(let j=0; j<64; j++) hannWindow[j] = 0.5 - 0.5 * Math.cos(2 * Math.PI * j / 63);
 
-                // CILCO SUPER-VELOCE
+                // ESTRAZIONE MEL
                 for (let f = 0; f < numFrames; f++) {
                     let offset = f * hopLength;
-                    
-                    // Zero-padding laterale (32 zeri a sx, 64 dati hann, 32 zeri a dx)
                     for(let j=0; j<32; j++) frame[j] = 0;
                     for(let j=0; j<64; j++) frame[32 + j] = audioData[offset + 32 + j] * hannWindow[j];
                     for(let j=96; j<128; j++) frame[j] = 0;
@@ -181,43 +187,72 @@
                     let m = Meyda.extract("melBands", frame);
                     if(!m) m = new Array(64).fill(0);
                     
-                    // Scrittura diretta sulla matrice trasposta (addio array in eccesso e lag)
                     for (let b = 0; b < 64; b++) {
                         let db = 10 * Math.log10(Math.max(m[b], 1e-10));
                         if (db > globalMaxDB) globalMaxDB = db;
                         trans[b * numFrames + f] = db; 
                     }
 
-                    // Fai respirare la UI per non causare micro-scatti
                     if (f % 100 === 0) await new Promise(r => setTimeout(r, 0));
                 }
 
-                // TOP-DB (80dB) E MEDIA
+                // ==========================================
+                // IL MASCHERAMENTO CHIRURGICO (Uccide le armoniche grafiche)
+                // ==========================================
+                let bandEnergy = new Float32Array(64);
+                for (let f = 0; f < numFrames; f++) {
+                    for (let b = 0; b < 64; b++) {
+                        bandEnergy[b] += trans[b * numFrames + f];
+                    }
+                }
+                
+                let maxEnergy = -Infinity;
+                let dominantBand = -1;
+                // Cerca la traccia CW principale
+                for (let b = 5; b < 60; b++) {
+                    if (bandEnergy[b] > maxEnergy) {
+                        maxEnergy = bandEnergy[b];
+                        dominantBand = b;
+                    }
+                }
+
+                const noiseFloor = globalMaxDB - 80.0;
+                
+                // Se abbiamo trovato il tono, CANCELLIAMO tutto il resto!
+                if (dominantBand !== -1) {
+                    for (let f = 0; f < numFrames; f++) {
+                        for (let b = 0; b < 64; b++) {
+                            // Lascia intatta solo la traccia principale e le sue immediate vicinanze
+                            if (Math.abs(b - dominantBand) > 3) {
+                                trans[b * numFrames + f] = noiseFloor; 
+                            }
+                        }
+                    }
+                }
+                // ==========================================
+
+                // NORMALIZZAZIONE (Con blocco anti-allucinazione)
                 let sum = 0;
                 for(let i=0; i<trans.length; i++) {
-                    trans[i] = Math.max(trans[i], globalMaxDB - 80.0);
+                    trans[i] = Math.max(trans[i], noiseFloor);
                     sum += trans[i];
                 }
 
                 let mean = sum / trans.length;
                 let vSum = 0;
-                for(let i=0; i<trans.length; i++) {
-                    vSum += Math.pow(trans[i] - mean, 2);
-                }
+                for(let i=0; i<trans.length; i++) vSum += Math.pow(trans[i] - mean, 2);
                 
-                // *** FIX CRITICA: EVITA IL BLOW-UP DEL SILENZIO ***
-                // Se la traccia è muta, la dev. standard è piccolissima e il rumore verrebbe amplificato.
                 let std = Math.sqrt(vSum / trans.length);
-                if (std < 10.0) std = 10.0; // Se non c'è abbastanza energia, blocca l'amplificazione!
+                // FIX: Impedisce al silenzio assoluto di esplodere in rumore e generare numeri casuali
+                if (std < 15.0) std = 15.0; 
 
                 for(let i=0; i<trans.length; i++) {
-                    trans[i] = (trans[i] - mean) / (std + 1e-5);
+                    trans[i] = (trans[i] - mean) / std;
                 }
 
-                // DISEGNO SPETTROGRAMMA (Manda a schermo la visione pura normalizzata)
+                // DISEGNO E DECODIFICA
                 drawNeuralVision(trans, numFrames);
 
-                // INFERENZA ONNX
                 const tensor = new ort.Tensor('float32', trans, [1, 1, 64, numFrames]);
                 const inputName = session.inputNames[0];
                 const feeds = {};
@@ -245,7 +280,6 @@
 
                 if (text) {
                     liveText.innerText += text + " ";
-                    log(`Decodificato: ${text}`);
                 }
                 
             } catch(e) { 
@@ -255,7 +289,7 @@
             isProcessing = false;
         }
 
-        // DISEGNA ESATTAMENTE QUELLO CHE VEDE LA RETE (Post-Normalizzazione)
+        // DISEGNO SPETTROGRAMMA
         function drawNeuralVision(transMatrix, numFrames) {
             const numBands = 64;
             canvas.width = numFrames;
@@ -264,10 +298,7 @@
             
             for (let t = 0; t < numFrames; t++) {
                 for (let m = 0; m < numBands; m++) {
-                    // I valori normalizzati oscillano di solito tra -3 (silenzio) e +3 (picco massimo)
                     let val = transMatrix[m * numFrames + t];
-                    
-                    // Trasforma la scala statistica in colore (0 - 255)
                     let intensity = Math.max(0, Math.min(255, (val + 1) * 80)); 
                     
                     const y = (numBands - 1) - m; 
