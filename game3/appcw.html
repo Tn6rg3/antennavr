@@ -619,11 +619,39 @@ s            </div>
 
         <!-- ANDAMENTO TEMPORALE -->
         <div class="box-panel" style="margin-bottom:12px; background: #fff; border-color: var(--link-color);">
-            <h3 style="color:var(--link-color); font-size:1em; margin-bottom:10px; display:flex; align-items:center; justify-content:center; gap:8px;">
-                📈 Andamento Accuratezza
+            <h3 style="color:var(--link-color); font-size:1em; margin-bottom:8px; display:flex; align-items:center; justify-content:center; gap:8px;">
+                📈 Progressioni Velocità WPM & Accuratezza
                 <span class="info-icon" onclick="window.showStatInfo('trend')">ⓘ</span>
             </h3>
-            <canvas id="accuracyTrendChart" style="width:100%; height:150px; background:#f9f9f9; border-radius:8px; border:1px solid #eee;"></canvas>
+
+            <!-- SUMMARY BADGES IN ALTO AL GRAFICO -->
+            <div id="wpmSummaryBadges" style="display:flex; justify-content:space-around; align-items:center; background:#f0f7ff; padding:8px 4px; border-radius:8px; border:1px solid #cce3fe; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+                <div style="text-align:center; min-width:65px;">
+                    <span style="font-size:0.7em; color:#555; display:block;">⚡ WPM Medio</span>
+                    <b id="badgeAvgWpm" style="font-size:1.05em; color:#ff9800;">-- WPM</b>
+                </div>
+                <div style="text-align:center; min-width:65px;">
+                    <span style="font-size:0.7em; color:#555; display:block;">🚀 Picco WPM</span>
+                    <b id="badgePeakWpm" style="font-size:1.05em; color:#2e7d32;">-- WPM</b>
+                </div>
+                <div style="text-align:center; min-width:65px;">
+                    <span style="font-size:0.7em; color:#555; display:block;">🎯 Accuratezza</span>
+                    <b id="badgeAvgAcc" style="font-size:1.05em; color:#1976d2;">-- %</b>
+                </div>
+                <div style="text-align:center; min-width:65px;">
+                    <span style="font-size:0.7em; color:#555; display:block;">📈 Crescita</span>
+                    <b id="badgeWpmGrowth" style="font-size:1.05em; color:#00bcd4;">-- WPM</b>
+                </div>
+            </div>
+
+            <!-- GRAFICO A DOPPIO ASSE -->
+            <div style="position:relative; width:100%; height:180px;">
+                <canvas id="accuracyTrendChart" style="width:100%; height:180px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; display:block;"></canvas>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:0.75em; padding:0 4px;">
+                <span style="color:#1976d2; font-weight:bold;">🔵 Accuratezza (%) [Asse SX]</span>
+                <span style="color:#ff9800; font-weight:bold;">🟠 Velocità (WPM) [Asse DX]</span>
+            </div>
         </div>
 
         <!-- DASHBOARD ANALITICA -->
