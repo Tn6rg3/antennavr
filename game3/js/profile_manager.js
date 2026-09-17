@@ -1349,10 +1349,13 @@ window.trackSessionAccuracy = function(matchDetails) {
 
     const sessionsRef = db.ref(`users/${myId}/stats/accuracySessions`);
 
-    // Aggiungiamo la nuova sessione
+    const activeWpmVal = window.currentWpm || (matchDetails[0] ? matchDetails[0].wpm : 20);
+
+    // Aggiungiamo la nuova sessione con Accuratezza % e Velocita WPM
     sessionsRef.push({
         ts: firebase.database.ServerValue.TIMESTAMP,
-        acc: accuracy
+        acc: accuracy,
+        wpm: activeWpmVal
     }).then(() => {
         // Pulizia: manteniamo solo le ultime 50 sessioni nel DB
         sessionsRef.once('value', snap => {
