@@ -324,8 +324,13 @@ window.loadAdvancedStats = function() {
     db.ref(`users/${myId}/stats`).once('value').then(snap => {
         const stats = snap.val() || {};
 
-        // 0. GRAFICO TREND (Sessioni)
-        window.renderAccuracyTrend(stats.accuracySessions || {});
+        // 0. GRAFICO TREND DUAL-AXIS (WPM & ACCURATEZZA)
+        db.ref(`users/${myId}/history`).limitToLast(35).once('value').then(histSnap => {
+            const historyData = histSnap.val() ? Object.values(histSnap.val()) : [];
+            window.renderAccuracyTrend(stats.accuracySessions || {}, historyData);
+        }).catch(() => {
+            window.renderAccuracyTrend(stats.accuracySessions || {}, []);
+        });
 
         // 0b. MIGLIORAMENTO MIRATO
         window.renderTargetedImprovement(stats);
@@ -527,69 +532,191 @@ window.renderNGramTable = function(dataNode, container, threshold) {
     }
 });
 
-window.renderAccuracyTrend = function(trendData) {
+window.renderAccuracyTrend = function(trendData, historyMatches = []) {
     const canvas = document.getElementById('accuracyTrendChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const width = canvas.offsetWidth;
-    const height = canvas.offsetHeight;
+    const width = canvas.offsetWidth || 300;
+    const height = canvas.offsetHeight || 180;
 
-    // Setup canvas resolution
     const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
 
-    const entries = Object.entries(trendData).sort((a,b) => a[0].localeCompare(b[0])).slice(-30);
-    if (entries.length < 2) {
+    let sessions = [];
+
+    // 1. Parsing da stats.accuracySessions
+    if (trendData && typeof trendData === 'object') {
+        Object.values(trendData).forEach(s => {
+            if (s) {
+                let acc = -1;
+                if (typeof s.acc === 'number') acc = s.acc;
+                else if (s.sum && s.total) acc = Math.round((s.sum / s.total) * 100);
+
+                let wpm = s.wpm || s.speed || 20;
+                let ts = s.ts || 0;
+
+                if (acc >= 0 && acc <= 100) {
+                    sessions.push({ acc, wpm, ts });
+                }
+            }
+        });
+    }
+
+    // 2. Integrazione dallo storico partite
+    if (sessions.length < 5 && Array.isArray(historyMatches) && historyMatches.length > 0) {
+        historyMatches.forEach(m => {
+            if (m && m.matchDetails && m.matchDetails.length > 0) {
+                const correctCount = m.matchDetails.filter(d => (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay).length;
+                const acc = Math.round((correctCount / m.matchDetails.length) * 100);
+                const wpm = m.wpm || 20;
+                const ts = m.ts || (m.date ? new Date(m.date).getTime() : 0);
+                sessions.push({ acc, wpm, ts });
+            }
+        });
+    }
+
+    sessions.sort((a,b) => (a.ts || 0) - (b.ts || 0));
+    sessions = sessions.slice(-35);
+
+    const badgeAvgWpm = document.getElementById('badgeAvgWpm');
+    const badgePeakWpm = document.getElementById('badgePeakWpm');
+    const badgeAvgAcc = document.getElementById('badgeAvgAcc');
+    const badgeWpmGrowth = document.getElementById('badgeWpmGrowth');
+
+    if (sessions.length === 0) {
+        ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = "#999";
         ctx.font = "12px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Gioca più partite per vedere il grafico", width/2, height/2);
+        ctx.fillText("Gioca più partite per vedere la progressione WPM ed accuratezza", width/2, height/2);
+
+        if (badgeAvgWpm) badgeAvgWpm.textContent = "-- WPM";
+        if (badgePeakWpm) badgePeakWpm.textContent = "-- WPM";
+        if (badgeAvgAcc) badgeAvgAcc.textContent = "-- %";
+        if (badgeWpmGrowth) badgeWpmGrowth.textContent = "-- WPM";
         return;
     }
 
-    const points = entries.map(e => (e[1].sum / e[1].total) * 100);
-    const padding = 20;
-    const chartW = width - padding * 2;
-    const chartH = height - padding * 2;
+    // Statistiche Summary Badges
+    const totalWpmSum = sessions.reduce((s, x) => s + x.wpm, 0);
+    const avgWpm = Math.round(totalWpmSum / sessions.length);
+    const peakWpm = Math.max(...sessions.map(x => x.wpm));
+
+    const totalAccSum = sessions.reduce((s, x) => s + x.acc, 0);
+    const avgAcc = Math.round(totalAccSum / sessions.length);
+
+    let growthStr = "0 WPM";
+    if (sessions.length >= 4) {
+        const half = Math.min(5, Math.floor(sessions.length / 2));
+        const firstAvg = sessions.slice(0, half).reduce((s,x)=>s+x.wpm,0) / half;
+        const lastAvg = sessions.slice(-half).reduce((s,x)=>s+x.wpm,0) / half;
+        const diff = Math.round(lastAvg - firstAvg);
+        growthStr = (diff >= 0 ? `+${diff}` : `${diff}`) + " WPM " + (diff > 0 ? "↗️" : (diff < 0 ? "↘️" : "➡️"));
+    }
+
+    if (badgeAvgWpm) badgeAvgWpm.textContent = `${avgWpm} WPM`;
+    if (badgePeakWpm) badgePeakWpm.textContent = `${peakWpm} WPM`;
+    if (badgeAvgAcc) badgeAvgAcc.textContent = `${avgAcc}%`;
+    if (badgeWpmGrowth) badgeWpmGrowth.textContent = growthStr;
+
+    if (sessions.length < 2) {
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = "#999";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Completa almeno 2 partite per tracciare il grafico", width/2, height/2);
+        return;
+    }
+
+    // RENDERING GRAFICO DUAL-AXIS (Accuratezza % SX, WPM DX)
+    const paddingLeft = 32;
+    const paddingRight = 32;
+    const paddingTop = 20;
+    const paddingBottom = 25;
+
+    const chartW = width - paddingLeft - paddingRight;
+    const chartH = height - paddingTop - paddingBottom;
 
     ctx.clearRect(0, 0, width, height);
 
-    // Grid
-    ctx.strokeStyle = "#eee";
+    const minWpm = Math.max(5, Math.min(...sessions.map(x => x.wpm)) - 5);
+    const maxWpm = Math.max(minWpm + 15, Math.max(...sessions.map(x => x.wpm)) + 5);
+    const wpmRange = maxWpm - minWpm;
+
+    ctx.strokeStyle = "#e2e8f0";
     ctx.lineWidth = 1;
+    ctx.fillStyle = "#64748b";
+    ctx.font = "9px sans-serif";
+
     for (let i = 0; i <= 4; i++) {
-        const y = padding + (chartH / 4) * i;
-        ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(width - padding, y); ctx.stroke();
+        const y = paddingTop + (chartH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft, y);
+        ctx.lineTo(width - paddingRight, y);
+        ctx.stroke();
+
+        const accLabel = 100 - i * 25;
+        ctx.textAlign = "right";
+        ctx.fillText(`${accLabel}%`, paddingLeft - 4, y + 3);
+
+        const wpmLabel = Math.round(maxWpm - (i / 4) * wpmRange);
+        ctx.textAlign = "left";
+        ctx.fillText(`${wpmLabel}`, width - paddingRight + 4, y + 3);
     }
 
-    // Line
-    ctx.strokeStyle = "var(--link-color)";
-    ctx.lineWidth = 2;
+    // LINEA 1: ACCURATEZZA % (BLU #1976d2)
+    ctx.strokeStyle = "#1976d2";
+    ctx.lineWidth = 2.2;
     ctx.lineJoin = "round";
-    ctx.lineCap = "round";
     ctx.beginPath();
 
-    points.forEach((p, i) => {
-        const x = padding + (chartW / (points.length - 1)) * i;
-        const y = padding + chartH - (chartH * (p / 100));
+    sessions.forEach((s, i) => {
+        const x = paddingLeft + (chartW / (sessions.length - 1)) * i;
+        const y = paddingTop + chartH - (chartH * (s.acc / 100));
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
     ctx.stroke();
 
-    // Area
-    ctx.lineTo(padding + chartW, padding + chartH);
-    ctx.lineTo(padding, padding + chartH);
-    ctx.fillStyle = "rgba(51, 144, 236, 0.1)";
+    const lastX = paddingLeft + chartW;
+    ctx.lineTo(lastX, paddingTop + chartH);
+    ctx.lineTo(paddingLeft, paddingTop + chartH);
+    ctx.fillStyle = "rgba(25, 118, 210, 0.08)";
     ctx.fill();
 
-    // Dots
-    ctx.fillStyle = "var(--link-color)";
-    points.forEach((p, i) => {
-        const x = padding + (chartW / (points.length - 1)) * i;
-        const y = padding + chartH - (chartH * (p / 100));
-        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    // LINEA 2: VELOCITA' WPM (ARANCIONE #ff9800)
+    ctx.strokeStyle = "#ff9800";
+    ctx.lineWidth = 2.2;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+
+    sessions.forEach((s, i) => {
+        const x = paddingLeft + (chartW / (sessions.length - 1)) * i;
+        const yRatio = (s.wpm - minWpm) / wpmRange;
+        const y = paddingTop + chartH - (chartH * yRatio);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // DENTI / PUNTI SUL GRAFICO
+    sessions.forEach((s, i) => {
+        const x = paddingLeft + (chartW / (sessions.length - 1)) * i;
+
+        // Punto Accuratezza (Blu)
+        const yAcc = paddingTop + chartH - (chartH * (s.acc / 100));
+        ctx.fillStyle = "#1976d2";
+        ctx.beginPath();
+        ctx.arc(x, yAcc, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Punto WPM (Arancione)
+        const yRatio = (s.wpm - minWpm) / wpmRange;
+        const yWpm = paddingTop + chartH - (chartH * yRatio);
+        ctx.fillStyle = "#ff9800";
+        ctx.beginPath();
+        ctx.arc(x, yWpm, 3.5, 0, Math.PI * 2);
+        ctx.fill();
     });
 };
 
