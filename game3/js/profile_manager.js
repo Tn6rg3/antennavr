@@ -589,7 +589,7 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         });
     }
                 }
-            
+            }
         });
     }
 
@@ -779,9 +779,11 @@ window.showStatInfo = function(type) {
     modal.style.display = 'flex';
 };
 
-window.showProfileScreen = function() {
+function showProfileScreen() {
     window.showScreen('profileScreen');
-    window.switchProfileTab('info');
+    if (typeof window.switchProfileTab === 'function') {
+        window.switchProfileTab('info');
+    }
 
     if (els.userAliasInput) els.userAliasInput.value = window.myName || "";
 
@@ -793,7 +795,8 @@ window.showProfileScreen = function() {
     if (typeof window.updatePushBtnUI === 'function') {
         window.updatePushBtnUI(document.getElementById('pushNotifBtn'));
     }
-};
+}
+window.showProfileScreen = showProfileScreen;
 
 window.openMatchDetails = function(matchKey) {
     if (!window.userMatchHistory) return;
