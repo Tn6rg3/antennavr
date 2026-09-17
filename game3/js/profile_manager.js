@@ -589,7 +589,7 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         });
     }
                 }
-            }
+            
         });
     }
 
