@@ -564,15 +564,26 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         });
     }
 
-    // 2. Integrazione dallo storico partite
+    // 2. Integrazione dallo storico partite se le sessioni dirette sono poche
     if (sessions.length < 5 && Array.isArray(historyMatches) && historyMatches.length > 0) {
         historyMatches.forEach(m => {
-            if (m && m.matchDetails && m.matchDetails.length > 0) {
-                const correctCount = m.matchDetails.filter(d => (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay).length;
-                const acc = Math.round((correctCount / m.matchDetails.length) * 100);
-                const wpm = m.wpm || 20;
+            if (m) {
+                let acc = -1;
+                if (m.matchDetails && m.matchDetails.length > 0) {
+                    const correctCount = m.matchDetails.filter(d => (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay).length;
+                    acc = Math.round((correctCount / m.matchDetails.length) * 100);
+                } else if (typeof m.accuracy === 'number') {
+                    acc = m.accuracy;
+                } else if (typeof m.score === 'number' && m.score >= 0) {
+                    acc = 85;
+                }
+
+                const wpm = m.wpm || (m.matchDetails && m.matchDetails[0] ? m.matchDetails[0].wpm : 20);
                 const ts = m.ts || (m.date ? new Date(m.date).getTime() : 0);
-                sessions.push({ acc, wpm, ts });
+
+                if (acc >= 0 && wpm > 0) {
+                    sessions.push({ acc, wpm, ts });
+                }
             }
         });
     }
