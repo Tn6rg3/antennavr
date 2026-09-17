@@ -588,10 +588,6 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
             }
         });
     }
-                }
-            }
-        });
-    }
 
     sessions.sort((a,b) => (a.ts || 0) - (b.ts || 0));
     sessions = sessions.slice(-35);
