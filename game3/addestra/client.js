@@ -1,4 +1,4 @@
-// CLIENT.JS - MODALITÀ DUAL-MODE: LOCALE CON SERVER PYTHON O 100% SERVERLESS CLIENT-SIDE SU GITHUB PAGES
+// CLIENT.JS - STANDALONE COMPLETO CON CHUNK GENERATOR E SPETTROGRAMMA HD
 
 document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('statusPill');
@@ -89,10 +89,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let micDecodeTimer = null;
     let isDecodingBusy = false;
     let liveAccumulatedText = "";
-
-    // DUAL-MODE SERVER CONFIGURATION
-    const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const SERVER_API_URL = isLocalServer ? "http://localhost:8000" : "";
 
     // ONNX RUNTIME WEB SESSION & VOCABULARY
     let onnxSession = null;
@@ -406,14 +402,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const specResult = computeRealMelSpectrogramJS(subPcm, 3200);
                 const results = await onnxSession.run({ input_spectrogram: specResult.tensor });
                 transcript = decodeCtcGreedy(results[Object.keys(results)[0]]);
-            } else if (isLocalServer) {
-                const response = await fetch(`${SERVER_API_URL}/api/decode_region`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: audioPlayer.src, start: item.startSec, end: item.endSec })
-                });
-                const data = await response.json();
-                transcript = data.transcript || "";
             }
 
             if (aiInp) aiInp.value = transcript;
@@ -423,6 +411,114 @@ document.addEventListener('DOMContentLoaded', () => {
             if (aiInp) aiInp.value = "❌ Errore IA";
         }
     };
+
+    function drawChunkCanvas(i) {
+        const item = audioChunkList[i];
+        if (!item || !currentData) return;
+
+        const waveCanvas = document.getElementById(`chunkWave_${i}`);
+        const specCanvas = document.getElementById(`chunkSpec_${i}`);
+
+        if (waveCanvas && currentData.waveform) {
+            waveCanvas.onclick = (e) => {
+                const rect = waveCanvas.getBoundingClientRect();
+                const pct = (e.clientX - rect.left) / rect.width;
+                audioPlayer.currentTime = item.startSec + pct * (item.endSec - item.startSec);
+                renderCanvasesAtCurrentTime();
+            };
+
+            const ctx = waveCanvas.getContext('2d');
+            const w = waveCanvas.width = waveCanvas.parentElement.clientWidth || 300;
+            const h = waveCanvas.height = 70;
+
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, w, h);
+
+            const startIdx = Math.floor((item.startSec / currentData.duration) * currentData.waveform.length);
+            const endIdx = Math.ceil((item.endSec / currentData.duration) * currentData.waveform.length);
+            const sliced = currentData.waveform.slice(startIdx, endIdx);
+
+            if (sliced.length > 0) {
+                const centerY = h / 2;
+                ctx.fillStyle = '#38bdf8';
+                const step = w / sliced.length;
+
+                for (let k = 0; k < sliced.length; k++) {
+                    const v = Math.abs(sliced[k]);
+                    const bh = Math.max(1.5, v * (h / 2) * 1.8);
+                    ctx.fillRect(k * step, centerY - bh / 2, step + 0.2, bh);
+                }
+            }
+        }
+
+        if (specCanvas && currentData.spectrogram) {
+            drawSpectrogramWindowHDOnCanvas(specCanvas, currentData.spectrogram, item.startSec, item.endSec, currentData.duration, i);
+        }
+    }
+
+    function drawSpectrogramWindowHDOnCanvas(canvas, specMatrix, startTime, endTime, totalDuration, chunkIndex) {
+        if (!specMatrix || specMatrix.length === 0) return;
+
+        const ctx = canvas.getContext('2d');
+        const numMels = specMatrix.length;
+        const totalFrames = specMatrix[0].length;
+
+        const canvasWidth = canvas.width = canvas.parentElement.clientWidth || 300;
+        const canvasHeight = canvas.height = 100;
+
+        const startFrame = Math.floor((startTime / totalDuration) * totalFrames);
+        const endFrame = Math.min(totalFrames, Math.ceil((endTime / totalDuration) * totalFrames));
+        const visibleFrames = Math.max(1, endFrame - startFrame);
+
+        const imgData = ctx.createImageData(canvasWidth, canvasHeight);
+        const pixels = imgData.data;
+
+        let minVal = Infinity, maxVal = -Infinity;
+        for (let r = 0; r < numMels; r++) {
+            for (let c = startFrame; c < Math.min(totalFrames, startFrame + visibleFrames); c++) {
+                const val = specMatrix[r][c];
+                if (val < minVal) minVal = val;
+                if (val > maxVal) maxVal = val;
+            }
+        }
+        const range = (maxVal - minVal) || 1e-5;
+
+        for (let x = 0; x < canvasWidth; x++) {
+            const frameFloat = startFrame + (x / canvasWidth) * (visibleFrames - 1);
+            const frame0 = Math.floor(frameFloat);
+            const frame1 = Math.min(totalFrames - 1, frame0 + 1);
+            const frameFrac = frameFloat - frame0;
+
+            for (let y = 0; y < canvasHeight; y++) {
+                const melBinFloat = ((canvasHeight - 1 - y) / canvasHeight) * (numMels - 1);
+                const melR0 = Math.floor(melBinFloat);
+                const melR1 = Math.min(numMels - 1, melR0 + 1);
+                const melFrac = melBinFloat - melR0;
+
+                const v00 = specMatrix[melR0][frame0];
+                const v01 = specMatrix[melR0][frame1];
+                const v10 = specMatrix[melR1][frame0];
+                const v11 = specMatrix[melR1][frame1];
+
+                const interpTime0 = v00 + frameFrac * (v01 - v00);
+                const interpTime1 = v10 + frameFrac * (v11 - v10);
+                const interpVal = interpTime0 + melFrac * (interpTime1 - interpTime0);
+
+                const linearVal = (interpVal - minVal) / range;
+                const boostedVal = Math.pow(Math.max(0, linearVal), contrastGamma);
+
+                const rgb = getRGBPalette(boostedVal, selectedPalette);
+                const pixelIdx = (y * canvasWidth + x) * 4;
+
+                pixels[pixelIdx]     = rgb[0];
+                pixels[pixelIdx + 1] = rgb[1];
+                pixels[pixelIdx + 2] = rgb[2];
+                pixels[pixelIdx + 3] = 255;
+            }
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+    }
 
     // MICROFONO LIVE CONTROL VIA WEBAUDIO PCM ENCODER
     btnMic.addEventListener('click', toggleMicrophoneStream);
@@ -492,8 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const overlapCount = Math.floor(micAudioContext.sampleRate * 2.0);
                         micPcmSamples = micPcmSamples.slice(micPcmSamples.length - overlapCount);
 
-                        const wavBuffer = encodeWAV(samplesToProcess, micAudioContext.sampleRate);
-                        await decodeAudioUniversal(wavBuffer, true);
+                        await processPcmAndRender(samplesToProcess, 3200, true);
                         isDecodingBusy = false;
                     }
                 }, 800);
@@ -525,9 +620,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function decodeAudioUniversal(arrayBuffer, isLive = false) {
+    async function processAudioClientSide(arrayBuffer, isLive = false) {
         try {
-            updateStatus('processing', '⚡ Elaborazione acustica IA in corso...');
+            updateStatus('processing', '⚡ Elaborazione acustica IA client-side...');
 
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 3200 });
             const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
@@ -535,190 +630,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             await processPcmAndRender(pcm3200, 3200, isLive);
 
-            updateStatus('active', 'Decodifica IA Completata!');
+            updateStatus('active', 'Decodifica IA Client-Side Completata!');
         } catch (error) {
-            console.error('Errore decodifica:', error);
-            if (isLocalServer) {
-                try {
-                    const response = await fetch(`${SERVER_API_URL}/api/decode`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/octet-stream' },
-                        body: arrayBuffer
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.success) {
-                            currentData = data;
-                            renderResults(data, isLive);
-                            updateStatus('active', 'Decodifica IA (Server) Completata!');
-                            return;
-                        }
-                    }
-                } catch(e) {}
-            }
+            console.error('Errore decodifica client-side:', error);
             if (!isLive) {
                 updateStatus('error', `Errore: ${error.message}`);
                 decodedTextBox.textContent = `❌ Errore: ${error.message}`;
             }
-        }
-    }
-
-    function encodeWAV(samples, sampleRate) {
-        const buffer = new ArrayBuffer(44 + samples.length * 2);
-        const view = new DataView(buffer);
-
-        writeString(view, 0, 'RIFF');
-        view.setUint32(4, 36 + samples.length * 2, true);
-        writeString(view, 8, 'WAVE');
-        writeString(view, 12, 'fmt ');
-        view.setUint32(16, 16, true);
-        view.setUint16(20, 1, true);
-        view.setUint16(22, 1, true);
-        view.setUint32(24, sampleRate, true);
-        view.setUint32(28, sampleRate * 2, true);
-        view.setUint16(32, 2, true);
-        view.setUint16(34, 16, true);
-        writeString(view, 36, 'data');
-        view.setUint32(40, samples.length * 2, true);
-
-        let offset = 44;
-        for (let i = 0; i < samples.length; i++, offset += 2) {
-            const s = Math.max(-1, Math.min(1, samples[i]));
-            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-        }
-
-        return buffer;
-    }
-
-    function writeString(view, offset, string) {
-        for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-        }
-    }
-
-    const startPlayAction = () => {
-        safePlayAudio(audioPlayer);
-        if (btnPlay) btnPlay.textContent = '▶ In Riproduzione';
-        if (btnPlayTab3) btnPlayTab3.textContent = '▶ In Riproduzione';
-        start60FpsCanvasAnimation();
-    };
-
-    const pausePlayAction = () => {
-        try { audioPlayer.pause(); } catch (e) {}
-        if (btnPlay) btnPlay.textContent = '▶ Avvia Audio';
-        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
-        stop60FpsCanvasAnimation();
-    };
-
-    const stopPlayAction = () => {
-        try {
-            audioPlayer.pause();
-            audioPlayer.currentTime = 0;
-        } catch (e) {}
-        if (btnPlay) btnPlay.textContent = '▶ Avvia Audio';
-        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
-        stop60FpsCanvasAnimation();
-        renderCanvasesAtCurrentTime();
-    };
-
-    btnPlay.addEventListener('click', startPlayAction);
-    btnPause.addEventListener('click', pausePlayAction);
-    btnStop.addEventListener('click', stopPlayAction);
-
-    if (btnPlayTab3) btnPlayTab3.addEventListener('click', startPlayAction);
-    if (btnPauseTab3) btnPauseTab3.addEventListener('click', pausePlayAction);
-    if (btnStopTab3) btnStopTab3.addEventListener('click', stopPlayAction);
-
-    function start60FpsCanvasAnimation() {
-        stop60FpsCanvasAnimation();
-        function loop() {
-            renderCanvasesAtCurrentTime();
-            if (!audioPlayer.paused && !audioPlayer.ended) {
-                animationFrameId = requestAnimationFrame(loop);
-            }
-        }
-        loop();
-    }
-
-    function stop60FpsCanvasAnimation() {
-        if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
-            animationFrameId = null;
-        }
-    }
-
-    audioPlayer.addEventListener('play', start60FpsCanvasAnimation);
-    audioPlayer.addEventListener('playing', start60FpsCanvasAnimation);
-    audioPlayer.addEventListener('pause', stop60FpsCanvasAnimation);
-    audioPlayer.addEventListener('ended', () => {
-        stop60FpsCanvasAnimation();
-        if (btnPlay) btnPlay.textContent = '▶ Avvia Audio';
-        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
-        playheads.forEach(ph => ph.style.display = 'none');
-    });
-
-    contrastSlider.addEventListener('input', e => {
-        contrastGamma = parseFloat(e.target.value);
-        contrastVal.textContent = `${contrastGamma.toFixed(1)}x`;
-        renderCanvasesAtCurrentTime();
-    });
-
-    colorPaletteSelect.addEventListener('change', e => {
-        selectedPalette = e.target.value;
-        renderCanvasesAtCurrentTime();
-    });
-
-    btnView3s.addEventListener('click', () => {
-        is3sMode = true;
-        isZoomedABMode = false;
-        btnView3s.classList.add('active');
-        btnViewFull.classList.remove('active');
-        renderCanvasesAtCurrentTime();
-    });
-
-    btnViewFull.addEventListener('click', () => {
-        is3sMode = false;
-        isZoomedABMode = false;
-        btnViewFull.classList.add('active');
-        btnView3s.classList.remove('active');
-        renderCanvasesAtCurrentTime();
-    });
-
-    window.addEventListener('resize', () => {
-        renderCanvasesAtCurrentTime();
-    });
-
-    async function processFile(file) {
-        if (isMicRecording) toggleMicrophoneStream();
-
-        updateStatus('processing', `Elaborazione di '${file.name}'...`);
-        if (fileNameDisplay) fileNameDisplay.textContent = file.name;
-        if (fileNameDisplayTab3) fileNameDisplayTab3.textContent = file.name;
-
-        const audioUrl = URL.createObjectURL(file);
-        audioPlayer.src = audioUrl;
-
-        audioSection.classList.remove('hidden');
-        regionCropperSection.classList.remove('hidden');
-        chunkGeneratorSection.classList.remove('hidden');
-        resultCard.classList.remove('hidden');
-        visualizerCard.classList.remove('hidden');
-        decodedTextBox.textContent = "⚡ Elaborazione acustica IA client-side in corso...";
-        if (decodedTextSingle) decodedTextSingle.value = "⚡ Elaborazione in corso...";
-
-        try {
-            const arrayBuffer = await file.arrayBuffer();
-            await decodeAudioUniversal(arrayBuffer, false);
-
-            if (currentData && currentData.duration) {
-                markerAInput.value = "0.0";
-                markerBInput.value = Math.min(10.0, currentData.duration).toFixed(1);
-            }
-        } catch (error) {
-            console.error('Errore:', error);
-            updateStatus('error', `Errore: ${error.message}`);
-            decodedTextBox.textContent = `❌ Errore: ${error.message}`;
-            if (decodedTextSingle) decodedTextSingle.value = `❌ Errore: ${error.message}`;
         }
     }
 
