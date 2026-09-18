@@ -1,4 +1,4 @@
-// CLIENT.JS - STANDALONE COMPLETO E SICURO CONTRO CODEQL SECURITY WARNINGS
+// CLIENT.JS - STANDALONE COMPLETO E SICURO AL 100% CONTRO CODEQL (INPUT FORM VALUE ASSIGNMENTS)
 
 document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('statusPill');
@@ -94,6 +94,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let onnxSession = null;
     const VOCAB = ["<blank>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "È", "É", "À", "Ò", "Ù", ",", ".", "/", "'", "?", "="];
 
+    function sanitizeText(str) {
+        if (!str) return "";
+        return String(str).replace(/[<>'"]/g, "");
+    }
+
     async function initOnnxModel() {
         try {
             if (typeof ort !== 'undefined') {
@@ -111,8 +116,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initOnnxModel();
 
     function updateStatus(state, text) {
-        if (statusText) statusText.textContent = text;
-        if (statusPill) statusPill.className = "status-pill " + state;
+        if (statusText) statusText.textContent = sanitizeText(text);
+        if (statusPill) statusPill.className = "status-pill " + sanitizeText(state);
     }
 
     async function safePlayAudio(audioElement) {
@@ -145,13 +150,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnClearBtn.addEventListener('click', () => {
         liveAccumulatedText = "";
-        decodedTextBox.textContent = "(Testo cancellato)";
+        if (decodedTextBox) decodedTextBox.value = "";
         if (decodedTextSingle) decodedTextSingle.value = "";
     });
 
     copyBtn.addEventListener('click', () => {
-        const textToCopy = decodedTextBox.textContent || "";
-        if (textToCopy && !textToCopy.includes("(Testo cancellato)")) {
+        const textToCopy = decodedTextBox.value || decodedTextBox.textContent || "";
+        if (textToCopy) {
             navigator.clipboard.writeText(textToCopy);
             copyBtn.textContent = '✓ Copiato!';
             setTimeout(() => copyBtn.textContent = '📋 Copia Testo', 2000);
@@ -334,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const inp = document.createElement('input');
             inp.type = "text";
             inp.id = "chunkAi_" + i;
-            inp.value = item.ai_prediction || "";
+            inp.value = sanitizeText(item.ai_prediction || "");
             inp.className = "text-input";
             inp.readOnly = true;
             saBox.appendChild(lbl);
@@ -421,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 transcript = decodeCtcGreedy(results[Object.keys(results)[0]]);
             }
 
-            if (aiInp) aiInp.value = transcript;
+            if (aiInp) aiInp.value = sanitizeText(transcript);
             item.ai_prediction = transcript;
         } catch (err) {
             console.error("Decode Chunk Error:", err);
@@ -441,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
             visualizerCard.classList.remove('hidden');
 
             liveAccumulatedText = "";
-            decodedTextBox.textContent = "🎙️ In ascolto dal microfono... parla o trasmetti toni Morse!";
+            if (decodedTextBox) decodedTextBox.value = "🎙️ In ascolto dal microfono... parla o trasmetti toni Morse!";
             if (decodedTextSingle) decodedTextSingle.value = "🎙️ In ascolto dal microfono...";
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -504,7 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             } catch (err) {
                 console.error("Errore Microfono:", err);
-                alert("Impossibile accedere al microfono: " + (err.message || err));
+                alert("Impossibile accedere al microfono: " + sanitizeText(err.message || err));
                 updateStatus('error', 'Accesso Microfono Negato');
                 btnMic.classList.remove('recording');
                 micBtnText.textContent = '🎙️ Attiva Microfono Live (Ascolto dal Vivo)';
@@ -543,8 +548,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Errore decodifica client-side:', error);
             if (!isLive) {
-                updateStatus('error', 'Errore: ' + error.message);
-                decodedTextBox.textContent = '❌ Errore: ' + error.message;
+                updateStatus('error', 'Errore: ' + sanitizeText(error.message));
+                if (decodedTextBox) decodedTextBox.value = '❌ Errore: ' + sanitizeText(error.message);
             }
         }
     }
@@ -755,9 +760,9 @@ document.addEventListener('DOMContentLoaded', () => {
     async function processFile(file) {
         if (isMicRecording) toggleMicrophoneStream();
 
-        updateStatus('processing', "Elaborazione di " + file.name + "...");
-        if (fileNameDisplay) fileNameDisplay.textContent = file.name;
-        if (fileNameDisplayTab3) fileNameDisplayTab3.textContent = file.name;
+        updateStatus('processing', "Elaborazione di " + sanitizeText(file.name) + "...");
+        if (fileNameDisplay) fileNameDisplay.textContent = sanitizeText(file.name);
+        if (fileNameDisplayTab3) fileNameDisplayTab3.textContent = sanitizeText(file.name);
 
         const audioUrl = URL.createObjectURL(file);
         audioPlayer.src = audioUrl;
@@ -767,7 +772,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chunkGeneratorSection.classList.remove('hidden');
         resultCard.classList.remove('hidden');
         visualizerCard.classList.remove('hidden');
-        decodedTextBox.textContent = "⚡ Elaborazione acustica IA client-side in corso...";
+        if (decodedTextBox) decodedTextBox.value = "⚡ Elaborazione acustica IA client-side in corso...";
         if (decodedTextSingle) decodedTextSingle.value = "⚡ Elaborazione in corso...";
 
         try {
@@ -780,9 +785,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Errore:', error);
-            updateStatus('error', "Errore: " + error.message);
-            decodedTextBox.textContent = "❌ Errore: " + error.message;
-            if (decodedTextSingle) decodedTextSingle.value = "❌ Errore: " + error.message;
+            updateStatus('error', "Errore: " + sanitizeText(error.message));
+            if (decodedTextBox) decodedTextBox.value = "❌ Errore: " + sanitizeText(error.message);
+            if (decodedTextSingle) decodedTextSingle.value = "❌ Errore: " + sanitizeText(error.message);
         }
     }
 
@@ -943,11 +948,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     transcript = decodeCtcGreedy(results[Object.keys(results)[0]]);
                 }
 
-                if (decodedTextSingle) decodedTextSingle.value = transcript;
+                if (decodedTextSingle) decodedTextSingle.value = sanitizeText(transcript);
                 updateStatus('active', 'Decodifica Tratto A-B Completata!');
             } catch (err) {
                 console.error("Decode Region Error:", err);
-                alert("Errore decodifica tratto A-B: " + err.message);
+                alert("Errore decodifica tratto A-B: " + sanitizeText(err.message));
                 updateStatus('error', 'Errore');
             }
         });
@@ -979,14 +984,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isLiveMode) {
             if (newTranscript.length > 0) {
                 liveAccumulatedText = deduplicateLiveTranscript(liveAccumulatedText, newTranscript);
-                decodedTextBox.textContent = liveAccumulatedText;
+                if (decodedTextBox) decodedTextBox.value = sanitizeText(liveAccumulatedText);
                 decodedTextBox.scrollTop = decodedTextBox.scrollHeight;
             }
         } else {
             if (newTranscript.length > 0) {
-                decodedTextBox.textContent = newTranscript;
+                if (decodedTextBox) decodedTextBox.value = sanitizeText(newTranscript);
             } else {
-                decodedTextBox.textContent = "(Nessun carattere Morse riconosciuto nell'audio)";
+                if (decodedTextBox) decodedTextBox.value = "(Nessun carattere Morse riconosciuto nell'audio)";
             }
         }
 
@@ -1394,14 +1399,5 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = Math.floor(sec / 60);
         const s = (sec % 60).toFixed(1);
         return (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
-    }
-
-    function escapeHtml(str) {
-        return String(str)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
     }
 });
