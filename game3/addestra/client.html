@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decodificatore Morse IA - Standalone Serverless (GitHub Pages)</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="styleclient.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- ONNX Runtime Web per inferenza IA puramente client-side -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="logo-title">
+                <span class="icon">📻</span>
+                <h1>DECODIFICATORE MORSE IA <span class="badge">SERVERLESS GITHUB PAGES</span></h1>
+            </div>
+            <div class="status-pill active" id="statusPill">
+                <span class="dot"></span> <span id="statusText">Pronto per Microfono o File Audio</span>
+            </div>
+        </header>
+
+        <!-- MICROPHONE LIVE STREAM CONTROL -->
+        <section class="mic-section">
+            <div class="mic-card">
+                <button class="mic-btn" id="btnMic">
+                    <span class="mic-icon">🎙️</span> <span id="micBtnText">Attiva Microfono Live (Ascolto dal Vivo)</span>
+                </button>
+                <p class="mic-hint">Ascolta la radio o i toni dal microfono e mostra lo spettrogramma e la decodifica in tempo reale!</p>
+            </div>
+        </section>
+
+        <!-- UPLOAD SECTION -->
+        <section class="upload-section">
+            <div class="drop-zone" id="dropZone">
+                <div class="upload-icon">🎵</div>
+                <h3>Trascina un file Audio qui o <span class="browse-btn">Sfoglia</span></h3>
+                <p class="file-types">Formati supportati: <strong>MP3, WAV, OGG, FLAC, M4A, AMR</strong></p>
+                <input type="file" id="fileInput" accept="audio/*" class="file-input">
+            </div>
+        </section>
+
+        <!-- COMMON AUDIO PLAYER & CONTROLS -->
+        <section class="audio-control-card hidden" id="audioSection">
+            <div class="audio-info">
+                <span class="file-name" id="fileNameDisplay">audio.wav</span>
+                <span class="time-display" id="timeDisplay">00:00 / 00:00</span>
+            </div>
+            <div class="player-controls">
+                <button class="ctrl-btn play" id="btnPlay">▶ Avvia Audio</button>
+                <button class="ctrl-btn pause" id="btnPause">⏸ Pausa</button>
+                <button class="ctrl-btn stop" id="btnStop">⏹ Stop</button>
+            </div>
+            <audio id="audioPlayer" class="native-audio-player"></audio>
+        </section>
+
+        <!-- DECODED TEXT RESULT DISPLAY -->
+        <section class="result-card hidden" id="resultCard">
+            <div class="card-header">
+                <h2>💬 TESTO DECODIFICATO DALL'IA</h2>
+                <div class="card-actions">
+                    <button class="copy-btn clear" id="btnClearBtn">🧹 Cancella Testo</button>
+                    <button class="copy-btn" id="copyBtn">📋 Copia Testo</button>
+                </div>
+            </div>
+            <div class="decoded-text-box single-line" id="decodedTextBox">
+                <span class="placeholder">In attesa dell'elaborazione...</span>
+            </div>
+        </section>
+
+        <!-- VISUALIZERS (WAVEFORM & MEL SPECTROGRAM) -->
+        <section class="visualizer-card hidden" id="visualizerCard">
+            <div class="card-header">
+                <h2>📊 SPETTROGRAMMA E TRACCIA AUDIO IN TEMPO REALE</h2>
+                <div class="visualizer-controls">
+                    <div class="control-group">
+                        <label for="contrastSlider">⚡ Contrasto:</label>
+                        <input type="range" id="contrastSlider" min="1.0" max="10.0" step="0.1" value="2.2" class="slider">
+                        <span class="slider-val" id="contrastVal">2.2x</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="colorPaletteSelect">🎨 Palette:</label>
+                        <select id="colorPaletteSelect" class="select-input">
+                            <option value="cyber">Cyber Neon</option>
+                            <option value="magma">Magma</option>
+                            <option value="high_contrast">Alto Contrasto</option>
+                        </select>
+                    </div>
+                    <div class="view-toggle">
+                        <button class="toggle-btn active" id="btnView3s">🌊 3 Sec</button>
+                        <button class="toggle-btn" id="btnViewFull">📜 Intera</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="canvas-block">
+                <div class="canvas-label">1. FORMA D'ONDA AUDIO</div>
+                <div class="canvas-wrapper">
+                    <canvas id="waveformCanvas" height="85"></canvas>
+                    <div class="playhead" id="playhead1"></div>
+                </div>
+            </div>
+
+            <div class="canvas-block">
+                <div class="canvas-label">2. SPETTROGRAMMA MEL HD</div>
+                <div class="canvas-wrapper">
+                    <canvas id="spectrogramCanvas" height="140"></canvas>
+                    <div class="playhead" id="playhead2"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="appclient.js"></script>
+</body>
+</html>
