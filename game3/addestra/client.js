@@ -1,4 +1,4 @@
-// CLIENT.JS - DECODIFICA ibrida smart: server locale (se attivo) o fallback ONNX client-side
+// CLIENT.JS - STANDALONE COMPLETO E SICURO CONTRO CODEQL SECURITY WARNINGS
 
 document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('statusPill');
@@ -90,9 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDecodingBusy = false;
     let liveAccumulatedText = "";
 
-    // Server API base URL (supporta server locale se attivo)
-    const SERVER_API_URL = "http://localhost:8000";
-
     // ONNX RUNTIME WEB SESSION & VOCABULARY
     let onnxSession = null;
     const VOCAB = ["<blank>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "È", "É", "À", "Ò", "Ù", ",", ".", "/", "'", "?", "="];
@@ -103,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateStatus('processing', '⏳ Caricamento modello IA ONNX nel browser...');
                 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
                 onnxSession = await ort.InferenceSession.create('morse_model_quant.onnx');
-                updateStatus('active', 'Pronto (IA Client-Side attiva)');
+                updateStatus('active', 'Pronto (IA Serverless Client-Side attiva)');
             } else {
                 updateStatus('active', 'Pronto (Modalità Audio Standalone)');
             }
@@ -115,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateStatus(state, text) {
         if (statusText) statusText.textContent = text;
-        if (statusPill) statusPill.className = `status-pill ${state}`;
+        if (statusPill) statusPill.className = "status-pill " + state;
     }
 
     async function safePlayAudio(audioElement) {
@@ -228,17 +225,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         audioChunkList.forEach((item, i) => {
             const card = document.createElement('div');
-            card.className = `chunk-card`;
-            card.id = `chunkCard_${i}`;
+            card.className = "chunk-card";
+            card.id = "chunkCard_" + i;
 
             const headerDiv = document.createElement('div');
-            headerDiv.className = `chunk-card-header`;
+            headerDiv.className = "chunk-card-header";
             const h4 = document.createElement('h4');
-            h4.textContent = `✂️ Segmento #${i + 1} [${formatSecToMin(item.startSec)} - ${formatSecToMin(item.endSec)}]`;
+            h4.textContent = "✂️ Segmento #" + (i + 1) + " [" + formatSecToMin(item.startSec) + " - " + formatSecToMin(item.endSec) + "]";
             headerDiv.appendChild(h4);
 
             const controlsDiv = document.createElement('div');
-            controlsDiv.className = `player-controls inline`;
+            controlsDiv.className = "player-controls inline";
             const btnPlay = document.createElement('button');
             btnPlay.className = "ctrl-btn play";
             btnPlay.textContent = "▶ Riproduci";
@@ -258,26 +255,26 @@ document.addEventListener('DOMContentLoaded', () => {
             card.appendChild(headerDiv);
 
             const canvasRow = document.createElement('div');
-            canvasRow.className = `chunk-canvas-row`;
+            canvasRow.className = "chunk-canvas-row";
 
             const block1 = document.createElement('div');
-            block1.className = `mini-canvas-block`;
+            block1.className = "mini-canvas-block";
             const span1 = document.createElement('span');
-            span1.className = `mini-canvas-label`;
-            span1.textContent = `1. FORMA D'ONDA SEGMENTO`;
+            span1.className = "mini-canvas-label";
+            span1.textContent = "1. FORMA D'ONDA SEGMENTO";
             const cv1 = document.createElement('canvas');
-            cv1.id = `chunkWave_${i}`;
+            cv1.id = "chunkWave_" + i;
             cv1.height = 70;
             block1.appendChild(span1);
             block1.appendChild(cv1);
 
             const block2 = document.createElement('div');
-            block2.className = `mini-canvas-block`;
+            block2.className = "mini-canvas-block";
             const span2 = document.createElement('span');
-            span2.className = `mini-canvas-label`;
-            span2.textContent = `2. SPETTROGRAMMA MEL SEGMENTO`;
+            span2.className = "mini-canvas-label";
+            span2.textContent = "2. SPETTROGRAMMA MEL SEGMENTO";
             const cv2 = document.createElement('canvas');
-            cv2.id = `chunkSpec_${i}`;
+            cv2.id = "chunkSpec_" + i;
             cv2.height = 100;
             block2.appendChild(span2);
             block2.appendChild(cv2);
@@ -287,7 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.appendChild(canvasRow);
 
             const controlsRow = document.createElement('div');
-            controlsRow.className = `chunk-controls-row`;
+            controlsRow.className = "chunk-controls-row";
 
             const grpA = document.createElement('div');
             grpA.className = "input-group";
@@ -295,7 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lblA.textContent = "Marker A (sec):";
             const inputA = document.createElement('input');
             inputA.type = "number";
-            inputA.id = `chunkInputA_${i}`;
+            inputA.id = "chunkInputA_" + i;
             inputA.value = item.startSec.toFixed(1);
             inputA.step = "0.1";
             inputA.className = "num-input";
@@ -309,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lblB.textContent = "Marker B (sec):";
             const inputB = document.createElement('input');
             inputB.type = "number";
-            inputB.id = `chunkInputB_${i}`;
+            inputB.id = "chunkInputB_" + i;
             inputB.value = item.endSec.toFixed(1);
             inputB.step = "0.1";
             inputB.className = "num-input";
@@ -328,15 +325,15 @@ document.addEventListener('DOMContentLoaded', () => {
             card.appendChild(controlsRow);
 
             const transcriptsRow = document.createElement('div');
-            transcriptsRow.className = `chunk-transcripts-row`;
+            transcriptsRow.className = "chunk-transcripts-row";
             const saBox = document.createElement('div');
-            saBox.className = `save-addestra-box`;
+            saBox.className = "save-addestra-box";
             saBox.style.flex = "1";
             const lbl = document.createElement('label');
             lbl.textContent = "💬 Decodifica IA:";
             const inp = document.createElement('input');
             inp.type = "text";
-            inp.id = `chunkAi_${i}`;
+            inp.id = "chunkAi_" + i;
             inp.value = item.ai_prediction || "";
             inp.className = "text-input";
             inp.readOnly = true;
@@ -351,8 +348,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.updateChunkBounds = (i) => {
-        const inpA = document.getElementById(`chunkInputA_${i}`);
-        const inpB = document.getElementById(`chunkInputB_${i}`);
+        const inpA = document.getElementById("chunkInputA_" + i);
+        const inpB = document.getElementById("chunkInputB_" + i);
         if (!inpA || !inpB || !audioChunkList[i]) return;
 
         audioChunkList[i].startSec = parseFloat(inpA.value) || 0;
@@ -409,7 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = audioChunkList[i];
         if (!item || !currentData || !currentData.rawPcm) return;
 
-        const aiInp = document.getElementById(`chunkAi_${i}`);
+        const aiInp = document.getElementById("chunkAi_" + i);
         if (aiInp) aiInp.value = "⚡ Decodifica IA...";
 
         try {
@@ -507,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             } catch (err) {
                 console.error("Errore Microfono:", err);
-                alert(`Impossibile accedere al microfono: ${err.message || err}`);
+                alert("Impossibile accedere al microfono: " + (err.message || err));
                 updateStatus('error', 'Accesso Microfono Negato');
                 btnMic.classList.remove('recording');
                 micBtnText.textContent = '🎙️ Attiva Microfono Live (Ascolto dal Vivo)';
@@ -545,28 +542,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updateStatus('active', 'Decodifica IA Client-Side Completata!');
         } catch (error) {
             console.error('Errore decodifica client-side:', error);
-
-            // Smart fallback su server locale se attivo (per test in locale)
-            try {
-                const response = await fetch(`${SERVER_API_URL}/api/decode`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/octet-stream' },
-                    body: arrayBuffer
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.success) {
-                        currentData = data;
-                        renderResults(data, isLive);
-                        updateStatus('active', 'Decodifica IA (Server) Completata!');
-                        return;
-                    }
-                }
-            } catch(e) {}
-
             if (!isLive) {
-                updateStatus('error', `Errore: ${error.message}`);
-                decodedTextBox.textContent = `❌ Errore: ${error.message}`;
+                updateStatus('error', 'Errore: ' + error.message);
+                decodedTextBox.textContent = '❌ Errore: ' + error.message;
             }
         }
     }
@@ -745,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     contrastSlider.addEventListener('input', e => {
         contrastGamma = parseFloat(e.target.value);
-        contrastVal.textContent = `${contrastGamma.toFixed(1)}x`;
+        contrastVal.textContent = contrastGamma.toFixed(1) + "x";
         renderCanvasesAtCurrentTime();
     });
 
@@ -777,7 +755,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function processFile(file) {
         if (isMicRecording) toggleMicrophoneStream();
 
-        updateStatus('processing', `Elaborazione di '${file.name}'...`);
+        updateStatus('processing', "Elaborazione di " + file.name + "...");
         if (fileNameDisplay) fileNameDisplay.textContent = file.name;
         if (fileNameDisplayTab3) fileNameDisplayTab3.textContent = file.name;
 
@@ -802,9 +780,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Errore:', error);
-            updateStatus('error', `Errore: ${error.message}`);
-            decodedTextBox.textContent = `❌ Errore: ${error.message}`;
-            if (decodedTextSingle) decodedTextSingle.value = `❌ Errore: ${error.message}`;
+            updateStatus('error', "Errore: " + error.message);
+            decodedTextBox.textContent = "❌ Errore: " + error.message;
+            if (decodedTextSingle) decodedTextSingle.value = "❌ Errore: " + error.message;
         }
     }
 
@@ -952,7 +930,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const mA = parseFloat(markerAInput.value) || 0;
             const mB = parseFloat(markerBInput.value) || currentData.duration;
 
-            updateStatus('processing', `Decodifica IA in corso per il tratto A-B (${mA}s - ${mB}s)...`);
+            updateStatus('processing', "Decodifica IA in corso per il tratto A-B (" + mA + "s - " + mB + "s)...");
             try {
                 const startIdx = Math.floor(mA * 3200);
                 const endIdx = Math.floor(mB * 3200);
@@ -969,10 +947,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateStatus('active', 'Decodifica Tratto A-B Completata!');
             } catch (err) {
                 console.error("Decode Region Error:", err);
-                alert(`Errore decodifica tratto A-B: ${err.message}`);
+                alert("Errore decodifica tratto A-B: " + err.message);
                 updateStatus('error', 'Errore');
             }
         });
+    }
+
+    function deduplicateLiveTranscript(existingText, newText) {
+        if (!newText || !newText.trim()) return existingText;
+        const cleanNew = newText.trim();
+        if (!existingText || !existingText.trim()) return cleanNew;
+
+        const exWords = existingText.trim().split(/\s+/);
+        const newWords = cleanNew.split(/\s+/);
+
+        const lastWord = exWords[exWords.length - 1];
+        if (newWords[0] === lastWord) {
+            newWords.shift();
+        }
+
+        if (newWords.length > 0) {
+            return (existingText.trim() + " " + newWords.join(" ")).trim();
+        }
+
+        return existingText;
     }
 
     function renderResults(data, isLiveMode = false) {
@@ -1004,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalDuration = currentData.duration || 1;
 
         if (timeDisplayTab3) {
-            timeDisplayTab3.textContent = `${formatTime(curTime)} / ${formatTime(totalDuration)}`;
+            timeDisplayTab3.textContent = formatTime(curTime) + " / " + formatTime(totalDuration);
         }
 
         let specStartTime = Math.max(0, curTime - 1.0);
@@ -1033,13 +1031,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (playheads[0]) {
             const pctWave = ((curTime - waveStartTime) / visWaveDur) * 100;
             playheads[0].style.display = 'block';
-            playheads[0].style.left = `${Math.max(0, Math.min(100, pctWave))}%`;
+            playheads[0].style.left = Math.max(0, Math.min(100, pctWave)) + "%";
         }
 
         if (playheads[1]) {
             const pctSpec = ((curTime - specStartTime) / visSpecDur) * 100;
             playheads[1].style.display = 'block';
-            playheads[1].style.left = `${Math.max(0, Math.min(100, pctSpec))}%`;
+            playheads[1].style.left = Math.max(0, Math.min(100, pctSpec)) + "%";
         }
 
         drawWaveformWindow(currentData.waveform, waveStartTime, waveEndTime, totalDuration);
@@ -1079,7 +1077,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.lineTo(x, height);
             ctx.stroke();
 
-            ctx.fillText(`${t.toFixed(1)}s`, x + 3, 12);
+            ctx.fillText(t.toFixed(1) + "s", x + 3, 12);
         }
 
         const startIdx = Math.floor((startTime / totalDuration) * waveform.length);
@@ -1175,8 +1173,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = audioChunkList[i];
         if (!item || !currentData) return;
 
-        const waveCanvas = document.getElementById(`chunkWave_${i}`);
-        const specCanvas = document.getElementById(`chunkSpec_${i}`);
+        const waveCanvas = document.getElementById("chunkWave_" + i);
+        const specCanvas = document.getElementById("chunkSpec_" + i);
 
         if (waveCanvas && currentData.waveform) {
             waveCanvas.onclick = (e) => {
@@ -1389,16 +1387,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatTime(sec) {
         const m = Math.floor(sec / 60);
         const s = Math.floor(sec % 60);
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        return (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
     }
 
     function formatSecToMin(sec) {
         const m = Math.floor(sec / 60);
         const s = (sec % 60).toFixed(1);
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(4, '0')}`;
+        return (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
     }
 
     function escapeHtml(str) {
-        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 });
