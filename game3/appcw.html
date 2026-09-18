@@ -619,10 +619,17 @@ s            </div>
 
         <!-- ANDAMENTO TEMPORALE -->
         <div class="box-panel" style="margin-bottom:12px; background: #fff; border-color: var(--link-color);">
-            <h3 style="color:var(--link-color); font-size:1em; margin-bottom:8px; display:flex; align-items:center; justify-content:center; gap:8px;">
-                📈 Progressioni Velocità WPM & Accuratezza
-                <span class="info-icon" onclick="window.showStatInfo('trend')">ⓘ</span>
-            </h3>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+                <h3 style="color:var(--link-color); font-size:0.95em; margin:0; display:flex; align-items:center; gap:6px;">
+                    📈 Progressione WPM & Accuratezza
+                    <span class="info-icon" onclick="window.showStatInfo('trend')">ⓘ</span>
+                </h3>
+                <select id="chartPeriodSelect" onchange="window.loadAdvancedStats()" style="padding:4px 8px; font-size:0.8em; font-weight:bold; background:#f0f7ff; color:#1976d2; border:1px solid #1976d2; border-radius:6px; cursor:pointer;">
+                    <option value="history" selected>📅 Storico Globale nel Tempo</option>
+                    <option value="today">☀️ Risultato Giornaliero (Oggi)</option>
+                    <option value="last_match">🎯 Ultima Partita (Parola per Parola)</option>
+                </select>
+            </div>
 
             <!-- SUMMARY BADGES IN ALTO AL GRAFICO -->
             <div id="wpmSummaryBadges" style="display:flex; justify-content:space-around; align-items:center; background:#f0f7ff; padding:8px 4px; border-radius:8px; border:1px solid #cce3fe; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
@@ -651,6 +658,17 @@ s            </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:0.75em; padding:0 4px;">
                 <span style="color:#1976d2; font-weight:bold;">🔵 Accuratezza (%) [Asse SX]</span>
                 <span style="color:#ff9800; font-weight:bold;">🟠 Velocità (WPM) [Asse DX]</span>
+            </div>
+        </div>
+
+        <!-- ANALISI FASI DI GIOCO (TENUTA E CALO COGNITIVO) -->
+        <div class="box-panel" style="margin-bottom:12px; background: #fff; border-color: #ff9800; color: #000;">
+            <h3 style="color:#ff9800; font-size:1em; margin-bottom:8px; text-align: left; display:flex; align-items:center; justify-content:space-between;">
+                <span>🧠 Tenuta Mentale & Fasi di Gioco</span>
+                <span class="info-icon" onclick="window.showStatInfo('phases')">ⓘ</span>
+            </h3>
+            <div id="gamePhaseContainer" style="display:flex; flex-direction:column; gap:8px;">
+                <!-- Caricato via JS: Inizio (0-33%), Metà (33-66%), Finale (66-100%) -->
             </div>
         </div>
 
@@ -1692,7 +1710,7 @@ s            </div>
 
     <div class="table-wrapper" id="tableWrapper">
         <table id="gameTable">
-            <thead><tr><th id="txt_th_typed">Scritto</th><th id="txt_th_real">Reale</th><th id="txt_th_pts">Pt / 🔊</th></tr></thead>
+            <thead><tr><th id="txt_th_typed">Scritto</th><th id="txt_th_real">Reale</th><th>WPM</th><th id="txt_th_pts">Pt / 🔊</th></tr></thead>
             <tbody id="tableBody"></tbody>
         </table>
     </div>
@@ -2402,7 +2420,7 @@ window.openStandaloneAiStudio = window.openStandaloneAiStudio || function() {
     <p style="text-align: center; font-size: 0.85em; color: var(--hint-color); margin-top: -10px;">I caratteri saltati o errati sono in <span style="color: #d32f2f; font-weight: bold;">rosso</span>.</p>
     <div class="table-wrapper" style="flex-grow:1; overflow-y:auto; margin-bottom: 10px;">
         <table id="matchDetailsTable">
-            <thead><tr><th>Scritto</th><th>Reale</th><th>Pt / 🔊</th></tr></thead>
+            <thead><tr><th>Scritto</th><th>Reale</th><th>WPM</th><th>Pt / 🔊</th></tr></thead>
             <tbody id="matchDetailsBody"></tbody>
         </table>
     </div>
