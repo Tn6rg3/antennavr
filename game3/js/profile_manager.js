@@ -839,15 +839,23 @@ window.renderGamePhaseAnalysis = function(historyMatches = []) {
     const container = document.getElementById('gamePhaseContainer');
     if (!container) return;
 
-    if (!Array.isArray(historyMatches) || historyMatches.length === 0) {
-        container.innerHTML = '<p style="font-size:0.75em; color:#888; text-align:center; margin:10px 0;">Gioca almeno 1 partita per analizzare la tenuta nelle fasi di gioco.</p>';
+    const allowedModes = new Set(['standard', 'callsign', 'daily_challenge']);
+
+    const filteredMatches = (Array.isArray(historyMatches) ? historyMatches : []).filter(m => {
+        if (!m) return false;
+        const mode = (m.mode || 'standard').toLowerCase();
+        return allowedModes.has(mode);
+    });
+
+    if (filteredMatches.length === 0) {
+        container.innerHTML = '<p style="font-size:0.75em; color:#888; text-align:center; margin:10px 0;">Gioca almeno 1 partita ufficiale (Parole Comuni, Nominativi o Sfida) per sbloccare l\'analisi delle fasi.</p>';
         return;
     }
 
     let phase1Acc = [], phase2Acc = [], phase3Acc = [];
     let phase1Wpm = [], phase2Wpm = [], phase3Wpm = [];
 
-    historyMatches.forEach(m => {
+    filteredMatches.forEach(m => {
         const details = (m.details || m.matchDetails || []);
         if (details.length >= 3) {
             const len = details.length;
