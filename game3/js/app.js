@@ -1459,32 +1459,58 @@ window.setupBugSystem = function() {
 
 window.updateAdminBadge = async function() {
     const badge = document.getElementById('bugsBadge');
-    if (!badge || !db) return;
+    const courseBadge = document.getElementById('courseEnrollmentBadgeGlobal');
+    if (!db) return;
 
+    let unreadBugsCount = 0;
+    let pendingTutorRequestsCount = 0;
+
+    const lastSeenBugTs = parseInt(localStorage.getItem('cw_last_bug_ts') || 0);
+
+    // 1. Lettura Bug Reports (Solo se Admin)
     try {
-        const lastSeenBugTs = parseInt(localStorage.getItem('cw_last_bug_ts') || 0);
-
-        // Contiamo bug nuovi e tutor requests pendenti
-        const [bugsSnap, tutorSnap] = await Promise.all([
-            db.ref('bugReports').once('value'),
-            db.ref('tutorRequests').once('value')
-        ]);
-
-        let count = 0;
-        if (bugsSnap.exists()) {
-            bugsSnap.forEach(c => { if (c.val().ts > lastSeenBugTs) count++; });
+        const bugsSnap = await db.ref('bugReports').once('value');
+        if (bugsSnap && bugsSnap.exists()) {
+            bugsSnap.forEach(c => {
+                if (c.val() && c.val().ts > lastSeenBugTs) unreadBugsCount++;
+            });
         }
-        if (tutorSnap.exists()) {
-            count += Object.keys(tutorSnap.val()).length;
-        }
+    } catch(e) {}
 
-        if (count > 0) {
-            badge.textContent = count;
+    // 2. Lettura Richieste Tutor (Accessibile ai Tutor/Admin)
+    try {
+        const tutorSnap = await db.ref('tutorRequests').once('value');
+        if (tutorSnap && tutorSnap.exists()) {
+            const requests = tutorSnap.val() || {};
+            Object.values(requests).forEach(req => {
+                if (req) {
+                    if (!req.tutorId || req.tutorId === window.myId || window.isAdmin) {
+                        pendingTutorRequestsCount++;
+                    }
+                }
+            });
+        }
+    } catch(e) {}
+
+    if (badge) {
+        if (unreadBugsCount > 0) {
+            badge.textContent = unreadBugsCount;
             badge.style.display = 'flex';
         } else {
             badge.style.display = 'none';
         }
-    } catch(e) { console.error("Firebase Security Logic Error:", e); }
+    }
+
+    if (courseBadge) {
+        if (pendingTutorRequestsCount > 0) {
+            courseBadge.textContent = pendingTutorRequestsCount;
+            courseBadge.style.display = 'flex';
+            courseBadge.classList.add('badge-active');
+        } else {
+            courseBadge.style.display = 'none';
+            courseBadge.classList.remove('badge-active');
+        }
+    }
 };
 
 window.loadAdminBugs = function() {

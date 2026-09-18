@@ -1230,6 +1230,9 @@ window.initTutorCourseChatNotification = function() {
         const aulaCallback = snap => {
             if (initAula) { initAula = false; return; }
             const m = snap.val(); if (!m || m.senderId === window.myId) return;
+            if (typeof showToast === 'function') {
+                showToast(`💬 Messaggio Aula da ${m.senderName || 'Studente'}: ${m.msg ? m.msg.substring(0, 30) : 'Nuovo messaggio'}`);
+            }
             window.processCourseNotification('aula');
         };
 
@@ -1246,6 +1249,9 @@ window.initTutorCourseChatNotification = function() {
     const globalCallback = snap => {
         if (initGlobal) { initGlobal = false; return; }
         const m = snap.val(); if (!m || m.senderId === window.myId) return;
+        if (typeof showToast === 'function') {
+            showToast(`💬 Messaggio Chat Corso da ${m.senderName || 'Studente'}: ${m.msg ? m.msg.substring(0, 30) : 'Nuovo messaggio'}`);
+        }
         window.processCourseNotification('global');
     };
 
