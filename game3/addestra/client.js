@@ -1254,6 +1254,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function drawSpectrogramWindowHDOnCanvas(canvas, specMatrix, startTime, endTime, totalDuration, chunkIndex) {
+        if (!specMatrix || specMatrix.length === 0) return;
+
+        const ctx = canvas.getContext('2d');
+        const numMels = specMatrix.length;
+        const totalFrames = specMatrix[0].length;
+
+        const canvasWidth = canvas.width = canvas.parentElement.clientWidth || 300;
+        const canvasHeight = canvas.height = 100;
+
+        const startFrame = Math.floor((startTime / totalDuration) * totalFrames);
+        const endFrame = Math.min(totalFrames, Math.ceil((endTime / totalDuration) * totalFrames));
+        const visibleFrames = Math.max(1, endFrame - startFrame);
+
+        const imgData = ctx.createImageData(canvasWidth, canvasHeight);
+        const pixels = imgData.data;
+
+        let minVal = Infinity, maxVal = -Infinity;
+        for (let r = 0; r < numMels; r++) {
+            for (let c = startFrame; c < Math.min(totalFrames, startFrame + visibleFrames); c++) {
+                const val = specMatrix[r][c];
+                if (val < minVal) minVal = val;
+                if (val > maxVal) maxVal = val;
+            }
+        }
+        const range = (maxVal - minVal) || 1e-5;
+
+        for (let x = 0; x < canvasWidth; x++) {
+            const frameFloat = startFrame + (x / canvasWidth) * (visibleFrames - 1);
+            const frame0 = Math.floor(frameFloat);
+            const frame1 = Math.min(totalFrames - 1, frame0 + 1);
+            const frameFrac = frameFloat - frame0;
+
+            for (let y = 0; y < canvasHeight; y++) {
+                const melBinFloat = ((canvasHeight - 1 - y) / canvasHeight) * (numMels - 1);
+                const melR0 = Math.floor(melBinFloat);
+                const melR1 = Math.min(numMels - 1, melR0 + 1);
+                const melFrac = melBinFloat - melR0;
+
+                const v00 = specMatrix[melR0][frame0];
+                const v01 = specMatrix[melR0][frame1];
+                const v10 = specMatrix[melR1][frame0];
+                const v11 = specMatrix[melR1][frame1];
+
+                const interpTime0 = v00 + frameFrac * (v01 - v00);
+                const interpTime1 = v10 + frameFrac * (v11 - v10);
+                const interpVal = interpTime0 + melFrac * (interpTime1 - interpTime0);
+
+                const linearVal = (interpVal - minVal) / range;
+                const boostedVal = Math.pow(Math.max(0, linearVal), contrastGamma);
+
+                const rgb = getRGBPalette(boostedVal, selectedPalette);
+                const pixelIdx = (y * canvasWidth + x) * 4;
+
+                pixels[pixelIdx]     = rgb[0];
+                pixels[pixelIdx + 1] = rgb[1];
+                pixels[pixelIdx + 2] = rgb[2];
+                pixels[pixelIdx + 3] = 255;
+            }
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+
+        const curTime = audioPlayer.currentTime || 0;
+        if (currentPlayingChunkIndex === chunkIndex && !audioPlayer.paused && curTime >= startTime && curTime <= endTime) {
+            const visDur = (endTime - startTime) || 1e-5;
+            const xPlay = Math.max(0, Math.min(canvasWidth, ((curTime - startTime) / visDur) * canvasWidth));
+
+            ctx.shadowColor = '#ff1744';
+            ctx.shadowBlur = 8;
+            ctx.strokeStyle = '#ff1744';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(xPlay, 0);
+            ctx.lineTo(xPlay, canvasHeight);
+            ctx.stroke();
+
+            ctx.fillStyle = '#ff1744';
+            ctx.beginPath();
+            ctx.arc(xPlay, 6, 4, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
     function escapeHtml(str) {
         return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
