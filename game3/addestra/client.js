@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const arrayBuffer = await file.arrayBuffer();
-            await decodeAudioServer(arrayBuffer, false);
+            await processAudioClientSide(arrayBuffer, false);
 
             if (currentData && currentData.duration) {
                 markerAInput.value = "0.0";
