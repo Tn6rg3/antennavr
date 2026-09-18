@@ -171,7 +171,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnResetFullTrack) {
         btnResetFullTrack.addEventListener('click', () => {
             audioChunkList = [];
-            if (chunksListContainer) chunksListContainer.innerHTML = "";
+            if (chunksListContainer) {
+                while (chunksListContainer.firstChild) {
+                    chunksListContainer.removeChild(chunksListContainer.firstChild);
+                }
+            }
             try { stopChunk(); } catch(e) {}
             isZoomedABMode = false;
             waveZoomScale = 1.0;
@@ -218,7 +222,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderAudioChunksList() {
         if (!chunksListContainer) return;
-        chunksListContainer.innerHTML = "";
+        while (chunksListContainer.firstChild) {
+            chunksListContainer.removeChild(chunksListContainer.firstChild);
+        }
 
         if (audioChunkList.length === 0) {
             const p = document.createElement('p');
