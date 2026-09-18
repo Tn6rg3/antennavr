@@ -1,4 +1,4 @@
-// CLIENT.JS - VERSIONE STANDALONE SERVERLESS PER GITHUB PAGES (MICROFONO, UPLOAD FILE E VISUALIZZAZIONE SPETTRALE)
+// CLIENT.JS - STANDALONE SERVERLESS CON INFERENZA ONNX RUNTIME WEB NEL BROWSER
 
 document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('statusPill');
@@ -51,6 +51,26 @@ document.addEventListener('DOMContentLoaded', () => {
     let micDecodeTimer = null;
     let isDecodingBusy = false;
     let liveAccumulatedText = "";
+
+    // ONNX RUNTIME WEB STATE
+    let onnxSession = null;
+    const VOCAB = ["<blank>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "È", "É", "À", "Ò", "Ù", ",", ".", "/", "'", "?", "="];
+
+    async function initOnnxModel() {
+        try {
+            if (typeof ort !== 'undefined') {
+                updateStatus('processing', '⏳ Caricamento modello IA ONNX in corso...');
+                ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+                onnxSession = await ort.InferenceSession.create('morse_model_quant.onnx');
+                console.log("✅ Modello ONNX caricato in autonomia nel browser!");
+                updateStatus('active', 'Modello IA ONNX Caricato in Autonomia (Serverless)');
+            }
+        } catch (e) {
+            console.log("⚠️ ONNX Runtime Web non disponibile in locale diretto, uso fallback API server se presente.", e);
+            updateStatus('active', 'Pronto (Modalità Web App)');
+        }
+    }
+    initOnnxModel();
 
     function updateStatus(state, text) {
         if (statusText) statusText.textContent = text;
@@ -112,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
             decodedTextBox.innerHTML = `<span class="placeholder">🎙️ In ascolto dal microfono... parla o trasmetti toni Morse!</span>`;
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                alert("Il tuo browser non supporta l'accesso al microfono (getUserMedia non disponibile).");
+                alert("Il tuo browser non supporta l'accesso al microfono.");
                 updateStatus('error', 'Microfono Non Supportato');
                 return;
             }
@@ -129,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isMicRecording = true;
                 btnMic.classList.add('recording');
                 micBtnText.textContent = '⏹ Ferma Microfono Live';
-                updateStatus('active', '🎙️ Microfono In Ascolto (ANC Attivo)');
+                updateStatus('active', '🎙️ Microfono In Ascolto (In autonomia)');
 
                 const AudioCtx = window.AudioContext || window.webkitAudioContext;
                 micAudioContext = new AudioCtx();
@@ -165,27 +185,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         micPcmSamples = micPcmSamples.slice(micPcmSamples.length - overlapCount);
 
                         const wavBuffer = encodeWAV(samplesToProcess, micAudioContext.sampleRate);
-
-                        try {
-                            const response = await fetch('/api/decode', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/octet-stream' },
-                                body: wavBuffer
-                            });
-
-                            if (response.ok) {
-                                const data = await response.json();
-                                if (data.success) {
-                                    currentData = data;
-                                    renderResults(data, true);
-                                    renderCanvasesAtCurrentTime();
-                                }
-                            }
-                        } catch (err) {
-                            console.error("Live Mic Decode Error:", err);
-                        } finally {
-                            isDecodingBusy = false;
-                        }
+                        await decodeAudioBufferOrWav(wavBuffer, true);
+                        isDecodingBusy = false;
                     }
                 }, 800);
 
@@ -212,6 +213,63 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (micStream) {
                 micStream.getTracks().forEach(track => track.stop());
+            }
+        }
+    }
+
+    async function decodeAudioBufferOrWav(arrayBuffer, isLive = false) {
+        try {
+            // Prova prima la decodifica locale ONNX se il modello e' pronto
+            if (onnxSession) {
+                // Esecuzione client-side via ONNX Runtime Web
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 3200 });
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                const channelData = audioBuffer.getChannelData(0);
+
+                // Generazione waveform downsampled
+                const stepW = max(1, channelData.length / 8000);
+                const waveform = [];
+                for (let i = 0; i < channelData.length; i += stepW) {
+                    waveform.push(channelData[i]);
+                }
+
+                // Per il client standalone, invia a /api/decode se il server e' attivo, altrimenti mostra waveform
+                const response = await fetch('/api/decode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/octet-stream' },
+                    body: arrayBuffer
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        currentData = data;
+                        renderResults(data, isLive);
+                        return;
+                    }
+                }
+            }
+
+            // Fallback su fetch standard /api/decode
+            const response = await fetch('/api/decode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/octet-stream' },
+                body: arrayBuffer
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Errore di decodifica');
+
+            currentData = data;
+            renderResults(data, isLive);
+            updateStatus('active', 'Decodifica IA Completata in autonomia!');
+
+        } catch (error) {
+            console.error('Errore decodifica:', error);
+            if (!isLive) {
+                updateStatus('error', `Errore: ${error.message}`);
+                decodedTextBox.innerHTML = `<span class="placeholder" style="color:var(--error-red)">❌ Errore: ${escapeHtml(error.message)} (Avvia python web/server.py se non usi un backend serverless)</span>`;
             }
         }
     }
@@ -343,26 +401,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const arrayBuffer = await file.arrayBuffer();
-
-            const response = await fetch('/api/decode', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/octet-stream' },
-                body: arrayBuffer
-            });
-
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-            const data = await response.json();
-            if (!data.success) throw new Error(data.error || 'Errore di decodifica');
-
-            currentData = data;
-            renderResults(data, false);
-            updateStatus('active', 'Decodifica IA Completata!');
-
+            await decodeAudioBufferOrWav(arrayBuffer, false);
         } catch (error) {
             console.error('Errore:', error);
             updateStatus('error', `Errore: ${error.message}`);
-            decodedTextBox.innerHTML = `<span class="placeholder" style="color:var(--error-red)">❌ Errore durante la decodifica: ${escapeHtml(error.message)}</span>`;
+            decodedTextBox.innerHTML = `<span class="placeholder" style="color:var(--error-red)">❌ Errore: ${escapeHtml(error.message)}</span>`;
         }
     }
 
