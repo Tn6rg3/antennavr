@@ -1,4 +1,4 @@
-// CLIENT.JS - INFERENZA ONNX 100% CLIENT-SIDE CON STFT E MEL-SPECTROGRAM REALE IN JS
+// CLIENT.JS - 100% PURE CLIENT-SIDE SERVERLESS (GITHUB PAGES / NO LOCAL SERVER)
 
 document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('statusPill');
@@ -100,13 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateStatus('processing', '⏳ Caricamento modello IA ONNX nel browser...');
                 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
                 onnxSession = await ort.InferenceSession.create('morse_model_quant.onnx');
-                console.log("✅ Modello ONNX caricato con successo nel browser!");
                 updateStatus('active', 'Pronto (IA Serverless Client-Side attiva)');
             } else {
                 updateStatus('active', 'Pronto (Modalità Audio Standalone)');
             }
         } catch (e) {
-            console.warn("⚠️ Impossibile caricare il file ONNX in locale:", e);
             updateStatus('active', 'Pronto (Visualizzatore e Player Audio)');
         }
     }
@@ -1210,6 +1208,50 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = Math.floor(sec / 60);
         const s = (sec % 60).toFixed(1);
         return `${m.toString().padStart(2, '0')}:${s.toString().padStart(4, '0')}`;
+    }
+
+    function drawChunkCanvas(i) {
+        const item = audioChunkList[i];
+        if (!item || !currentData) return;
+
+        const waveCanvas = document.getElementById(`chunkWave_${i}`);
+        const specCanvas = document.getElementById(`chunkSpec_${i}`);
+
+        if (waveCanvas && currentData.waveform) {
+            waveCanvas.onclick = (e) => {
+                const rect = waveCanvas.getBoundingClientRect();
+                const pct = (e.clientX - rect.left) / rect.width;
+                audioPlayer.currentTime = item.startSec + pct * (item.endSec - item.startSec);
+                renderCanvasesAtCurrentTime();
+            };
+
+            const ctx = waveCanvas.getContext('2d');
+            const w = waveCanvas.width = waveCanvas.parentElement.clientWidth || 300;
+            const h = waveCanvas.height = 70;
+
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, w, h);
+
+            const startIdx = Math.floor((item.startSec / currentData.duration) * currentData.waveform.length);
+            const endIdx = Math.ceil((item.endSec / currentData.duration) * currentData.waveform.length);
+            const sliced = currentData.waveform.slice(startIdx, endIdx);
+
+            if (sliced.length > 0) {
+                const centerY = h / 2;
+                ctx.fillStyle = '#38bdf8';
+                const step = w / sliced.length;
+
+                for (let k = 0; k < sliced.length; k++) {
+                    const v = Math.abs(sliced[k]);
+                    const bh = Math.max(1.5, v * (h / 2) * 1.8);
+                    ctx.fillRect(k * step, centerY - bh / 2, step + 0.2, bh);
+                }
+            }
+        }
+
+        if (specCanvas && currentData.spectrogram) {
+            drawSpectrogramWindowHDOnCanvas(specCanvas, currentData.spectrogram, item.startSec, item.endSec, currentData.duration, i);
+        }
     }
 
     function escapeHtml(str) {
