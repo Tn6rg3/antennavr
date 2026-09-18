@@ -259,14 +259,27 @@ window.loadProfileInfo = function() {
     if (!listContainer) return;
     listContainer.innerHTML = '<li style="justify-content:center;">Caricamento...</li>';
 
-    if (!myId) return;
+    const userId = window.myId || (typeof myId !== 'undefined' && myId ? myId : null);
+    if (!userId || !db) {
+        listContainer.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Autenticazione in corso...</li>';
+        return;
+    }
 
-    db.ref(`users/${myId}/history`).orderByChild('date').limitToLast(10).once('value').then(snap => {
+    db.ref(`users/${userId}/history`).once('value').then(snap => {
         listContainer.innerHTML = '';
         window.userMatchHistory = [];
 
-        snap.forEach(child => { window.userMatchHistory.push({ key: child.key, ...child.val() }); });
-        window.userMatchHistory.reverse();
+        if (snap.exists()) {
+            snap.forEach(child => {
+                window.userMatchHistory.push({ key: child.key, ...child.val() });
+            });
+        }
+
+        window.userMatchHistory.sort((a,b) => {
+            const tsA = a.ts || (a.date ? (typeof a.date === 'number' ? a.date : new Date(a.date).getTime()) : 0);
+            const tsB = b.ts || (b.date ? (typeof b.date === 'number' ? b.date : new Date(b.date).getTime()) : 0);
+            return tsB - tsA;
+        });
 
         if (window.userMatchHistory.length === 0) {
             listContainer.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna partita.</li>';
@@ -274,8 +287,8 @@ window.loadProfileInfo = function() {
         }
 
         const frag = document.createDocumentFragment();
-        window.userMatchHistory.forEach(match => {
-            const d = new Date(match.date || Date.now());
+        window.userMatchHistory.slice(0, 15).forEach(match => {
+            const d = new Date(match.date || match.ts || Date.now());
             const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
             let modeIcon = match.mode === 'callsign' ? '🎙️' : match.mode === 'pingpong' ? '🏓' : match.mode === 'chars' ? '⌨️' : (match.mode === 'daily_challenge' ? '📅' : '🔤');
 
@@ -287,7 +300,7 @@ window.loadProfileInfo = function() {
                     <span style="color:var(--hint-color)">${dateStr}</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; width:100%; margin-top:5px; align-items:center;">
-                    <span><b>${match.score} pt</b> <small>(${match.wpm} WPM)</small></span>
+                    <span><b>${match.score || 0} pt</b> <small>(${match.wpm || 20} WPM)</small></span>
                     <div style="display:flex; gap:5px;">
                         <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${match.key}')" style="width:auto; padding:2px 10px;">Vedi</button>
                         <button class="action-btn-small btn-danger" onclick="window.deleteHistoryItem('${match.key}')" style="width:auto; padding:2px 6px;">🗑️</button>
@@ -299,7 +312,7 @@ window.loadProfileInfo = function() {
         listContainer.appendChild(frag);
     }).catch(err => {
         console.error("Profile: Error loading history:", err);
-        listContainer.innerHTML = '<li style="justify-content:center; color:red;">Errore caricamento.</li>';
+        listContainer.innerHTML = '<li style="justify-content:center; color:#d32f2f;">Errore caricamento.</li>';
     });
 };
 
@@ -321,17 +334,31 @@ window.loadAdvancedStats = function() {
     if (quadgramContainer) quadgramContainer.innerHTML = 'Caricamento...';
     if (wordContainer) wordContainer.innerHTML = 'Caricamento...';
 
-    db.ref(`users/${myId}/stats`).once('value').then(snap => {
+    const userId = window.myId || (typeof myId !== 'undefined' && myId ? myId : null);
+    if (!userId || !db) {
+        console.warn("loadAdvancedStats: userId or db not available yet.");
+        return;
+    }
+
+    db.ref(`users/${userId}/stats`).once('value').then(snap => {
         const stats = snap.val() || {};
 
         // 0. GRAFICO TREND DUAL-AXIS (WPM & ACCURATEZZA)
-        db.ref(`users/${myId}/history`).limitToLast(35).once('value').then(histSnap => {
-            const historyData = histSnap.val() ? Object.values(histSnap.val()) : [];
+        db.ref(`users/${userId}/history`).once('value').then(histSnap => {
+            let historyData = [];
+            if (histSnap.exists()) {
+                histSnap.forEach(child => {
+                    historyData.push({ key: child.key, ...child.val() });
+                });
+            }
+            window.userMatchHistory = historyData;
+
             window.renderAccuracyTrend(stats.accuracySessions || {}, historyData);
             window.renderGamePhaseAnalysis(historyData);
-        }).catch(() => {
-            window.renderAccuracyTrend(stats.accuracySessions || {}, []);
-            window.renderGamePhaseAnalysis([]);
+        }).catch(err => {
+            console.warn("History fetch warning:", err);
+            window.renderAccuracyTrend(stats.accuracySessions || {}, window.userMatchHistory || []);
+            window.renderGamePhaseAnalysis(window.userMatchHistory || []);
         });
 
         // 0b. MIGLIORAMENTO MIRATO
