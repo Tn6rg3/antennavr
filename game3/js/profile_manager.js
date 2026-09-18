@@ -364,12 +364,6 @@ window.loadAdvancedStats = function() {
 
         // 0b. MIGLIORAMENTO MIRATO
         window.renderTargetedImprovement(stats);
-    }).catch(err => {
-        console.error("loadAdvancedStats error:", err);
-        const fallbackHistory = window.userMatchHistory || [];
-        window.renderAccuracyTrend({}, fallbackHistory);
-        window.renderGamePhaseAnalysis(fallbackHistory);
-    });
 
         // A. DIAGNOSTICA LUNGHEZZA
         const lengthCont = document.getElementById('lengthStatsContainer');
