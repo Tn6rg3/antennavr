@@ -601,7 +601,13 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         return 0;
     };
 
-    let allMatches = rawMatches.filter(m => !!m).sort((a,b) => getMatchTs(a) - getMatchTs(b));
+    const allowedModes = new Set(['standard', 'callsign', 'daily_challenge']);
+
+    let allMatches = rawMatches.filter(m => {
+        if (!m) return false;
+        const mode = (m.mode || 'standard').toLowerCase();
+        return allowedModes.has(mode);
+    }).sort((a,b) => getMatchTs(a) - getMatchTs(b));
 
     let sessions = [];
 

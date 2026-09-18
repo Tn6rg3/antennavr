@@ -1291,8 +1291,9 @@ window.finishGame = function() {
             details: matchDetailsArray
         });
 
-        // --- TRACCIAMENTO ACCURATEZZA GLOBALE PER GRAFICO (Escluso se Avanzamento Auto è attivo) ---
-        if (!window.isAutoAdvance && typeof window.trackSessionAccuracy === 'function') {
+        // --- TRACCIAMENTO ACCURATEZZA GLOBALE PER GRAFICO (Solo Parole Comuni, Nominativi e Sfida Giornaliera) ---
+        const isAllowedStatMode = ['standard', 'callsign', 'daily_challenge'].includes(window.currentMode);
+        if (isAllowedStatMode && !window.isAutoAdvance && typeof window.trackSessionAccuracy === 'function') {
             window.trackSessionAccuracy(matchDetailsArray);
         }
 
