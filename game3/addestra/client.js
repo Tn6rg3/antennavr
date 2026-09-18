@@ -259,12 +259,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const canvasRow = document.createElement('div');
             canvasRow.className = `chunk-canvas-row`;
+
             const block1 = document.createElement('div');
             block1.className = `mini-canvas-block`;
-            block1.innerHTML = `<span class="mini-canvas-label">1. FORMA D'ONDA SEGMENTO</span><canvas id="chunkWave_${i}" height="70"></canvas>`;
+            const span1 = document.createElement('span');
+            span1.className = `mini-canvas-label`;
+            span1.textContent = `1. FORMA D'ONDA SEGMENTO`;
+            const cv1 = document.createElement('canvas');
+            cv1.id = `chunkWave_${i}`;
+            cv1.height = 70;
+            block1.appendChild(span1);
+            block1.appendChild(cv1);
+
             const block2 = document.createElement('div');
             block2.className = `mini-canvas-block`;
-            block2.innerHTML = `<span class="mini-canvas-label">2. SPETTROGRAMMA MEL SEGMENTO</span><canvas id="chunkSpec_${i}" height="100"></canvas>`;
+            const span2 = document.createElement('span');
+            span2.className = `mini-canvas-label`;
+            span2.textContent = `2. SPETTROGRAMMA MEL SEGMENTO`;
+            const cv2 = document.createElement('canvas');
+            cv2.id = `chunkSpec_${i}`;
+            cv2.height = 100;
+            block2.appendChild(span2);
+            block2.appendChild(cv2);
+
             canvasRow.appendChild(block1);
             canvasRow.appendChild(block2);
             card.appendChild(canvasRow);
