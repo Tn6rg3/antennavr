@@ -549,42 +549,38 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
     const periodSel = document.getElementById('chartPeriodSelect');
     const period = periodSel ? periodSel.value : 'history';
 
+    // Raccoglie lo storico globale sia da window.userMatchHistory che da historyMatches
+    let allMatches = [];
+    if (Array.isArray(historyMatches) && historyMatches.length > 0) {
+        allMatches = historyMatches;
+    } else if (Array.isArray(window.userMatchHistory) && window.userMatchHistory.length > 0) {
+        allMatches = window.userMatchHistory;
+    }
+
     let sessions = [];
 
-    if (period === 'last_match' && Array.isArray(historyMatches) && historyMatches.length > 0) {
-        // Modalita Ultima Partita (Parola per Parola)
-        const lastMatch = historyMatches[historyMatches.length - 1];
-        const details = (lastMatch ? (lastMatch.details || lastMatch.matchDetails) : []) || [];
-        details.forEach((d, idx) => {
-            const isCorrect = (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay;
-            sessions.push({
-                acc: isCorrect ? 100 : 0,
-                wpm: d.wpm || lastMatch.wpm || 20,
-                label: d.real || `#${idx+1}`
-            });
-        });
-    } else {
-        // 1. Parsing da stats.accuracySessions
-        if (trendData && typeof trendData === 'object') {
-            Object.values(trendData).forEach(s => {
-                if (s) {
-                    let acc = -1;
-                    if (typeof s.acc === 'number') acc = s.acc;
-                    else if (s.sum && s.total) acc = Math.round((s.sum / s.total) * 100);
-
-                    let wpm = s.wpm || s.speed || 20;
-                    let ts = s.ts || 0;
-
-                    if (acc >= 0 && acc <= 100) {
-                        sessions.push({ acc, wpm, ts });
-                    }
-                }
+    if (period === 'last_match') {
+        // Modalita Ultima Partita: parola per parola dell'ultima partita giocata
+        if (allMatches.length > 0) {
+            const lastMatch = allMatches[allMatches.length - 1];
+            const details = (lastMatch ? (lastMatch.details || lastMatch.matchDetails) : []) || [];
+            details.forEach((d, idx) => {
+                const isCorrect = (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay;
+                const wordWpm = d.wpm || lastMatch.wpm || 20;
+                sessions.push({
+                    acc: isCorrect ? 100 : 0,
+                    wpm: wordWpm,
+                    ts: idx + 1
+                });
             });
         }
+    } else {
+        // Modalita Storico / Giornaliero: Unione completa tra stats.accuracySessions e historyMatches
+        let sessionMap = new Map();
 
-        // 2. Integrazione dallo storico partite Cloud
-        if (sessions.length < 5 && Array.isArray(historyMatches) && historyMatches.length > 0) {
-            historyMatches.forEach(m => {
+        // 1. Dallo storico partite Firebase
+        if (allMatches.length > 0) {
+            allMatches.forEach(m => {
                 if (m) {
                     let acc = -1;
                     const detailsArr = m.details || m.matchDetails || [];
@@ -594,10 +590,51 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
                     } else if (typeof m.accuracy === 'number') {
                         acc = m.accuracy;
                     } else if (typeof m.score === 'number' && m.score >= 0) {
-                        acc = 85;
+                        acc = 80;
                     }
 
                     const wpm = m.wpm || (detailsArr[0] ? detailsArr[0].wpm : 20);
+                    const ts = m.ts || (m.date ? (typeof m.date === 'number' ? m.date : new Date(m.date).getTime()) : Date.now());
+
+                    if (acc >= 0 && wpm > 0) {
+                        sessionMap.set(ts, { acc, wpm, ts });
+                    }
+                }
+            });
+        }
+
+        // 2. Da stats.accuracySessions
+        if (trendData && typeof trendData === 'object') {
+            Object.values(trendData).forEach(s => {
+                if (s) {
+                    let acc = -1;
+                    if (typeof s.acc === 'number') acc = s.acc;
+                    else if (s.sum && s.total) acc = Math.round((s.sum / s.total) * 100);
+
+                    let wpm = s.wpm || s.speed || 20;
+                    let ts = s.ts || Date.now();
+
+                    if (acc >= 0 && acc <= 100) {
+                        sessionMap.set(ts, { acc, wpm, ts });
+                    }
+                }
+            });
+        }
+
+        sessions = Array.from(sessionMap.values());
+
+        // Filtro Giornaliero (Oggi)
+        if (period === 'today') {
+            const todayStart = new Date();
+            todayStart.setHours(0,0,0,0);
+            const todayMs = todayStart.getTime();
+            const todaySessions = sessions.filter(s => s.ts >= todayMs);
+            if (todaySessions.length > 0) sessions = todaySessions;
+        }
+
+        sessions.sort((a,b) => (a.ts || 0) - (b.ts || 0));
+        sessions = sessions.slice(-35);
+    }
                     const ts = m.ts || (m.date ? (typeof m.date === 'number' ? m.date : new Date(m.date).getTime()) : 0);
 
                     if (acc >= 0 && wpm > 0) {
