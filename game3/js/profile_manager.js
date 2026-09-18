@@ -518,6 +518,11 @@ window.loadAdvancedStats = function() {
                 wordContainer.appendChild(frag);
             }
         }
+    }).catch(err => {
+        console.error("loadAdvancedStats error:", err);
+        const fallbackHistory = window.userMatchHistory || [];
+        window.renderAccuracyTrend({}, fallbackHistory);
+        window.renderGamePhaseAnalysis(fallbackHistory);
     });
 };
 
