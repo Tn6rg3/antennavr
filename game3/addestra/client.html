@@ -23,28 +23,25 @@
             </div>
         </header>
 
-        <!-- TAB 1: DECODIFICATORE LIVE E FILE -->
-        <div class="tab-content active" id="tabContent1" style="display: flex; flex-direction: column; gap: 20px;">
-            <!-- MICROPHONE LIVE STREAM CONTROL -->
-            <section class="mic-section">
-                <div class="mic-card">
-                    <button class="mic-btn" id="btnMic">
-                        <span class="mic-icon">🎙️</span> <span id="micBtnText">Attiva Microfono Live (Ascolto dal Vivo)</span>
-                    </button>
-                    <p class="mic-hint">Ascolta la radio o i toni dal microfono e mostra lo spettrogramma e la decodifica in tempo reale!</p>
-                </div>
-            </section>
+        <!-- MICROPHONE LIVE STREAM CONTROL -->
+        <section class="mic-section">
+            <div class="mic-card">
+                <button class="mic-btn" id="btnMic">
+                    <span class="mic-icon">🎙️</span> <span id="micBtnText">Attiva Microfono Live (Ascolto dal Vivo)</span>
+                </button>
+                <p class="mic-hint">Ascolta la radio o i toni dal microfono e mostra lo spettrogramma e la decodifica in tempo reale!</p>
+            </div>
+        </section>
 
-            <!-- UPLOAD SECTION -->
-            <section class="upload-section">
-                <div class="drop-zone" id="dropZone">
-                    <div class="upload-icon">🎵</div>
-                    <h3>Trascina un file Audio qui o <span class="browse-btn">Sfoglia</span></h3>
-                    <p class="file-types">Formati supportati: <strong>MP3, WAV, OGG, FLAC, M4A, AMR</strong></p>
-                    <input type="file" id="fileInput" accept="audio/*" class="file-input">
-                </div>
-            </section>
-        </div>
+        <!-- UPLOAD SECTION -->
+        <section class="upload-section">
+            <div class="drop-zone" id="dropZone">
+                <div class="upload-icon">🎵</div>
+                <h3>Trascina un file Audio qui o <span class="browse-btn">Sfoglia</span></h3>
+                <p class="file-types">Formati supportati: <strong>MP3, WAV, OGG, FLAC, M4A, AMR</strong></p>
+                <input type="file" id="fileInput" accept="audio/*" class="file-input">
+            </div>
+        </section>
 
         <!-- COMMON AUDIO PLAYER & CONTROLS -->
         <section class="audio-control-card hidden" id="audioSection">
@@ -58,6 +55,55 @@
                 <button class="ctrl-btn stop" id="btnStop">⏹ Stop</button>
             </div>
             <audio id="audioPlayer" class="native-audio-player"></audio>
+        </section>
+
+        <!-- REGION / LOOP A-B CROPPER & CUTTER BOX -->
+        <section class="dataset-card hidden" id="regionCropperSection">
+            <div class="region-cropper-box">
+                <div class="cropper-player-bar">
+                    <span class="file-name" id="fileNameDisplayTab3">Ascolto Audio</span>
+                    <span class="time-display" id="timeDisplayTab3">00:00 / 00:00</span>
+                    <div class="player-controls inline">
+                        <button class="ctrl-btn play" id="btnPlayTab3">▶ Avvia Audio</button>
+                        <button class="ctrl-btn pause" id="btnPauseTab3">⏸ Pausa</button>
+                        <button class="ctrl-btn stop" id="btnStopTab3">⏹ Stop</button>
+                    </div>
+                </div>
+
+                <h3>✂️ REGOLAZIONE LOOP A-B SULLO SPETTO & TAGLIO TRACCIA</h3>
+                <p class="mic-hint">💡 Fai clic con il mouse sullo spettrogramma per impostare il Marker A (Inizio), premi Maiusc + Clic per il Marker B (Fine)!</p>
+                <div class="region-inputs">
+                    <div class="input-group">
+                        <label for="markerAInput">Marker A (Inizio sec):</label>
+                        <button class="small-btn" id="btnNudgeALeftFast" title="Indietro 1.0 sec">◄◄</button>
+                        <button class="small-btn" id="btnNudgeALeft" title="Indietro 0.2 sec">◄ A</button>
+                        <input type="number" id="markerAInput" step="0.1" value="0.0" class="num-input">
+                        <button class="small-btn" id="btnNudgeARight" title="Avanti 0.2 sec">A ►</button>
+                        <button class="small-btn" id="btnNudgeARightFast" title="Avanti 1.0 sec">►►</button>
+                    </div>
+                    <div class="input-group">
+                        <label for="markerBInput">Marker B (Fine sec):</label>
+                        <button class="small-btn" id="btnNudgeBLeftFast" title="Indietro 1.0 sec">◄◄</button>
+                        <button class="small-btn" id="btnNudgeBLeft" title="Indietro 0.2 sec">◄ B</button>
+                        <input type="number" id="markerBInput" step="0.1" value="10.0" class="num-input">
+                        <button class="small-btn" id="btnNudgeBRight" title="Avanti 0.2 sec">B ►</button>
+                        <button class="small-btn" id="btnNudgeBRightFast" title="Avanti 1.0 sec">►►</button>
+                        <button class="small-btn highlight" id="btnNudgeBRightSuper" title="Espandi +5 sec">+5s B</button>
+                    </div>
+                    <div class="zoom-controls">
+                        <button class="ctrl-btn" id="btnZoomInWave" title="Ingrandisci Forma d'Onda">🔍+</button>
+                        <button class="ctrl-btn" id="btnZoomOutWave" title="Rimpicciolisci Forma d'Onda">🔍-</button>
+                        <button class="ctrl-btn" id="btnZoomRegionAB">🔍 Zoom Tratto A-B</button>
+                    </div>
+                    <button class="ctrl-btn" id="btnPlayRegionAB">▶ Riproduci Tratto A-B</button>
+                    <button class="ctrl-btn play" id="btnDecodeRegionAB">⚡ Decodifica Tratto A-B con IA</button>
+                </div>
+
+                <div class="save-addestra-box">
+                    <label for="decodedTextSingle">💬 Testo Decodificato dal Tratto A-B (IA):</label>
+                    <input type="text" id="decodedTextSingle" class="text-input" placeholder="In attesa dell'elaborazione IA..." readonly>
+                </div>
+            </div>
         </section>
 
         <!-- DECODED TEXT RESULT DISPLAY -->

@@ -1,4 +1,4 @@
-// CLIENT.JS - INFERENZA ONNX 100% CLIENT-SIDE PURAMENTE SERVERLESS (GITHUB PAGES)
+// CLIENT.JS - STANDALONE CON REGION CROPPER A-B, MICROFONO E SPETTROGRAMMA
 
 document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('statusPill');
@@ -10,12 +10,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const micBtnText = document.getElementById('micBtnText');
 
     const audioSection = document.getElementById('audioSection');
+    const regionCropperSection = document.getElementById('regionCropperSection');
     const audioPlayer = document.getElementById('audioPlayer');
     const fileNameDisplay = document.getElementById('fileNameDisplay');
     const timeDisplay = document.getElementById('timeDisplay');
     const btnPlay = document.getElementById('btnPlay');
     const btnPause = document.getElementById('btnPause');
     const btnStop = document.getElementById('btnStop');
+
+    const fileNameDisplayTab3 = document.getElementById('fileNameDisplayTab3');
+    const timeDisplayTab3 = document.getElementById('timeDisplayTab3');
+    const btnPlayTab3 = document.getElementById('btnPlayTab3');
+    const btnPauseTab3 = document.getElementById('btnPauseTab3');
+    const btnStopTab3 = document.getElementById('btnStopTab3');
+
+    const markerAInput = document.getElementById('markerAInput');
+    const markerBInput = document.getElementById('markerBInput');
+    const btnNudgeALeft = document.getElementById('btnNudgeALeft');
+    const btnNudgeARight = document.getElementById('btnNudgeARight');
+    const btnNudgeBLeft = document.getElementById('btnNudgeBLeft');
+    const btnNudgeBRight = document.getElementById('btnNudgeBRight');
+    const btnNudgeALeftFast = document.getElementById('btnNudgeALeftFast');
+    const btnNudgeARightFast = document.getElementById('btnNudgeARightFast');
+    const btnNudgeBLeftFast = document.getElementById('btnNudgeBLeftFast');
+    const btnNudgeBRightFast = document.getElementById('btnNudgeBRightFast');
+    const btnNudgeBRightSuper = document.getElementById('btnNudgeBRightSuper');
+
+    const btnZoomInWave = document.getElementById('btnZoomInWave');
+    const btnZoomOutWave = document.getElementById('btnZoomOutWave');
+    const btnZoomRegionAB = document.getElementById('btnZoomRegionAB');
+
+    const btnPlayRegionAB = document.getElementById('btnPlayRegionAB');
+    const btnDecodeRegionAB = document.getElementById('btnDecodeRegionAB');
+    const decodedTextSingle = document.getElementById('decodedTextSingle');
 
     const resultCard = document.getElementById('resultCard');
     const decodedTextBox = document.getElementById('decodedTextBox');
@@ -39,6 +66,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentData = null;
     let is3sMode = true;
+    let isZoomedABMode = false;
+    let waveZoomScale = 1.0;
     let contrastGamma = 2.2;
     let selectedPalette = 'cyber';
     let animationFrameId = null;
@@ -52,25 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDecodingBusy = false;
     let liveAccumulatedText = "";
 
-    // ONNX RUNTIME WEB SESSION & VOCABULARY
-    let onnxSession = null;
-    const VOCAB = ["<blank>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "È", "É", "À", "Ò", "Ù", ",", ".", "/", "'", "?", "="];
-
-    async function initOnnxModel() {
-        try {
-            if (typeof ort !== 'undefined') {
-                updateStatus('processing', '⏳ Caricamento modello IA ONNX nel browser...');
-                ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
-                onnxSession = await ort.InferenceSession.create('morse_model_quant.onnx');
-                console.log("✅ Modello ONNX caricato con successo nel browser!");
-                updateStatus('active', 'Pronto (IA Serverless Client-Side attiva)');
-            }
-        } catch (e) {
-            console.error("Errore caricamento modello ONNX:", e);
-            updateStatus('error', 'Errore caricamento modello ONNX');
-        }
-    }
-    initOnnxModel();
+    const SERVER_API_URL = "http://localhost:8000";
 
     function updateStatus(state, text) {
         if (statusText) statusText.textContent = text;
@@ -108,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnClearBtn.addEventListener('click', () => {
         liveAccumulatedText = "";
         decodedTextBox.innerHTML = `<span class="placeholder">(Testo cancellato)</span>`;
+        if (decodedTextSingle) decodedTextSingle.value = "";
     });
 
     copyBtn.addEventListener('click', () => {
@@ -130,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             liveAccumulatedText = "";
             decodedTextBox.innerHTML = `<span class="placeholder">🎙️ In ascolto dal microfono... parla o trasmetti toni Morse!</span>`;
+            if (decodedTextSingle) decodedTextSingle.value = "🎙️ In ascolto dal microfono...";
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 alert("Il tuo browser non supporta l'accesso al microfono.");
@@ -149,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isMicRecording = true;
                 btnMic.classList.add('recording');
                 micBtnText.textContent = '⏹ Ferma Microfono Live';
-                updateStatus('active', '🎙️ Microfono In Ascolto Client-Side');
+                updateStatus('active', '🎙️ Microfono In Ascolto (ANC Attivo)');
 
                 const AudioCtx = window.AudioContext || window.webkitAudioContext;
                 micAudioContext = new AudioCtx();
@@ -185,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         micPcmSamples = micPcmSamples.slice(micPcmSamples.length - overlapCount);
 
                         const wavBuffer = encodeWAV(samplesToProcess, micAudioContext.sampleRate);
-                        await decodeAudioClientSide(wavBuffer, true);
+                        await decodeAudioServer(wavBuffer, true);
                         isDecodingBusy = false;
                     }
                 }, 800);
@@ -217,116 +230,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function decodeAudioClientSide(arrayBuffer, isLive = false) {
+    async function decodeAudioServer(arrayBuffer, isLive = false) {
         try {
-            updateStatus('processing', '⚡ Elaborazione IA client-side in corso...');
+            updateStatus('processing', '⚡ Elaborazione acustica IA in corso...');
 
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 3200 });
-            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-            const pcm3200 = audioBuffer.getChannelData(0);
-            const duration = audioBuffer.duration;
+            const response = await fetch(`${SERVER_API_URL}/api/decode`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/octet-stream' },
+                body: arrayBuffer
+            });
 
-            // 1. Generazione waveform downsampled
-            const stepW = Math.max(1, Math.floor(pcm3200.length / 8000));
-            const waveform = [];
-            for (let i = 0; i < pcm3200.length; i += stepW) {
-                waveform.push(pcm3200[i]);
-            }
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Errore di decodifica');
 
-            // 2. Se onnxSession e' disponibile, esegui inferenza ONNX nel browser
-            let transcript = "";
-            let spectrogram = [];
-
-            if (onnxSession) {
-                // Generazione Spettrogramma in JS (Simulato / Analyser STFT)
-                const specData = computeClientSideSpectrogram(pcm3200, 3200);
-                spectrogram = specData.matrix;
-                const tensor = specData.tensor;
-
-                // Esegui modello ONNX
-                const feeds = { input_spectrogram: tensor };
-                const results = await onnxSession.run(feeds);
-                const output = results[Object.keys(results)[0]]; // log_probs
-
-                transcript = decodeCtcGreedy(output);
-            } else {
-                transcript = "(Modello ONNX in caricamento...)";
-                spectrogram = Array(64).fill(0).map(() => Array(100).fill(0));
-            }
-
-            currentData = {
-                success: true,
-                transcript: transcript,
-                duration: duration,
-                waveform: waveform,
-                spectrogram: spectrogram
-            };
-
-            renderResults(currentData, isLive);
-            updateStatus('active', 'Decodifica IA Client-Side Completata!');
+            currentData = data;
+            renderResults(data, isLive);
+            updateStatus('active', 'Decodifica IA Completata!');
 
         } catch (error) {
-            console.error('Errore inferenza client-side:', error);
+            console.error('Errore decodifica:', error);
             if (!isLive) {
                 updateStatus('error', `Errore: ${error.message}`);
-                decodedTextBox.innerHTML = `<span class="placeholder" style="color:var(--error-red)">❌ Errore: ${escapeHtml(error.message)}</span>`;
+                decodedTextBox.innerHTML = `<span class="placeholder" style="color:var(--error-red)">❌ Errore: ${escapeHtml(error.message)} (Assicurati che il server Python sia avviato con python web/server.py)</span>`;
             }
         }
-    }
-
-    // Semplificazione calcolo spettrogramma e CTC in JS per ONNX Runtime Web
-    function computeClientSideSpectrogram(pcm, sampleRate) {
-        const numMels = 64;
-        const hopLength = 16;
-        const numFrames = Math.floor(pcm.length / hopLength);
-
-        let matrix = Array(numMels).fill(0).map(() => Array(numFrames).fill(-50.0));
-        let flatTensorData = new Float32Array(1 * 1 * numMels * numFrames);
-
-        for (let f = 0; f < numFrames; f++) {
-            const start = f * hopLength;
-            let energy = 0;
-            for (let k = 0; k < 64 && (start + k) < pcm.length; k++) {
-                energy += Math.abs(pcm[start + k]);
-            }
-            const dbVal = 20 * Math.log10(Math.max(1e-5, energy / 64));
-
-            for (let m = 0; m < numMels; m++) {
-                const val = dbVal + (Math.sin(m + f * 0.1) * 5); // mel contour approximation
-                matrix[m][f] = val;
-                flatTensorData[m * numFrames + f] = val;
-            }
-        }
-
-        const tensor = new ort.Tensor('float32', flatTensorData, [1, 1, numMels, numFrames]);
-        return { matrix, tensor };
-    }
-
-    function decodeCtcGreedy(outputTensor) {
-        const data = outputTensor.data;
-        const numClasses = VOCAB.length;
-        const steps = Math.floor(data.length / numClasses);
-
-        let decodedChars = [];
-        let prevIdx = null;
-
-        for (let t = 0; t < steps; t++) {
-            let maxIdx = 0;
-            let maxVal = -Infinity;
-            for (let c = 0; c < numClasses; c++) {
-                const val = data[t * numClasses + c];
-                if (val > maxVal) {
-                    maxVal = val;
-                    maxIdx = c;
-                }
-            }
-
-            if (maxIdx !== 0 && maxIdx !== prevIdx) {
-                decodedChars.push(VOCAB[maxIdx]);
-            }
-            prevIdx = maxIdx;
-        }
-        return decodedChars.join("");
     }
 
     function encodeWAV(samples, sampleRate) {
@@ -365,12 +293,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const startPlayAction = () => {
         safePlayAudio(audioPlayer);
         if (btnPlay) btnPlay.textContent = '▶ In Riproduzione';
+        if (btnPlayTab3) btnPlayTab3.textContent = '▶ In Riproduzione';
         start60FpsCanvasAnimation();
     };
 
     const pausePlayAction = () => {
         try { audioPlayer.pause(); } catch (e) {}
         if (btnPlay) btnPlay.textContent = '▶ Avvia Audio';
+        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
         stop60FpsCanvasAnimation();
     };
 
@@ -380,6 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
             audioPlayer.currentTime = 0;
         } catch (e) {}
         if (btnPlay) btnPlay.textContent = '▶ Avvia Audio';
+        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
         stop60FpsCanvasAnimation();
         renderCanvasesAtCurrentTime();
     };
@@ -387,6 +318,10 @@ document.addEventListener('DOMContentLoaded', () => {
     btnPlay.addEventListener('click', startPlayAction);
     btnPause.addEventListener('click', pausePlayAction);
     btnStop.addEventListener('click', stopPlayAction);
+
+    if (btnPlayTab3) btnPlayTab3.addEventListener('click', startPlayAction);
+    if (btnPauseTab3) btnPauseTab3.addEventListener('click', pausePlayAction);
+    if (btnStopTab3) btnStopTab3.addEventListener('click', stopPlayAction);
 
     function start60FpsCanvasAnimation() {
         stop60FpsCanvasAnimation();
@@ -412,6 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
     audioPlayer.addEventListener('ended', () => {
         stop60FpsCanvasAnimation();
         if (btnPlay) btnPlay.textContent = '▶ Avvia Audio';
+        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
         playheads.forEach(ph => ph.style.display = 'none');
     });
 
@@ -428,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnView3s.addEventListener('click', () => {
         is3sMode = true;
+        isZoomedABMode = false;
         btnView3s.classList.add('active');
         btnViewFull.classList.remove('active');
         renderCanvasesAtCurrentTime();
@@ -435,8 +372,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnViewFull.addEventListener('click', () => {
         is3sMode = false;
+        isZoomedABMode = false;
         btnViewFull.classList.add('active');
         btnView3s.classList.remove('active');
+        renderCanvasesAtCurrentTime();
+    });
+
+    window.addEventListener('resize', () => {
         renderCanvasesAtCurrentTime();
     });
 
@@ -444,26 +386,206 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isMicRecording) toggleMicrophoneStream();
 
         updateStatus('processing', `Elaborazione di '${file.name}'...`);
-        fileNameDisplay.textContent = file.name;
+        if (fileNameDisplay) fileNameDisplay.textContent = file.name;
+        if (fileNameDisplayTab3) fileNameDisplayTab3.textContent = file.name;
 
         const audioUrl = URL.createObjectURL(file);
         audioPlayer.src = audioUrl;
 
         audioSection.classList.remove('hidden');
+        regionCropperSection.classList.remove('hidden');
         resultCard.classList.remove('hidden');
         visualizerCard.classList.remove('hidden');
-        decodedTextBox.innerHTML = `<span class="placeholder">⚡ Elaborazione acustica IA client-side in corso...</span>`;
+        decodedTextBox.innerHTML = `<span class="placeholder">⚡ Elaborazione acustica IA in corso...</span>`;
+        if (decodedTextSingle) decodedTextSingle.value = "⚡ Elaborazione in corso...";
 
         try {
             const arrayBuffer = await file.arrayBuffer();
-            await decodeAudioClientSide(arrayBuffer, false);
+            await decodeAudioServer(arrayBuffer, false);
+
+            if (currentData && currentData.duration) {
+                markerAInput.value = "0.0";
+                markerBInput.value = Math.min(10.0, currentData.duration).toFixed(1);
+            }
         } catch (error) {
             console.error('Errore:', error);
             updateStatus('error', `Errore: ${error.message}`);
             decodedTextBox.innerHTML = `<span class="placeholder" style="color:var(--error-red)">❌ Errore: ${escapeHtml(error.message)}</span>`;
+            if (decodedTextSingle) decodedTextSingle.value = `❌ Errore: ${error.message}`;
         }
     }
 
+    // REGION / TRATTO A-B CONTROLS
+    if (btnNudgeALeftFast) {
+        btnNudgeALeftFast.addEventListener('click', () => {
+            const currentA = parseFloat(markerAInput.value) || 0;
+            markerAInput.value = Math.max(0, currentA - 1.0).toFixed(1);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnNudgeARightFast) {
+        btnNudgeARightFast.addEventListener('click', () => {
+            const currentA = parseFloat(markerAInput.value) || 0;
+            const currentB = parseFloat(markerBInput.value) || (currentData ? currentData.duration : 10);
+            markerAInput.value = Math.min(currentB - 0.1, currentA + 1.0).toFixed(1);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnNudgeBLeftFast) {
+        btnNudgeBLeftFast.addEventListener('click', () => {
+            const currentA = parseFloat(markerAInput.value) || 0;
+            const currentB = parseFloat(markerBInput.value) || 10;
+            markerBInput.value = Math.max(currentA + 0.1, currentB - 1.0).toFixed(1);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnNudgeBRightFast) {
+        btnNudgeBRightFast.addEventListener('click', () => {
+            const currentB = parseFloat(markerBInput.value) || 10;
+            const maxDur = currentData ? currentData.duration : 100;
+            markerBInput.value = Math.min(maxDur, currentB + 1.0).toFixed(1);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnNudgeBRightSuper) {
+        btnNudgeBRightSuper.addEventListener('click', () => {
+            const currentB = parseFloat(markerBInput.value) || 10;
+            const maxDur = currentData ? currentData.duration : 100;
+            markerBInput.value = Math.min(maxDur, currentB + 5.0).toFixed(1);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnNudgeALeft) {
+        btnNudgeALeft.addEventListener('click', () => {
+            const currentA = parseFloat(markerAInput.value) || 0;
+            markerAInput.value = Math.max(0, currentA - 0.2).toFixed(1);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnNudgeARight) {
+        btnNudgeARight.addEventListener('click', () => {
+            const currentA = parseFloat(markerAInput.value) || 0;
+            const currentB = parseFloat(markerBInput.value) || (currentData ? currentData.duration : 10);
+            markerAInput.value = Math.min(currentB - 0.1, currentA + 0.2).toFixed(1);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnNudgeBLeft) {
+        btnNudgeBLeft.addEventListener('click', () => {
+            const currentA = parseFloat(markerAInput.value) || 0;
+            const currentB = parseFloat(markerBInput.value) || 10;
+            markerBInput.value = Math.max(currentA + 0.1, currentB - 0.2).toFixed(1);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnNudgeBRight) {
+        btnNudgeBRight.addEventListener('click', () => {
+            const currentB = parseFloat(markerBInput.value) || 10;
+            const maxDur = currentData ? currentData.duration : 100;
+            markerBInput.value = Math.min(maxDur, currentB + 0.2).toFixed(1);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnZoomInWave) {
+        btnZoomInWave.addEventListener('click', () => {
+            waveZoomScale = Math.min(8.0, waveZoomScale + 0.5);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnZoomOutWave) {
+        btnZoomOutWave.addEventListener('click', () => {
+            waveZoomScale = Math.max(1.0, waveZoomScale - 0.5);
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (markerAInput) markerAInput.addEventListener('input', () => renderCanvasesAtCurrentTime());
+    if (markerBInput) markerBInput.addEventListener('input', () => renderCanvasesAtCurrentTime());
+
+    if (btnPlayRegionAB) {
+        btnPlayRegionAB.addEventListener('click', async () => {
+            if (!audioPlayer.duration) return;
+            const mA = parseFloat(markerAInput.value) || 0;
+            const mB = parseFloat(markerBInput.value) || audioPlayer.duration;
+
+            try {
+                audioPlayer.currentTime = mA;
+                await safePlayAudio(audioPlayer);
+                btnPlay.textContent = '▶ In Riproduzione';
+                if (btnPlayTab3) btnPlayTab3.textContent = '▶ In Riproduzione';
+                start60FpsCanvasAnimation();
+
+                const checkStop = () => {
+                    if (audioPlayer.currentTime >= mB) {
+                        try { audioPlayer.pause(); } catch(e){}
+                        audioPlayer.removeEventListener('timeupdate', checkStop);
+                        btnPlay.textContent = '▶ Avvia Audio';
+                        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
+                        stop60FpsCanvasAnimation();
+                    }
+                };
+                audioPlayer.addEventListener('timeupdate', checkStop);
+            } catch (e) {}
+        });
+    }
+
+    if (btnZoomRegionAB) {
+        btnZoomRegionAB.addEventListener('click', () => {
+            isZoomedABMode = !isZoomedABMode;
+            if (isZoomedABMode) {
+                btnZoomRegionAB.classList.add('active');
+                btnZoomRegionAB.textContent = '🔍 Reset Zoom Full';
+            } else {
+                btnZoomRegionAB.classList.remove('active');
+                btnZoomRegionAB.textContent = '🔍 Zoom Tratto A-B';
+            }
+            renderCanvasesAtCurrentTime();
+        });
+    }
+
+    if (btnDecodeRegionAB) {
+        btnDecodeRegionAB.addEventListener('click', async () => {
+            if (!currentData || !audioPlayer.src) return;
+            const mA = parseFloat(markerAInput.value) || 0;
+            const mB = parseFloat(markerBInput.value) || currentData.duration;
+
+            updateStatus('processing', `Decodifica IA in corso per il tratto A-B (${mA}s - ${mB}s)...`);
+            try {
+                const response = await fetch(`${SERVER_API_URL}/api/decode_region`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: audioPlayer.src, start: mA, end: mB })
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const regionText = data.transcript || "";
+                    if (decodedTextSingle) decodedTextSingle.value = regionText;
+                    updateStatus('active', 'Decodifica Tratto A-B Completata!');
+                } else {
+                    throw new Error(data.error || 'Errore');
+                }
+            } catch (err) {
+                console.error("Decode Region Error:", err);
+                alert(`Errore decodifica tratto A-B: ${err.message}`);
+                updateStatus('error', 'Errore');
+            }
+        });
+    }
+
+    // DEDUPLICATE LIVE TRANSCRIPT
     function deduplicateLiveTranscript(existingText, newText) {
         if (!newText || !newText.trim()) return existingText;
         const cleanNew = newText.trim();
@@ -512,6 +634,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const curTime = isMicRecording ? (currentData.duration || 0) : (audioPlayer.currentTime || 0);
         const totalDuration = currentData.duration || 1;
 
+        if (timeDisplayTab3) {
+            timeDisplayTab3.textContent = `${formatTime(curTime)} / ${formatTime(totalDuration)}`;
+        }
+
         let specStartTime = Math.max(0, curTime - 1.0);
         let specEndTime = Math.min(totalDuration, specStartTime + 3.0);
         if (specEndTime - specStartTime < 3.0 && specStartTime > 0) {
@@ -520,6 +646,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let waveStartTime = 0;
         let waveEndTime = totalDuration;
+
+        if (isZoomedABMode) {
+            const mA = parseFloat(markerAInput.value) || 0;
+            const mB = parseFloat(markerBInput.value) || totalDuration;
+            waveStartTime = Math.max(0, mA - 0.5);
+            waveEndTime = Math.min(totalDuration, mB + 0.5);
+        } else if (waveZoomScale > 1.0) {
+            const visibleWin = totalDuration / waveZoomScale;
+            waveStartTime = Math.max(0, curTime - visibleWin / 2);
+            waveEndTime = Math.min(totalDuration, waveStartTime + visibleWin);
+        }
 
         const visWaveDur = (waveEndTime - waveStartTime) || 1e-5;
         const visSpecDur = (specEndTime - specStartTime) || 1e-5;
@@ -551,6 +688,25 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, width, height);
 
+        const visibleDuration = (endTime - startTime) || 1e-5;
+
+        ctx.fillStyle = '#8e9bb0';
+        ctx.font = '10px "Roboto Mono", monospace';
+        const intervalSec = visibleDuration > 30 ? 10 : (visibleDuration > 10 ? 5 : (visibleDuration > 3 ? 1 : 0.5));
+
+        for (let t = Math.floor(startTime / intervalSec) * intervalSec; t <= endTime; t += intervalSec) {
+            if (t < 0 || t > totalDuration) continue;
+            const x = ((t - startTime) / visibleDuration) * width;
+            ctx.strokeStyle = 'rgba(142, 155, 176, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+
+            ctx.fillText(`${t.toFixed(1)}s`, x + 3, 12);
+        }
+
         const startIdx = Math.floor((startTime / totalDuration) * waveform.length);
         const endIdx = Math.ceil((endTime / totalDuration) * waveform.length);
         const slicedWave = waveform.slice(startIdx, endIdx);
@@ -570,6 +726,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fillRect(x, centerY - barHeight / 2, barWidth + 0.2, barHeight);
             }
         }
+
+        drawMarkerLines(ctx, width, height, startTime, endTime, totalDuration);
     }
 
     function drawSpectrogramWindowHD(specMatrix, startTime, endTime, totalDuration) {
@@ -635,6 +793,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         ctx.putImageData(imgData, 0, 0);
+        drawMarkerLines(ctx, canvasWidth, canvasHeight, startTime, endTime, totalDuration);
+    }
+
+    function drawMarkerLines(ctx, width, height, startTime, endTime, totalDuration) {
+        const mA = parseFloat(markerAInput.value) || 0;
+        const mB = parseFloat(markerBInput.value) || totalDuration;
+        const visDur = (endTime - startTime) || 1e-5;
+
+        if (mA >= startTime && mA <= endTime) {
+            const xA = ((mA - startTime) / visDur) * width;
+            ctx.strokeStyle = '#2ea043';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(xA, 0);
+            ctx.lineTo(xA, height);
+            ctx.stroke();
+
+            ctx.fillStyle = '#2ea043';
+            ctx.fillRect(xA - 7, 0, 14, 18);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 11px "Roboto Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('A', xA, 13);
+        }
+
+        if (mB >= startTime && mB <= endTime) {
+            const xB = ((mB - startTime) / visDur) * width;
+            ctx.strokeStyle = '#f0883e';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(xB, 0);
+            ctx.lineTo(xB, height);
+            ctx.stroke();
+
+            ctx.fillStyle = '#f0883e';
+            ctx.fillRect(xB - 7, 0, 14, 18);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 11px "Roboto Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('B', xB, 13);
+        }
     }
 
     function getRGBPalette(val, palette) {
@@ -681,6 +880,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return [r, g, b];
+    }
+
+    function formatTime(sec) {
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function formatSecToMin(sec) {
+        const m = Math.floor(sec / 60);
+        const s = (sec % 60).toFixed(1);
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(4, '0')}`;
     }
 
     function escapeHtml(str) {
