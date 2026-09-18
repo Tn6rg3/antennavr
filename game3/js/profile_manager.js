@@ -600,7 +600,7 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
 
         // 1. Dallo storico partite Firebase
         if (allMatches.length > 0) {
-            allMatches.forEach(m => {
+            allMatches.forEach((m, idx) => {
                 if (m) {
                     let acc = -1;
                     const detailsArr = m.details || m.matchDetails || [];
@@ -614,10 +614,10 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
                     }
 
                     const wpm = m.wpm || (detailsArr[0] ? detailsArr[0].wpm : 20);
-                    const ts = getMatchTs(m) || Date.now();
+                    const ts = getMatchTs(m) || (Date.now() + idx);
 
                     if (acc >= 0 && wpm > 0) {
-                        sessionMap.set(ts, { acc, wpm, ts });
+                        sessionMap.set(`m_${idx}_${ts}`, { acc, wpm, ts });
                     }
                 }
             });
@@ -625,17 +625,17 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
 
         // 2. Da stats.accuracySessions
         if (trendData && typeof trendData === 'object') {
-            Object.values(trendData).forEach(s => {
+            Object.values(trendData).forEach((s, sIdx) => {
                 if (s) {
                     let acc = -1;
                     if (typeof s.acc === 'number') acc = s.acc;
                     else if (s.sum && s.total) acc = Math.round((s.sum / s.total) * 100);
 
                     let wpm = s.wpm || s.speed || 20;
-                    let ts = s.ts || Date.now();
+                    let ts = s.ts || (Date.now() + sIdx);
 
                     if (acc >= 0 && acc <= 100) {
-                        sessionMap.set(ts, { acc, wpm, ts });
+                        sessionMap.set(`s_${sIdx}_${ts}`, { acc, wpm, ts });
                     }
                 }
             });
