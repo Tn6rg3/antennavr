@@ -340,29 +340,36 @@ window.loadAdvancedStats = function() {
         return;
     }
 
-    db.ref(`users/${userId}/stats`).once('value').then(snap => {
-        const stats = snap.val() || {};
+    Promise.all([
+        db.ref(`users/${userId}/stats`).once('value').catch(() => null),
+        db.ref(`users/${userId}/history`).once('value').catch(() => null)
+    ]).then(([statsSnap, histSnap]) => {
+        const stats = (statsSnap && statsSnap.exists()) ? statsSnap.val() : {};
+        let historyData = [];
 
-        // 0. GRAFICO TREND DUAL-AXIS (WPM & ACCURATEZZA)
-        db.ref(`users/${userId}/history`).once('value').then(histSnap => {
-            let historyData = [];
-            if (histSnap.exists()) {
-                histSnap.forEach(child => {
-                    historyData.push({ key: child.key, ...child.val() });
-                });
-            }
+        if (histSnap && histSnap.exists()) {
+            histSnap.forEach(child => {
+                historyData.push({ key: child.key, ...child.val() });
+            });
+        }
+
+        if (historyData.length === 0 && Array.isArray(window.userMatchHistory) && window.userMatchHistory.length > 0) {
+            historyData = window.userMatchHistory;
+        } else {
             window.userMatchHistory = historyData;
+        }
 
-            window.renderAccuracyTrend(stats.accuracySessions || {}, historyData);
-            window.renderGamePhaseAnalysis(historyData);
-        }).catch(err => {
-            console.warn("History fetch warning:", err);
-            window.renderAccuracyTrend(stats.accuracySessions || {}, window.userMatchHistory || []);
-            window.renderGamePhaseAnalysis(window.userMatchHistory || []);
-        });
+        window.renderAccuracyTrend(stats.accuracySessions || {}, historyData);
+        window.renderGamePhaseAnalysis(historyData);
 
         // 0b. MIGLIORAMENTO MIRATO
         window.renderTargetedImprovement(stats);
+    }).catch(err => {
+        console.error("loadAdvancedStats error:", err);
+        const fallbackHistory = window.userMatchHistory || [];
+        window.renderAccuracyTrend({}, fallbackHistory);
+        window.renderGamePhaseAnalysis(fallbackHistory);
+    });
 
         // A. DIAGNOSTICA LUNGHEZZA
         const lengthCont = document.getElementById('lengthStatsContainer');
